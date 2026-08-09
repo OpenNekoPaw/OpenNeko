@@ -43,6 +43,12 @@
       "file": "cases/model-selected-read-without-approval.json",
       "group": "regression",
       "visibility": "public"
+    },
+    {
+      "id": "entry-explicit-builtin-first-submit",
+      "file": "cases/entry-explicit-builtin-first-submit.json",
+      "group": "workflow",
+      "visibility": "public"
     }
   ],
   "rubricRefs": [],

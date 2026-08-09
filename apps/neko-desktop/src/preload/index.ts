@@ -66,6 +66,7 @@ import { preserveDesktopBootstrapEventSequence } from './desktop-runtime-event-c
 import {
   parseResourceBrowserChildrenRequest,
   parseResourceBrowserIntentRequest,
+  parseResourceBrowserIntentResult,
   parseResourceBrowserQuickPreviewReleaseRequest,
   parseResourceBrowserQuickPreviewReleaseResult,
   parseResourceBrowserQuickPreviewRequest,
@@ -97,6 +98,18 @@ import {
 } from '../shared/preview-bridge-contract';
 import type { PreviewRuntimeIdentity } from '@neko/preview-domain';
 import {
+  TEXT_EDITOR_HOST_CHANNELS,
+  TEXT_EDITOR_HOST_ROUTES,
+  parseTextEditorHostRequest,
+  parseTextEditorHostResult,
+  parseTextEditorProjectionEvent,
+  parseTextEditorRuntimeIdentity,
+  sameTextEditorRuntimeIdentity,
+  sameTextEditorRuntimeOwner,
+  type OpenNekoDesktopTextEditorBridge,
+  type TextEditorRuntimeIdentity,
+} from '@neko/text-editor-domain';
+import {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
   parseCanvasMaterialActionResolution,
@@ -118,6 +131,7 @@ import {
 } from '../shared/canvas-bridge-contract';
 import {
   CUT_HOST_RUNTIME_ROUTES,
+  isCutDraftDocumentId,
   parseCutHostRuntimeProjectionEvent,
   parseCutHostRuntimeRequest,
   parseCutHostRuntimeResult,
@@ -125,9 +139,14 @@ import {
   type CutHostRuntimeIdentity,
 } from '@neko/cut-domain';
 import {
+  desktopCutIdentityKey,
   DESKTOP_CUT_CHANNELS,
   isSameCutHostIdentity,
+  isSameCutHostSession,
   parseDesktopCutHostIdentity,
+  parseDesktopCutViewMutationRequest,
+  parseDesktopCutViewMutationResult,
+  rebindDesktopCutProjectionState,
   type OpenNekoDesktopCutBridge,
 } from '../shared/cut-bridge-contract';
 import {
@@ -186,6 +205,19 @@ import {
   parseAgentExtensionManagementHostResult,
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
+import {
+  CHARACTER_FOUNDATION_HOST_CHANNEL,
+  CHARACTER_ROOM_WORKBENCH_CHANNELS,
+  createCharacterFoundationCommandHostRequest,
+  createCharacterFoundationHostRequest,
+  createCharacterRoomWorkbenchSnapshotRequest,
+  parseCharacterFoundationHostResult,
+  parseCharacterRoomWorkbenchProjectionEvent,
+  parseCharacterRoomWorkbenchSnapshotResult,
+  type CharacterRoomWorkbenchProjectionEvent,
+  type OpenNekoDesktopCharacterBridge,
+  type OpenNekoDesktopCharacterRoomWorkbenchBridge,
+} from '@neko/chara/contracts';
 
 let requestSequence = 0;
 let latestShellProjection: DesktopShellMutationContext | undefined;
@@ -205,6 +237,12 @@ const projectPortabilityListeners = new Set<
   Parameters<OpenNekoDesktopProjectPortabilityBridge['projectPortability']['subscribe']>[0]
 >();
 const currentPreviewIdentities = new Map<string, PreviewRuntimeIdentity>();
+const currentTextEditorIdentities = new Map<string, TextEditorRuntimeIdentity>();
+const currentTextEditorEventSequences = new Map<string, number>();
+const textEditorListeners = new Set<{
+  identity: TextEditorRuntimeIdentity;
+  readonly listener: Parameters<OpenNekoDesktopTextEditorBridge['textEditor']['subscribe']>[1];
+}>();
 const currentCanvasIdentities = new Map<string, CanvasHostRuntimeIdentity>();
 const currentCanvasEventSequences = new Map<string, number>();
 const canvasListeners = new Set<{
@@ -221,6 +259,17 @@ let currentSettingsProjection: DesktopApplicationSettingsProjection | undefined;
 const settingsListeners = new Set<
   Parameters<OpenNekoDesktopApplicationSettingsBridge['settings']['subscribe']>[0]
 >();
+let currentCharacterRoomRunId: string | undefined;
+let currentCharacterRoomEventSequence = 0;
+let currentCharacterRoomSnapshotRequestId: string | undefined;
+let characterRoomSnapshotPending = false;
+let pendingCharacterRoomEvents: CharacterRoomWorkbenchProjectionEvent[] = [];
+const characterRoomWorkbenchListeners = new Set<{
+  readonly roomRunId: string;
+  readonly listener: Parameters<
+    OpenNekoDesktopCharacterRoomWorkbenchBridge['characterRoomWorkbench']['subscribe']
+  >[1];
+}>();
 
 const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopShellBridge &
@@ -228,6 +277,7 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopAgentAutomationBridge &
   OpenNekoDesktopResourceBrowserBridge &
   OpenNekoDesktopPreviewBridge &
+  OpenNekoDesktopTextEditorBridge &
   OpenNekoDesktopCanvasBridge &
   OpenNekoDesktopCutBridge &
   OpenNekoAssetCenterBridge &
@@ -236,7 +286,78 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
   OpenNekoDesktopApplicationSettingsBridge &
-  OpenNekoDesktopProjectPortabilityBridge = {
+  OpenNekoDesktopProjectPortabilityBridge &
+  OpenNekoDesktopCharacterBridge &
+  OpenNekoDesktopCharacterRoomWorkbenchBridge = {
+  characterFoundation: {
+    async getSnapshot() {
+      const request = createCharacterFoundationHostRequest(nextRequestId('character-foundation'));
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_FOUNDATION_HOST_CHANNEL,
+        request,
+      );
+      return parseCharacterFoundationHostResult(response, request.requestId).snapshot;
+    },
+    async execute(command) {
+      const request = createCharacterFoundationCommandHostRequest(
+        nextRequestId('character-foundation-command'),
+        command,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_FOUNDATION_HOST_CHANNEL,
+        request,
+      );
+      return parseCharacterFoundationHostResult(response, request.requestId).snapshot;
+    },
+  },
+  characterRoomWorkbench: {
+    async getSnapshot(roomRunId) {
+      const request = createCharacterRoomWorkbenchSnapshotRequest(
+        nextRequestId('character-room-workbench'),
+        roomRunId,
+      );
+      currentCharacterRoomSnapshotRequestId = request.requestId;
+      characterRoomSnapshotPending = true;
+      currentCharacterRoomEventSequence = 0;
+      currentCharacterRoomRunId = request.roomRunId;
+      pendingCharacterRoomEvents = [];
+      try {
+        const response: unknown = await ipcRenderer.invoke(
+          CHARACTER_ROOM_WORKBENCH_CHANNELS.snapshotGet,
+          request,
+        );
+        const result = parseCharacterRoomWorkbenchSnapshotResult(response, request);
+        if (currentCharacterRoomSnapshotRequestId === request.requestId) {
+          currentCharacterRoomEventSequence = Math.max(
+            currentCharacterRoomEventSequence,
+            result.sequence,
+          );
+          characterRoomSnapshotPending = false;
+          for (const event of pendingCharacterRoomEvents) publishCharacterRoomEvent(event);
+          pendingCharacterRoomEvents = [];
+        }
+        return result.projection;
+      } catch (error) {
+        if (currentCharacterRoomSnapshotRequestId === request.requestId) {
+          currentCharacterRoomSnapshotRequestId = undefined;
+          characterRoomSnapshotPending = false;
+          currentCharacterRoomRunId = undefined;
+          currentCharacterRoomEventSequence = 0;
+          pendingCharacterRoomEvents = [];
+        }
+        throw error;
+      }
+    },
+    subscribe(roomRunId, listener) {
+      const identity = createCharacterRoomWorkbenchSnapshotRequest(
+        'character-room-workbench-subscription',
+        roomRunId,
+      ).roomRunId;
+      const subscription = { roomRunId: identity, listener };
+      characterRoomWorkbenchListeners.add(subscription);
+      return () => characterRoomWorkbenchListeners.delete(subscription);
+    },
+  },
   assistantResources: {
     async execute(value) {
       const request = parseAssistantResourceHostRequest(value);
@@ -245,21 +366,21 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   agentLaunch: {
-    async attach(workbenchInstanceId, agentSurfaceId, viewId, scope) {
+    async attach(workbenchInstanceId, agentSurfaceId, viewId, draft) {
       const request = parseAgentLaunchHostRequest({
         requestId: nextRequestId('agent-launch-attach'),
         operation: 'attach',
         workbenchInstanceId,
         agentSurfaceId,
         viewId,
-        scope,
+        draft,
       });
       const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
       const result = parseAgentLaunchHostResult(response, request.requestId);
-      if (result.status !== 'ready') {
+      if (result.status !== 'ready' && result.status !== 'unavailable') {
         throw new Error(`Agent launch attach returned '${result.status}'.`);
       }
-      return result.catalog;
+      return result;
     },
     async authorizeResource(connection, resourceKind) {
       const request = parseAgentLaunchHostRequest({
@@ -275,6 +396,62 @@ const bridge: OpenNekoDesktopBridge &
         throw new Error(`Agent launch authorization returned '${result.status}'.`);
       }
       return result.catalog;
+    },
+    async bindTarget(connection, binding) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-bind-target'),
+        operation: 'bind-target',
+        connection,
+        binding,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch target binding returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async bindAssistant(connection) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-bind-assistant'),
+        operation: 'bind-assistant',
+        connection,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch Assistant binding returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async updateConfiguration(connection, configuration) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-update-configuration'),
+        operation: 'update-configuration',
+        connection,
+        configuration,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch configuration update returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async searchWorkspaceMentions(connection, bindingReceiptId, filter) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-search-workspace-mentions'),
+        operation: 'search-workspace-mentions',
+        connection,
+        bindingReceiptId,
+        filter,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'mentions') {
+        throw new Error(`Agent launch mention search returned '${result.status}'.`);
+      }
+      return result.projection;
     },
     async submitDraft(connection, input) {
       const request = parseAgentLaunchHostRequest({
@@ -665,7 +842,14 @@ const bridge: OpenNekoDesktopBridge &
         DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
         request,
       );
-      return parseResourceBrowserProjection(response);
+      const result = parseResourceBrowserIntentResult(response);
+      if (
+        !isSameResourceBrowserIdentity(result.identity, request.identity) ||
+        result.requestId !== request.requestId
+      ) {
+        throw new Error('Desktop Resource Browser intent result identity does not match.');
+      }
+      return result;
     },
     subscribe(listener) {
       resourceListeners.add(listener);
@@ -814,6 +998,50 @@ const bridge: OpenNekoDesktopBridge &
       return projection;
     },
   },
+  textEditor: {
+    async execute(value) {
+      const request = parseTextEditorHostRequest(value);
+      const response: unknown = await ipcRenderer.invoke(
+        TEXT_EDITOR_HOST_CHANNELS.execute,
+        request,
+      );
+      const result = parseTextEditorHostResult(response);
+      const recoveredCleanSession =
+        result.status === 'ready' &&
+        request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet &&
+        sameTextEditorRuntimeOwner(result.identity, request.identity);
+      if (
+        result.requestId !== request.requestId ||
+        (!sameTextEditorRuntimeIdentity(result.identity, request.identity) &&
+          !recoveredCleanSession)
+      ) {
+        throw new Error('Desktop Text Editor result identity does not match.');
+      }
+      const previousKey = textEditorIdentityKey(request.identity);
+      const key = textEditorIdentityKey(result.identity);
+      if (result.status === 'ready') {
+        if (previousKey !== key) {
+          currentTextEditorIdentities.delete(previousKey);
+          currentTextEditorEventSequences.delete(previousKey);
+          for (const entry of textEditorListeners) {
+            if (sameTextEditorRuntimeIdentity(entry.identity, request.identity)) {
+              entry.identity = result.identity;
+            }
+          }
+        }
+        currentTextEditorIdentities.set(key, result.identity);
+      } else if (result.status === 'closed') {
+        currentTextEditorIdentities.delete(key);
+        currentTextEditorEventSequences.delete(key);
+      }
+      return result;
+    },
+    subscribe(identity, listener) {
+      const entry = { identity: parseTextEditorRuntimeIdentity(identity), listener };
+      textEditorListeners.add(entry);
+      return () => textEditorListeners.delete(entry);
+    },
+  },
   canvas: {
     async getSnapshot(value) {
       const identity = parseDesktopCanvasHostIdentity(value);
@@ -890,6 +1118,22 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   cut: {
+    async createDraft(value) {
+      const request = parseDesktopCutViewMutationRequest(value);
+      if (request.identity !== undefined) {
+        throw new Error('Desktop Cut draft creation must not carry a document identity.');
+      }
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_CUT_CHANNELS.draftCreate, request);
+      return parseDesktopCutViewMutationResult(response);
+    },
+    async closeView(value) {
+      const request = parseDesktopCutViewMutationRequest(value);
+      if (request.identity === undefined) {
+        throw new Error('Desktop Cut close requires an exact document identity.');
+      }
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_CUT_CHANNELS.viewClose, request);
+      return parseDesktopCutViewMutationResult(response);
+    },
     async getSnapshot(value) {
       const identity = parseDesktopCutHostIdentity(value);
       const response: unknown = await ipcRenderer.invoke(
@@ -900,7 +1144,7 @@ const bridge: OpenNekoDesktopBridge &
       if (!isSameCutHostIdentity(snapshot.identity, identity)) {
         throw new Error('Desktop Cut snapshot owner identity does not match.');
       }
-      const key = cutIdentityKey(snapshot.identity);
+      const key = desktopCutIdentityKey(snapshot.identity);
       currentCutIdentities.set(key, snapshot.identity);
       currentCutEventSequences.set(
         key,
@@ -910,7 +1154,7 @@ const bridge: OpenNekoDesktopBridge &
     },
     async execute(value) {
       const request = parseCutHostRuntimeRequest(value);
-      const identity = currentCutIdentities.get(cutIdentityKey(request.identity));
+      const identity = currentCutIdentities.get(desktopCutIdentityKey(request.identity));
       const createsDocument = request.route === CUT_HOST_RUNTIME_ROUTES.documentCreate;
       if (
         (!identity && !createsDocument) ||
@@ -924,16 +1168,37 @@ const bridge: OpenNekoDesktopBridge &
       );
       const result = parseCutHostRuntimeResult(response);
       const expectedIdentity = identity ?? request.identity;
-      if (!isSameCutHostIdentity(result.snapshot.identity, expectedIdentity)) {
+      const savesDraft =
+        request.route === CUT_HOST_RUNTIME_ROUTES.save &&
+        isCutDraftDocumentId(request.identity.documentId);
+      const reboundDraft =
+        savesDraft &&
+        !isCutDraftDocumentId(result.snapshot.identity.documentId) &&
+        isSameCutHostSession(result.snapshot.identity, expectedIdentity);
+      if (!isSameCutHostIdentity(result.snapshot.identity, expectedIdentity) && !reboundDraft) {
         throw new Error('Desktop Cut response owner identity does not match.');
       }
-      if (createsDocument) {
-        const key = cutIdentityKey(result.snapshot.identity);
-        currentCutIdentities.set(key, result.snapshot.identity);
-        currentCutEventSequences.set(
-          key,
-          preserveDesktopBootstrapEventSequence(currentCutEventSequences.get(key)),
-        );
+      if (createsDocument || reboundDraft) {
+        if (reboundDraft) {
+          if (result.output?.type !== 'identity-rebound') {
+            throw new Error('Desktop Cut draft rebind result is missing its event cursor.');
+          }
+          rebindDesktopCutProjectionState({
+            identities: currentCutIdentities,
+            eventSequences: currentCutEventSequences,
+            listeners: cutListeners,
+            previousIdentity: expectedIdentity,
+            nextIdentity: result.snapshot.identity,
+            eventSequence: result.output.eventSequence,
+          });
+        } else {
+          const key = desktopCutIdentityKey(result.snapshot.identity);
+          currentCutIdentities.set(key, result.snapshot.identity);
+          currentCutEventSequences.set(
+            key,
+            preserveDesktopBootstrapEventSequence(currentCutEventSequences.get(key)),
+          );
+        }
       }
       return result;
     },
@@ -1208,7 +1473,7 @@ ipcRenderer.on(
   DESKTOP_CUT_CHANNELS.projectionEvent,
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
     const event = parseCutHostRuntimeProjectionEvent(value);
-    const key = cutIdentityKey(event.snapshot.identity);
+    const key = desktopCutIdentityKey(event.snapshot.identity);
     const identity = currentCutIdentities.get(key);
     if (!identity || !isSameCutHostIdentity(event.snapshot.identity, identity)) {
       return;
@@ -1223,6 +1488,25 @@ ipcRenderer.on(
     }
   },
 );
+
+ipcRenderer.on(
+  CHARACTER_ROOM_WORKBENCH_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseCharacterRoomWorkbenchProjectionEvent(value);
+    if (event.requestId !== currentCharacterRoomSnapshotRequestId) return;
+    if (event.projection.roomRunId !== currentCharacterRoomRunId) return;
+    if (event.sequence !== currentCharacterRoomEventSequence + 1) return;
+    currentCharacterRoomEventSequence = event.sequence;
+    if (characterRoomSnapshotPending) pendingCharacterRoomEvents.push(event);
+    else publishCharacterRoomEvent(event);
+  },
+);
+
+function publishCharacterRoomEvent(event: CharacterRoomWorkbenchProjectionEvent): void {
+  for (const subscription of characterRoomWorkbenchListeners) {
+    if (subscription.roomRunId === event.projection.roomRunId) subscription.listener(event);
+  }
+}
 
 ipcRenderer.on(
   DESKTOP_RESOURCE_BROWSER_CHANNELS.projectionEvent,
@@ -1256,6 +1540,22 @@ ipcRenderer.on(
 );
 
 ipcRenderer.on(
+  TEXT_EDITOR_HOST_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseTextEditorProjectionEvent(value);
+    const key = textEditorIdentityKey(event.identity);
+    const identity = currentTextEditorIdentities.get(key);
+    if (!identity || !sameTextEditorRuntimeIdentity(event.identity, identity)) return;
+    const currentSequence = currentTextEditorEventSequences.get(key);
+    if (currentSequence !== undefined && event.sequence <= currentSequence) return;
+    currentTextEditorEventSequences.set(key, event.sequence);
+    for (const entry of textEditorListeners) {
+      if (sameTextEditorRuntimeIdentity(entry.identity, identity)) entry.listener(event);
+    }
+  },
+);
+
+ipcRenderer.on(
   DESKTOP_CANVAS_CHANNELS.projectionEvent,
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
     const event: CanvasHostProjectionEvent = parseCanvasHostProjectionEvent(value);
@@ -1276,6 +1576,16 @@ ipcRenderer.on(
 );
 
 contextBridge.exposeInMainWorld('openNekoDesktop', bridge);
+
+function textEditorIdentityKey(identity: TextEditorRuntimeIdentity): string {
+  return [
+    identity.windowId,
+    identity.viewId,
+    identity.viewInstanceId,
+    identity.documentId,
+    identity.sessionId,
+  ].join(':');
+}
 
 function nextRequestId(prefix: string): string {
   requestSequence += 1;
@@ -1337,17 +1647,6 @@ function requireProjectPortabilityResultIdentity(
 }
 
 function canvasIdentityKey(identity: CanvasHostRuntimeIdentity): string {
-  return [
-    identity.windowId,
-    identity.viewId,
-    String(identity.viewInstanceId),
-    identity.documentId,
-    identity.sessionId,
-    identity.rendererSessionId,
-  ].join(':');
-}
-
-function cutIdentityKey(identity: CutHostRuntimeIdentity): string {
   return [
     identity.windowId,
     identity.viewId,

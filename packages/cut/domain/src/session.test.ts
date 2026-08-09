@@ -1236,6 +1236,7 @@ describe('CutDocumentSession', () => {
 
   it('rebases through the supplied Save As boundary and resets document identity history', async () => {
     const storage = new MemoryStorage();
+    const destinationStorage = new MemoryStorage();
     const session = CutDocumentSession.create('file:///workspace/old/demo.otio', emptyTimeline(), {
       storage,
       createClipId: sequence('clip'),
@@ -1246,6 +1247,7 @@ describe('CutDocumentSession', () => {
 
     await session.saveAs({
       documentUri: 'file:///workspace/new/demo.otio',
+      storage: destinationStorage,
       rebase: (document) =>
         applyCutCommand(document, {
           type: 'relink-media',
@@ -1257,7 +1259,7 @@ describe('CutDocumentSession', () => {
     expect(session.documentUri).toBe('file:///workspace/new/demo.otio');
     expect(session.dirty).toBe(false);
     expect(session.canUndo).toBe(false);
-    const stored = storage.readSync(session.documentUri);
+    const stored = destinationStorage.readSync(session.documentUri);
     const parsed = parseOtio(stored.bytes);
     expect(parsed.ok && parsed.document.tracks.children[0]?.children[0]).toMatchObject({
       media_reference: { target_url: '../media/shot.mp4' },

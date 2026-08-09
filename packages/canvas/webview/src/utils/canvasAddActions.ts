@@ -1,6 +1,6 @@
 import type { CanonicalCanvasNodeType } from '@neko/canvas-domain';
 
-export type CanvasAddActionId = 'text' | 'table' | 'image' | 'video' | 'audio' | 'director3d';
+export type CanvasAddActionId = 'text' | 'image' | 'video' | 'audio';
 
 export type CanvasAddSourceKind = 'image' | 'video' | 'audio' | 'model';
 export type CanvasAddSourceModeId = 'create' | 'import' | 'reference';
@@ -35,52 +35,39 @@ export interface CanvasAddAction {
   readonly labelKey: string;
   readonly descriptionKey?: string;
   readonly badgeKey?: string;
-  readonly mode: 'direct' | 'source';
+  readonly mode: 'direct' | 'generation' | 'source';
+  readonly generationKind?: 'prompt' | 'image' | 'video' | 'audio';
   readonly sourceKind?: CanvasAddSourceKind;
 }
 
 export const CANVAS_ADD_ACTIONS: readonly CanvasAddAction[] = [
   {
     id: 'text',
-    nodeType: 'markdown',
+    nodeType: 'generation',
     labelKey: 'node.text',
-    mode: 'direct',
-  },
-  {
-    id: 'table',
-    nodeType: 'markdown',
-    labelKey: 'node.table',
-    descriptionKey: 'node.tableDescription',
-    mode: 'direct',
+    mode: 'generation',
+    generationKind: 'prompt',
   },
   {
     id: 'image',
-    nodeType: 'media',
+    nodeType: 'generation',
     labelKey: 'node.image',
-    mode: 'source',
-    sourceKind: 'image',
+    mode: 'generation',
+    generationKind: 'image',
   },
   {
     id: 'video',
-    nodeType: 'media',
+    nodeType: 'generation',
     labelKey: 'node.video',
-    mode: 'source',
-    sourceKind: 'video',
+    mode: 'generation',
+    generationKind: 'video',
   },
   {
     id: 'audio',
-    nodeType: 'media',
+    nodeType: 'generation',
     labelKey: 'node.audio',
-    mode: 'source',
-    sourceKind: 'audio',
-  },
-  {
-    id: 'director3d',
-    nodeType: 'file',
-    labelKey: 'node.director3d',
-    badgeKey: 'badge.new',
-    mode: 'source',
-    sourceKind: 'model',
+    mode: 'generation',
+    generationKind: 'audio',
   },
 ] as const;
 

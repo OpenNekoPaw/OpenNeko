@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import { readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
-import { createDesktopUiFunctionalLaunch } from '../run-desktop-ui-functional.mjs';
+import {
+  createDesktopUiFunctionalLaunch,
+  prepareDesktopUiFunctionalWorkspace,
+} from '../run-desktop-ui-functional.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CODE_GATE_ROOTS = Object.freeze([
@@ -16,11 +20,27 @@ const CODE_GATE_ROOTS = Object.freeze([
 const LOCAL_RUNTIME_SCRIPTS = Object.freeze(['dev:desktop']);
 
 describe('Desktop functional workflow boundary', () => {
+  it('prepares a minimal project inside the isolated manual Workspace', async () => {
+    const fixtureHome = await mkdtemp(join(tmpdir(), 'openneko-desktop-functional-manual-'));
+    try {
+      const workspacePath = await prepareDesktopUiFunctionalWorkspace(fixtureHome);
+      const project = JSON.parse(
+        await readFile(join(workspacePath, 'neko', 'project.json'), 'utf8'),
+      );
+
+      assert.equal(workspacePath, join(fixtureHome, 'workspace'));
+      assert.equal(project.workspaceId, '4c58697b-af37-4e30-8863-502ed5927a6e');
+    } finally {
+      await rm(fixtureHome, { recursive: true, force: true });
+    }
+  });
+
   it('launches graphical UI acceptance with isolated functional and Electron data roots', () => {
     const launch = createDesktopUiFunctionalLaunch({
       platform: 'darwin',
       fixtureHome: '/tmp/openneko-desktop-functional-shell',
       userDataRoot: '/tmp/openneko-desktop-functional-shell/electron-user-data',
+      workspacePath: '/tmp/openneko-desktop-functional-shell/workspace',
     });
 
     assert.equal(launch.command, 'pnpm');
@@ -34,12 +54,14 @@ describe('Desktop functional workflow boundary', () => {
     ]);
     assert.deepEqual(launch.environment, {
       OPENNEKO_DESKTOP_FUNCTIONAL_HOME: '/tmp/openneko-desktop-functional-shell',
+      OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE: '/tmp/openneko-desktop-functional-shell/workspace',
     });
 
     const windowsLaunch = createDesktopUiFunctionalLaunch({
       platform: 'win32',
       fixtureHome: 'D:\\openneko-desktop-functional-shell',
       userDataRoot: 'D:\\openneko-desktop-functional-shell\\electron-user-data',
+      workspacePath: 'D:\\openneko-desktop-functional-shell\\workspace',
     });
     assert.equal(windowsLaunch.command, 'pnpm.cmd');
   });

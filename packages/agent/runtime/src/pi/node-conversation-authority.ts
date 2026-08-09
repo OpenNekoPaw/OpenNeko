@@ -11,7 +11,7 @@ import {
   type SessionTreeEntry,
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 import { serializeLocalMetadataJson } from '@neko/local-metadata';
 import {
   parsePortablePiConversationManifest,
@@ -19,6 +19,11 @@ import {
   type PortablePiConversationManifest,
 } from './conversation-portability';
 import { openNodePiConversationStorage } from './node-conversation-storage';
+import {
+  PI_USER_MESSAGE_PRESENTATION_CUSTOM_TYPE,
+  parsePiUserMessagePresentation,
+  type PiUserMessagePresentation,
+} from './user-message-presentation';
 
 export interface ConversationExecutionLease {
   readonly conversationId: string;
@@ -34,7 +39,7 @@ export interface PiConversationCatalogRecord {
   readonly activeBranchId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly context?: AgentConversationContext;
+  readonly context?: AgentBoundDomainBinding;
 }
 
 export interface PiConversationBranchRecord {
@@ -122,6 +127,7 @@ export interface CheckpointPiTurnInput {
   readonly branchId: string;
   readonly turnId: string;
   readonly terminalState: PiTurnCheckpointRecord['terminalState'];
+  readonly userMessagePresentation?: PiUserMessagePresentation;
   readonly messages?: readonly AgentMessage[];
 }
 
@@ -577,6 +583,16 @@ export class NodePiConversationAuthority {
 
   async checkpointTurn(input: CheckpointPiTurnInput): Promise<PiTurnCheckpointRecord> {
     validateIdentity('turnId', input.turnId);
+    const userMessagePresentation =
+      input.userMessagePresentation === undefined
+        ? undefined
+        : parsePiUserMessagePresentation(input.userMessagePresentation);
+    if (userMessagePresentation && userMessagePresentation.turnId !== input.turnId) {
+      throw new PiConversationAuthorityError(
+        'invalid-identity',
+        `Pi user message presentation Turn '${userMessagePresentation.turnId}' does not match checkpoint Turn '${input.turnId}'.`,
+      );
+    }
     const key = checkpointKey(input.conversationId, input.turnId);
     this.durability.set(key, 'persisting');
     try {
@@ -592,6 +608,12 @@ export class NodePiConversationAuthority {
       }
       try {
         this.assertLease(input.lease, this.now());
+        if (userMessagePresentation) {
+          await session.appendCustomEntry(
+            PI_USER_MESSAGE_PRESENTATION_CUSTOM_TYPE,
+            userMessagePresentation,
+          );
+        }
         for (const message of input.messages ?? []) {
           await session.appendMessage(message);
         }

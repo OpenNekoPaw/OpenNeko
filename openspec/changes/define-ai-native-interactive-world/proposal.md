@@ -40,4 +40,4 @@ OpenNeko 当前只把 `@neko/world` 记录为拟议 owner，并在 Character Pla
 - Data：新增 versioned WorldProject、WorldVersion、WorldExperienceVersion 和 WorldSave 格式；项目事实进入 workspace `neko/` 下 owning-domain 文件，用户级 SQLite 只保存 catalog、恢复索引和可重建 projection。
 - AI：复用现有 Pi/AgentSession、Tool Call、purpose-model binding、流式 event、Approval、打断和取消；不建立 World-specific Agent runtime。每个作品必须声明非空、provider-neutral 的实时 AI contract，Host 只允许通过资格的 binding 启动 Run。
 - Presentation：复用 ContentLocator、Entity/Asset representation、共享 UI、Preview/Media 与实时表现 public contracts；Renderer/Webview 只消费 WorldView 和短生命周期表现 descriptor。普通 GenerationJob 只服务 World authoring 和传统作品输出，不进入实时 World Run 的成功路径。
-- Related design：需要在实施前协调 `define-character-chatroom-play-use`，将外部游戏、VLA、seat lease 与 Computer Use 从 World core 的目标职责中移出；当前 Desktop World surface 继续保持 unavailable。
+- Related design：`define-character-dialogue-chatroom-world-foundation` 先建立 Character Chatroom 当前消费的 WorldBook、WorldVersion、WorldRun、WorldEvent、WorldState、WorldView 与叙事 save/branch authority；本变更在同一事实链上扩展完整 AI-native World。Browser Use、Computer Use、Play-use、外部游戏、VLA 与 seat control 由独立变更拥有，当前 Desktop World surface 继续保持 unavailable。

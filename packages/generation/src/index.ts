@@ -24,8 +24,13 @@ export type {
 } from './contracts';
 export type {
   GenerationExecutionPort,
+  GenerationExecutionResult,
+  MediaGenerationExecutionPort,
   MediaGenerationExecutionOptions,
   MediaGenerationResult,
+  PromptGenerationExecutionPort,
+  PromptGenerationRequest,
+  PromptGenerationResult,
 } from './execution';
 export * from './job/contracts';
 export * from './domain-contracts/index';

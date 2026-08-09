@@ -1,31 +1,42 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRef } from 'react';
-import { parseSendMessageWebviewMessage } from '@neko/agent-contracts';
+import { type AgentInputCatalogMessage } from '@neko/agent-contracts';
 import { useChatActions } from '../useChatActions';
 
 const hostMocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
-  invokeSlashCommand: vi.fn(),
-  invokeSkill: vi.fn(),
+  invokeAgentInput: vi.fn(),
   cancelMessage: vi.fn(),
 }));
 
 vi.mock('../../host-runtime-context', () => ({
   useAgentHostMessages: () => ({
     sendMessage: hostMocks.sendMessage,
-    invokeSlashCommand: hostMocks.invokeSlashCommand,
-    invokeSkill: hostMocks.invokeSkill,
+    invokeAgentInput: hostMocks.invokeAgentInput,
     cancelMessage: hostMocks.cancelMessage,
   }),
 }));
+
+function createSessionInputCatalog(
+  entries: AgentInputCatalogMessage['entries'],
+  bindingKind: AgentInputCatalogMessage['bindingKind'] = 'assistant',
+): AgentInputCatalogMessage {
+  return {
+    type: 'agentInputCatalog',
+    conversationId: bindingKind === 'character' ? 'role-session-1' : 'conv-1',
+    phase: 'session',
+    bindingKind,
+    entries,
+  };
+}
 
 describe('useChatActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('routes direct builtin slash commands without persisting them as chat messages', () => {
+  it('routes a direct command through the exact Session catalog identity', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -39,6 +50,20 @@ describe('useChatActions', () => {
       return useChatActions({
         inputValue: '/as @小明 --consult hello',
         isThinking: false,
+        inputCatalog: createSessionInputCatalog([
+          {
+            id: 'command:builtin:as',
+            name: 'as',
+            description: 'Start a role interaction',
+            trigger: 'command',
+            prefix: '/',
+            phaseRequirement: 'session',
+            bindingRequirement: 'any',
+            source: { kind: 'builtin', sourceId: 'as' },
+            availability: { status: 'available' },
+            executable: { kind: 'command', commandId: 'as', handlerId: 'builtin:as' },
+          },
+        ]),
         selectedModel: 'model-a',
         activeConversationId: 'conv-1',
         activeConversationIdRef,
@@ -57,9 +82,14 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(hostMocks.invokeSlashCommand).toHaveBeenCalledWith(
-      'as',
-      '@小明 --consult hello',
+    expect(hostMocks.invokeAgentInput).toHaveBeenCalledWith(
+      {
+        kind: 'command',
+        catalogEntryId: 'command:builtin:as',
+        commandId: 'as',
+        handlerId: 'builtin:as',
+        args: '@小明 --consult hello',
+      },
       'conv-1',
     );
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
@@ -70,18 +100,75 @@ describe('useChatActions', () => {
     expect(setAttachedFiles).toHaveBeenCalledWith([]);
   });
 
-  it('sends unknown slash text as a normal chat message', () => {
+  it('routes /compact only through the exact Session command receipt', () => {
+    const clearInput = vi.fn();
+    const { result } = renderHook(() => {
+      const activeConversationIdRef = useRef<string | null>('conv-1');
+      return useChatActions({
+        inputValue: '/compact',
+        isThinking: false,
+        inputCatalog: createSessionInputCatalog([
+          {
+            id: 'command:builtin:compact',
+            name: 'compact',
+            description: 'Compact the exact Conversation',
+            trigger: 'command',
+            prefix: '/',
+            phaseRequirement: 'session',
+            bindingRequirement: 'any',
+            source: { kind: 'builtin', sourceId: 'compact' },
+            availability: { status: 'available' },
+            executable: {
+              kind: 'command',
+              commandId: 'compact',
+              handlerId: 'builtin:compact',
+            },
+          },
+        ]),
+        selectedModel: 'model-a',
+        activeConversationId: 'conv-1',
+        activeConversationIdRef,
+        streamingMessageIdRef: { current: null },
+        messages: [],
+        setMessages: vi.fn(),
+        setIsThinking: vi.fn(),
+        setStreamingMessageId: vi.fn(),
+        setActiveTab: vi.fn(),
+        clearInput,
+        setAttachedFiles: vi.fn(),
+      });
+    });
+
+    act(() => result.current.handleSend());
+
+    expect(hostMocks.invokeAgentInput).toHaveBeenCalledWith(
+      {
+        kind: 'command',
+        catalogEntryId: 'command:builtin:compact',
+        commandId: 'compact',
+        handlerId: 'builtin:compact',
+      },
+      'conv-1',
+    );
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(clearInput).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports unknown slash text without sending it as a normal chat message', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
     const streamingMessageIdRef = { current: 'streaming-1' };
     const onUserMessageSent = vi.fn();
+    const reportInputDiagnostic = vi.fn();
 
     const { result } = renderHook(() => {
       const activeConversationIdRef = useRef<string | null>('conv-1');
       return useChatActions({
         inputValue: '/not-a-builtin hello',
         isThinking: false,
+        inputCatalog: createSessionInputCatalog([]),
+        reportInputDiagnostic,
         selectedModel: 'model-a',
         activeConversationId: 'conv-1',
         activeConversationIdRef,
@@ -101,25 +188,16 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(hostMocks.invokeSlashCommand).not.toHaveBeenCalled();
-    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-1',
-        message: '/not-a-builtin hello',
-        sessionMode: 'agent',
-      }),
+    expect(hostMocks.invokeAgentInput).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(reportInputDiagnostic).toHaveBeenCalledWith(
+      "Agent input '/not-a-builtin' is unknown or stale.",
     );
-    expect(setMessages).toHaveBeenCalledTimes(1);
-    expect(setIsThinking).toHaveBeenCalledWith(true);
-    expect(setStreamingMessageId).toHaveBeenCalledWith(null);
-    expect(streamingMessageIdRef.current).toBeNull();
-    expect(onUserMessageSent).toHaveBeenCalledWith({
-      conversationId: 'conv-1',
-      message: expect.objectContaining({
-        role: 'user',
-        content: '/not-a-builtin hello',
-      }),
-    });
+    expect(setMessages).not.toHaveBeenCalled();
+    expect(setIsThinking).not.toHaveBeenCalled();
+    expect(setStreamingMessageId).not.toHaveBeenCalled();
+    expect(streamingMessageIdRef.current).toBe('streaming-1');
+    expect(onUserMessageSent).not.toHaveBeenCalled();
   });
 
   it('routes direct dollar skill invocations without persisting them as chat messages', () => {
@@ -134,6 +212,27 @@ describe('useChatActions', () => {
       return useChatActions({
         inputValue: '$quality-review changed files',
         isThinking: false,
+        inputCatalog: createSessionInputCatalog(
+          [
+            {
+              id: 'skill:project:quality-review',
+              name: 'quality-review',
+              description: 'Review changed files',
+              trigger: 'skill',
+              prefix: '$',
+              phaseRequirement: 'any',
+              bindingRequirement: 'workspace',
+              source: { kind: 'project', workspaceId: 'workspace-1', sourceId: 'skill-source-1' },
+              availability: { status: 'available' },
+              executable: {
+                kind: 'skill',
+                skillName: 'quality-review',
+                activationId: 'skill:project:skill:skill-source-1',
+              },
+            },
+          ],
+          'workspace',
+        ),
         selectedModel: 'model-a',
         activeConversationId: 'conv-1',
         activeConversationIdRef,
@@ -152,8 +251,16 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(hostMocks.invokeSkill).toHaveBeenCalledWith('quality-review', 'changed files', 'conv-1');
-    expect(hostMocks.invokeSlashCommand).not.toHaveBeenCalled();
+    expect(hostMocks.invokeAgentInput).toHaveBeenCalledWith(
+      {
+        kind: 'skill',
+        catalogEntryId: 'skill:project:quality-review',
+        skillName: 'quality-review',
+        activationId: 'skill:project:skill:skill-source-1',
+        args: 'changed files',
+      },
+      'conv-1',
+    );
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
     expect(setMessages).not.toHaveBeenCalled();
     expect(setIsThinking).not.toHaveBeenCalled();
@@ -274,17 +381,19 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('sends builtin slash-looking text as role session content during character role sessions', () => {
+  it('does not let Character raw command text bypass its exact catalog policy', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
+    const reportInputDiagnostic = vi.fn();
 
     const { result } = renderHook(() => {
       const activeConversationIdRef = useRef<string | null>('role-session-1');
       return useChatActions({
         inputValue: '/as @小明 --consult hello',
         isThinking: false,
-        isCharacterRoleSession: true,
+        inputCatalog: createSessionInputCatalog([], 'character'),
+        reportInputDiagnostic,
         selectedModel: 'model-a',
         activeConversationId: 'role-session-1',
         activeConversationIdRef,
@@ -303,17 +412,12 @@ describe('useChatActions', () => {
       result.current.handleSend();
     });
 
-    expect(hostMocks.invokeSlashCommand).not.toHaveBeenCalled();
-    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'role-session-1',
-        message: '/as @小明 --consult hello',
-        sessionMode: 'agent',
-      }),
-    );
-    expect(setMessages).toHaveBeenCalledTimes(1);
-    expect(setIsThinking).toHaveBeenCalledWith(true);
-    expect(setStreamingMessageId).toHaveBeenCalledWith(null);
+    expect(hostMocks.invokeAgentInput).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(reportInputDiagnostic).toHaveBeenCalledWith("Agent input '/as' is unknown or stale.");
+    expect(setMessages).not.toHaveBeenCalled();
+    expect(setIsThinking).not.toHaveBeenCalled();
+    expect(setStreamingMessageId).not.toHaveBeenCalled();
   });
 
   it('resolves selected chat models from model options instead of parsing the option id', () => {
@@ -361,83 +465,6 @@ describe('useChatActions', () => {
           providerId: 'deepseek-chat',
           modelId: 'deepseek-pro',
           category: 'llm',
-        },
-      }),
-    );
-  });
-
-  it('does not send purpose model selections outside Agent mode', () => {
-    const setMessages = vi.fn();
-    const setIsThinking = vi.fn();
-    const setStreamingMessageId = vi.fn();
-
-    const { result } = renderHook(() => {
-      const activeConversationIdRef = useRef<string | null>('conv-image');
-      return useChatActions({
-        inputValue: '生成一张图片',
-        isThinking: false,
-        selectedModel: 'openai:gpt-4.1',
-        availableModels: [
-          {
-            id: 'openai:gpt-4.1',
-            label: 'OpenAI / GPT 4.1',
-            providerId: 'openai',
-            modelId: 'gpt-4.1',
-            category: 'llm',
-          },
-          {
-            id: 'flux:flux-pro',
-            label: 'Flux / Flux Pro',
-            providerId: 'flux',
-            modelId: 'flux-pro',
-            category: 'image',
-            capabilities: ['text_to_image'],
-          },
-        ],
-        sessionMode: 'image',
-        mediaProviderId: 'flux',
-        mediaModelId: 'flux-pro',
-        agentMediaModels: {
-          image: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
-          video: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
-        },
-        understandingModels: {
-          image: { providerId: 'google', modelId: 'gemini-image', category: 'llm' },
-        },
-        activeConversationId: 'conv-image',
-        activeConversationIdRef,
-        streamingMessageIdRef: { current: null },
-        messages: [],
-        setMessages,
-        setIsThinking,
-        setStreamingMessageId,
-        setActiveTab: vi.fn(),
-        clearInput: vi.fn(),
-        setAttachedFiles: vi.fn(),
-      });
-    });
-
-    act(() => {
-      result.current.handleSend();
-    });
-
-    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-image',
-        message: '生成一张图片',
-        sessionMode: 'image',
-      }),
-    );
-    const payload = { type: 'sendMessage', ...hostMocks.sendMessage.mock.calls[0]?.[0] };
-    expect(payload).not.toHaveProperty('purposeModels');
-    expect(payload).not.toHaveProperty('chatModel');
-    expect(parseSendMessageWebviewMessage(payload)).toEqual(
-      expect.objectContaining({
-        sessionMode: 'image',
-        mediaModel: {
-          providerId: 'flux',
-          modelId: 'flux-pro',
-          category: 'image',
         },
       }),
     );
@@ -507,47 +534,6 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage.mock.calls[0]?.[0]?.purposeModels).not.toHaveProperty([
       'audio.generate',
     ]);
-  });
-
-  it('does not cache understanding model selections for new non-Agent conversations', () => {
-    const ensureConversationForSend = vi.fn();
-
-    const { result } = renderHook(() => {
-      const activeConversationIdRef = useRef<string | null>(null);
-      return useChatActions({
-        inputValue: '生成视频',
-        isThinking: false,
-        selectedModel: 'model-a',
-        sessionMode: 'video',
-        activeConversationId: null,
-        activeConversationIdRef,
-        streamingMessageIdRef: { current: null },
-        messages: [],
-        setMessages: vi.fn(),
-        setIsThinking: vi.fn(),
-        setStreamingMessageId: vi.fn(),
-        setActiveTab: vi.fn(),
-        clearInput: vi.fn(),
-        setAttachedFiles: vi.fn(),
-        ensureConversationForSend,
-      });
-    });
-
-    act(() => {
-      result.current.handleSend({
-        sessionMode: 'video',
-        understandingModels: {
-          video: { providerId: 'google', modelId: 'gemini-video', category: 'llm' },
-        },
-      });
-    });
-
-    expect(ensureConversationForSend).toHaveBeenCalledWith({
-      messageText: '生成视频',
-      displayMessageText: '生成视频',
-      sessionMode: 'video',
-    });
-    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it('gives the explicit Agent primary model precedence for LLM routing', () => {
@@ -663,7 +649,7 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('contextPayloads');
   });
 
-  it('keeps selected file references as local attachment previews while sending @path text', () => {
+  it('projects selected file references once and sends them separately from message text', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -691,7 +677,7 @@ describe('useChatActions', () => {
 
     act(() => {
       result.current.handleSend({
-        messageText: '参考 @"assets/ref file.zip"',
+        messageText: '参考',
         displayMessageText: '参考',
         fileReferences: [
           {
@@ -718,28 +704,12 @@ describe('useChatActions', () => {
             contentLocator: { kind: 'workspace-file', path: 'assets/ref file.zip' },
           }),
         ],
-        attachments: [
-          expect.objectContaining({
-            id: 'file-ref:assets/ref file.zip',
-            name: 'ref file.zip',
-            path: 'assets/ref file.zip',
-            type: 'file',
-          }),
-        ],
       }),
     ]);
     expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-files',
-        message: '参考 @"assets/ref file.zip"',
-        attachments: [
-          expect.objectContaining({
-            id: 'file-ref:assets/ref file.zip',
-            name: 'ref file.zip',
-            path: 'assets/ref file.zip',
-            type: 'file',
-          }),
-        ],
+        message: '参考',
         fileReferences: [
           {
             id: 'file-ref:assets/ref file.zip',
@@ -755,7 +725,7 @@ describe('useChatActions', () => {
     expect(setSelectedFileReferences).toHaveBeenCalledWith([]);
   });
 
-  it('sends selected document references as @path text without file attachments', () => {
+  it('sends selected document references without file attachments or text rewriting', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -781,7 +751,7 @@ describe('useChatActions', () => {
 
     act(() => {
       result.current.handleSend({
-        messageText: '分析 @books/story.epub',
+        messageText: '分析',
         displayMessageText: '分析',
         fileReferences: [
           {
@@ -819,7 +789,7 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-doc',
-        message: '分析 @books/story.epub',
+        message: '分析',
         fileReferences: [
           {
             id: 'file-ref:books/story.epub',
@@ -861,7 +831,7 @@ describe('useChatActions', () => {
 
     act(() => {
       result.current.handleSend({
-        messageText: '@books/story.epub',
+        messageText: '',
         displayMessageText: '',
         fileReferences: [
           {
@@ -892,7 +862,7 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-doc-only',
-        message: '@books/story.epub',
+        message: '',
         fileReferences: [
           {
             id: 'file-ref:books/story.epub',
@@ -905,7 +875,7 @@ describe('useChatActions', () => {
     );
   });
 
-  it('sends selected media file references as attachments for extension preprocessing', () => {
+  it('sends selected media references as locators without synthesizing attachments', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -931,7 +901,7 @@ describe('useChatActions', () => {
 
     act(() => {
       result.current.handleSend({
-        messageText: '参考 @assets/1.png @cases/1080P.mp4',
+        messageText: '参考',
         displayMessageText: '参考',
         fileReferences: [
           {
@@ -953,26 +923,17 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-media',
-        message: '参考 @assets/1.png @cases/1080P.mp4',
-        attachments: [
-          expect.objectContaining({
-            id: 'file-ref:assets/1.png',
-            name: '1.png',
-            path: 'assets/1.png',
-            type: 'image',
-          }),
-          expect.objectContaining({
-            id: 'file-ref:cases/1080P.mp4',
-            name: '1080P.mp4',
-            path: 'cases/1080P.mp4',
-            type: 'video',
-          }),
+        message: '参考',
+        fileReferences: [
+          expect.objectContaining({ id: 'file-ref:assets/1.png', mediaType: 'image' }),
+          expect.objectContaining({ id: 'file-ref:cases/1080P.mp4', mediaType: 'video' }),
         ],
       }),
     );
+    expect(hostMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('attachments');
   });
 
-  it('infers selected file reference attachment types from paths', () => {
+  it('does not infer attachment semantics from a selected locator path', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -998,7 +959,7 @@ describe('useChatActions', () => {
 
     act(() => {
       result.current.handleSend({
-        messageText: '参考 @cases/1080P.mp4',
+        messageText: '参考',
         displayMessageText: '参考',
         fileReferences: [
           {
@@ -1013,15 +974,15 @@ describe('useChatActions', () => {
     const updater = setMessages.mock.calls[0]?.[0] as (messages: unknown[]) => unknown[];
     expect(updater([])).toEqual([
       expect.objectContaining({
-        attachments: [
+        contextReferences: [
           expect.objectContaining({
-            name: '1080P.mp4',
-            path: 'cases/1080P.mp4',
-            type: 'video',
+            label: '1080P.mp4',
+            contentLocator: { kind: 'workspace-file', path: 'cases/1080P.mp4' },
           }),
         ],
       }),
     ]);
+    expect(hostMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('attachments');
   });
 
   it('notifies user message sent for externally triggered sends', () => {

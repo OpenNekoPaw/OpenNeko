@@ -59,5 +59,14 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       defaultSize: { width: 280, height: 200 },
       presentation: 'foundational',
     },
+    generation: {
+      type: 'generation',
+      labelKey: 'node.generation',
+      icon: 'AI',
+      tagLabel: 'GEN',
+      tagColor: '#0f766e',
+      defaultSize: { width: 300, height: 220 },
+      presentation: 'foundational',
+    },
   };
 }

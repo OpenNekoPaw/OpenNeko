@@ -6,7 +6,6 @@ import type {
   AgentMediaModelCategory,
   AgentMediaModelSelections,
   AgentFlatPurposeModelRefs,
-  MediaModelCategory,
   ModelRef,
   ProjectFileMentionInfo,
   ProjectMentionMediaType,
@@ -15,7 +14,7 @@ import type {
 
 export type MediaModelDefaults = Partial<Record<AgentMediaModelCategory, string>>;
 export type MediaModelSelectionState = Record<AgentMediaModelCategory, string>;
-export type AgentSessionMode = 'agent' | AgentMediaModelCategory;
+export type AgentSessionMode = 'agent';
 
 export interface SettingsDataProjection {
   settingsPatch: Partial<SettingsState>;
@@ -33,14 +32,11 @@ export interface MessageModelProjectionInput {
   selectedModel: string;
   chatModelOptions?: readonly ChatModelOption[];
   sessionMode: AgentSessionMode;
-  mediaProviderId?: string;
-  mediaModelId?: string;
   agentMediaModels?: AgentMediaModelSelections;
 }
 
 export interface MessageModelProjection {
   chatModel?: ModelRef<'llm'>;
-  mediaModel?: ModelRef<MediaModelCategory>;
   purposeModels?: AgentFlatPurposeModelRefs;
 }
 
@@ -56,7 +52,6 @@ export interface ChatWorkspaceModelStateProjection {
   allModels: ChatModelOption[];
   availableModels: ChatModelOption[];
   availableMediaModels: ChatModelOption[];
-  activeMediaModel?: ChatModelOption;
   agentMediaModels?: AgentMediaModelSelections;
   selectedContextWindow?: number;
   selectedEffectiveInputBudget?: number;

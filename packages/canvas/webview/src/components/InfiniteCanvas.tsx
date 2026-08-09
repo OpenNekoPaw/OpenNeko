@@ -29,6 +29,10 @@ import {
   type CanvasInteractionPhase,
 } from '../utils/renderRefreshTiering';
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
+import {
+  resolveGenerationSelectionSafePan,
+  SelectionGenerationInputPanel,
+} from './selection/SelectionGenerationInputPanel';
 import { SelectionMaterialGenerationBar } from './selection/SelectionMaterialGenerationBar';
 import { resolveCanvasDropContainer } from '../utils/containerMembership';
 import {
@@ -165,6 +169,29 @@ export function InfiniteCanvas({
     onSelect: onMarqueeSelect,
     enabled: !viewportState.isPanning && !isDraggingConnection && !isPanMode,
   });
+
+  useEffect(() => {
+    if (transformingNodeIds.length > 0 || isMarqueeSelecting) return;
+    const selectedNode =
+      selectedNodeIds.length === 1
+        ? nodes.find(
+            (candidate): candidate is Extract<CanvasNode, { type: 'generation' }> =>
+              candidate.id === selectedNodeIds[0] && candidate.type === 'generation',
+          )
+        : undefined;
+    if (!selectedNode) return;
+
+    const safePan = resolveGenerationSelectionSafePan(selectedNode, viewport, containerSize);
+    if (safePan) onViewportChange({ pan: safePan });
+  }, [
+    containerSize,
+    isMarqueeSelecting,
+    nodes,
+    onViewportChange,
+    selectedNodeIds,
+    transformingNodeIds.length,
+    viewport,
+  ]);
 
   const interactionPhase: CanvasInteractionPhase =
     transformingNodeIds.length > 0
@@ -440,6 +467,13 @@ export function InfiniteCanvas({
         nodes={nodes}
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
+        viewportSize={containerSize}
+        hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
+      />
+      <SelectionGenerationInputPanel
+        nodes={nodes}
+        connections={connections}
+        selectedNodeIds={selectedNodeIds}
         viewportSize={containerSize}
         hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
       />

@@ -1,5 +1,9 @@
 import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import { isContentLocator, type WorkspaceFileContentLocator } from '@neko/content';
+import {
+  isContentLocator,
+  type ContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content';
 import type { DesktopCanvasMediaRequest } from '../shared/canvas-bridge-contract';
 
 const DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES = new Set([
@@ -50,6 +54,7 @@ export function createDesktopCanvasWebviewDelegate(
         .resolvePreviewVariant({
           identity,
           requestId: request.requestId,
+          sourceId: request.sourceId,
           locator: request.contentLocator,
           role: request.role,
           ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
@@ -180,7 +185,8 @@ function createMediaErrorResponse(
 
 function parsePreviewVariantMessage(message: unknown): {
   readonly requestId: string;
-  readonly contentLocator: WorkspaceFileContentLocator;
+  readonly sourceId: string;
+  readonly contentLocator: ContentLocator;
   readonly role: 'source' | 'thumbnail' | 'proxy' | 'fov-crop';
   readonly mediaType?: string;
 } {
@@ -188,10 +194,17 @@ function parsePreviewVariantMessage(message: unknown): {
     throw new Error('Desktop Canvas delegate received an unsupported message.');
   }
   const requestId = message['requestId'];
-  const contentLocator = readCanvasContentLocator(message);
+  const sourceId = message['sourceId'];
+  const contentLocator = readPreviewContentLocator(message);
   const role = message['role'];
   const mediaType = message['mediaType'];
-  if (typeof requestId !== 'string' || requestId.length === 0 || !contentLocator) {
+  if (
+    typeof requestId !== 'string' ||
+    requestId.length === 0 ||
+    typeof sourceId !== 'string' ||
+    sourceId.length === 0 ||
+    !contentLocator
+  ) {
     throw new Error('Desktop Canvas preview message is invalid.');
   }
   if (role !== 'source' && role !== 'thumbnail' && role !== 'proxy' && role !== 'fov-crop') {
@@ -202,6 +215,7 @@ function parsePreviewVariantMessage(message: unknown): {
   }
   return {
     requestId,
+    sourceId,
     contentLocator,
     role,
     ...(mediaType === undefined ? {} : { mediaType }),
@@ -215,6 +229,10 @@ function readCanvasContentLocator(
     message['contentLocator'].kind === 'workspace-file'
     ? message['contentLocator']
     : undefined;
+}
+
+function readPreviewContentLocator(message: Record<string, unknown>): ContentLocator | undefined {
+  return isContentLocator(message['contentLocator']) ? message['contentLocator'] : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -9,6 +9,82 @@ describe('Desktop Agent evaluation driver boundary', () => {
     });
   });
 
+  it('blocks every unapproved explicit model before Desktop launch', async () => {
+    const input = selection();
+    input.suite.modelProfiles = [
+      {
+        id: 'model-1',
+        selection: 'explicit',
+        chat: { providerId: 'provider-1', modelId: 'model-1' },
+        configurationHash: `sha256:${'c'.repeat(64)}`,
+      },
+      {
+        id: 'model-2',
+        selection: 'explicit',
+        chat: { providerId: 'provider-1', modelId: 'model-2' },
+        configurationHash: `sha256:${'e'.repeat(64)}`,
+      },
+    ];
+    input.scenario.modelProfileIds = ['model-1', 'model-2'];
+    const runDesktop = vi.fn();
+
+    await expect(
+      runCase(input, {
+        providerAuthorization: {
+          providerId: 'provider-1',
+          modelId: 'model-1',
+          configurationFile: '/fixtures/config.toml',
+          costApproved: true,
+        },
+        runDesktop,
+      }),
+    ).rejects.toMatchObject({
+      code: 'infrastructure-blocked',
+      message: expect.stringContaining('provider-1/model-2'),
+    });
+    expect(runDesktop).not.toHaveBeenCalled();
+  });
+
+  it('accepts an explicit same-provider model authorization set for switching cases', async () => {
+    const input = selection();
+    input.suite.modelProfiles = [
+      {
+        id: 'model-1',
+        selection: 'explicit',
+        chat: { providerId: 'provider-1', modelId: 'model-1' },
+        configurationHash: `sha256:${'c'.repeat(64)}`,
+      },
+      {
+        id: 'model-2',
+        selection: 'explicit',
+        chat: { providerId: 'provider-1', modelId: 'model-2' },
+        configurationHash: `sha256:${'e'.repeat(64)}`,
+      },
+    ];
+    input.scenario.modelProfileIds = ['model-1', 'model-2'];
+    const runDesktop = vi.fn(async () => ({
+      reportPath: '/reports/model-switch/desktop-functional.json',
+      report: { evidence: { facts: {} } },
+    }));
+
+    await expect(
+      runCase(input, {
+        providerAuthorization: {
+          providerId: 'provider-1',
+          modelId: 'model-2',
+          modelIds: ['model-1', 'model-2'],
+          configurationFile: '/fixtures/config.toml',
+          costApproved: true,
+        },
+        runDesktop,
+        createScenario: () => ({ id: 'model-switch', owner: 'evaluation' }),
+        runPipeline: async () => ({ outcome: 'pass', result: {} }),
+        runId: 'model-switch',
+      }),
+    ).resolves.toMatchObject({ outcome: 'pass' });
+    expect(runDesktop).toHaveBeenCalledOnce();
+  });
+
   it('launches one isolated Desktop sample through the injected functional boundary', async () => {
     const runDesktop = vi.fn(async (options) => ({
       reportPath: '/reports/sample/desktop-functional.json',

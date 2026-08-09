@@ -18,6 +18,10 @@ import {
   type CoreFileAccessPolicy,
 } from './file-access-policy';
 import type { WorkspaceFileIgnoreRules } from '../../input/workspace-ignore';
+import {
+  createNodeHostContentReadService,
+  NodeAuthorizedWorkspaceWriter,
+} from '@neko/content/node';
 
 export interface CoreToolsOptions {
   /** Default working directory for Grep and optional Developer Mode shell */
@@ -52,10 +56,33 @@ export function createCoreTools(options?: CoreToolsOptions): Tool[] {
           ignoreRules: options.workspaceIgnoreRules,
         })
       : createNoWorkspaceFileAccessPolicy());
+  const directoryAccessPolicy =
+    options?.fileAccessPolicy ??
+    (options?.defaultCwd
+      ? createWorkspaceFileAccessPolicy({
+          workspaceRoot: options.defaultCwd,
+          readRoots: [options.defaultCwd],
+          ignoreRules: options.workspaceIgnoreRules,
+        })
+      : createNoWorkspaceFileAccessPolicy());
+  const workspaceReader = options?.defaultCwd
+    ? createNodeHostContentReadService({ workspaceRoot: options.defaultCwd })
+    : undefined;
+  const workspaceWriter = options?.defaultCwd
+    ? new NodeAuthorizedWorkspaceWriter({ workspaceRoot: options.defaultCwd })
+    : undefined;
   const tools: Tool[] = [
-    new ReadTool({ fileAccessPolicy }),
-    new WriteTool({ defaultCwd: options?.defaultCwd, fileAccessPolicy }),
-    new ListDirectoryTool({ fileAccessPolicy }),
+    new ReadTool({ fileAccessPolicy, workspaceReader }),
+    new WriteTool({ fileAccessPolicy, workspaceWriter }),
+    new ListDirectoryTool({
+      fileAccessPolicy: directoryAccessPolicy,
+      ...(options?.defaultCwd
+        ? {
+            workspaceRoot: options.defaultCwd,
+            authorizedRoots: [options.defaultCwd],
+          }
+        : {}),
+    }),
     new GrepTool({ defaultCwd: options?.defaultCwd, fileAccessPolicy }),
   ];
 

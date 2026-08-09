@@ -14,6 +14,7 @@ import type {
   ImageGenerationRequest,
   VideoGenerationRequest,
 } from '../contracts';
+import type { PromptGenerationRequest } from '../execution';
 
 const JOB_PHASES: ReadonlySet<string> = new Set([
   'pending',
@@ -78,6 +79,7 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
     !hasOnlyKeys(value, GENERATION_JOB_SNAPSHOT_KEYS) ||
     !isGenerationRef(ref) ||
     (value['lifecycleMode'] !== 'linked' && value['lifecycleMode'] !== 'detached') ||
+    (value['submissionId'] !== undefined && !isNonEmptyString(value['submissionId'])) ||
     !isJobPhase(phase) ||
     !isTimestamp(value['createdAt']) ||
     !isTimestamp(value['updatedAt']) ||
@@ -123,10 +125,32 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
   const generationType = value['generationType'];
   const request = value['request'];
   if (typeof generationType !== 'string') return false;
+  if (generationType === 'prompt') return isPromptRequest(request);
   if (IMAGE_GENERATION_TYPES.has(generationType)) return isImageRequest(request);
   if (VIDEO_GENERATION_TYPES.has(generationType)) return isVideoRequest(request);
   if (AUDIO_GENERATION_TYPES.has(generationType)) return isAudioRequest(request);
   return false;
+}
+
+function isPromptRequest(value: unknown): value is PromptGenerationRequest {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, PROMPT_REQUEST_KEYS) &&
+    typeof value['prompt'] === 'string' &&
+    optionalNumbersAreFinite(value, ['temperature', 'maxOutputTokens']) &&
+    (value['context'] === undefined ||
+      (Array.isArray(value['context']) && value['context'].every(isPromptContext)))
+  );
+}
+
+function isPromptContext(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, PROMPT_CONTEXT_KEYS) &&
+    isNonEmptyString(value['sourceNodeId']) &&
+    typeof value['text'] === 'string' &&
+    isNonEmptyString(value['digest'])
+  );
 }
 
 function isImageRequest(value: unknown): value is ImageGenerationRequest {
@@ -330,6 +354,7 @@ const BASE_REQUEST_KEYS = [
 ] as const;
 const GENERATION_JOB_SNAPSHOT_KEYS = new Set([
   'ref',
+  'submissionId',
   'phase',
   'createdAt',
   'updatedAt',
@@ -342,6 +367,8 @@ const GENERATION_JOB_SNAPSHOT_KEYS = new Set([
   'providerTask',
   'resultLocators',
 ]);
+const PROMPT_REQUEST_KEYS = new Set(['prompt', 'context', 'temperature', 'maxOutputTokens']);
+const PROMPT_CONTEXT_KEYS = new Set(['sourceNodeId', 'text', 'digest']);
 const IMAGE_REQUEST_KEYS = new Set([
   ...BASE_REQUEST_KEYS,
   'operation',

@@ -53,6 +53,15 @@ describe('Desktop Scene contract', () => {
         code: 'desktop-scene-scope-mismatch',
       }),
     );
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: { ...projection.slots.cutPanel, workspaceId: 'workspace-other' },
+        },
+      }),
+    ).toThrow('Workspace Cut Panel does not match Agent Workspace scope');
   });
 
   it('rejects incompatible slots, unknown kinds and renderer component payloads', () => {
@@ -84,6 +93,21 @@ describe('Desktop Scene contract', () => {
         },
       }),
     ).toThrow('Assistant Scene Main Surface');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...assistant,
+        slots: {
+          ...assistant.slots,
+          cutPanel: {
+            kind: 'workspace-cut',
+            workspaceId: 'workspace-1',
+            viewId: 'cut-1',
+            viewInstanceId: 'cut-instance-1',
+            ownerId: 'cut-owner-1',
+          },
+        },
+      }),
+    ).toThrow('cannot mount a Workspace Cut Panel');
     expect(() =>
       parseDesktopWorkbenchSceneProjection({
         ...assistant,
@@ -202,6 +226,46 @@ describe('Desktop Scene contract', () => {
         },
       }),
     ).toThrow("Unknown Manager Surface kind 'extension-catalog'");
+  });
+
+  it('owns Character Management catalog and exact detail as one Window scene', () => {
+    const sceneId = 'scene:window-1:character-management';
+    const detail = { kind: 'project' as const, characterProjectId: 'character-project:lin' };
+    const projection = {
+      sceneId,
+      windowId: 'window-1',
+      context: { kind: 'character-management' as const, detail },
+      slots: {
+        main: { kind: 'character-management' as const },
+        secondaryMain: { kind: 'character-detail' as const, selection: detail },
+        status: { kind: 'scene-status' as const, sceneId },
+      },
+    };
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-character-management',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: { kind: 'open-character-management' },
+      }).intent,
+    ).toEqual({ kind: 'open-character-management' });
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-character-detail',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId,
+        intent: { kind: 'select-character-detail', selection: { kind: 'create' } },
+      }).intent,
+    ).toEqual({ kind: 'select-character-detail', selection: { kind: 'create' } });
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: { main: { kind: 'project-management' }, status: projection.slots.status },
+      }),
+    ).toThrow("Main Surface 'project-management' is not valid for this Scene");
   });
 
   it('creates exact Scene identity transition requests and rejects arbitrary intent', () => {
@@ -419,12 +483,12 @@ function workspaceScene() {
         viewInstanceId: 'view-instance-3',
       },
       rightManager: { kind: 'workspace-resources' as const, workspaceId: 'workspace-1' },
-      timeline: {
-        kind: 'workspace-timeline' as const,
+      cutPanel: {
+        kind: 'workspace-cut' as const,
         workspaceId: 'workspace-1',
-        viewId: 'view-1',
+        viewId: 'cut-1',
         viewInstanceId: 'view-instance-3',
-        ownerId: 'cut-1',
+        ownerId: 'cut-owner-1',
       },
       status: { kind: 'scene-status' as const, sceneId: 'scene:window-1:workspace-1' },
     },

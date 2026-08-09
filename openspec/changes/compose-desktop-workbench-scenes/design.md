@@ -58,7 +58,7 @@ DesktopApplication
    ├─ primarySidebar: ApplicationPrimarySidebar
    ├─ currentInteractionOrMain
    ├─ optionalExplicitSecondary
-   ├─ currentManagerOrTimeline
+   ├─ currentManager
    └─ status
 ```
 
@@ -133,12 +133,26 @@ Surface 并原子切换 Scene，使 renderer 不会先挂载一个必然 bootstr
 
 PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects` 与 `agentHome.conversations`，因此删除 Home composer/management page 时必须保留最近项目、最近会话、attention 和显式恢复/删除操作。
 
-Sidebar 顶部品牌区承载一组 VS Code 风格的窗口级 presentation 图标控件。PrimarySidebar 显隐控件始终存在；exact Workspace composition 另外提供 Agent、Main 与管理面板三个独立控件。每个控件只改变其所属区域的 presentation，不能通过一个混合菜单或 Main 内按钮同时管理多个区域；Agent 与 Main 仍必须保证至少一个业务区域可见。控件使用紧凑、无边框、透明默认态和清晰 hover/pressed/focus 状态，并位于一级侧栏顶部 chrome，不随品牌内容或 Main tab 数量移动。它们不得沉入侧栏 footer、Workspace Main tab header 或领域 Surface。footer 只保留 lifecycle、attention、Settings 等非布局操作。
+PrimarySidebar 顶部品牌区只承载自身显隐控件。Exact Workspace composition 通过 `ControlledWorkbenchShell.titleBar` 插槽把 Agent、Main、管理面板与 Cut Panel 四个独立控件浮置在现有窗口顶部 chrome 右侧；该插槽在 Desktop 视觉层使用 absolute overlay，不参与 Workbench grid track sizing，不增加背景、边框、标题或额外 header 高度，并保持与 macOS 原生 title chrome 的垂直对齐。每个控件只改变其所属区域的 presentation，不能通过一个混合菜单或 Main 内按钮同时管理多个区域；Agent 与 Main 仍必须保证至少一个业务区域可见。
+
+Window 级 Main、Interaction 与 Manager Surface 必须 full-bleed 占用 `ControlledWorkbenchShell` 分配的完整 grid track。Desktop 不得通过 panel 外层 margin、Dock padding、responsive inset 或顶层圆角缩小 package Root/Webview viewport 或露出 Window 背景；顶层 panel shell 使用直角边界，Sidebar/Main 和兄弟 Surface 的结构关系由 divider、现有 resize primitive 与功能性 gutter 表达。Overlay/Docked manager 在其当前业务 track 内同样使用完整高度、直角和外侧边界。领域页面的 readable width、toolbar alignment、内容 padding 和内部组件圆角继续由 owning package 管理，因此删除 Window 装饰性 inset 与圆角不得拉伸管理控件或把页面内容贴到窗口边缘。
+
+Workspace Main 的真实 View tab strip 与相邻 Resource Manager header 共享 Desktop-owned `38px` panel chrome 尺寸。`@neko/ui` 的通用 editor tabs 保留默认高度；Desktop composition 只在 `.project-main-group__tabs` 内覆盖 strip 的 block padding 和高度，使 `30px` tab 在 `38px` chrome 中垂直居中。Main/Resources resize、显隐与响应式切换不得改变两条 chrome 的 top/bottom 对齐。
+
+Workspace Main 上半区域继续承载 Canvas、authorized file Preview 或 Editor。Main 下方的 Cut Panel 是独立可调整高度的可见 composition；其轻量 projection 保存 exact Cut View refs、active View、显隐和高度，但不拥有 OTIO 事实或 runtime。每个已保存 OTIO 文档或未保存 Cut draft 对应一个 Cut Panel tab；只挂载 active tab 的 `CutWebviewRoot`，并由该 Root 组合上部 Preview、下部 Timeline 与素材拖拽目标。切换 tab 时卸载旧 Root 并从 Cut authority/presentation snapshot 重建新 Root；隐藏 panel 时卸载 active Root但保留轻量 tab refs，不能保留隐藏 DOM/runtime。打开 OTIO 只打开或聚焦对应 Cut tab并显示 panel，不替换当前 Main Canvas/Preview/Editor。关闭最后一个 Cut tab时 panel 回到 canonical hidden fresh state。顶部 Cut Panel 开关在已有 tab 时只修改 panel presentation；没有 tab 且 Cut capability 可用时，请求 Cut application 创建唯一的 exact 未命名内存 draft 并附着一个 Cut View，而不是让 renderer 伪造空 panel、回退历史 runtime 或提前创建 OTIO 文件。已有 panel 的 `+` 紧随最后一个 Cut tab，是独立 Cut 创建命令；标签较少时 tab list 按内容收缩，不把 `+` 推到面板远端，标签溢出时只让 tab list 滚动并保留 `+` 的固定命中尺寸。每次完成的点击都由 Cut application 创建新的 exact draft、生成不冲突的本地化标签、追加并选中 View；同一时刻针对 exact Workbench 的并发请求只共享一次创建操作。Timeline 标尺仍位于 canonical Timeline 滚动容器中，与 clips 共用横向坐标，并在轨道纵向滚动时 sticky 到容器顶部，不能复制为第二个 overlay 标尺。Cut capability unavailable 时按钮才禁用。Scene 可投影 active `workspace-cut` Surface identity，但不投影 standalone Timeline Surface。
+
+任意已有 OTIO 的文件发现和打开继续由 Workspace Resources 与 Cut tab composition 负责；Canvas 不增加文件选择器、OTIO catalog 或另一个打开路径。Canvas 只保留 owner-projected “Open in Cut” 素材动作，把当前精确选择交给 Cut owner；它不能借此推断、浏览或替换已有 OTIO 文档。
+
+未命名 Cut draft 由 Cut application/runtime 拥有稳定 draft identity、canonical 空 OTIO model、dirty 状态和工作区授权；Workbench 只持有 exact View ref。空 OTIO 继续使用同一个 Cut Root、Preview、Timeline、轨道和 canonical 素材命令，Timeline 按文档本身的空轨道状态自然渲染，不叠加独立 empty-state 文案或修改 Timeline 几何。active Cut Root 在现有 Timeline toolbar 提供图标保存命令，且 package-owned keyboard dispatcher 将 `Cmd/Ctrl+S` 绑定到同一个 `CutOtioController.save()`；两者只在 exact active document projection 存在时执行，不新增 Workbench command router 或第二条保存路径。首次保存由 Desktop native adapter 选择当前 Workspace 内的 `.otio` 位置，Cut owner 在一次 identity rebind 中 rebase media refs、排他写入、更新 View document identity/label 并保留同一 View/session；取消选择保持原 draft。关闭 dirty draft 时 Cut owner 请求放弃确认：取消保持 exact draft/View，确认后先移除 exact View projection再释放该 runtime；不得影响 sibling tabs、上部 Main 或 Workspace 资源。保存后的 OTIO 按普通文档 dirty/close policy 处理。
+
+未命名 draft 的 authoritative document/session 不跨应用进程恢复，因此 `cut-draft:*` View ref 不是 durable document fact。Desktop Shell 启动恢复边界必须在挂载 Scene Root 前，从当前 Workbench 与所有 Project presentation snapshot 中逐项移除这些失效 View，并同步重投影 Cut slot；清理必须返回 owner-qualified presentation-reset diagnostic。真实 `.otio` View 与用户文件保持原样。恢复边界不得把 draft identity 传给 Workspace file resolver，也不得创建 canonical 空 OTIO 来伪装恢复可能包含未保存编辑的旧草稿。当前进程内仍有 exact Cut session 的 draft 不受普通布局切换或 React Root 卸载影响。
+
+Workspace 控件使用固定尺寸、无边框、透明默认态和清晰 hover/pressed/focus 状态，并避开实际 Main tab buttons；非 Workspace Scene 不挂载该组控件。按钮按可见空间结构固定为 Agent、Main、Cut Panel、资源管理，保持左侧区域、中心上部、中心下部、右侧区域的阅读顺序。选中态必须同时来自 exact Scene slot 与当前 layout presentation：只有区域实际可见时才选中；仅保留可恢复布局记录、但 slot 缺失或 presentation 已隐藏时保持未选中，其中隐藏的 Cut Panel 在仍有 exact Cut View 时继续可点击恢复，没有 Cut View 时保持未选中但可创建 draft。它们不得沉入侧栏、Workspace Main tab header 或领域 Surface，资源管理标题也不重复提供关闭动作。footer 只保留 lifecycle、attention、Settings 等非布局操作。控件只承担布局命令，不承载任务、运行或错误状态；这些状态继续由 owning panel、内容区或状态栏展示。
 
 `HomeWorkspace`、`ContentProjectWorkspace` 和 Settings 顶层条件分支被替换为 scene slot builders。
 Scene 切换只更新 active instance/slot projection；PrimarySidebar、ControlledWorkbenchShell 以及未关闭
-instance 的 package Root identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/
-Timeline components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建
+instance 的 package Root identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/Cut
+components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建
 Shell 或 sidebar frame。Renderer 必须逐一消费 Host 的 `interaction/main/secondaryMain/leftManager/
 rightManager` 语义，不能把 Interaction 临时当 Main、把 management Main 当 Dock，或仅复用 Shell
 JSX 而丢失 Workspace CSS scope。
@@ -204,13 +218,13 @@ interface DesktopWorkbenchSceneProjection {
     secondaryMain?: MainSurfaceRef;
     leftManager?: ManagerSurfaceRef;
     rightManager?: ManagerSurfaceRef;
-    timeline?: TimelineSurfaceRef;
+    cutPanel?: CutPanelSurfaceRef;
     status?: StatusSurfaceRef;
   };
 }
 ```
 
-Codec 必须验证 context 与每个 slot 的 identity/scope 一致。例如 Assistant scene 不允许 Workspace Main，Asset Preview 必须与同一 AssetCenterSession 配对，Settings 不允许 Agent/Timeline。Unknown kind、缺失 owner、跨 window/view/session ref 和 renderer payload 全部失败。
+Codec 必须验证 context 与每个 slot 的 identity/scope 一致。例如 Assistant scene 不允许 Workspace Main，Asset Preview 必须与同一 AssetCenterSession 配对，Settings 不允许 Agent。Unknown kind、缺失 owner、跨 window/view/session ref 和 renderer payload 全部失败。`DesktopWorkbenchLayoutProjection.cutPanel` 使用一个 canonical shape 保存 presentation、height、exact Cut View refs 与 active View；Main View 不携带 Cut presentation。Scene 只投影 active `workspace-cut` Surface，不保存 Timeline owner 或 standalone Timeline Surface。
 
 ### 3. Scene transitions are typed Host commands
 
@@ -248,7 +262,9 @@ interface DesktopApplicationSidebarProjection {
 
 Sidebar mutation 携带 requestId 与 exact Window identity，在该 Window 的 presentation owner 中串行执行并只更新 sidebar aggregate。所有 producer/consumer、fixture 和测试同时使用这一 canonical shape；旧字段、旧 handler 和旧 storage dispatch 从产品路径删除，不双读双写、不在启动时转换数据。非法 sidebar 记录只禁用该 Window 的 sidebar record 并返回 diagnostic，不阻断其他 Window 或 Workbench record。
 
-### 5. Agent Root, session phase and authority scope are orthogonal
+### 5. Workbench consumes Agent phase and binding without owning them
+
+Agent Draft/binding、input catalog、configuration policy、first submit 和 Conversation owner 的 canonical contract 由 `unify-agent-launch-and-domain-bindings` 与 `@neko/agent-runtime/application` 拥有。本变更只拥有 Window Scene、Workbench slots、Root placement 和 committed launch result 的 Scene handoff；后续段落中的 Agent identity 只描述 composition input，不是第二套 Agent authority。
 
 `AgentWebviewRoot` 是唯一 Agent UI/controller/composer。新增显式 presentation contract：
 
@@ -258,15 +274,15 @@ type AgentRootPresentation =
   | { kind: 'session'; scope: AgentScopeProjection; conversationId: ConversationId };
 ```
 
-Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。`unbound` Entry Draft 和从 Assistant/Workspace/Character/Room owner 内发起的 bound Draft 复用同一简洁 EmptyState；Entry 不显示强制 owner 选择卡，bound Draft 的 target 由其发起 owner 固定。任何 Draft 都不是空 Conversation，只在 first submit 成功后进入 session presentation。
+Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。Workbench 不按 phase 或 conversation kind 增删可执行能力；Agent Root 依据 canonical launch projection呈现 catalog、配置、资源、输入与诊断。任何 Draft 都不是空 Conversation，Workbench 只在 Agent application 返回已提交并可附着的 exact Conversation 后进入 session presentation。
 
 `draftId` 是 presentation identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、旧 transcript/render subscription、entry input/reference/target/configuration 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。当前 Draft snapshot 可以保存未发送 input、resource refs、单选 target receipt 和 model/configuration selection，但不得把它们提前写成 conversation effective configuration 或共享用户设置。Desktop 只挂载当前 package Root，不发送伪造 close-tab 消息，也不保留旧 Root 作为 draft 状态 owner。
 
-Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog，以及目录/Project、未来 Character/Room 等 target 显式选择。普通直接提交由 package-owned Agent 入口确定性选择 Assistant 用户区并沿既有 local transaction 创建 exact session；它不依赖关键词、模型推断或 active Project。选择目录/Project 只替换当前 Draft 的单一 target receipt，Agent-only Entry Scene 与 launch connection 保持不变；首次提交才把 target 转为 stable conversation context 并激活对应 owner Scene。入口不得用 owner 选择卡阻塞普通输入。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
+Target 选择由 Agent launch application更新 exact Draft binding，Workbench 保持 Agent-only Entry Scene，不因此挂载 Workspace/Character/Room Surface。普通直接提交、Workspace target、未来 Character/Room provider 可用性和 catalog filtering 均由该 application capability 决定；Workbench 不读取关键词或 active Project。每次再次点击“开始创作”只请求新的 unbound Draft presentation，不恢复已有 Conversation。
 
 Entry Draft 中显式授权的文件仍归 exact launch connection 与 `draftId` 所有。确定性 Assistant 首次提交在 conversation validation 前先校验请求中的全部 grant，再将匹配的 `unbound` grants 原子绑定到 exact AssistantSpace；缺失、跨 connection、跨 draft、已绑定其他 scope 或 conversation 的 grant 必须 fail-visible，且验证失败不能造成部分 scope 修改。相同 AssistantSpace 的幂等重试保持成功，但不得扩大授权集合或接受其他 draft 的 grant。
 
-Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不得改用 active Project。Root 不因 scope 改变而换成另一套 controller。
+Workbench 不解释 capability catalog。Agent Root 始终使用 `agent-input-capability-catalog` 的 phase/binding availability，缺少 owner capability 时由 Agent 返回 typed diagnostic；Scene composition 不提供 default handler 或 active Project fallback。
 
 Composer 视觉继续由 `@neko/agent-webview` 拥有并增强现有 `InputArea`、`ComposerConfigMenu` 与 `ModeSelector`，不创建 Desktop composer 或平行控件。Desktop 只通过 Agent Root 的 React presentation prop 注入 Entry 的目录选择命令；该短生命周期 UI projection 不进入 Agent authority、conversation facts 或持久 Scene schema。Composer 将 textarea 与工具条收进同一居中悬浮表面：Entry 显示单选“打开项目”和模型配置，会话态隐藏已经锁定的 Workspace 标签、Agent 模式以及 `/`、`$` 快捷按钮，同时保留文本命令/Skill 解析、附件、模型、usage、审批和发送/停止能力；不复制 Codex 的 branch/local 元信息。窄 dock 通过 package-owned responsive CSS 收缩低优先级标签并允许工具条在稳定边界内换行，菜单仍向上定位且不得溢出 Workbench。
 
@@ -352,7 +368,7 @@ Modal/context menu invocation 结束后直接释放。
 
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 
-Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个兄弟 shell：各自拥有独立 DOM、边框、圆角、背景、裁切和 overflow 边界，并由保留可见 gutter 的 resize composition 连接。禁止让两个内容区共享一块连续 Main 底板后只绘制分隔线。两个 shell 都不渲染 Workspace View tab/header 或 Preview descriptor header；只有 Workspace Main 的真实多 View group 拥有 Workbench tab。Workspace 与 Asset Center 的 Preview 内容都使用 `@neko/preview-webview` 的 content-only chrome，并以透明内容背景继承所在 shell 的主题，而不是在 Desktop 复制 viewer 或硬编码另一组主题 token。只有 owner-qualified 且信息足以支撑独立内容区域的 Preview/Detail 才挂载 Secondary Main；低信息量的 Project selection保留在 catalog 中，显式打开 Workspace 的操作也位于对应 catalog row，不创建空洞的 Project Detail shell。组合时 management panel 默认占可用分栏的 50%，共享 resize binding 将 management ratio 下限固定为 0.5，使 Assets、Extensions 与 Projects 的管理 Main 始终不窄于 Preview/Detail；没有合格 detail 时 management shell 独占可用区域，且不保留 secondary column 或 gutter。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
+Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个 full-bleed 兄弟 shell：各自拥有独立 DOM、边框、直角边界、背景、裁切和 overflow 边界，并由保留可见 gutter 的 resize composition 连接。该 gutter 是 resize 命中与兄弟 Surface 分隔，不是 Window 外层装饰性 margin。禁止让两个内容区共享一块连续 Main 底板后只绘制分隔线。两个 shell 都不渲染 Workspace View tab/header 或 Preview descriptor header；只有 Workspace Main 的真实多 View group 拥有 Workbench tab。Workspace 与 Asset Center 的 Preview 内容都使用 `@neko/preview-webview` 的 content-only chrome，并以透明内容背景继承所在 shell 的主题，而不是在 Desktop 复制 viewer 或硬编码另一组主题 token。只有 owner-qualified 且信息足以支撑独立内容区域的 Preview/Detail 才挂载 Secondary Main；低信息量的 Project selection保留在 catalog 中，显式打开 Workspace 的操作也位于对应 catalog row，不创建空洞的 Project Detail shell。组合时 management panel 默认占可用分栏的 50%，共享 resize binding 将 management ratio 下限固定为 0.5，使 Assets、Extensions 与 Projects 的管理 Main 始终不窄于 Preview/Detail；没有合格 detail 时 management shell 独占可用区域，且不保留 secondary column 或 gutter。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
 
 PrimarySidebar 顶部布局控件继续复用 `@neko/ui` 的 Codicon 入口。生产 renderer 必须让 Vite 从 query-free 的 canonical 字体引用生成 hashed asset 路径；不能依赖 vendor CSS 自带的 query-bearing URL，因为 `openneko://desktop` 协议有意拒绝所有带 query/hash 的非 canonical 应用资源请求。Desktop Main 只补齐 `.ttf` 的 `font/ttf` 响应类型并保留 `nosniff` 与 query 拒绝规则，不增加旧 URL 读取路径或第二套图标实现。
 
@@ -360,7 +376,7 @@ PrimarySidebar 顶部布局控件继续复用 `@neko/ui` 的 Codicon 入口。�
 
 打开显式 Project/Workspace 或恢复 conversation 时，Host Shell 在 Window owner 的一个串行 commit 中同时更新 exact Project `activeTarget`、对应 Workbench attachment、Scene scope/slots 与 Agent `draft | session` phase。Desktop 只有在该提交完成后才返回 transition success；renderer 不得先启动旧 scope 的 launch adapter，再等待布局或 Agent 状态补齐。App composition 可以在返回前 attach 对应 package runtime，但不能改用 active/recent Project 修复不一致状态。
 
-Workspace 的 Main View 集允许因用户关闭最后一个 Preview/View 暂时为空。此时 Workbench 保留 primary group，Scene 移除 `slots.main` 和无 owner 的 Timeline，同时继续保留 exact Workspace scope、Agent Interaction、Workspace Resources 与 Status。Renderer projection 只更新实际存在的 Main/Timeline ref；不得把空 Main 当作 scene corruption。应用重启时现有 `attachProjectWorkbench` 恢复 canonical Canvas，但运行中的关闭操作不隐式发明另一个 View。
+Workspace 的 Main View 集允许因用户关闭最后一个 Preview/View 暂时为空。此时 Workbench 保留 primary group，Scene 移除 `slots.main`，同时继续保留 exact Workspace scope、Agent Interaction、Workspace Resources 与 Status。Renderer projection 只更新实际存在的 Main ref；不得把空 Main 当作 scene corruption。应用重启时现有 `attachProjectWorkbench` 恢复 canonical Canvas，但运行中的关闭操作不隐式发明另一个 View。
 
 Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 `errorMessage` 投影到 package-owned Agent error presentation。空 content 不得把真实 diagnostic 降级成只有固定 `Error` 标题；错误仍保持 conversation/turn scoped，不自动重试或伪装成功。
 
@@ -428,3 +444,16 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 - Assistant Preview v1使用现有 Preview Root支持的、可由 Host Content authorization生成 descriptor的内容类型；不支持类型显示 typed unavailable且保留引用。
 - 语音能力只保证入口与 workspace使用同一现有 capability projection；本变更不补建缺失的语音 runtime。
 - PrimarySidebar 保留最近项，但分为 exact session restore 与 container open：conversation恢复 session，Project打开 Workspace draft；Character/Room owner可用后由其投影顶层 session/container，不暴露内部 AgentSession。
+
+### Cut identity rebind and representation request ownership
+
+An unnamed Cut draft Save As remains one canonical session transition. After the native picker
+returns, Desktop revalidates the exact renderer, Workbench and draft View before writing. The Cut
+application returns the authoritative event sequence produced by the rebind; preload moves the
+current identity, listener identity and sequence cursor together before accepting later events.
+
+Clip representations are disposable projections owned by the exact Cut document/session. The
+Webview controller tracks every request by request identity and requested representation key, merges
+valid out-of-order results by key, and rejects results from a replaced document/session or removed
+Clip. Completion and failure release only those in-flight keys, so resize/scroll overlap cannot make
+an earlier valid batch stale or permanently suppress a retry.

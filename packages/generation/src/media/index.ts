@@ -80,6 +80,10 @@ export {
   type MediaGenerationDeliverySettingsPlan,
 } from './media-generation-delivery-settings';
 export {
+  createNodeWorkspaceGenerationJobOwner,
+  type NodeWorkspaceGenerationJobOwnerOptions,
+} from './workspace-generation-job-owner';
+export {
   GeneratedAssetIndex,
   generateAssetId,
   type AssetFilter,

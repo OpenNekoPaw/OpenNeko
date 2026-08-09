@@ -23,9 +23,17 @@ import {
   type CanvasMaterialActionTarget,
 } from './canvas-material-action-catalog';
 import {
-  projectGenerationSnapshotToCanvas,
-  type CanvasGenerationProjectionSnapshot,
-} from './canvas-generation-projection';
+  applyCanvasGenerationNodeOutputs,
+  authorCanvasGenerationNodeText,
+  createCanvasGenerationNode,
+  requireCanvasGenerationNode,
+  selectCanvasGenerationNodeOutput,
+  updateCanvasGenerationNodeRecipe,
+} from './canvas-generation-authoring';
+import type {
+  CanvasGenerationApplicationPort,
+  CanvasGenerationRuntimeProjection,
+} from './canvas-generation-application-port';
 import type { CanvasHostPresentationSnapshotStore } from './canvas-host-presentation-snapshot';
 
 export interface CanvasHostRuntimeSessionEffects {
@@ -48,12 +56,45 @@ export interface CanvasHostRuntimeSessionEffects {
     readonly sourceKind: 'image' | 'video' | 'audio' | 'model' | 'document' | 'canvas';
     readonly sourceMode: 'import' | 'reference';
   }) => Promise<CanvasMaterialAuthoringRequest | undefined>;
-  readonly requestGenerationDraft?: (input: {
-    readonly identity: CanvasHostRuntimeIdentity;
-    readonly mediaKind: 'image' | 'video' | 'audio' | 'model' | 'document';
-    readonly position?: { readonly x: number; readonly y: number };
-    readonly inputNodeIds: readonly string[];
-  }) => Promise<CanvasGenerationProjectionSnapshot | undefined>;
+  readonly generation?: {
+    readonly startNode: (input: {
+      readonly canvas: CanvasData;
+      readonly identity: CanvasHostRuntimeIdentity;
+      readonly nodeId: string;
+      readonly persistCanvas: (canvas: CanvasData) => Promise<void>;
+    }) => ReturnType<CanvasGenerationApplicationPort['startNode']>;
+    readonly resumeNode: (input: {
+      readonly canvas: CanvasData;
+      readonly identity: CanvasHostRuntimeIdentity;
+      readonly nodeId: string;
+      readonly run: NonNullable<
+        ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']
+      >;
+      readonly persistCanvas: (canvas: CanvasData) => Promise<void>;
+    }) => ReturnType<CanvasGenerationApplicationPort['resumeNode']>;
+    readonly observeNode: (input: {
+      readonly identity: CanvasHostRuntimeIdentity;
+      readonly nodeId: string;
+      readonly run: NonNullable<
+        ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']
+      > & {
+        readonly jobRef: NonNullable<
+          NonNullable<ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']>['jobRef']
+        >;
+      };
+    }) => ReturnType<CanvasGenerationApplicationPort['observeNode']>;
+    readonly cancelNode: (input: {
+      readonly identity: CanvasHostRuntimeIdentity;
+      readonly nodeId: string;
+      readonly run: NonNullable<
+        ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']
+      > & {
+        readonly jobRef: NonNullable<
+          NonNullable<ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']>['jobRef']
+        >;
+      };
+    }) => ReturnType<CanvasGenerationApplicationPort['cancelNode']>;
+  };
   readonly previewResource?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly locator: ContentLocator;
@@ -110,6 +151,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private readonly redoStack: CanvasData[] = [];
   private readonly completedCommands = new Map<string, CanvasHostIntentResult>();
   private readonly commandOrder: string[] = [];
+  private readonly generationNodes = new Map<string, CanvasGenerationRuntimeProjection>();
+  private readonly observedGenerationSubmissions = new Set<string>();
   private operationTail: Promise<void> = Promise.resolve();
   private readonly commandHistoryLimit: number;
   private readonly documentHistoryLimit: number;
@@ -170,6 +213,42 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return this.enqueueOperation(() => this.executeIntentSerial(request));
   }
 
+  async reattachGenerationNodes(): Promise<void> {
+    await this.enqueueOperation(async () => {
+      this.assertActive();
+      const generation = this.options.effects.generation;
+      if (!generation) return;
+      for (const node of this.canvas.nodes) {
+        if (node.type !== 'generation' || !node.data.latestRun) continue;
+        try {
+          const result = await generation.resumeNode({
+            canvas: cloneCanvas(this.canvas),
+            identity: { ...this.identity },
+            nodeId: node.id,
+            run: node.data.latestRun,
+            persistCanvas: (canvas) => this.persistCanvas(canvas),
+          });
+          this.canvas = cloneCanvas(result.canvas);
+          this.generationNodes.set(node.id, result.projection);
+          this.startGenerationObservation(node.id);
+        } catch (error) {
+          this.generationNodes.set(node.id, {
+            nodeId: node.id,
+            submissionId: node.data.latestRun.submissionId,
+            recipeInputFingerprint: node.data.latestRun.recipeInputFingerprint,
+            ...(node.data.latestRun.jobRef ? { jobRef: node.data.latestRun.jobRef } : {}),
+            phase: 'outcome-unknown',
+            diagnostic: {
+              code: 'canvas-generation-reattach-failed',
+              message:
+                error instanceof Error ? error.message : 'Canvas Generation reattachment failed.',
+            },
+          });
+        }
+      }
+    });
+  }
+
   private async executeIntentSerial(
     request: CanvasHostIntentRequest,
   ): Promise<CanvasHostIntentResult> {
@@ -214,6 +293,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.redoStack.length = 0;
     this.completedCommands.clear();
     this.commandOrder.length = 0;
+    this.generationNodes.clear();
+    this.observedGenerationSubmissions.clear();
   }
 
   private async applyIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult> {
@@ -277,39 +358,94 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       this.commitCanvas(next, request.commandId);
       return this.accepted(request);
     }
-    if (intent.type === 'request-generation-draft') {
-      const requestGenerationDraft = this.options.effects.requestGenerationDraft;
-      if (!requestGenerationDraft) return unsupported(request, intent.type);
-      const generation = await requestGenerationDraft({
-        identity: { ...this.identity },
-        mediaKind: intent.mediaKind,
-        ...(intent.position ? { position: intent.position } : {}),
-        inputNodeIds: [...intent.inputNodeIds],
+    if (intent.type === 'create-generation-node') {
+      if (!this.options.effects.generation) return unsupported(request, intent.type);
+      const next = createCanvasGenerationNode({
+        canvas: this.canvas,
+        nodeId: nextGenerationNodeId(this.canvas),
+        kind: intent.kind,
+        position: intent.position ?? { x: 100, y: 100 },
       });
-      if (!generation) {
-        return rejected(
-          request,
-          'canvas-runtime-source-cancelled',
-          'Canvas Generation draft was cancelled.',
-        );
-      }
-      const identity = {
-        projectId: this.identity.projectId,
-        canvasId: this.identity.documentId,
-        canvasSessionId: this.identity.sessionId,
-      };
+      this.commitCanvas(next, request.commandId);
+      return this.accepted(request);
+    }
+    if (intent.type === 'update-generation-recipe') {
+      const current = requireCanvasGenerationNode(this.canvas, intent.nodeId);
+      const recipeChanged = JSON.stringify(current.data.recipe) !== JSON.stringify(intent.recipe);
       this.commitCanvas(
-        projectGenerationSnapshotToCanvas({
-          identity,
-          expectedIdentity: identity,
-          canvas: cloneCanvas(this.canvas),
-          snapshot: {
-            ...generation,
-            ...(intent.position ? { position: intent.position } : {}),
-          },
+        updateCanvasGenerationNodeRecipe({
+          canvas: this.canvas,
+          nodeId: intent.nodeId,
+          recipe: intent.recipe,
         }),
         request.commandId,
       );
+      if (recipeChanged && current.data.latestRun) {
+        this.markGenerationRecipeStale(intent.nodeId, current.data.latestRun);
+      }
+      return this.accepted(request);
+    }
+    if (intent.type === 'select-generation-output') {
+      const next = selectCanvasGenerationNodeOutput({
+        canvas: this.canvas,
+        nodeId: intent.nodeId,
+        outputId: intent.outputId,
+      });
+      this.commitCanvas(next, request.commandId);
+      const generation = this.options.effects.generation;
+      const node = requireCanvasGenerationNode(next, intent.nodeId);
+      if (generation && node.data.latestRun?.jobRef) {
+        const result = await generation.resumeNode({
+          canvas: cloneCanvas(next),
+          identity: { ...this.identity },
+          nodeId: intent.nodeId,
+          run: node.data.latestRun,
+          persistCanvas: (canvas) => this.persistCanvas(canvas),
+        });
+        this.generationNodes.set(intent.nodeId, result.projection);
+      }
+      return this.accepted(request);
+    }
+    if (intent.type === 'author-generation-text') {
+      this.commitCanvas(
+        authorCanvasGenerationNodeText({
+          canvas: this.canvas,
+          nodeId: intent.nodeId,
+          text: intent.text,
+        }),
+        request.commandId,
+      );
+      return this.accepted(request);
+    }
+    if (intent.type === 'run-generation-node') {
+      const generation = this.options.effects.generation;
+      if (!generation) return unsupported(request, intent.type);
+      const result = await generation.startNode({
+        canvas: cloneCanvas(this.canvas),
+        identity: { ...this.identity },
+        nodeId: intent.nodeId,
+        persistCanvas: (canvas) => this.persistCanvas(canvas),
+      });
+      this.commitCanvas(result.canvas, request.commandId, false);
+      this.generationNodes.set(intent.nodeId, result.projection);
+      this.startGenerationObservation(intent.nodeId);
+      return this.accepted(request);
+    }
+    if (intent.type === 'cancel-generation-node') {
+      const generation = this.options.effects.generation;
+      if (!generation) return unsupported(request, intent.type);
+      const node = requireCanvasGenerationNode(this.canvas, intent.nodeId);
+      const run = node.data.latestRun;
+      if (!run?.jobRef) throw new Error('Canvas Generation node has no cancellable Job binding.');
+      this.generationNodes.set(
+        intent.nodeId,
+        await generation.cancelNode({
+          identity: { ...this.identity },
+          nodeId: intent.nodeId,
+          run: { ...run, jobRef: run.jobRef },
+        }),
+      );
+      this.commitStateChange(this.dirty, request.commandId);
       return this.accepted(request);
     }
     if (intent.type === 'preview-resource' || intent.type === 'reveal-resource') {
@@ -340,6 +476,13 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
           request,
           'canvas-runtime-unsupported-intent',
           `Canvas material action "${intent.action.actionId}" is unavailable for the current selection.`,
+        );
+      }
+      if (!areJsonValuesEqual(intent.action.payload, descriptor.executionPayload ?? {})) {
+        return rejected(
+          request,
+          'canvas-runtime-stale-identity',
+          'Canvas material action target changed before execution.',
         );
       }
       const executeMaterialAction = this.options.effects.executeMaterialAction;
@@ -379,11 +522,11 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     });
   }
 
-  private commitCanvas(nextCanvas: CanvasData, originCommandId: string): void {
+  private commitCanvas(nextCanvas: CanvasData, originCommandId: string, dirty = true): void {
     this.pushHistory(this.undoStack, this.canvas);
     this.redoStack.length = 0;
     this.canvas = cloneCanvas(nextCanvas);
-    this.commitStateChange(true, originCommandId);
+    this.commitStateChange(dirty, originCommandId);
   }
 
   private pushHistory(history: CanvasData[], canvas: CanvasData): void {
@@ -413,7 +556,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
 
   private createSnapshot(): CanvasHostSnapshot {
     const sourceAvailable = this.options.effects.requestSource !== undefined;
-    const generationAvailable = this.options.effects.requestGenerationDraft !== undefined;
+    const generationAvailable = this.options.effects.generation !== undefined;
     return {
       identity: { ...this.identity },
       dirty: this.dirty,
@@ -421,11 +564,125 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       presentation: clonePresentation(this.presentation),
       authoringCapabilities: {
         sourceModes: sourceAvailable ? ['import', 'reference'] : [],
-        generationMediaKinds: generationAvailable
-          ? ['image', 'video', 'audio', 'model', 'document']
-          : [],
+        generationKinds: generationAvailable ? ['prompt', 'image', 'audio', 'video'] : [],
       },
+      generationNodes: [...this.generationNodes.values()].map((projection) =>
+        structuredClone(projection),
+      ),
     };
+  }
+
+  private async persistCanvas(canvas: CanvasData): Promise<void> {
+    const saveDocument = this.options.effects.saveDocument;
+    if (!saveDocument) throw new Error('Canvas durable save capability is unavailable.');
+    await saveDocument({ canvas: cloneCanvas(canvas), identity: { ...this.identity } });
+  }
+
+  private startGenerationObservation(nodeId: string): void {
+    const generation = this.options.effects.generation;
+    if (!generation || this.disposed) return;
+    const node = requireCanvasGenerationNode(this.canvas, nodeId);
+    const run = node.data.latestRun;
+    if (!run?.jobRef || this.observedGenerationSubmissions.has(run.submissionId)) return;
+    this.observedGenerationSubmissions.add(run.submissionId);
+    void this.consumeGenerationObservation(nodeId, { ...run, jobRef: run.jobRef });
+  }
+
+  private async consumeGenerationObservation(
+    nodeId: string,
+    run: NonNullable<ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']> & {
+      readonly jobRef: NonNullable<
+        NonNullable<ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']>['jobRef']
+      >;
+    },
+  ): Promise<void> {
+    const generation = this.options.effects.generation;
+    if (!generation) return;
+    try {
+      for await (const projection of generation.observeNode({
+        identity: { ...this.identity },
+        nodeId,
+        run,
+      })) {
+        await this.enqueueOperation(async () => {
+          if (this.disposed) return;
+          const previous = this.generationNodes.get(nodeId);
+          this.generationNodes.set(
+            nodeId,
+            previous?.recipeStale ? { ...projection, recipeStale: true } : projection,
+          );
+          if (projection.phase === 'succeeded' && projection.resultLocators?.length) {
+            const current = requireCanvasGenerationNode(this.canvas, nodeId);
+            const outputs = projection.resultLocators.map((locator) => ({
+              outputId: locator.outputId,
+              jobRef: run.jobRef,
+              locator,
+              kind: current.data.recipe.kind,
+              recipeInputFingerprint: run.recipeInputFingerprint,
+            }));
+            const next = applyCanvasGenerationNodeOutputs({
+              canvas: this.canvas,
+              nodeId,
+              submissionId: run.submissionId,
+              recipeInputFingerprint: run.recipeInputFingerprint,
+              jobRef: run.jobRef,
+              outputs,
+            });
+            await this.persistCanvas(next);
+            this.canvas = cloneCanvas(next);
+            this.dirty = false;
+          }
+          this.commitProjectionChange();
+        });
+      }
+    } catch (error) {
+      await this.enqueueOperation(() => {
+        if (this.disposed) return;
+        this.generationNodes.set(nodeId, {
+          nodeId,
+          submissionId: run.submissionId,
+          recipeInputFingerprint: run.recipeInputFingerprint,
+          jobRef: run.jobRef,
+          phase: 'outcome-unknown',
+          diagnostic: {
+            code: 'canvas-generation-observation-failed',
+            message:
+              error instanceof Error ? error.message : 'Canvas Generation observation failed.',
+          },
+        });
+        this.commitProjectionChange();
+      });
+    } finally {
+      this.observedGenerationSubmissions.delete(run.submissionId);
+    }
+  }
+
+  private commitProjectionChange(): void {
+    this.sequence += 1;
+    const event: CanvasHostProjectionEvent = {
+      sequence: this.sequence,
+      snapshot: this.createSnapshot(),
+    };
+    for (const listener of this.listeners) listener(cloneEvent(event));
+  }
+
+  private markGenerationRecipeStale(
+    nodeId: string,
+    run: NonNullable<ReturnType<typeof requireCanvasGenerationNode>['data']['latestRun']>,
+  ): void {
+    const current = this.generationNodes.get(nodeId);
+    this.generationNodes.set(nodeId, {
+      nodeId,
+      submissionId: run.submissionId,
+      recipeInputFingerprint: run.recipeInputFingerprint,
+      ...(run.jobRef ? { jobRef: run.jobRef } : {}),
+      phase: current?.phase ?? (run.jobRef ? 'binding' : 'outcome-unknown'),
+      ...(current?.progress ? { progress: current.progress } : {}),
+      ...(current?.resultLocators ? { resultLocators: current.resultLocators } : {}),
+      ...(current?.text ? { text: current.text } : {}),
+      ...(current?.diagnostic ? { diagnostic: current.diagnostic } : {}),
+      recipeStale: true,
+    });
   }
 
   private async resolveAvailableMaterialActions(
@@ -477,6 +734,31 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     );
     return result;
   }
+}
+
+function areJsonValuesEqual(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => areJsonValuesEqual(value, right[index]))
+    );
+  }
+  if (!isComparableRecord(left) || !isComparableRecord(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key, index) => key === rightKeys[index] && areJsonValuesEqual(left[key], right[key]),
+    )
+  );
+}
+
+function isComparableRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function rejected(
@@ -544,7 +826,16 @@ function cloneSnapshot(snapshot: CanvasHostSnapshot): CanvasHostSnapshot {
     identity: { ...snapshot.identity },
     canvas: cloneCanvas(snapshot.canvas),
     presentation: clonePresentation(snapshot.presentation),
+    authoringCapabilities: structuredClone(snapshot.authoringCapabilities),
+    generationNodes: structuredClone(snapshot.generationNodes),
   };
+}
+
+function nextGenerationNodeId(canvas: CanvasData): string {
+  const existing = new Set(canvas.nodes.map((node) => node.id));
+  let sequence = 1;
+  while (existing.has(`generation-${sequence}`)) sequence += 1;
+  return `generation-${sequence}`;
 }
 
 function assertMaterialIdentity(

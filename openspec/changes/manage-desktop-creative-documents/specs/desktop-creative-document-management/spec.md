@@ -1,270 +1,243 @@
 ## ADDED Requirements
 
-### Requirement: Desktop owns one creative-document lifecycle command path
+### Requirement: Workspace Files is an authoritative live directory projection
 
-Desktop SHALL execute `.nkc` and `.otio` create, import, open, trash-plan, and trash-apply operations
-through one canonical sender-bound creative-document lifecycle contract. Assets and empty Main SHALL
-only submit intents and render projections; Canvas and Cut SHALL remain the canonical document
-producers and session owners. Missing, stale, mismatched, or unauthorized identity MUST fail visibly
-without falling back to an active or recent project, document, View, or directory.
+The Desktop Files facet SHALL project the authorized Workspace filesystem as its only file catalog.
+A package-owned observation service SHALL treat OS filesystem notifications only as invalidations,
+re-read authoritative directory state, and publish immutable Resource Browser snapshots. Files added,
+removed, or changed through Finder, Explorer, terminal, or another process MUST become visible
+without an application import operation or normal manual refresh.
 
-#### Scenario: Resource Browser and empty Main create through the same path
+#### Scenario: External file is added
 
-- **WHEN** a user creates a Canvas from a Resource Browser directory and later creates a Cut from
-  empty Main
-- **THEN** both requests reach the same Desktop lifecycle coordinator with explicit Project,
-  Workspace, Window, endpoint, request, and target/default-directory identity
-- **AND** neither surface writes project bytes or constructs a parallel document session
+- **WHEN** a regular file is added anywhere under the visible Workspace through an external tool
+- **THEN** observation invalidates the affected projection and an authoritative rescan displays it
+- **AND** Desktop does not copy, import, register, or rewrite that file
 
-#### Scenario: Forged lifecycle identity is submitted
+#### Scenario: Filesystem notification is duplicated or coalesced
 
-- **WHEN** a renderer submits a stale Resource Browser revision, mismatched Workspace, stale endpoint
-  renderer session/request identity, or target outside its sender-owned Project
-- **THEN** Main rejects the request with a typed diagnostic
-- **AND** no picker, file mutation, session creation, Workbench mutation, or fallback executes
+- **WHEN** the OS emits duplicate, partial, reordered, or coalesced notifications
+- **THEN** the observer uses them only to schedule an authoritative reconciliation
+- **AND** notification order does not become file identity or a second source of truth
 
-### Requirement: New creative documents are explicit canonical workspace files
+#### Scenario: Observation fails
 
-Desktop SHALL create a new document in an explicit authorized Resource Browser directory or the
-matching owner default directory. Canvas SHALL produce valid empty NKC through its canonical factory
-and codec; Cut SHALL produce a valid OTIO v1 project through its canonical factory, profile, session,
-and codec. The Host MUST normalize and validate a visible portable name, require the matching
-extension, publish exclusively through same-directory staging, and MUST NOT overwrite or leave a
-partial file.
+- **WHEN** Workspace observation cannot continue or reconciliation fails
+- **THEN** the Files facet retains valid sibling entries and displays a local diagnostic with a
+  one-shot Rescan recovery action
+- **AND** it does not report an empty successful catalog, disable unrelated facets, or expose a normal
+  always-visible Refresh command
 
-#### Scenario: Canvas is created in the selected directory
+### Requirement: Desktop owns one canonical creation command path
 
-- **WHEN** the user invokes New Canvas on an authorized Files directory and submits an available name
-- **THEN** the Canvas owner produces canonical empty NKC bytes and Desktop publishes the exact
-  workspace-relative `.nkc` target
-- **AND** Desktop refreshes Resources and opens/focuses that document only after publication succeeds
+Desktop SHALL execute ordinary file, directory, Canvas, and Cut creation through one sender-bound
+command family owned by `@neko/content/project-file-io`. Assets and empty Main SHALL submit intents
+and render projections; Canvas and Cut SHALL remain the only canonical producers of `.nkc` and
+`.otio` bytes. Desktop MUST retain only Application-boundary authorization, concrete native adapters,
+package wiring, and Workbench projection.
 
-#### Scenario: Cut is created from empty Main
+#### Scenario: A creation request crosses the Desktop boundary
 
-- **WHEN** no Main View is open and the user invokes New Cut without a directory context
-- **THEN** Desktop resolves the Cut owner default project directory and Cut creates the canonical v1
-  OTIO project
-- **AND** the resulting Cut View and Timeline bind to the exact new document identity
+- **WHEN** Renderer submits a creation command
+- **THEN** Main validates the exact sender, Window, Project, Workspace, endpoint, request,
+  target-directory, and projection identity before delegating to the package owner
+- **AND** it does not use an active/recent Workspace or directory fallback
 
-#### Scenario: Requested document name conflicts
+#### Scenario: One request is invalid
 
-- **WHEN** the normalized target already exists or publication loses an exclusive-create race
-- **THEN** Desktop returns a conflict diagnostic and removes any staging file
-- **AND** it does not overwrite bytes, allocate a hidden suffix, open a View, or report success
+- **WHEN** one command has an invalid shape, stale identity, unauthorized directory, or unavailable
+  owner
+- **THEN** only that request fails with a typed diagnostic
+- **AND** sibling files, projections, commands, Workspaces, and the application remain available
 
-#### Scenario: Owner document construction fails
+### Requirement: Creation target resolution is deterministic and visible
 
-- **WHEN** the matching Canvas or Cut factory, codec, or storage dependency is unavailable or rejects
-  the document
-- **THEN** creation fails visibly and leaves the filesystem, Workbench, and Resource Browser
-  projection unchanged
-- **AND** Desktop does not construct substitute JSON, use another codec, or create an in-memory
-  untitled document
+Every Resource Browser creation request SHALL carry one explicit workspace-relative target directory.
+Files `+` SHALL target a selected directory itself, a selected file's parent, or Workspace root when
+there is no selection. A directory context menu SHALL target that directory, and a blank-area context
+menu SHALL target Workspace root. File context menus MUST NOT expose creation commands. Main SHALL
+re-authorize the exact resolved target and MUST NOT substitute another directory after failure.
 
-### Requirement: External creative-document import is explicit and bounded
+#### Scenario: User creates under a selected directory
 
-Desktop SHALL import only an explicitly selected external regular non-symlink `.nkc` or `.otio`
-file through a sender-bound native picker. The matching owner MUST validate the source bytes before
-Desktop copies them into an explicit authorized workspace directory through exclusive staging.
-Import MUST preserve document bytes and MUST NOT infer a source workspace, copy adjacent media,
-rewrite references, or open an external absolute path as a project document.
+- **WHEN** a directory is selected and the user invokes a Files `+` creation action
+- **THEN** the tree expands that directory and places the inline name editor inside it
+- **AND** the submitted command names that exact workspace-relative directory
 
-#### Scenario: Valid external project document is imported
+#### Scenario: User creates while a file is selected
 
-- **WHEN** a user selects a valid external NKC or OTIO and an available workspace destination
-- **THEN** Desktop validates it through the matching owner, publishes one workspace file, refreshes
-  Resources, and opens the imported document
-- **AND** renderer receives only portable document identity and diagnostics
+- **WHEN** a file is selected and the user invokes a Files `+` creation action
+- **THEN** the inline editor appears beside that file under its parent directory
+- **AND** creation does not target the file, Workspace root, or a recent directory
 
-#### Scenario: External document is invalid or a symlink
+#### Scenario: User creates from blank area
 
-- **WHEN** the selected source is a symlink, not a regular file, has the wrong extension, or fails its
-  owning codec
-- **THEN** Desktop rejects import before destination publication
-- **AND** it does not follow the link, copy bytes, create a View, or fall back to generic JSON parsing
+- **WHEN** the user invokes the blank-area creation menu
+- **THEN** the inline editor and command target Workspace root
+- **AND** a previously selected child directory does not change that explicit blank-area target
 
-#### Scenario: Imported references are unavailable in the destination
+#### Scenario: Target directory becomes stale
 
-- **WHEN** preserved NKC workspace locators or OTIO-relative media references do not resolve in the
-  destination Workspace
-- **THEN** the owning Canvas or Cut session opens the valid document structure with explicit missing
-  content diagnostics
-- **AND** Desktop does not use the external source directory as hidden context, automatically copy
-  media, or silently rebase paths
+- **WHEN** the resolved target is removed, changed to a symlink, unauthorized, or leaves Workspace
+  containment before commit
+- **THEN** Main rejects that creation and the inline editor displays the diagnostic
+- **AND** Desktop does not retry in Workspace root or an owner default directory
 
-### Requirement: Resource management provides capability-driven toolbar and context menus
+### Requirement: Ordinary file and directory creation is portable and non-overwriting
 
-The Assets-owned Resource Browser SHALL derive its visible toolbar, item context menu, directory
-context menu, and blank-area context menu from immutable Host-authorized capabilities and SHALL reuse
-the public `@neko/ui` context-menu primitive. Context menus SHALL select their target before opening,
-support pointer and `Shift+F10`/Menu-key invocation, separate destructive actions, and MUST NOT be the
-only way to discover create/import operations.
+New File SHALL create one zero-byte regular file and New Folder SHALL create one empty directory.
+Names MUST be NFC-normalized, visible, portable, non-empty single path segments and MUST reject path
+separators, absolute paths, `.`/`..`, control characters, reserved names, trailing dot/space, and
+Workspace escape. Publication MUST use fail-if-exists semantics and MUST NOT overwrite, infer a
+suffix, or report partial success.
 
-#### Scenario: Files facet exposes document management
+#### Scenario: User creates an ordinary file
 
-- **WHEN** the Files facet is active
-- **THEN** the visible add menu and blank-area menu expose New Canvas, New Cut, and Import Document,
-  while a directory menu applies those operations to that explicit directory
-- **AND** Refresh remains available without showing Media Library configuration as an unrelated Files
-  action
+- **WHEN** the user commits a valid unused ordinary filename through the inline editor
+- **THEN** Content publishes exactly one zero-byte regular file in the authorized target directory
+- **AND** Resources invalidates immediately and selects the exact created entry
 
-#### Scenario: Creative document context menu opens
+#### Scenario: User creates a directory
 
-- **WHEN** the user opens the context menu for a workspace NKC or OTIO item
-- **THEN** the item becomes selected and the menu shows only its authorized open, supported side-open,
-  reveal, and move-to-trash actions
-- **AND** OTIO does not offer side-open until the Cut owner and Workbench explicitly support it
+- **WHEN** the user commits a valid unused directory name through the inline editor
+- **THEN** Content creates exactly one empty directory in the authorized target directory
+- **AND** the directory becomes selected without creating hidden metadata or an open runtime
 
-#### Scenario: Media Library root context menu opens
+#### Scenario: Target name already exists
 
-- **WHEN** the user opens a context menu for a linked Media Library root
-- **THEN** the menu exposes only applicable recover, relink, unlink, and refresh operations
-- **AND** it does not expose workspace-file trash or describe unlink as deleting target contents
+- **WHEN** a file or directory already occupies the target path, including a publication race
+- **THEN** creation fails with a conflict diagnostic and keeps inline naming active
+- **AND** the existing entry is unchanged and no implicit numbered name is created
 
-#### Scenario: Context menu is invoked from the keyboard
+#### Scenario: Generic file uses a reserved domain extension
 
-- **WHEN** a selected resource receives `Shift+F10` or the platform Menu key
-- **THEN** the same capability-derived menu opens with managed focus and keyboard navigation
-- **AND** closing it restores focus without changing project facts
+- **WHEN** New File is committed with `.nkc` or `.otio`, case-insensitively
+- **THEN** Content rejects it and identifies New Canvas or New Cut as the required operation
+- **AND** no zero-byte or substitute domain document is published
 
-### Requirement: Empty Main is a shortcut surface rather than a document owner
+### Requirement: Canvas and Cut creation uses canonical domain owners
 
-When a Main group contains no View, Desktop SHALL render compact New Canvas, New Cut, and
-Import/Open shortcuts for ready domain capabilities. Each shortcut MUST submit the same lifecycle
-intent used by Resource Browser, and Main MUST remain free of project byte construction, target path
-state, document dirty state, and owner session state.
+New Canvas and New Cut SHALL obtain valid bytes from the Canvas and Cut owner ports respectively and
+publish them exclusively before opening/focusing the exact document. The Host MAY append the required
+extension when absent and MUST reject a mismatched extension. Neither Desktop nor Assets MAY author
+substitute NKC/OTIO JSON or create an untitled hidden document first.
 
-#### Scenario: User creates from empty Main
+#### Scenario: Canvas is created in an explicit directory
 
-- **WHEN** the user chooses New Canvas or New Cut in an empty Main group
-- **THEN** Desktop uses the owner default directory, publishes the canonical file, and replaces the
-  empty state with the exact opened View
-- **AND** no anonymous or hidden in-memory document exists before publication
+- **WHEN** a user commits a valid Canvas name in an authorized Resource Browser directory
+- **THEN** the Canvas owner produces canonical NKC bytes and Content publishes the exact `.nkc` file
+- **AND** only after publication succeeds Resources invalidates and Workbench opens/focuses it
 
-#### Scenario: Domain capability is unavailable
+#### Scenario: Owner or publication fails
 
-- **WHEN** Canvas or Cut is unavailable
-- **THEN** empty Main omits or disables only that owner's shortcut with a typed diagnostic
-- **AND** it does not render a simulated successful action or redirect through another owner
+- **WHEN** the matching owner is unavailable, produces invalid bytes, or exclusive publication fails
+- **THEN** that request returns a typed diagnostic
+- **AND** no partial file, alternate owner, generic-file fallback, View, or successful projection exists
 
-### Requirement: Creative-document trash is recoverable and two-phase
+#### Scenario: Publication succeeds but the editor cannot open
 
-Desktop SHALL implement project-document deletion as short-lived `trash.plan` and `trash.apply`
-operations that move an authorized workspace-owned regular file to the operating-system trash.
-Planning MUST bind target fingerprint, sender, Project, Workspace, endpoint, open View/session state,
-dirty state, running owner tasks, reference coverage, and referencing owners. Apply MUST repeat
-authorization, reject stale plans, require an explicit dirty resolution and reference acknowledgement
-when applicable, release owner resources, and invoke the injected trash adapter. It MUST NOT use
-permanent delete, cascade deletion, or reference rewriting.
+- **WHEN** canonical bytes publish successfully and exact Workbench open/focus then fails
+- **THEN** the new file remains visible as authoritative user content and receives a local diagnostic
+- **AND** Desktop does not delete the file, create a substitute View, or report the editor as opened
 
-#### Scenario: Clean unreferenced document is moved to trash
+### Requirement: Files creation is discoverable and context-aware
 
-- **WHEN** a valid non-expired plan still matches a clean, unreferenced, task-free document and the
-  user confirms
-- **THEN** Desktop releases its owner session, moves the exact file to system trash, removes matching
-  Views, and refreshes Resources
-- **AND** unrelated documents, references, Entity identities, Media Library links, and files remain
-  unchanged
+The Files facet SHALL expose one accessible icon-only `+` toolbar button whose menu contains New File,
+New Folder, New Canvas, and New Cut. Directory and blank-area context menus SHALL expose equivalent
+authorized actions for their explicit targets. These menus SHALL be capability-derived, reuse the
+public `@neko/ui` context-menu primitive, support pointer and `Shift+F10`/Menu-key invocation, and
+restore focus after closing.
 
-#### Scenario: Open document is dirty
+#### Scenario: Files `+` opens
 
-- **WHEN** planning finds an open dirty Canvas or Cut session
-- **THEN** apply requires the user to choose save-and-trash, discard-and-trash, or cancel
-- **AND** no trash call executes until the owning session successfully completes the selected
-  resolution
+- **WHEN** the Files facet is active and the user invokes `+`
+- **THEN** the menu shows the four supported creation kinds and the resolved target context
+- **AND** it does not show Media Library configuration, Import, or Refresh
 
-#### Scenario: Document has a running owner task
+#### Scenario: Inline naming commits or cancels
 
-- **WHEN** planning or apply finds an active Cut export, Generation operation, or other
-  document-scoped owner task
-- **THEN** Desktop rejects trash with the exact blocking task diagnostic
-- **AND** it does not silently cancel the task, detach its owner, or move the file
+- **WHEN** a creation action starts
+- **THEN** an inline name editor appears at the exact future tree location, Enter submits, and Escape
+  cancels without a filesystem mutation
+- **AND** validation/conflict diagnostics remain local without closing the editor or shifting target
 
-#### Scenario: Document is referenced
+#### Scenario: Creative-document suffix is fixed during naming
 
-- **WHEN** complete project-content inspection finds Canvas, Cut, or Entity representation owners
-  referencing the target
-- **THEN** the plan lists those owner identities and apply requires explicit acknowledgement
-- **AND** successful trash leaves the references unchanged so their owners project missing-content
-  diagnostics
+- **WHEN** New Canvas or New Cut starts inline naming
+- **THEN** the user edits only the document stem while `.nkc` or `.otio` is displayed as a fixed,
+  non-editable suffix
+- **AND** commit submits the complete filename with that owning suffix exactly once
 
-#### Scenario: Reference inspection is incomplete
+#### Scenario: Directory disclosure is clicked
 
-- **WHEN** registered reference coverage is incomplete or an owning project document cannot be parsed
-- **THEN** Desktop rejects trash with the incomplete or invalid owner diagnostic
-- **AND** it does not assume zero references or offer an unguarded apply path
+- **WHEN** the user single-clicks the disclosure triangle beside a directory in list view
+- **THEN** that exact directory expands when collapsed and collapses when expanded
+- **AND** single-clicking elsewhere on the row remains selection-only
 
-#### Scenario: Trash target changes after planning
+#### Scenario: File context menu opens
 
-- **WHEN** the file fingerprint, session identity, dirty state, task state, Project ownership, or
-  renderer session or request/plan identity changes before apply
-- **THEN** Desktop rejects the stale plan and requires a new plan
-- **AND** it does not apply using a label, previous absolute path, active View, or stale confirmation
+- **WHEN** the user invokes a context menu on a file
+- **THEN** the menu contains only authorized operations on that file
+- **AND** it does not contain New File, New Folder, New Canvas, or New Cut
 
-#### Scenario: Operating-system trash fails
+### Requirement: Existing-file import is not an application operation
 
-- **WHEN** owner resources are released but the trash adapter fails while the source file remains
-- **THEN** Desktop keeps the Workbench mutation uncommitted, remounts the previous Views from the
-  unchanged file, and reports failure
-- **AND** it does not report deletion or leave a successful empty projection
+Desktop and Assets MUST NOT expose an existing-file import command, native import picker, or copy-into-
+Workspace handler for the Files facet. Existing files SHALL enter the projection only by existing in
+the authoritative Workspace directory.
 
-### Requirement: Trash authorization protects ownership and special resources
+#### Scenario: User wants to add an existing file
 
-Creative-document and directory trash SHALL accept only visible, workspace-owned, authorized,
-non-symlink targets. Ordinary trash MUST reject the protected `neko/boards/workspace.nkc`, Media
-Library roots and external linked contents, hidden/internal paths, and non-empty directories.
-Directory trash SHALL be limited to empty directories and MUST NOT set a recursive deletion flag.
+- **WHEN** a user copies or moves an existing file into the Workspace through the operating system
+- **THEN** live directory reconciliation displays that same file
+- **AND** OpenNeko does not create a duplicate copy, import record, or alternate project identity
 
-#### Scenario: Protected workspace Canvas is selected
+#### Scenario: Retired import path is invoked
 
-- **WHEN** the target is `neko/boards/workspace.nkc`
-- **THEN** Resource Browser does not project ordinary trash capability and Main rejects a forged plan
-  request
-- **AND** the document can only be changed through a future explicit reset workflow
+- **WHEN** a stale or forged client attempts the retired import command
+- **THEN** the command is unregistered or rejected locally
+- **AND** no picker opens and no source or Workspace file is mutated
 
-#### Scenario: External or linked source is selected
+### Requirement: Empty Main and trash remain outside creation
 
-- **WHEN** the target belongs to an external Media Library, is a symlink, or resolves outside the
-  authorized Workspace
-- **THEN** Desktop rejects file trash before reference or session mutation
-- **AND** it does not follow the target, delete external bytes, or reinterpret unlink as trash
+Empty Main SHALL remain presentation-only and SHALL NOT acquire directory-selection, naming, or
+filesystem authority in this change. Existing Trash behavior SHALL remain unchanged. A future change
+MUST define dirty-session, task, reference, authorization, rollback, and directory policies before
+replacing that behavior.
 
-#### Scenario: Empty workspace directory is moved to trash
+#### Scenario: Empty Main remains presentation-only
 
-- **WHEN** a visible authorized workspace directory has zero entries and a matching non-expired plan
-  is confirmed
-- **THEN** Desktop moves that exact directory to system trash and refreshes Resources
-- **AND** it does not recursively inspect or delete descendants
+- **WHEN** a Main group has no View during this change
+- **THEN** it does not expose file, folder, Canvas, or Cut creation commands
+- **AND** existing Trash routes and behavior are not replaced by a partial creation-owned lifecycle
 
-#### Scenario: Non-empty directory is selected
+### Requirement: Close, unlink, create, and rename remain distinct
 
-- **WHEN** a directory contains any visible or hidden entry
-- **THEN** Desktop rejects trash with a non-empty-directory diagnostic
-- **AND** no recursive delete, partial child mutation, or fallback executes
-
-### Requirement: Close, unlink, trash, and representation lifecycle remain distinct
-
-Closing a Main View SHALL remain a presentation operation. Removing a Media Library SHALL unlink only
-the workspace connection. Creative-document trash SHALL mutate only the explicitly authorized
-workspace file. Generated-output deletion and Entity representation lifecycle SHALL retain their
-own contracts. No legacy alias, callback, or conditional fallback MAY make one operation execute as
-another or report success.
+Closing a Main View SHALL remain presentation-only. Removing a Media Library SHALL unlink only its
+Workspace connection. Creation SHALL publish only the requested new entry. Rename SHALL remain
+unreachable until a separate owner-coordinated contract exists. No alias, fallback, or generic
+filesystem bridge MAY reinterpret one operation as another or report success. Existing Trash behavior
+is unchanged by this requirement.
 
 #### Scenario: User closes a creative document tab
 
-- **WHEN** the user closes an NKC or OTIO Main View without invoking trash
-- **THEN** Desktop removes only its View projection and follows the owner close/dirty policy
-- **AND** the project file remains in Resources and on disk
+- **WHEN** the user closes an NKC or OTIO View without invoking trash
+- **THEN** Desktop removes only its View projection according to owner dirty policy
+- **AND** the Workspace file remains visible and unchanged
 
-#### Scenario: User removes a Media Library
+#### Scenario: Rename is requested before its lifecycle exists
 
-- **WHEN** the user confirms Remove Media Library
-- **THEN** Desktop removes only the workspace link and retains target contents
-- **AND** the confirmation and diagnostic remain distinct from Move to Trash
+- **WHEN** a client attempts an unregistered or forged rename command
+- **THEN** Desktop rejects only that operation
+- **AND** it does not expose a raw Host rename call or mutate the file, session, View, or references
 
-#### Scenario: New creative-document path is accepted
+### Requirement: Directory observation disposal is fail-local
 
-- **WHEN** create, open, import, or trash succeeds through the new lifecycle contract
-- **THEN** path-level tests prove the new coordinator and matching Canvas/Cut owner were invoked
-- **AND** the legacy Canvas open callback, asymmetric Cut open route, direct permanent delete, active
-  document fallback, and compatibility aliases are absent
+The Assets Node observer MUST stop publishing invalidations and errors after disposal. Runtime
+diagnostic delivery MUST explicitly settle if the exact controller is disposed concurrently.
+
+#### Scenario: Reconciliation rejects after observer disposal
+
+- **WHEN** a pending authoritative reconciliation rejects after its observer and controller are disposed
+- **THEN** no observer error callback or unhandled promise rejection is emitted
+- **AND** unrelated Resource Browser controllers and projections remain available

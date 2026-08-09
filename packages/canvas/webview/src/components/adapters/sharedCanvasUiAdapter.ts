@@ -4,11 +4,9 @@ import type { CanvasAddActionId } from '../../utils/canvasAddActions';
 
 const ADD_ACTION_ICON_BY_ID: Readonly<Record<CanvasAddActionId, CodiconName>> = {
   text: 'edit',
-  table: 'table',
   image: 'symbol-color',
   video: 'play',
   audio: 'symbol-ruler',
-  director3d: 'device-camera',
 };
 
 export function createCanvasAddActionIcon(

@@ -15,7 +15,7 @@ interface RequestBase {
 export type AgentExtensionManagementHostRequest =
   | (RequestBase & { readonly route: 'snapshot.get' })
   | (RequestBase & {
-      readonly route: 'plugin.install' | 'plugin.remove';
+      readonly route: 'plugin.install' | 'plugin.enable' | 'plugin.disable' | 'plugin.remove';
       readonly pluginId: string;
     })
   | (RequestBase & {
@@ -61,6 +61,8 @@ export function parseAgentExtensionManagementHostRequest(
       requireExactKeys(record, BASE_KEYS);
       return { ...base, route: 'snapshot.get' };
     case 'plugin.install':
+    case 'plugin.enable':
+    case 'plugin.disable':
     case 'plugin.remove':
       requireExactKeys(record, [...BASE_KEYS, 'pluginId']);
       return {

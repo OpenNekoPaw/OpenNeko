@@ -5,9 +5,9 @@ import type {
   TabRenderStateUpdate,
 } from './tab-render-runtime';
 import {
-  parseAgentConversationContext,
+  parseAgentBoundDomainBinding,
   type AgentContextPayload,
-  type AgentConversationContext,
+  type AgentBoundDomainBinding,
 } from '@neko/agent-contracts';
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
@@ -19,9 +19,14 @@ export interface AgentEntryDraftSnapshot {
   readonly draftId: string;
   readonly inputValue: string;
   readonly contextReferences: readonly AgentContextPayload[];
+  readonly characterLaunches: readonly {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+    readonly label: string;
+  }[];
   readonly workspaceTarget?: {
     readonly label: string;
-    readonly context: Extract<AgentConversationContext, { readonly kind: 'workspace' }>;
+    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
   };
   readonly selectedModel: string;
   readonly executionMode: 'plan' | 'ask' | 'auto';
@@ -329,6 +334,19 @@ function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
   if (!Array.isArray(contextReferences)) {
     throw new Error(`${path}.contextReferences must be an array.`);
   }
+  const characterLaunches = value.characterLaunches;
+  if (!Array.isArray(characterLaunches)) {
+    throw new Error(`${path}.characterLaunches must be an array.`);
+  }
+  const parsedCharacterLaunches = characterLaunches.map((selection, index) =>
+    parseEntryCharacterLaunch(selection, `${path}.characterLaunches[${index}]`),
+  );
+  if (
+    new Set(parsedCharacterLaunches.map((selection) => selection.characterVersionId)).size !==
+    parsedCharacterLaunches.length
+  ) {
+    throw new Error(`${path}.characterLaunches must not contain duplicate CharacterVersions.`);
+  }
   const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
   return {
     draftId: nonEmptyString(value.draftId, `${path}.draftId`),
@@ -336,9 +354,30 @@ function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
     contextReferences: contextReferences.map((reference, index) =>
       parseEntryContextReference(reference, `${path}.contextReferences[${index}]`),
     ),
+    characterLaunches: parsedCharacterLaunches,
     ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
     selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
     executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
+  };
+}
+
+function parseEntryCharacterLaunch(
+  value: unknown,
+  path: string,
+): AgentEntryDraftSnapshot['characterLaunches'][number] {
+  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  if (
+    Object.keys(value).length !== 3 ||
+    !('characterProjectId' in value) ||
+    !('characterVersionId' in value) ||
+    !('label' in value)
+  ) {
+    throw new Error(`${path} has unsupported fields.`);
+  }
+  return {
+    characterProjectId: nonEmptyString(value.characterProjectId, `${path}.characterProjectId`),
+    characterVersionId: nonEmptyString(value.characterVersionId, `${path}.characterVersionId`),
+    label: nonEmptyString(value.label, `${path}.label`),
   };
 }
 
@@ -348,7 +387,7 @@ function parseEntryWorkspaceTarget(
 ): AgentEntryDraftSnapshot['workspaceTarget'] {
   if (value === undefined) return undefined;
   if (!isRecord(value)) throw new Error(`${path}.workspaceTarget must be an object.`);
-  const context = parseAgentConversationContext(value.context);
+  const context = parseAgentBoundDomainBinding(value.context);
   if (context.kind !== 'workspace') {
     throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
   }

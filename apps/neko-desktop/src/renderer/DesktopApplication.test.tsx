@@ -4,7 +4,11 @@ import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
+import {
+  createDefaultDesktopWorkbenchLayout,
+  openOrFocusMainView,
+  setWorkbenchDisplayMode,
+} from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
@@ -23,14 +27,25 @@ import { DesktopApplicationSettingsProvider } from './application-settings-conte
 import { createDesktopI18n } from './i18n';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
 import {
+  TEXT_EDITOR_HOST_ROUTES,
+  type TextEditorHostRequest,
+  type TextEditorHostResult,
+} from '@neko/text-editor-domain';
+import {
   createDefaultAssetCenterFilter,
   type AssetCenterSessionProjection,
 } from '@neko/assets-domain/asset-center/contract';
+import type {
+  DesktopProjectPortabilityRequest,
+  OpenNekoDesktopProjectPortabilityBridge,
+} from '@neko/assets-domain/contracts';
+import type { RoomView } from '@neko/chara/contracts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const rendererInstrumentation = vi.hoisted(() => ({
   extensionRootRender: vi.fn(),
+  textEditorRootRender: vi.fn(),
 }));
 
 vi.mock('./DesktopExtensionManagementSurface', () => ({
@@ -68,10 +83,18 @@ vi.mock('./DesktopAssetCenterMainSurface', () => ({
   ),
 }));
 
+vi.mock('./DesktopTextEditorSurface', () => ({
+  DesktopTextEditorSurface: ({ view }: { readonly view: { readonly viewId: string } }) => {
+    rendererInstrumentation.textEditorRootRender(view.viewId);
+    return <div data-text-editor-root={view.viewId} />;
+  },
+}));
+
 describe('DesktopApplication scene lifecycle', () => {
   afterEach(() => {
     document.body.replaceChildren();
     rendererInstrumentation.extensionRootRender.mockClear();
+    rendererInstrumentation.textEditorRootRender.mockClear();
     vi.restoreAllMocks();
   });
 
@@ -119,6 +142,105 @@ describe('DesktopApplication scene lifecycle', () => {
 
     await act(async () => root.unmount());
     expect(activeSubscriptions).toBe(0);
+  });
+
+  it.each([
+    { label: 'clean', dirty: false, confirmations: [] as boolean[], decision: 'discard' as const },
+    { label: 'dirty save', dirty: true, confirmations: [true], decision: 'save' as const },
+    {
+      label: 'dirty discard',
+      dirty: true,
+      confirmations: [false, true],
+      decision: 'discard' as const,
+    },
+  ])('closes a $label Text Editor tab through its exact session', async (fixture) => {
+    const projection = createTextEditorShellProjection();
+    const confirm = vi.spyOn(globalThis, 'confirm');
+    for (const response of fixture.confirmations) confirm.mockReturnValueOnce(response);
+    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> =>
+      request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet
+        ? readyTextEditorResult(request, fixture.dirty)
+        : {
+            requestId: request.requestId,
+            identity: request.identity,
+            status: 'closed',
+          },
+    );
+    installBridge({ projection, textEditorExecute: execute });
+    const { container, root } = await renderApplication();
+
+    const close = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close story.fountain"]',
+    );
+    if (!close) throw new Error('Desktop fixture requires the Text Editor close control.');
+    await act(async () => close.click());
+    await waitFor(() => execute.mock.calls.length === 2);
+
+    expect(confirm.mock.calls).toHaveLength(fixture.confirmations.length);
+    expect(execute.mock.calls[0]?.[0]).toMatchObject({
+      route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
+      identity: textEditorRuntimeIdentity(projection),
+    });
+    expect(execute.mock.calls[1]?.[0]).toMatchObject({
+      route: TEXT_EDITOR_HOST_ROUTES.close,
+      identity: textEditorRuntimeIdentity(projection),
+      decision: fixture.decision,
+    });
+    await act(async () => root.unmount());
+  });
+
+  it('keeps a dirty Text Editor tab when close is cancelled', async () => {
+    const projection = createTextEditorShellProjection();
+    vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(false);
+    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> =>
+      readyTextEditorResult(request, true),
+    );
+    installBridge({ projection, textEditorExecute: execute });
+    const { container, root } = await renderApplication();
+
+    const close = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close story.fountain"]',
+    );
+    if (!close) throw new Error('Desktop fixture requires the Text Editor close control.');
+    await act(async () => close.click());
+    await waitFor(() => execute.mock.calls.length === 1);
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-text-editor-root="text-editor:view-1"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('keeps the exact Text Editor tab and reports a save conflict during close', async () => {
+    const projection = createTextEditorShellProjection();
+    const getSnapshot = vi.fn(async () => projection);
+    vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(true);
+    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> => {
+      if (request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
+        return readyTextEditorResult(request, true);
+      }
+      return {
+        requestId: request.requestId,
+        identity: request.identity,
+        status: 'rejected',
+        diagnostic: { code: 'text-document-save-conflict', severity: 'error' },
+      };
+    });
+    installBridge({ projection, getSnapshot, textEditorExecute: execute });
+    const { container, root } = await renderApplication();
+
+    const close = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close story.fountain"]',
+    );
+    if (!close) throw new Error('Desktop fixture requires the Text Editor close control.');
+    await act(async () => close.click());
+    await waitFor(() => container.querySelector('[role="alert"]') !== null);
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'text-document-save-conflict',
+    );
+    expect(container.querySelector('[data-text-editor-root="text-editor:view-1"]')).not.toBeNull();
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
+    await act(async () => root.unmount());
   });
 
   it('uses one committed projection event to switch Settings without a success refresh', async () => {
@@ -329,6 +451,127 @@ describe('DesktopApplication scene lifecycle', () => {
       { kind: 'open-agent-entry' },
       activeScene(projection).sceneId,
     );
+    await act(async () => root.unmount());
+  });
+
+  it('routes Character navigation to its singleton Management scene', async () => {
+    const projection = createProjection();
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'character-management-1',
+      scene: characterManagementScene(),
+    }));
+    installBridge({ projection, transition });
+    const { container, root } = await renderApplication();
+    const characters = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Characters',
+    );
+    if (!characters) throw new Error('Desktop fixture requires Character navigation.');
+
+    await act(async () => characters.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-character-management' },
+      activeScene(projection).sceneId,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('mounts only the current Character Management catalog and unmounts it on replacement', async () => {
+    const initial = withActiveScene(createProjection(), characterManagementScene());
+    const settings = withActiveScene(initial, settingsScene());
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    installBridge({
+      projection: initial,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await waitFor(
+      () => container.querySelector('[data-character-management-catalog="true"]') !== null,
+    );
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: settings.applicationInstanceId,
+        windowId: settings.window.windowId,
+        rendererSessionId: settings.rendererSessionId,
+        sequence: 1,
+        projection: settings,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    expect(container.querySelector('[data-character-management-catalog="true"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('composes exact Character and Room workbenches and unmounts their Roots on scene exit', async () => {
+    const character = withActiveScene(createProjection(), characterInteractionScene());
+    const room = withActiveScene(character, characterRoomInteractionScene());
+    const settings = withActiveScene(room, settingsScene());
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    installBridge({
+      projection: character,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await waitFor(() => container.querySelector('[data-character-avatar-surface="true"]') !== null);
+    expect(
+      container
+        .querySelector('[data-character-avatar-surface="true"]')
+        ?.getAttribute('data-character-owner-id'),
+    ).toBe('character-run-1');
+    expect(container.querySelector('[data-character-runtime-manager="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
+    expect(
+      container.querySelector('.desktop-scene-workbench--character-interaction'),
+    ).not.toBeNull();
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: room.applicationInstanceId,
+        windowId: room.window.windowId,
+        rendererSessionId: room.rendererSessionId,
+        sequence: 1,
+        projection: room,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-character-room-timeline="true"]') !== null);
+    expect(
+      container
+        .querySelector('[data-character-room-timeline="true"]')
+        ?.getAttribute('data-room-run-id'),
+    ).toBe('room-run-1');
+    expect(container.querySelector('[data-character-room-timeline="true"]')?.textContent).toContain(
+      'Room projection message.',
+    );
+    expect(
+      container
+        .querySelector('[data-character-avatar-surface="true"]')
+        ?.getAttribute('data-character-owner-kind'),
+    ).toBe('room');
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: settings.applicationInstanceId,
+        windowId: settings.window.windowId,
+        rendererSessionId: settings.rendererSessionId,
+        sequence: 2,
+        projection: settings,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
+    expect(container.querySelector('[data-character-runtime-manager="true"]')).toBeNull();
+    expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -810,7 +1053,9 @@ describe('DesktopApplication scene lifecycle', () => {
       container.querySelector('[data-workbench-main-shell="secondary"]')?.hasAttribute('hidden'),
     ).toBe(true);
     expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
-    expect(container.querySelector('[aria-label="Open project: Project one"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Open project: Project one"]')).toBeNull();
+    expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
+    expect(projectButton.closest('[data-project-id="content:workspace-1"]')).not.toBeNull();
     expect(container.textContent).toContain('Project one');
     await act(async () => root.unmount());
   });
@@ -852,6 +1097,12 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, transition });
 
     const { container, root } = await renderApplication();
+    const projectSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="projects"]',
+    );
+    const conversationSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="conversations"]',
+    );
     const group = container.querySelector<HTMLElement>(
       '.primary-conversation-group[data-group-kind="project"]',
     );
@@ -865,7 +1116,19 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!group || !projectButton || !newConversationButton || !cleanupButton) {
       throw new Error('Desktop fixture requires empty Project navigation actions.');
     }
+    if (!projectSection || !conversationSection) {
+      throw new Error('Desktop fixture requires current navigation sections.');
+    }
 
+    expect(projectSection.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects1');
+    expect(conversationSection.querySelector('.home-sidebar-heading')?.textContent).toBe(
+      'Conversations0',
+    );
+    expect(projectSection.contains(group)).toBe(true);
+    expect(
+      projectSection.compareDocumentPosition(conversationSection) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(projectButton.textContent).toContain(project.displayName);
     expect(container.textContent).not.toContain(catalogOnlyProject.displayName);
     expect(group.querySelector('.primary-conversation-group__count')?.textContent).toBe('0');
@@ -1082,12 +1345,30 @@ describe('DesktopApplication scene lifecycle', () => {
     const deleteConversation = vi.fn(async () => projection);
     const removeProjects = vi.fn(async () => projection);
     const deleteProjectConversations = vi.fn(async () => projection);
+    const inspectPortability = vi.fn(async (request: DesktopProjectPortabilityRequest) => ({
+      requestId: request.requestId,
+      identity: request.identity,
+      portability: {
+        state: 'linked-ready' as const,
+        requirementFingerprint: 'requirements:empty',
+        libraries: [],
+      },
+    }));
+    const projectPortability = {
+      inspect: inspectPortability,
+      plan: vi.fn(),
+      resume: vi.fn(),
+      execute: vi.fn(),
+      cancel: vi.fn(),
+      subscribe: vi.fn(() => () => undefined),
+    } satisfies OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
     installBridge({
       projection,
       transition,
       deleteConversation,
       removeProjects,
       deleteProjectConversations,
+      projectPortability,
     });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
@@ -1107,6 +1388,7 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(
       conversationRow.querySelectorAll(':scope > .primary-navigation-row-actions button'),
     ).toHaveLength(1);
+    expect(container.querySelectorAll('.home-navigation-footer__actions button')).toHaveLength(1);
 
     await openContextMenu(projectRow);
     await selectContextMenuItem('Open project');
@@ -1134,6 +1416,28 @@ describe('DesktopApplication scene lifecycle', () => {
       { kind: 'open-project-management' },
       activeScene(projection).sceneId,
     );
+
+    await openContextMenu(projectRow);
+    await selectContextMenuItem('Project portability');
+    await waitFor(() => inspectPortability.mock.calls.length === 1);
+    expect(inspectPortability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: {
+          projectId: project.projectId,
+          workspaceId: project.workspaceId,
+          windowId: projection.window.windowId,
+          rendererSessionId: projection.rendererSessionId,
+        },
+      }),
+    );
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Linked media is available on this machine.',
+    );
+    const closePortability = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close project portability"]',
+    );
+    if (!closePortability) throw new Error('Project portability dialog requires a close command.');
+    await act(async () => closePortability.click());
 
     await openContextMenu(projectRow);
     await selectContextMenuItem('Delete Workspace conversations for Context menu project');
@@ -1456,6 +1760,14 @@ describe('DesktopApplication scene lifecycle', () => {
       '.primary-conversation-group[data-group-kind="workspace"]',
     );
     if (!group) throw new Error('Desktop fixture requires an unavailable Workspace group.');
+    const projectSection = group.closest<HTMLElement>('[data-navigation-section="projects"]');
+    const conversationSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="conversations"]',
+    );
+    expect(projectSection?.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects1');
+    expect(conversationSection?.querySelector('.home-sidebar-heading')?.textContent).toBe(
+      'Conversations0',
+    );
     const heading = group.querySelector<HTMLElement>(
       '.primary-conversation-group__standalone-heading',
     );
@@ -1607,6 +1919,16 @@ describe('DesktopApplication scene lifecycle', () => {
       '.primary-conversation-group[data-group-kind="assistant"]',
     );
     if (!group) throw new Error('Desktop fixture requires a standalone Assistant group.');
+    const projectSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="projects"]',
+    );
+    const conversationSection = group.closest<HTMLElement>(
+      '[data-navigation-section="conversations"]',
+    );
+    expect(projectSection?.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects0');
+    expect(conversationSection?.querySelector('.home-sidebar-heading')?.textContent).toBe(
+      'Conversations6',
+    );
     expect(group.textContent).toContain('Personal assistant');
     expect(
       group.querySelector(
@@ -1643,8 +1965,16 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('renders distinct Character and Room owner icons above shared Conversation icons', async () => {
+  it('keeps future Character, Room, and World classifications out of current navigation', async () => {
     const base = createProjection();
+    const currentProject = {
+      projectId: 'content:project-1',
+      workspaceId: 'workspace-1',
+      profile: 'content' as const,
+      displayName: 'Current authoring project',
+      createdAt: '2026-08-07T00:00:00.000Z',
+      updatedAt: '2026-08-07T00:00:00.000Z',
+    };
     const conversations = [
       {
         navigation: {
@@ -1653,6 +1983,7 @@ describe('DesktopApplication scene lifecycle', () => {
             kind: 'character' as const,
             characterId: 'character-1',
             characterRunId: 'character-run-1',
+            dialogueRunId: 'dialogue-run-1',
           },
         },
         title: 'Character conversation',
@@ -1680,8 +2011,24 @@ describe('DesktopApplication scene lifecycle', () => {
           occurredAt: '2026-08-07T02:00:00.000Z',
         },
       },
+      {
+        navigation: {
+          conversationId: 'assistant-conversation-current',
+          owner: {
+            kind: 'assistant' as const,
+            assistantSpaceId: 'assistant-space:local-user',
+          },
+        },
+        title: 'Current assistant conversation',
+        updatedAt: '2026-08-07T03:00:00.000Z',
+        attention: 'none' as const,
+        lastActivity: {
+          kind: 'conversation-updated' as const,
+          occurredAt: '2026-08-07T03:00:00.000Z',
+        },
+      },
     ];
-    const catalog = { projects: [] };
+    const catalog = { projects: [currentProject] };
     const agentHome = {
       conversations,
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -1690,38 +2037,43 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, [
+        currentProject.projectId,
+      ]),
     };
     installBridge({ projection });
     const { container, root } = await renderApplication();
 
-    const characterGroup = container.querySelector<HTMLElement>(
-      '.primary-conversation-group[data-group-kind="character"]',
-    );
-    const roomGroup = container.querySelector<HTMLElement>(
-      '.primary-conversation-group[data-group-kind="room"]',
-    );
-    if (!characterGroup || !roomGroup) {
-      throw new Error('Desktop fixture requires Character and Room groups.');
-    }
+    const navigation = container.querySelector<HTMLElement>('.home-recent-navigation');
+    if (!navigation) throw new Error('Desktop fixture requires PrimarySidebar navigation.');
+    const headings = [
+      ...navigation.querySelectorAll('.home-sidebar-heading > span:first-child'),
+    ].map((heading) => heading.textContent);
+    expect(headings).toEqual(['Projects', 'Conversations']);
     expect(
-      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-character'),
-    ).not.toBeNull();
+      navigation.querySelector('[data-navigation-section="projects"] .home-sidebar-heading')
+        ?.textContent,
+    ).toBe('Projects1');
     expect(
-      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-room'),
-    ).not.toBeNull();
+      navigation.querySelector('[data-navigation-section="conversations"] .home-sidebar-heading')
+        ?.textContent,
+    ).toBe('Conversations1');
     expect(
-      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-conversation'),
-    ).not.toBeNull();
+      navigation.querySelector('[data-navigation-section="projects"] [data-group-kind="project"]')
+        ?.textContent,
+    ).toContain(currentProject.displayName);
     expect(
-      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-conversation'),
-    ).not.toBeNull();
-    expect(
-      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-room'),
-    ).toBeNull();
-    expect(
-      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-character'),
-    ).toBeNull();
+      navigation.querySelector(
+        '[data-navigation-section="conversations"] [data-group-kind="assistant"]',
+      )?.textContent,
+    ).toContain('Current assistant conversation');
+    expect(navigation.querySelector('[data-group-kind="character"]')).toBeNull();
+    expect(navigation.querySelector('[data-group-kind="room"]')).toBeNull();
+    expect(navigation.querySelector('[data-navigation-section="character"]')).toBeNull();
+    expect(navigation.querySelector('[data-navigation-section="room"]')).toBeNull();
+    expect(navigation.querySelector('[data-navigation-section="world"]')).toBeNull();
+    expect(navigation.textContent).not.toContain('Character conversation');
+    expect(navigation.textContent).not.toContain('Room conversation');
 
     await act(async () => root.unmount());
   });
@@ -1844,6 +2196,10 @@ function installBridge({
   updateApplicationSidebar = vi.fn(),
   updateWorkbench = vi.fn(),
   assetCenterExecute = vi.fn(),
+  projectPortability,
+  textEditorExecute = vi.fn(),
+  characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
+  characterRoomSubscribe = vi.fn(() => () => undefined),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -1855,6 +2211,10 @@ function installBridge({
   readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
   readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
+  readonly projectPortability?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
+  readonly textEditorExecute?: (request: TextEditorHostRequest) => Promise<TextEditorHostResult>;
+  readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
+  readonly characterRoomSubscribe?: typeof window.openNekoDesktop.characterRoomWorkbench.subscribe;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -1866,12 +2226,25 @@ function installBridge({
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },
+      characterFoundation: {
+        getSnapshot: vi.fn(async () => emptyCharacterFoundationSnapshot()),
+        execute: vi.fn(async () => emptyCharacterFoundationSnapshot()),
+      },
+      characterRoomWorkbench: {
+        getSnapshot: characterRoomGetSnapshot,
+        subscribe: characterRoomSubscribe,
+      },
+      textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
       agentLaunch: {
         attach: vi.fn(() => new Promise(() => undefined)),
         authorizeResource: vi.fn(),
+        bindTarget: vi.fn(),
+        bindAssistant: vi.fn(),
+        searchWorkspaceMentions: vi.fn(),
+        submitDraft: vi.fn(),
         detach: vi.fn(),
       },
-      projectPortability: undefined,
+      projectPortability,
     },
   });
 }
@@ -1931,6 +2304,124 @@ function createProjection(): DesktopShellProjection {
   };
 }
 
+function createTextEditorShellProjection(): DesktopShellProjection {
+  const base = createProjection();
+  const project = {
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    profile: 'content' as const,
+    displayName: 'Screenplay project',
+    createdAt: '2026-08-08T00:00:00.000Z',
+    updatedAt: '2026-08-08T00:00:00.000Z',
+  };
+  const view = {
+    viewId: 'text-editor:view-1',
+    viewInstanceId: 'view-instance-1',
+    projectId: project.projectId,
+    workspaceId: project.workspaceId,
+    kind: 'text-editor' as const,
+    ownerId: 'text-document:session-1',
+    displayLabel: 'story.fountain',
+    documentId: 'story.fountain',
+    editorSessionId: 'text-document:session-1',
+  };
+  const layout = setWorkbenchDisplayMode(
+    openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), view),
+    'main-only',
+  );
+  const sceneId = 'scene:window-1:workspace-1';
+  const scope = {
+    kind: 'workspace' as const,
+    draftId: 'draft:workspace-1',
+    workspaceId: project.workspaceId,
+    workspaceGrantId: 'workspace-grant:workspace-1',
+  };
+  const scene = parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'agent', agentViewId: 'project-view-1', scope },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface:workspace-1',
+        agentViewId: 'project-view-1',
+        phase: 'draft',
+        scope,
+      },
+      main: {
+        kind: 'workspace-main',
+        workspaceId: project.workspaceId,
+        viewId: view.viewId,
+        viewInstanceId: 'view-instance-1',
+      },
+      rightManager: { kind: 'workspace-resources', workspaceId: project.workspaceId },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+  const catalog = { projects: [project] };
+  return {
+    ...base,
+    catalog,
+    conversationNavigation: projectDesktopConversationNavigation(catalog, base.agentHome, []),
+    window: {
+      ...base.window,
+      activeTarget: { kind: 'project', tabId: 'tab-1' },
+      tabs: [
+        {
+          tabId: 'tab-1',
+          projectId: project.projectId,
+          viewId: 'project-view-1',
+          viewInstanceId: 'view-instance-1',
+        },
+      ],
+      workbench: createDesktopWindowComposition({
+        workbenchInstanceId: 'workbench:workspace-1',
+        layout,
+        scene,
+      }),
+    },
+  };
+}
+
+function textEditorRuntimeIdentity(projection: DesktopShellProjection) {
+  return {
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    windowId: 'window-1',
+    viewId: 'text-editor:view-1',
+    viewInstanceId: 'view-instance-1',
+    documentId: 'story.fountain',
+    sessionId: 'text-document:session-1',
+    rendererSessionId: projection.rendererSessionId,
+  };
+}
+
+function readyTextEditorResult(
+  request: TextEditorHostRequest,
+  dirty: boolean,
+): TextEditorHostResult {
+  return {
+    requestId: request.requestId,
+    identity: request.identity,
+    status: 'ready',
+    projection: {
+      identity: {
+        owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
+        workspaceId: 'workspace-1',
+        documentId: 'story.fountain',
+        locator: { kind: 'workspace-file', path: 'story.fountain' },
+      },
+      sessionId: 'text-document:session-1',
+      editSequence: dirty ? 1 : 0,
+      mode: 'fountain',
+      source: '.INT. ROOM - NIGHT\n',
+      dirty,
+      conflict: false,
+      diagnostics: [],
+    },
+  };
+}
+
 function activeScene(projection: DesktopShellProjection) {
   return resolveActiveDesktopWindowWorkbench(projection.window).scene;
 }
@@ -1967,6 +2458,135 @@ function settingsScene() {
       status: { kind: 'scene-status', sceneId },
     },
   });
+}
+
+function characterManagementScene() {
+  const sceneId = 'scene:window-1:character-management';
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'character-management' },
+    slots: {
+      main: { kind: 'character-management' },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function characterInteractionScene() {
+  const sceneId = 'scene:window-1:character-interaction:conversation-character-1';
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: 'draft-character-1',
+    assistantSpaceId: 'assistant-space-character-1',
+    conversationId: 'conversation-character-1',
+  };
+  const owner = {
+    kind: 'character' as const,
+    characterId: 'character-project-1',
+    characterRunId: 'character-run-1',
+    dialogueRunId: 'dialogue-run-1',
+  };
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'character-interaction', agentViewId: 'agent-view-character-1', scope, owner },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface-character-1',
+        agentViewId: 'agent-view-character-1',
+        phase: 'session',
+        scope,
+      },
+      main: { kind: 'character-avatar', owner },
+      rightManager: { kind: 'character-runtime-manager', owner },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function characterRoomInteractionScene() {
+  const sceneId = 'scene:window-1:character-interaction:conversation-room-1';
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: 'draft-room-1',
+    assistantSpaceId: 'assistant-space-room-1',
+    conversationId: 'conversation-room-1',
+  };
+  const owner = { kind: 'room' as const, roomId: 'room-1', roomRunId: 'room-run-1' };
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'character-interaction', agentViewId: 'agent-view-room-1', scope, owner },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface-room-1',
+        agentViewId: 'agent-view-room-1',
+        phase: 'session',
+        scope,
+      },
+      main: { kind: 'character-avatar', owner },
+      rightManager: { kind: 'character-runtime-manager', owner },
+      cutPanel: { kind: 'character-room-timeline', owner },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function emptyCharacterFoundationSnapshot() {
+  return {
+    character: {
+      projects: [],
+      versions: [],
+      relationships: [],
+      characterRuns: [],
+      dialogueRuns: [],
+      rooms: [],
+      roomRuns: [],
+    },
+    world: { projects: [], versions: [], runtimes: [] },
+    diagnostics: [],
+  };
+}
+
+function roomWorkbenchView(roomRunId: string): RoomView {
+  return {
+    roomRunId,
+    roomRevision: 1,
+    participantId: 'participant-user',
+    participants: [
+      {
+        participantId: 'participant-user',
+        displayName: 'User',
+        controller: { kind: 'human', userId: 'user:local' },
+      },
+      {
+        participantId: 'participant-lin',
+        displayName: 'Lin',
+        characterVersionId: 'character-version-lin',
+        controller: {
+          kind: 'agent',
+          characterRunId: 'character-run-lin',
+          primaryAgentSessionId: 'conversation:character:lin',
+        },
+      },
+    ],
+    events: [
+      {
+        kind: 'message',
+        roomEventId: 'room-event-1',
+        roomRunId,
+        sequence: 1,
+        createdAt: '2026-08-09T10:00:00.000Z',
+        visibility: { kind: 'public' },
+        authorParticipantId: 'participant-lin',
+        content: 'Room projection message.',
+        mentionedParticipantIds: [],
+      },
+    ],
+  };
 }
 
 function extensionsScene() {

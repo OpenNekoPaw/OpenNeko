@@ -1,4 +1,8 @@
-import type { ConversationKind, SessionMode } from '@neko/agent-contracts';
+import type {
+  AgentConfigurationPolicyProjection,
+  ConversationKind,
+  SessionMode,
+} from '@neko/agent-contracts';
 import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
 
 export interface InputAreaUiProjectionInput {
@@ -13,6 +17,7 @@ export interface InputAreaUiProjectionInput {
   disabled: boolean;
   sessionMode: SessionMode;
   conversationKind?: ConversationKind;
+  configurationPolicy?: AgentConfigurationPolicyProjection;
   currentSessionMediaModelCount: number;
   compactControls?: boolean;
 }
@@ -33,7 +38,6 @@ export interface InputAreaUiProjection {
   showMediaCallCount: boolean;
   showExecutionModeSelector: boolean;
   showModelConfig: boolean;
-  showSessionModeSelector: boolean;
   inputPlaceholderKey:
     | 'chat.input.entryPlaceholder'
     | 'chat.input.placeholder'
@@ -78,6 +82,9 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     input.conversationKind === 'character-dialogue' ||
     input.conversationKind === 'embody-character';
   const isAgentMode = input.sessionMode === 'agent';
+  const modelPolicy = input.configurationPolicy?.fields.model.policy.status ?? 'editable';
+  const executionModePolicy =
+    input.configurationPolicy?.fields.executionMode.policy.status ?? 'editable';
   const isActionTrigger = /^[/$]/.test(input.inputValue.trimStart());
   const hasQueueableTextOnlyContent =
     hasText && !hasAttachments && !hasContextChips && !hasAmbientNodes && !isActionTrigger;
@@ -105,9 +112,8 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     showContextChips: hasContextChips,
     showAmbientNodes: hasAmbientNodes,
     showMediaCallCount: !isCharacterRoleSession && input.mediaModelCallCount > 0,
-    showExecutionModeSelector: !isEntry && !isCharacterRoleSession && isAgentMode,
-    showModelConfig: !isCharacterRoleSession && (isAgentMode || hasCurrentSessionMediaModels),
-    showSessionModeSelector: !isEntry && !isCharacterRoleSession && !input.compactControls,
+    showExecutionModeSelector: !isEntry && executionModePolicy !== 'unavailable' && isAgentMode,
+    showModelConfig: modelPolicy !== 'unavailable' && (isAgentMode || hasCurrentSessionMediaModels),
     inputPlaceholderKey: isEntry
       ? 'chat.input.entryPlaceholder'
       : queuedMessageCount > 0

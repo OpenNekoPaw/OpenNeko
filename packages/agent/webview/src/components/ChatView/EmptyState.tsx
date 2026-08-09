@@ -1,14 +1,14 @@
 import { useTranslation } from '../../i18n/I18nContext';
 import type { SkillSummary } from './InputArea/types';
 
-export type EmptyStateEntryAction = 'start-chat' | 'generate-assets' | 'roleplay';
+export type EmptyStateEntryAction = 'start-chat' | 'roleplay';
 
 interface EmptyStateProps {
   selectedAction?: EmptyStateEntryAction;
   disabled?: boolean;
   onEntryAction?: (action: EmptyStateEntryAction) => void;
   presentation?: 'default' | 'desktop-dock';
-  draftScope?: 'unbound' | 'assistant' | 'workspace';
+  draftScope?: 'unbound' | 'assistant' | 'workspace' | 'character' | 'room' | 'world';
   skills?: readonly SkillSummary[];
   onSkillSelect?: (skill: SkillSummary) => void;
 }
@@ -22,11 +22,6 @@ const EMPTY_STATE_ENTRIES: readonly {
     action: 'start-chat',
     labelKey: 'chat.emptyState.entry.startChat',
     helperKey: 'chat.emptyState.entry.startChatHelper',
-  },
-  {
-    action: 'generate-assets',
-    labelKey: 'chat.emptyState.entry.generateAssets',
-    helperKey: 'chat.emptyState.entry.generateAssetsHelper',
   },
   {
     action: 'roleplay',

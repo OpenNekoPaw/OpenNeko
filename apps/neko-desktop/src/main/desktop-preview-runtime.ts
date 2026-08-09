@@ -5,6 +5,7 @@ import {
   PREVIEW_HOST_RUNTIME_ROUTES,
   assertPreviewRuntimeIdentity,
   detectPreviewContentKind,
+  getEpubResourceMediaType,
   getPreviewMediaType,
   parsePreviewProjection,
   parsePreviewRuntimeRequest,
@@ -16,6 +17,7 @@ import {
   type PreviewSessionSnapshot,
   type PreviewViewPresentation,
 } from '@neko/preview-domain';
+import { createNodeArchiveResource } from '@neko/content/document/node';
 import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
@@ -56,13 +58,15 @@ export interface DesktopPreviewRuntimeOptions {
   readonly shell: DesktopPreviewShellPort;
   readonly resources: Pick<
     DesktopResourceRegistry,
-    'registerFile' | 'registerResourceSet' | 'releaseSession'
+    'registerFile' | 'registerResourceSet' | 'registerResourceTree' | 'releaseSession'
   >;
   readonly createIdentity?: () => string;
 }
 
 export class DesktopPreviewRuntime {
   private readonly sessions = new PreviewSessionRegistry();
+  private readonly pendingSources = new Map<string, PendingPreviewSource>();
+  private readonly sourcePreparations = new Map<string, Promise<PreviewProjection>>();
   private readonly createIdentity: () => string;
   private disposed = false;
 
@@ -121,6 +125,7 @@ export class DesktopPreviewRuntime {
     const contentKind = detectPreviewContentKind(input.item.label);
     const mediaType = getPreviewMediaType(input.item.label);
     let projection: PreviewProjection;
+    let pendingSource: PendingPreviewSource | undefined;
     if (!contentKind || !mediaType) {
       projection = parsePreviewProjection({
         identity: runtimeIdentity,
@@ -136,35 +141,25 @@ export class DesktopPreviewRuntime {
       if (!file.isFile()) throw new Error('Desktop Preview source is not a file.');
       const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
       const descriptorId = `preview:${sessionId}`;
-      const resource = await publishPreviewResource({
-        resources: this.options.resources,
-        owner: {
-          windowId: input.identity.windowId,
-          viewId,
-          sessionId,
-          rendererSessionId: input.identity.rendererSessionId,
-        },
+      const contentLocator = resolvePreviewContentLocator(input.item);
+      projection = parsePreviewProjection({
+        identity: runtimeIdentity,
+        presentation,
+        status: 'loading',
+      });
+      pendingSource = {
         absolutePath: input.absolutePath,
         displayName: input.item.label,
         contentKind,
         mediaType,
-      });
-      projection = parsePreviewProjection({
+        byteLength: file.size,
+        contentLocator,
+        descriptorId,
+        sourceFingerprint,
         identity: runtimeIdentity,
         presentation,
-        status: 'ready',
-        descriptor: {
-          descriptorId,
-          sourceFingerprint,
-          contentLocator: resolvePreviewContentLocator(input.item),
-          url: resource.url,
-          ...(resource.resourceUris ? { resourceUris: resource.resourceUris } : {}),
-          contentKind,
-          mediaType,
-          displayName: input.item.label,
-          byteLength: file.size,
-        },
-      });
+        abortController: new AbortController(),
+      };
     }
     const currentWorkbench = workspaceWorkbench.layout;
     const previewView: DesktopWorkbenchLayoutProjection['main']['views'][number] = {
@@ -197,8 +192,9 @@ export class DesktopPreviewRuntime {
         workbench,
       );
       for (const releasedSessionId of this.sessions.register(projection)) {
-        this.options.resources.releaseSession(releasedSessionId);
+        this.releaseSessionResources(releasedSessionId);
       }
+      if (pendingSource) this.pendingSources.set(sessionId, pendingSource);
       return projection;
     } catch (error) {
       this.options.resources.releaseSession(sessionId);
@@ -315,7 +311,9 @@ export class DesktopPreviewRuntime {
     if (session.identity.rendererSessionId !== request.rendererSessionId) {
       throw new Error('Desktop Preview session endpoint is stale.');
     }
-    return session.projection;
+    return session.projection.status === 'loading'
+      ? this.prepareSource(session)
+      : session.projection;
   }
 
   async execute(
@@ -343,7 +341,9 @@ export class DesktopPreviewRuntime {
     if (!view) throw new Error('Desktop Preview View is no longer attached.');
     switch (request.route) {
       case PREVIEW_HOST_RUNTIME_ROUTES.snapshotGet:
-        return session.projection;
+        return session.projection.status === 'loading'
+          ? this.prepareSource(session)
+          : session.projection;
       case PREVIEW_HOST_RUNTIME_ROUTES.viewPin:
         return this.updatePresentation(
           session,
@@ -376,7 +376,7 @@ export class DesktopPreviewRuntime {
 
   detachWindow(windowId: string): void {
     for (const sessionId of this.sessions.detachWindow(windowId)) {
-      this.options.resources.releaseSession(sessionId);
+      this.releaseSessionResources(sessionId);
     }
   }
 
@@ -389,7 +389,7 @@ export class DesktopPreviewRuntime {
       .filter((view) => view.kind === 'preview')
       .map((view) => view.ownerId);
     for (const sessionId of this.sessions.reconcileWindow(windowId, attachedSessionIds)) {
-      this.options.resources.releaseSession(sessionId);
+      this.releaseSessionResources(sessionId);
     }
   }
 
@@ -397,12 +397,108 @@ export class DesktopPreviewRuntime {
     if (this.disposed) return;
     this.disposed = true;
     for (const sessionId of this.sessions.dispose()) {
-      this.options.resources.releaseSession(sessionId);
+      this.releaseSessionResources(sessionId);
     }
   }
 
   private requireActive(): void {
     if (this.disposed) throw new Error('Desktop Preview runtime is disposed.');
+  }
+
+  private prepareSource(session: PreviewSessionSnapshot): Promise<PreviewProjection> {
+    const sessionId = session.identity.sessionId;
+    const current = this.sourcePreparations.get(sessionId);
+    if (current) return current;
+    const source = this.pendingSources.get(sessionId);
+    if (!source) {
+      throw new Error(`Preview session '${sessionId}' has no pending source.`);
+    }
+    const preparation = this.completeSourcePreparation(session, source).finally(() => {
+      if (this.sourcePreparations.get(sessionId) === preparation) {
+        this.sourcePreparations.delete(sessionId);
+      }
+    });
+    this.sourcePreparations.set(sessionId, preparation);
+    return preparation;
+  }
+
+  private async completeSourcePreparation(
+    session: PreviewSessionSnapshot,
+    source: PendingPreviewSource,
+  ): Promise<PreviewProjection> {
+    try {
+      source.abortController.signal.throwIfAborted();
+      const resource = await publishPreviewResource({
+        resources: this.options.resources,
+        owner: {
+          windowId: source.identity.windowId,
+          viewId: source.identity.viewId,
+          sessionId: source.identity.sessionId,
+          rendererSessionId: source.identity.rendererSessionId,
+        },
+        absolutePath: source.absolutePath,
+        displayName: source.displayName,
+        contentKind: source.contentKind,
+        mediaType: source.mediaType,
+        signal: source.abortController.signal,
+      });
+      if (source.abortController.signal.aborted) {
+        this.options.resources.releaseSession(source.identity.sessionId);
+        source.abortController.signal.throwIfAborted();
+      }
+      if (this.pendingSources.get(source.identity.sessionId) !== source) {
+        this.options.resources.releaseSession(source.identity.sessionId);
+        throw new Error(`Preview session '${source.identity.sessionId}' preparation is stale.`);
+      }
+      const ready = parsePreviewProjection({
+        identity: source.identity,
+        presentation: source.presentation,
+        status: 'ready',
+        descriptor: {
+          descriptorId: source.descriptorId,
+          sourceFingerprint: source.sourceFingerprint,
+          contentLocator: source.contentLocator,
+          url: resource.url,
+          ...(resource.resourceUris ? { resourceUris: resource.resourceUris } : {}),
+          contentKind: source.contentKind,
+          mediaType: source.mediaType,
+          displayName: source.displayName,
+          byteLength: source.byteLength,
+        },
+      });
+      const transition = this.sessions.planPreparation(session.identity.sessionId, ready);
+      this.pendingSources.delete(session.identity.sessionId);
+      return this.sessions.commit(transition).projection;
+    } catch (error) {
+      if (source.abortController.signal.aborted) throw error;
+      if (
+        !this.sessions.has(session.identity.sessionId) ||
+        this.pendingSources.get(session.identity.sessionId) !== source
+      ) {
+        throw error;
+      }
+      const unavailable = parsePreviewProjection({
+        identity: source.identity,
+        presentation: source.presentation,
+        status: 'unavailable',
+        diagnostic: {
+          code: 'preview-source-unavailable',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+      const transition = this.sessions.planPreparation(session.identity.sessionId, unavailable);
+      this.pendingSources.delete(session.identity.sessionId);
+      return this.sessions.commit(transition).projection;
+    }
+  }
+
+  private releaseSessionResources(sessionId: string): void {
+    const source = this.pendingSources.get(sessionId);
+    if (source) {
+      this.pendingSources.delete(sessionId);
+      source.abortController.abort(new Error('Preview source preparation was released.'));
+    }
+    this.options.resources.releaseSession(sessionId);
   }
 
   private async updatePresentation(
@@ -471,7 +567,7 @@ export class DesktopPreviewRuntime {
       workbenchInstanceId,
       workbench,
     );
-    this.options.resources.releaseSession(session.identity.sessionId);
+    this.releaseSessionResources(session.identity.sessionId);
     return this.sessions.commitClose(transition);
   }
 }
@@ -507,22 +603,69 @@ interface PublishedPreviewResource {
   readonly resourceUris?: Readonly<Record<string, string>>;
 }
 
+interface PendingPreviewSource {
+  readonly absolutePath: string;
+  readonly displayName: string;
+  readonly contentKind: PreviewContentKind;
+  readonly mediaType: string;
+  readonly byteLength: number;
+  readonly contentLocator: ResourceBrowserContentLocator;
+  readonly descriptorId: string;
+  readonly sourceFingerprint: string;
+  readonly identity: PreviewRuntimeIdentity;
+  readonly presentation: PreviewViewPresentation;
+  readonly abortController: AbortController;
+}
+
 async function publishPreviewResource(input: {
-  readonly resources: Pick<DesktopResourceRegistry, 'registerFile' | 'registerResourceSet'>;
+  readonly resources: Pick<
+    DesktopResourceRegistry,
+    'registerFile' | 'registerResourceSet' | 'registerResourceTree'
+  >;
   readonly owner: Parameters<DesktopResourceRegistry['registerFile']>[0];
   readonly absolutePath: string;
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
   readonly mediaType: string;
+  readonly signal: AbortSignal;
 }): Promise<PublishedPreviewResource> {
+  input.signal.throwIfAborted();
+  if (input.mediaType === 'application/epub+zip') {
+    const archive = await createNodeArchiveResource(input.absolutePath, {
+      signal: input.signal,
+    });
+    try {
+      if (!archive.entries.some((entry) => entry.path === 'META-INF/container.xml')) {
+        throw new Error('EPUB container descriptor is missing.');
+      }
+      const lease = input.resources.registerResourceTree(input.owner, {
+        entries: archive.entries.map((entry) => ({
+          virtualPath: entry.path,
+          byteLength: entry.byteLength,
+          contentType: getEpubResourceMediaType(entry.path),
+          read: (signal) => archive.readEntry(entry.path, signal),
+        })),
+        release: () => {
+          void archive.dispose();
+        },
+      });
+      releaseLeaseIfAborted(lease, input.signal);
+      return lease;
+    } catch (error) {
+      await archive.dispose();
+      throw error;
+    }
+  }
   if (
     input.contentKind !== 'model' ||
     path.extname(input.displayName).toLocaleLowerCase() !== '.gltf'
   ) {
-    return input.resources.registerFile(input.owner, {
+    const lease = await input.resources.registerFile(input.owner, {
       absolutePath: input.absolutePath,
       mediaType: input.mediaType,
     });
+    releaseLeaseIfAborted(lease, input.signal);
+    return lease;
   }
   const dependencies = await resolveGltfDependencies(input.absolutePath);
   const entryPath = path.basename(input.absolutePath);
@@ -542,6 +685,7 @@ async function publishPreviewResource(input: {
     ],
     entryPath,
   );
+  releaseLeaseIfAborted(lease, input.signal);
   return {
     url: lease.url,
     resourceUris: {
@@ -554,6 +698,12 @@ async function publishPreviewResource(input: {
       ),
     },
   };
+}
+
+function releaseLeaseIfAborted(lease: { release(): void }, signal: AbortSignal): void {
+  if (!signal.aborted) return;
+  lease.release();
+  signal.throwIfAborted();
 }
 
 interface GltfDependency {

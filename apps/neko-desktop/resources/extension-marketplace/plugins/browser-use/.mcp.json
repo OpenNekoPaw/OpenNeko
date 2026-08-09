@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "browser-use": {
+      "type": "stdio",
+      "command": "./runtime/bin/browser-use",
+      "args": ["--mcp"]
+    }
+  }
+}

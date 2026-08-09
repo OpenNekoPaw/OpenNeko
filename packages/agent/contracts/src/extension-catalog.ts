@@ -1,4 +1,5 @@
-export type AgentExtensionStatus = 'not-installed' | 'ready' | 'partial' | 'unsupported' | 'error';
+export type AgentExtensionStatus =
+  'not-installed' | 'disabled' | 'ready' | 'partial' | 'unsupported' | 'error';
 
 export interface AgentExtensionCatalogItem {
   readonly id: string;
@@ -12,7 +13,11 @@ export interface AgentExtensionCatalogItem {
   readonly installed: boolean;
   readonly enabled: boolean;
   readonly canInstall: boolean;
+  readonly canEnable: boolean;
+  readonly canDisable: boolean;
   readonly canRemove: boolean;
+  readonly declaredPermissions: readonly string[];
+  readonly acceptedPermissions: readonly string[];
   readonly agentStatus: AgentExtensionStatus;
   readonly runtimeDiagnosticCode: string;
   readonly iconDataUrl: string;
@@ -25,6 +30,7 @@ export type AgentExtensionDiagnosticCode =
   | 'repository_unavailable'
   | 'repository_failed'
   | 'repository_invalid'
+  | 'state_invalid'
   | 'manifest_invalid'
   | 'contribution_invalid'
   | 'runtime_unsupported'
@@ -37,6 +43,7 @@ export interface AgentExtensionRuntimeDescriptor {
   readonly skillRoot?: string;
   readonly mcpDocumentPath?: string;
   readonly mcpServerIds: readonly string[];
+  readonly mcpToolExposure?: 'adapter-only';
   readonly appIds: readonly string[];
 }
 

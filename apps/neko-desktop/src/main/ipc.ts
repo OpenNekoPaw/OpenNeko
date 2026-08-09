@@ -5,6 +5,7 @@ import { DESKTOP_BRIDGE_CHANNELS } from '../shared/bridge-contract';
 import { DESKTOP_SHELL_CHANNELS } from '@neko/host/desktop-shell-contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
 import { DESKTOP_PREVIEW_CHANNELS } from '../shared/preview-bridge-contract';
+import { TEXT_EDITOR_HOST_CHANNELS } from '@neko/text-editor-domain';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
@@ -14,6 +15,10 @@ import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/e
 import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-host';
 import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant-resource-host';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
+import {
+  CHARACTER_FOUNDATION_HOST_CHANNEL,
+  CHARACTER_ROOM_WORKBENCH_CHANNELS,
+} from '@neko/chara/contracts';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(
@@ -25,6 +30,18 @@ export function registerDesktopIpc(
     ) => Promise<{ readonly label: string; readonly hostResource: string } | undefined>;
   },
 ): () => void {
+  ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeCharacterFoundationRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    CHARACTER_ROOM_WORKBENCH_CHANNELS.snapshotGet,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.getCharacterRoomWorkbenchSnapshot(requireSender(event), payload, (roomEvent) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(CHARACTER_ROOM_WORKBENCH_CHANNELS.projectionEvent, roomEvent);
+        }
+      }),
+  );
   ipcMain.handle(
     DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
     (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -76,6 +93,12 @@ export function registerDesktopIpc(
     DESKTOP_CUT_CHANNELS.requestExecute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeCutRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(DESKTOP_CUT_CHANNELS.draftCreate, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.createCutDraft(requireSender(event), payload),
+  );
+  ipcMain.handle(DESKTOP_CUT_CHANNELS.viewClose, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.closeCutView(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet,
@@ -169,6 +192,13 @@ export function registerDesktopIpc(
     DESKTOP_PREVIEW_CHANNELS.requestExecute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executePreviewRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(TEXT_EDITOR_HOST_CHANNELS.execute, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeTextEditorRequest(requireSender(event), payload, (textEditorEvent) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(TEXT_EDITOR_HOST_CHANNELS.projectionEvent, textEditorEvent);
+      }
+    }),
   );
   ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.snapshotGet,
@@ -298,6 +328,7 @@ export function registerDesktopIpc(
   );
   return () => {
     for (const channel of [
+      CHARACTER_FOUNDATION_HOST_CHANNEL,
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
       DESKTOP_AGENT_CHANNELS.connectionDetach,
       AGENT_LAUNCH_HOST_CHANNEL,
@@ -325,6 +356,7 @@ export function registerDesktopIpc(
       DESKTOP_PROJECT_PORTABILITY_CHANNELS.cancel,
       DESKTOP_PREVIEW_CHANNELS.snapshotGet,
       DESKTOP_PREVIEW_CHANNELS.requestExecute,
+      TEXT_EDITOR_HOST_CHANNELS.execute,
       DESKTOP_CANVAS_CHANNELS.snapshotGet,
       DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
@@ -332,6 +364,8 @@ export function registerDesktopIpc(
       DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
       DESKTOP_CUT_CHANNELS.snapshotGet,
       DESKTOP_CUT_CHANNELS.requestExecute,
+      DESKTOP_CUT_CHANNELS.draftCreate,
+      DESKTOP_CUT_CHANNELS.viewClose,
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       ASSET_CENTER_HOST_CHANNEL,

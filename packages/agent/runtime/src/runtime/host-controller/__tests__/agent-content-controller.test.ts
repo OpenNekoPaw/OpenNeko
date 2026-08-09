@@ -1,6 +1,10 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentWebviewToHostMessage } from '@neko/agent-contracts';
 import {
+  searchAgentWorkspaceMentions,
   tryHandleAgentContentControllerRoute,
   type AgentContentControllerEffectPort,
   type AgentHostRouteEffectContext,
@@ -45,6 +49,111 @@ async function dispatch(
 }
 
 describe('Agent content controller', () => {
+  it('projects canonical media types for Workspace mention references', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-media-'));
+    const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    try {
+      const projection = await searchAgentWorkspaceMentions({
+        workspace: {
+          workspaceId: 'workspace-1',
+          workspacePath,
+          displayName: 'Workspace',
+          locator: { kind: 'variable', value: '${HOME}/workspace' },
+        },
+        host: {
+          files: {
+            readDirectory: vi.fn(async () => [
+              { name: 'book.epub', type: 'file' as const },
+              { name: 'comic.cbz', type: 'file' as const },
+              { name: 'draft.docx', type: 'file' as const },
+              { name: 'report.pdf', type: 'file' as const },
+              { name: 'test.png', type: 'file' as const },
+              { name: 'test.fountain', type: 'file' as const },
+              { name: 'data.json', type: 'file' as const },
+              { name: 'outline.yaml', type: 'file' as const },
+              { name: 'reference.html', type: 'file' as const },
+            ]),
+            readText: vi.fn(async () => Promise.reject(missingGitignore)),
+          },
+          paths: {},
+        } as Parameters<typeof searchAgentWorkspaceMentions>[0]['host'],
+        filter: '',
+        purpose: 'entry',
+      });
+
+      expect(projection.files).toEqual([
+        expect.objectContaining({ name: 'book.epub', mediaType: 'document' }),
+        expect.objectContaining({ name: 'comic.cbz', mediaType: 'document' }),
+        expect.objectContaining({ name: 'data.json', mediaType: 'text' }),
+        expect.objectContaining({ name: 'draft.docx', mediaType: 'document' }),
+        expect.objectContaining({ name: 'outline.yaml', mediaType: 'text' }),
+        expect.objectContaining({ name: 'reference.html', mediaType: 'text' }),
+        expect.objectContaining({ name: 'report.pdf', mediaType: 'document' }),
+        expect.objectContaining({ name: 'test.fountain', mediaType: 'text' }),
+        expect.objectContaining({ name: 'test.png', mediaType: 'image' }),
+      ]);
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true });
+    }
+  });
+
+  it('merges linked Media Library locators and keeps contributor failures local', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-linked-media-'));
+    const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const reportMentionContributorError = vi.fn();
+    const host = {
+      files: {
+        readDirectory: vi.fn(async () => [{ name: 'local.md', type: 'file' as const }]),
+        readText: vi.fn(async () => Promise.reject(missingGitignore)),
+      },
+      paths: {},
+    } as Parameters<typeof searchAgentWorkspaceMentions>[0]['host'];
+    const workspace = {
+      workspaceId: 'workspace-1',
+      workspacePath,
+      displayName: 'Workspace',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace' },
+    };
+    try {
+      const projection = await searchAgentWorkspaceMentions({
+        workspace,
+        host,
+        filter: '',
+        purpose: 'entry',
+        searchLinkedMediaLibraryFiles: async () => [
+          { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+        ],
+        reportMentionContributorError,
+      });
+
+      expect(projection.files).toEqual([
+        expect.objectContaining({ name: 'local.md', source: 'workspace' }),
+        expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+          name: 'hero.png',
+          source: 'media-library',
+          mediaType: 'image',
+        }),
+      ]);
+
+      const contributorFailure = new Error('linked library unavailable');
+      const fallbackProjection = await searchAgentWorkspaceMentions({
+        workspace,
+        host,
+        filter: '',
+        purpose: 'entry',
+        searchLinkedMediaLibraryFiles: async () => Promise.reject(contributorFailure),
+        reportMentionContributorError,
+      });
+      expect(fallbackProjection.files).toEqual([
+        expect.objectContaining({ name: 'local.md', source: 'workspace' }),
+      ]);
+      expect(reportMentionContributorError).toHaveBeenCalledWith(contributorFailure);
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true });
+    }
+  });
+
   it('routes all content operations through narrow Host effects with connection context', async () => {
     const effects = createEffects();
     const context = createContext();

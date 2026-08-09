@@ -5,13 +5,15 @@ export async function executeDesktopAgentWorkflow(input) {
   const steps = [];
   let terminalIdle;
   let conversationId = input.conversationId;
-  for (const step of input.steps) {
+  for (const [stepIndex, step] of input.steps.entries()) {
+    const nextStep = input.steps[stepIndex + 1];
     const receipt = await executeStep({
       ...input,
       conversationId,
       step,
       receipts,
       defaultTimeoutMs: input.defaultTimeoutMs,
+      modelProfiles: input.modelProfiles ?? [],
     });
     if (conversationId === undefined && typeof receipt?.conversationId === 'string') {
       conversationId = receipt.conversationId;
@@ -25,6 +27,10 @@ export async function executeDesktopAgentWorkflow(input) {
           defaultTimeoutMs: input.defaultTimeoutMs,
           step,
           receipt,
+          deferObservation:
+            nextStep?.kind === 'update-configuration' &&
+            nextStep.turnState === 'running' &&
+            nextStep.afterStepId === step.id,
         }),
       ),
     );
@@ -48,21 +54,41 @@ export async function executeDesktopAgentWorkflow(input) {
 async function executeStep(input) {
   const { driver, conversationId, step, receipts } = input;
   switch (step.kind) {
+    case 'draft-bind':
+      return driver.bindDraft({ target: step.target, catalogRef: step.id });
+    case 'draft-submit':
+      return driver.submitDraft({
+        catalogRef: step.catalogRef,
+        input: step.input,
+        expectedStatus: step.expectedStatus,
+      });
     case 'submit':
       if (step.delayMs) await (input.delay ?? delay)(step.delayMs);
+      if (typeof driver.prepareSessionAfterDraft === 'function') {
+        await driver.prepareSessionAfterDraft();
+      }
       return driver.submit({
         ...(conversationId === undefined ? {} : { conversationId }),
         prompt: step.prompt,
         ...(step.contextPayloads ? { contextPayloads: step.contextPayloads } : {}),
+        ...resolveModelOverride(step, input.modelProfiles),
       });
     case 'queue':
       requireReceipt(receipts, step.afterStepId, step);
       return driver.queue({
         conversationId: requireConversationId(conversationId),
         prompt: step.prompt,
+        ...resolveModelOverride(step, input.modelProfiles),
       });
-    case 'wait-for-idle':
-      return driver.waitForIdle(requireConversationId(conversationId), step.timeoutMs);
+    case 'wait-for-idle': {
+      const idle = await driver.waitForIdle(requireConversationId(conversationId), step.timeoutMs);
+      if (typeof driver.readFacts !== 'function') return idle;
+      const observed = await driver.readFacts(idle.identity);
+      if (observed?.status !== 'facts' || !observed.facts) {
+        throw configurationError(`Desktop Agent workflow idle step '${step.id}' has no facts.`);
+      }
+      return { ...idle, facts: observed.facts };
+    }
     case 'cancel': {
       const referenced = requireSubmissionReceipt(receipts, step.afterStepId, step);
       const identity = await driver.waitForIdentity(
@@ -104,11 +130,63 @@ async function executeStep(input) {
         prompt: step.prompt.replaceAll('${lastAssistant}', lastAssistant),
       });
     }
+    case 'update-configuration': {
+      const referenced =
+        step.turnState === 'running'
+          ? requireSubmissionReceipt(receipts, step.afterStepId, step)
+          : undefined;
+      const runningTurnIdentity = referenced
+        ? await driver.waitForIdentity(
+            requireConversationId(conversationId),
+            referenced.eventOffset,
+            step.timeoutMs,
+          )
+        : undefined;
+      return driver.updateConfiguration({
+        conversationId: requireConversationId(conversationId),
+        providerId: step.providerId,
+        modelId: step.modelId,
+        expectedStatus: step.expectedStatus,
+        turnState: step.turnState,
+        ...(runningTurnIdentity === undefined ? {} : { runningTurnIdentity }),
+        timeoutMs: step.timeoutMs,
+      });
+    }
+    case 'invoke-input':
+      return driver.invokeInput({
+        conversationId: requireConversationId(conversationId),
+        trigger: step.trigger,
+        name: step.name,
+        ...(step.args === undefined ? {} : { args: step.args }),
+        ...(step.resultEvent === undefined ? {} : { resultEvent: step.resultEvent }),
+        timeoutMs: step.timeoutMs,
+      });
     default:
       throw configurationError(
         `Desktop Agent workflow operation '${step.kind}' reached the interpreter without support.`,
       );
   }
+}
+
+function resolveModelOverride(step, profiles) {
+  if (step.modelProfileId === undefined) return {};
+  const profile = profiles.find((candidate) => candidate.id === step.modelProfileId);
+  if (!profile) {
+    throw configurationError(
+      `Desktop Agent workflow model profile '${step.modelProfileId}' is unavailable.`,
+    );
+  }
+  if (profile.selection === 'configured-default') return {};
+  return {
+    chatModel: {
+      providerId: profile.chat.providerId,
+      modelId: profile.chat.modelId,
+      category: 'llm',
+      ...(profile.chat.providerExpressionProfileId === undefined
+        ? {}
+        : { providerExpressionProfileId: profile.chat.providerExpressionProfileId }),
+    },
+  };
 }
 
 function requireConversationId(value) {
@@ -159,7 +237,9 @@ function checkpointDetail(step, receipt) {
 
 async function createWorkflowStepEvidence(input) {
   const observation =
-    typeof input.driver.observeWorkflowStep === 'function' && typeof input.conversationId === 'string'
+    input.deferObservation !== true &&
+    typeof input.driver.observeWorkflowStep === 'function' &&
+    typeof input.conversationId === 'string'
       ? await input.driver.observeWorkflowStep({
           conversationId: input.conversationId,
           afterEventOffset: input.receipt?.eventOffset,
@@ -171,6 +251,8 @@ async function createWorkflowStepEvidence(input) {
     kind: input.step.kind,
     method: workflowMethod(input.step.kind),
     ...(input.receipt?.accepted === undefined ? {} : { accepted: input.receipt.accepted }),
+    ...(input.receipt?.facts === undefined ? {} : { facts: input.receipt.facts }),
+    ...(input.receipt?.status === undefined ? {} : { status: input.receipt.status }),
     ...(input.step.kind === 'queue' ? { queued: observation?.queued === true } : {}),
     ...(observation === undefined ? {} : { snapshot: observation }),
   };
@@ -178,6 +260,10 @@ async function createWorkflowStepEvidence(input) {
 
 function workflowMethod(kind) {
   switch (kind) {
+    case 'draft-bind':
+      return 'draft.binding.update';
+    case 'draft-submit':
+      return 'draft.input.submit';
     case 'submit':
     case 'queue':
     case 'feedback':
@@ -191,6 +277,10 @@ function workflowMethod(kind) {
     case 'resume':
     case 'restart':
       return 'session.resume';
+    case 'invoke-input':
+      return 'agent-input.invoke';
+    case 'update-configuration':
+      return 'conversation.configuration.update';
     default:
       throw configurationError(`Desktop Agent workflow step '${kind}' has no evidence method.`);
   }

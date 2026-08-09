@@ -138,6 +138,8 @@ Pi SkillHost 已验证并纳入当前 generation 的插件 Skill 进入 Skill �
 pluginId provenance 展示；它们不能单独删除，只随插件 install/remove 生命周期管理。manifest
 仅声明但 Pi validation 失败的 Skill 不进入页签，也不能标记为 Agent ready。
 
+Extension/Skill management catalog 只拥有安装、来源和 runtime readiness 事实。可执行的 Entry/Session `$` catalog 由 `unify-agent-launch-and-domain-bindings` 的 Agent input catalog owner 从 Pi SkillHost receipt 投影，保留 project/personal/plugin/builtin 的完整 Host identity、fingerprint 和 precedence。管理卡片、manifest 名称或 installed 状态不得直接充当 executable identity，也不得在 invocation 失败后切换同名来源。
+
 ### 5. 管理 contract
 
 Extension item 包含 installed/available 状态、category、contribution summary、

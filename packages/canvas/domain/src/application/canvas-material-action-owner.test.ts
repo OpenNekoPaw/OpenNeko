@@ -8,6 +8,7 @@ import {
   createCanvasMaterialActionOwner,
   CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+  CANVAS_ADD_TO_CUT_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
@@ -220,6 +221,55 @@ describe('Desktop Canvas material action owner', () => {
     });
     expect(resolveCut).toHaveBeenCalledWith({ identity, target: cutTarget });
     expect(openInCut).toHaveBeenCalledWith({ identity, target: cutTarget });
+  });
+
+  it('contributes Add to Cut only for audio/video and preserves the exact owner payload', async () => {
+    const videoTarget: CanvasMaterialActionTarget = {
+      nodeId: 'video-1',
+      mediaKind: 'video',
+      origin: 'referenced',
+      locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+    };
+    const executionPayload = {
+      target: {
+        kind: 'existing',
+        viewId: 'cut-view-1',
+        documentId: 'edits/sequence.otio',
+      },
+    } as const;
+    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const addToCut = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({ resolveAddToCut, addToCut });
+
+    const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
+    expect(descriptors).toEqual([
+      expect.objectContaining({
+        id: CANVAS_ADD_TO_CUT_ACTION_ID,
+        label: 'Add to Cut',
+        mediaKinds: ['video', 'audio'],
+        executionPayload,
+      }),
+    ]);
+    const descriptor = descriptors[0];
+    if (!descriptor) throw new Error('Add to Cut descriptor is missing.');
+    await owner.execute({
+      identity,
+      descriptor,
+      action: {
+        identity: {
+          projectId: identity.projectId,
+          canvasId: identity.documentId,
+          canvasSessionId: identity.sessionId,
+        },
+        actionId: descriptor.id,
+        selectedNodeIds: [videoTarget.nodeId],
+        payload: executionPayload,
+      },
+      targets: [videoTarget],
+    });
+
+    expect(addToCut).toHaveBeenCalledWith({ identity, target: videoTarget, executionPayload });
+    await expect(owner.resolve({ identity, targets: [target] })).resolves.toEqual([]);
   });
 
   it('exposes explicit project/global Media Library copies and never an Asset promotion action', async () => {

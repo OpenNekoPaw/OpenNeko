@@ -15,17 +15,15 @@ const ResourceBrowserRoot = lazy(async () => {
 });
 
 const QuickPreviewSurface = lazy(async () => {
-  const module = await import('@neko/preview-webview/root');
+  const module = await import('@neko/preview-webview/quick-preview');
   return { default: module.QuickPreviewSurface };
 });
 
 export function DesktopResourceBrowserSurface({
-  onOpenCanvasDocument,
   project,
   projection,
   tab,
 }: {
-  readonly onOpenCanvasDocument: (documentId: string, presentation: 'main' | 'side') => void;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly tab: DesktopProjectTabProjection;
@@ -68,20 +66,10 @@ export function DesktopResourceBrowserSurface({
           runtime={runtime}
           locale={locale}
           lifecyclePresentation="active"
-          refreshControl="hidden"
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
           previewTarget={{
             viewId: `preview:${tab.viewId}:temporary`,
             presentation: 'temporary',
-          }}
-          onOpenCanvas={(item, presentation) => {
-            if (
-              (item.facet !== 'files' && item.facet !== 'media') ||
-              item.locator.kind !== 'workspace-file'
-            ) {
-              throw new Error('Canvas documents require a workspace-file ContentLocator.');
-            }
-            onOpenCanvasDocument(item.locator.path, presentation);
           }}
           renderQuickPreview={(descriptor) => (
             <Suspense fallback={null}>

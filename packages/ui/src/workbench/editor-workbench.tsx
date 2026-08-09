@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type React from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { useResizable } from '../hooks';
 import { ResizeHandle } from '../primitives';
 import { cn } from '../utils';
@@ -56,6 +56,7 @@ export interface WorkbenchEditorTabsProps {
   readonly onSelect: (id: string) => void;
   readonly onClose?: (id: string) => void;
   readonly onReorder?: (sourceId: string, targetId: string) => void;
+  readonly contextActionsRef?: Ref<HTMLDivElement>;
 }
 
 export interface WorkbenchPanelHeaderProps {
@@ -160,10 +161,10 @@ export interface ControlledWorkbenchShellProps {
   readonly rightDockPresentation?: ControlledWorkbenchDockPresentation;
   readonly rightDockWidth?: number;
   readonly rightDockResize?: ControlledWorkbenchResizeBinding;
-  readonly timeline?: ReactNode;
-  readonly timelineVisible?: boolean;
-  readonly timelineHeight?: number;
-  readonly timelineResize?: ControlledWorkbenchResizeBinding;
+  readonly bottomPanel?: ReactNode;
+  readonly bottomPanelVisible?: boolean;
+  readonly bottomPanelHeight?: number;
+  readonly bottomPanelResize?: ControlledWorkbenchResizeBinding;
   readonly statusBar?: ReactNode;
   readonly className?: string;
 }
@@ -211,6 +212,10 @@ export function EditorWorkbenchShell({
 }
 
 export function ControlledWorkbenchShell({
+  bottomPanel,
+  bottomPanelHeight = 420,
+  bottomPanelResize,
+  bottomPanelVisible = false,
   className,
   interaction,
   interactionPosition = 'left',
@@ -237,10 +242,6 @@ export function ControlledWorkbenchShell({
   secondaryMain,
   secondaryMainVisible = Boolean(secondaryMain),
   statusBar,
-  timeline,
-  timelineHeight = 240,
-  timelineResize,
-  timelineVisible = false,
   titleBar,
 }: ControlledWorkbenchShellProps): React.ReactElement {
   const interactionSide =
@@ -293,11 +294,11 @@ export function ControlledWorkbenchShell({
     ),
     size: rightColumnWidth,
   });
-  const timelineResizeState = useControlledWorkbenchResize({
-    binding: timelineResize,
+  const bottomPanelResizeState = useControlledWorkbenchResize({
+    binding: bottomPanelResize,
     edge: 'bottom',
-    enabled: Boolean(timeline && timelineVisible),
-    size: timelineHeight,
+    enabled: Boolean(bottomPanel && bottomPanelVisible),
+    size: bottomPanelHeight,
   });
   const mainSplitResizeState = useControlledWorkbenchResize({
     binding: mainSplitResize,
@@ -310,13 +311,13 @@ export function ControlledWorkbenchShell({
     '--neko-controlled-primary-width': string;
     '--neko-controlled-left-dock-width': string;
     '--neko-controlled-right-dock-width': string;
-    '--neko-controlled-timeline-height': string;
+    '--neko-controlled-bottom-panel-height': string;
     '--neko-controlled-main-split-ratio': string;
   } = {
     '--neko-controlled-primary-width': `${primaryResize.size}px`,
     '--neko-controlled-left-dock-width': `${leftResize.size}px`,
     '--neko-controlled-right-dock-width': `${rightResize.size}px`,
-    '--neko-controlled-timeline-height': `${timelineResizeState.size}px`,
+    '--neko-controlled-bottom-panel-height': `${bottomPanelResizeState.size}px`,
     '--neko-controlled-main-split-ratio': `${mainSplitResizeState.size * 100}%`,
   };
 
@@ -331,7 +332,7 @@ export function ControlledWorkbenchShell({
       data-interaction-presentation={interaction ? interactionPresentation : 'hidden'}
       data-main-split={effectiveSplit}
       data-main-composition={mainComposition}
-      data-timeline-visible={timeline && timelineVisible ? 'true' : 'false'}
+      data-bottom-panel-visible={bottomPanel && bottomPanelVisible ? 'true' : 'false'}
       style={shellStyle}
     >
       {titleBar ? <div className="neko-controlled-workbench-title">{titleBar}</div> : null}
@@ -462,20 +463,20 @@ export function ControlledWorkbenchShell({
           ) : null}
         </aside>
       ) : null}
-      {timeline ? (
+      {bottomPanel ? (
         <div
           ref={(element) => {
-            timelineResizeState.containerRef.current = element;
+            bottomPanelResizeState.containerRef.current = element;
           }}
-          className="neko-controlled-workbench-timeline"
-          data-resizing={timelineResizeState.isResizing ? 'true' : 'false'}
+          className="neko-controlled-workbench-bottom-panel"
+          data-resizing={bottomPanelResizeState.isResizing ? 'true' : 'false'}
         >
-          {timeline}
-          {timelineResize && timelineVisible ? (
+          {bottomPanel}
+          {bottomPanelResize && bottomPanelVisible ? (
             <ResizeHandle
               className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--top"
-              handleProps={timelineResizeState.handleProps}
-              label={timelineResize.label}
+              handleProps={bottomPanelResizeState.handleProps}
+              label={bottomPanelResize.label}
             />
           ) : null}
         </div>
@@ -569,6 +570,7 @@ export function WorkbenchActivityBar({
 export function WorkbenchEditorTabs({
   activeId,
   className,
+  contextActionsRef,
   emptyLabel,
   label,
   onClose,
@@ -594,68 +596,73 @@ export function WorkbenchEditorTabs({
   };
 
   return (
-    <div className={cn('neko-workbench-editor-tabs', className)} role="tablist" aria-label={label}>
-      {tabs.length > 0 ? (
-        tabs.map((tab) => {
-          const active = tab.id === activeId;
-          const closable = tab.closable ?? Boolean(onClose);
-          return (
-            <div
-              key={tab.id}
-              className="neko-workbench-editor-tab"
-              data-active={active ? 'true' : 'false'}
-              draggable={Boolean(onReorder) && !tab.disabled}
-              role="tab"
-              tabIndex={tab.disabled ? -1 : 0}
-              aria-selected={active}
-              aria-disabled={tab.disabled ? 'true' : undefined}
-              title={tab.title ?? tab.label}
-              onDragOver={(event) => {
-                if (onReorder) event.preventDefault();
-              }}
-              onDragStart={(event) => handleDragStart(event, tab.id)}
-              onDrop={(event) => handleDrop(event, tab.id)}
-              onClick={() => {
-                if (!tab.disabled) onSelect(tab.id);
-              }}
-              onKeyDown={(event) => {
-                if (tab.disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
-                event.preventDefault();
-                onSelect(tab.id);
-              }}
-            >
-              {tab.icon ? (
-                <span className="neko-workbench-editor-tab__icon">{tab.icon}</span>
-              ) : null}
-              <span className="neko-workbench-editor-tab__label">{tab.label}</span>
-              {closable && onClose ? (
-                <button
-                  type="button"
-                  aria-label={tab.closeLabel ?? `Close ${tab.label}`}
-                  className="neko-workbench-editor-tab__close"
-                  title={tab.closeLabel ?? `Close ${tab.label}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onClose(tab.id);
-                  }}
-                >
-                  ×
-                </button>
-              ) : null}
-            </div>
-          );
-        })
-      ) : (
-        <button
-          type="button"
-          className="neko-workbench-editor-tab"
-          data-active="true"
-          role="tab"
-          aria-selected
-        >
-          <span className="neko-workbench-editor-tab__label">{emptyLabel}</span>
-        </button>
-      )}
+    <div className={cn('neko-workbench-editor-tabs', className)}>
+      <div className="neko-workbench-editor-tabs__list" role="tablist" aria-label={label}>
+        {tabs.length > 0 ? (
+          tabs.map((tab) => {
+            const active = tab.id === activeId;
+            const closable = tab.closable ?? Boolean(onClose);
+            return (
+              <div
+                key={tab.id}
+                className="neko-workbench-editor-tab"
+                data-active={active ? 'true' : 'false'}
+                draggable={Boolean(onReorder) && !tab.disabled}
+                role="tab"
+                tabIndex={tab.disabled ? -1 : 0}
+                aria-selected={active}
+                aria-disabled={tab.disabled ? 'true' : undefined}
+                title={tab.title ?? tab.label}
+                onDragOver={(event) => {
+                  if (onReorder) event.preventDefault();
+                }}
+                onDragStart={(event) => handleDragStart(event, tab.id)}
+                onDrop={(event) => handleDrop(event, tab.id)}
+                onClick={() => {
+                  if (!tab.disabled) onSelect(tab.id);
+                }}
+                onKeyDown={(event) => {
+                  if (tab.disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
+                  event.preventDefault();
+                  onSelect(tab.id);
+                }}
+              >
+                {tab.icon ? (
+                  <span className="neko-workbench-editor-tab__icon">{tab.icon}</span>
+                ) : null}
+                <span className="neko-workbench-editor-tab__label">{tab.label}</span>
+                {closable && onClose ? (
+                  <button
+                    type="button"
+                    aria-label={tab.closeLabel ?? `Close ${tab.label}`}
+                    className="neko-workbench-editor-tab__close"
+                    title={tab.closeLabel ?? `Close ${tab.label}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onClose(tab.id);
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            );
+          })
+        ) : (
+          <button
+            type="button"
+            className="neko-workbench-editor-tab"
+            data-active="true"
+            role="tab"
+            aria-selected
+          >
+            <span className="neko-workbench-editor-tab__label">{emptyLabel}</span>
+          </button>
+        )}
+      </div>
+      {contextActionsRef ? (
+        <div className="neko-workbench-editor-tabs__context-actions" ref={contextActionsRef} />
+      ) : null}
     </div>
   );
 }

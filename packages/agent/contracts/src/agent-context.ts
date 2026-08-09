@@ -44,22 +44,31 @@ export function isAgentResolvedEntityContextData(
  * Source type for agent context attachments.
  * Used to determine how the agent should interpret the payload.
  */
-export type AgentContextType =
-  | 'canvas-node'
-  | 'cut-clip'
-  | 'story-selection'
-  | 'character'
-  | 'scene'
-  | 'asset'
-  | 'media'
-  | 'entity'
-  | 'sketch-layer'
-  | '3d-reference'
-  | 'audio-clip'
-  | 'file'
-  | 'image'
-  | 'document-selection'
-  | 'canvas-storyboard-action-intent';
+export const AGENT_CONTEXT_TYPES = [
+  'canvas-node',
+  'cut-clip',
+  'story-selection',
+  'character',
+  'scene',
+  'asset',
+  'media',
+  'entity',
+  'sketch-layer',
+  '3d-reference',
+  'audio-clip',
+  'file',
+  'image',
+  'document-selection',
+  'canvas-storyboard-action-intent',
+] as const;
+
+export type AgentContextType = (typeof AGENT_CONTEXT_TYPES)[number];
+
+const AGENT_CONTEXT_TYPE_SET: ReadonlySet<string> = new Set(AGENT_CONTEXT_TYPES);
+
+export function isAgentContextType(value: unknown): value is AgentContextType {
+  return typeof value === 'string' && AGENT_CONTEXT_TYPE_SET.has(value);
+}
 
 /**
  * Unified context payload sent from any sub-package to the agent panel.

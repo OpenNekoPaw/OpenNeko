@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-01
+更新日期：2026-08-09
 
 范围：Agent 工具执行、文件访问、外部图片/视频/音频处理器、用户脚本、资源投影、审批与 Desktop Host。
 
@@ -47,6 +47,23 @@ output contract、timeout 与 resource limits。会改变项目、访问网络�
 
 stdout/stderr 有界采集并脱敏；退出码、signal、timeout、cancel、schema mismatch 和 output validation
 分别返回 typed diagnostic。不得把部分输出、空文件或失败退出包装为成功。
+
+### Agent 内容读取审批矩阵
+
+内容处理先使用已授权资源与 immutable Turn capability snapshot 做确定性路由，模型不决定权限、provider
+或处理器。普通本地只读操作不得逐次询问用户：已授权 Workspace 内的有界文本读取、文档 manifest/range、
+图片 metadata、缩放、最多五张图片的 overview/detail/contact sheet，以及无网络的媒体 metadata/抽帧/OCR
+属于自动允许的只读能力。
+
+以下行为必须进入明确审批：扩大 Workspace 或资源 grant、访问网络、调用专用付费感知模型、预计产生显著
+token/cost、执行用户代码或可执行文件、递归/大规模解包、覆盖或批量写入以及不可逆外部副作用。审批快照
+必须冻结 exact Conversation/Turn/Tool、输入短引用解析出的 canonical locator、provider/model、成本等级、
+读写范围与输出 owner。批准一个操作不得提升 sibling Tool、后续 Turn、其他 Conversation 或整个 Workspace
+的权限。
+
+权限拒绝、过期授权和单个处理器失败只拒绝当前 Tool Call 并返回可见 diagnostic；不得使 Agent Surface、
+Window Shell 或 sibling Conversation 无法渲染。该矩阵是后续 permission runtime 收敛的架构约束；
+`unify-agent-launch-and-domain-bindings` 的内容接口改造阶段只记录决策，不修改现有权限执行逻辑。
 
 ## 输出与生命周期
 

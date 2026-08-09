@@ -1,5 +1,5 @@
+import { parseFountainDocument } from '@neko/screenplay-domain';
 import type { ProjectSearchItem, ProjectSearchSourceRef } from '../contracts';
-import type { FountainParsedScript } from '@neko/content';
 
 export interface ScriptEntityCandidate {
   readonly name: string;
@@ -13,42 +13,21 @@ export interface ContextScriptEntitySearchItemOptions {
   readonly uri?: string;
 }
 
-export type StoryScriptParser = (text: string) => FountainParsedScript | undefined;
-
-export function extractScriptCharacterCandidates(
-  text: string,
-  parseStoryScript?: StoryScriptParser,
-): readonly ScriptEntityCandidate[] {
-  const byName = new Map<string, ScriptEntityCandidate>();
-  for (const candidate of extractLineBasedScriptCharacters(text)) {
-    byName.set(candidate.name, candidate);
-  }
-
-  const parsed = safeParseStoryScript(parseStoryScript, text);
-  for (const element of parsed?.elements ?? []) {
-    if (element.type !== 'character') continue;
-    const name = normalizeScriptCharacterName(readString(element['name']) ?? element.text);
-    if (!name || byName.has(name)) continue;
-    byName.set(name, { name });
-  }
-
-  return [...byName.values()].sort((a, b) => {
-    const lineA = a.firstLine ?? Number.MAX_SAFE_INTEGER;
-    const lineB = b.firstLine ?? Number.MAX_SAFE_INTEGER;
-    return lineA - lineB || a.name.localeCompare(b.name);
+export function extractScriptCharacterCandidates(text: string): readonly ScriptEntityCandidate[] {
+  const parsed = parseFountainDocument(text, 'project-search-script', {
+    maxSourceCodeUnits: Math.max(1, text.length),
   });
-}
-
-export function extractLineBasedScriptCharacters(text: string): readonly ScriptEntityCandidate[] {
-  const byName = new Map<string, ScriptEntityCandidate>();
-  const lines = text.split(/\r?\n/);
-  lines.forEach((line, index) => {
-    const match = /^\s*@(.+?)\s*$/.exec(line);
-    const name = normalizeScriptCharacterName(match?.[1]);
-    if (!name || byName.has(name)) return;
-    byName.set(name, { name, firstLine: index });
-  });
-  return [...byName.values()];
+  if (parsed.status === 'failed') {
+    throw new Error(
+      `Canonical Fountain parsing failed: ${parsed.diagnostics[0]?.code ?? 'unknown'}`,
+    );
+  }
+  return parsed.document.characters
+    .map((character) => ({
+      name: character.name,
+      firstLine: Math.max(0, (character.ranges[0]?.start.line ?? 1) - 1),
+    }))
+    .sort((left, right) => left.firstLine - right.firstLine || left.name.localeCompare(right.name));
 }
 
 export function scriptCharacterCandidateToProjectSearchItem(
@@ -104,22 +83,6 @@ export function scriptCharacterCandidateToProjectSearchItem(
   };
 }
 
-function safeParseStoryScript(
-  parseStoryScript: StoryScriptParser | undefined,
-  text: string,
-): FountainParsedScript | undefined {
-  try {
-    return parseStoryScript?.(text);
-  } catch {
-    return undefined;
-  }
-}
-
-function normalizeScriptCharacterName(value: string | undefined): string | undefined {
-  const name = value?.trim().replace(/^@+/, '').trim();
-  return name ? name : undefined;
-}
-
 function buildProjectSearchText(
   parts: readonly (string | undefined | readonly string[])[],
 ): string {
@@ -133,8 +96,4 @@ function buildProjectSearchText(
     }
   }
   return flattened.join(' ');
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }

@@ -3,7 +3,6 @@ import {
   FolderIcon,
   GridIcon,
   LayersIcon,
-  OpenIcon,
   RemoveIcon,
   SearchIcon,
   TrashIcon,
@@ -191,7 +190,9 @@ export function DesktopProjectCatalogSurface({
         {visible.map((project) => (
           <div
             className="management-surface-row"
+            data-project-id={project.projectId}
             data-selected={selectedProjectIds.has(project.projectId)}
+            data-workspace-open-disabled={project.unavailable !== undefined}
             key={project.projectId}
           >
             <button
@@ -200,6 +201,7 @@ export function DesktopProjectCatalogSurface({
               aria-pressed={selectedProjectIds.has(project.projectId)}
               disabled={!interactive}
               onClick={(event) => selectProject(project.projectId, event)}
+              onDoubleClick={project.unavailable ? undefined : () => onOpen(project.projectId)}
             >
               <FolderIcon size={17} />
               <span className="management-surface-copy">
@@ -220,15 +222,6 @@ export function DesktopProjectCatalogSurface({
               </span>
             </button>
             <span className="management-surface-row-actions">
-              <button
-                type="button"
-                aria-label={`${t('home.openProject')}: ${project.displayName}`}
-                disabled={!interactive || project.unavailable !== undefined}
-                title={t('home.openProject')}
-                onClick={() => onOpen(project.projectId)}
-              >
-                <OpenIcon size={15} />
-              </button>
               <button
                 type="button"
                 aria-label={t('shell.deleteProjectConversations', {

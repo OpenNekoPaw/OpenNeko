@@ -20,6 +20,13 @@ export function createPurposeGenerationJobPort(input: {
         );
       }
       switch (request.generationType) {
+        case 'prompt':
+          return input.jobs.submitGeneration({
+            lifecycleMode: request.lifecycleMode,
+            generationType: request.generationType,
+            ...binding,
+            request: request.request,
+          });
         case 'text-to-image':
         case 'image-to-image':
         case 'image-edit':

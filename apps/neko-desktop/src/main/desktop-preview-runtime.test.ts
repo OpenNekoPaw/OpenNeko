@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PREVIEW_HOST_RUNTIME_ROUTES } from '@neko/preview-domain';
+import { PREVIEW_HOST_RUNTIME_ROUTES, type PreviewProjection } from '@neko/preview-domain';
+import { TextReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
@@ -47,7 +48,6 @@ describe('DesktopPreviewRuntime', () => {
       'document',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ],
-    ['book.epub', 'document', 'application/epub+zip'],
   ] as const)(
     'projects locator-backed %s through its package viewer MIME and Range source',
     async (label, contentKind, mediaType) => {
@@ -55,10 +55,12 @@ describe('DesktopPreviewRuntime', () => {
       roots.push(root);
       const absolutePath = path.join(root, label);
       await writeFile(absolutePath, 'preview-bytes');
-      const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+      let workbench = createDefaultDesktopWorkbenchLayout('window-1');
       const shell: DesktopPreviewShellPort = {
         getProjection: async () => createShellProjection(workbench),
-        updateWorkbench: vi.fn(async () => undefined),
+        updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+          workbench = next;
+        }),
       };
       const runtime = new DesktopPreviewRuntime({
         shell,
@@ -66,11 +68,13 @@ describe('DesktopPreviewRuntime', () => {
         createIdentity: () => `kind-${contentKind}-${label}`,
       });
 
-      const projection = await runtime.open({
+      const opened = await runtime.open({
         identity: resourceIdentity,
         item: createItem(label, `content:${label}`),
         absolutePath,
       });
+      expect(opened.status).toBe('loading');
+      const projection = await preparePreview(runtime, opened);
       if (projection.status !== 'ready') throw new Error('Expected a ready Preview.');
 
       expect(projection.descriptor).toMatchObject({
@@ -90,6 +94,52 @@ describe('DesktopPreviewRuntime', () => {
       expect((await fetchResource(projection.descriptor.url)).status).toBe(404);
     },
   );
+
+  it('publishes EPUB as one virtual directory only when the first exact Snapshot is requested', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-epub-'));
+    roots.push(root);
+    const absolutePath = path.join(root, 'book.epub');
+    await writeEpubFixture(absolutePath);
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => createShellProjection(workbench),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
+    };
+    const resources = createResources();
+    const registerFile = vi.spyOn(resources, 'registerFile');
+    const registerResourceTree = vi.spyOn(resources, 'registerResourceTree');
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources,
+      createIdentity: () => 'epub-one',
+    });
+
+    const opened = await runtime.open({
+      identity: resourceIdentity,
+      item: createItem('book.epub', 'content:book'),
+      absolutePath,
+    });
+    expect(opened).toMatchObject({ status: 'loading' });
+    expect(registerFile).not.toHaveBeenCalled();
+    expect(registerResourceTree).not.toHaveBeenCalled();
+
+    const [first, second] = await Promise.all([
+      preparePreview(runtime, opened),
+      preparePreview(runtime, opened),
+    ]);
+    expect(second).toEqual(first);
+    if (first.status !== 'ready') throw new Error('Expected a ready EPUB Preview.');
+    expect(registerResourceTree).toHaveBeenCalledOnce();
+    expect(registerFile).not.toHaveBeenCalled();
+    expect(first.descriptor.url).toMatch(/^openneko:\/\/resource\/[A-Za-z0-9_-]{32}\/$/u);
+    expect(first.descriptor.url).not.toContain(absolutePath);
+    const container = await fetchResource(new URL('META-INF/container.xml', first.descriptor.url));
+    expect(container.status).toBe(200);
+    expect(container.headers.get('content-type')).toBe('application/xml');
+    expect(await container.text()).toContain('rootfile');
+  });
 
   it('authorizes and releases a transient media descriptor without mutating the workbench', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-hover-'));
@@ -138,10 +188,12 @@ describe('DesktopPreviewRuntime', () => {
     roots.push(root);
     const mediaPath = path.join(root, 'preview.mp4');
     await writeFile(mediaPath, 'video');
-    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
       getProjection: async () => createShellProjection(workbench),
-      updateWorkbench: vi.fn(async () => undefined),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
     };
     const runtime = new DesktopPreviewRuntime({
       shell,
@@ -151,11 +203,12 @@ describe('DesktopPreviewRuntime', () => {
         return () => identities.shift() ?? 'unexpected';
       })(),
     });
-    const projection = await runtime.open({
+    const opened = await runtime.open({
       identity: resourceIdentity,
       item: createItem('preview.mp4', 'content:full'),
       absolutePath: mediaPath,
     });
+    const projection = await preparePreview(runtime, opened);
     if (projection.status !== 'ready') throw new Error('Expected a ready Preview.');
     const quick = await runtime.openQuickPreview({
       identity: resourceIdentity,
@@ -179,6 +232,55 @@ describe('DesktopPreviewRuntime', () => {
     runtime.detachWindow('window-1');
     expect((await fetchResource(projection.descriptor.url)).status).toBe(404);
     expect((await fetchResource(quick.descriptor.url)).status).toBe(404);
+  });
+
+  it('releases a source registration that completes after its Preview was closed', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-cancel-'));
+    roots.push(root);
+    const mediaPath = path.join(root, 'late.mp4');
+    await writeFile(mediaPath, 'video');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => createShellProjection(workbench),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
+    };
+    const resources = createResources();
+    const registerFile = resources.registerFile.bind(resources);
+    let releaseRegistration: (() => void) | undefined;
+    const registrationGate = new Promise<void>((resolve) => {
+      releaseRegistration = resolve;
+    });
+    let lateUrl: string | undefined;
+    vi.spyOn(resources, 'registerFile').mockImplementation(async (owner, source) => {
+      await registrationGate;
+      const lease = await registerFile(owner, source);
+      lateUrl = lease.url;
+      return lease;
+    });
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources,
+      createIdentity: () => 'late-one',
+    });
+    const opened = await runtime.open({
+      identity: resourceIdentity,
+      item: createItem('late.mp4', 'content:late'),
+      absolutePath: mediaPath,
+    });
+    const preparation = preparePreview(runtime, opened);
+    await vi.waitFor(() => expect(resources.registerFile).toHaveBeenCalledOnce());
+
+    await runtime.execute('window-1', {
+      requestId: 'close-late',
+      route: PREVIEW_HOST_RUNTIME_ROUTES.viewClose,
+      identity: opened.identity,
+    });
+    releaseRegistration?.();
+    await expect(preparation).rejects.toThrow('Preview source preparation was released.');
+    expect(lateUrl).toBeDefined();
+    expect((await fetchResource(lateUrl ?? '')).status).toBe(404);
   });
 
   it('opens one temporary owner-bound Preview View and releases the replaced descriptor', async () => {
@@ -212,11 +314,9 @@ describe('DesktopPreviewRuntime', () => {
     let rendererSessionId = 'endpoint-1';
     const shell: DesktopPreviewShellPort = {
       getProjection: async () => createShellProjection(workbench, rendererSessionId),
-      updateWorkbench: vi.fn(
-        async (_windowId, _rendererSessionId, _workbenchInstanceId, next) => {
-          workbench = next;
-        },
-      ),
+      updateWorkbench: vi.fn(async (_windowId, _rendererSessionId, _workbenchInstanceId, next) => {
+        workbench = next;
+      }),
     };
     const resources = createResources();
     const identities = ['one', 'two', 'three'];
@@ -237,7 +337,7 @@ describe('DesktopPreviewRuntime', () => {
         },
       }),
     ).rejects.toThrow('target View identity is stale');
-    const first = await runtime.open({
+    const firstOpened = await runtime.open({
       identity: resourceIdentity,
       item: createItem('first.json', 'content:first'),
       absolutePath: firstPath,
@@ -246,6 +346,7 @@ describe('DesktopPreviewRuntime', () => {
         presentation: 'temporary',
       },
     });
+    const first = await preparePreview(runtime, firstOpened);
     if (first.status !== 'ready') throw new Error('Expected a ready Preview.');
     expect((await fetchResource(first.descriptor.url)).status).toBe(200);
     expect(workbench).toMatchObject({
@@ -265,11 +366,12 @@ describe('DesktopPreviewRuntime', () => {
       },
     });
 
-    const second = await runtime.open({
+    const secondOpened = await runtime.open({
       identity: resourceIdentity,
       item: createItem('second.glb', 'content:second'),
       absolutePath: secondPath,
     });
+    const second = await preparePreview(runtime, secondOpened);
     if (second.status !== 'ready') throw new Error('Expected a ready Preview.');
     expect(second.descriptor.contentKind).toBe('model');
     expect((await fetchResource(first.descriptor.url)).status).toBe(404);
@@ -311,11 +413,12 @@ describe('DesktopPreviewRuntime', () => {
 
     const thirdPath = path.join(root, 'third.md');
     await writeFile(thirdPath, '# Third');
-    const third = await runtime.open({
+    const thirdOpened = await runtime.open({
       identity: resourceIdentity,
       item: createItem('third.md', 'content:third'),
       absolutePath: thirdPath,
     });
+    const third = await preparePreview(runtime, thirdOpened);
     if (third.status !== 'ready') throw new Error('Expected a ready Preview.');
     expect((await fetchResource(second.descriptor.url)).status).toBe(200);
     expect(workbench.main.views.filter((view) => view.kind === 'preview')).toHaveLength(2);
@@ -398,10 +501,12 @@ describe('DesktopPreviewRuntime', () => {
     await writeFile(path.join(root, 'scene.bin'), 'buffer');
     await writeFile(path.join(root, 'textures', 'base.png'), 'image');
     await writeFile(path.join(root, 'undeclared.bin'), 'private');
-    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
       getProjection: async () => createShellProjection(workbench),
-      updateWorkbench: vi.fn(async () => undefined),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
     };
     const runtime = new DesktopPreviewRuntime({
       shell,
@@ -409,11 +514,12 @@ describe('DesktopPreviewRuntime', () => {
       createIdentity: () => 'gltf-one',
     });
 
-    const projection = await runtime.open({
+    const opened = await runtime.open({
       identity: resourceIdentity,
       item: createItem('scene.gltf', 'content:gltf'),
       absolutePath: modelPath,
     });
+    const projection = await preparePreview(runtime, opened);
     if (projection.status !== 'ready') throw new Error('Expected a ready glTF Preview.');
 
     expect(projection.descriptor.resourceUris).toEqual({
@@ -449,10 +555,12 @@ describe('DesktopPreviewRuntime', () => {
         buffers: [{ uri: '%2e%2e/secret.bin', byteLength: 6 }],
       }),
     );
-    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
       getProjection: async () => createShellProjection(workbench),
-      updateWorkbench: vi.fn(async () => undefined),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
     };
     const runtime = new DesktopPreviewRuntime({
       shell,
@@ -460,13 +568,15 @@ describe('DesktopPreviewRuntime', () => {
       createIdentity: () => 'gltf-unsafe',
     });
 
-    await expect(
-      runtime.open({
-        identity: resourceIdentity,
-        item: createItem('unsafe.gltf', 'content:gltf-unsafe'),
-        absolutePath: modelPath,
-      }),
-    ).rejects.toThrow('unsafe path segment');
+    const opened = await runtime.open({
+      identity: resourceIdentity,
+      item: createItem('unsafe.gltf', 'content:gltf-unsafe'),
+      absolutePath: modelPath,
+    });
+    await expect(preparePreview(runtime, opened)).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { message: expect.stringContaining('unsafe path segment') },
+    });
   });
 
   it('rejects a glTF dependency symlink that escapes the model directory', async () => {
@@ -483,10 +593,12 @@ describe('DesktopPreviewRuntime', () => {
     );
     await writeFile(path.join(outside, 'secret.bin'), 'secret');
     await symlink(path.join(outside, 'secret.bin'), path.join(root, 'linked.bin'));
-    const workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
       getProjection: async () => createShellProjection(workbench),
-      updateWorkbench: vi.fn(async () => undefined),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
     };
     const runtime = new DesktopPreviewRuntime({
       shell,
@@ -494,13 +606,15 @@ describe('DesktopPreviewRuntime', () => {
       createIdentity: () => 'gltf-unsafe-link',
     });
 
-    await expect(
-      runtime.open({
-        identity: resourceIdentity,
-        item: createItem('unsafe-link.gltf', 'content:gltf-unsafe-link'),
-        absolutePath: modelPath,
-      }),
-    ).rejects.toThrow('escapes the model directory');
+    const opened = await runtime.open({
+      identity: resourceIdentity,
+      item: createItem('unsafe-link.gltf', 'content:gltf-unsafe-link'),
+      absolutePath: modelPath,
+    });
+    await expect(preparePreview(runtime, opened)).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { message: expect.stringContaining('escapes the model directory') },
+    });
   });
 });
 
@@ -581,6 +695,36 @@ function fetchResource(input: string | URL, init?: RequestInit): Promise<Respons
     return Promise.resolve(new Response('Resource not found', { status: 404 }));
   }
   return registry.handle(new Request(url, init));
+}
+
+function preparePreview(
+  runtime: DesktopPreviewRuntime,
+  projection: PreviewProjection,
+): Promise<PreviewProjection> {
+  return runtime.execute(projection.identity.windowId, {
+    requestId: `prepare:${projection.identity.sessionId}`,
+    route: PREVIEW_HOST_RUNTIME_ROUTES.snapshotGet,
+    identity: projection.identity,
+  });
+}
+
+async function writeEpubFixture(absolutePath: string): Promise<void> {
+  const writer = new ZipWriter(new Uint8ArrayWriter(), { useWebWorkers: false });
+  await writer.add('mimetype', new TextReader('application/epub+zip'));
+  await writer.add(
+    'META-INF/container.xml',
+    new TextReader(
+      '<?xml version="1.0"?><container><rootfiles><rootfile full-path="OPS/package.opf"/></rootfiles></container>',
+    ),
+  );
+  await writer.add(
+    'OPS/package.opf',
+    new TextReader(
+      '<package><manifest><item id="chapter" href="chapter.xhtml"/></manifest><spine><itemref idref="chapter"/></spine></package>',
+    ),
+  );
+  await writer.add('OPS/chapter.xhtml', new TextReader('<html><body>chapter</body></html>'));
+  await writeFile(absolutePath, await writer.close());
 }
 
 function createItem(label: string, resourceId: string) {

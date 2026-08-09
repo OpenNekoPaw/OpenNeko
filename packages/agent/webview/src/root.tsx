@@ -14,7 +14,7 @@ import {
 } from '@neko/ui/foundation';
 import { AgentHostRuntimeProvider } from './host-runtime-context';
 import type { AgentHostRuntimeAdapter } from './messages';
-import type { AgentRootPresentation } from '@neko/agent-contracts';
+import type { AgentInteractionProjection } from '@neko/agent-contracts';
 import {
   ComposerWorkspaceProvider,
   type AgentComposerWorkspacePresentation,
@@ -30,8 +30,12 @@ export interface AgentWebviewRootProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
-  readonly agentPresentation?: AgentRootPresentation;
+  readonly agentPresentation?: AgentInteractionProjection;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+  readonly conversationFeed?: {
+    readonly conversationId: string;
+    readonly content: ReactNode;
+  };
 }
 
 export function AgentWebviewRoot({
@@ -39,6 +43,7 @@ export function AgentWebviewRoot({
   hostRuntimeAdapter,
   agentPresentation,
   composerWorkspace,
+  conversationFeed,
   initialConversation,
   initialInput,
   locale,
@@ -65,6 +70,7 @@ export function AgentWebviewRoot({
                 initialConversation={initialConversation}
                 initialInput={initialInput}
                 presentation={presentation}
+                conversationFeed={conversationFeed}
               />
             </ComposerWorkspaceProvider>
           </I18nProvider>

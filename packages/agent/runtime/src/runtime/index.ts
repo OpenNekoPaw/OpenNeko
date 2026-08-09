@@ -83,6 +83,11 @@ export {
 
 export {
   collectCreatorVisibleArtifacts,
+  collectCreatorVisibleArtifactsFromTurnProjection,
+  deliverCreatorVisibleArtifactsFromTurnProjection,
+  type AgentCreatorVisibleArtifactDeliveryInput,
+  type AgentCreatorVisibleArtifactDeliveryOutcome,
+  type AgentCreatorVisibleArtifactDeliveryPort,
   type CreatorVisibleArtifactCandidate,
   type CreatorVisibleArtifactCollectionInput,
   type CreatorVisibleToolResult,
@@ -291,6 +296,7 @@ export {
   projectAgentFileMentions,
   projectAgentMentionExtras,
   projectAgentProjectFilesMessage,
+  projectContextReferences,
   projectThreeReferenceContextImageResources,
   mergeReferencedMediaImageAttachments,
   prepareAgentMessageDispatch,
@@ -321,7 +327,6 @@ export {
   type AgentMessageRuntimeRequest,
   type AgentMessageTurnAgentExecutionInput,
   type AgentMessageTurnPreconditionReason,
-  type AgentMessageTurnMediaExecutionInput,
   type AgentMessageTurnRuntimeMessage,
   type AgentThreeReferenceImageResource,
   type AgentTurnConfigurationPlan,
@@ -449,14 +454,12 @@ export {
 } from './turn/context-control-runtime';
 
 export {
-  buildRuntimePluginSlashCommandDispatch,
   buildRuntimePluginsAvailableMessage,
   createRuntimePluginSlashCommandRegistry,
   expandRuntimePluginTransferInputs,
   type BuildPluginTransferPlanInput,
   type PluginSlashCommandDef,
   type RegisteredPluginSlashCommand,
-  type RuntimePluginSlashCommandDispatch,
   type RuntimePluginSlashCommandRegistry,
 } from './plugin-transfer-runtime';
 

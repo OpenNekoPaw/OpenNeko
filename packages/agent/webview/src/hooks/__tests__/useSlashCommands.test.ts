@@ -1,61 +1,58 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentInputCatalogMessage } from '@neko/agent-contracts';
 import { useSlashCommands } from '../useSlashCommands';
 
 const hostMocks = vi.hoisted(() => ({
-  invokeSlashCommand: vi.fn(),
-  invokePluginSlashCommand: vi.fn(),
+  invokeAgentInput: vi.fn(),
 }));
 
 vi.mock('../../host-runtime-context', () => ({
   useAgentHostMessages: () => ({
-    invokeSlashCommand: hostMocks.invokeSlashCommand,
-    invokePluginSlashCommand: hostMocks.invokePluginSlashCommand,
+    invokeAgentInput: hostMocks.invokeAgentInput,
   }),
 }));
 
-vi.mock('../../i18n/I18nContext', () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const translations: Record<string, string> = {
-        'chat.commands.help': 'Show help',
-      };
-      return translations[key] ?? key;
+const inputCatalog: AgentInputCatalogMessage = {
+  type: 'agentInputCatalog',
+  conversationId: 'conv-1',
+  phase: 'session',
+  bindingKind: 'assistant',
+  entries: [
+    {
+      id: 'command:builtin:help',
+      name: 'help',
+      description: 'Show help',
+      trigger: 'command',
+      prefix: '/',
+      phaseRequirement: 'session',
+      bindingRequirement: 'any',
+      source: { kind: 'builtin', sourceId: 'help' },
+      availability: { status: 'available' },
+      executable: { kind: 'command', commandId: 'help', handlerId: 'builtin:help' },
     },
-  }),
-}));
+  ],
+};
 
 describe('useSlashCommands', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders help with separate slash command and dollar skill sections', () => {
-    const setMessages = vi.fn();
+  it('invokes the exact command catalog entry instead of handling help in Renderer', () => {
     const clearInput = vi.fn();
     const { result } = renderHook(() =>
       useSlashCommands({
-        skills: [
-          {
-            id: 'quality-review',
-            name: 'quality-review',
-            description: 'Review changed files',
-            tags: [],
-            source: 'project',
-            enabled: true,
-          },
-        ],
-        pluginCommands: [],
+        inputCatalog,
         inputValue: '/help',
         activeConversationId: 'conv-1',
-        setMessages,
         clearInput,
       }),
     );
 
     act(() => {
       result.current.handleSlashCommand({
-        id: 'help',
+        id: 'command:builtin:help',
         commandId: 'help',
         name: '/help',
         descriptionKey: 'chat.commands.help',
@@ -65,12 +62,45 @@ describe('useSlashCommands', () => {
     });
 
     expect(clearInput).toHaveBeenCalledTimes(1);
-    const updater = setMessages.mock.calls[0]?.[0];
-    expect(typeof updater).toBe('function');
-    const nextMessages = updater([]);
-    expect(nextMessages[0].content).toContain('**Available Commands:**');
-    expect(nextMessages[0].content).toContain('**Available Skills:**');
-    expect(nextMessages[0].content).toContain('$quality-review');
-    expect(nextMessages[0].content).toContain('Use `$` to invoke Skills');
+    expect(hostMocks.invokeAgentInput).toHaveBeenCalledWith(
+      {
+        kind: 'command',
+        catalogEntryId: 'command:builtin:help',
+        commandId: 'help',
+        handlerId: 'builtin:help',
+      },
+      'conv-1',
+    );
+  });
+
+  it('reports a stale selected command without clearing or invoking it', () => {
+    const clearInput = vi.fn();
+    const reportInputDiagnostic = vi.fn();
+    const { result } = renderHook(() =>
+      useSlashCommands({
+        inputCatalog,
+        inputValue: '/removed',
+        activeConversationId: 'conv-1',
+        clearInput,
+        reportInputDiagnostic,
+      }),
+    );
+
+    act(() => {
+      result.current.handleSlashCommand({
+        id: 'command:removed',
+        commandId: 'removed',
+        name: '/removed',
+        descriptionKey: 'Removed command',
+        icon: '',
+        source: 'builtin',
+      });
+    });
+
+    expect(reportInputDiagnostic).toHaveBeenCalledWith(
+      "Agent command '/removed' is stale or unavailable.",
+    );
+    expect(clearInput).not.toHaveBeenCalled();
+    expect(hostMocks.invokeAgentInput).not.toHaveBeenCalled();
   });
 });

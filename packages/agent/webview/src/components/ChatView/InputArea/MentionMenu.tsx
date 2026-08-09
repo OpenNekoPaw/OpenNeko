@@ -125,6 +125,7 @@ interface MentionMenuProps {
   onSelectFile: (item: MentionItem) => void;
   /** Called when user picks a non-file item — provides context payload for chip creation */
   onSelectContext: (payload: AgentContextPayload) => void;
+  onSelectItem?: (item: MentionItem) => void;
   onClose: () => void;
 }
 
@@ -135,6 +136,7 @@ export function MentionMenu({
   selectedIndex,
   onSelectFile,
   onSelectContext,
+  onSelectItem,
   onClose,
 }: MentionMenuProps) {
   const { t } = useTranslation();
@@ -151,6 +153,10 @@ export function MentionMenu({
   const flat = sections.flatMap((s) => s.items);
 
   const handleSelect = (item: MentionItem) => {
+    if (onSelectItem) {
+      onSelectItem(item);
+      return;
+    }
     if (item.contentLocator) {
       onSelectFile(item);
     } else if (item.contextPayload) {

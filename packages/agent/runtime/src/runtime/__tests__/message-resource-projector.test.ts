@@ -11,6 +11,17 @@ const contentLocator = {
   path: 'images/page-1.jpg',
 };
 
+const representationLocator = {
+  kind: 'content-representation' as const,
+  id: 'page-1',
+  representationKind: 'raster-page' as const,
+  source: { kind: 'workspace-file' as const, path: 'documents/book.pdf' },
+  spec: { kind: 'raster-page' as const, page: 1, format: 'png' as const },
+  generatorId: 'document-raster',
+  sourceFingerprint: 'sha256:source',
+  specFingerprint: 'sha256:spec',
+};
+
 describe('message resource projector', () => {
   it('detects absolute local media paths without treating relative or network URLs as files', () => {
     expect(isLocalMediaFilePath('/tmp/image.png')).toBe(true);
@@ -21,7 +32,7 @@ describe('message resource projector', () => {
   });
 
   it('preserves ContentLocator, removes absolute display paths and adds only renderUri', async () => {
-    const resolveContentLocator = vi.fn(async () => 'http://127.0.0.1:43125/resources/image-token');
+    const resolveDisplayLocator = vi.fn(async () => 'http://127.0.0.1:43125/resources/image-token');
 
     await expect(
       projectResourceValue(
@@ -31,7 +42,7 @@ describe('message resource projector', () => {
           mimeType: 'image/jpeg',
           contentLocator,
         },
-        { resolveContentLocator },
+        { resolveDisplayLocator },
       ),
     ).resolves.toEqual({
       label: 'Page 1',
@@ -40,7 +51,7 @@ describe('message resource projector', () => {
       contentLocator,
       renderUri: 'http://127.0.0.1:43125/resources/image-token',
     });
-    expect(resolveContentLocator).toHaveBeenCalledWith(contentLocator, {
+    expect(resolveDisplayLocator).toHaveBeenCalledWith(contentLocator, {
       mediaType: 'image/jpeg',
     });
   });
@@ -103,7 +114,7 @@ describe('message resource projector', () => {
     ];
 
     const [projected] = await projectMessagesForResourceDisplay(messages, {
-      resolveContentLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
+      resolveDisplayLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
     });
     expect(messages[0]?.contentBlocks?.[0]).toEqual({
       id: 'block-1',
@@ -144,7 +155,7 @@ describe('message resource projector', () => {
           mimeType: 'image/jpeg',
         },
         {
-          resolveContentLocator: async () => {
+          resolveDisplayLocator: async () => {
             throw new Error('denied');
           },
         },
@@ -162,6 +173,29 @@ describe('message resource projector', () => {
           message: 'Content could not be authorized for Webview display.',
         },
       ],
+    });
+  });
+
+  it('projects the exact representation locator instead of substituting its source', async () => {
+    const resolveDisplayLocator = vi.fn(async () => 'openneko://resource/page/content');
+
+    await expect(
+      projectResourceValue(
+        {
+          label: 'Page 1',
+          mimeType: 'image/png',
+          representationLocator,
+        },
+        { resolveDisplayLocator },
+      ),
+    ).resolves.toEqual({
+      label: 'Page 1',
+      mimeType: 'image/png',
+      representationLocator,
+      renderUri: 'openneko://resource/page/content',
+    });
+    expect(resolveDisplayLocator).toHaveBeenCalledWith(representationLocator, {
+      mediaType: 'image/png',
     });
   });
 });

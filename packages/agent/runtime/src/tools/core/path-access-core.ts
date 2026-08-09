@@ -1,4 +1,5 @@
 import * as os from 'node:os';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 export interface RootPathAccessDecision {
@@ -29,6 +30,24 @@ export function isPathInsideRoot(filePath: string, root: string): boolean {
   return (
     normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}${path.sep}`)
   );
+}
+
+export async function pathCrossesSymlinkInsideRoots(
+  filePath: string,
+  roots: readonly string[],
+): Promise<boolean> {
+  const normalizedPath = path.resolve(filePath);
+  for (const root of roots) {
+    const normalizedRoot = path.resolve(root);
+    if (!isPathInsideRoot(normalizedPath, normalizedRoot)) continue;
+    const [realRoot, realPath] = await Promise.all([
+      fs.realpath(normalizedRoot),
+      fs.realpath(normalizedPath),
+    ]);
+    const expectedRealPath = path.resolve(realRoot, path.relative(normalizedRoot, normalizedPath));
+    return path.normalize(realPath) !== path.normalize(expectedRealPath);
+  }
+  return false;
 }
 
 export function isForbiddenUnmanagedPath(filePath: string): boolean {

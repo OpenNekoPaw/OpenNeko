@@ -1,7 +1,6 @@
 import {
   classifyAgentHostRoute,
   createAgentHostWorkspaceScopeRequiredDiagnostic,
-  isAgentLaunchEntryAvailable,
   type AgentDraftHostRuntimeAdapter,
   type AgentHostToWebviewMessage,
   type AgentLaunchCatalogProjection,
@@ -43,10 +42,74 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     get catalog() {
       return catalog;
     },
+    readLaunchCatalog() {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      return catalog;
+    },
+    async bindTarget(binding) {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      catalog = { ...catalog, inputs: [] };
+      emit({ type: 'projectFiles', filter: '', purpose: 'entry', files: [], mentionExtras: [] });
+      catalog = await input.bridge.agentLaunch.bindTarget(connection, binding);
+      return catalog;
+    },
+    async bindAssistant() {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      catalog = { ...catalog, inputs: [] };
+      emit({ type: 'projectFiles', filter: '', purpose: 'entry', files: [], mentionExtras: [] });
+      catalog = await input.bridge.agentLaunch.bindAssistant(connection);
+      return catalog;
+    },
+    async updateDraftConfiguration(configuration) {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      catalog = await input.bridge.agentLaunch.updateConfiguration(connection, configuration);
+      return catalog;
+    },
     send(message): void {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
+      if (message.type === 'searchProjectFiles') {
+        const receipt = catalog.interaction.bindingReceipt;
+        if (catalog.interaction.binding.kind !== 'workspace' || !receipt) {
+          emit({
+            type: 'globalError',
+            message: createAgentHostWorkspaceScopeRequiredDiagnostic(message.type).message,
+          });
+          return;
+        }
+        const bindingReceiptId = receipt.bindingReceiptId;
+        void input.bridge.agentLaunch
+          .searchWorkspaceMentions(connection, bindingReceiptId, message.filter)
+          .then((projection) => {
+            if (
+              disposed ||
+              catalog.interaction.bindingReceipt?.bindingReceiptId !== bindingReceiptId
+            ) {
+              return;
+            }
+            emit({
+              type: 'projectFiles',
+              filter: projection.filter,
+              purpose: 'entry',
+              files: [...projection.files],
+              mentionExtras: [...projection.mentionExtras],
+            });
+          })
+          .catch((error: unknown) => {
+            if (
+              disposed ||
+              catalog.interaction.bindingReceipt?.bindingReceiptId !== bindingReceiptId
+            ) {
+              return;
+            }
+            emit({
+              type: 'globalError',
+              message: error instanceof Error ? error.message : String(error),
+            });
+          });
+        return;
+      }
       const authority = classifyAgentHostRoute(message.type);
-      if (authority.scope === 'workspace' && connection.scope.kind === 'assistant') {
+      if (authority.scope === 'workspace' && catalog.interaction.binding.kind !== 'workspace') {
         emit({
           type: 'globalError',
           message: createAgentHostWorkspaceScopeRequiredDiagnostic(message.type).message,
@@ -63,10 +126,10 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
       switch (message.type) {
         case 'getConfig':
         case 'refreshConfigSnapshot': {
-          const models = input.catalog.models.filter((entry) =>
-            isAgentLaunchEntryAvailable(entry, connection.scope),
+          const models = catalog.models.filter(
+            (entry) => entry.availability.status === 'available',
           );
-          const selected = models[0];
+          const selected = catalog.configuration.fields.model.effectiveValue;
           emit({
             type: 'configState',
             config: {
@@ -79,34 +142,18 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
               })),
               selectedProviderId: selected?.providerId ?? null,
               selectedModelId: selected?.modelId ?? null,
+              temperature: catalog.configuration.fields.temperature.effectiveValue ?? undefined,
+              maxTokens:
+                catalog.configuration.fields.maximumOutputTokens.effectiveValue ?? undefined,
+              executionMode:
+                catalog.configuration.fields.executionMode.effectiveValue ?? undefined,
+              agentConfiguration: catalog.configuration,
             },
           });
           return;
         }
-        case 'getSkills':
-          emit({
-            type: 'skillsList',
-            skills: input.catalog.skills
-              .filter((entry) => isAgentLaunchEntryAvailable(entry, connection.scope))
-              .map((entry) => ({
-                name: entry.name,
-                description: entry.description,
-                source: entry.source,
-                enabled: true,
-                type: 'skill',
-              })),
-          });
-          return;
         case 'getAgentStates':
           emit({ type: 'agentStateSnapshot', agentStates: [] });
-          return;
-        case 'searchProjectFiles':
-          emit({
-            type: 'projectFiles',
-            filter: message.filter,
-            ...(message.purpose === undefined ? {} : { purpose: message.purpose }),
-            files: [],
-          });
           return;
         case 'webviewKeyboardFocus':
         case 'webviewKeyboardEditable':
@@ -136,21 +183,11 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     async submitDraft(draftInput) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       const contextMatches =
-        connection.scope.kind === 'unbound'
-          ? connection.scope.draftId === draftInput.target.draftId &&
-            input.draftId === draftInput.target.draftId
-          : draftInput.target.kind === 'bound-context' &&
-            draftInput.target.draftId === input.draftId &&
-            (draftInput.target.context.kind === 'assistant'
-              ? connection.scope.kind === 'assistant' &&
-                draftInput.target.context.assistantSpaceId === connection.scope.assistantSpaceId &&
-                sameIdentities(
-                  draftInput.target.context.baseGrantIds,
-                  draftInput.resourceGrantIds,
-                )
-              : connection.scope.kind === 'workspace' &&
-                draftInput.target.context.workspaceId === connection.scope.workspaceId &&
-                draftInput.target.context.workspaceGrantId === connection.scope.workspaceGrantId);
+        draftInput.draft.draftId === connection.draftId &&
+        draftInput.draft.draftId === input.draftId &&
+        draftInput.draft.bindingReceipt?.bindingReceiptId ===
+          catalog.interaction.bindingReceipt?.bindingReceiptId &&
+        JSON.stringify(draftInput.draft.binding) === JSON.stringify(catalog.interaction.binding);
       if (!contextMatches) {
         throw new Error('Agent draft submit context does not match its launch connection scope.');
       }
@@ -158,25 +195,37 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     },
     async authorizeResource(resourceKind) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
-      const previousIds = new Set(catalog.resources.map((resource) => resource.resourceGrantId));
+      const previousIds = new Set(
+        catalog.inputs
+          .filter((entry) => entry.trigger === 'mention')
+          .map((entry) => entry.executable.referenceId),
+      );
       const next = await input.bridge.agentLaunch.authorizeResource(connection, resourceKind);
       if (!next) return undefined;
       catalog = next;
-      const resource = next.resources.find(
+      const resource = next.inputs.find(
         (candidate) =>
-          candidate.resourceKind === resourceKind && !previousIds.has(candidate.resourceGrantId),
+          candidate.trigger === 'mention' && !previousIds.has(candidate.executable.referenceId),
       );
-      if (!resource) {
+      if (!resource || resource.trigger !== 'mention') {
         throw new Error('Agent resource authorization did not return a new exact grant.');
       }
       return {
         type: resourceKind === 'file' ? 'file' : 'media',
-        id: resource.resourceGrantId,
-        label: resource.label,
-        summary: `Authorized ${resourceKind}: ${resource.label}`,
+        id: resource.executable.referenceId,
+        label: resource.name,
+        summary: resource.description,
         data: {
-          resourceGrantId: resource.resourceGrantId,
+          catalogEntryId: resource.id,
+          resourceGrantId: resource.executable.referenceId,
           resourceKind,
+          ownerKind: resource.executable.ownerKind,
+          ownerId: resource.executable.ownerId,
+          ...(catalog.interaction.bindingReceipt === null
+            ? {}
+            : {
+                bindingReceiptId: catalog.interaction.bindingReceipt.bindingReceiptId,
+              }),
         },
       };
     },
@@ -187,8 +236,4 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
       await input.bridge.agentLaunch.detach(connection);
     },
   };
-}
-
-function sameIdentities(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((identity, index) => identity === right[index]);
 }

@@ -1,5 +1,7 @@
 import {
+  createCanvasGenerationNode,
   createEmptyCanvasData,
+  updateCanvasGenerationNodeRecipe,
   type CanvasMaterialActionDescriptor,
   type MediaCanvasNode,
 } from '@neko/canvas-domain';
@@ -8,6 +10,7 @@ import {
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
   createCanvasHostIntentRequest,
+  type CanvasHostRuntimeSessionEffects,
   type CanvasHostRuntimeIdentity,
 } from '../index';
 
@@ -275,48 +278,116 @@ describe('CanvasHostRuntimeSession', () => {
     });
   });
 
-  it('projects an empty material request as a Generation-owned Job without a source-less node', async () => {
-    const requestGenerationDraft = vi.fn(async () => ({
-      ref: { kind: 'generation' as const, jobId: 'generation-1' },
-      phase: 'pending' as const,
-      title: 'Generate image',
-      inputNodeIds: [],
-      mediaKind: 'image' as const,
-      summary: { prompt: 'Describe the image to generate' },
-    }));
+  it.each([
+    ['prompt', { width: 320, height: 220 }],
+    ['image', { width: 300, height: 220 }],
+    ['audio', { width: 300, height: 120 }],
+    ['video', { width: 300, height: 220 }],
+  ] as const)(
+    'creates an empty canonical %s Generation Node with the matching content size',
+    async (kind, size) => {
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { generation: unusedGenerationEffects() },
+      });
+
+      const result = await runtime.executeIntent(
+        request('generation-create', {
+          type: 'create-generation-node',
+          kind,
+          position: { x: 240, y: 180 },
+        }),
+      );
+
+      expect(result.status).toBe('accepted');
+      if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
+      expect(result.snapshot.canvas.nodes).toEqual([
+        expect.objectContaining({
+          type: 'generation',
+          position: { x: 240, y: 180 },
+          size,
+          data: expect.objectContaining({
+            recipe: expect.objectContaining({ kind, prompt: '' }),
+            outputs: [],
+          }),
+        }),
+      ]);
+      expect(result.snapshot.canvas.nodes).toHaveLength(1);
+    },
+  );
+
+  it('marks the current Generation projection stale when its submitted Recipe is edited', async () => {
+    const configured = updateCanvasGenerationNodeRecipe({
+      canvas: createCanvasGenerationNode({
+        canvas: createEmptyCanvasData('Initial'),
+        nodeId: 'generation-1',
+        kind: 'image',
+        position: { x: 0, y: 0 },
+      }),
+      nodeId: 'generation-1',
+      recipe: {
+        kind: 'image',
+        prompt: 'Original prompt',
+        model: {
+          purpose: 'image.generate',
+          providerId: 'provider-1',
+          modelId: 'model-1',
+        },
+      },
+    });
+    const node = configured.nodes[0];
+    if (!node || node.type !== 'generation') throw new Error('Generation fixture is invalid.');
+    const run = {
+      submissionId: 'submission-1',
+      recipeInputFingerprint: 'sha256:original',
+      jobRef: { kind: 'generation' as const, jobId: 'job-1' },
+    };
+    const initialCanvas = {
+      ...configured,
+      nodes: [{ ...node, data: { ...node.data, latestRun: run } }],
+    };
+    const effects: NonNullable<CanvasHostRuntimeSessionEffects['generation']> = {
+      ...unusedGenerationEffects(),
+      resumeNode: async ({ canvas }) => ({
+        canvas,
+        projection: {
+          nodeId: 'generation-1',
+          submissionId: run.submissionId,
+          recipeInputFingerprint: run.recipeInputFingerprint,
+          jobRef: run.jobRef,
+          phase: 'succeeded',
+        },
+      }),
+      observeNode: async function* () {},
+    };
     const runtime = new CanvasHostRuntimeSession({
       identity,
-      initialCanvas: createEmptyCanvasData('Initial'),
-      effects: { requestGenerationDraft },
+      initialCanvas,
+      effects: { generation: effects },
     });
+    await runtime.reattachGenerationNodes();
 
     const result = await runtime.executeIntent(
-      request('generation-draft', {
-        type: 'request-generation-draft',
-        mediaKind: 'image',
-        position: { x: 240, y: 180 },
-        inputNodeIds: [],
+      request('generation-edit-stale', {
+        type: 'update-generation-recipe',
+        nodeId: 'generation-1',
+        recipe: {
+          kind: 'image',
+          prompt: 'Changed prompt',
+          model: {
+            purpose: 'image.generate',
+            providerId: 'provider-1',
+            modelId: 'model-1',
+          },
+        },
       }),
     );
 
     expect(result.status).toBe('accepted');
     if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
-    expect(requestGenerationDraft).toHaveBeenCalledWith({
-      identity,
-      mediaKind: 'image',
-      position: { x: 240, y: 180 },
-      inputNodeIds: [],
-    });
-    expect(result.snapshot.canvas.nodes).toEqual([
-      expect.objectContaining({
-        type: 'job',
-        position: { x: 240, y: 180 },
-        data: expect.objectContaining({
-          jobRef: { kind: 'generation', jobId: 'generation-1' },
-          status: 'queued',
-          outputRefs: [],
-        }),
-      }),
+    expect(result.snapshot.generationNodes).toEqual([
+      expect.objectContaining({ nodeId: 'generation-1', recipeStale: true }),
     ]);
   });
 
@@ -331,17 +402,17 @@ describe('CanvasHostRuntimeSession', () => {
       initialCanvas: createEmptyCanvasData('Available'),
       effects: {
         requestSource: async () => undefined,
-        requestGenerationDraft: async () => undefined,
+        generation: unusedGenerationEffects(),
       },
     });
 
     expect((await unavailable.getSnapshot()).authoringCapabilities).toEqual({
       sourceModes: [],
-      generationMediaKinds: [],
+      generationKinds: [],
     });
     expect((await available.getSnapshot()).authoringCapabilities).toEqual({
       sourceModes: ['import', 'reference'],
-      generationMediaKinds: ['image', 'video', 'audio', 'model', 'document'],
+      generationKinds: ['prompt', 'image', 'audio', 'video'],
     });
   });
 
@@ -467,6 +538,55 @@ describe('CanvasHostRuntimeSession', () => {
     expect(resolveMaterialActions).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects a target-sensitive action when its resolved execution payload changed', async () => {
+    const node = referencedImageNode();
+    const executeMaterialAction = vi.fn(async () => ({}));
+    const resolveMaterialActions = vi.fn(async () => [
+      {
+        id: 'cut:add-resource',
+        ownerId: 'cut',
+        label: 'Add to Cut',
+        mediaKinds: ['image'] as const,
+        origins: ['referenced'] as const,
+        selection: { minimum: 1, maximum: 1 },
+        effect: 'handoff' as const,
+        executionPayload: {
+          target: { kind: 'existing', viewId: 'cut-view-current' },
+        },
+      },
+    ]);
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: { ...createEmptyCanvasData('Initial'), nodes: [node] },
+      effects: { resolveMaterialActions, executeMaterialAction },
+    });
+
+    const result = await runtime.executeIntent(
+      request('stale-cut-target', {
+        type: 'execute-material-action',
+        action: {
+          identity: {
+            projectId: identity.projectId,
+            canvasId: identity.documentId,
+            canvasSessionId: identity.sessionId,
+          },
+          actionId: 'cut:add-resource',
+          selectedNodeIds: [node.id],
+          payload: { target: { kind: 'existing', viewId: 'cut-view-previous' } },
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      status: 'rejected',
+      diagnostic: {
+        code: 'canvas-runtime-stale-identity',
+        message: 'Canvas material action target changed before execution.',
+      },
+    });
+    expect(executeMaterialAction).not.toHaveBeenCalled();
+  });
+
   it('isolates presentation state and releases listeners on dispose', async () => {
     const runtime = new CanvasHostRuntimeSession({
       identity,
@@ -543,6 +663,24 @@ function request(
     identity,
     intent,
   });
+}
+
+function unusedGenerationEffects(): NonNullable<CanvasHostRuntimeSessionEffects['generation']> {
+  return {
+    startNode: async () => {
+      throw new Error('Generation execution is not used by this test.');
+    },
+    resumeNode: async () => {
+      throw new Error('Generation recovery is not used by this test.');
+    },
+    observeNode: async function* () {
+      yield* [];
+      throw new Error('Generation observation is not used by this test.');
+    },
+    cancelNode: async () => {
+      throw new Error('Generation cancellation is not used by this test.');
+    },
+  };
 }
 
 function directReference(

@@ -14,6 +14,7 @@
 
 import {
   type MutableRefObject,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -31,6 +32,7 @@ import {
   type CharacterDialogueSessionProjection,
   type EmbodyCharacterSessionProjection,
   type AgentQueuedMessageItem,
+  type AgentInputCatalogMessage,
   type AmbientCanvasNode,
   parseAmbientCanvasUpdateNodes,
 } from '@neko/agent-contracts';
@@ -49,13 +51,7 @@ import {
   type MediaModelSelection,
   type MediaUnderstandingSelection,
 } from './ChatView/InputAreaContext';
-import type {
-  ComposerMenuState,
-  EntryPromptMenu,
-  SkillSummary,
-  MentionItem,
-  PluginSlashCommandDef,
-} from './ChatView/InputArea/types';
+import type { ComposerMenuState, EntryPromptMenu, MentionItem } from './ChatView/InputArea/types';
 import type { PluginsAvailable } from './ChatView/SendToMenu';
 import type { AgentWorkItem } from './AgentWorkItem';
 import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
@@ -84,6 +80,7 @@ export interface ChatWorkspaceProps {
   tabRenderStore: TabRenderStore;
   isVisible?: boolean;
   composerPresentation?: 'default' | 'compact';
+  conversationFeed?: ReactNode;
   // Conversation state
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -106,7 +103,9 @@ export interface ChatWorkspaceProps {
   mediaUnderstandingModels?: MediaUnderstandingModels;
   mentionItems: MentionItem[];
   onMentionSearchFilterChange: (filter: string) => void;
-  pluginCommands: PluginSlashCommandDef[];
+  inputCatalog?: AgentInputCatalogMessage;
+  configurationPolicy?: import('@neko/agent-contracts').AgentConfigurationPolicyProjection;
+  onInputDiagnostic?: (message: string) => void;
   // Resources
   workItems: AgentWorkItem[];
   pluginsAvailable: PluginsAvailable;
@@ -118,8 +117,6 @@ export interface ChatWorkspaceProps {
   contextTokenCount: number;
   isCompressing: boolean;
   mediaModelCallCount: number;
-  // Skills
-  skills: SkillSummary[];
   activationProgress?: readonly ActivationProgressTimeline[];
   // Context chips
   ambientNodes: AmbientCanvasNode[];
@@ -146,6 +143,7 @@ export function ChatWorkspace({
   tabRenderStore,
   isVisible = true,
   composerPresentation = 'default',
+  conversationFeed,
   messages,
   setMessages,
   isThinking,
@@ -166,7 +164,9 @@ export function ChatWorkspace({
   mediaUnderstandingModels,
   mentionItems,
   onMentionSearchFilterChange,
-  pluginCommands,
+  inputCatalog,
+  configurationPolicy,
+  onInputDiagnostic,
   workItems,
   pluginsAvailable,
   setActiveTab,
@@ -174,7 +174,6 @@ export function ChatWorkspace({
   contextTokenCount,
   isCompressing,
   mediaModelCallCount,
-  skills,
   activationProgress = [],
   ambientNodes,
   agentState,
@@ -385,7 +384,6 @@ export function ChatWorkspace({
   const {
     availableModels,
     availableMediaModels,
-    activeMediaModel,
     agentMediaModels,
     selectedEffectiveInputBudget,
     selectedOutputTokenCap,
@@ -397,16 +395,6 @@ export function ChatWorkspace({
     sessionMode,
     mediaModelSelection,
   });
-
-  useEffect(() => {
-    if (sessionMode === 'agent') return;
-    const hasCurrentSessionModel = availableMediaModels.some(
-      (model) => model.category === sessionMode,
-    );
-    if (!hasCurrentSessionModel) {
-      setVisibleSessionMode('agent');
-    }
-  }, [availableMediaModels, sessionMode, setVisibleSessionMode]);
 
   // ---- Behavior hooks ----
   const handleSendWithoutConversation = useCallback(
@@ -420,12 +408,11 @@ export function ChatWorkspace({
   const { handleSend, triggerSend, handleCancelMessage, copyLastResponse } = useChatActions({
     inputValue,
     isThinking,
-    isCharacterRoleSession,
+    inputCatalog,
+    reportInputDiagnostic: onInputDiagnostic,
     selectedModel,
     availableModels: settings.chatModelOptions,
     sessionMode,
-    mediaProviderId: activeMediaModel?.providerId,
-    mediaModelId: activeMediaModel?.modelId,
     agentMediaModels,
     understandingModels: buildRuntimeUnderstandingModelSelections(
       mediaUnderstandingSelection,
@@ -661,12 +648,11 @@ export function ChatWorkspace({
 
   // Slash command routing
   const { handleSlashCommand } = useSlashCommands({
-    skills,
-    pluginCommands,
+    inputCatalog,
     inputValue,
     activeConversationId: sessionMutationConversationId,
-    setMessages,
     clearInput,
+    reportInputDiagnostic: onInputDiagnostic,
   });
 
   // ---- Simple callback handlers ----
@@ -790,8 +776,10 @@ export function ChatWorkspace({
       isCompressing={isCompressing}
       onCompressContext={handleCompressContext}
       mediaModelCallCount={mediaModelCallCount}
-      skills={skills}
-      pluginCommands={pluginCommands}
+      inputCatalog={inputCatalog?.entries}
+      configurationPolicy={configurationPolicy}
+      inputCatalogPhase={inputCatalog?.phase}
+      inputCatalogBindingKind={inputCatalog?.bindingKind}
       onSlashCommand={handleSlashCommand}
       onRequestFiles={(filter) => {
         onMentionSearchFilterChange(filter);
@@ -818,6 +806,7 @@ export function ChatWorkspace({
       ) : null}
       <ChatView
         composerPresentation={composerPresentation}
+        conversationFeed={conversationFeed}
         composerDisabled={!isModelConfigurationReady}
         messages={visibleMessages}
         inputValue={inputValue}

@@ -46,6 +46,9 @@ describe('Desktop Agent bridge runtime', () => {
             'conversation-effects': true,
           },
           createEffects: () => createEffects(),
+          resolveExternalOwnerTurnRuntime: vi.fn(async () => {
+            throw new Error('Character runtime resolution is not used by this fixture.');
+          }),
         },
         false,
       ),
@@ -76,6 +79,14 @@ describe('Desktop Agent bridge runtime', () => {
       publish: vi.fn(),
     });
     if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    expect(() => runtime.assertConnection(projection.connection, grant())).not.toThrow();
+    expect(() =>
+      runtime.assertConnection(
+        { ...projection.connection, connectionId: 'forged-connection' },
+        grant(),
+      ),
+    ).toThrow("Unknown Desktop Agent connection 'forged-connection'");
 
     await expect(
       runtime.send(
@@ -136,6 +147,42 @@ describe('Desktop Agent bridge runtime', () => {
         },
       ),
     ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
+  });
+
+  it('resolves only the exact live Session connection identity', () => {
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(createEffects()),
+      createIdentity: () => 'connection-exact',
+    });
+    const exactGrant = grant();
+    const projection = runtime.createBootstrap({
+      requestId: 'bootstrap-exact',
+      grant: exactGrant,
+      workspace: workspace(),
+      publish: vi.fn(),
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    expect(runtime.resolveExactConnection(projection.connection, exactGrant)).toBe(
+      projection.connection,
+    );
+    expect(() =>
+      runtime.resolveExactConnection(
+        { ...projection.connection, viewId: 'agent-view:stale' },
+        exactGrant,
+      ),
+    ).toThrow("Unknown or stale Desktop Agent connection 'connection-exact'");
+    expect(() =>
+      runtime.resolveExactConnection(projection.connection, {
+        ...exactGrant,
+        windowId: 'window-foreign',
+      }),
+    ).toThrow('does not match its sender-derived Window');
+
+    runtime.detachConnection(projection.connection, exactGrant);
+    expect(() => runtime.resolveExactConnection(projection.connection, exactGrant)).toThrow(
+      "Unknown or stale Desktop Agent connection 'connection-exact'",
+    );
   });
 
   it('passes the persisted initial user message into the exact session effects owner', () => {
@@ -695,6 +742,9 @@ function createComposition(effects: AgentControllerEffects): AgentControllerComp
       'projection-effects': true,
     },
     createEffects: () => effects,
+    resolveExternalOwnerTurnRuntime: vi.fn(async () => {
+      throw new Error('Character runtime resolution is not used by this fixture.');
+    }),
   };
 }
 
@@ -732,9 +782,8 @@ function createEffects(
       updateTabState: vi.fn(),
     },
     skill: {
-      listSkills: vi.fn(),
-      invokeSlashCommand: vi.fn(),
-      invokeSkill: vi.fn(),
+      readInputCatalog: vi.fn(),
+      invokeInput: vi.fn(),
       readContextTokenCount: vi.fn(),
       compressContext: vi.fn(),
     },
@@ -803,6 +852,7 @@ function workspace(workspaceId = 'workspace-1'): AgentWorkspaceRuntime {
     clearContext: vi.fn(),
     compactContext: vi.fn(),
     readSkillCatalog: vi.fn(),
+    readCapabilityPromptFragments: () => [],
     listConversations: vi.fn(() => []),
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(),

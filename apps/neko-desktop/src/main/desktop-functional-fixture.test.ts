@@ -9,6 +9,7 @@ import {
   resolveDesktopFunctionalCutExport,
   resolveDesktopFunctionalWorkspace,
   resolveDesktopFunctionalWindowMode,
+  resolveDesktopFunctionalUserDataRoot,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
 
@@ -21,6 +22,32 @@ afterEach(async () => {
 });
 
 describe('Desktop functional fixture home', () => {
+  it('authorizes exactly one contained Electron userData path before app readiness', () => {
+    const fixtureHome = '/tmp/openneko-desktop-functional-ui';
+    expect(
+      resolveDesktopFunctionalUserDataRoot({
+        argv: [
+          'electron',
+          '.',
+          '--openneko-functional-fixture',
+          `--user-data-dir=${fixtureHome}/electron-user-data`,
+        ],
+        environment: { OPENNEKO_DESKTOP_FUNCTIONAL_HOME: fixtureHome },
+      }),
+    ).toBe(`${fixtureHome}/electron-user-data`);
+    expect(() =>
+      resolveDesktopFunctionalUserDataRoot({
+        argv: [
+          'electron',
+          '.',
+          '--openneko-functional-fixture',
+          '--user-data-dir=/Users/example/Library/Application Support/OpenNeko',
+        ],
+        environment: { OPENNEKO_DESKTOP_FUNCTIONAL_HOME: fixtureHome },
+      }),
+    ).toThrow('must be contained by the fixture home');
+  });
+
   it('keeps the system home for ordinary Desktop startup', () => {
     expect(
       resolveDesktopRuntimeHome({

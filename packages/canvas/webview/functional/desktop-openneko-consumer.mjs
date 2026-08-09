@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   openFixtureWorkspace,
@@ -10,20 +10,39 @@ import { createDesktopMediaFixtureSet } from '../../../../scripts/desktop-functi
 export const canvasOpenNekoConsumerScenario = Object.freeze({
   id: 'canvas-openneko-consumer',
   owner: '@neko/canvas-webview',
-  async prepare({ fixtureHome }) {
+  async prepare({ fixtureHome, repositoryRoot }) {
     const workspacePath = join(fixtureHome, 'workspace');
     const boardsRoot = join(workspacePath, 'boards');
     await mkdir(boardsRoot, { recursive: true });
     const media = await createDesktopMediaFixtureSet(workspacePath);
+    await copyFile(
+      join(
+        repositoryRoot,
+        'scripts',
+        'agent-eval',
+        'shared-fixtures',
+        'document-image-workspace',
+        'synthetic-document.epub',
+      ),
+      join(workspacePath, 'synthetic-document.epub'),
+    );
     await Promise.all([
       writeFile(
         join(boardsRoot, 'video.nkc'),
-        `${JSON.stringify(canvasDocument('Video View', 'video-node', media.video, 'video'), null, 2)}\n`,
+        `${JSON.stringify(
+          canvasDocument('Video View', 'video-node', media.video, 'video', [
+            cutDocumentNode('cut-document-node', 'story.otio'),
+            epubImageNode('epub-image-node'),
+          ]),
+          null,
+          2,
+        )}\n`,
       ),
       writeFile(
         join(boardsRoot, 'audio.nkc'),
         `${JSON.stringify(canvasDocument('Audio View', 'audio-node', media.audio, 'audio'), null, 2)}\n`,
       ),
+      writeFile(join(workspacePath, 'story.otio'), `${JSON.stringify(emptyOtioDocument())}\n`),
     ]);
     return {
       workspacePath,
@@ -38,10 +57,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     evaluate,
     hover,
     prepared,
+    pressKey,
     restartApplication,
     screenshot,
     waitForSelector,
   }) {
+    await resizeWindow(evaluate, 1200, 800);
     await waitForSelector('[data-primary-sidebar="application"]');
     const unifiedWorkbench = await evaluate(`(() => ({
       shellCount: document.querySelectorAll('[data-neko-controlled-workbench="true"]').length,
@@ -93,7 +114,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           activeGroupId: 'main:primary',
           split: { axis: 'columns', ratio: 0.5 },
         },
-        timeline: { presentation: 'hidden', height: 240 },
       })`,
     );
     await waitForSelector('[data-owner-root="canvas"]');
@@ -101,17 +121,65 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"] img',
+    );
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const image = document.querySelector(
+          '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"] img'
+        );
+        return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0;
+      })()`,
+      'Canvas EPUB document-entry image did not decode.',
+    );
+    const epubImageProjection = await evaluate(`(() => {
+      const image = document.querySelector(
+        '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"] img'
+      );
+      if (!(image instanceof HTMLImageElement)) throw new Error('Canvas EPUB image is unavailable.');
+      return {
+        src: image.currentSrc || image.src,
+        complete: image.complete,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        objectFit: getComputedStyle(image).objectFit,
+      };
+    })()`);
+    if (
+      !epubImageProjection.src.startsWith('openneko://resource/') ||
+      !epubImageProjection.complete ||
+      epubImageProjection.naturalWidth <= 0 ||
+      epubImageProjection.naturalHeight <= 0 ||
+      epubImageProjection.objectFit !== 'contain'
+    ) {
+      throw new Error(
+        `Canvas EPUB image projection is invalid: ${JSON.stringify(epubImageProjection)}`,
+      );
+    }
+    const epubResourceStatus = await readFetchStatus(evaluate, epubImageProjection.src);
+    if (epubResourceStatus !== 200) {
+      throw new Error(`Canvas EPUB image resource returned ${String(epubResourceStatus)}.`);
+    }
+    checkpoint('canvas-epub-document-entry-image', {
+      ...epubImageProjection,
+      resourceStatus: epubResourceStatus,
+    });
+    const epubImageScreenshot = await screenshot('canvas-epub-document-entry-image');
     await waitForInteractiveSelector(
       evaluate,
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
     );
-    await click(
-      '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
-    );
-    await waitForSelector('[data-canvas-add-action="text"]');
-    await click('[data-canvas-add-action="text"]');
-    const authoredNodeCount = await waitForCanvasNodeCount(evaluate, 'canvas:functional:video', 2);
-    checkpoint('canvas-node-authored', { nodeCount: authoredNodeCount });
+    const generationAuthoring = await exerciseCanvasGenerationAuthoring({
+      click,
+      evaluate,
+      screenshot,
+      viewId: 'canvas:functional:video',
+      waitForSelector,
+    });
+    const authoredNodeCount = generationAuthoring.maximumNodeCount;
+    checkpoint('canvas-generation-authoring', generationAuthoring);
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
       0,
@@ -119,6 +187,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:add-resource"]',
     );
     const selectedNodePresentation = await evaluate(`(() => {
       const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
@@ -138,6 +209,88 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     checkpoint('canvas-node-selected-without-property-dock', selectedNodePresentation);
     const selectedNodeScreenshot = await screenshot('canvas-node-selected-without-property-dock');
+    const videoActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
+    if (
+      videoActions.visible.join('|') !== '添加到剪辑|预览|创建节点副本' &&
+      videoActions.visible.join('|') !== 'Add to Cut|Preview|Duplicate node'
+    ) {
+      throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
+    }
+    if (
+      !videoActions.overflowActionIds.includes('desktop:reveal') ||
+      !videoActions.overflowActionIds.includes('delete-selection')
+    ) {
+      throw new Error(
+        `Canvas video overflow actions are incomplete: ${JSON.stringify(videoActions)}`,
+      );
+    }
+    await click('[data-owner-view-id="canvas:functional:video"] [data-selection-overflow="true"]');
+    await waitForSelector('[data-selection-overflow-group="node"]');
+    const videoOverflow = await inspectCanvasOverflow(evaluate);
+    if (
+      !videoOverflow.groups.includes('file') ||
+      !videoOverflow.groups.includes('node') ||
+      !videoOverflow.nodeText.some((text) => ['删除', 'Delete'].includes(text))
+    ) {
+      throw new Error(
+        `Canvas video overflow grouping is invalid: ${JSON.stringify(videoOverflow)}`,
+      );
+    }
+    const videoOverflowScreenshot = await screenshot('canvas-video-actions-overflow');
+    await pressKey('Escape');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:add-resource"]',
+    );
+    await waitForSelector('[data-workbench-cut-panel="true"] .cut-basic-clip');
+    const newDraftHandoff = await inspectCanvasCutHandoff(evaluate);
+    if (
+      newDraftHandoff.clipCount !== 1 ||
+      !newDraftHandoff.activeLabel ||
+      !['Untitled Cut', '未命名剪辑'].includes(newDraftHandoff.activeLabel)
+    ) {
+      throw new Error(
+        `Canvas media was not added to one new Cut draft: ${JSON.stringify(newDraftHandoff)}`,
+      );
+    }
+    const newDraftHandoffScreenshot = await screenshot('canvas-video-added-to-new-cut');
+    await hideFunctionalCutPanel(evaluate);
+
+    await waitForInteractiveSelector(
+      evaluate,
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="cut-document-node"]',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="cut-document-node"]',
+      0,
+      { xRatio: 0.5, yRatio: 0.5 },
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:open"]',
+    );
+    const otioActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
+    if (
+      otioActions.visible.length !== 2 ||
+      !otioActions.visible.some((label) => ['打开剪辑', 'Open Cut'].includes(label)) ||
+      otioActions.actionIds.includes('cut:add-resource')
+    ) {
+      throw new Error(`Canvas OTIO actions are invalid: ${JSON.stringify(otioActions)}`);
+    }
+    const otioActionsScreenshot = await screenshot('canvas-otio-open-action');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:open"]',
+    );
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const active = document.querySelector(
+          '[data-workbench-cut-panel="true"] .neko-workbench-editor-tab[aria-selected="true"] .neko-workbench-editor-tab__label'
+        );
+        return active?.textContent?.trim() === 'story.otio';
+      })()`,
+      'Canvas OTIO action did not open the exact Cut document.',
+    );
+    const otioOpenedScreenshot = await screenshot('canvas-otio-opened-in-cut');
+    await hideFunctionalCutPanel(evaluate);
     await evaluate(`(() => {
       const viewport = document.querySelector(
         '[data-owner-view-id="canvas:functional:video"] [data-canvas-viewport-root="true"]',
@@ -248,7 +401,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           groups: [{ groupId: 'main:primary', viewIds: [] }],
           activeGroupId: 'main:primary',
         },
-        timeline: { presentation: 'hidden', height: 240 },
       })`,
     );
     await waitForCanvasRootsRemoved(evaluate);
@@ -298,7 +450,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(interactionResizeSelector);
     await waitForInteractiveSelector(evaluate, interactionResizeSelector);
     const interactionWidthBeforeResize = await readInteractionWidth(evaluate);
-    await drag(interactionResizeSelector, '.neko-controlled-workbench-main', {
+    const interactionResizeTarget =
+      interactionWidthBeforeResize >= 300
+        ? '.neko-controlled-workbench-interaction'
+        : '.neko-controlled-workbench-main';
+    await drag(interactionResizeSelector, interactionResizeTarget, {
       targetPosition: { xRatio: 0.5, yRatio: 0.5 },
     });
     const resizeLifecycle = await waitForResizeLifecycleCompletion(
@@ -355,6 +511,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           document.querySelectorAll('.project-resource-dock__header strong'),
           (element) => element.textContent?.trim() ?? '',
         ),
+        agentDirectModeControlCount: agent.querySelectorAll(
+          '.agent-control-chip-mode, .agent-composer-session-mode-menu',
+        ).length,
+        agentDirectGenerationStatusCount: agent.querySelectorAll(
+          '.direct-generation-status, [data-direct-generation-status]',
+        ).length,
         desktopMain: rootStyle.getPropertyValue('--neko-desktop-main').trim(),
         desktopSurface: rootStyle.getPropertyValue('--neko-desktop-surface').trim(),
         desktopSurfaceMuted: rootStyle.getPropertyValue('--neko-desktop-surface-muted').trim(),
@@ -368,11 +530,23 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       unifiedWorkbench,
       unifiedWorkbenchScreenshot,
       rootCount: 2,
+      epubImageProjection,
+      epubResourceStatus,
+      epubImageScreenshot,
       authoredNodeCount,
+      generationAuthoring,
       selectedNodePresentation,
       selectedNodeScreenshot,
-      locatorBackedNodes: ['video', 'audio'],
-      nativeElements: ['video', 'audio'],
+      videoActions,
+      videoOverflow,
+      videoOverflowScreenshot,
+      newDraftHandoff,
+      newDraftHandoffScreenshot,
+      otioActions,
+      otioActionsScreenshot,
+      otioOpenedScreenshot,
+      locatorBackedNodes: ['video', 'audio', 'epub-document-entry-image'],
+      nativeElements: ['video', 'audio', 'img'],
       storylineAdvancedTo: storylinePlayback.currentTime,
       videoManualStartTime: playback.videoTime,
       videoAdvancedTo: playback.videoTimeAfterPointerLeave,
@@ -398,18 +572,41 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         `Desktop did not use the canonical unified Workbench entry: ${JSON.stringify(evidence.unifiedWorkbench)}`,
       );
     }
-    if (observation.openNekoResourceRequestCount < 2) {
-      throw new Error('Canvas did not reach the OpenNeko resource handler for both Views.');
+    if (observation.openNekoResourceRequestCount < 3) {
+      throw new Error(
+        'Canvas did not reach the OpenNeko resource handler for video, audio and EPUB image content.',
+      );
+    }
+    if (
+      evidence.epubResourceStatus !== 200 ||
+      evidence.epubImageProjection.naturalWidth <= 0 ||
+      evidence.epubImageProjection.naturalHeight <= 0 ||
+      evidence.epubImageProjection.objectFit !== 'contain'
+    ) {
+      throw new Error(
+        `Canvas EPUB document-entry image evidence is invalid: ${JSON.stringify(evidence.epubImageProjection)}`,
+      );
     }
     if (observation.pcmResponseCount !== 0) {
       throw new Error('Canvas ordinary node playback unexpectedly consumed PCM.');
     }
     if (
       evidence.rootCount !== 2 ||
-      evidence.authoredNodeCount !== 2 ||
+      evidence.authoredNodeCount !== 4 ||
+      evidence.generationAuthoring.catalog.actionIds.join('|') !== 'text|image|video|audio' ||
+      evidence.generationAuthoring.kinds.map((item) => item.kind).join('|') !==
+        'prompt|image|video|audio' ||
+      evidence.generationAuthoring.kinds.some(
+        (item) => item.runButtonCount !== 1 || item.alertCount !== 0,
+      ) ||
+      evidence.generationAuthoring.kinds[0]?.compact?.bodyScrollWidth !==
+        evidence.generationAuthoring.kinds[0]?.compact?.bodyClientWidth ||
       evidence.selectedNodePresentation.nodeLocalActionCount === 0 ||
       evidence.selectedNodePresentation.propertyDockCount !== 0 ||
       !evidence.isolatedUrls ||
+      evidence.newDraftHandoff.clipCount !== 1 ||
+      !evidence.otioActions.actionIds.includes('cut:open') ||
+      evidence.otioActions.actionIds.includes('cut:add-resource') ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||
       evidence.audioAdvancedTo <= 0
@@ -460,6 +657,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         ['列表视图', 'List view', '网格视图', 'Grid view'].includes(label),
       ) ||
       evidence.themeSurfaces.resourceManagementTitles.length !== 1 ||
+      evidence.themeSurfaces.agentDirectModeControlCount !== 0 ||
+      evidence.themeSurfaces.agentDirectGenerationStatusCount !== 0 ||
       !['资源管理', 'Resource management'].includes(
         evidence.themeSurfaces.resourceManagementTitles[0],
       )
@@ -470,6 +669,254 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
   },
 });
+
+async function exerciseCanvasGenerationAuthoring({
+  click,
+  evaluate,
+  screenshot,
+  viewId,
+  waitForSelector,
+}) {
+  const viewSelector = `[data-owner-view-id=${JSON.stringify(viewId)}]`;
+  const openMenuSelector = `${viewSelector} [data-canvas-toolbar-action="open-add-node-popover"]`;
+  await click(openMenuSelector);
+  await waitForSelector('[data-canvas-add-action-popover="true"]');
+  const catalog = await evaluate(`(() => ({
+    actionIds: [...document.querySelectorAll(
+      '[data-canvas-add-action-popover="true"] [data-canvas-add-action]',
+    )].map((element) => element.getAttribute('data-canvas-add-action')),
+    labels: [...document.querySelectorAll(
+      '[data-canvas-add-action-popover="true"] .canvas-add-action-popover__label',
+    )].map((element) => element.childNodes[0]?.textContent?.trim() ?? ''),
+  }))()`);
+  const expectedActionIds = ['text', 'image', 'video', 'audio'];
+  if (catalog.actionIds.join('|') !== expectedActionIds.join('|')) {
+    throw new Error(`Canvas add catalog order is invalid: ${JSON.stringify(catalog)}`);
+  }
+  const screenshots = [await screenshot('canvas-generation-add-menu-large')];
+  const kinds = [];
+  const actions = [
+    {
+      actionId: 'text',
+      kind: 'prompt',
+      contentKind: 'text',
+      label: ['Text', '文本'],
+      emptyIconClass: 'codicon-file-text',
+    },
+    {
+      actionId: 'image',
+      kind: 'image',
+      contentKind: 'image',
+      label: ['Image', '图片'],
+      emptyIconClass: 'codicon-file-media',
+    },
+    {
+      actionId: 'video',
+      kind: 'video',
+      contentKind: 'video',
+      label: ['Video', '视频'],
+      emptyIconClass: 'codicon-play',
+    },
+    {
+      actionId: 'audio',
+      kind: 'audio',
+      contentKind: 'audio',
+      label: ['Audio', '音频'],
+      emptyIconClass: 'codicon-music',
+    },
+  ];
+  let maximumNodeCount = 0;
+
+  for (const [index, action] of actions.entries()) {
+    if (index > 0) {
+      await click(openMenuSelector);
+      await waitForSelector('[data-canvas-add-action-popover="true"]');
+    }
+    await click(`[data-canvas-add-action=${JSON.stringify(action.actionId)}]`);
+    maximumNodeCount = Math.max(
+      maximumNodeCount,
+      await waitForCanvasNodeCount(evaluate, viewId, 4),
+    );
+    const nodeSelector = `${viewSelector} [data-node-presentation]:has([data-canvas-generation-node=${JSON.stringify(action.kind)}])`;
+    await waitForInteractiveSelector(evaluate, nodeSelector);
+    await click(nodeSelector);
+    const inputSelector = `${viewSelector} [data-canvas-generation-input="true"]`;
+    await waitForSelector(inputSelector);
+    const state = await evaluate(`(() => {
+      const node = document.querySelector(${JSON.stringify(nodeSelector)});
+      if (!(node instanceof HTMLElement)) throw new Error('Generation Node is unavailable.');
+      const nodeContent = node.querySelector(':scope > .node-card');
+      if (!(nodeContent instanceof HTMLElement)) {
+        throw new Error('Generation Node content is unavailable.');
+      }
+      const input = document.querySelector(${JSON.stringify(inputSelector)});
+      if (!(input instanceof HTMLElement)) throw new Error('Generation input is unavailable.');
+      const toolbar = document.querySelector(
+        ${JSON.stringify(`${viewSelector} [data-selection-context-toolbar="true"]`)},
+      );
+      if (!(toolbar instanceof HTMLElement)) throw new Error('Selection toolbar is unavailable.');
+      const nodeBounds = node.getBoundingClientRect();
+      const inputBounds = input.getBoundingClientRect();
+      const toolbarBounds = toolbar.getBoundingClientRect();
+      const controls = [...input.querySelectorAll('textarea, input, select, button')];
+      const overlaps = (left, right) => !(
+        left.right <= right.left ||
+        right.right <= left.left ||
+        left.bottom <= right.top ||
+        right.bottom <= left.top
+      );
+      return {
+        kind: node.querySelector('[data-canvas-generation-node]')?.getAttribute(
+          'data-canvas-generation-node',
+        ),
+        contentKind: node.querySelector('[data-canvas-content-kind]')?.getAttribute(
+          'data-canvas-content-kind',
+        ),
+        nodeLabel: node.querySelector('.canvas-generation-node__label')?.textContent?.trim() ?? '',
+        emptyIconClass:
+          node.querySelector('.canvas-generation-node__empty .codicon')?.className ?? '',
+        inputKind: input.getAttribute('data-canvas-generation-input-kind'),
+        inputPlacement: input.getAttribute('data-placement'),
+        inputHeadingCount: input.querySelectorAll(
+          '.selection-generation-input-panel__header',
+        ).length,
+        inputInsideNode: node.contains(input),
+        nodeControlCount: node.querySelectorAll('textarea, input, select, button').length,
+        toolbarLabel:
+          toolbar.querySelector('[data-selection-kind-label="true"]')?.textContent?.trim() ?? '',
+        labels: controls.map((control) =>
+          control.getAttribute('aria-label') ?? control.getAttribute('title') ?? '',
+        ),
+        runButtonCount: [...input.querySelectorAll('button')].filter((button) =>
+          ['Run', '生成'].includes(button.getAttribute('title') ?? ''),
+        ).length,
+        alertCount: input.querySelectorAll('[role="alert"]').length,
+        referenceSummaryCount: input.querySelectorAll(
+          '.selection-generation-input-panel__references',
+        ).length,
+        bounds: {
+          node: { width: nodeBounds.width, height: nodeBounds.height },
+          input: { width: inputBounds.width, height: inputBounds.height },
+          toolbar: { width: toolbarBounds.width, height: toolbarBounds.height },
+        },
+        overlap: {
+          nodeInput: overlaps(nodeBounds, inputBounds),
+          nodeToolbar: overlaps(nodeBounds, toolbarBounds),
+          inputToolbar: overlaps(inputBounds, toolbarBounds),
+        },
+        overflow: {
+          nodeHorizontal: nodeContent.scrollWidth > nodeContent.clientWidth,
+          inputHorizontal: input.scrollWidth > input.clientWidth,
+          inputVertical: input.scrollHeight > input.clientHeight,
+          toolbarHorizontal: toolbar.scrollWidth > toolbar.clientWidth,
+        },
+      };
+    })()`);
+    if (
+      state.kind !== action.kind ||
+      state.contentKind !== action.contentKind ||
+      !action.label.includes(state.nodeLabel) ||
+      !state.emptyIconClass.includes(action.emptyIconClass) ||
+      state.inputKind !== action.kind ||
+      state.inputPlacement !== 'viewport-bottom' ||
+      state.inputHeadingCount !== 0 ||
+      state.inputInsideNode ||
+      state.nodeControlCount !== 0 ||
+      !action.label.includes(state.toolbarLabel) ||
+      state.runButtonCount !== 1 ||
+      state.alertCount !== 0 ||
+      state.referenceSummaryCount !== 1 ||
+      state.bounds.node.width <= 0 ||
+      state.bounds.node.height <= 0 ||
+      state.bounds.input.width <= 0 ||
+      state.bounds.input.height <= 0 ||
+      state.bounds.toolbar.width <= 0 ||
+      state.bounds.toolbar.height <= 0 ||
+      state.overlap.nodeInput ||
+      state.overlap.nodeToolbar ||
+      state.overlap.inputToolbar ||
+      state.overflow.nodeHorizontal ||
+      state.overflow.inputHorizontal ||
+      state.overflow.inputVertical ||
+      state.overflow.toolbarHorizontal
+    ) {
+      throw new Error(`Canvas Generation presentation is invalid: ${JSON.stringify(state)}`);
+    }
+    kinds.push(state);
+    screenshots.push(await screenshot(`canvas-generation-${action.kind}-selected-large`));
+
+    if (action.kind === 'prompt') {
+      await resizeWindow(evaluate, 1040, 700);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const node = document.querySelector(${JSON.stringify(nodeSelector)});
+          const input = document.querySelector(${JSON.stringify(inputSelector)});
+          if (!(node instanceof HTMLElement) || !(input instanceof HTMLElement)) return false;
+          return node.getBoundingClientRect().bottom <= input.getBoundingClientRect().top;
+        })()`,
+        'Compact Generation Node remained behind the viewport-bottom input.',
+      );
+      const compact = await evaluate(`(() => {
+        const node = document.querySelector(${JSON.stringify(nodeSelector)});
+        if (!(node instanceof HTMLElement)) throw new Error('Compact Generation Node is unavailable.');
+        const input = document.querySelector(${JSON.stringify(inputSelector)});
+        if (!(input instanceof HTMLElement)) throw new Error('Compact Generation input is unavailable.');
+        const nodeBounds = node.getBoundingClientRect();
+        const inputBounds = input.getBoundingClientRect();
+        return {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          nodeWidth: nodeBounds.width,
+          nodeHeight: nodeBounds.height,
+          inputWidth: inputBounds.width,
+          inputHeight: inputBounds.height,
+          inputLeft: inputBounds.left,
+          inputRight: inputBounds.right,
+          nodeBottom: nodeBounds.bottom,
+          inputTop: inputBounds.top,
+          nodeInputOverlap: nodeBounds.bottom > inputBounds.top,
+          bodyScrollWidth: document.body.scrollWidth,
+          bodyClientWidth: document.body.clientWidth,
+        };
+      })()`);
+      if (
+        compact.inputWidth <= 0 ||
+        compact.inputHeight <= 0 ||
+        compact.inputLeft < 0 ||
+        compact.inputRight > compact.width ||
+        compact.nodeInputOverlap ||
+        compact.bodyScrollWidth > compact.bodyClientWidth
+      ) {
+        throw new Error(`Compact Generation presentation is invalid: ${JSON.stringify(compact)}`);
+      }
+      kinds[kinds.length - 1] = { ...state, compact };
+      screenshots.push(await screenshot('canvas-generation-prompt-selected-compact'));
+      await resizeWindow(evaluate, 1200, 800);
+    }
+
+    await click(`${viewSelector} [data-selection-overflow="true"]`);
+    await waitForSelector(
+      '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
+    );
+    await click(
+      '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
+    );
+    await waitForCanvasNodeCount(evaluate, viewId, 3);
+  }
+
+  return { catalog, kinds, maximumNodeCount, screenshots };
+}
+
+async function resizeWindow(evaluate, width, height) {
+  await evaluate(`window.resizeTo(${String(width)}, ${String(height)})`);
+  await waitForCondition(
+    evaluate,
+    `window.innerWidth <= ${String(width)} && window.innerHeight <= ${String(height)}`,
+    `Desktop window did not resize to ${String(width)}x${String(height)}.`,
+  );
+  await delay(250);
+}
 
 function readInteractionWidth(evaluate) {
   return evaluate(`(() => {
@@ -776,7 +1223,7 @@ async function waitForReleasedUrl(evaluate, url, mediaType) {
   );
 }
 
-function canvasDocument(name, nodeId, path, mediaType) {
+function canvasDocument(name, nodeId, path, mediaType, extraNodes = []) {
   return {
     name,
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
@@ -794,9 +1241,142 @@ function canvasDocument(name, nodeId, path, mediaType) {
           mediaType,
         },
       },
+      ...extraNodes,
     ],
     connections: [],
   };
+}
+
+function cutDocumentNode(nodeId, path) {
+  return {
+    id: nodeId,
+    type: 'file',
+    position: { x: 360, y: 360 },
+    size: { width: 260, height: 180 },
+    zIndex: 2,
+    data: {
+      title: path,
+      path,
+      mediaKind: 'document',
+      contentLocator: { kind: 'workspace-file', path },
+    },
+  };
+}
+
+function epubImageNode(nodeId) {
+  return {
+    id: nodeId,
+    type: 'media',
+    position: { x: 80, y: 360 },
+    size: { width: 240, height: 180 },
+    zIndex: 2,
+    data: {
+      title: 'EPUB page 1',
+      assetPath: 'OEBPS/images/page-1.png',
+      contentLocator: {
+        kind: 'document-entry',
+        source: { kind: 'workspace-file', path: 'synthetic-document.epub' },
+        entryPath: 'OEBPS/images/page-1.png',
+      },
+      mediaType: 'image',
+    },
+  };
+}
+
+function emptyOtioDocument() {
+  return {
+    OTIO_SCHEMA: 'Timeline.1',
+    name: 'Story',
+    global_start_time: null,
+    metadata: {
+      openneko: {
+        cut: {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        },
+      },
+    },
+    tracks: {
+      OTIO_SCHEMA: 'Stack.1',
+      name: 'Tracks',
+      metadata: {},
+      effects: [],
+      markers: [],
+      children: [
+        {
+          OTIO_SCHEMA: 'Track.1',
+          name: 'Video 1',
+          kind: 'Video',
+          children: [],
+          metadata: { openneko: { cut: { trackId: 'video-1' } } },
+          enabled: true,
+          effects: [],
+          markers: [],
+        },
+      ],
+    },
+  };
+}
+
+function inspectCanvasSelectionActions(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    const actions = [...(root?.querySelectorAll('[data-selection-action]') ?? [])];
+    const overflow = root?.querySelector('[data-selection-overflow="true"]');
+    return {
+      actionIds: actions.map((action) => action.getAttribute('data-selection-action')),
+      visible: actions
+        .filter((action) => action.getAttribute('data-selection-action-location') === 'primary')
+        .map((action) =>
+          action.getAttribute('aria-label') ??
+          action.getAttribute('title') ??
+          action.textContent?.trim() ??
+          ''
+        ),
+      overflowActionIds: (overflow?.getAttribute('data-selection-overflow-actions') ?? '')
+        .split(' ')
+        .filter(Boolean),
+    };
+  })()`);
+}
+
+function inspectCanvasOverflow(evaluate) {
+  return evaluate(`(() => ({
+    groups: [...document.querySelectorAll('[data-selection-overflow-group]')]
+      .map((group) => group.getAttribute('data-selection-overflow-group')),
+    nodeText: [...document.querySelectorAll(
+      '[data-selection-overflow-group="node"] [data-selection-action]'
+    )].map((action) => action.textContent?.trim() ?? ''),
+  }))()`);
+}
+
+function inspectCanvasCutHandoff(evaluate) {
+  return evaluate(`(() => {
+    const panel = document.querySelector('[data-workbench-cut-panel="true"]');
+    const active = panel?.querySelector(
+      '.neko-workbench-editor-tab[aria-selected="true"] .neko-workbench-editor-tab__label'
+    );
+    return {
+      activeLabel: active?.textContent?.trim(),
+      clipCount: panel?.querySelectorAll('.cut-basic-clip').length ?? 0,
+      cutRootCount: panel?.querySelectorAll('[data-owner-root="cut"]').length ?? 0,
+    };
+  })()`);
+}
+
+function hideFunctionalCutPanel(evaluate) {
+  return replaceWorkbench(
+    evaluate,
+    `(projection, current) => ({
+      ...current,
+      cutPanel: current.cutPanel
+        ? { ...current.cutPanel, presentation: 'hidden' }
+        : current.cutPanel,
+    })`,
+  );
 }
 
 function delay(milliseconds) {

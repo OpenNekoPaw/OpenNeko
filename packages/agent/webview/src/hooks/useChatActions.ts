@@ -14,6 +14,7 @@ import {
 } from 'react';
 import {
   Message,
+  type AgentInputCatalogMessage,
   type MessageContextReference,
   type AgentFlatPurposeModelRefs,
   type AgentModelSlots,
@@ -28,18 +29,16 @@ import type {
   SelectedFileReference,
 } from '../components/ChatView/InputArea/types';
 import {
-  getBuiltinSlashCommand,
-  normalizeSlashCommandName,
   parseAgentInputTrigger,
   type AgentContextPayload,
   type AgentMediaModelSelections,
+  type ParsedAgentInputTrigger,
 } from '@neko/agent-contracts';
+import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
 import { projectMessageModelSelection } from '../presenters/config-message-presenter';
 import { projectContextReferencesFromPayloads } from '../presenters/context-reference-presenter';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
-import { toAttachmentTypeFromPathReference } from '../presenters/reference-token-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
-import { isDocumentFile } from '@neko/media';
 
 /** Per-category resolved media model for agent mode */
 export type AgentMediaModels = AgentMediaModelSelections;
@@ -63,13 +62,12 @@ export interface PendingSendIdentity {
 export interface UseChatActionsProps {
   inputValue: string;
   isThinking: boolean;
-  isCharacterRoleSession?: boolean;
+  inputCatalog?: AgentInputCatalogMessage;
+  reportInputDiagnostic?: (message: string) => void;
   selectedModel: string;
   availableModels?: readonly ChatModelOption[];
   sessionMode?: SessionMode;
-  mediaProviderId?: string;
-  mediaModelId?: string;
-  /** Per-category media models for agent mode (overrides mediaModelId when set) */
+  /** Per-category generation models exposed to approved Agent Tools. */
   agentMediaModels?: AgentMediaModels;
   /** Per-category media understanding models for the current webview session. */
   understandingModels?: MediaUnderstandingModelSelections;
@@ -100,12 +98,11 @@ export interface UseChatActionsReturn {
 export function useChatActions({
   inputValue,
   isThinking,
-  isCharacterRoleSession = false,
+  inputCatalog,
+  reportInputDiagnostic,
   selectedModel,
   availableModels,
   sessionMode,
-  mediaProviderId,
-  mediaModelId,
   agentMediaModels,
   understandingModels,
   activeConversationId,
@@ -147,11 +144,10 @@ export function useChatActions({
       const inputSessionMode = input?.sessionMode;
       const attachments = input?.attachments;
       const contextPayloads = input?.contextPayloads;
-      const fileReferenceAttachments = projectFileReferenceAttachments(input?.fileReferences);
       const fileReferenceContextReferences = projectFileReferenceContextReferences(
         input?.fileReferences,
       );
-      const outboundAttachments = mergeDisplayAttachments(attachments, fileReferenceAttachments);
+      const outboundAttachments = attachments ?? [];
       const outboundContextPayloads = contextPayloads ?? [];
       const trimmed = messageText.trim();
       const hasAttachments = outboundAttachments.length > 0;
@@ -159,6 +155,7 @@ export function useChatActions({
       const selectedFileReferenceCount = input?.fileReferences?.length ?? 0;
       const hasFileReferences = selectedFileReferenceCount > 0;
       if (!trimmed && !hasAttachments && !hasContextPayloads && !hasFileReferences) return;
+      const effectiveSessionMode: SessionMode = inputSessionMode ?? sessionMode ?? 'agent';
       if (
         isQueueingSend &&
         !isQueueableRunningTextSend({
@@ -191,29 +188,29 @@ export function useChatActions({
         return;
       }
 
-      const slashCommand = isCharacterRoleSession ? null : parseDirectBuiltinSlashCommand(trimmed);
-      if (slashCommand) {
-        clearInput();
-        setAttachedFiles([]);
-        setSelectedFileReferences?.([]);
-        agentHostMessages.invokeSlashCommand(
-          slashCommand.command,
-          slashCommand.args,
-          conversationId,
-        );
-        return;
-      }
-
-      const skillInvocation = isCharacterRoleSession ? null : parseDirectSkillInvocation(trimmed);
-      if (skillInvocation) {
-        clearInput();
-        setAttachedFiles([]);
-        setSelectedFileReferences?.([]);
-        agentHostMessages.invokeSkill(
-          skillInvocation.skillName,
-          skillInvocation.args,
-          conversationId,
-        );
+      const parsedTrigger = parseAgentInputTrigger(trimmed);
+      if (parsedTrigger?.trigger === 'command' || parsedTrigger?.trigger === 'skill') {
+        try {
+          if (!inputCatalog || inputCatalog.conversationId !== conversationId) {
+            throw new Error(
+              `Agent input '${parsedTrigger.prefix}${parsedTrigger.name}' cannot run before the exact Conversation catalog is available.`,
+            );
+          }
+          const intent = resolveAgentInputInvocationIntent({
+            trigger: parsedTrigger as ParsedAgentInputTrigger & {
+              readonly trigger: 'command' | 'skill';
+            },
+            entries: inputCatalog.entries,
+            phase: inputCatalog.phase,
+            bindingKind: inputCatalog.bindingKind,
+          });
+          clearInput();
+          setAttachedFiles([]);
+          setSelectedFileReferences?.([]);
+          agentHostMessages.invokeAgentInput(intent, conversationId);
+        } catch (error) {
+          reportInputDiagnostic?.(error instanceof Error ? error.message : String(error));
+        }
         return;
       }
 
@@ -254,13 +251,10 @@ export function useChatActions({
         setIsThinking(true);
       }
 
-      const effectiveSessionMode = inputSessionMode ?? sessionMode ?? 'agent';
       const modelProjection = projectMessageModelSelection({
         selectedModel,
         chatModelOptions: availableModels,
         sessionMode: effectiveSessionMode,
-        mediaProviderId,
-        mediaModelId,
         agentMediaModels,
       });
       const purposeModels = projectAgentPurposeModels(
@@ -276,10 +270,8 @@ export function useChatActions({
           modelProjection,
           agentModels: input?.agentModels,
         }),
-        ...(effectiveSessionMode === 'agent' && input?.agentModels
-          ? { agentModels: input.agentModels }
-          : {}),
-        ...(effectiveSessionMode === 'agent' && purposeModels ? { purposeModels } : {}),
+        ...(input?.agentModels ? { agentModels: input.agentModels } : {}),
+        ...(purposeModels ? { purposeModels } : {}),
         ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
         ...(outboundContextPayloads.length > 0 ? { contextPayloads: outboundContextPayloads } : {}),
         ...(input?.fileReferences && input.fileReferences.length > 0
@@ -290,11 +282,10 @@ export function useChatActions({
     [
       inputValue,
       isThinking,
-      isCharacterRoleSession,
+      inputCatalog,
+      reportInputDiagnostic,
       selectedModel,
       sessionMode,
-      mediaProviderId,
-      mediaModelId,
       agentMediaModels,
       understandingModels,
       activeConversationId,
@@ -435,40 +426,12 @@ interface AgentModelSendProjectionInput {
 function projectAgentModelSendProjection(
   input: AgentModelSendProjectionInput,
 ): MessageModelProjection {
-  if (input.sessionMode !== 'agent') {
-    return input.modelProjection.mediaModel ? { mediaModel: input.modelProjection.mediaModel } : {};
-  }
   if (!input.agentModels?.primary) {
     return input.modelProjection;
   }
 
   const { chatModel: _chatModel, ...rest } = input.modelProjection;
   return rest;
-}
-
-function projectFileReferenceAttachments(
-  references: readonly SelectedFileReference[] | undefined,
-): MessageAttachment[] {
-  return (
-    references
-      ?.filter((reference) => !isDocumentFile(projectContentLocatorPath(reference.contentLocator)))
-      .map((reference) => {
-        const path = projectContentLocatorPath(reference.contentLocator);
-        const type = toAttachmentTypeFromPathReference({
-          path,
-          mediaType: reference.mediaType,
-        });
-        return {
-          id: reference.id,
-          name: reference.label,
-          type,
-          path,
-          ...(reference.thumbnailUri && type === 'image'
-            ? { preview: reference.thumbnailUri }
-            : {}),
-        };
-      }) ?? []
-  );
 }
 
 function projectFileReferenceContextReferences(
@@ -527,15 +490,6 @@ function fileReferenceContextType(
   return 'file';
 }
 
-function mergeDisplayAttachments(
-  attachments: readonly MessageAttachment[] | undefined,
-  fileReferences: readonly MessageAttachment[],
-): MessageAttachment[] {
-  if (!attachments || attachments.length === 0) return [...fileReferences];
-  if (fileReferences.length === 0) return [...attachments];
-  return [...attachments, ...fileReferences];
-}
-
 function isQueueableRunningTextSend(input: {
   readonly trimmed: string;
   readonly hasAttachments: boolean;
@@ -549,43 +503,4 @@ function isQueueableRunningTextSend(input: {
     input.selectedFileReferenceCount === 0 &&
     !/^[/$]/.test(input.trimmed)
   );
-}
-
-function parseDirectSkillInvocation(
-  input: string,
-): { readonly skillName: string; readonly args?: string } | null {
-  const parsed = parseAgentInputTrigger(input);
-  if (!parsed || parsed.trigger !== 'skill') {
-    return null;
-  }
-
-  return {
-    skillName: parsed.name,
-    ...(parsed.args ? { args: parsed.args } : {}),
-  };
-}
-
-function parseDirectBuiltinSlashCommand(
-  input: string,
-): { readonly command: string; readonly args?: string } | null {
-  if (!input.startsWith('/')) {
-    return null;
-  }
-
-  const withoutPrefix = input.slice(1);
-  const separatorIndex = withoutPrefix.search(/\s/);
-  const commandToken =
-    separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, Math.max(separatorIndex, 0));
-  const command = normalizeSlashCommandName(commandToken);
-  const definition = command ? getBuiltinSlashCommand(command) : undefined;
-  if (!definition?.availableInDesktop) {
-    return null;
-  }
-
-  if (separatorIndex === -1) {
-    return { command };
-  }
-
-  const args = withoutPrefix.slice(separatorIndex + 1).trim();
-  return { command, ...(args ? { args } : {}) };
 }

@@ -195,9 +195,9 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       postWebviewMessage({ type: 'getConfig' });
     },
 
-    /** Request skills used by the input slash-command catalog */
-    getSkills: () => {
-      postWebviewMessage({ type: 'getSkills' });
+    /** Request the canonical input catalog for one exact Conversation. */
+    getAgentInputCatalog: (conversationId: string) => {
+      postConversationMessage({ type: 'getAgentInputCatalog', conversationId });
     },
 
     /** Open the raw user config in the Desktop editor. */
@@ -254,26 +254,6 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       postWebviewMessage({ type: 'exitCharacterDialogueSession', sessionId });
     },
 
-    startCharacterDialogueFromSlash: (args?: string) => {
-      postWebviewMessage({
-        type: 'startCharacterDialogueFromSlash',
-        ...(args !== undefined ? { args } : {}),
-      });
-    },
-
-    confirmRoleplayCandidate: (input: {
-      readonly projectSearchItemId: string;
-      readonly initialUserMessage?: string;
-    }) => {
-      postWebviewMessage({
-        type: 'confirmRoleplayCandidate',
-        projectSearchItemId: input.projectSearchItemId,
-        ...(input.initialUserMessage !== undefined
-          ? { initialUserMessage: input.initialUserMessage }
-          : {}),
-      });
-    },
-
     // ==========================================================================
     // File Operations
     // ==========================================================================
@@ -302,44 +282,11 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       });
     },
 
-    /**
-     * Invoke a skill via slash command
-     * @param command - Slash command (without /)
-     * @param args - Optional arguments
-     */
-    invokeSlashCommand: (command: string, args: string | undefined, conversationId: string) => {
-      postConversationMessage({ type: 'invokeSlashCommand', command, args, conversationId });
-    },
-
-    /**
-     * Invoke a Skill through the explicit $skill namespace.
-     * @param skillName - Canonical Skill name/id
-     * @param args - Optional invocation arguments
-     */
-    invokeSkill: (skillName: string, args: string | undefined, conversationId: string) => {
-      postConversationMessage({ type: 'invokeSkill', skillName, args, conversationId });
-    },
-
-    /**
-     * Invoke a plugin slash command registered by an installed Desktop plugin.
-     * Desktop host routes it to the owning plugin runtime.
-     * @param pluginId - The plugin that registered the command
-     * @param commandId   - The command id (without /)
-     * @param args        - Optional arguments string
-     */
-    invokePluginSlashCommand: (
-      pluginId: string,
-      commandId: string,
+    invokeAgentInput: (
+      input: import('@neko/agent-contracts').AgentInputInvocationIntent,
       conversationId: string,
-      args?: string,
     ) => {
-      postConversationMessage({
-        type: 'invokePluginSlashCommand',
-        pluginId,
-        commandId,
-        conversationId,
-        args,
-      });
+      postConversationMessage({ type: 'invokeAgentInput', conversationId, input });
     },
 
     // -------------------------------------------------------------------------

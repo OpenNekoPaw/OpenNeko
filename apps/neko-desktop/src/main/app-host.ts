@@ -56,6 +56,7 @@ import { DESKTOP_DEFAULT_ASSISTANT_SPACE_ID } from '@neko/host/desktop-shell-sta
 import type {
   ResourceBrowserChildrenRequest,
   ResourceBrowserIntentRequest,
+  ResourceBrowserIntentResult,
   ResourceBrowserProjection,
   ResourceBrowserProjectionEvent,
   ResourceBrowserQuickPreviewReleaseRequest,
@@ -72,6 +73,11 @@ import type {
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
 } from '@neko/assets-domain/resource-browser/contract';
+import { parseResourceBrowserIntentRequest } from '@neko/assets-domain/resource-browser/contract';
+import {
+  DESKTOP_WORKBENCH_LIMITS,
+  DesktopWorkbenchContractError,
+} from '@neko/host/desktop-workbench-contract';
 import type { AssetCenterNodeRuntime, ResourceBrowserNodeRuntime } from '@neko/assets-node';
 import {
   parseAssetCenterHostRequest,
@@ -80,6 +86,14 @@ import {
 import type { AssetCenterSessionProjection } from '@neko/assets-domain/asset-center/contract';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { DesktopPreviewRuntime } from './desktop-preview-runtime';
+import type { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
+import {
+  TEXT_EDITOR_HOST_ROUTES,
+  parseTextEditorHostRequest,
+  type TextEditorHostResult,
+  type TextEditorProjectionEvent,
+  type TextEditorRuntimeIdentity,
+} from '@neko/text-editor-domain';
 import type { PreviewProjection, PreviewRuntimeRequest } from '@neko/preview-domain';
 import type {
   CanvasHostIntentResult,
@@ -99,7 +113,11 @@ import type {
   CutHostRuntimeResult,
   CutHostRuntimeSnapshot,
 } from '@neko/cut-domain';
-import { parseDesktopCutHostIdentity } from '../shared/cut-bridge-contract';
+import {
+  parseDesktopCutHostIdentity,
+  parseDesktopCutViewMutationRequest,
+  type DesktopCutViewMutationResult,
+} from '../shared/cut-bridge-contract';
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   parseDesktopApplicationSettingsRequest,
@@ -113,7 +131,7 @@ import {
   parseAgentLaunchHostRequest,
   type AgentLaunchHostResult,
 } from '@neko/agent-contracts/agent-launch-host';
-import type { AgentAuthorityScopeProjection } from '@neko/agent-contracts';
+import { type AgentBoundDomainBinding, type AgentDomainBinding } from '@neko/agent-contracts';
 import {
   parseAgentExtensionManagementHostRequest,
   type AgentExtensionManagementHostResult,
@@ -136,25 +154,45 @@ import {
   type DesktopAgentAutomationResult,
 } from '../shared/agent-automation-contract';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
+import type { AgentLaunchDraftSubmissionApplicationService } from '@neko/agent-runtime/application';
 import {
   parseDesktopWorkspaceGrantTargetRequest,
   type DesktopWorkspaceGrantTargetResult,
 } from '@neko/host/desktop-workspace-grant-contract';
 import type { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import {
+  AgentConversationLifecycleUnavailableError,
   projectAgentConversationInitialMessage,
   type AgentConversationLifecycleService,
 } from '@neko/agent-runtime/application';
 import type { AssistantResourceService } from '@neko/agent-runtime/application';
 import {
   isSameAgentConversationOwner,
-  type AgentConversationContext,
   type AgentConversationOwnerRef,
 } from '@neko/agent-contracts';
 import {
   parseAssistantResourceHostRequest,
   type AssistantResourceHostResult,
 } from '@neko/agent-contracts/assistant-resource-host';
+import {
+  parseCharacterFoundationAnyHostRequest,
+  parseCharacterFoundationHostRequest,
+  parseCharacterRoomWorkbenchSnapshotRequest,
+  type CharacterConversationLaunchInput,
+  type CharacterConversationLaunchResult,
+  type CharacterFoundationCommand,
+  type CharacterFoundationCommandHostRequest,
+  type CharacterFoundationHostResult,
+  type CharacterRoomWorkbenchProjectionEvent,
+  type CharacterRoomWorkbenchSnapshotResult,
+  type RoomView,
+} from '@neko/chara/contracts';
+import type {
+  CharacterFoundationCommandPort,
+  CharacterFoundationService,
+  CharacterRoomMessageSubmissionResult,
+  SubmitCharacterRoomMessageInput,
+} from '@neko/chara/application';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -164,10 +202,38 @@ export interface DesktopAppHostOptions {
   readonly agent: AgentAppHost;
   readonly assistantWorkspace: AssetWorkspaceResolution;
   readonly agentControllerComposition?: AgentControllerComposition;
+  readonly generationLifecycle?: { dispose(): Promise<void> };
+  readonly workspaceConfigLifecycle?: { dispose(): void };
   readonly agentLaunch: DesktopAgentLaunchRuntime;
+  readonly agentLaunchSubmission: AgentLaunchDraftSubmissionApplicationService;
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
+  readonly characterFoundation: CharacterFoundationService;
+  readonly characterFoundationCommands: CharacterFoundationCommandPort;
+  readonly characterConversations: {
+    launch(
+      input: CharacterConversationLaunchInput,
+      signal?: AbortSignal,
+    ): Promise<CharacterConversationLaunchResult>;
+  };
+  readonly characterRoomConversations: {
+    submitUserMessage(
+      input: SubmitCharacterRoomMessageInput,
+      signal?: AbortSignal,
+    ): Promise<CharacterRoomMessageSubmissionResult>;
+  };
+  readonly characterRoomWorkbench: {
+    materializeUserView(
+      input: { readonly roomRunId: string; readonly userId: string },
+      signal?: AbortSignal,
+    ): Promise<RoomView>;
+    subscribeUserView(
+      roomRunId: string,
+      userId: string,
+      listener: (view: RoomView) => void,
+    ): () => void;
+  };
   readonly assistantPreviewLifecycle?: {
     detachWindow(windowId: string): void;
     dispose(): void;
@@ -176,6 +242,7 @@ export interface DesktopAppHostOptions {
   readonly assetCenter?: AssetCenterNodeRuntime;
   readonly projectPortability?: ProjectPortabilityRuntime;
   readonly preview?: DesktopPreviewRuntime;
+  readonly textEditor?: DesktopTextEditorRuntime;
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
@@ -197,19 +264,31 @@ export class DesktopAppHost {
   readonly agent: AgentAppHost;
   readonly agentBridge: DesktopAgentBridgeRuntime;
   readonly agentLaunch: DesktopAgentLaunchRuntime;
+  readonly agentLaunchSubmission: AgentLaunchDraftSubmissionApplicationService;
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources: AssistantResourceService | undefined;
+  readonly characterFoundation: CharacterFoundationService;
+  readonly characterFoundationCommands: CharacterFoundationCommandPort;
+  readonly characterConversations: DesktopAppHostOptions['characterConversations'];
+  readonly characterRoomConversations: DesktopAppHostOptions['characterRoomConversations'];
+  readonly characterRoomWorkbench: DesktopAppHostOptions['characterRoomWorkbench'];
   readonly resourceBrowser: ResourceBrowserNodeRuntime | undefined;
   readonly assetCenter: AssetCenterNodeRuntime | undefined;
   readonly projectPortability: ProjectPortabilityRuntime | undefined;
   readonly preview: DesktopPreviewRuntime | undefined;
+  readonly textEditor: DesktopTextEditorRuntime | undefined;
   readonly canvas: DesktopCanvasRuntime | undefined;
   readonly cut: DesktopCutRuntime | undefined;
   readonly settings: DesktopApplicationSettingsService;
   private readonly resourceSubscriptions = new Map<number, () => void>();
   private readonly canvasSubscriptions = new Map<number, Map<string, () => void>>();
   private readonly cutSubscriptions = new Map<number, Map<string, () => void>>();
+  private readonly textEditorSubscriptions = new Map<number, Map<string, () => void>>();
+  private readonly characterRoomWorkbenchSubscriptions = new Map<
+    number,
+    { readonly roomRunId: string; readonly dispose: () => void }
+  >();
   private disposed = false;
 
   constructor(private readonly options: DesktopAppHostOptions) {
@@ -226,13 +305,20 @@ export class DesktopAppHost {
         : {}),
     });
     this.agentLaunch = options.agentLaunch;
+    this.agentLaunchSubmission = options.agentLaunchSubmission;
     this.workspaceGrants = options.workspaceGrants;
     this.conversationLifecycle = options.conversationLifecycle;
     this.assistantResources = options.assistantResources;
+    this.characterFoundation = options.characterFoundation;
+    this.characterFoundationCommands = options.characterFoundationCommands;
+    this.characterConversations = options.characterConversations;
+    this.characterRoomConversations = options.characterRoomConversations;
+    this.characterRoomWorkbench = options.characterRoomWorkbench;
     this.resourceBrowser = options.resourceBrowser;
     this.assetCenter = options.assetCenter;
     this.projectPortability = options.projectPortability;
     this.preview = options.preview;
+    this.textEditor = options.textEditor;
     this.canvas = options.canvas;
     this.cut = options.cut;
     this.settings = options.settings;
@@ -255,6 +341,92 @@ export class DesktopAppHost {
       requestId: request.requestId,
       projection: this.settings.current,
     };
+  }
+
+  async createCharacterFoundationSnapshot(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<CharacterFoundationHostResult> {
+    this.requireActive();
+    const request = parseCharacterFoundationHostRequest(payload);
+    this.windows.resolveSender(sender);
+    return {
+      requestId: request.requestId,
+      snapshot: await this.characterFoundation.getSnapshot(),
+    };
+  }
+
+  async executeCharacterFoundationRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<CharacterFoundationHostResult> {
+    this.requireActive();
+    const request = parseCharacterFoundationAnyHostRequest(payload);
+    this.windows.resolveSender(sender);
+    if (request.operation !== 'snapshot-get') {
+      await this.characterFoundationCommands.execute(stripCommandRequestId(request));
+    }
+    return {
+      requestId: request.requestId,
+      snapshot: await this.characterFoundation.getSnapshot(),
+    };
+  }
+
+  async getCharacterRoomWorkbenchSnapshot(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+    publish: (event: CharacterRoomWorkbenchProjectionEvent) => void,
+  ): Promise<CharacterRoomWorkbenchSnapshotResult> {
+    this.requireActive();
+    const request = parseCharacterRoomWorkbenchSnapshotRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const scene = await this.shell.getSceneProjection(window.windowId);
+    if (
+      scene.context.kind !== 'character-interaction' ||
+      scene.context.owner.kind !== 'room' ||
+      scene.context.owner.roomRunId !== request.roomRunId
+    ) {
+      throw new Error('Character Room Workbench request does not match the active Room Scene.');
+    }
+
+    const current = this.characterRoomWorkbenchSubscriptions.get(sender.webContentsId);
+    current?.dispose();
+    let sequence = 0;
+    let active = false;
+    const disposeUserView = this.characterRoomWorkbench.subscribeUserView(
+      request.roomRunId,
+      'user:local',
+      (projection) => {
+        if (active) publish({ requestId: request.requestId, sequence: ++sequence, projection });
+      },
+    );
+    const subscription = {
+      roomRunId: request.roomRunId,
+      dispose: () => {
+        active = false;
+        disposeUserView();
+      },
+    };
+    this.characterRoomWorkbenchSubscriptions.set(sender.webContentsId, subscription);
+    active = true;
+
+    try {
+      const projection = await this.characterRoomWorkbench.materializeUserView({
+        roomRunId: request.roomRunId,
+        userId: 'user:local',
+      });
+      return {
+        requestId: request.requestId,
+        sequence,
+        projection,
+      };
+    } catch (error) {
+      if (this.characterRoomWorkbenchSubscriptions.get(sender.webContentsId) === subscription) {
+        subscription.dispose();
+        this.characterRoomWorkbenchSubscriptions.delete(sender.webContentsId);
+      }
+      throw error;
+    }
   }
 
   async updateApplicationSettings(
@@ -366,10 +538,18 @@ export class DesktopAppHost {
           'Desktop Assistant Agent bootstrap does not match its exact Agent Surface.',
         );
       }
-      const [context, firstSubmitRecord] = await Promise.all([
-        this.conversationLifecycle.readConversationContext(request.conversationId),
-        this.conversationLifecycle.readFirstSubmitRecord(request.conversationId),
-      ]);
+      const restored = await readAgentConversationBootstrap(
+        this.conversationLifecycle,
+        request.conversationId,
+      );
+      if (restored.status === 'unavailable') {
+        return {
+          requestId: request.requestId,
+          status: 'unavailable',
+          diagnostic: restored.diagnostic,
+        };
+      }
+      const { context, firstSubmitRecord } = restored;
       if (context.kind !== 'assistant' || context.assistantSpaceId !== request.assistantSpaceId) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
@@ -407,6 +587,14 @@ export class DesktopAppHost {
               initialConversationMessage: projectAgentConversationInitialMessage(firstSubmitRecord),
             }),
         publish,
+        readConversationContext: (conversationId) =>
+          this.conversationLifecycle.readConversationContext(conversationId),
+        readConversationConfiguration: (conversationId) =>
+          this.conversationLifecycle.readConversationConfiguration(conversationId),
+        updateConversationConfiguration: (input) =>
+          this.conversationLifecycle.updateConfiguration(input),
+        readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
+        personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
       });
     }
     const view = await this.shell.resolveAgentViewGrant(window.windowId, request);
@@ -442,18 +630,22 @@ export class DesktopAppHost {
     const initialConversation =
       initialConversationId === undefined
         ? undefined
-        : await Promise.all([
-            this.conversationLifecycle.readConversationContext(initialConversationId),
-            this.conversationLifecycle.readFirstSubmitRecord(initialConversationId),
-          ]);
+        : await readAgentConversationBootstrap(this.conversationLifecycle, initialConversationId);
+    if (initialConversation?.status === 'unavailable') {
+      return {
+        requestId: request.requestId,
+        status: 'unavailable',
+        diagnostic: initialConversation.diagnostic,
+      };
+    }
     if (
       initialConversation &&
-      (initialConversation[0].kind !== 'workspace' ||
-        initialConversation[0].workspaceId !== grant.workspaceId)
+      (initialConversation.context.kind !== 'workspace' ||
+        initialConversation.context.workspaceId !== grant.workspaceId)
     ) {
       throw new Error('Desktop Workspace Agent bootstrap context belongs to another Workspace.');
     }
-    const initialConversationRecord = initialConversation?.[1];
+    const initialConversationRecord = initialConversation?.firstSubmitRecord;
     return this.agentBridge.createBootstrap({
       requestId: request.requestId,
       grant,
@@ -466,6 +658,14 @@ export class DesktopAppHost {
               projectAgentConversationInitialMessage(initialConversationRecord),
           }),
       publish,
+      readConversationContext: (conversationId) =>
+        this.conversationLifecycle.readConversationContext(conversationId),
+      readConversationConfiguration: (conversationId) =>
+        this.conversationLifecycle.readConversationConfiguration(conversationId),
+      updateConversationConfiguration: (input) =>
+        this.conversationLifecycle.updateConfiguration(input),
+      readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
+      personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
     });
   }
 
@@ -482,9 +682,29 @@ export class DesktopAppHost {
       if (
         interaction.agentViewId !== request.viewId ||
         interaction.phase !== 'draft' ||
-        !sameAgentScope(interaction.scope, request.scope)
+        !desktopAgentScopeMatchesBinding(interaction.scope, request.draft.binding) ||
+        interaction.scope.draftId !== request.draft.draftId
       ) {
         throw new Error('Agent launch attach does not match its exact Agent Surface.');
+      }
+      if (request.draft.binding.kind === 'workspace') {
+        try {
+          await this.workspaceGrants.restore(
+            window.windowId,
+            request.draft.binding.workspaceGrantId,
+            request.draft.binding.workspaceId,
+          );
+        } catch {
+          return {
+            requestId: request.requestId,
+            status: 'unavailable',
+            diagnostic: {
+              code: 'agent-workspace-binding-unavailable',
+              owner: 'workspace',
+              message: 'The exact Workspace access for this Agent draft is unavailable.',
+            },
+          };
+        }
       }
       return {
         requestId: request.requestId,
@@ -495,7 +715,7 @@ export class DesktopAppHost {
           workbenchInstanceId: surfaceGrant.workbenchInstanceId,
           agentSurfaceId: surfaceGrant.agentSurfaceId,
           viewId: request.viewId,
-          scope: request.scope,
+          draft: request.draft,
         }),
       };
     }
@@ -505,6 +725,60 @@ export class DesktopAppHost {
       connection.windowId !== window.windowId
     ) {
       throw new Error('Agent launch connection does not match its sender-bound Desktop identity.');
+    }
+    if (request.operation === 'bind-assistant') {
+      return {
+        requestId: request.requestId,
+        status: 'ready',
+        catalog: await this.agentLaunch.bindTarget(connection, {
+          kind: 'assistant',
+          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          baseGrantIds: [],
+        }),
+      };
+    }
+    if (request.operation === 'bind-target') {
+      if (request.binding.kind === 'assistant') {
+        if (
+          request.binding.assistantSpaceId !== DESKTOP_DEFAULT_ASSISTANT_SPACE_ID ||
+          request.binding.baseGrantIds.length > 0
+        ) {
+          throw new Error('Agent Assistant target is not authorized by this Desktop entry.');
+        }
+      } else if (request.binding.kind === 'workspace') {
+        const resolution = await this.workspaceGrants.resolve(
+          window.windowId,
+          request.binding.workspaceGrantId,
+        );
+        if (resolution.workspace.workspaceId !== request.binding.workspaceId) {
+          throw new Error('Agent Workspace target grant resolves to another Workspace.');
+        }
+      } else if (request.binding.kind === 'character' || request.binding.kind === 'world') {
+        throw new Error(`Agent ${request.binding.kind} binding provider is unavailable.`);
+      }
+      return {
+        requestId: request.requestId,
+        status: 'ready',
+        catalog: await this.agentLaunch.bindTarget(connection, request.binding),
+      };
+    }
+    if (request.operation === 'update-configuration') {
+      return {
+        requestId: request.requestId,
+        status: 'ready',
+        catalog: this.agentLaunch.updateConfiguration(connection, request.configuration),
+      };
+    }
+    if (request.operation === 'search-workspace-mentions') {
+      return {
+        requestId: request.requestId,
+        status: 'mentions',
+        projection: await this.agentLaunch.searchWorkspaceMentions(
+          connection,
+          request.bindingReceiptId,
+          request.filter,
+        ),
+      };
     }
     if (request.operation === 'authorize-resource') {
       const catalog = await this.agentLaunch.authorizeResource(connection, request.resourceKind);
@@ -520,163 +794,14 @@ export class DesktopAppHost {
           };
     }
     if (request.operation === 'submit-draft') {
-      const shellProjection = await this.shell.getProjection(window.windowId);
-      const target = request.input.target;
-      let context: AgentConversationContext;
-      let existingRecord:
-        | Awaited<ReturnType<AgentConversationLifecycleService['readFirstSubmitByRequest']>>
-        | undefined;
-      if (target.kind === 'automatic-assistant') {
-        if (connection.scope.kind !== 'unbound' || connection.scope.draftId !== target.draftId) {
-          throw new Error(
-            'Automatic Assistant draft submit does not match its unbound launch connection.',
-          );
-        }
-        const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
-        if (
-          scene.context.kind !== 'agent' ||
-          scene.context.scope.draftId !== target.draftId ||
-          scene.context.agentViewId !== connection.viewId
-        ) {
-          throw new Error('Automatic Assistant draft submit is not the exact active Entry Draft.');
-        }
-        const assistantSpaceId =
-          scene.context.scope.kind === 'unbound'
-            ? DESKTOP_DEFAULT_ASSISTANT_SPACE_ID
-            : scene.context.scope.kind === 'assistant'
-              ? scene.context.scope.assistantSpaceId
-              : undefined;
-        if (!assistantSpaceId) {
-          throw new Error('Automatic Assistant draft submit cannot use Workspace scope.');
-        }
-        context = {
-          kind: 'assistant',
-          assistantSpaceId,
-          baseGrantIds: request.input.resourceGrantIds,
-        };
-        await this.agentLaunch.bindResourceGrants(
-          connection,
-          { kind: 'assistant', assistantSpaceId },
-          request.input.resourceGrantIds,
-        );
-        if (scene.context.scope.kind === 'assistant' && scene.context.scope.conversationId) {
-          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
-            request.requestId,
-          );
-          if (
-            !existingRecord ||
-            existingRecord.conversationId !== scene.context.scope.conversationId ||
-            !conversationContextMatchesLaunchScope(existingRecord.context, {
-              kind: 'assistant',
-              assistantSpaceId,
-            })
-          ) {
-            throw new Error(
-              'Automatic Assistant draft submit request does not match the committed session.',
-            );
-          }
-        }
-      } else {
-        const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
-        const isExactActiveDraft =
-          scene.context.kind === 'agent' &&
-          scene.context.scope.draftId === target.draftId &&
-          scene.context.agentViewId === connection.viewId &&
-          scene.slots.interaction?.phase === 'draft';
-        if (isExactActiveDraft) {
-          context = target.context;
-          if (connection.scope.kind === 'unbound') {
-            if (
-              scene.context.kind !== 'agent' ||
-              scene.context.scope.kind !== 'unbound' ||
-              connection.scope.draftId !== target.draftId
-            ) {
-              throw new Error('Agent draft submit is not the exact active Entry Draft.');
-            }
-            if (context.kind !== 'workspace') {
-              throw new Error(
-                'Unbound Entry target must use automatic Assistant or exact Workspace.',
-              );
-            }
-            const resolution = await this.workspaceGrants.resolve(
-              window.windowId,
-              context.workspaceGrantId,
-            );
-            if (resolution.workspace.workspaceId !== context.workspaceId) {
-              throw new Error('Agent Workspace target grant resolves to another Workspace.');
-            }
-            await this.agentLaunch.bindResourceGrants(
-              connection,
-              {
-                kind: 'workspace',
-                workspaceId: context.workspaceId,
-                workspaceGrantId: context.workspaceGrantId,
-              },
-              request.input.resourceGrantIds,
-            );
-          } else if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
-            throw new Error(
-              'Agent draft submit context does not match its launch connection scope.',
-            );
-          }
-        } else {
-          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
-            request.requestId,
-          );
-          const connectionMatchesCommittedDraft =
-            connection.scope.kind === 'unbound'
-              ? connection.scope.draftId === target.draftId
-              : existingRecord !== undefined &&
-                conversationContextMatchesLaunchScope(existingRecord.context, connection.scope);
-          if (
-            !existingRecord ||
-            scene.context.kind !== 'agent' ||
-            scene.context.scope.kind === 'unbound' ||
-            scene.context.scope.draftId !== target.draftId ||
-            scene.context.scope.conversationId !== existingRecord.conversationId ||
-            scene.slots.interaction?.phase !== 'session' ||
-            !conversationContextMatchesLaunchScope(existingRecord.context, scene.context.scope) ||
-            !conversationContextMatchesLaunchScope(target.context, scene.context.scope) ||
-            !connectionMatchesCommittedDraft
-          ) {
-            throw new Error('Agent draft submit is not the exact active Draft presentation.');
-          }
-          context = existingRecord.context;
-        }
-      }
-      const record =
-        existingRecord ??
-        (await this.conversationLifecycle.firstSubmit({
-          requestId: request.requestId,
-          context,
-          messageText: request.input.messageText,
-          resourceGrantIds: request.input.resourceGrantIds,
-          configuration: request.input.configuration,
-        }));
-      await this.agentLaunch.commitResourceGrants(
-        connection,
-        record.conversationId,
-        record.initialMessage.resourceGrantIds,
-      );
-      await this.shell.attachAgentConversation({
-        windowId: window.windowId,
-        rendererSessionId: shellProjection.rendererSessionId,
-        agentViewId: connection.viewId,
-        draftId: target.draftId,
-        context: record.context,
-        conversationId: record.conversationId,
-      });
       return {
         requestId: request.requestId,
         status: 'committed',
-        projection: {
-          conversationId: record.conversationId,
-          turnId: record.pendingTurn.turnId,
-          turnStatus: record.pendingTurn.status,
-          ...(record.pendingTurn.diagnostic === undefined
-            ? {}
-            : { diagnostic: record.pendingTurn.diagnostic }),
-        },
+        projection: await this.agentLaunchSubmission.submit({
+          requestId: request.requestId,
+          connection,
+          draftInput: request.input,
+        }),
       };
     }
     await this.agentLaunch.detach(connection);
@@ -842,6 +967,46 @@ export class DesktopAppHost {
       return result;
     }
     const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
+    if (request.message.type === 'sendMessage') {
+      const context = await this.conversationLifecycle.readConversationContext(
+        request.message.conversationId,
+      );
+      if (context.kind === 'room') {
+        const scene = resolveActiveDesktopWindowWorkbench(
+          (await this.shell.getProjection(window.windowId)).window,
+        ).scene;
+        if (
+          scene.context.kind !== 'character-interaction' ||
+          scene.context.owner.kind !== 'room' ||
+          scene.context.scope.conversationId !== request.message.conversationId ||
+          !isSameAgentConversationOwner(conversationOwnerFromContext(context), scene.context.owner)
+        ) {
+          throw new Error('Room message does not match the exact active Room Conversation owner.');
+        }
+        this.agentBridge.assertConnection(request.connection, grant);
+        const result = await this.characterRoomConversations.submitUserMessage({
+          submissionId: request.message.messageTrackingId ?? request.requestId,
+          roomRunId: context.roomRunId,
+          userId: 'user:local',
+          message: request.message.message,
+        });
+        const rejected = result.outcomes.filter((outcome) => outcome.status === 'rejected');
+        for (const outcome of rejected) {
+          this.reportError(
+            outcome.diagnostic.code,
+            `Room participant '${outcome.participantId}' response was rejected.`,
+            new Error(outcome.diagnostic.message),
+          );
+        }
+        if (
+          result.outcomes.length > 0 &&
+          result.outcomes.every((outcome) => outcome.status === 'rejected')
+        ) {
+          throw new Error('Every scheduled Room participant response was rejected.');
+        }
+        return { requestId: request.requestId, status: 'accepted' };
+      }
+    }
     if (request.message.type === 'newConversation') {
       const projection = await this.shell.getProjection(window.windowId);
       const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
@@ -1190,6 +1355,18 @@ export class DesktopAppHost {
       case 'plugin.install': {
         this.requireAgentIdleForPluginMutation();
         const snapshot = await this.options.extensionManager.installPlugin(request.pluginId);
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
+      case 'plugin.enable': {
+        this.requireAgentIdleForPluginMutation();
+        const snapshot = await this.options.extensionManager.enablePlugin(request.pluginId);
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
+      case 'plugin.disable': {
+        this.requireAgentIdleForPluginMutation();
+        const snapshot = await this.options.extensionManager.disablePlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
         break;
       }
@@ -1581,10 +1758,35 @@ export class DesktopAppHost {
   async executeResourceBrowser(
     sender: DesktopSenderIdentity,
     payload: ResourceBrowserIntentRequest | unknown,
-  ): Promise<ResourceBrowserProjection> {
+  ): Promise<ResourceBrowserIntentResult> {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
-    return this.requireResourceBrowser().execute(window.windowId, payload);
+    const request = parseResourceBrowserIntentRequest(payload);
+    try {
+      const projection = await this.requireResourceBrowser().execute(window.windowId, request);
+      return {
+        requestId: request.requestId,
+        identity: request.identity,
+        status: 'completed',
+        projection,
+      };
+    } catch (error) {
+      if (
+        error instanceof DesktopWorkbenchContractError &&
+        error.code === 'desktop-workbench-main-view-capacity-reached'
+      ) {
+        return {
+          requestId: request.requestId,
+          identity: request.identity,
+          status: 'rejected',
+          rejection: {
+            code: 'main-view-capacity-reached',
+            maximum: DESKTOP_WORKBENCH_LIMITS.mainViewCount.max,
+          },
+        };
+      }
+      throw error;
+    }
   }
 
   async getPreviewSnapshot(
@@ -1605,6 +1807,34 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     if (!this.preview) throw new Error('Desktop Preview runtime is unavailable.');
     return this.preview.execute(window.windowId, payload);
+  }
+
+  async executeTextEditorRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+    publish: (event: TextEditorProjectionEvent) => void,
+  ): Promise<TextEditorHostResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    const runtime = this.textEditor;
+    if (!runtime) throw new Error('Desktop Text Editor runtime is unavailable.');
+    const request = parseTextEditorHostRequest(payload);
+    const result = await runtime.execute(window.windowId, request);
+    if (request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet && result.status === 'ready') {
+      const subscriptions =
+        this.textEditorSubscriptions.get(sender.webContentsId) ?? new Map<string, () => void>();
+      const previousKey = textEditorSubscriptionKey(request.identity);
+      const key = textEditorSubscriptionKey(result.identity);
+      if (previousKey !== key) {
+        subscriptions.get(previousKey)?.();
+        subscriptions.delete(previousKey);
+      }
+      if (!subscriptions.has(key)) {
+        subscriptions.set(key, await runtime.subscribe(window.windowId, result.identity, publish));
+        this.textEditorSubscriptions.set(sender.webContentsId, subscriptions);
+      }
+    }
+    return result;
   }
 
   async getCanvasSnapshot(
@@ -1683,6 +1913,34 @@ export class DesktopAppHost {
     return snapshot;
   }
 
+  async createCutDraft(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopCutViewMutationResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    const request = parseDesktopCutViewMutationRequest(payload);
+    if (request.windowId !== window.windowId || request.identity !== undefined) {
+      throw new Error('Desktop Cut draft request does not match its sender Window.');
+    }
+    const projection = await this.requireCut().createDraft(request);
+    return { requestId: request.requestId, status: 'updated', projection };
+  }
+
+  async closeCutView(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopCutViewMutationResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    const request = parseDesktopCutViewMutationRequest(payload);
+    if (request.windowId !== window.windowId || request.identity === undefined) {
+      throw new Error('Desktop Cut close request does not match its sender Window.');
+    }
+    const result = await this.requireCut().closeView({ ...request, identity: request.identity });
+    return { requestId: request.requestId, ...result };
+  }
+
   async executeCutRequest(
     sender: DesktopSenderIdentity,
     payload: unknown,
@@ -1700,6 +1958,7 @@ export class DesktopAppHost {
     this.assetCenter?.detachWindow(windowId);
     this.projectPortability?.detachWindow(windowId);
     this.preview?.detachWindow(windowId);
+    this.textEditor?.detachWindow(windowId);
     this.canvas?.detachWindow(windowId);
     this.cut?.detachWindow(windowId);
     this.options.assistantPreviewLifecycle?.detachWindow(windowId);
@@ -1724,6 +1983,13 @@ export class DesktopAppHost {
       disposeSubscription();
     }
     this.cutSubscriptions.delete(webContentsId);
+    for (const disposeSubscription of this.textEditorSubscriptions.get(webContentsId)?.values() ??
+      []) {
+      disposeSubscription();
+    }
+    this.textEditorSubscriptions.delete(webContentsId);
+    this.characterRoomWorkbenchSubscriptions.get(webContentsId)?.dispose();
+    this.characterRoomWorkbenchSubscriptions.delete(webContentsId);
   }
 
   async dispose(): Promise<void> {
@@ -1778,6 +2044,24 @@ export class DesktopAppHost {
       }
     }
     this.cutSubscriptions.clear();
+    for (const subscriptions of this.textEditorSubscriptions.values()) {
+      for (const disposeSubscription of subscriptions.values()) {
+        try {
+          disposeSubscription();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+    }
+    this.textEditorSubscriptions.clear();
+    for (const subscription of this.characterRoomWorkbenchSubscriptions.values()) {
+      try {
+        subscription.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    this.characterRoomWorkbenchSubscriptions.clear();
     try {
       this.assetCenter?.dispose();
     } catch (error) {
@@ -1790,6 +2074,11 @@ export class DesktopAppHost {
     }
     try {
       this.preview?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.textEditor?.dispose();
     } catch (error) {
       errors.push(error);
     }
@@ -1815,6 +2104,16 @@ export class DesktopAppHost {
     }
     try {
       await this.agent.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await this.options.generationLifecycle?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.options.workspaceConfigLifecycle?.dispose();
     } catch (error) {
       errors.push(error);
     }
@@ -1872,10 +2171,10 @@ export class DesktopAppHost {
       const context = await this.conversationLifecycle.readConversationContext(
         interaction.scope.conversationId,
       );
-      if (
-        context.kind !== 'assistant' ||
-        context.assistantSpaceId !== connection.assistantSpaceId
-      ) {
+      const scene = resolveActiveDesktopWindowWorkbench(
+        (await this.shell.getProjection(windowId)).window,
+      ).scene;
+      if (!assistantSurfaceContextMatches(context, scene, connection.assistantSpaceId)) {
         throw new Error(
           'Desktop Assistant Agent connection does not match its persisted Conversation context.',
         );
@@ -2049,6 +2348,7 @@ export class DesktopAppHost {
   ): void {
     const workbenches = [projection.window.workbench.layout];
     this.preview?.reconcileWindow(windowId, workbenches);
+    this.textEditor?.reconcileWindow(windowId, workbenches);
     this.canvas?.reconcileWindow(windowId, workbenches);
     this.cut?.reconcileWindow(windowId, workbenches);
   }
@@ -2063,12 +2363,50 @@ function isAgentProjectionControlMessage(type: string): boolean {
   );
 }
 
-function conversationOwnerFromContext(
-  context: AgentConversationContext,
-): AgentConversationOwnerRef {
-  return context.kind === 'assistant'
-    ? { kind: 'assistant', assistantSpaceId: context.assistantSpaceId }
-    : { kind: 'workspace', workspaceId: context.workspaceId };
+function conversationOwnerFromContext(context: AgentBoundDomainBinding): AgentConversationOwnerRef {
+  if (context.kind === 'assistant') {
+    return { kind: 'assistant', assistantSpaceId: context.assistantSpaceId };
+  }
+  if (context.kind === 'workspace') {
+    return { kind: 'workspace', workspaceId: context.workspaceId };
+  }
+  if (
+    context.kind === 'character' &&
+    context.characterRunId !== undefined &&
+    context.dialogueRunId !== undefined
+  ) {
+    return {
+      kind: 'character',
+      characterId: context.characterId,
+      characterRunId: context.characterRunId,
+      dialogueRunId: context.dialogueRunId,
+    };
+  }
+  if (context.kind === 'room') {
+    return { kind: 'room', roomId: context.roomId, roomRunId: context.roomRunId };
+  }
+  throw new Error(`Desktop ${context.kind} Conversation owner provider is unavailable.`);
+}
+
+function assistantSurfaceContextMatches(
+  context: AgentBoundDomainBinding,
+  scene: DesktopWorkbenchSceneProjection,
+  assistantSpaceId: string,
+): boolean {
+  if (context.kind === 'assistant') {
+    return (
+      context.assistantSpaceId === assistantSpaceId &&
+      scene.context.kind === 'agent' &&
+      scene.context.scope.kind === 'assistant' &&
+      scene.context.scope.assistantSpaceId === assistantSpaceId
+    );
+  }
+  if (context.kind !== 'character' && context.kind !== 'room') return false;
+  return (
+    scene.context.kind === 'character-interaction' &&
+    scene.context.scope.assistantSpaceId === assistantSpaceId &&
+    isSameAgentConversationOwner(conversationOwnerFromContext(context), scene.context.owner)
+  );
 }
 
 function unavailableConversationOwner(
@@ -2090,6 +2428,36 @@ function unavailableConversationOwner(
       },
     },
   };
+}
+
+async function readAgentConversationBootstrap(
+  lifecycle: AgentConversationLifecycleService,
+  conversationId: string,
+) {
+  try {
+    const [context, firstSubmitRecord] = await Promise.all([
+      lifecycle.readConversationContext(conversationId),
+      lifecycle.readFirstSubmitRecord(conversationId),
+    ]);
+    return { status: 'ready' as const, context, firstSubmitRecord };
+  } catch (error) {
+    if (
+      !(error instanceof AgentConversationLifecycleUnavailableError) ||
+      error.conversationId !== conversationId
+    ) {
+      throw error;
+    }
+    return {
+      status: 'unavailable' as const,
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable' as const,
+        severity: 'error' as const,
+        conversationId,
+        fieldNames: [...error.fieldNames],
+        message: 'The stored Agent Conversation cannot be opened by the current application.',
+      },
+    };
+  }
 }
 
 export async function deliverCutAgentContext(
@@ -2169,12 +2537,12 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function sameAgentScope(
-  left: AgentAuthorityScopeProjection,
-  right: AgentAuthorityScopeProjection,
+function desktopAgentScopeMatchesBinding(
+  left: Extract<DesktopWorkbenchSceneProjection['context'], { readonly kind: 'agent' }>['scope'],
+  right: AgentDomainBinding,
 ): boolean {
   if (left.kind === 'unbound' || right.kind === 'unbound') {
-    return left.kind === 'unbound' && right.kind === 'unbound' && left.draftId === right.draftId;
+    return left.kind === 'unbound' && right.kind === 'unbound';
   }
   if (left.kind === 'assistant' && right.kind === 'assistant') {
     return left.assistantSpaceId === right.assistantSpaceId;
@@ -2185,18 +2553,6 @@ function sameAgentScope(
     left.workspaceId === right.workspaceId &&
     left.workspaceGrantId === right.workspaceGrantId
   );
-}
-
-function conversationContextMatchesLaunchScope(
-  context: AgentConversationContext,
-  scope: AgentAuthorityScopeProjection,
-): boolean {
-  if (scope.kind === 'unbound') return false;
-  return context.kind === 'assistant'
-    ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
-    : scope.kind === 'workspace' &&
-        context.workspaceId === scope.workspaceId &&
-        context.workspaceGrantId === scope.workspaceGrantId;
 }
 
 function canvasSubscriptionKey(identity: CanvasHostRuntimeIdentity): string {
@@ -2219,4 +2575,21 @@ function cutSubscriptionKey(identity: ReturnType<typeof parseDesktopCutHostIdent
     identity.sessionId,
     identity.rendererSessionId,
   ].join(':');
+}
+
+function textEditorSubscriptionKey(identity: TextEditorRuntimeIdentity): string {
+  return [
+    identity.windowId,
+    identity.viewId,
+    identity.viewInstanceId,
+    identity.documentId,
+    identity.sessionId,
+  ].join(':');
+}
+
+function stripCommandRequestId(
+  request: CharacterFoundationCommandHostRequest,
+): CharacterFoundationCommand {
+  const { requestId: _requestId, ...command } = request;
+  return command;
 }

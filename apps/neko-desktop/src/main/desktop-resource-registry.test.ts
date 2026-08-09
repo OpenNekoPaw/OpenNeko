@@ -163,6 +163,96 @@ describe('DesktopResourceRegistry', () => {
     ).toBe(400);
   });
 
+  it('serves sender-bound resource-tree entries with MIME, HEAD and Range semantics', async () => {
+    const registry = createRegistry();
+    const readContainer = vi.fn(async () => new TextEncoder().encode('<container/>'));
+    const readChapter = vi.fn(async () => new TextEncoder().encode('chapter'));
+    const release = vi.fn();
+    const lease = registry.registerResourceTree(owner(), {
+      entries: [
+        {
+          virtualPath: 'META-INF/container.xml',
+          byteLength: 12,
+          contentType: 'application/xml',
+          read: readContainer,
+        },
+        {
+          virtualPath: 'OPS/chapter.xhtml',
+          byteLength: 7,
+          contentType: 'application/xhtml+xml',
+          read: readChapter,
+        },
+      ],
+      release,
+    });
+
+    expect(lease.url).toMatch(/^openneko:\/\/resource\/[A-Za-z0-9_-]{32}\/$/u);
+    const chapterUrl = new URL('OPS/chapter.xhtml', lease.url).toString();
+    expect(registry.authorizeRequest(chapterUrl, 101)).toBe(true);
+    expect(registry.authorizeRequest(chapterUrl, 202)).toBe(false);
+
+    const head = await registry.handle(new Request(chapterUrl, { method: 'HEAD' }));
+    expect(head.status).toBe(200);
+    expect(head.headers.get('Content-Type')).toBe('application/xhtml+xml');
+    expect(head.headers.get('Content-Length')).toBe('7');
+    expect(readChapter).not.toHaveBeenCalled();
+
+    const partial = await registry.handle(
+      new Request(chapterUrl, { headers: { Range: 'bytes=1-3' } }),
+    );
+    expect(partial.status).toBe(206);
+    expect(partial.headers.get('Content-Range')).toBe('bytes 1-3/7');
+    expect(await partial.text()).toBe('hap');
+    expect(readChapter).toHaveBeenCalledOnce();
+    expect(readContainer).not.toHaveBeenCalled();
+
+    lease.release();
+    expect(release).toHaveBeenCalledOnce();
+    expect((await registry.handle(new Request(chapterUrl))).status).toBe(404);
+  });
+
+  it('rejects unsafe resource-tree paths and cancels an in-flight exact entry on release', async () => {
+    const registry = createRegistry();
+    expect(() =>
+      registry.registerResourceTree(owner(), {
+        entries: [
+          {
+            virtualPath: '../secret',
+            byteLength: 1,
+            contentType: 'text/plain',
+            read: async () => new Uint8Array([1]),
+          },
+        ],
+        release: () => undefined,
+      }),
+    ).toThrow('unsafe segment');
+
+    let observedSignal: AbortSignal | undefined;
+    const lease = registry.registerResourceTree(owner(), {
+      entries: [
+        {
+          virtualPath: 'OPS/chapter.xhtml',
+          byteLength: 7,
+          contentType: 'application/xhtml+xml',
+          read: (signal) => {
+            observedSignal = signal;
+            return new Promise<Uint8Array>((_resolve, reject) => {
+              signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+            });
+          },
+        },
+      ],
+      release: () => undefined,
+    });
+    const responsePromise = registry.handle(
+      new Request(new URL('OPS/chapter.xhtml', lease.url).toString()),
+    );
+    await vi.waitFor(() => expect(observedSignal).toBeDefined());
+    lease.release();
+    expect(observedSignal?.aborted).toBe(true);
+    expect((await responsePromise).status).toBe(410);
+  });
+
   it('requires exact absolute files and explicit sender authorization', async () => {
     const registry = createRegistry();
     await expect(

@@ -8,3 +8,5 @@ export * from './add-source-flow';
 export * from './ingest';
 export * from './store';
 export * from './save-session';
+export * from './workspace-entry-creation';
+export * from './creative-document-creation';

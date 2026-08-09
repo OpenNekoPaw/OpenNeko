@@ -50,7 +50,9 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
       checkpoint,
       readOpenNekoResourceRequests,
     }) {
-      const opened = await openFixtureWorkspace(evaluate);
+      const startSurface = executionCase.execution?.startSurface ?? 'workspace';
+      const opened =
+        startSurface === 'workspace' ? await openFixtureWorkspace(evaluate) : undefined;
       await waitForSelector('[data-owner-root="agent"]', 30_000);
       const driver = createDesktopAgentDriver({
         evaluate,
@@ -60,12 +62,20 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         },
         restartApplication,
       });
-      const owner = resolveWorkspaceAgentOwner(opened);
-      const connected = await driver.connect(owner);
       const visible = executionCase.execution?.evidenceLevel === 'visible-desktop';
+      if (startSurface === 'entry' && !visible) {
+        throw infrastructureBlocker(
+          'Entry Draft Evaluation requires visible Desktop controls before Session materialization.',
+        );
+      }
+      const initialInteraction = await readActiveAgentInteraction(evaluate);
+      const connected =
+        startSurface === 'workspace'
+          ? await driver.connect(resolveWorkspaceAgentOwner(opened))
+          : undefined;
       const workflowDriver = createScenarioWorkflowDriver({
         driver,
-        connection: connected.connection,
+        connection: connected?.connection,
         visible,
         evaluate,
         waitForSelector,
@@ -80,11 +90,13 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         driver: workflowDriver,
         conversationId: conversation?.conversationId,
         steps: executionCase.steps,
+        modelProfiles: executionCase.modelProfiles,
         defaultTimeoutMs: executionCase.budget.timeoutMs,
         checkpoint,
       });
       const conversationId = workflow.conversationId;
       const identity = workflow.terminalIdle.identity;
+      const finalInteraction = await readActiveAgentInteraction(evaluate);
       let resumed = await driver.resume({
         conversationId,
         timeoutMs: executionCase.budget.timeoutMs,
@@ -142,6 +154,10 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         openNekoResourceRequestCount,
         mediaCard,
         lifecycle,
+        interaction: {
+          initial: initialInteraction,
+          final: finalInteraction,
+        },
       };
     },
   });
@@ -176,7 +192,7 @@ function createScenarioWorkflowDriver(input) {
           'Visible Desktop Agent submission does not support hidden context injection.',
         );
       }
-      const { eventOffset } = await input.driver.markEventOffset();
+      const eventOffset = connection ? (await input.driver.markEventOffset()).eventOffset : 0;
       await input.type(ACTIVE_AGENT_TEXTAREA_SELECTOR, command.prompt);
       await waitForCondition(
         input.evaluate,
@@ -187,10 +203,17 @@ function createScenarioWorkflowDriver(input) {
         'Visible Desktop Agent composer did not enable its send control.',
       );
       await input.click(ACTIVE_AGENT_SEND_SELECTOR);
-      const conversationId =
-        command.conversationId ??
-        (await input.driver.waitForActiveConversation(eventOffset, command.timeoutMs ?? 30_000))
-          .conversationId;
+      let conversationId = command.conversationId;
+      if (!connection) {
+        const owner = await waitForActiveAgentSession(input.evaluate, command.timeoutMs ?? 30_000);
+        const connected = await input.driver.connect(owner);
+        connection = connected.connection;
+        conversationId = owner.conversationId;
+      } else if (conversationId === undefined) {
+        conversationId = (
+          await input.driver.waitForActiveConversation(eventOffset, command.timeoutMs ?? 30_000)
+        ).conversationId;
+      }
       return { accepted: true, eventOffset, conversationId };
     },
     async confirm(command) {
@@ -228,6 +251,54 @@ function createScenarioWorkflowDriver(input) {
       return { accepted: true, connection, snapshot: restored.snapshot };
     },
   });
+}
+
+async function waitForActiveAgentSession(evaluate, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const interaction = await readActiveAgentInteraction(evaluate);
+    if (
+      interaction.phase === 'session' &&
+      interaction.bindingKind === 'assistant' &&
+      typeof interaction.assistantSpaceId === 'string' &&
+      typeof interaction.conversationId === 'string'
+    ) {
+      return {
+        workbenchInstanceId: interaction.workbenchInstanceId,
+        agentSurfaceId: interaction.agentSurfaceId,
+        assistantSpaceId: interaction.assistantSpaceId,
+        conversationId: interaction.conversationId,
+        viewId: interaction.agentViewId,
+      };
+    }
+    await delay(50);
+  }
+  throw new Error('Visible Entry Draft did not materialize an Assistant Session.');
+}
+
+async function readActiveAgentInteraction(evaluate) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const workbench = projection.window.workbench;
+    const interaction = workbench?.scene?.slots?.interaction;
+    const context = workbench?.scene?.context;
+    if (!interaction || interaction.kind !== 'agent' || context?.kind !== 'agent') {
+      throw new Error('Desktop Agent Evaluation has no active Agent interaction.');
+    }
+    const scope = context.scope;
+    return {
+      workbenchInstanceId: workbench.workbenchInstanceId,
+      agentSurfaceId: interaction.agentSurfaceId,
+      agentViewId: context.agentViewId,
+      phase: interaction.phase,
+      bindingKind: scope.kind,
+      draftId: scope.draftId,
+      ...(scope.assistantSpaceId === undefined ? {} : { assistantSpaceId: scope.assistantSpaceId }),
+      ...(scope.workspaceId === undefined ? {} : { workspaceId: scope.workspaceId }),
+      ...(scope.workspaceGrantId === undefined ? {} : { workspaceGrantId: scope.workspaceGrantId }),
+      ...(scope.conversationId === undefined ? {} : { conversationId: scope.conversationId }),
+    };
+  })()`);
 }
 
 async function waitForCondition(evaluate, expression, message, timeoutMs = 30_000) {
@@ -287,5 +358,9 @@ async function waitForPackageOwnedMediaCard(evaluate, readRequests, timeoutMs) {
 }
 
 function authorizationError(message) {
+  return Object.assign(new Error(message), { code: 'infrastructure-blocked' });
+}
+
+function infrastructureBlocker(message) {
   return Object.assign(new Error(message), { code: 'infrastructure-blocked' });
 }

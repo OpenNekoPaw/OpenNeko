@@ -149,6 +149,14 @@ describe('OpenNeko tool projection to Pi', () => {
     };
 
     expect(Value.Check(projected.parameters, base)).toBe(false);
+    expect(projected.parameters.additionalProperties).toBe(false);
+    expect(
+      Value.Check(projected.parameters, {
+        source: base.source,
+        mode: 'range',
+        locator: { kind: 'chapter', chapterHref: 'page-305.xhtml', spineIndex: 304 },
+      }),
+    ).toBe(false);
     expect(
       Value.Check(projected.parameters, {
         ...base,

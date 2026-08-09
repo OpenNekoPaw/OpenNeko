@@ -160,4 +160,34 @@ describe('Resource Browser presenter', () => {
     expect(video.capabilities).toContain('add-to-cut');
     expect(document.capabilities).not.toContain('add-to-cut');
   });
+
+  it('projects editable Workspace text only through the canonical admission registry', () => {
+    const markdown = presentResourceBrowserContentItem(
+      {
+        locator: { kind: 'workspace-file', path: 'notes/readme.md' },
+        label: 'readme.md',
+        availability: 'available',
+        capabilities: ['read', 'preview'],
+        metadata: { mediaType: 'text' },
+        role: 'content',
+        depth: 0,
+      },
+      'files',
+    );
+    const unsupported = presentResourceBrowserContentItem(
+      {
+        locator: { kind: 'workspace-file', path: 'data/archive.bin' },
+        label: 'archive.bin',
+        availability: 'available',
+        capabilities: ['read', 'preview'],
+        metadata: { mediaType: 'file' },
+        role: 'content',
+        depth: 0,
+      },
+      'files',
+    );
+
+    expect(markdown.capabilities).toEqual(['edit-text', 'preview', 'reveal']);
+    expect(unsupported.capabilities).toEqual(['preview', 'reveal']);
+  });
 });

@@ -1,6 +1,6 @@
 import { PackageIcon, PlusIcon, SearchIcon, TrashIcon, WarningIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { EmptyState } from '@neko/ui/primitives';
+import { EmptyState, Switch } from '@neko/ui/primitives';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AgentExtensionCatalogItem } from '@neko/agent-contracts';
 import type {
@@ -170,11 +170,33 @@ export function AgentExtensionManagementRoot({
               <span className="management-surface-copy">
                 <strong>{skill?.name ?? extension?.displayName}</strong>
                 <small>{skill?.description || extension?.description || item.id}</small>
+                {extension ? (
+                  <>
+                    <small>
+                      {extension.version}
+                      {extension.developer ? ` · ${extension.developer}` : ''}
+                      {' · '}
+                      {describeExtensionContributions(extension, t)}
+                    </small>
+                    <small>
+                      {t(`home.capabilities.agentStatus.${extension.agentStatus}`)}
+                      {extension.runtimeDiagnosticCode
+                        ? ` · ${describeRuntimeDiagnostic(extension.runtimeDiagnosticCode, t)}`
+                        : ''}
+                      {extension.declaredPermissions.length > 0
+                        ? ` · ${t('home.capabilities.permissions', {
+                            permissions: extension.declaredPermissions.join(', '),
+                          })}`
+                        : ''}
+                    </small>
+                  </>
+                ) : null}
               </span>
               <span className="management-surface-row-actions">
                 {extension?.canInstall ? (
                   <button
                     type="button"
+                    aria-label={t('home.capabilities.install')}
                     disabled={!projection || operationKey !== undefined}
                     onClick={() => {
                       void Promise.resolve(
@@ -194,6 +216,43 @@ export function AgentExtensionManagementRoot({
                   >
                     <PlusIcon size={13} />
                   </button>
+                ) : null}
+                {extension?.installed ? (
+                  <Switch
+                    aria-label={t('home.capabilities.enablement', {
+                      name: extension.displayName,
+                    })}
+                    checked={extension.enabled}
+                    disabled={
+                      !projection ||
+                      operationKey !== undefined ||
+                      (!extension.canEnable && !extension.canDisable)
+                    }
+                    onCheckedChange={(checked) => {
+                      if (!checked) {
+                        void runMutation(`disable:${extension.id}`, () =>
+                          runtime.disablePlugin(extension.id),
+                        );
+                        return;
+                      }
+                      void Promise.resolve(
+                        confirmAction(
+                          t('home.capabilities.confirmEnablePlugin', {
+                            name: extension.displayName,
+                            permissions:
+                              extension.declaredPermissions.join(', ') ||
+                              t('home.capabilities.permissions.none'),
+                          }),
+                        ),
+                      ).then((confirmed) => {
+                        if (confirmed) {
+                          void runMutation(`enable:${extension.id}`, () =>
+                            runtime.enablePlugin(extension.id),
+                          );
+                        }
+                      });
+                    }}
+                  />
                 ) : null}
                 {skill?.canRemove || extension?.canRemove ? (
                   <button
@@ -260,4 +319,30 @@ export function searchAndOrderAgentExtensions(
 
 function describeError(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
+}
+
+function describeExtensionContributions(
+  extension: AgentExtensionCatalogItem,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  const contributions = [
+    ...(extension.mcpServerIds.length === 0
+      ? []
+      : [t('home.capabilities.extensionMcp', { ids: extension.mcpServerIds.join(', ') })]),
+    ...(extension.hasSkills ? [t('home.capabilities.extensionSkills')] : []),
+    ...(extension.appIds.length === 0
+      ? []
+      : [t('home.capabilities.extensionApps', { ids: extension.appIds.join(', ') })]),
+  ];
+  return contributions.join(' · ') || t('home.capabilities.extensionNoContributions');
+}
+
+function describeRuntimeDiagnostic(
+  code: string,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  if (code === 'artifact-unavailable') {
+    return t('home.capabilities.runtimeDiagnostic.artifact-unavailable');
+  }
+  return t('home.capabilities.runtimeDiagnostic.other', { code });
 }

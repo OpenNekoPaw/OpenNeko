@@ -19,6 +19,12 @@
       "id": "configured-default",
       "selection": "configured-default",
       "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    },
+    {
+      "id": "nekoapi-chat-without-image-generation",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
+      "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe"
     }
   ],
   "judgeProfiles": [],
@@ -78,6 +84,18 @@
       "id": "conversation-idle-continuation",
       "file": "cases/conversation-idle-continuation.json",
       "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "session-compact-continuation",
+      "file": "cases/session-compact-continuation.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "entry-compact-session-required",
+      "file": "cases/entry-compact-session-required.json",
+      "group": "boundary",
       "visibility": "public"
     },
     {

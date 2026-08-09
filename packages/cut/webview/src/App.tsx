@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { createPortal } from 'react-dom';
 import type {
   CutCommand,
   CutExportTaskSnapshot,
@@ -69,12 +68,7 @@ interface PendingVideoPromotion {
   readonly retained: boolean;
 }
 
-export interface CutAppProps {
-  readonly presentation?: 'editor' | 'timeline-only';
-  readonly timelineTarget?: Element;
-}
-
-function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
+function App() {
   const rootRef = useRef<HTMLDivElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
@@ -1041,6 +1035,9 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
   };
   const undo = () => view && controller.undo();
   const redo = () => view && controller.redo();
+  const save = useCallback(() => {
+    if (view) controller.save();
+  }, [controller, view]);
 
   const shortcutActions = useMemo(
     () => ({
@@ -1050,6 +1047,7 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
       seekEnd: () => seek(view?.durationSeconds ?? 0),
       undo,
       redo,
+      save,
       split: splitSelected,
       duplicateSelection: () => {
         if (selectedClips.length > 0) {
@@ -1074,6 +1072,7 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
       playheadSeconds,
       playing,
       presentationActions,
+      save,
       selected?.clipId,
       selectedClips,
       selection,
@@ -1093,20 +1092,6 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
 
   const previewTitle = selected?.name ?? view?.name;
   const previewSource = selected?.targetUrl;
-  if (presentation === 'timeline-only') {
-    return (
-      <div
-        ref={rootRef}
-        className="relative h-full bg-neko-bg"
-        data-cut-presentation="timeline-only"
-        data-neko-keyboard-focused={isKeyboardFocused ? 'true' : 'false'}
-      >
-        <section className="cut-basic-timeline-region cut-basic-timeline-region--host">
-          <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
-        </section>
-      </div>
-    );
-  }
   return (
     <div
       ref={rootRef}
@@ -1124,10 +1109,7 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
             className="cut-basic-editor"
             data-resizing={previewResize.isResizing ? 'true' : 'false'}
           >
-            <section
-              className="cut-basic-upper-workspace"
-              style={{ flex: timelineTarget ? 1 : previewSplit.size }}
-            >
+            <section className="cut-basic-upper-workspace" style={{ flex: previewSplit.size }}>
               <div className="cut-basic-preview-region">
                 <PreviewPanel
                   ref={previewCanvasRef}
@@ -1180,29 +1162,13 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
                 </aside>
               ) : null}
             </section>
-            {timelineTarget ? (
-              createPortal(
-                <div className="cut-webview-root cut-timeline-portal-root">
-                  <section className="cut-basic-timeline-region cut-basic-timeline-region--host">
-                    <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
-                  </section>
-                </div>,
-                timelineTarget,
-              )
-            ) : (
-              <>
-                <ResizeHandle
-                  handleProps={previewResize.handleProps}
-                  className="cut-basic-preview-resize-handle"
-                />
-                <section
-                  className="cut-basic-timeline-region"
-                  style={{ flex: 1 - previewSplit.size }}
-                >
-                  <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
-                </section>
-              </>
-            )}
+            <ResizeHandle
+              handleProps={previewResize.handleProps}
+              className="cut-basic-preview-resize-handle"
+            />
+            <section className="cut-basic-timeline-region" style={{ flex: 1 - previewSplit.size }}>
+              <Timeline onOpenPackage={linkMediaToSelectedTrack} onSave={save} onSeek={seek} />
+            </section>
           </div>
         }
       />

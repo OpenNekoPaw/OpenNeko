@@ -15,6 +15,7 @@ import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
   ResourceBrowserProjection,
+  ResourceBrowserDiagnostic,
   ResourceBrowserThumbnailDescriptor,
 } from './contract';
 
@@ -86,15 +87,25 @@ export interface ResourceBrowserProjectionSource {
 }
 
 export interface ResourceBrowserInteractionPort {
+  createCreativeDocument(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly parent?: ResourceBrowserContentItem;
+    readonly kind: 'canvas' | 'cut';
+    readonly name: string;
+  }): Promise<
+    | { readonly status: 'opened' }
+    | { readonly status: 'created'; readonly diagnostic: ResourceBrowserDiagnostic }
+  >;
+  createFile(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly parent?: ResourceBrowserContentItem;
+    readonly name: string;
+  }): Promise<void>;
   createDirectory(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly parent?: ResourceBrowserContentItem;
     readonly name: string;
   }): Promise<void>;
-  importFiles(input: {
-    readonly identity: ResourceBrowserIdentity;
-    readonly parent?: ResourceBrowserContentItem;
-  }): Promise<'imported' | 'cancelled'>;
   trashContent(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserContentItem;
@@ -126,9 +137,13 @@ export interface ResourceBrowserInteractionPort {
       readonly presentation: 'temporary' | 'side';
     };
   }): Promise<void>;
-  openCut(input: {
+  openCreativeDocument(input: {
     readonly identity: ResourceBrowserIdentity;
-    readonly item: ResourceBrowserItem;
+    readonly item: ResourceBrowserContentItem;
+  }): Promise<void>;
+  editText(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: ResourceBrowserContentItem;
   }): Promise<void>;
   reveal(input: {
     readonly identity: ResourceBrowserIdentity;

@@ -532,9 +532,10 @@ const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLo
     },
   },
   Read: {
-    description: '读取文件内容并返回带行号的文本。大文件可使用 offset/limit 分段读取。',
+    description:
+      '读取工作区内有界 UTF-8 文本并返回带行号的内容；结构化文档和媒体使用对应内容能力。',
     parameters: {
-      file_path: '要读取的文件绝对路径。',
+      file_path: '要读取的工作区相对文本文件路径。',
       offset: '起始行号，从 1 开始。',
       limit: '最多读取的行数。',
     },
@@ -548,10 +549,10 @@ const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLo
     },
   },
   ListDirectory: {
-    description: '列出目录内容，返回文件名、类型和大小。',
+    description: '单层列出工作区目录，返回按读取方式分类的结构化条目。',
     parameters: {
-      path: '要列出的目录绝对路径。',
-      recursive: '是否递归列出，默认最多 3 层。',
+      path: '工作区相对目录路径；工作区根目录使用“.”。',
+      cursor_ref: '继续读取上一页目录结果时使用的短引用。',
     },
   },
   Grep: {

@@ -45,6 +45,7 @@ interface ComposerConfigMenuProps {
   readonly genParams: GenerationParams;
   readonly onGenParamsChange: (params: Partial<GenerationParams>) => void;
   readonly disabled?: boolean;
+  readonly disabledReason?: string;
 }
 
 interface ParamOption<Value extends string = string> {
@@ -114,6 +115,7 @@ export function ComposerConfigMenu({
   genParams,
   onGenParamsChange,
   disabled = false,
+  disabledReason,
 }: ComposerConfigMenuProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useComposerControlMenu('composer-config');
@@ -139,6 +141,7 @@ export function ComposerConfigMenu({
   });
   const canOpen = !disabled;
   const modelTriggerTitle =
+    disabledReason ??
     selected?.label ??
     (activeMode === 'agent'
       ? t('chat.noModelsAvailable')
@@ -638,12 +641,5 @@ function findTriggerModel(input: {
   readonly mediaModelSelection: Readonly<MediaModelSelection>;
   readonly availableMediaModels: readonly ChatModelOption[];
 }): ChatModelOption | undefined {
-  if (input.activeMode === 'agent') {
-    return input.primaryModels.find((model) => model.id === input.selectedModel);
-  }
-  const selectedId = input.mediaModelSelection[input.activeMode];
-  if (selectedId === 'none') return undefined;
-  return input.availableMediaModels.find(
-    (model) => model.category === input.activeMode && model.id === selectedId,
-  );
+  return input.primaryModels.find((model) => model.id === input.selectedModel);
 }

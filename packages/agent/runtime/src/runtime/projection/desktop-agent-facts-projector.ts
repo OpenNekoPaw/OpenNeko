@@ -96,6 +96,13 @@ export function createDesktopAgentFactsProjector(input: {
           message: `Desktop Agent configuration diagnostic: ${diagnostic.code}.`,
         });
       }
+      if (turn.artifactDelivery?.status === 'blocked') {
+        record.diagnostics.push({
+          code: turn.artifactDelivery.diagnostic.code,
+          severity: 'error',
+          message: 'Workspace Board delivery was blocked; durable artifacts were retained.',
+        });
+      }
     },
     recordResourceDisplayProjection(fact) {
       const record = [...records.values()]

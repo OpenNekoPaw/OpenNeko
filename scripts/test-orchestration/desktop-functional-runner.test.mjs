@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import {
   captureDesktopScreenshot,
+  composeDesktopText,
   createAutomatedDesktopLaunch,
   createProcessController,
   dragDesktopElement,
@@ -168,8 +169,19 @@ describe('Desktop automated functional runner contract', () => {
           platform: 'darwin',
           fixtureHome: base.fixtureHome,
           userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
+          workspacePath: base.workspacePath,
         }),
       /Electron userData must remain inside its fixture home/u,
+    );
+    assert.throws(
+      () =>
+        createDesktopUiFunctionalLaunch({
+          platform: 'darwin',
+          fixtureHome: base.fixtureHome,
+          userDataRoot: base.userDataRoot,
+          workspacePath: '/Users/example/OpenNekoProjects/user-project',
+        }),
+      /Workspace must remain inside its fixture home/u,
     );
   });
 
@@ -270,7 +282,9 @@ describe('Desktop automated functional runner contract', () => {
     await typeDesktopText(cdp, '[data-testid="prompt"]', 'hello', 0, {
       platform: 'darwin',
     });
+    await composeDesktopText(cdp, '[data-testid="prompt"]', '中文输入');
     await pressDesktopKey(cdp, 'Enter', ['Shift']);
+    await pressDesktopKey(cdp, 'F10', ['Shift']);
     await pressDesktopKey(cdp, 'End');
     await scrollDesktopElement(cdp, '[data-testid="timeline"]', 0, { deltaY: 240 });
     await dragDesktopElement(cdp, '[data-testid="clip"]', '[data-testid="track"]');
@@ -279,7 +293,19 @@ describe('Desktop automated functional runner contract', () => {
     assert.equal(Buffer.from(screenshot, 'base64').toString('utf8'), 'synthetic-png');
     assert.deepEqual(
       calls.filter((call) => call.method === 'Input.insertText'),
-      [{ method: 'Input.insertText', params: { text: 'hello' } }],
+      [
+        { method: 'Input.insertText', params: { text: 'hello' } },
+        { method: 'Input.insertText', params: { text: '中文输入' } },
+      ],
+    );
+    assert.deepEqual(
+      calls.filter((call) => call.method === 'Input.imeSetComposition'),
+      [
+        {
+          method: 'Input.imeSetComposition',
+          params: { text: '中文输入', selectionStart: 4, selectionEnd: 4 },
+        },
+      ],
     );
     assert.deepEqual(
       calls
@@ -292,9 +318,29 @@ describe('Desktop automated functional runner contract', () => {
         ['keyUp', 'Backspace', 0],
         ['keyDown', 'Enter', 8],
         ['keyUp', 'Enter', 8],
+        ['keyDown', 'F10', 8],
+        ['keyUp', 'F10', 8],
         ['keyDown', 'End', 0],
         ['keyUp', 'End', 0],
       ],
+    );
+    assert.deepEqual(
+      calls.find(
+        (call) =>
+          call.method === 'Input.dispatchKeyEvent' &&
+          call.params.type === 'keyDown' &&
+          call.params.key === 'Enter',
+      )?.params,
+      {
+        type: 'keyDown',
+        modifiers: 8,
+        key: 'Enter',
+        code: 'Enter',
+        windowsVirtualKeyCode: 13,
+        nativeVirtualKeyCode: 13,
+        text: '\r',
+        unmodifiedText: '\r',
+      },
     );
     assert.deepEqual(
       calls.find(
@@ -329,7 +375,7 @@ describe('Desktop automated functional runner contract', () => {
       calls.filter(
         (call) => call.method === 'Input.dispatchMouseEvent' && call.params.type === 'mouseMoved',
       ).length,
-      10,
+      12,
     );
     assert.deepEqual(calls.at(-1), {
       method: 'Page.captureScreenshot',

@@ -11,6 +11,11 @@ const DESKTOP_EVIDENCE_ASSERTION_KINDS = new Set([
   'final-answer',
   'skill',
   'model',
+  'model-sequence',
+  'interaction-binding',
+  'input-invocation',
+  'draft-rejection',
+  'configuration-update',
   'tool-call',
   'process-order',
   'queue-state',
@@ -40,6 +45,7 @@ export function createDesktopEvaluationFacts(input) {
     projection: input.projection,
     snapshot: input.snapshot,
     ...(input.mediaCard === undefined ? {} : { mediaCard: input.mediaCard }),
+    ...(input.interaction === undefined ? {} : { interaction: input.interaction }),
     openNekoResourceRequestCount: input.openNekoResourceRequestCount ?? 0,
   });
 }
@@ -87,6 +93,7 @@ export function runDesktopHardGate(assertion, facts, context) {
     workflow: facts.workflow,
     projection: facts.projection,
     snapshot: facts.snapshot,
+    interaction: facts.interaction,
     mediaCard: facts.mediaCard,
     openNekoResourceRequestCount: facts.openNekoResourceRequestCount,
     executionCase: context.executionCase,
@@ -108,6 +115,16 @@ export function runDesktopHardGate(assertion, facts, context) {
       return assertSkill(assertion, input.facts);
     case 'model':
       return assertModel(assertion, input);
+    case 'model-sequence':
+      return assertModelSequence(assertion, input);
+    case 'interaction-binding':
+      return assertInteractionBinding(assertion, input);
+    case 'input-invocation':
+      return assertInputInvocation(assertion, input);
+    case 'draft-rejection':
+      return assertDraftRejection(assertion, input);
+    case 'configuration-update':
+      return assertConfigurationUpdate(assertion, input);
     case 'tool-call':
       return assertToolCall(assertion, input);
     case 'process-order':
@@ -266,6 +283,187 @@ function assertModel(assertion, input) {
     }
   }
   return { profileId: profile.id, providerId: effective.providerId, modelId: effective.modelId };
+}
+
+function assertModelSequence(assertion, input) {
+  const observed = assertion.turns.map((turn) => {
+    const receipt = input.workflow.receipts[turn.idleStepId];
+    const facts = receipt?.facts;
+    const profile = input.executionCase.modelProfiles.find(
+      (candidate) => candidate.id === turn.profileId,
+    );
+    if (!facts || !profile) {
+      throw new Error(`Desktop Agent model sequence evidence is unavailable: ${turn.idleStepId}`);
+    }
+    const effective = facts.configuration?.effective?.values?.modelBinding;
+    if (
+      profile.selection === 'explicit' &&
+      (effective?.providerId !== profile.chat.providerId ||
+        effective?.modelId !== profile.chat.modelId)
+    ) {
+      throw new Error(`Desktop Agent turn ${turn.idleStepId} used an unexpected model binding.`);
+    }
+    if (
+      facts.identity?.conversationId !== input.identity.conversationId ||
+      facts.identity?.turnId !== receipt.identity?.turnId ||
+      facts.identity?.runId !== receipt.identity?.runId
+    ) {
+      throw new Error(`Desktop Agent turn ${turn.idleStepId} facts identity is stale.`);
+    }
+    return {
+      idleStepId: turn.idleStepId,
+      profileId: profile.id,
+      providerId: effective?.providerId,
+      modelId: effective?.modelId,
+      turnId: facts.identity.turnId,
+      runId: facts.identity.runId,
+    };
+  });
+  if (new Set(observed.map((item) => item.turnId)).size !== observed.length) {
+    throw new Error('Desktop Agent model sequence did not preserve distinct Turn identities.');
+  }
+  return { conversationId: input.identity.conversationId, turns: observed };
+}
+
+function assertInteractionBinding(assertion, input) {
+  const initial = input.interaction?.initial;
+  const final = input.interaction?.final;
+  if (
+    initial?.phase !== assertion.initialPhase ||
+    initial?.bindingKind !== assertion.initialBindingKind ||
+    final?.phase !== assertion.finalPhase ||
+    final?.bindingKind !== assertion.finalBindingKind ||
+    final?.conversationId !== input.identity.conversationId ||
+    initial?.draftId !== final?.draftId
+  ) {
+    throw new Error('Desktop Agent Draft-to-Session binding evidence does not match.');
+  }
+  const ownerMatches =
+    final.bindingKind === 'assistant'
+      ? final.assistantSpaceId === input.facts.identity.connection.assistantSpaceId &&
+        !('projectId' in input.facts.identity.connection)
+      : final.workspaceId === input.facts.identity.connection.workspaceId &&
+        typeof input.facts.identity.connection.projectId === 'string';
+  if (!ownerMatches) {
+    throw new Error('Desktop Agent Session connection does not match the exact final binding.');
+  }
+  return {
+    draftId: initial.draftId,
+    conversationId: final.conversationId,
+    initialBindingKind: initial.bindingKind,
+    finalBindingKind: final.bindingKind,
+  };
+}
+
+function assertInputInvocation(assertion, input) {
+  const receipt = input.workflow.receipts[assertion.stepId];
+  if (
+    receipt?.accepted !== true ||
+    receipt.trigger !== assertion.trigger ||
+    receipt.name !== assertion.name ||
+    receipt.result?.conversationId !== input.identity.conversationId
+  ) {
+    throw new Error(`Desktop Agent input invocation evidence is unavailable: ${assertion.stepId}`);
+  }
+  return {
+    stepId: assertion.stepId,
+    trigger: receipt.trigger,
+    name: receipt.name,
+    status: assertion.status,
+    resultType: receipt.result.type,
+  };
+}
+
+function assertDraftRejection(assertion, input) {
+  const receipt = input.workflow.receipts[assertion.stepId];
+  const before = receipt?.surfaceBefore;
+  const after = receipt?.surfaceAfter;
+  if (
+    receipt?.accepted !== false ||
+    receipt.status !== 'rejected' ||
+    receipt.catalogRef !== assertion.catalogRef ||
+    receipt.initialBindingKind !== assertion.initialBindingKind ||
+    receipt.currentBindingKind !== assertion.currentBindingKind ||
+    receipt.conversationCreated !== false ||
+    before?.phase !== 'draft' ||
+    after?.phase !== 'draft' ||
+    before?.bindingKind !== assertion.surfaceBindingKind ||
+    after?.bindingKind !== assertion.surfaceBindingKind ||
+    before?.draftId !== after?.draftId ||
+    'conversationId' in before ||
+    'conversationId' in after
+  ) {
+    throw new Error(`Desktop Agent Draft rejection evidence is unavailable: ${assertion.stepId}`);
+  }
+  if (!receipt.diagnosticMessage.includes(assertion.messageIncludes)) {
+    throw new Error('Desktop Agent Draft rejection diagnostic does not match.');
+  }
+  if (
+    assertion.availabilityCode !== undefined &&
+    receipt.availability?.diagnostic?.code !== assertion.availabilityCode
+  ) {
+    throw new Error('Desktop Agent Draft input availability diagnostic does not match.');
+  }
+  return {
+    stepId: assertion.stepId,
+    draftId: after.draftId,
+    catalogRef: assertion.catalogRef,
+    initialBindingKind: receipt.initialBindingKind,
+    currentBindingKind: receipt.currentBindingKind,
+    surfaceBindingKind: after.bindingKind,
+    conversationCreated: false,
+    diagnosticMessage: receipt.diagnosticMessage,
+    ...(receipt.availability?.diagnostic?.code === undefined
+      ? {}
+      : { availabilityCode: receipt.availability.diagnostic.code }),
+  };
+}
+
+function assertConfigurationUpdate(assertion, input) {
+  const receipt = input.workflow.receipts[assertion.stepId];
+  if (
+    receipt?.status !== assertion.status ||
+    receipt.providerId !== assertion.providerId ||
+    receipt.modelId !== assertion.modelId ||
+    receipt.turnStateAtUpdate !== assertion.turnState ||
+    receipt.conversationId !== input.identity.conversationId ||
+    receipt.submissionCountBefore !== receipt.submissionCountAfter
+  ) {
+    throw new Error(
+      `Desktop Agent configuration update evidence is unavailable: ${assertion.stepId}`,
+    );
+  }
+  if (assertion.status === 'applied') {
+    const requested = receipt.projection?.request;
+    const effective = receipt.projection?.fields?.model?.effectiveValue;
+    if (
+      receipt.accepted !== true ||
+      requested?.providerId !== assertion.providerId ||
+      requested?.modelId !== assertion.modelId ||
+      effective?.providerId !== assertion.providerId ||
+      effective?.modelId !== assertion.modelId
+    ) {
+      throw new Error('Desktop Agent applied configuration lacks requested/effective evidence.');
+    }
+  } else if (
+    receipt.accepted !== false ||
+    typeof receipt.diagnosticMessage !== 'string' ||
+    receipt.diagnosticMessage.trim().length === 0
+  ) {
+    throw new Error('Desktop Agent rejected configuration lacks a diagnostic.');
+  }
+  return {
+    stepId: assertion.stepId,
+    status: assertion.status,
+    providerId: receipt.providerId,
+    modelId: receipt.modelId,
+    conversationId: receipt.conversationId,
+    turnState: receipt.turnStateAtUpdate,
+    turnCreated: false,
+    ...(receipt.diagnosticMessage === undefined
+      ? {}
+      : { diagnosticMessage: receipt.diagnosticMessage }),
+  };
 }
 
 function assertToolCall(assertion, input) {

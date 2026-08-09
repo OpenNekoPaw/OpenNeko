@@ -1,6 +1,6 @@
-import { IconButton, PackageIcon, Popover } from '@neko/ui';
+import { Dialog } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createDesktopProjectPortabilityExecuteRequest,
   createDesktopProjectPortabilityRequest,
@@ -15,14 +15,18 @@ import type {
   PortableMediaLibrarySnapshotProgress,
 } from '@neko/assets-domain/contracts';
 
-export function ProjectPortabilityControl({
+export function ProjectPortabilityDialog({
   disabled,
+  onOpenChange,
+  open,
   rendererSessionId,
   project,
   port,
   windowId,
 }: {
   readonly disabled: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly open: boolean;
   readonly rendererSessionId: string;
   readonly project: {
     readonly projectId: string;
@@ -33,7 +37,6 @@ export function ProjectPortabilityControl({
   readonly windowId: string;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const [inspection, setInspection] = useState<DesktopProjectPortabilityInspectResult>();
   const [plan, setPlan] = useState<PortableMediaLibrarySnapshotPlan>();
   const [progress, setProgress] = useState<PortableMediaLibrarySnapshotProgress>();
@@ -52,12 +55,12 @@ export function ProjectPortabilityControl({
     [rendererSessionId, project.projectId, project.workspaceId, windowId],
   );
 
-  const nextRequestId = (operation: string): string => {
+  const nextRequestId = useCallback((operation: string): string => {
     requestSequence.current += 1;
     return `project-portability:${operation}:${requestSequence.current}`;
-  };
+  }, []);
 
-  const refresh = async (): Promise<void> => {
+  const refresh = useCallback(async (): Promise<void> => {
     const result = await port.inspect(
       createDesktopProjectPortabilityRequest({
         requestId: nextRequestId('inspect'),
@@ -65,7 +68,7 @@ export function ProjectPortabilityControl({
       }),
     );
     setInspection(result);
-  };
+  }, [identity, nextRequestId, port]);
 
   useEffect(() => {
     return port.subscribe((event) => {
@@ -84,7 +87,7 @@ export function ProjectPortabilityControl({
     void refresh()
       .catch((cause: unknown) => setError(describeError(cause)))
       .finally(() => setPending(false));
-  }, [identity, open]);
+  }, [open, refresh]);
 
   const requestPlan = async (resumeSnapshotId?: string): Promise<void> => {
     setPending(true);
@@ -162,30 +165,19 @@ export function ProjectPortabilityControl({
   };
 
   return (
-    <Popover
-      align="end"
+    <Dialog
+      className="project-portability-dialog"
+      closeLabel={t('workspace.portabilityClose')}
+      description={project.displayName}
       open={open}
-      onOpenChange={setOpen}
-      side="right"
-      trigger={
-        <IconButton
-          disabled={disabled}
-          icon={<PackageIcon size={16} />}
-          label={t('workspace.portability')}
-          title={t('workspace.portability')}
-          aria-expanded={open}
-        />
-      }
+      onOpenChange={onOpenChange}
+      title={t('workspace.portability')}
     >
       <section
         className="project-portability-panel"
         aria-label={t('workspace.portability')}
         data-project-portability-state={inspection?.portability.state ?? 'loading'}
       >
-        <header>
-          <strong>{t('workspace.portability')}</strong>
-          <span>{project.displayName}</span>
-        </header>
         {inspection ? (
           <>
             <p>{t(`workspace.portabilityState.${inspection.portability.state}`)}</p>
@@ -225,12 +217,16 @@ export function ProjectPortabilityControl({
             <div>
               <button
                 type="button"
-                disabled={pending || executing}
+                disabled={disabled || pending || executing}
                 onClick={() => void executePlan()}
               >
                 {executing ? t('workspace.portabilityCreating') : t('workspace.portabilityConfirm')}
               </button>
-              <button type="button" disabled={pending} onClick={() => void cancelPlan()}>
+              <button
+                type="button"
+                disabled={disabled || pending}
+                onClick={() => void cancelPlan()}
+              >
                 {t('workspace.portabilityCancel')}
               </button>
             </div>
@@ -242,7 +238,7 @@ export function ProjectPortabilityControl({
               inspection.portability.requirementFingerprint ? (
               <button
                 type="button"
-                disabled={pending || executing}
+                disabled={disabled || pending || executing}
                 onClick={() => void requestPlan(inspection.resumableSnapshot?.snapshotId)}
               >
                 {t('workspace.portabilityResume')}
@@ -251,7 +247,10 @@ export function ProjectPortabilityControl({
             <button
               type="button"
               disabled={
-                pending || executing || inspection?.portability.state === 'coverage-incomplete'
+                disabled ||
+                pending ||
+                executing ||
+                inspection?.portability.state === 'coverage-incomplete'
               }
               onClick={() => void requestPlan()}
             >
@@ -261,7 +260,7 @@ export function ProjectPortabilityControl({
         )}
         {error ? <p className="project-portability-panel__error">{error}</p> : null}
       </section>
-    </Popover>
+    </Dialog>
   );
 }
 

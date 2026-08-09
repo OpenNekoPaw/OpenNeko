@@ -101,7 +101,7 @@ describe('NodePiConversationCatalogReader', () => {
     readers.push(reader);
 
     expect(() => reader.findConversation('conversation-invalid')).toThrow(
-      "unknown field 'unexpectedField'",
+      "unsupported field 'unexpectedField'",
     );
     expect(reader.findConversation('conversation-valid')).toMatchObject({
       context: { workspaceGrantId: 'grant-valid' },
@@ -121,7 +121,7 @@ describe('NodePiConversationCatalogReader', () => {
           code: 'invalid-conversation-record',
           workspaceId: 'workspace-a',
           conversationId: 'conversation-invalid',
-          message: expect.stringContaining("unknown field 'unexpectedField'"),
+          message: expect.stringContaining("unsupported field 'unexpectedField'"),
         }),
       ],
     });

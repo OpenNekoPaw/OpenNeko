@@ -1,9 +1,9 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 
 export interface AgentComposerWorkspaceTarget {
   readonly label: string;
-  readonly context: Extract<AgentConversationContext, { readonly kind: 'workspace' }>;
+  readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
 }
 
 export interface AgentComposerProjectOption {

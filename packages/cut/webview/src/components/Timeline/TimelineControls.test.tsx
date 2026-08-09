@@ -33,6 +33,7 @@ describe('TimelineControls media-kind actions', () => {
         <TimelineControls
           canAddAudioTrack
           canAddSubtitleTrack
+          canSave
           canSplit={false}
           hasSelection={false}
           placementMode="sequence"
@@ -45,6 +46,7 @@ describe('TimelineControls media-kind actions', () => {
           onPixelsPerSecond={vi.fn()}
           onPlacementMode={vi.fn()}
           onRedo={vi.fn()}
+          onSave={vi.fn()}
           onSplit={vi.fn()}
           onToggleOverview={vi.fn()}
           onToggleSnapping={vi.fn()}
@@ -82,6 +84,7 @@ describe('TimelineControls media-kind actions', () => {
         <TimelineControls
           canAddAudioTrack
           canAddSubtitleTrack
+          canSave
           canSplit={false}
           hasSelection={false}
           onAddAudioTrack={vi.fn()}
@@ -93,6 +96,7 @@ describe('TimelineControls media-kind actions', () => {
           onPixelsPerSecond={vi.fn()}
           onPlacementMode={onPlacementMode}
           onRedo={vi.fn()}
+          onSave={vi.fn()}
           onSplit={vi.fn()}
           onToggleOverview={vi.fn()}
           onToggleSnapping={vi.fn()}
@@ -125,6 +129,7 @@ describe('TimelineControls media-kind actions', () => {
         <TimelineControls
           canAddAudioTrack
           canAddSubtitleTrack
+          canSave
           canSplit={false}
           hasSelection={false}
           onAddAudioTrack={vi.fn()}
@@ -136,6 +141,7 @@ describe('TimelineControls media-kind actions', () => {
           onPixelsPerSecond={vi.fn()}
           onPlacementMode={onPlacementMode}
           onRedo={vi.fn()}
+          onSave={vi.fn()}
           onSplit={vi.fn()}
           onToggleOverview={vi.fn()}
           onToggleSnapping={vi.fn()}
@@ -152,6 +158,77 @@ describe('TimelineControls media-kind actions', () => {
     expect(activePlacementButton.getAttribute('aria-pressed')).toBe('true');
     act(() => activePlacementButton.click());
     expect(onPlacementMode).toHaveBeenLastCalledWith('sequence');
+  });
+
+  it('routes the visible save control through one accessible icon button', () => {
+    const onSave = vi.fn();
+    act(() => {
+      root.render(
+        <TimelineControls
+          canAddAudioTrack
+          canAddSubtitleTrack
+          canSave
+          canSplit={false}
+          hasSelection={false}
+          onAddAudioTrack={vi.fn()}
+          onAddSubtitleTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onExport={vi.fn()}
+          onFitAll={vi.fn()}
+          onLinkMedia={vi.fn()}
+          onPixelsPerSecond={vi.fn()}
+          onPlacementMode={vi.fn()}
+          onRedo={vi.fn()}
+          onSave={onSave}
+          onSplit={vi.fn()}
+          onToggleOverview={vi.fn()}
+          onToggleSnapping={vi.fn()}
+          onUndo={vi.fn()}
+          overviewVisible
+          pixelsPerSecond={80}
+          placementMode="sequence"
+          snappingEnabled
+        />,
+      );
+    });
+
+    const saveButton = getButton('timeline.controls.save');
+    expect(saveButton.disabled).toBe(false);
+    expect(saveButton.textContent).toBe('');
+    expect(saveButton.querySelector('.codicon-save')).not.toBeNull();
+    act(() => saveButton.click());
+    expect(onSave).toHaveBeenCalledOnce();
+
+    act(() => {
+      root.render(
+        <TimelineControls
+          canAddAudioTrack
+          canAddSubtitleTrack
+          canSave={false}
+          canSplit={false}
+          hasSelection={false}
+          onAddAudioTrack={vi.fn()}
+          onAddSubtitleTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onExport={vi.fn()}
+          onFitAll={vi.fn()}
+          onLinkMedia={vi.fn()}
+          onPixelsPerSecond={vi.fn()}
+          onPlacementMode={vi.fn()}
+          onRedo={vi.fn()}
+          onSave={onSave}
+          onSplit={vi.fn()}
+          onToggleOverview={vi.fn()}
+          onToggleSnapping={vi.fn()}
+          onUndo={vi.fn()}
+          overviewVisible
+          pixelsPerSecond={80}
+          placementMode="sequence"
+          snappingEnabled
+        />,
+      );
+    });
+    expect(getButton('timeline.controls.save').disabled).toBe(true);
   });
 
   function getButton(title: string): HTMLButtonElement {

@@ -43,6 +43,8 @@ describe('AgentExtensionManagementRoot', () => {
         extensionDiscovery: { diagnostics: [] },
       }),
       installPlugin: vi.fn(),
+      enablePlugin: vi.fn(),
+      disablePlugin: vi.fn(),
       removePlugin: vi.fn(),
       refreshMarketplaces: vi.fn(),
       installPersonalSkill: vi.fn(),
@@ -76,6 +78,8 @@ describe('AgentExtensionManagementRoot', () => {
         extensionDiscovery: { diagnostics: [] },
       }),
       installPlugin: vi.fn(),
+      enablePlugin: vi.fn(),
+      disablePlugin: vi.fn(),
       removePlugin: vi.fn(),
       refreshMarketplaces: vi.fn(),
       installPersonalSkill: vi.fn(),
@@ -108,6 +112,48 @@ describe('AgentExtensionManagementRoot', () => {
       screen.getByRole('button', { name: 'home.capabilities.skills' }).getAttribute('aria-pressed'),
     ).toBe('true');
   });
+
+  it('shows unavailable automation qualification without exposing an install action', async () => {
+    const identity = { windowId: 'window-1' };
+    const browserUse = {
+      ...extension('browser-use@openneko', 'Browser Use', false),
+      version: '0.13.7',
+      canInstall: false,
+      agentStatus: 'unsupported' as const,
+      runtimeDiagnosticCode: 'artifact-unavailable',
+      mcpServerIds: ['browser-use'],
+      declaredPermissions: ['browser-observe', 'screen-content'],
+    };
+    const runtime: AgentExtensionManagementRuntime = {
+      identity,
+      getSnapshot: async () => ({
+        identity,
+        skills: [],
+        skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+        extensions: [browserUse],
+        extensionDiscovery: { diagnostics: [] },
+      }),
+      installPlugin: vi.fn(),
+      enablePlugin: vi.fn(),
+      disablePlugin: vi.fn(),
+      removePlugin: vi.fn(),
+      refreshMarketplaces: vi.fn(),
+      installPersonalSkill: vi.fn(),
+      removePersonalSkill: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'home.capabilities.extensions' }));
+    expect((await screen.findAllByText('Browser Use')).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/home\.capabilities\.runtimeDiagnostic\.artifact-unavailable/u),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'home.capabilities.install' })).toBeNull();
+    expect(runtime.installPlugin).not.toHaveBeenCalled();
+  });
 });
 
 function skill(name: string, source: 'personal' | 'plugin') {
@@ -135,7 +181,11 @@ function extension(id: string, displayName: string, installed: boolean) {
     installed,
     enabled: installed,
     canInstall: !installed,
-    canRemove: installed,
+    canEnable: false,
+    canDisable: installed,
+    canRemove: false,
+    declaredPermissions: [],
+    acceptedPermissions: [],
     agentStatus: installed ? ('ready' as const) : ('not-installed' as const),
     runtimeDiagnosticCode: '',
     iconDataUrl: '',

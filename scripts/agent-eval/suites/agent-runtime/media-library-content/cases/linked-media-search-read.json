@@ -10,8 +10,8 @@
       "Desktop Agent input queue",
       "QueryProjectSearch media-library partition",
       "desktop-media-library-files adapter",
-      "workspace-file locator",
-      "ReadImage workspace locator",
+      "workspace-file locator binding",
+      "ReadImage image_ref resolution",
       "Host ContentReadService"
     ],
     "observables": [
@@ -36,7 +36,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "严格执行两步：先调用 QueryProjectSearch，query=library-image、mode=agent-tool、partitions=[media-library]、limit=5；再把返回项的 workspace-relative filePath 原样放入 ReadImage 的 images[0].locator={kind:workspace-file,path:<filePath>}，mode=metadata、max_images=1。不要调用 Asset 工具，不要使用绝对路径、链接目标、缓存路径或 project://assets。读取成功后输出 MEDIA_LIBRARY_CANONICAL_7X9，并单独输出 MEDIA_LIBRARY_READ_OK。"
+      "prompt": "严格执行两步：先调用 QueryProjectSearch，query=library-image、mode=agent-tool、partitions=[media-library]、limit=5；再把返回项的 image_ref 原样放入 ReadImage.image_refs，且只传这一个短引用。不要调用 Asset 工具，不要构造 locator、绝对路径、链接目标、缓存路径或 project://assets。读取成功后输出 MEDIA_LIBRARY_CANONICAL_7X9，并单独输出 MEDIA_LIBRARY_READ_OK。"
     },
     {
       "id": "idle",
@@ -91,7 +91,7 @@
       "expectedArguments": {
         "images": [
           {
-            "locator": {
+            "contentLocator": {
               "kind": "workspace-file",
               "path": "neko/assets/Reference/library-image.svg"
             }
@@ -105,7 +105,7 @@
         "imageCount": 1,
         "images": [
           {
-            "locator": {
+            "contentLocator": {
               "kind": "workspace-file",
               "path": "neko/assets/Reference/library-image.svg"
             }

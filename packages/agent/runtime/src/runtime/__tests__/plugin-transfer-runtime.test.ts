@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   expandRuntimePluginTransferInputs,
-  buildRuntimePluginSlashCommandDispatch,
   buildRuntimePluginsAvailableMessage,
   createRuntimePluginSlashCommandRegistry,
 } from '../plugin-transfer-runtime';
@@ -85,26 +84,6 @@ describe('plugin transfer runtime', () => {
         },
       },
     ]);
-  });
-
-  it('builds plugin slash command dispatch plans', () => {
-    expect(
-      buildRuntimePluginSlashCommandDispatch({
-        type: 'invokePluginSlashCommand',
-        pluginId: 'neko.canvas',
-        commandId: 'batch',
-        conversationId: 'conv-1',
-        args: 'selected shots',
-      }),
-    ).toEqual({
-      command: 'neko.canvas.slashCommand.batch',
-      invocation: {
-        pluginId: 'neko.canvas',
-        commandId: 'batch',
-        conversationId: 'conv-1',
-        args: 'selected shots',
-      },
-    });
   });
 
   it('aggregates plugin slash commands in stable plugin order', () => {

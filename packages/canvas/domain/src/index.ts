@@ -1,5 +1,7 @@
 export * from './canvas-cut-draft';
 export * from './canvas-generation-application-port';
+export * from './canvas-generation-authoring';
+export * from './canvas-generation-inputs';
 export * from './canvas-drop';
 export * from './canvas-markdown-capabilities';
 export * from './canvas-projection';
@@ -67,6 +69,8 @@ export {
 export {
   CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+  CANVAS_ADD_TO_CUT_ACTION_ID,
+  CANVAS_EDIT_AND_GENERATE_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
@@ -83,6 +87,14 @@ export {
   replaceCanvasEntityRepresentationOnCanvas,
   type ResolvedCanvasMaterialDescriptor,
 } from './canvas-content-authoring';
+export {
+  CanvasProjectAuthoringError,
+  CanvasProjectAuthoringService,
+  type CanvasProjectConnectionMutationResult,
+  type CanvasProjectAuthoringServiceOptions,
+  type CanvasProjectNodeMutationResult,
+  type CanvasProjectSnapshot,
+} from './canvas-project-authoring-service';
 export {
   projectGenerationSnapshotToCanvas,
   type CanvasGenerationProjectionInput,

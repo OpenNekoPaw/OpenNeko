@@ -7,8 +7,8 @@ import {
 } from '@neko/shared/job-lifecycle';
 import type {
   GenerationExecutionPort,
+  GenerationExecutionResult,
   MediaGenerationExecutionOptions,
-  MediaGenerationResult,
 } from '../execution';
 import type { MediaAdapterResult } from '../contracts';
 import type {
@@ -42,6 +42,7 @@ export interface GenerationJobCoordinatorOptions {
 export class GenerationJobCoordinator implements GenerationJobPort {
   private readonly active = new Map<string, ActiveGeneration>();
   private readonly mutationTails = new Map<string, Promise<void>>();
+  private readonly submissionTails = new Map<string, Promise<void>>();
   private readonly now: () => number;
   private readonly createJobId: () => string;
   private readonly recoveryPollIntervalMs: number;
@@ -61,6 +62,31 @@ export class GenerationJobCoordinator implements GenerationJobPort {
 
   async submitGeneration(input: SubmitGenerationJobInput): Promise<GenerationJobSnapshot> {
     this.assertNotDisposed();
+    if (input.submissionId !== undefined) {
+      if (!input.submissionId.trim()) {
+        throw new GenerationJobError(
+          'generation-job-submission-conflict',
+          'Generation submission identity must be non-empty.',
+        );
+      }
+      return this.enqueueSubmission(input.submissionId, async () => {
+        const existing = await this.options.store.findBySubmissionId(input.submissionId!);
+        if (existing) {
+          if (!submissionMatches(existing, input)) {
+            throw new GenerationJobError(
+              'generation-job-submission-conflict',
+              `Generation submission '${input.submissionId}' conflicts with its existing Job.`,
+            );
+          }
+          return existing;
+        }
+        return this.createGeneration(input);
+      });
+    }
+    return this.createGeneration(input);
+  }
+
+  private async createGeneration(input: SubmitGenerationJobInput): Promise<GenerationJobSnapshot> {
     if (input.retryOf !== undefined && input.regenerateOf !== undefined) {
       throw new GenerationJobError(
         'generation-job-binding-mismatch',
@@ -77,6 +103,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
       phase: 'pending',
       createdAt: timestamp,
       updatedAt: timestamp,
+      ...(input.submissionId === undefined ? {} : { submissionId: input.submissionId }),
       lifecycleMode: input.lifecycleMode,
       ...(input.retryOf === undefined ? {} : { retryOf: input.retryOf }),
       ...(input.regenerateOf === undefined ? {} : { regenerateOf: input.regenerateOf }),
@@ -113,15 +140,16 @@ export class GenerationJobCoordinator implements GenerationJobPort {
         );
       }
 
+      const active = this.active.get(input.ref.jobId);
       if (current.providerTask) {
         await this.options.execution.cancelExternalTask(current.providerTask);
-        this.active.get(input.ref.jobId)?.controller.abort(new Error('Generation Job cancelled'));
-      } else {
+      } else if (!active) {
         throw new GenerationJobError(
           'generation-job-cancel-unsupported',
-          `Generation Job ${current.ref.jobId} has no provider task identity that can be cancelled safely.`,
+          `Generation Job ${current.ref.jobId} has no active execution or provider task that can be cancelled safely.`,
         );
       }
+      active?.controller.abort(new Error('Generation Job cancelled'));
       return this.commit(current, {
         phase: 'cancelled',
         progress: current.progress,
@@ -399,8 +427,17 @@ export class GenerationJobCoordinator implements GenerationJobPort {
   private executeGeneration(
     snapshot: GenerationJobSnapshot,
     options: MediaGenerationExecutionOptions,
-  ): Promise<MediaGenerationResult> {
+  ): Promise<GenerationExecutionResult> {
     switch (snapshot.request.generationType) {
+      case 'prompt':
+        return this.options.execution.generatePrompt(
+          {
+            ...snapshot.request.request,
+            providerId: snapshot.request.providerId,
+            modelId: snapshot.request.modelId,
+          },
+          { signal: options.signal },
+        );
       case 'text-to-image':
       case 'image-to-image':
       case 'image-edit':
@@ -449,6 +486,12 @@ export class GenerationJobCoordinator implements GenerationJobPort {
           },
         });
       case 'completed':
+        if (current.request.generationType === 'prompt') {
+          throw new GenerationJobError(
+            'generation-job-binding-mismatch',
+            `Prompt Generation Job ${current.ref.jobId} cannot complete through a media provider task.`,
+          );
+        }
         if (!result.outputs || result.outputs.length === 0) {
           throw new GenerationJobError(
             'generation-job-result-unavailable',
@@ -509,6 +552,20 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     return result;
   }
 
+  private enqueueSubmission<T>(identity: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.submissionTails.get(identity) ?? Promise.resolve();
+    const result = previous.then(operation, operation);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.submissionTails.set(identity, tail);
+    void tail.finally(() => {
+      if (this.submissionTails.get(identity) === tail) this.submissionTails.delete(identity);
+    });
+    return result;
+  }
+
   private async drain(ref: GenerationJobRef): Promise<void> {
     await (this.mutationTails.get(ref.jobId) ?? Promise.resolve());
   }
@@ -523,6 +580,13 @@ export class GenerationJobCoordinator implements GenerationJobPort {
 function freezeRequest(input: SubmitGenerationJobInput): GenerationJobSnapshot['request'] {
   assertRequestBinding(input);
   switch (input.generationType) {
+    case 'prompt':
+      return Object.freeze({
+        generationType: input.generationType,
+        providerId: input.providerId,
+        modelId: input.modelId,
+        request: Object.freeze({ ...input.request }),
+      });
     case 'text-to-image':
     case 'image-to-image':
     case 'image-edit':
@@ -566,6 +630,7 @@ function freezeRequest(input: SubmitGenerationJobInput): GenerationJobSnapshot['
 }
 
 function assertRequestBinding(input: SubmitGenerationJobInput): void {
+  if (input.generationType === 'prompt') return;
   const requestProviderId = input.request.providerId;
   const requestModelId = input.request.modelId;
   if (
@@ -581,7 +646,7 @@ function assertRequestBinding(input: SubmitGenerationJobInput): void {
 
 function assertGenerationResultBinding(
   snapshot: GenerationJobSnapshot,
-  result: MediaGenerationResult,
+  result: GenerationExecutionResult,
 ): void {
   if (
     result.providerId !== snapshot.request.providerId ||
@@ -593,6 +658,21 @@ function assertGenerationResultBinding(
       `Generation result binding ${result.providerId}/${result.modelId}/${result.type} does not match Job binding ${snapshot.request.providerId}/${snapshot.request.modelId}/${snapshot.request.generationType}.`,
     );
   }
+}
+
+function submissionMatches(
+  snapshot: GenerationJobSnapshot,
+  input: SubmitGenerationJobInput,
+): boolean {
+  const retryOf = input.retryOf;
+  const regenerateOf = input.regenerateOf;
+  return (
+    snapshot.submissionId === input.submissionId &&
+    snapshot.lifecycleMode === input.lifecycleMode &&
+    snapshot.retryOf?.jobId === retryOf?.jobId &&
+    snapshot.regenerateOf?.jobId === regenerateOf?.jobId &&
+    JSON.stringify(snapshot.request) === JSON.stringify(freezeRequest(input))
+  );
 }
 
 function normalizeProgress(progress: number): number {

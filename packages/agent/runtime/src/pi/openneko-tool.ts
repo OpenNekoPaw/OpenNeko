@@ -42,6 +42,27 @@ export interface ProjectOpenNekoToolOptions {
   readonly locale?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly assetLoader?: PiToolResultAssetLoader;
+  readonly modelProtocol?: PiToolModelProtocol;
+}
+
+export interface PiToolModelDefinitionProjection {
+  readonly description?: string;
+  readonly parameters: ToolParameters;
+}
+
+/** Keeps provider-facing arguments small while domain Tools retain canonical contracts. */
+export interface PiToolModelProtocol {
+  projectDefinition(tool: Tool): PiToolModelDefinitionProjection | undefined;
+  prepareArguments(input: {
+    readonly tool: Tool;
+    readonly args: Record<string, unknown>;
+    readonly context: PiCapabilityToolContext;
+  }): Record<string, unknown> | Promise<Record<string, unknown>>;
+  projectResultText(input: {
+    readonly tool: Tool;
+    readonly result: ToolResult;
+    readonly context: PiCapabilityToolContext;
+  }): string | undefined | Promise<string | undefined>;
 }
 
 export interface PiToolResultAssetPayload {
@@ -143,12 +164,16 @@ export function projectOpenNekoTool(
   tool: Tool,
   options: ProjectOpenNekoToolOptions = {},
 ): PiCapabilityTool<ToolResult> {
-  const parameters = Type.Object({}, toTypeBoxObjectOptions(tool.parameters));
+  const modelDefinition = options.modelProtocol?.projectDefinition(tool);
+  const parameters = Type.Object(
+    {},
+    toTypeBoxObjectOptions(modelDefinition?.parameters ?? tool.parameters),
+  );
   const requirements = projectRequirements(tool);
   return Object.freeze({
     name: tool.name,
     label: tool.name,
-    description: resolveDescription(tool, options.locale),
+    description: modelDefinition?.description ?? resolveDescription(tool, options.locale),
     parameters,
     ...(options.modelPurpose === undefined ? {} : { modelPurpose: options.modelPurpose }),
     ...(options.modelPurposes === undefined
@@ -173,9 +198,18 @@ export function projectOpenNekoTool(
       readonly onUpdate?: AgentToolUpdateCallback<ToolResult>;
     }): Promise<AgentToolResult<ToolResult>> => {
       const { args, context, signal, onUpdate } = input;
-      const record = requireArgumentsRecord(tool.name, args);
-      assertNoTransientDisplayProjection(record, `Tool ${tool.name} arguments`);
-      const result = await tool.execute(record, {
+      const modelArguments = requireArgumentsRecord(tool.name, args);
+      assertNoTransientDisplayProjection(modelArguments, `Tool ${tool.name} arguments`);
+      const preparedArguments =
+        options.modelProtocol === undefined
+          ? modelArguments
+          : await options.modelProtocol.prepareArguments({
+              tool,
+              args: modelArguments,
+              context,
+            });
+      assertNoTransientDisplayProjection(preparedArguments, `Tool ${tool.name} prepared arguments`);
+      const result = await tool.execute(preparedArguments, {
         ...(signal === undefined ? {} : { signal }),
         ...(context.purposeModel === undefined ? {} : { purposeModel: context.purposeModel }),
         metadata: createExecutionMetadata(context, options.metadata),
@@ -206,8 +240,13 @@ export function projectOpenNekoTool(
       }
       if (!result.success) throw new OpenNekoPiToolExecutionError(tool.name, result);
       assertNoTransientDisplayProjection(result, `Tool ${tool.name} result`);
+      const modelResultText = await options.modelProtocol?.projectResultText({
+        tool,
+        result,
+        context,
+      });
       return {
-        content: await projectToolResultContent(result, options.assetLoader),
+        content: await projectToolResultContent(result, options.assetLoader, modelResultText),
         details: structuredClone(result),
       };
     },
@@ -223,6 +262,7 @@ export function projectOpenNekoTools(
     readonly purposeForToolCall?: (tool: Tool, args: unknown) => ToolModelPurpose | undefined;
     readonly isPurposeOptionalForTool?: (tool: Tool) => boolean;
     readonly assetLoader?: PiToolResultAssetLoader;
+    readonly modelProtocol?: PiToolModelProtocol;
   },
 ): readonly PiCapabilityTool<ToolResult>[] {
   return Object.freeze(
@@ -238,6 +278,7 @@ export function projectOpenNekoTools(
         ...(options?.locale === undefined ? {} : { locale: options.locale }),
         ...(options?.metadata === undefined ? {} : { metadata: options.metadata }),
         ...(options?.assetLoader === undefined ? {} : { assetLoader: options.assetLoader }),
+        ...(options?.modelProtocol === undefined ? {} : { modelProtocol: options.modelProtocol }),
         ...(purposes.length === 0
           ? {}
           : purposes.length === 1
@@ -360,9 +401,10 @@ function formatToolResultForModel(result: ToolResult): string {
 async function projectToolResultContent(
   result: ToolResult,
   assetLoader: PiToolResultAssetLoader | undefined,
+  modelResultText?: string,
 ): Promise<(TextContent | ImageContent)[]> {
   const content: (TextContent | ImageContent)[] = [
-    { type: 'text', text: formatToolResultForModel(result) },
+    { type: 'text', text: modelResultText ?? formatToolResultForModel(result) },
   ];
   const imageAttachments = (result.attachments ?? []).filter(
     (attachment) => attachment.type === 'image',

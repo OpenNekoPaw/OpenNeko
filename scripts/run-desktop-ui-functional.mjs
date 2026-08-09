@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,19 @@ import { resolveDesktopFunctionalScenarios } from './desktop-functional/scenario
 
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixturePrefix = 'openneko-desktop-functional-';
+const MANUAL_FIXTURE_WORKSPACE_ID = '4c58697b-af37-4e30-8863-502ed5927a6e';
+
+export async function prepareDesktopUiFunctionalWorkspace(fixtureHome) {
+  const workspacePath = join(fixtureHome, 'workspace');
+  const projectRoot = join(workspacePath, 'neko');
+  await mkdir(projectRoot, { recursive: true });
+  await writeFile(
+    join(projectRoot, 'project.json'),
+    `${JSON.stringify({ workspaceId: MANUAL_FIXTURE_WORKSPACE_ID }, null, 2)}\n`,
+    'utf8',
+  );
+  return workspacePath;
+}
 
 export function createDesktopUiFunctionalLaunch(input) {
   validateDesktopFunctionalStoragePaths(input);
@@ -27,6 +40,7 @@ export function createDesktopUiFunctionalLaunch(input) {
     ]),
     environment: Object.freeze({
       OPENNEKO_DESKTOP_FUNCTIONAL_HOME: input.fixtureHome,
+      OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE: input.workspacePath,
     }),
   });
 }
@@ -39,12 +53,16 @@ export async function runDesktopUiFunctional(options = {}) {
   const spawnProcess = options.spawnProcess ?? spawn;
   const fixtureHome = await createTemporaryRoot();
   const userDataRoot = join(fixtureHome, 'electron-user-data');
-  await mkdir(userDataRoot, { recursive: true });
+  const [, workspacePath] = await Promise.all([
+    mkdir(userDataRoot, { recursive: true }),
+    prepareDesktopUiFunctionalWorkspace(fixtureHome),
+  ]);
 
   const launch = createDesktopUiFunctionalLaunch({
     platform: options.platform ?? process.platform,
     fixtureHome,
     userDataRoot,
+    workspacePath,
   });
   process.stdout.write(`Launching isolated OpenNeko Desktop UI fixture from ${fixtureHome}.\n`);
 

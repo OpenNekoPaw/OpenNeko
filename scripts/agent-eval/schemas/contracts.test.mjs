@@ -274,6 +274,64 @@ describe('agent evaluation suite and scenario contracts', () => {
     expect(() => validateScenarioForExecution(noTerminalIdle)).toThrow('end with wait-for-idle');
   });
 
+  it('validates Draft rejection and running configuration update workflows without case dispatch', () => {
+    const workflow = scenario();
+    workflow.steps = [
+      { id: 'assistant-binding', kind: 'draft-bind', target: 'assistant' },
+      {
+        id: 'stale-submit',
+        kind: 'draft-submit',
+        catalogRef: 'initial',
+        input: { kind: 'message', text: 'hello' },
+        expectedStatus: 'rejected',
+      },
+      { id: 'submit', kind: 'submit', prompt: 'Create a session.' },
+      {
+        id: 'model-update',
+        kind: 'update-configuration',
+        afterStepId: 'submit',
+        providerId: 'provider',
+        modelId: 'model-next',
+        expectedStatus: 'applied',
+        turnState: 'running',
+        timeoutMs: 120_000,
+      },
+      { id: 'idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
+    ];
+    workflow.assertions.push(
+      {
+        id: 'draft-boundary',
+        kind: 'draft-rejection',
+        stepId: 'stale-submit',
+        catalogRef: 'initial',
+        initialBindingKind: 'unbound',
+        currentBindingKind: 'assistant',
+        surfaceBindingKind: 'unbound',
+        conversationCreated: false,
+        messageIncludes: 'stale',
+        evidenceRef: 'turn-facts',
+      },
+      {
+        id: 'configuration',
+        kind: 'configuration-update',
+        stepId: 'model-update',
+        providerId: 'provider',
+        modelId: 'model-next',
+        status: 'applied',
+        turnState: 'running',
+        turnCreated: false,
+        evidenceRef: 'turn-facts',
+      },
+    );
+    expect(validateScenarioForExecution(workflow)).toBe(workflow);
+
+    const unknownCatalog = structuredClone(workflow);
+    unknownCatalog.steps[1].catalogRef = 'missing';
+    expect(() => validateScenarioForExecution(unknownCatalog)).toThrow(
+      'references unknown Draft catalog',
+    );
+  });
+
   it('rejects unknown schema identities, fields, and kinds', () => {
     expect(() => validateSuite({ ...suite(), schema: 'neko.agent-eval.unknown-suite' })).toThrow(
       'must equal "neko.agent-eval.suite"',

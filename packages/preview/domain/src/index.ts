@@ -135,6 +135,34 @@ const PREVIEW_MIME_TYPES: Readonly<Record<string, string>> = {
   fountain: 'text/plain',
 };
 
+const EPUB_RESOURCE_MIME_TYPES: Readonly<Record<string, string>> = {
+  xml: 'application/xml',
+  opf: 'application/oebps-package+xml',
+  ncx: 'application/x-dtbncx+xml',
+  xhtml: 'application/xhtml+xml',
+  html: 'text/html',
+  htm: 'text/html',
+  css: 'text/css',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  ogg: 'audio/ogg',
+  opus: 'audio/opus',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+};
+
 export interface PreviewRuntimeIdentity {
   readonly projectId: string;
   readonly workspaceId: string;
@@ -159,6 +187,11 @@ export interface PreviewMediaDescriptor {
 }
 
 export type PreviewProjection =
+  | {
+      readonly identity: PreviewRuntimeIdentity;
+      readonly presentation: PreviewViewPresentation;
+      readonly status: 'loading';
+    }
   | {
       readonly identity: PreviewRuntimeIdentity;
       readonly presentation: PreviewViewPresentation;
@@ -282,6 +315,10 @@ export function parsePreviewProjection(value: unknown): PreviewProjection {
   const record = requireRecord(value, 'Preview projection must be an object.');
   const identity = parsePreviewRuntimeIdentity(record['identity']);
   const presentation = requirePresentation(record['presentation']);
+  if (record['status'] === 'loading') {
+    requireExactKeys(record, ['identity', 'presentation', 'status']);
+    return { identity, presentation, status: 'loading' };
+  }
   if (record['status'] === 'ready') {
     requireExactKeys(record, ['identity', 'presentation', 'status', 'descriptor']);
     return {
@@ -394,6 +431,11 @@ export function detectPreviewContentKind(fileName: string): PreviewContentKind |
 
 export function getPreviewMediaType(fileName: string): string | undefined {
   return PREVIEW_MIME_TYPES[fileExtension(fileName)];
+}
+
+export function getEpubResourceMediaType(entryPath: string): string {
+  if (entryPath === 'mimetype') return 'application/epub+zip';
+  return EPUB_RESOURCE_MIME_TYPES[fileExtension(entryPath)] ?? 'application/octet-stream';
 }
 
 function inspectTransportValue(value: unknown, label: string): void {

@@ -1,6 +1,6 @@
 ## Context
 
-`@neko/world` 当前不存在。稳定架构只声明 `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` 及 World 对世界事实、规则、事件、存档、分支和回放的 owner 责任；Desktop 明确把 World 保持为 unavailable。活跃变更 `define-character-chatroom-play-use` 进一步讨论多角色 Play、外部游戏、VLA、seat lease 与 Computer Use，但没有定义一个可发布、可进入、可持续互动的 World 作品，且其 Game Activity 假设不应成为 World core。
+`@neko/world` 当前不存在。稳定架构只声明 `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` 及 World 对世界事实、规则、事件、存档、分支和回放的 owner 责任；Desktop 明确把 World 保持为 unavailable。前置变更 `define-character-dialogue-chatroom-world-foundation` 为 Character Chatroom 建立 WorldBook、WorldVersion、WorldRun、WorldEvent、WorldState、participant-scoped WorldView 与叙事 save/branch 的最小真实闭包。本设计必须复用该事实链，并只扩展可发布、可进入、可持续互动的 AI-native WorldExperience。
 
 本设计把 Neko World 定位为 AI-native 互动世界：Story 提供主题、冲突和情节机会，World 提供共同事实、规则与状态，Character 提供稳定身份、知识与行为策略，User 以显式 stance 观察、参与、扮演或导演。与“AI 只辅助创作、用户消费时不再推理”的传统作品不同，WorldExperienceVersion 是一套由 AI 在消费期持续实时执行的约束式世界生成规范；World application service 仍是唯一状态和事件提交权威。
 
@@ -168,6 +168,8 @@ Desktop Home 首先提供轻量 World Library：已安装/创作 WorldExperience
 
 Canonical producer 是 World package public authoring/publication/runtime service；consumer 是 Chara/Agent adapter、Node repository、World Webview port 和 Desktop composition。Desktop 只保留 Electron sender/path/trust boundary、typed IPC、View/Window lifecycle、native dialog、public port wiring 与 disposal，因为这些逻辑真实依赖 Application 层；所有可脱离 Electron 的规则、事务、codec、projection 和恢复编排留在 World owning package。
 
+World product entry 只有在 package owner 可用后才通过 `unify-agent-launch-and-domain-bindings` 的 typed World binding/context port 向 Agent 贡献 exact WorldExperienceVersion 或 WorldRun、participant、stance、branch 和 participant-scoped WorldView。Agent 只拥有 Draft/Conversation/Turn 与 AI role session，不得从文本或 active Scene 推断 World identity，也不得提交 WorldEvent/WorldState。World provider 未组合时，Agent Entry 和 Desktop 都必须保留 owner-qualified unavailable。
+
 ### 15. 项目事实、本地状态和表现资源保持分离
 
 WorldProject 与 portable WorldSave 使用稳定的 owning-domain 文件结构；WorldVersion 和 WorldExperienceVersion 是用户可发布、选择和绑定的不可变业务版本身份。具体 workspace-relative canonical path 和扩展名由实现 OpenSpec 冻结。用户级 SQLite 只保存 installed catalog、recent run、恢复索引、attention 和可重建 Search projection。素材由 Generation/Content/Asset owner 在 authoring 时提供 durable ContentLocator，并在发布后作为 grounding/reference 被实时 Context Materializer裁剪使用；普通 Generation runtime、cache、opaque URL 和 runtime token 不进入 World Run 或 facts。
@@ -190,7 +192,7 @@ WorldProject 与 portable WorldSave 使用稳定的 owning-domain 文件结构�
 ## Migration Plan
 
 1. 先合入本 OpenSpec，不改变 Desktop unavailable 状态，不创建生产空包或用户数据。
-2. 协调 `define-character-chatroom-play-use`，将 World core 描述收敛到 participant、observation、intent、event、state、save 与 branch；外部游戏/VLA/Computer Use 留在独立 Activity 方向。
+2. 以 `define-character-dialogue-chatroom-world-foundation` 的 WorldVersion、Run、Intent、Event、State、View、Save 与 branch 为前置 canonical authority；Browser Use、Computer Use、Play-use、外部游戏、VLA 与 seat control 留在各自独立变更中。
 3. 建立 World package-owned contract/codec、architecture tests 和合成 fixture，再实现 authoring/publication、runtime/state 和 persistence service。
 4. 接入 CharacterVersion/CharacterRun、Entity/Asset/Content 与 AgentSession adapter，使用路径断言证明没有第二套 Agent 或 app-owned World workflow。
 5. 实现文字+2D World Webview、Desktop World Library、typed IPC 和隔离 fixture workspace；完成真实 Electron 入口、reload、切换、关闭与资源释放验收后才将 surface 标为 ready。

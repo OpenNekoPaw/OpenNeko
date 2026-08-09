@@ -60,7 +60,7 @@ describe('conversation-host-message', () => {
           updatedAt: 100,
         },
         {
-          resolveContentLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
+          resolveDisplayLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
         },
       ),
     ).resolves.toEqual({

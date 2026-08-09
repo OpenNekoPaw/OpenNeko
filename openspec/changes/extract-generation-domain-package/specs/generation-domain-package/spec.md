@@ -42,6 +42,52 @@ credentials remain outside Job snapshots and Webview projections.
 - **THEN** both use the canonical Host config parsing and immutable projection rules
 - **AND** Generation creates no domain-local config file or second ConfigManager
 
+### Requirement: One exact Workspace has one application Generation owner
+
+The Generation application runtime SHALL map each exact Workspace identity and authorized root to one
+shared GenerationJob owner within the Desktop application lifecycle, including concurrent first access,
+and SHALL NOT select an owner by active, current, recent, first, wildcard or failed-owner fallback.
+
+#### Scenario: Canvas and Agent use the same Workspace
+
+- **WHEN** Canvas and an Agent Tool request Generation for the same exact Workspace
+- **THEN** both receive the same GenerationJob port owned by one Workspace coordinator
+- **AND** neither consumer owns coordinator disposal or a second Job store
+
+#### Scenario: One Workspace owner fails to initialize
+
+- **WHEN** one Workspace cannot create its Generation execution or persistence owner
+- **THEN** only that Workspace request fails with an explicit diagnostic
+- **AND** an already available sibling Workspace owner remains usable
+
+#### Scenario: Workspace identity is reused with another root
+
+- **WHEN** a caller requests an existing Workspace identity with a different authorized root
+- **THEN** the runtime rejects the request and does not replace, alias or create another owner
+
+### Requirement: Direct and Agent generation share the canonical Job path
+
+Explicit direct image, video and audio operations and Agent generation Tool calls SHALL submit through
+the same exact Workspace Generation application runtime and purpose-qualified model binding.
+
+#### Scenario: Direct generation is submitted
+
+- **WHEN** a user submits an explicit media operation from a direct generation control
+- **THEN** Generation creates one detached canonical GenerationJob without creating a Conversation,
+  Agent Turn, Pi Session or Tool Call
+
+#### Scenario: Agent generation Tool is submitted
+
+- **WHEN** an Agent Turn invokes an approved generation Tool
+- **THEN** the Tool submits through the same Workspace GenerationJob port with its immutable Turn purpose
+  binding and projects the exact Job and artifact identities into that Conversation
+
+#### Scenario: Either entry path fails
+
+- **WHEN** the direct operation or Agent Tool cannot validate its exact model or Job request
+- **THEN** that operation fails visibly in its own UI/Tool boundary
+- **AND** it does not retry through the other entry path, another provider or another Workspace owner
+
 ### Requirement: Package extraction does not create another Host
 
 The Generation package SHALL remain host-neutral and MUST NOT introduce a new process, application

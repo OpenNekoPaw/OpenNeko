@@ -259,6 +259,7 @@ function entryDraft(draftId: string, inputValue: string): AgentEntryDraftSnapsho
     draftId,
     inputValue,
     contextReferences: [],
+    characterLaunches: [],
     selectedModel: 'test:test-model',
     executionMode: 'ask',
   };

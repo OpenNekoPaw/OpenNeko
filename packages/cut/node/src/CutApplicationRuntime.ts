@@ -5,8 +5,10 @@ import {
   CUT_HOST_RUNTIME_ROUTES,
   CutDocumentSession,
   createOtioTimeline,
+  isCutDraftDocumentId,
   DEFAULT_CUT_HOST_PRESENTATION,
   assertCutHostRuntimeIdentity,
+  isCutCommand,
   parseCutHostPresentationState,
   parseCutHostRuntimeRequest,
   type CutCommand,
@@ -21,6 +23,11 @@ import {
   type CutHostRuntimeSnapshot,
   type CutMediaRuntimeAdapter,
 } from '@neko/cut-domain';
+import {
+  parseContentLocatorDragData,
+  type ContentLocator,
+  type ContentLocatorDragData,
+} from '@neko/content';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
 import {
   CutPreviewRuntimeController,
@@ -34,7 +41,6 @@ import { freezeCutExportRequest, readCutExportSettings } from './cutExportReques
 import { generateClipRepresentations, readClipRepresentationRequests } from './clipRepresentations';
 import type { NodeMediaPublisher } from '@neko/media/node';
 import type {
-  ResourceBrowserContentItem,
   ResourceBrowserIdentity,
   ResourceBrowserItem,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -44,7 +50,7 @@ interface CutApplicationRuntimeEntry {
   readonly session: CutDocumentSession;
   readonly listeners: Set<(event: CutHostRuntimeProjectionEvent) => void>;
   readonly completedCommands: Map<string, CutHostRuntimeResult>;
-  readonly documentPath: string;
+  documentPath: string;
   readonly workspacePath: string;
   preview: CutPreviewRuntimeController;
   presentation: CutHostPresentationState;
@@ -78,10 +84,7 @@ export interface CutApplicationRuntimeOptions {
     readonly workspacePath: string;
     readonly storage: CutDocumentStorage;
   }>;
-  readonly resolveResourcePath: (
-    workspaceId: string,
-    item: ResourceBrowserContentItem,
-  ) => Promise<string>;
+  readonly resolveResourcePath: (workspaceId: string, locator: ContentLocator) => Promise<string>;
   readonly readText: (absolutePath: string) => Promise<string>;
   readonly createMediaPublisher?: (input: {
     readonly windowId: string;
@@ -171,7 +174,7 @@ export class CutApplicationRuntime {
     const current = entry.session.view();
     const sourcePath = await this.options.resolveResourcePath(
       input.resourceIdentity.workspaceId,
-      input.item,
+      input.item.locator,
     );
     const importer = await CutWorkspaceMediaImporter.create(entry.workspacePath);
     const prepared = await importer.prepare(entry.documentPath, sourcePath);
@@ -260,6 +263,118 @@ export class CutApplicationRuntime {
     return this.projectSnapshot(await this.requireSession(windowId, identity));
   }
 
+  hasSession(identity: CutHostRuntimeIdentity): boolean {
+    this.requireActive();
+    return this.sessions.has(cutSessionKey(identity));
+  }
+
+  createDraft(input: {
+    readonly identity: CutHostRuntimeIdentity;
+    readonly name: string;
+    readonly documentPath: string;
+    readonly workspacePath: string;
+    readonly storage: CutDocumentStorage;
+  }): CutHostRuntimeSnapshot {
+    this.requireActive();
+    const key = cutSessionKey(input.identity);
+    if (this.sessions.has(key)) {
+      throw new Error('Cut draft identity already has an active session.');
+    }
+    const session = CutDocumentSession.create(
+      input.identity.documentId,
+      createOtioTimeline(input.name, {
+        profile: '1080p30',
+        editRateNumerator: 30,
+        editRateDenominator: 1,
+        width: 1920,
+        height: 1080,
+      }),
+      {
+        storage: input.storage,
+        createClipId: () => `clip-${randomUUID()}`,
+        createTrackId: () => `track-${randomUUID()}`,
+        createSessionId: () => input.identity.sessionId,
+      },
+    );
+    const entry: CutApplicationRuntimeEntry = {
+      identity: { ...input.identity },
+      session,
+      listeners: new Set(),
+      completedCommands: new Map(),
+      documentPath: input.documentPath,
+      workspacePath: input.workspacePath,
+      preview: this.createPreviewController(
+        input.documentPath,
+        input.workspacePath,
+        input.identity,
+        `draft:${input.identity.sessionId}`,
+      ),
+      presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
+      sequence: 0,
+    };
+    this.sessions.set(key, entry);
+    return this.projectSnapshot(entry);
+  }
+
+  async saveDraftAs(input: {
+    readonly windowId: string;
+    readonly identity: CutHostRuntimeIdentity;
+    readonly nextIdentity: CutHostRuntimeIdentity;
+    readonly documentPath: string;
+    readonly storage: CutDocumentStorage;
+  }): Promise<CutHostRuntimeResult> {
+    const key = cutSessionKey(input.identity);
+    return this.enqueueSessionOperation(key, async () => {
+      const entry = this.sessions.get(key);
+      if (!entry || entry.identity.windowId !== input.windowId) {
+        throw new Error('Cut draft session is unavailable.');
+      }
+      assertCutHostRuntimeIdentity(entry.identity, input.identity);
+      assertCutHostRuntimeIdentity(
+        { ...entry.identity, documentId: input.nextIdentity.documentId },
+        input.nextIdentity,
+      );
+      const nextKey = cutSessionKey(input.nextIdentity);
+      if (this.sessions.has(nextKey)) {
+        throw new Error('Cut Save As target already has an active session.');
+      }
+      const paths = await CutWorkspaceMediaPaths.create(entry.workspacePath);
+      await entry.session.saveAs({
+        documentUri: input.nextIdentity.documentId,
+        storage: input.storage,
+        rebase: (document) =>
+          paths.rebaseDocument(document, entry.documentPath, input.documentPath),
+      });
+      await entry.preview.dispose();
+      this.sessions.delete(key);
+      entry.identity = { ...input.nextIdentity };
+      entry.documentPath = input.documentPath;
+      entry.preview = this.createPreviewController(
+        input.documentPath,
+        entry.workspacePath,
+        entry.identity,
+        `save-as:${entry.identity.sessionId}`,
+      );
+      this.sessions.set(nextKey, entry);
+      const snapshot = this.projectSnapshot(entry);
+      const eventSequence = this.publish(entry, snapshot);
+      return { snapshot, output: { type: 'identity-rebound', eventSequence } };
+    });
+  }
+
+  discardSession(windowId: string, identity: CutHostRuntimeIdentity): void {
+    this.requireActive();
+    const key = cutSessionKey(identity);
+    const entry = this.sessions.get(key);
+    if (!entry || entry.identity.windowId !== windowId) {
+      throw new Error('Cut session is unavailable.');
+    }
+    assertCutHostRuntimeIdentity(entry.identity, identity);
+    entry.listeners.clear();
+    this.sessions.delete(key);
+    this.scheduleDisposal(entry);
+  }
+
   async execute(
     windowId: string,
     value: CutHostRuntimeRequest | unknown,
@@ -341,9 +456,18 @@ export class CutApplicationRuntime {
       }
       case CUT_HOST_RUNTIME_ROUTES.mediaDrop: {
         const payload = requireMediaDropPayload(request.payload);
+        const sourcePaths =
+          payload.source.kind === 'content-locator'
+            ? [
+                await this.options.resolveResourcePath(
+                  entry.identity.workspaceId,
+                  payload.source.data.locator,
+                ),
+              ]
+            : payload.source.uris.map(requireLocalFileUri);
         await this.applyMediaPaths(entry, request.requestId, {
           ...payload,
-          sourcePaths: payload.uris.map(requireLocalFileUri),
+          sourcePaths,
         });
         break;
       }
@@ -612,9 +736,13 @@ export class CutApplicationRuntime {
     identity: CutHostRuntimeIdentity,
   ): Promise<CutApplicationRuntimeEntry> {
     this.requireActive();
-    const grant = await this.options.authorizeSession(windowId, identity);
     const key = cutSessionKey(identity);
     const current = this.sessions.get(key);
+    if (isCutDraftDocumentId(identity.documentId)) {
+      if (current) return current;
+      throw new Error('Unnamed Cut draft session is unavailable in this application process.');
+    }
+    const grant = await this.options.authorizeSession(windowId, identity);
     if (current) return current;
     const pending = this.sessionOpenings.get(key);
     if (pending) return pending;
@@ -793,13 +921,14 @@ export class CutApplicationRuntime {
   private publish(
     entry: CutApplicationRuntimeEntry,
     snapshot: CutHostRuntimeSnapshot = this.projectSnapshot(entry),
-  ): void {
+  ): number {
     entry.sequence += 1;
     const event: CutHostRuntimeProjectionEvent = {
       sequence: entry.sequence,
       snapshot,
     };
     for (const listener of entry.listeners) listener(event);
+    return event.sequence;
   }
 
   private completePreviewRequest(
@@ -987,39 +1116,6 @@ const UNAVAILABLE_MEDIA_PUBLISHER = {
   },
 } satisfies NodeMediaPublisher;
 
-const CUT_COMMAND_TYPES = new Set<string>([
-  'set-project-canvas',
-  'link-media',
-  'add-track',
-  'remove-track',
-  'rename-track',
-  'move-track',
-  'relink-media',
-  'split',
-  'trim',
-  'move-item',
-  'place-clip',
-  'rename-clip',
-  'set-clip-duration',
-  'set-playback-rate',
-  'ripple-delete',
-  'trim-trailing-gaps',
-  'insert-gap',
-  'remove-gap',
-  'set-audio',
-  'set-clip-enabled',
-  'set-track-enabled',
-  'set-track-muted',
-  'set-clip-locked',
-  'set-track-locked',
-  'duplicate-clip',
-  'clone-clip-at-time',
-  'duplicate-track',
-  'separate-audio',
-  'unseparate-audio',
-  'append-route',
-]);
-
 function requireCutCommand(value: unknown): CutCommand {
   if (!isCutCommand(value)) throw new Error('Cut command payload is invalid.');
   return value;
@@ -1117,21 +1213,34 @@ function requireMediaDropPayload(value: unknown): {
   readonly trackId: string;
   readonly timelineStartFrames: number;
   readonly overlapPolicy: 'reject' | 'insert';
-  readonly uris: readonly string[];
+  readonly source:
+    | { readonly kind: 'content-locator'; readonly data: ContentLocatorDragData }
+    | { readonly kind: 'local-file-uris'; readonly uris: readonly string[] };
 } {
   const record = requireObject(value, 'Cut media drop payload is invalid.');
   if (record['type'] !== 'cut:drop-link-media') {
     throw new Error('Cut media drop type is invalid.');
   }
-  const uris = record['uris'];
+  const source = requireObject(record['source'], 'Cut media drop source is invalid.');
+  if (source['kind'] === 'content-locator') {
+    return {
+      ...readMediaPlacement(record),
+      source: {
+        kind: 'content-locator',
+        data: parseContentLocatorDragData(source['data']),
+      },
+    };
+  }
+  const uris = source['uris'];
   if (
+    source['kind'] !== 'local-file-uris' ||
     !Array.isArray(uris) ||
     uris.length === 0 ||
     !uris.every((uri): uri is string => typeof uri === 'string')
   ) {
-    throw new Error('Cut media drop requires at least one local file URI.');
+    throw new Error('Cut media drop source is invalid.');
   }
-  return { ...readMediaPlacement(record), uris };
+  return { ...readMediaPlacement(record), source: { kind: 'local-file-uris', uris } };
 }
 
 function readMediaPlacement(record: Record<string, unknown>): {
@@ -1350,17 +1459,6 @@ function requireNonNegativeFinite(value: unknown, message: string): number {
 function requireIdentity(value: unknown, message: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) throw new Error(message);
   return value;
-}
-
-function isCutCommand(value: unknown): value is CutCommand {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    'type' in value &&
-    typeof value.type === 'string' &&
-    CUT_COMMAND_TYPES.has(value.type)
-  );
 }
 
 function cutSessionKey(identity: CutHostRuntimeIdentity): string {

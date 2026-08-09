@@ -54,6 +54,15 @@ describe('Desktop Settings scene surfaces', () => {
     await act(async () => root.unmount());
   });
 
+  it('renders the settings heading without a decorative icon', async () => {
+    const { container, root } = await renderSettings();
+    const heading = container.querySelector('.desktop-settings__title');
+
+    expect(heading?.querySelector('svg')).toBeNull();
+    expect(heading?.textContent).toContain('Settings');
+    await act(async () => root.unmount());
+  });
+
   it('filters only the navigation catalog without changing the active Main section', async () => {
     const { container, root } = await renderSettings();
     const search = container.querySelector<HTMLInputElement>('input[type="search"]');

@@ -97,6 +97,7 @@ export function createBuiltInMiniMapNodeStyleRegistry(): MiniMapNodeStyleRegistr
     media: { fill: '#4ec9b0' },
     markdown: { fill: '#dcdcaa' },
     group: { fill: '#569cd6' },
+    generation: { fill: '#f59e0b' },
     job: { fill: '#c586c0' },
     file: { fill: '#ef4444' },
     'canvas-embed': { fill: '#ce9178' },

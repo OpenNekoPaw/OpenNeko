@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { isAgentLaunchEntryAvailable, parseAgentLaunchCatalogProjection } from '../agent-launch';
+import { parseAgentLaunchCatalogProjection } from '../agent-launch';
 
 describe('Agent launch contract', () => {
-  it('parses an exact secret-free, scope-qualified launch catalog', () => {
+  it('parses one exact Draft, model and input catalog projection', () => {
+    const binding = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    };
     const projection = parseAgentLaunchCatalogProjection({
       connection: {
         applicationInstanceId: 'application-1',
@@ -10,66 +15,67 @@ describe('Agent launch contract', () => {
         workbenchInstanceId: 'workbench-1',
         agentSurfaceId: 'agent-surface-1',
         viewId: 'agent-view-1',
+        draftId: 'draft-1',
         connectionId: 'launch-connection-1',
-        scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+      },
+      interaction: {
+        phase: 'draft',
+        draftId: 'draft-1',
+        binding,
+        bindingReceipt: {
+          bindingReceiptId: 'binding-1',
+          draftId: 'draft-1',
+          connectionId: 'launch-connection-1',
+          binding,
+        },
       },
       models: [
         {
-          kind: 'model',
           id: 'openai:gpt-5',
           label: 'GPT-5',
-          scopeRequirement: 'any',
           providerId: 'openai',
           modelId: 'gpt-5',
           modelType: 'llm',
+          contextWindow: 128_000,
+          maximumOutputTokens: 16_384,
+          purposeCapabilities: ['agent.main'],
+          availability: { status: 'available' },
         },
       ],
-      commands: [
+      configuration: configuration({
+        modelCatalogEntryId: 'openai:gpt-5',
+        providerId: 'openai',
+        modelId: 'gpt-5',
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
+      }),
+      inputs: [
         {
-          kind: 'command',
-          id: 'command:help',
-          label: 'Help',
-          scopeRequirement: 'any',
-          command: 'help',
-          description: 'Show help.',
-        },
-      ],
-      skills: [
-        {
-          kind: 'skill',
-          id: 'skill:storyboard',
-          label: 'Storyboard',
-          scopeRequirement: 'workspace',
+          id: 'skill:project:storyboard',
           name: 'storyboard',
           description: 'Create a storyboard.',
-          source: 'project',
-        },
-      ],
-      resources: [
-        {
-          kind: 'resource',
-          id: 'resource:file-1',
-          label: 'reference.png',
-          scopeRequirement: 'assistant',
-          resourceGrantId: 'resource-grant-1',
-          resourceKind: 'file',
+          trigger: 'skill',
+          prefix: '$',
+          phaseRequirement: 'any',
+          bindingRequirement: 'workspace',
+          source: { kind: 'project', workspaceId: 'workspace-1', sourceId: 'storyboard' },
+          availability: { status: 'available' },
+          executable: {
+            kind: 'skill',
+            skillName: 'storyboard',
+            activationId: 'skill:workspace-1:storyboard',
+          },
         },
       ],
     });
 
-    expect(projection.connection.scope).toEqual({
-      kind: 'assistant',
-      assistantSpaceId: 'assistant:1',
-    });
-    expect(isAgentLaunchEntryAvailable(projection.models[0]!, projection.connection.scope)).toBe(
-      true,
-    );
-    expect(isAgentLaunchEntryAvailable(projection.skills[0]!, projection.connection.scope)).toBe(
-      false,
-    );
+    expect(projection.interaction.binding).toEqual(binding);
+    expect(projection.inputs[0]?.source).toMatchObject({ kind: 'project' });
   });
 
-  it('rejects paths, secrets, unknown scopes and stale identity shapes', () => {
+  it('rejects cross-Draft and cross-connection binding receipts', () => {
     const base = {
       connection: {
         applicationInstanceId: 'application-1',
@@ -77,37 +83,131 @@ describe('Agent launch contract', () => {
         workbenchInstanceId: 'workbench-1',
         agentSurfaceId: 'agent-surface-1',
         viewId: 'agent-view-1',
+        draftId: 'draft-1',
         connectionId: 'launch-connection-1',
-        scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+      },
+      interaction: {
+        phase: 'draft',
+        draftId: 'draft-1',
+        binding: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant:1',
+          baseGrantIds: [],
+        },
+        bindingReceipt: {
+          bindingReceiptId: 'binding-1',
+          draftId: 'draft-1',
+          connectionId: 'launch-connection-other',
+          binding: {
+            kind: 'assistant',
+            assistantSpaceId: 'assistant:1',
+            baseGrantIds: [],
+          },
+        },
       },
       models: [],
-      commands: [],
-      skills: [],
-      resources: [],
+      configuration: configuration(null),
+      inputs: [],
+    };
+    expect(() => parseAgentLaunchCatalogProjection(base)).toThrow('another connection');
+    expect(() =>
+      parseAgentLaunchCatalogProjection({
+        ...base,
+        interaction: { ...base.interaction, draftId: 'draft-other' },
+      }),
+    ).toThrow('another Draft');
+  });
+
+  it('rejects paths, secrets and stale launch catalog shapes', () => {
+    const base = {
+      connection: {
+        applicationInstanceId: 'application-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        viewId: 'agent-view-1',
+        draftId: 'draft-1',
+        connectionId: 'launch-connection-1',
+      },
+      interaction: {
+        phase: 'draft',
+        draftId: 'draft-1',
+        binding: { kind: 'unbound' },
+        bindingReceipt: null,
+      },
+      models: [],
+      configuration: configuration(null),
+      inputs: [],
     };
     expect(() =>
       parseAgentLaunchCatalogProjection({ ...base, absolutePath: '/Users/private' }),
     ).toThrow('unsupported fields');
     expect(() =>
-      parseAgentLaunchCatalogProjection({
-        ...base,
-        resources: [
-          {
-            kind: 'resource',
-            id: 'resource:1',
-            label: 'private',
-            scopeRequirement: 'home',
-            resourceGrantId: 'grant-1',
-            resourceKind: 'file',
-          },
-        ],
-      }),
-    ).toThrow("Unknown Agent launch scope requirement 'home'");
+      parseAgentLaunchCatalogProjection({ ...base, commands: [], skills: [], resources: [] }),
+    ).toThrow('unsupported fields');
     expect(() =>
       parseAgentLaunchCatalogProjection({
         ...base,
-        connection: { ...base.connection, rendererSessionId: 1 },
+        connection: { ...base.connection, scope: { kind: 'unbound', draftId: 'draft-1' } },
       }),
     ).toThrow('unsupported fields');
   });
 });
+
+function configuration(
+  request: {
+    readonly modelCatalogEntryId: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly executionMode: 'ask';
+    readonly temperature: number;
+    readonly maximumOutputTokens: number;
+    readonly thinkingBudget: number;
+  } | null,
+) {
+  const editable = { status: 'editable' as const, owner: 'agent-config' };
+  return {
+    request,
+    fields: {
+      model: {
+        effectiveValue:
+          request === null
+            ? null
+            : {
+                modelCatalogEntryId: request.modelCatalogEntryId,
+                providerId: request.providerId,
+                modelId: request.modelId,
+              },
+        source: 'global-default' as const,
+        policy:
+          request === null
+            ? {
+                status: 'unavailable' as const,
+                owner: 'agent-config',
+                reason: 'Choose a model.',
+              }
+            : editable,
+      },
+      executionMode: {
+        effectiveValue: request?.executionMode ?? 'ask',
+        source: 'global-default' as const,
+        policy: editable,
+      },
+      temperature: {
+        effectiveValue: request?.temperature ?? 0.7,
+        source: 'global-default' as const,
+        policy: editable,
+      },
+      maximumOutputTokens: {
+        effectiveValue: request?.maximumOutputTokens ?? 4096,
+        source: 'global-default' as const,
+        policy: editable,
+      },
+      thinkingBudget: {
+        effectiveValue: request?.thinkingBudget ?? 0,
+        source: 'global-default' as const,
+        policy: editable,
+      },
+    },
+  };
+}

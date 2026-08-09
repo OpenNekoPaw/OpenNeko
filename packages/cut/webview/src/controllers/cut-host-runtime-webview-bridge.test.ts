@@ -21,6 +21,71 @@ const identity = {
 } as const;
 
 describe('createCutHostRuntimeWebviewBridge', () => {
+  it('prepares one Snapshot before a late Root subscriber and replays it without another read', async () => {
+    const initial = snapshot(0);
+    const disposeSubscription = vi.fn();
+    const runtime: CutHostRuntime = {
+      identity,
+      getSnapshot: vi.fn(async () => initial),
+      execute: vi.fn(),
+      subscribe: vi.fn(() => disposeSubscription),
+    };
+    const bridge = createCutHostRuntimeWebviewBridge(runtime);
+
+    bridge.prepare();
+    expect(runtime.subscribe).toHaveBeenCalledOnce();
+    expect(runtime.getSnapshot).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      const messages: unknown[] = [];
+      const unsubscribe = bridge.subscribe((message) => messages.push(message));
+      expect(messages).toHaveLength(2);
+      unsubscribe();
+    });
+    bridge.postIntent({ type: 'cut:ready' });
+    await Promise.resolve();
+    expect(runtime.getSnapshot).toHaveBeenCalledOnce();
+
+    bridge.dispose();
+    expect(disposeSubscription).toHaveBeenCalledOnce();
+    expect(() => bridge.subscribe(() => undefined)).toThrow('disposed');
+  });
+
+  it('keeps a runtime event authoritative when the older initial Snapshot resolves later', async () => {
+    const initial = snapshot(0);
+    const current = snapshot(1);
+    let resolveInitial: ((value: CutHostRuntimeSnapshot) => void) | undefined;
+    let onEvent: ((event: { snapshot: CutHostRuntimeSnapshot }) => void) | undefined;
+    const runtime: CutHostRuntime = {
+      identity,
+      getSnapshot: vi.fn(
+        () =>
+          new Promise<CutHostRuntimeSnapshot>((resolve) => {
+            resolveInitial = resolve;
+          }),
+      ),
+      execute: vi.fn(),
+      subscribe: vi.fn((listener) => {
+        onEvent = listener;
+        return () => undefined;
+      }),
+    };
+    const bridge = createCutHostRuntimeWebviewBridge(runtime);
+    const messages: unknown[] = [];
+    bridge.prepare();
+    bridge.subscribe((message) => messages.push(message));
+
+    onEvent?.({ snapshot: current });
+    resolveInitial?.(initial);
+    await Promise.resolve();
+
+    expect(messages).toContainEqual(
+      expect.objectContaining({ type: 'cut:runtime-snapshot', dirty: true }),
+    );
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({ type: 'cut:runtime-snapshot', dirty: false }),
+    );
+  });
+
   it('projects snapshot-first state and orders a mutation projection before its result', async () => {
     const initial = snapshot(0);
     const next = snapshot(1);
@@ -122,6 +187,40 @@ describe('createCutHostRuntimeWebviewBridge', () => {
           results: [expect.objectContaining({ clipId: 'clip-1', status: 'ready' })],
         }),
       ),
+    );
+    expect(messages).not.toContainEqual(expect.objectContaining({ type: 'cut:error' }));
+  });
+
+  it('returns a typed representation failure without raising a generic Cut operation error', async () => {
+    const initial = snapshot(0);
+    const runtime: CutHostRuntime = {
+      identity,
+      getSnapshot: vi.fn(async () => initial),
+      execute: vi.fn(async () => {
+        throw new Error('media worker unavailable');
+      }),
+      subscribe: vi.fn(() => () => undefined),
+    };
+    const messages: unknown[] = [];
+    const bridge = createCutHostRuntimeWebviewBridge(runtime);
+    bridge.subscribe((message) => messages.push(message));
+
+    bridge.postIntent({
+      type: 'cut:request-representations',
+      documentUri: identity.documentId,
+      sessionId: identity.sessionId,
+      requestId: 'representation-request-failed',
+      requests: [{ clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 }],
+    });
+
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        type: 'cut:representation-failed',
+        documentUri: identity.documentId,
+        sessionId: identity.sessionId,
+        requestId: 'representation-request-failed',
+        diagnostic: { code: 'media-runtime-unavailable' },
+      }),
     );
     expect(messages).not.toContainEqual(expect.objectContaining({ type: 'cut:error' }));
   });

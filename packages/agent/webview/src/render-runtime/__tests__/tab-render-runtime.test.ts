@@ -22,7 +22,7 @@ describe('TabRenderRuntime', () => {
       composition: { isComposing: true },
       focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
-      menus: { ...state.menus, entryPrompt: 'generate-assets' },
+      menus: { ...state.menus, entryPrompt: 'roleplay' },
       diagnostics: [diagnostic],
     }));
 
@@ -33,7 +33,7 @@ describe('TabRenderRuntime', () => {
       composition: { isComposing: true },
       focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
-      menus: { entryPrompt: 'generate-assets' },
+      menus: { entryPrompt: 'roleplay' },
     });
     expect(runtimeB.store.getSnapshot().state).toMatchObject({
       inputValue: '',

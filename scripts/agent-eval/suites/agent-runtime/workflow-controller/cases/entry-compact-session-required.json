@@ -1,0 +1,95 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "entry-compact-session-required",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Attempt /compact from the unbound Entry Draft, observe session-required without creating a Conversation, then submit an ordinary first message from the same Draft.",
+    "canonicalPath": [
+      "visible unbound Entry Draft",
+      "Draft input catalog",
+      "typed compact intent",
+      "session-required rejection",
+      "same Draft visible composer"
+    ],
+    "observables": [
+      {
+        "ref": "entry-compact-facts",
+        "kind": "runtime-fact",
+        "description": "Exact compact catalog identity and availability diagnostic, rejection, unchanged Draft/no Conversation, and later canonical Session facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Entry /compact is rejected with session-required and creates no Conversation or Turn; the same Draft remains usable for a later ordinary first submit.",
+    "expectedFailure": "Executing compact as prompt text, compacting another Conversation, creating a rejection-time Turn, changing Draft identity, or hiding the diagnostic fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "compact-draft",
+      "kind": "draft-submit",
+      "catalogRef": "initial",
+      "input": { "kind": "command", "name": "compact" },
+      "expectedStatus": "rejected"
+    },
+    {
+      "id": "canonical-submit",
+      "kind": "submit",
+      "prompt": "Reply with one concise sentence confirming this conversation began after the rejected Draft command."
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "session-boundary",
+      "kind": "draft-rejection",
+      "stepId": "compact-draft",
+      "catalogRef": "initial",
+      "initialBindingKind": "unbound",
+      "currentBindingKind": "unbound",
+      "surfaceBindingKind": "unbound",
+      "conversationCreated": false,
+      "messageIncludes": "stale or unavailable",
+      "availabilityCode": "session-required",
+      "evidenceRef": "entry-compact-facts"
+    },
+    {
+      "id": "binding",
+      "kind": "interaction-binding",
+      "initialPhase": "draft",
+      "initialBindingKind": "unbound",
+      "finalPhase": "session",
+      "finalBindingKind": "assistant",
+      "conversationCreated": true,
+      "evidenceRef": "entry-compact-facts"
+    },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "entry-compact-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "entry-compact-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 },
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
+    "startSurface": "entry"
+  }
+}

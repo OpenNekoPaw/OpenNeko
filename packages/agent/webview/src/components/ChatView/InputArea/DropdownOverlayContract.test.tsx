@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { ModeSelector } from './ModeSelector';
 import { ModelSelector } from './ModelSelector';
-import { SessionModeSelector } from './SessionModeSelector';
 
 const translations: Record<string, string> = {
   'chat.autoMode': 'Auto',
@@ -159,23 +158,8 @@ describe('dropdown overlay presentation contract', () => {
     expect(menu.querySelector('.agent-dropdown-section-inline')).toBeNull();
   });
 
-  it('uses shared overlay shells for session and execution menus', () => {
-    const { rerender } = render(<SessionModeSelector mode="agent" onChange={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
-    expect(screen.getByRole('menu').className).toContain('agent-composer-popover');
-    expect(screen.getByRole('menu').className).toContain('agent-composer-session-mode-menu');
-    expect(screen.getByRole('menu').className).toContain('is-placement-');
-    expect(screen.queryByText('Direct Agent Collaboration')).toBeNull();
-    expect(screen.queryByText('Media Generation')).toBeNull();
-    expect(screen.getByRole('menuitem', { name: /Image/ })).toBeTruthy();
-    expect(screen.getByText('Create video material and motion previews')).toBeTruthy();
-    expect(screen.getByRole('menu').textContent).not.toMatch(/storyboard|shot|dialogue|narration/i);
-    expect(screen.queryByRole('menuitem', { name: 'Script Generation' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: 'Music' })).toBeNull();
-
-    rerender(<ModeSelector mode="ask" onChange={vi.fn()} />);
-
+  it('uses the shared overlay shell for the execution menu', () => {
+    render(<ModeSelector mode="ask" onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
     expect(screen.getByRole('menu').className).toContain('agent-dropdown-menu-mode');
   });

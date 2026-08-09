@@ -9,6 +9,7 @@ import {
   parseResourceBrowserProjection,
   parseResourceBrowserProjectionEvent,
   parseResourceBrowserIntentRequest,
+  parseResourceBrowserIntentResult,
   parseResourceBrowserRecoveryPlanRequest,
   parseResourceBrowserRecoveryPlanResult,
   parseResourceBrowserQuickPreviewResult,
@@ -24,6 +25,41 @@ const identity = {
 } as const;
 
 describe('Resource Browser contract', () => {
+  it('parses owner-bound intent completion and Main View capacity rejection results', () => {
+    expect(
+      parseResourceBrowserIntentResult({
+        requestId: 'intent-completed',
+        identity,
+        status: 'completed',
+        projection: projection('files', []),
+      }),
+    ).toMatchObject({ status: 'completed', projection: { identity } });
+    expect(
+      parseResourceBrowserIntentResult({
+        requestId: 'intent-rejected',
+        identity,
+        status: 'rejected',
+        rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+      }),
+    ).toEqual({
+      requestId: 'intent-rejected',
+      identity,
+      status: 'rejected',
+      rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+    });
+    expect(() =>
+      parseResourceBrowserIntentResult({
+        requestId: 'intent-foreign-projection',
+        identity,
+        status: 'completed',
+        projection: {
+          ...projection('files', []),
+          identity: { ...identity, workspaceId: 'workspace-2' },
+        },
+      }),
+    ).toThrow('identity is stale or belongs to another owner');
+  });
+
   it('builds a versioned, owner-bound search request', () => {
     expect(
       createResourceBrowserSearchRequest({
@@ -315,16 +351,15 @@ describe('Resource Browser contract', () => {
       [
         'canvas.add',
         'children',
-        'content.create-directory',
-        'content.import-files',
         'content.trash',
+        'creative-document.create',
+        'creative-document.open',
         'cut.add',
-        'cut.open',
         'entity.manage',
         'preview',
+        'projection.reconcile',
         'quick-preview.release',
         'quick-preview.resolve',
-        'refresh',
         'reveal',
         'search',
         'snapshot.get',
@@ -335,7 +370,10 @@ describe('Resource Browser contract', () => {
         'source.recovery.plan',
         'source.relink',
         'source.remove',
+        'text.edit',
         'thumbnail.resolve',
+        'workspace-entry.create-directory',
+        'workspace-entry.create-file',
       ].sort(),
     );
     expect(
@@ -362,30 +400,52 @@ describe('Resource Browser contract', () => {
         requestId: 'create-directory-1',
         identity,
         route: RESOURCE_BROWSER_ROUTES.createDirectory,
-        directoryName: 'References',
+        entryName: 'References',
       }),
     ).toEqual({
       requestId: 'create-directory-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.createDirectory,
-      directoryName: 'References',
+      entryName: 'References',
     });
     expect(() =>
       parseResourceBrowserIntentRequest({
         requestId: 'create-directory-invalid',
         identity,
         route: RESOURCE_BROWSER_ROUTES.createDirectory,
-        directoryName: '../outside',
+        entryName: '../outside',
       }),
-    ).toThrow('portable visible entry name');
+    ).toThrow('portable visible path segment');
     expect(() =>
       parseResourceBrowserIntentRequest({
         requestId: 'import-path-forbidden',
         identity,
-        route: RESOURCE_BROWSER_ROUTES.importFiles,
+        route: 'content.import-files',
         sourcePaths: ['/private/source.mov'],
       }),
     ).toThrow('unsupported fields');
+    for (const route of ['refresh', 'content.rename', 'cut.open']) {
+      expect(() =>
+        parseResourceBrowserIntentRequest({
+          requestId: `retired-route:${route}`,
+          identity,
+          route,
+        }),
+      ).toThrow('route is invalid');
+    }
+    expect(
+      parseResourceBrowserIntentRequest({
+        requestId: 'create-canvas-1',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.createCreativeDocument,
+        entryName: 'Storyboard',
+        documentKind: 'canvas',
+      }),
+    ).toMatchObject({
+      route: RESOURCE_BROWSER_ROUTES.createCreativeDocument,
+      entryName: 'Storyboard',
+      documentKind: 'canvas',
+    });
   });
 
   it('parses candidates without promoting them to stable Entity identity', () => {

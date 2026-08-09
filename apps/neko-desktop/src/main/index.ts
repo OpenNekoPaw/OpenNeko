@@ -14,24 +14,32 @@ import {
 } from 'electron';
 import { ConsoleLogger, ConsoleTransport, LogLevel, type ILogger } from '@neko/shared/logger';
 import { ManagedFileLogTransport } from '@neko/shared/logger/node';
-import type { AgentConversationContext } from '@neko/agent-contracts';
+import {
+  createNodeTextEditorMarkdownReferenceCatalog,
+  NodeTextEditorMarkdownMediaService,
+} from '@neko/text-editor-node';
+import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import {
   DESKTOP_SHELL_CHANNELS,
   type DesktopShellProjectionEvent,
 } from '@neko/host/desktop-shell-contract';
-import { DESKTOP_VITE_CSP_NONCE } from '../shared/vite-development-security';
 import { DesktopAppHost } from './app-host';
 import {
   registerDesktopOpenNekoProtocol,
   registerDesktopOpenNekoScheme,
 } from './desktop-openneko-protocol';
-import { createDesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import {
+  createDesktopWorkspaceRegistry,
+  type DesktopWorkspaceRegistry,
+} from './desktop-workspace-registry';
+import { DesktopWorkspaceBoardDelivery } from './desktop-workspace-board-delivery';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { registerDesktopIpc } from './ipc';
 import { DesktopRendererRecovery } from './renderer-recovery';
 import {
   configureDesktopWindowSecurity,
+  desktopRendererContentSecurityPolicyOptions,
   DESKTOP_APP_ORIGIN,
   createDesktopWebPreferences,
 } from './security';
@@ -45,12 +53,17 @@ import {
 import {
   createAgentAppHost,
   createAgentConversationLifecycleService,
+  createAgentDomainBindingApplicationService,
+  createAgentLaunchDraftSubmissionApplicationService,
   createAgentRuntimeSettingsAuthority,
   createAgentRuntimeSettingsRepository,
   createAssistantResourceService,
   createPersistentAgentConversationLifecycleRepository,
+  createPersistentAgentConversationContextAuthority,
   initializeAgentConversationLifecycleTables,
+  projectAgentDraftInputText,
 } from '@neko/agent-runtime/application';
+import { createCharacterPrimaryAgentSessionAdapter } from './character-primary-agent-session-adapter';
 import { setRootLogger as setAgentRootLogger } from '@neko/agent-runtime';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
@@ -64,11 +77,16 @@ import {
   resolveDesktopFunctionalCutExport,
   resolveDesktopFunctionalWorkspace,
   resolveDesktopFunctionalWindowMode,
+  resolveDesktopFunctionalUserDataRoot,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
 import { DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT } from '../shared/agent-automation-contract';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
-import { createAgentControllerComposition } from '@neko/agent-runtime/application';
+import {
+  createAgentControllerComposition,
+  isAgentLaunchConversationCreationCommand,
+} from '@neko/agent-runtime/application';
+import { searchAgentWorkspaceMentions } from '@neko/agent-runtime/runtime/host-controller';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
 import { closeDesktopWindows } from './window-lifecycle';
@@ -82,8 +100,29 @@ import {
 } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import {
+  createPersistentCharacterRepository,
+  initializeCharacterPersistenceTables,
+} from '@neko/chara-node';
+import {
+  createPersistentWorldRepository,
+  initializeWorldPersistenceTables,
+} from '@neko/world-node';
+import {
+  CharacterAuthoringService,
+  CharacterConversationLaunchService,
+  CharacterFoundationCommandService,
+  CharacterFoundationService,
+  CharacterInteractionService,
+  CharacterRoomConversationService,
+  CharacterRoomInteractionService,
+  CharacterRoomService,
+  UserCharacterRelationshipService,
+} from '@neko/chara/application';
+import { WorldAuthoringService, WorldRuntimeService } from '@neko/world/application';
+import {
   AssetCenterNodeRuntime,
   ResourceBrowserNodeRuntime,
+  searchWorkspaceLinkedMediaLibraryContentLocators,
   type ResourceBrowserNodeRuntimeOptions,
 } from '@neko/assets-node';
 import {
@@ -91,10 +130,27 @@ import {
   registerDesktopResourceRequestAuthorization,
 } from './desktop-resource-registry';
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
+import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
+import { WorkspaceGenerationApplicationRuntime } from '@neko/generation/job';
+import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
+import {
+  createContentReadMediaRequestAssetMaterializer,
+  createMediaPlatform,
+  createNodeWorkspaceGenerationJobOwner,
+} from '@neko/generation/media';
+import { createNodeHostContentReadService } from '@neko/content/node';
+import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
+import type { ContentLocator } from '@neko/content';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
-import { DesktopCutRuntime } from './desktop-cut-runtime';
+import {
+  createDesktopCutCanvasHandoffPayload,
+  DesktopCutRuntime,
+  parseDesktopCutCanvasHandoffPayload,
+} from './desktop-cut-runtime';
+import { openDesktopCanvasDocument } from './desktop-creative-document-runtime';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
 import {
   createDefaultDesktopApplicationSettingsState,
@@ -109,9 +165,10 @@ import {
 } from '@neko/host/application-settings';
 import { buildConfigFilePath } from '@neko/host/files';
 import {
-  ConfigManager,
   FileProviderCredentialSource,
   FileUserConfigManager,
+  WorkspaceConfigManagerAuthority,
+  modelSupportsPurpose,
 } from '@neko/host/settings';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
 import { listWorkspaceLinkedMediaLibraries } from '@neko/assets-node';
@@ -126,7 +183,10 @@ import {
 } from '@neko/agent-runtime/extensions';
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
-import { createDesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
+import {
+  createDesktopAgentConversationReferenceResolver,
+  createDesktopAgentLaunchRuntime,
+} from './desktop-agent-launch-runtime';
 import { createDesktopAssistantPreviewRuntime } from './desktop-assistant-preview-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 
@@ -143,6 +203,11 @@ void bootstrapDesktop().catch((error: unknown) => {
 async function bootstrapDesktop(): Promise<void> {
   registerDesktopOpenNekoScheme();
   app.enableSandbox();
+  const functionalUserDataRoot = resolveDesktopFunctionalUserDataRoot({
+    argv: process.argv,
+    environment: process.env,
+  });
+  if (functionalUserDataRoot) app.setPath('userData', functionalUserDataRoot);
   if (!app.requestSingleInstanceLock()) {
     app.quit();
     return;
@@ -246,6 +311,8 @@ async function startDesktop(): Promise<void> {
     );
     await initializeAssetLibraryMembershipTables(localMetadataStore);
     await initializeAgentConversationLifecycleTables(localMetadataStore);
+    await initializeCharacterPersistenceTables(localMetadataStore);
+    await initializeWorldPersistenceTables(localMetadataStore);
     agentRuntimeSettings = await createAgentRuntimeSettingsAuthority({
       scopeId: assistantSpaceId,
       repository: agentRuntimeSettingsRepository,
@@ -255,6 +322,15 @@ async function startDesktop(): Promise<void> {
     throw error;
   }
   const applicationSettings = new DesktopApplicationSettingsService(applicationSettingsRepository);
+  const characterRepository = createPersistentCharacterRepository({
+    metadataStore: localMetadataStore,
+  });
+  const worldRepository = createPersistentWorldRepository({ metadataStore: localMetadataStore });
+  const characterFoundation = new CharacterFoundationService({
+    characterCatalog: characterRepository,
+    worldCatalog: worldRepository,
+  });
+  const worldRuntime = new WorldRuntimeService({ repository: worldRepository, actionHandlers: [] });
   const initialApplicationSettings = await applicationSettings.initialize();
   const applicationSettingsStateDiagnostics = readDesktopApplicationSettingsStateDiagnostics(
     await applicationSettingsRepository.read(),
@@ -314,6 +390,12 @@ async function startDesktop(): Promise<void> {
     resolver: workspaceRegistry,
   });
   logger.info('Desktop workspace registry initialized.');
+  const workspaceConfigAuthority = new WorkspaceConfigManagerAuthority({
+    userConfigManager: new FileUserConfigManager({
+      filePath: buildConfigFilePath(homedir),
+    }),
+    assistantRuntimeSettings: agentRuntimeSettings,
+  });
   const credentialRuntime = createAgentCredentialRuntime({
     secrets,
     configCredentials: new FileProviderCredentialSource({
@@ -333,10 +415,35 @@ async function startDesktop(): Promise<void> {
     }),
   });
   const retainedProjects = await workspaceRegistry.listProjects([assistantSpaceId]);
+  const workspaceBoardDelivery = new DesktopWorkspaceBoardDelivery({
+    applicationInstanceId,
+    metadataStore: localMetadataStore,
+    workspaceRegistry,
+    host,
+    createIdentity: randomUUID,
+  });
+  const boardRestoringWorkspaceRegistry: DesktopWorkspaceRegistry = {
+    metadataRepositories: workspaceRegistry.metadataRepositories,
+    listProjects: (excludedWorkspaceIds) => workspaceRegistry.listProjects(excludedWorkspaceIds),
+    removeProjects: (workspaceIds) => workspaceRegistry.removeProjects(workspaceIds),
+    resolve: async (workspacePath) => {
+      const workspace = await workspaceRegistry.resolve(workspacePath);
+      await workspaceBoardDelivery.flushWorkspace(workspace);
+      return workspace;
+    },
+    restore: workspaceRegistry.restore
+      ? async (workspaceId) => {
+          const workspace = await workspaceRegistry.restore!(workspaceId);
+          await workspaceBoardDelivery.flushWorkspace(workspace);
+          return workspace;
+        }
+      : undefined,
+    dispose: () => workspaceRegistry.dispose(),
+  };
   const shellService = new DesktopShellService({
     applicationInstanceId,
     stateRepository: shellStateRepository,
-    workspaceRegistry,
+    workspaceRegistry: boardRestoringWorkspaceRegistry,
     workspaceGrantAuthority,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
     retainedProjects,
@@ -361,6 +468,31 @@ async function startDesktop(): Promise<void> {
         : []),
     ],
   });
+  const generationRuntime = new WorkspaceGenerationApplicationRuntime({
+    createOwner: async ({ workspaceId, workspaceRoot }) => {
+      const configManager = workspaceConfigAuthority.getWorkspaceConfig({
+        workspaceId,
+        workspacePath: workspaceRoot,
+      });
+      const media = createMediaPlatform({
+        configManager,
+        requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
+          contentRead: createNodeHostContentReadService({ workspaceRoot }),
+          encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
+        }),
+      });
+      return createNodeWorkspaceGenerationJobOwner({
+        workspaceId,
+        workspaceRoot,
+        homedir,
+        mediaExecution: media.service,
+        promptExecution: new PromptGenerationService(
+          configManager,
+          createAiSdkPromptCompletionPort(),
+        ),
+      });
+    },
+  });
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
     userDataRoot: globalStorage.root,
   });
@@ -370,7 +502,13 @@ async function startDesktop(): Promise<void> {
     hostId: `electron:${applicationInstanceId}`,
     credentialRuntime,
     catalogReader: agentCatalogReader,
+    resolveWorkspaceGenerationJobs: (workspace) =>
+      generationRuntime.getWorkspaceJobs({
+        workspaceId: workspace.workspaceId,
+        workspaceRoot: workspace.workspacePath,
+      }),
     assistantSpaceIds: [assistantSpaceId],
+    creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     createWorkspaceLogger: (workspace) => {
       if (workspace.workspaceId === assistantSpaceId) return agentLogger;
       const existing = workspaceLoggers.get(workspace.workspaceId);
@@ -402,7 +540,7 @@ async function startDesktop(): Promise<void> {
     displayName: 'Assistant',
     locator: { kind: 'relative' as const, value: 'assistant-spaces/local-user' },
   };
-  await agentComposition.attachWorkspace(assistantWorkspace);
+  const assistantAgentWorkspace = await agentComposition.attachWorkspace(assistantWorkspace);
   const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
       marketplaceRoot: path.join(
@@ -411,6 +549,7 @@ async function startDesktop(): Promise<void> {
         'extension-marketplace',
       ),
       installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
+      stateRoot: path.join(globalStorage.root, 'extensions', 'state'),
       trashItem: (absolutePath) => shell.trashItem(absolutePath),
     }),
     agentSupport: createAgentExtensionSupport(),
@@ -457,10 +596,58 @@ async function startDesktop(): Promise<void> {
     shell: shellService,
     resources: resourceRegistry,
   });
+  const textEditorRuntime = new DesktopTextEditorRuntime({
+    shell: shellService,
+    referenceCatalog: createNodeTextEditorMarkdownReferenceCatalog({
+      files: host.files,
+      resolveWorkspace: (workspaceId) => shellService.resolveAgentWorkspace(workspaceId),
+    }),
+    media: new NodeTextEditorMarkdownMediaService({
+      resolveWorkspace: (workspaceId) => shellService.resolveAgentWorkspace(workspaceId),
+      resources: resourceRegistry,
+    }),
+  });
   const cutRuntime = new DesktopCutRuntime({
     shell: shellService,
     host,
     resources: resourceRegistry,
+    draftLabel: app.getLocale().toLocaleLowerCase().startsWith('zh')
+      ? '未命名剪辑'
+      : 'Untitled Cut',
+    selectDraftDestination: async ({ identity, workspacePath, defaultName }) => {
+      const owner = requireOwnerWindow(identity.windowId);
+      const result = await dialog.showSaveDialog(owner, {
+        title: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '保存剪辑' : 'Save Cut',
+        defaultPath: path.join(workspacePath, defaultName),
+        filters: [{ name: 'OpenTimelineIO', extensions: ['otio'] }],
+      });
+      if (result.canceled || !result.filePath) return undefined;
+      const relativePath = path.relative(workspacePath, result.filePath);
+      if (
+        !relativePath ||
+        path.isAbsolute(relativePath) ||
+        relativePath === '..' ||
+        relativePath.startsWith(`..${path.sep}`)
+      ) {
+        throw new Error('Desktop Cut document target must remain inside the granted workspace.');
+      }
+      return relativePath.split(path.sep).join('/');
+    },
+    confirmDiscardDraft: async ({ identity, label }) => {
+      const owner = requireOwnerWindow(identity.windowId);
+      const usesChinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      const result = await dialog.showMessageBox(owner, {
+        type: 'warning',
+        title: usesChinese ? '放弃未保存的剪辑？' : 'Discard unsaved Cut?',
+        message: usesChinese
+          ? `“${label}”尚未保存。是否放弃更改？`
+          : `“${label}” has not been saved. Discard changes?`,
+        buttons: usesChinese ? ['取消', '放弃'] : ['Cancel', 'Discard'],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      return result.response === 1;
+    },
     selectMediaFiles: async ({ identity, trackKind }) => {
       const owner = requireOwnerWindow(identity.windowId);
       const result = await dialog.showOpenDialog(owner, {
@@ -508,7 +695,33 @@ async function startDesktop(): Promise<void> {
     },
   });
   const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
-  const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({ homedir });
+  const canvasDocumentEntryAccess = createNodeDocumentLowLevelAccess();
+  const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
+    generation: {
+      getWorkspaceJobs: (input) => generationRuntime.getWorkspaceJobs(input),
+      validateBinding: ({ workspace, binding }) => {
+        const config = workspaceConfigAuthority.getWorkspaceConfig({
+          workspaceId: workspace.workspaceId,
+          workspacePath: workspace.workspacePath,
+        });
+        const provider = config.getProvider(binding.providerId);
+        const model = config.getModel(binding.modelId);
+        if (!provider || provider.enabled === false) {
+          throw new Error(`Canvas Generation provider '${binding.providerId}' is unavailable.`);
+        }
+        if (!model || model.enabled === false || model.providerId !== binding.providerId) {
+          throw new Error(
+            `Canvas Generation model '${binding.modelId}' is not available from provider '${binding.providerId}'.`,
+          );
+        }
+        if (!modelSupportsPurpose(model, binding.purpose)) {
+          throw new Error(
+            `Canvas Generation model '${binding.modelId}' does not support purpose '${binding.purpose}'.`,
+          );
+        }
+      },
+    },
+  });
   const canvasRuntime = new DesktopCanvasRuntime({
     shell: shellService,
     host,
@@ -516,7 +729,8 @@ async function startDesktop(): Promise<void> {
     materialActionLabels: {
       preview: canvasUsesChineseLabels ? '预览' : 'Preview',
       reveal: canvasUsesChineseLabels ? '在访达中显示' : 'Reveal in Finder',
-      openInCut: canvasUsesChineseLabels ? '在剪辑中打开' : 'Open in Cut',
+      openInCut: canvasUsesChineseLabels ? '打开剪辑' : 'Open Cut',
+      addToCut: canvasUsesChineseLabels ? '添加到剪辑' : 'Add to Cut',
       copyToProjectMediaLibrary: canvasUsesChineseLabels
         ? '复制到项目媒体库'
         : 'Copy to project Media Library',
@@ -652,7 +866,7 @@ async function startDesktop(): Promise<void> {
         kind: 'file',
         label: path.basename(absolutePath),
         locator: target.locator,
-        capabilities: ['open-cut'],
+        capabilities: ['open-creative-document'],
       }),
     openInCut: async ({ absolutePath, identity, target }) => {
       const item = {
@@ -663,9 +877,9 @@ async function startDesktop(): Promise<void> {
         kind: 'file' as const,
         label: path.basename(absolutePath),
         locator: target.locator,
-        capabilities: ['open-cut'] as const,
+        capabilities: ['open-creative-document'] as const,
       };
-      await cutRuntime.open({
+      await cutRuntime.openAlongsideCanvas({
         identity: {
           projectId: identity.projectId,
           workspaceId: identity.workspaceId,
@@ -678,8 +892,61 @@ async function startDesktop(): Promise<void> {
         absolutePath,
       });
     },
-    createPreviewVariant: ({ absolutePath }) =>
-      createDesktopThumbnailDataUrl(absolutePath, { width: 640, height: 400 }),
+    resolveAddToCut: async ({ identity }) =>
+      createDesktopCutCanvasHandoffPayload(await cutRuntime.resolveCanvasHandoffTarget(identity)),
+    addToCut: async ({ identity, target, executionPayload }) => {
+      const label =
+        target.locator.kind === 'workspace-file' || target.locator.kind === 'generated-output'
+          ? path.posix.basename(target.locator.path)
+          : target.nodeId;
+      await cutRuntime.addCanvasMaterial({
+        identity,
+        nodeId: target.nodeId,
+        label,
+        locator: target.locator,
+        target: parseDesktopCutCanvasHandoffPayload(executionPayload),
+      });
+    },
+    registerPreviewResource: async ({ identity, workspace, locator, mediaType }) => {
+      const owner = {
+        windowId: identity.windowId,
+        viewId: identity.viewId,
+        sessionId: `canvas-preview:${identity.sessionId}:${identity.viewInstanceId}`,
+        rendererSessionId: identity.rendererSessionId,
+      };
+      const contentType = requireCanvasPreviewContentType(locator, mediaType);
+      if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
+        const absolutePath = await resolveWorkspaceContentLocator(workspace, locator);
+        if (contentType.startsWith('image/')) {
+          return resourceRegistry.registerFile(owner, {
+            absolutePath,
+            mediaType: contentType,
+          });
+        }
+        const thumbnail = await createDesktopThumbnailPng(absolutePath, {
+          width: 640,
+          height: 400,
+        });
+        return registerCanvasPreviewBytes(resourceRegistry, owner, thumbnail, 'image/png');
+      }
+      const contentRead = createNodeHostContentReadService({
+        workspaceRoot: workspace.workspacePath,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+        },
+      });
+      const loaded = await contentRead.read(locator, { maxBytes: 64 * 1024 * 1024 });
+      if (loaded.status !== 'ready') {
+        throw new Error(`Canvas preview content is unavailable: ${loaded.diagnostic.code}.`);
+      }
+      return registerCanvasPreviewBytes(
+        resourceRegistry,
+        owner,
+        loaded.bytes,
+        loaded.mimeType ?? contentType,
+      );
+    },
   });
   const resourceBrowser = new ResourceBrowserNodeRuntime({
     globalAssetRoot: globalStorage.assets,
@@ -701,10 +968,14 @@ async function startDesktop(): Promise<void> {
         }).execute(intent),
     },
     openPreview: (input) => previewRuntime.open(input).then(() => undefined),
+    openTextEditor: (input) => textEditorRuntime.open(input).then(() => undefined),
     openQuickPreview: (input) => previewRuntime.openQuickPreview(input),
     releaseQuickPreview: (windowId, previewSessionId) =>
       previewRuntime.releaseQuickPreview(windowId, previewSessionId),
-    openCut: (input) => cutRuntime.open(input),
+    openCreativeDocument: (input) =>
+      input.kind === 'canvas'
+        ? openDesktopCanvasDocument({ shell: shellService, ...input })
+        : cutRuntime.open(input),
     createThumbnail: (targetPath) =>
       createDesktopThumbnailDataUrl(targetPath, { width: 160, height: 100 }),
     createGlobalLibraryThumbnail: createDesktopGlobalLibraryThumbnailFactory(),
@@ -722,16 +993,6 @@ async function startDesktop(): Promise<void> {
         throw new Error('Desktop media source picker returned no directory.');
       }
       return selectedPath;
-    },
-    selectWorkspaceFiles: async (windowId) => {
-      const owner = requireOwnerWindow(windowId);
-      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
-      const result = await dialog.showOpenDialog(owner, {
-        title: chinese ? '导入工作区文件' : 'Import Workspace Files',
-        buttonLabel: chinese ? '导入' : 'Import',
-        properties: ['openFile', 'multiSelections'],
-      });
-      return result.canceled ? undefined : result.filePaths;
     },
     trashWorkspaceItem: (absolutePath) => shell.trashItem(absolutePath),
     selectConfiguredGlobalMediaLibrary: async ({ windowId, libraries }) => {
@@ -882,11 +1143,20 @@ async function startDesktop(): Promise<void> {
       return result.filePath;
     },
   });
+  const conversationReferenceResolver = createDesktopAgentConversationReferenceResolver({
+    authorizeWorkspace: async (binding) => {
+      await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+        binding.workspaceGrantId,
+        binding.workspaceId,
+      );
+    },
+  });
   const agentControllerComposition = createAgentControllerComposition({
     host,
     userHome: homedir,
     credentialRuntime,
-    runtimeSettings: agentRuntimeSettings,
+    resolveWorkspaceConfig: ({ workspaceId, workspacePath }) =>
+      workspaceConfigAuthority.getWorkspaceConfig({ workspaceId, workspacePath }),
     resources: {
       registerFile: (owner, source) =>
         resourceRegistry.registerFile(
@@ -901,6 +1171,34 @@ async function startDesktop(): Promise<void> {
             mediaType: source.mediaType,
           },
         ),
+      registerBytes: async (owner, source) => {
+        const lease = resourceRegistry.registerResourceTree(
+          {
+            windowId: owner.windowId,
+            viewId: owner.viewId,
+            sessionId: owner.sessionId,
+            rendererSessionId: owner.connectionId,
+          },
+          {
+            entries: [
+              {
+                virtualPath: 'content',
+                byteLength: source.bytes.byteLength,
+                contentType: source.mediaType,
+                read: async (signal) => {
+                  if (signal.aborted) throw signal.reason;
+                  return source.bytes;
+                },
+              },
+            ],
+            release: () => undefined,
+          },
+        );
+        return {
+          url: new URL('content', lease.url).toString(),
+          release: () => lease.release(),
+        };
+      },
     },
     contentInteraction: {
       openContent: async ({ identity, absolutePath }) => {
@@ -946,12 +1244,20 @@ async function startDesktop(): Promise<void> {
         shell.showItemInFolder(path.join(workspace.workspace.workspacePath, contentLocator.path));
       },
     },
+    searchLinkedMediaLibraryFiles: (workspace, input) =>
+      searchWorkspaceLinkedMediaLibraryContentLocators({
+        workspace,
+        files: host.files,
+        query: input.query,
+        limit: input.limit,
+      }),
     configInteraction: {
       openUserConfig: async ({ identity, absolutePath }) => {
         requireOwnerWindow(identity.windowId);
         await openHostPath(absolutePath);
       },
     },
+    conversationReferences: conversationReferenceResolver,
     reportError: (error) => {
       host.diagnostics?.report({
         code: 'desktop-agent-controller-effect-failed',
@@ -960,15 +1266,166 @@ async function startDesktop(): Promise<void> {
       });
     },
   });
+  const characterRooms = new CharacterRoomService(characterRepository, {
+    worldBindings: {
+      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
+    },
+  });
+  const characterAgentSessions = createCharacterPrimaryAgentSessionAdapter({
+    workspace: assistantAgentWorkspace,
+    conversationContexts: createPersistentAgentConversationContextAuthority({
+      metadataStore: localMetadataStore,
+    }),
+    resolveTurnRuntime: (characterRunId, signal) => {
+      signal?.throwIfAborted();
+      return agentControllerComposition.resolveExternalOwnerTurnRuntime({
+        workspace: assistantAgentWorkspace,
+        conversationId: `conversation:character:${characterRunId}`,
+        locale: app.getLocale().toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en',
+      });
+    },
+    baseSystemPrompt: (characterRunId) =>
+      `You are the primary Character Agent for CharacterRun '${characterRunId}'.`,
+  });
+  const characterInteractions = new CharacterInteractionService({
+    repository: characterRepository,
+    agentSessions: characterAgentSessions,
+    roomViews: {
+      materializeRoomView: (roomRunId, participantId, signal) =>
+        characterRooms.materializeView({ roomRunId, participantId }, signal),
+    },
+    worldViews: {
+      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
+      materializeWorldView: ({ binding, participantId, actorId }, signal) =>
+        worldRuntime.materializeBindingView(
+          {
+            ...binding,
+            participantId,
+            ...(actorId === undefined ? {} : { actorId }),
+          },
+          signal,
+        ),
+    },
+  });
+  const characterRoomConversations = new CharacterRoomConversationService({
+    rooms: characterRooms,
+    interactions: characterInteractions,
+  });
+  const characterConversations = new CharacterConversationLaunchService({
+    repository: characterRepository,
+    agentSessions: characterAgentSessions,
+    world: {
+      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
+    },
+  });
+  const characterRoomInteractions = new CharacterRoomInteractionService({
+    repository: characterRepository,
+    roomRuns: characterRooms,
+    agentSessions: characterAgentSessions,
+    worldBindings: {
+      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
+    },
+  });
+  const characterFoundationCommands = new CharacterFoundationCommandService({
+    characterAuthoring: new CharacterAuthoringService({ repository: characterRepository }),
+    relationships: new UserCharacterRelationshipService(characterRepository),
+    interactions: characterInteractions,
+    rooms: characterRooms,
+    roomInteractions: characterRoomInteractions,
+    worldAuthoring: new WorldAuthoringService({ repository: worldRepository }),
+    worldRuntime,
+  });
   const agentLaunch = createDesktopAgentLaunchRuntime({
     agent: agentComposition,
-    config: new ConfigManager({
-      userConfigManager: new FileUserConfigManager({
-        filePath: buildConfigFilePath(homedir),
-      }),
-      assistantRuntimeSettings: agentRuntimeSettings,
-    }),
+    config: workspaceConfigAuthority.getApplicationConfig(),
     readTextResource: (hostResource) => host.files.readText(hostResource),
+    workspaceMentions: {
+      search: async ({ binding, filter }) => {
+        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        const projection = await searchAgentWorkspaceMentions({
+          workspace: resolution.workspace,
+          host,
+          filter,
+          purpose: 'entry',
+          searchLinkedMediaLibraryFiles: (input) =>
+            searchWorkspaceLinkedMediaLibraryContentLocators({
+              workspace: resolution.workspace,
+              files: host.files,
+              query: input.query,
+              limit: input.limit,
+            }),
+          reportMentionContributorError: (error) => {
+            host.diagnostics?.report({
+              code: 'desktop-agent-media-library-mention-search-failed',
+              severity: 'error',
+              message: error.message,
+              metadata: { workspaceId: resolution.workspace.workspaceId },
+            });
+          },
+        });
+        return {
+          filter: projection.filter,
+          files: projection.files,
+          mentionExtras: projection.mentionExtras,
+        };
+      },
+    },
+    readWorkspaceSkillCatalog: async (binding) => {
+      const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+        binding.workspaceGrantId,
+        binding.workspaceId,
+      );
+      const workspace =
+        agentComposition.getWorkspace(binding.workspaceId) ??
+        (await agentComposition.attachWorkspace(resolution.workspace));
+      return workspace.readSkillCatalog(true);
+    },
+    resolveWorkspaceReferenceContext: async ({ binding, reference }) => {
+      if (reference.kind === 'entity') {
+        await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        return {
+          type: reference.entity.type === 'character' ? 'character' : 'entity',
+          id: reference.entity.id,
+          label: reference.entity.label,
+          summary: reference.entity.summary,
+          data: {
+            source: reference.entity.source ?? 'entity-graph',
+            ...(reference.entity.entityType === undefined
+              ? {}
+              : { entityType: reference.entity.entityType }),
+          },
+        };
+      }
+      if (reference.file.type !== 'file') {
+        throw new Error(
+          `Agent Workspace reference '${reference.file.name}' is not a readable file.`,
+        );
+      }
+      const [resolved] = await conversationReferenceResolver.resolveWorkspaceReferences({
+        context: binding,
+        references: [
+          {
+            id: JSON.stringify(reference.file.locator),
+            contentLocator: reference.file.locator,
+            label: reference.file.name,
+            ...(reference.file.mediaType === undefined
+              ? {}
+              : { mediaType: reference.file.mediaType }),
+            ...(reference.file.source === undefined ? {} : { source: reference.file.source }),
+          },
+        ],
+      });
+      if (!resolved) {
+        throw new Error(`Agent Workspace reference '${reference.file.name}' was not resolved.`);
+      }
+      return resolved;
+    },
     selectResource: async ({ windowId, resourceKind }) => {
       const owner = requireOwnerWindow(windowId);
       if (resourceKind === 'microphone') {
@@ -998,23 +1455,54 @@ async function startDesktop(): Promise<void> {
       return { label: path.basename(selectedPath), hostResource: selectedPath };
     },
   });
+  const agentDomainBindings = createAgentDomainBindingApplicationService({
+    assistant: {
+      resolve: async (binding) =>
+        binding.assistantSpaceId === assistantWorkspace.workspaceId
+          ? { status: 'available', binding, contextPayloads: [] }
+          : {
+              status: 'unavailable',
+              diagnostic: {
+                code: 'assistant-space-unavailable',
+                owner: `assistant:${binding.assistantSpaceId}`,
+                message: `Assistant Space '${binding.assistantSpaceId}' is unavailable.`,
+              },
+            },
+    },
+    workspace: {
+      resolve: async (binding) => {
+        await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        return { status: 'available', binding, contextPayloads: [] };
+      },
+    },
+  });
   const resolveScratchRoot = (ref: {
     readonly conversationId: string;
     readonly scratchArtifactId: string;
   }): string =>
     path.join(globalStorage.root, 'assistant-scratch', ref.conversationId, ref.scratchArtifactId);
-  const resolveConversationWorkspace = async (context: AgentConversationContext) =>
-    context.kind === 'assistant'
-      ? agentComposition.attachWorkspace(assistantWorkspace)
-      : (agentComposition.getWorkspace(context.workspaceId) ??
-        (await agentComposition.attachWorkspace(
-          (
-            await workspaceGrantAuthority.resolveAuthorizedWorkspace(
-              context.workspaceGrantId,
-              context.workspaceId,
-            )
-          ).workspace,
-        )));
+  const resolveConversationWorkspace = async (context: AgentBoundDomainBinding) => {
+    if (context.kind === 'assistant') {
+      return agentComposition.attachWorkspace(assistantWorkspace);
+    }
+    if (context.kind !== 'workspace') {
+      throw new Error(`Desktop ${context.kind} Conversation provider is unavailable.`);
+    }
+    return (
+      agentComposition.getWorkspace(context.workspaceId) ??
+      (await agentComposition.attachWorkspace(
+        (
+          await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+            context.workspaceGrantId,
+            context.workspaceId,
+          )
+        ).workspace,
+      ))
+    );
+  };
   const conversationLifecycle = createAgentConversationLifecycleService({
     repository: createPersistentAgentConversationLifecycleRepository({
       metadataStore: localMetadataStore,
@@ -1024,6 +1512,22 @@ async function startDesktop(): Promise<void> {
         agentLaunch.validateResourceGrants(context, resourceGrantIds),
       resolveForTurn: ({ context, resourceGrantIds }) =>
         agentLaunch.resolveResourceContexts(context, resourceGrantIds),
+    },
+    domainContext: {
+      resolveForTurn: async ({ conversationId, context, references }) => {
+        const resolution = await agentDomainBindings.resolve(context);
+        if (resolution.status === 'unavailable') {
+          throw new Error(
+            `[${resolution.diagnostic.owner}/${resolution.diagnostic.code}] ${resolution.diagnostic.message}`,
+          );
+        }
+        const referenceContexts = await agentLaunch.resolveReferenceContexts(
+          conversationId,
+          context,
+          references,
+        );
+        return [...resolution.contextPayloads, ...referenceContexts];
+      },
     },
     scratch: {
       create: async (ref) => {
@@ -1057,24 +1561,46 @@ async function startDesktop(): Promise<void> {
     session: {
       materialize: async (request) => {
         const workspace = await resolveConversationWorkspace(request.context);
-        await workspace.ensureConversation(request.conversationId);
+        await workspace.ensureConversation(request.conversationId, request.title);
       },
     },
     provider: {
       start: async (request) => {
         const workspace = await resolveConversationWorkspace(request.context);
+        if (isAgentLaunchConversationCreationCommand(request.input)) {
+          return;
+        }
         if (!agentControllerComposition.startInitialTurn) {
           throw new Error('Agent initial-turn provider adapter is unavailable.');
         }
+        const commandArtifactActivationId =
+          request.input.kind === 'command'
+            ? parseCommandArtifactHandlerId(request.input.handlerId)
+            : undefined;
         await agentControllerComposition.startInitialTurn({
           workspace,
           conversationId: request.conversationId,
           turnId: request.turnId,
-          messageText: request.messageText,
-          providerId: request.configuration.providerId,
-          modelId: request.configuration.modelId,
+          messageText:
+            request.input.kind === 'message' ? request.input.text : (request.input.args ?? ''),
+          presentationText: projectAgentDraftInputText(request.input),
+          configuration: request.configuration,
+          context: request.context,
           locale: 'en',
           contextPayloads: request.contextPayloads,
+          ...(request.input.kind === 'skill'
+            ? {
+                skillName: request.input.skillName,
+                skillActivationId: request.input.activationId,
+                additionalInstructions: request.input.args,
+              }
+            : request.input.kind === 'command'
+              ? {
+                  skillName: request.input.commandId,
+                  skillActivationId: commandArtifactActivationId,
+                  additionalInstructions: request.input.args,
+                }
+              : {}),
         });
       },
     },
@@ -1087,6 +1613,82 @@ async function startDesktop(): Promise<void> {
     },
     createIdentity: randomUUID,
     now: () => new Date().toISOString(),
+  });
+  const agentLaunchSubmission = createAgentLaunchDraftSubmissionApplicationService({
+    launch: agentLaunch,
+    entry: {
+      materialize: async () => {
+        const requested = {
+          kind: 'assistant' as const,
+          assistantSpaceId: assistantWorkspace.workspaceId,
+          baseGrantIds: [] as const,
+        };
+        const resolution = await agentDomainBindings.resolve(requested);
+        if (resolution.status === 'unavailable') {
+          throw new Error(
+            `[${resolution.diagnostic.owner}/${resolution.diagnostic.code}] ${resolution.diagnostic.message}`,
+          );
+        }
+        if (resolution.binding.kind !== 'assistant') {
+          throw new Error('Agent Entry owner materialized a non-Assistant binding.');
+        }
+        return resolution.binding;
+      },
+    },
+    bindings: agentDomainBindings,
+    lifecycle: conversationLifecycle,
+    resources: {
+      validate: ({ connection, conversationId, resourceGrantIds, references }) => {
+        agentLaunch.validateResourceGrantCommit(connection, conversationId, resourceGrantIds);
+        agentLaunch.validateReferenceCommit(connection, conversationId, references);
+        return agentLaunch.projectReferenceMessageContexts(connection, conversationId, references);
+      },
+      commit: async ({ connection, conversationId, resourceGrantIds, references }) => {
+        await agentLaunch.commitResourceGrants(connection, conversationId, resourceGrantIds);
+        agentLaunch.commitReferences(connection, conversationId, references);
+      },
+    },
+    scene: {
+      validate: async ({ connection, draftId, conversationId }) => {
+        const surface = await shellService.resolveAgentSurfaceGrant(
+          connection.windowId,
+          connection,
+        );
+        if (
+          surface.interaction.scope.draftId !== draftId ||
+          (conversationId === undefined
+            ? surface.interaction.phase !== 'draft' ||
+              surface.interaction.agentViewId !== connection.viewId
+            : surface.interaction.phase !== 'session' ||
+              surface.interaction.scope.kind === 'unbound' ||
+              surface.interaction.scope.conversationId !== conversationId)
+        ) {
+          throw new Error('Agent Draft submit is not the exact active Draft presentation.');
+        }
+      },
+      handoff: async ({ connection, draftId, conversationId, context }) => {
+        const projection = await shellService.getProjection(connection.windowId);
+        await shellService.attachAgentConversation({
+          windowId: connection.windowId,
+          rendererSessionId: projection.rendererSessionId,
+          agentViewId: connection.viewId,
+          draftId,
+          context,
+          conversationId,
+        });
+      },
+    },
+    commands: {
+      validate: (intent) => {
+        if (isAgentLaunchConversationCreationCommand(intent)) {
+          if (intent.args !== undefined) {
+            throw new Error('Agent Draft command /new does not accept arguments.');
+          }
+          return;
+        }
+        parseCommandArtifactHandlerId(intent.handlerId);
+      },
+    },
   });
   const assistantPreview = createDesktopAssistantPreviewRuntime({
     resolveScratchRoot,
@@ -1116,14 +1718,23 @@ async function startDesktop(): Promise<void> {
     assistantWorkspace,
     agentControllerComposition,
     agentLaunch,
+    agentLaunchSubmission,
+    generationLifecycle: generationRuntime,
+    workspaceConfigLifecycle: workspaceConfigAuthority,
     workspaceGrants: workspaceGrantAuthority,
     conversationLifecycle,
     assistantResources,
+    characterFoundation,
+    characterFoundationCommands,
+    characterConversations,
+    characterRoomConversations,
+    characterRoomWorkbench: characterRooms,
     assistantPreviewLifecycle: assistantPreview,
     resourceBrowser,
     assetCenter,
     projectPortability,
     preview: previewRuntime,
+    textEditor: textEditorRuntime,
     canvas: canvasRuntime,
     cut: cutRuntime,
     settings: applicationSettings,
@@ -1243,11 +1854,7 @@ async function startDesktop(): Promise<void> {
       const disposeSecurity = configureDesktopWindowSecurity(
         createdWindow,
         allowedOrigin,
-        developmentUrl
-          ? {
-              viteDevelopmentNonce: DESKTOP_VITE_CSP_NONCE,
-            }
-          : undefined,
+        desktopRendererContentSecurityPolicyOptions(Boolean(developmentUrl)),
       );
       appHost.windows.addDisposable(registration.windowId, { dispose: disposeSecurity });
       const disposeShellSubscription = appHost.shell.subscribe(registration.windowId, (event) =>
@@ -1322,12 +1929,51 @@ async function startDesktop(): Promise<void> {
           );
         }
       });
-      createdWindow.on('close', () => {
+      let textEditorCloseApproved = false;
+      let textEditorClosePromptActive = false;
+      createdWindow.on('close', (closeEvent) => {
+        if (
+          !textEditorCloseApproved &&
+          !shutdownStarted &&
+          textEditorRuntime.hasDirtySessions(registration.windowId)
+        ) {
+          closeEvent.preventDefault();
+          if (textEditorClosePromptActive) return;
+          textEditorClosePromptActive = true;
+          void promptTextEditorClose(createdWindow)
+            .then(async (decision) => {
+              if (decision === 'cancel') return;
+              const result = await textEditorRuntime.closeWindow(registration.windowId, decision);
+              if (result !== 'closed') return;
+              textEditorCloseApproved = true;
+              createdWindow.close();
+            })
+            .catch((error: unknown) => {
+              appHost.reportError(
+                'desktop-text-editor-close-failed',
+                'Desktop Text Editor could not complete the Window close decision.',
+                error,
+              );
+            })
+            .finally(() => {
+              textEditorClosePromptActive = false;
+            });
+          return;
+        }
         const event = appHost.windows.windowClosing(
           registration.windowId,
           appHost.applicationIdentity.instanceId,
         );
         sendLifecycleEvent(createdWindow, event);
+      });
+      createdWindow.on('focus', () => {
+        void resourceBrowser.reconcileWindow(registration.windowId).catch((error: unknown) => {
+          appHost.reportError(
+            'desktop-resource-browser-focus-reconciliation-failed',
+            `Failed to reconcile Resource Browser for Window '${registration.windowId}'.`,
+            error,
+          );
+        });
       });
       createdWindow.on('closed', () => {
         try {
@@ -1397,17 +2043,23 @@ async function startDesktop(): Promise<void> {
     event.preventDefault();
     if (shutdownStarted) return;
     shutdownStarted = true;
-    void shutdownDesktop()
+    void closeDirtyTextEditorsForApplication()
+      .then(async (proceed) => {
+        if (!proceed) {
+          shutdownStarted = false;
+          return;
+        }
+        await shutdownDesktop();
+        shutdownComplete = true;
+        app.quit();
+      })
       .catch((error: unknown) => {
+        shutdownStarted = false;
         appHost.reportError(
           'desktop-shutdown-failed',
           'Desktop shutdown did not release every owned resource.',
           error,
         );
-      })
-      .finally(() => {
-        shutdownComplete = true;
-        app.quit();
       });
   });
 
@@ -1426,6 +2078,35 @@ async function startDesktop(): Promise<void> {
     for (const transport of managedLogTransports) transport.dispose();
     managedLogTransports.clear();
     workspaceLoggers.clear();
+  }
+
+  async function closeDirtyTextEditorsForApplication(): Promise<boolean> {
+    for (const [windowId, owner] of windowsById) {
+      if (owner.isDestroyed() || !textEditorRuntime.hasDirtySessions(windowId)) continue;
+      const decision = await promptTextEditorClose(owner);
+      if (decision === 'cancel') return false;
+      if ((await textEditorRuntime.closeWindow(windowId, decision)) !== 'closed') return false;
+    }
+    return true;
+  }
+
+  async function promptTextEditorClose(
+    owner: BrowserWindow,
+  ): Promise<import('@neko/text-editor-domain').TextDocumentCloseDecision> {
+    const zh = app.getLocale().toLocaleLowerCase().startsWith('zh');
+    const result = await dialog.showMessageBox(owner, {
+      type: 'warning',
+      title: zh ? '保存文档更改' : 'Save document changes',
+      message: zh ? '文档包含未保存的更改。' : 'A document has unsaved changes.',
+      detail: zh
+        ? '关闭前保存、更改后放弃，或取消并返回编辑器。'
+        : 'Save before closing, discard the changes, or cancel and return to the editor.',
+      buttons: zh ? ['保存', '放弃', '取消'] : ['Save', 'Discard', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+    return result.response === 0 ? 'save' : result.response === 1 ? 'discard' : 'cancel';
   }
 }
 
@@ -1564,13 +2245,96 @@ async function createDesktopThumbnailDataUrl(
   targetPath: string,
   size: { readonly width: number; readonly height: number },
 ): Promise<string> {
+  const thumbnail = await createDesktopThumbnailPng(targetPath, size);
+  return `data:image/png;base64,${Buffer.from(thumbnail).toString('base64')}`;
+}
+
+async function createDesktopThumbnailPng(
+  targetPath: string,
+  size: { readonly width: number; readonly height: number },
+): Promise<Uint8Array> {
   try {
     const thumbnail = await nativeImage.createThumbnailFromPath(targetPath, size);
-    if (!thumbnail.isEmpty()) return thumbnail.toDataURL();
+    if (!thumbnail.isEmpty()) return thumbnail.toPNG();
   } catch {
     // Native thumbnail errors may contain the private absolute source path.
   }
   throw new Error('Desktop could not project a thumbnail for this resource.');
+}
+
+function registerCanvasPreviewBytes(
+  resourceRegistry: DesktopResourceRegistry,
+  owner: {
+    readonly windowId: string;
+    readonly viewId: string;
+    readonly sessionId: string;
+    readonly rendererSessionId: string;
+  },
+  bytes: Uint8Array,
+  contentType: string,
+) {
+  const lease = resourceRegistry.registerResourceTree(owner, {
+    entries: [
+      {
+        virtualPath: 'preview',
+        byteLength: bytes.byteLength,
+        contentType,
+        read: async (signal) => {
+          if (signal.aborted) throw signal.reason;
+          return bytes;
+        },
+      },
+    ],
+    release: () => undefined,
+  });
+  return {
+    url: new URL('preview', lease.url).toString(),
+    release: () => lease.release(),
+  };
+}
+
+function requireCanvasPreviewContentType(
+  locator: ContentLocator,
+  declared: string | undefined,
+): string {
+  if (declared?.includes('/')) return declared;
+  const sourcePath =
+    locator.kind === 'document-entry'
+      ? locator.entryPath
+      : locator.kind === 'package-resource'
+        ? locator.resourcePath
+        : locator.path;
+  switch (path.posix.extname(sourcePath).toLocaleLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.bmp':
+      return 'image/bmp';
+    case '.avif':
+      return 'image/avif';
+    case '.mp4':
+      return 'video/mp4';
+    case '.webm':
+      return 'video/webm';
+    case '.mov':
+      return 'video/quicktime';
+    case '.mp3':
+      return 'audio/mpeg';
+    case '.wav':
+      return 'audio/wav';
+    case '.pdf':
+      return 'application/pdf';
+    default:
+      throw new Error('Canvas preview content type is unavailable.');
+  }
 }
 
 function createDesktopGlobalLibraryThumbnailFactory(): ResourceBrowserNodeRuntimeOptions['createGlobalLibraryThumbnail'] {
@@ -1662,4 +2426,12 @@ function sendApplicationSettingsProjectionEvent(
   if (!window.isDestroyed()) {
     window.webContents.send(DESKTOP_APPLICATION_SETTINGS_CHANNELS.projectionEvent, event);
   }
+}
+
+function parseCommandArtifactHandlerId(handlerId: string): string {
+  const prefix = 'command-artifact:';
+  if (!handlerId.startsWith(prefix) || handlerId.length === prefix.length) {
+    throw new Error(`Agent Draft command has no registered launch handler '${handlerId}'.`);
+  }
+  return handlerId.slice(prefix.length);
 }

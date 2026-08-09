@@ -203,17 +203,17 @@
   grid-template-areas:
     'title title title title'
     'primary left main right'
-    'primary left timeline right'
+    'primary left bottom-panel right'
     'status status status status';
   grid-template-columns:
     var(--neko-controlled-primary-width)
-    var(--neko-controlled-left-dock-width)
+    minmax(0, var(--neko-controlled-left-dock-width))
     minmax(420px, 1fr)
-    var(--neko-controlled-right-dock-width);
+    minmax(0, var(--neko-controlled-right-dock-width));
   grid-template-rows:
     auto
     minmax(0, 1fr)
-    var(--neko-controlled-timeline-height)
+    var(--neko-controlled-bottom-panel-height)
     auto;
   width: 100%;
   height: 100%;
@@ -227,9 +227,9 @@
 .neko-controlled-workbench-shell[data-primary-visible='false'] {
   grid-template-columns:
     0
-    var(--neko-controlled-left-dock-width)
+    minmax(0, var(--neko-controlled-left-dock-width))
     minmax(420px, 1fr)
-    var(--neko-controlled-right-dock-width);
+    minmax(0, var(--neko-controlled-right-dock-width));
 }
 
 .neko-controlled-workbench-shell[data-left-presentation='hidden'],
@@ -238,7 +238,7 @@
     var(--neko-controlled-primary-width)
     0
     minmax(420px, 1fr)
-    var(--neko-controlled-right-dock-width);
+    minmax(0, var(--neko-controlled-right-dock-width));
 }
 
 .neko-controlled-workbench-shell[data-primary-visible='false'][data-left-presentation='hidden'],
@@ -247,14 +247,14 @@
     0
     0
     minmax(420px, 1fr)
-    var(--neko-controlled-right-dock-width);
+    minmax(0, var(--neko-controlled-right-dock-width));
 }
 
 .neko-controlled-workbench-shell[data-right-presentation='hidden'],
 .neko-controlled-workbench-shell[data-right-presentation='overlay'] {
   grid-template-columns:
     var(--neko-controlled-primary-width)
-    var(--neko-controlled-left-dock-width)
+    minmax(0, var(--neko-controlled-left-dock-width))
     minmax(420px, 1fr)
     0;
 }
@@ -263,7 +263,7 @@
 .neko-controlled-workbench-shell[data-primary-visible='false'][data-right-presentation='overlay'] {
   grid-template-columns:
     0
-    var(--neko-controlled-left-dock-width)
+    minmax(0, var(--neko-controlled-left-dock-width))
     minmax(420px, 1fr)
     0;
 }
@@ -286,7 +286,7 @@
   grid-template-columns: 0 0 minmax(420px, 1fr) 0;
 }
 
-.neko-controlled-workbench-shell[data-timeline-visible='false'] {
+.neko-controlled-workbench-shell[data-bottom-panel-visible='false'] {
   grid-template-rows: auto minmax(0, 1fr) 0 auto;
 }
 
@@ -502,9 +502,9 @@
   width: min(var(--neko-controlled-right-dock-width), calc(100% - 48px));
 }
 
-.neko-controlled-workbench-timeline {
+.neko-controlled-workbench-bottom-panel {
   position: relative;
-  grid-area: timeline;
+  grid-area: bottom-panel;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -565,8 +565,8 @@
   height: 2px;
 }
 
-.neko-controlled-workbench-shell[data-timeline-visible='false']
-  .neko-controlled-workbench-timeline {
+.neko-controlled-workbench-shell[data-bottom-panel-visible='false']
+  .neko-controlled-workbench-bottom-panel {
   display: none;
 }
 
@@ -656,13 +656,30 @@
   min-width: 0;
   min-height: 44px;
   align-items: center;
+  overflow: hidden;
+  background: var(--neko-workbench-tabs-background, var(--neko-workbench-chrome, #f1f3f6));
+}
+
+.neko-workbench-editor-tabs__list {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 7px 10px;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
-  background: var(--neko-workbench-tabs-background, var(--neko-workbench-chrome, #f1f3f6));
+}
+
+.neko-workbench-editor-tabs__context-actions {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 4px 8px 4px 0;
 }
 
 .neko-workbench-editor-tab {

@@ -120,6 +120,29 @@ describe('Cut Host runtime contract', () => {
     );
   });
 
+  it('parses an authoritative identity rebind event cursor', () => {
+    const snapshot = {
+      identity,
+      dirty: false,
+      document: { name: 'Fixture' },
+      playback: null,
+      export: { tasks: [] },
+      presentation: DEFAULT_CUT_HOST_PRESENTATION,
+    };
+    expect(
+      parseCutHostRuntimeResult({
+        snapshot,
+        output: { type: 'identity-rebound', eventSequence: 3 },
+      }),
+    ).toMatchObject({ output: { type: 'identity-rebound', eventSequence: 3 } });
+    expect(() =>
+      parseCutHostRuntimeResult({
+        snapshot,
+        output: { type: 'identity-rebound', eventSequence: 0 },
+      }),
+    ).toThrow('positive integer');
+  });
+
   it('parses Desktop HTTP preview output without accepting arbitrary URLs', () => {
     const snapshot = {
       identity,

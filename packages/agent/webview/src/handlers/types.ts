@@ -8,6 +8,7 @@ import type { MutableRefObject } from 'react';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { AgentHostToWebviewMessage, MessageOfType } from './messages';
 import type {
+  AgentInputCatalogMessage,
   Message,
   ConversationSummary,
   OpenTab,
@@ -23,11 +24,7 @@ import type { ActivationProgressTimeline } from '../presenters/activation-progre
 import type { AgentWorkItemStore } from '../components/AgentWorkItem';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 import type { ProjectFileInfo } from '../hooks/useConfigState';
-import type {
-  SkillSummary,
-  MentionItem,
-  PluginSlashCommandDef,
-} from '../components/ChatView/InputArea/types';
+import type { MentionItem, PluginSlashCommandDef } from '../components/ChatView/InputArea/types';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import type {
   ConversationRenderStateUpdater as CanonicalConversationRenderStateUpdater,
@@ -116,7 +113,9 @@ export interface AgentStateContext {
 
 /** Pi Skill catalog plus independent capability activation progress. */
 export interface SkillContext {
-  setSkills: React.Dispatch<React.SetStateAction<SkillSummary[]>>;
+  setAgentInputCatalogByConversation?: React.Dispatch<
+    React.SetStateAction<Map<string, AgentInputCatalogMessage>>
+  >;
   setActivationProgressByConversation: React.Dispatch<
     React.SetStateAction<Map<string, readonly ActivationProgressTimeline[]>>
   >;

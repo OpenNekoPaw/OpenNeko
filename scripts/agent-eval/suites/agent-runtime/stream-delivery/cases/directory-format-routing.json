@@ -1,0 +1,124 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "directory-format-routing",
+  "suiteId": "agent-runtime.stream-delivery",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Discover Workspace files by directory, read plain text natively, and read the discovered EPUB through its exact structured-document capability.",
+    "canonicalPath": [
+      "Desktop Agent input queue",
+      "ListDirectory with one Workspace-relative level",
+      "Conversation-scoped workspace_path and input_ref projection",
+      "Read for bounded UTF-8 text",
+      "ReadDocument for the discovered EPUB",
+      "terminal answer"
+    ],
+    "observables": [
+      {
+        "ref": "directory-routing-facts",
+        "kind": "runtime-fact",
+        "description": "Successful ListDirectory, exact Workspace-relative Read, successful ReadDocument, terminal state, and final marker facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent lists only the Workspace root, reads notes.txt through Read, uses the directory-issued input_ref for synthetic-document.epub through ReadDocument, and reaches idle with the final marker.",
+    "expectedFailure": "Absolute or recursive directory arguments, raw locator projection, binary-as-text reading, shell discovery, failed Tool execution, or a missing terminal marker fails visibly."
+  },
+  "fixtureRefs": ["document-image-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "先调用 ListDirectory 一次，参数只能是 path=\".\"。从结果中找到 notes.txt 和 synthetic-document.epub：使用 workspace_path 调用 Read 一次读取 notes.txt；使用目录结果返回的 input_ref 调用 ReadDocument 一次读取 EPUB，mode=content、include_images=false、max_chars=1000。不要构造 locator、绝对路径或递归参数，不要把 EPUB 交给 Read，也不要调用其他工具。成功后简短说明两个文件的内容，并单独输出 DIRECTORY_FORMAT_ROUTING_OK。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
+      "id": "idle",
+      "kind": "fully-idle",
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
+      "id": "list-directory",
+      "kind": "tool-call",
+      "name": "ListDirectory",
+      "status": "success",
+      "expectedArguments": {
+        "path": "."
+      },
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
+      "id": "read-text",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "expectedArguments": {
+        "file_path": "notes.txt"
+      },
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
+      "id": "read-document",
+      "kind": "tool-call",
+      "name": "ReadDocument",
+      "status": "success",
+      "expectedArguments": {
+        "source": {
+          "kind": "workspace-file",
+          "path": "synthetic-document.epub"
+        },
+        "mode": "content",
+        "start_batch": false,
+        "include_manifest": false,
+        "include_images": false,
+        "max_chars": 1000,
+        "max_images": 5
+      },
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
+      "id": "shell-absent",
+      "kind": "tool-call",
+      "name": "Bash",
+      "status": "absent",
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["DIRECTORY_FORMAT_ROUTING_OK"],
+      "evidenceRef": "directory-routing-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

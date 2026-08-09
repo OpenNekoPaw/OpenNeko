@@ -222,6 +222,8 @@ transcript 顺序和内容；生成 Tool/Job/progress/terminal/artifact 记录�
 文本只能证明输出，不能替代 provider/model identity、conversation/turn/run identity、canonical path、
 terminal、restore 和 no-fallback 证据。
 
+Agent Launch Draft 与领域 binding 使用独立的 `agent-runtime.launch-binding` suite owner。它必须从真实 Entry/领域控件驱动 unbound 或 bound Draft，观察 exact Draft/binding/Conversation/Scene identity，并毒化 active/current/recent Project、raw command/Skill prompt 和 wrong-owner fallback。Skill 首发继续更新 `agent-runtime.skill-runtime`，模型切换更新 `agent-runtime.model-binding`，compaction continuation 更新 `agent-runtime.workflow-controller`；各 suite 不得用另一 suite 的最终文本替代自身路径证据。
+
 ## Risks / Trade-offs
 
 - **[Electron Worker 消耗明显高于 TUI]** → 使用预构建 executable、有界并发、资源分类、分片和

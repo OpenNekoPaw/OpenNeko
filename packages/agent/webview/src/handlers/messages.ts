@@ -41,7 +41,6 @@ export type {
   ProjectFilesMessage,
   SettingsDataMessage,
   SettingsUpdatedMessage,
-  SkillsListMessage,
   SlashCommandResultMessage,
   SubAgentEventMessage,
   TabStateMessage,

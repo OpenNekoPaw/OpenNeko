@@ -7,6 +7,25 @@ import {
 } from './index';
 
 describe('PreviewSessionRegistry', () => {
+  it('settles an exact loading session once', () => {
+    const registry = new PreviewSessionRegistry();
+    const runtimeIdentity = identity('session-loading');
+    registry.register(
+      parsePreviewProjection({
+        identity: runtimeIdentity,
+        presentation: 'temporary',
+        status: 'loading',
+      }),
+    );
+    const ready = readyProjection(runtimeIdentity, 'temporary');
+    const transition = registry.planPreparation('session-loading', ready);
+
+    expect(registry.commit(transition).projection).toEqual(ready);
+    expect(() => registry.planPreparation('session-loading', ready)).toThrow(
+      'is not awaiting preparation',
+    );
+  });
+
   it('owns presentation transitions by exact snapshot and same-slot replacement', () => {
     const registry = new PreviewSessionRegistry();
     const first = readyProjection(identity('session-1'), 'temporary');

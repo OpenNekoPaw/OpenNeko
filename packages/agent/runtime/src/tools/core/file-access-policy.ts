@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import {
   shouldIgnoreWorkspaceFile,
   type WorkspaceFileIgnoreRules,
@@ -9,7 +10,9 @@ import {
   normalizeAccessRoots,
 } from './path-access-core';
 
-export type FileAccessKind = 'read' | 'write' | 'cwd';
+export type FileAccessKind = 'read' | 'write' | 'list' | 'cwd';
+
+export type ProtectedProjectDocumentOwner = 'canvas' | 'cut';
 
 export interface CoreFileAccessPolicy {
   authorize(filePath: string, accessKind: FileAccessKind): CoreFileAccessDecision;
@@ -19,12 +22,14 @@ export type CoreFileAccessDecision =
   | {
       readonly allowed: true;
       readonly path: string;
+      readonly contentLocator?: WorkspaceFileContentLocator;
     }
   | {
       readonly allowed: false;
       readonly path: string;
       readonly reason: CoreFileAccessDenialReason;
       readonly rule?: string;
+      readonly protectedProjectOwner?: ProtectedProjectDocumentOwner;
     };
 
 export type CoreFileAccessDenialReason =
@@ -32,7 +37,8 @@ export type CoreFileAccessDenialReason =
   | 'relative-path-without-root'
   | 'forbidden-unmanaged-path'
   | 'outside-authorized-roots'
-  | 'ignored-workspace-path';
+  | 'ignored-workspace-path'
+  | 'protected-project-document';
 
 export interface WorkspaceFileAccessPolicyOptions {
   readonly workspaceRoot: string;
@@ -104,12 +110,42 @@ class WorkspaceFileAccessPolicy implements CoreFileAccessPolicy {
             : {}),
         };
       }
+      const protectedProjectOwner = protectedProjectOwnerForPath(relativePath);
+      if (accessKind !== 'list' && protectedProjectOwner) {
+        return {
+          allowed: false,
+          path: resolved,
+          reason: 'protected-project-document',
+          protectedProjectOwner,
+        };
+      }
     }
 
     return {
       allowed: true,
       path: resolved,
+      ...(relativePath
+        ? {
+            contentLocator: {
+              kind: 'workspace-file' as const,
+              path: relativePath.split(path.sep).join('/'),
+            },
+          }
+        : {}),
     };
+  }
+}
+
+function protectedProjectOwnerForPath(
+  workspaceRelativePath: string,
+): ProtectedProjectDocumentOwner | undefined {
+  switch (path.extname(workspaceRelativePath).toLowerCase()) {
+    case '.nkc':
+      return 'canvas';
+    case '.otio':
+      return 'cut';
+    default:
+      return undefined;
   }
 }
 

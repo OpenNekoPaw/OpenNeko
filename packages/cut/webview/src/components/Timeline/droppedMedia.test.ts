@@ -1,28 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { readDroppedMediaUris } from './droppedMedia';
+import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content';
+import { readDroppedMediaSource } from './droppedMedia';
 
 describe('dropped Cut media', () => {
   it('prefers the VS Code URI list and ignores comments', () => {
     expect(
-      readDroppedMediaUris({
+      readDroppedMediaSource({
         files: emptyFiles(),
         getData: (type) =>
           type === 'application/vnd.code.uri-list'
             ? '# VS Code Explorer\nfile:///workspace/media/shot.mp4\nfile:///workspace/media/music.wav\n'
             : '',
       }),
-    ).toEqual(['file:///workspace/media/shot.mp4', 'file:///workspace/media/music.wav']);
+    ).toEqual({
+      kind: 'local-file-uris',
+      uris: ['file:///workspace/media/shot.mp4', 'file:///workspace/media/music.wav'],
+    });
   });
 
   it('projects an Electron system file path to a file URI', () => {
     const file = new File([], 'shot 01.mp4');
     Object.defineProperty(file, 'path', { value: '/workspace/media/shot 01.mp4' });
     expect(
-      readDroppedMediaUris({
+      readDroppedMediaSource({
         files: fileList(file),
         getData: () => '',
       }),
-    ).toEqual(['file:///workspace/media/shot%2001.mp4']);
+    ).toEqual({
+      kind: 'local-file-uris',
+      uris: ['file:///workspace/media/shot%2001.mp4'],
+    });
+  });
+
+  it('prefers the portable Resource Browser locator without projecting a local path', () => {
+    expect(
+      readDroppedMediaSource({
+        files: emptyFiles(),
+        getData: (type) =>
+          type === CONTENT_LOCATOR_DRAG_MIME
+            ? JSON.stringify({
+                type: 'content-locator',
+                locator: { kind: 'workspace-file', path: 'media/shot.mp4' },
+                name: 'shot.mp4',
+              })
+            : '',
+      }),
+    ).toEqual({
+      kind: 'content-locator',
+      data: {
+        type: 'content-locator',
+        locator: { kind: 'workspace-file', path: 'media/shot.mp4' },
+        name: 'shot.mp4',
+      },
+    });
   });
 });
 

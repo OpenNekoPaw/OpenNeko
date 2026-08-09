@@ -38,6 +38,8 @@ export {
   executeReadImage,
   type ReadImageContentAccessRuntime,
 } from './content/read-image-tool';
+export { createCanvasProjectCapabilityProvider } from './canvas/canvas-project-capability-provider';
+export { createCutProjectCapabilityProvider } from './cut/cut-project-capability-provider';
 
 // Category registry
 export { ToolCategoryRegistry, createToolCategoryRegistry } from './tool-category-registry';

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { createCutHostRuntimeWebviewBridge } from '@neko/cut-webview/runtime-bridge';
 import type {
@@ -17,12 +17,10 @@ const CutWebviewRoot = lazy(async () => {
 export function DesktopCutSurface({
   project,
   projection,
-  timelineTarget,
   view,
 }: {
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
-  readonly timelineTarget?: Element;
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const { locale, t } = useTranslation();
@@ -52,7 +50,21 @@ export function DesktopCutSurface({
       view.viewId,
     ],
   );
-  const bridge = useMemo(() => createCutHostRuntimeWebviewBridge(runtime), [runtime]);
+  const bridgeLifetime = useMemo(
+    () => ({ bridge: createCutHostRuntimeWebviewBridge(runtime), mounted: false }),
+    [runtime],
+  );
+  const bridge = bridgeLifetime.bridge;
+  useEffect(() => {
+    bridgeLifetime.mounted = true;
+    bridge.prepare();
+    return () => {
+      bridgeLifetime.mounted = false;
+      queueMicrotask(() => {
+        if (!bridgeLifetime.mounted) bridge.dispose();
+      });
+    };
+  }, [bridge, bridgeLifetime]);
   return (
     <section
       className="desktop-cut-surface"
@@ -67,12 +79,7 @@ export function DesktopCutSurface({
           </div>
         }
       >
-        <CutWebviewRoot
-          bridge={bridge}
-          lifecyclePresentation="active"
-          locale={locale}
-          timelineTarget={timelineTarget}
-        />
+        <CutWebviewRoot bridge={bridge} lifecyclePresentation="active" locale={locale} />
       </Suspense>
     </section>
   );

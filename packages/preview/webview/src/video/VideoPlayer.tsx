@@ -14,6 +14,7 @@ import { EmptyState } from '@neko/ui/primitives';
 import { InfoIcon, PlayIcon, WarningIcon } from '@neko/ui/icons';
 import type { PreviewOperationDiagnosticCode } from '../shared/types';
 import type { PreviewMediaViewerSnapshot } from '../root/viewer-snapshot';
+import '../styles/player.css';
 
 const CONTROLS_HIDE_DELAY = 3000;
 const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;

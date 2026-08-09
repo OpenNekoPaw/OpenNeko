@@ -315,12 +315,17 @@ describe('CutOtioController', () => {
       succeeded: false,
       diagnostic: { code: 'internal-failure' },
     });
-    controller.dropLinkMedia('track-video', ['file:///workspace/a.mp4'], 90, 'insert');
+    controller.dropLinkMedia(
+      'track-video',
+      { kind: 'local-file-uris', uris: ['file:///workspace/a.mp4'] },
+      90,
+      'insert',
+    );
     expect(postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({
         type: 'cut:drop-link-media',
         trackId: 'track-video',
-        uris: ['file:///workspace/a.mp4'],
+        source: { kind: 'local-file-uris', uris: ['file:///workspace/a.mp4'] },
         timelineStartFrames: 90,
         overlapPolicy: 'insert',
       }),
@@ -555,6 +560,90 @@ describe('CutOtioController', () => {
     expect(store.getState().view?.tracks[0]).toBe(previousTrack);
   });
 
+  it('merges overlapping representation batches that complete out of order', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    const current = createView();
+    controller.acceptHostMessage({ type: 'cut:view', view: current });
+
+    controller.requestRepresentations([
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 },
+    ]);
+    controller.requestRepresentations([
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 },
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 1 },
+    ]);
+
+    expect(postMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        requestId: 'session-1:representation:2',
+        requests: [{ clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 1 }],
+      }),
+    );
+    controller.acceptHostMessage({
+      type: 'cut:representations',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      requestId: 'session-1:representation:2',
+      results: [thumbnailResult(1)],
+    });
+    controller.acceptHostMessage({
+      type: 'cut:representations',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      requestId: 'session-1:representation:1',
+      results: [thumbnailResult(0)],
+    });
+
+    expect([...store.getState().representations.keys()]).toEqual([
+      'clip-1:thumbnail:64:1',
+      'clip-1:thumbnail:64:0',
+    ]);
+  });
+
+  it('retries failed media representations once before settling as unavailable', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    const current = createView();
+    controller.acceptHostMessage({ type: 'cut:view', view: current });
+    const request = {
+      clipId: 'clip-1',
+      kind: 'thumbnail' as const,
+      density: 64 as const,
+      tileIndex: 0,
+    };
+
+    controller.requestRepresentations([request]);
+    controller.acceptHostMessage({
+      type: 'cut:representation-failed',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      requestId: 'session-1:representation:1',
+      diagnostic: { code: 'media-runtime-unavailable' },
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestId: 'session-1:representation:2', requests: [request] }),
+    );
+    controller.acceptHostMessage({
+      type: 'cut:representation-failed',
+      documentUri: current.documentUri,
+      sessionId: current.sessionId,
+      requestId: 'session-1:representation:2',
+      diagnostic: { code: 'media-runtime-unavailable' },
+    });
+
+    expect(store.getState().diagnostic).toEqual({ code: 'media-runtime-unavailable' });
+    expect(store.getState().representations.get('clip-1:thumbnail:64:0')).toMatchObject({
+      status: 'unavailable',
+      message: expect.stringContaining('thumbnail'),
+    });
+    expect(postMessage).toHaveBeenCalledTimes(2);
+  });
+
   it('stores independent thumbnail tiles and rejects the removed Clip-wide result schema', () => {
     const store = createCutPresentationStore();
     const controller = new CutOtioController(store, { postMessage: vi.fn() });
@@ -596,12 +685,15 @@ describe('CutOtioController', () => {
       'clip-1:thumbnail:64:0',
       'clip-1:thumbnail:64:1',
     ]);
+    controller.requestRepresentations([
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 2 },
+    ]);
     expect(() =>
       controller.acceptHostMessage({
         type: 'cut:representations',
         documentUri: current.documentUri,
         sessionId: current.sessionId,
-        requestId: 'session-1:representation:1',
+        requestId: 'session-1:representation:2',
         results: [
           {
             clipId: 'clip-1',
@@ -619,16 +711,20 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage: vi.fn() });
     const current = createView();
     controller.acceptHostMessage({ type: 'cut:view', view: current });
-    controller.requestRepresentations([
-      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 },
-    ]);
+    const requests = Array.from({ length: 257 }, (_, tileIndex) => ({
+      clipId: 'clip-1',
+      kind: 'thumbnail' as const,
+      density: 64 as const,
+      tileIndex,
+    }));
+    controller.requestRepresentations(requests);
 
     controller.acceptHostMessage({
       type: 'cut:representations',
       documentUri: current.documentUri,
       sessionId: current.sessionId,
       requestId: 'session-1:representation:1',
-      results: Array.from({ length: 257 }, (_, tileIndex) => ({
+      results: requests.map(({ tileIndex }) => ({
         clipId: 'clip-1',
         kind: 'thumbnail',
         status: 'ready',
@@ -925,6 +1021,18 @@ describe('CutOtioController', () => {
     });
   });
 });
+
+function thumbnailResult(tileIndex: number) {
+  return {
+    clipId: 'clip-1',
+    kind: 'thumbnail' as const,
+    status: 'ready' as const,
+    density: 64 as const,
+    tileIndex,
+    sourceTimeSeconds: tileIndex,
+    dataUrl: `data:image/jpeg;base64,tile-${tileIndex}`,
+  };
+}
 
 function createView(): TimelineView {
   return {

@@ -15,7 +15,7 @@ The PrimarySidebar SHALL retain application navigation, recent Projects, recent 
 
 #### Scenario: A scene does not require every slot
 
-- **WHEN** a scene has no qualified producer for Interaction, Main, manager, Timeline or Status
+- **WHEN** a scene has no qualified producer for Interaction, Main, manager or Status
 - **THEN** that slot is omitted or displays an owner-qualified empty/unavailable Surface
 - **AND** Desktop does not insert mock domain content or a technical placeholder as a successful Surface
 
@@ -53,20 +53,122 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a Window-o
 #### Scenario: Workspace layout controls are available
 
 - **WHEN** the active scene owns an exact Workspace Workbench composition
-- **THEN** PrimarySidebar, Agent, Main and management presentation each has its own compact VS Code-style icon control in the PrimarySidebar top chrome
+- **THEN** PrimarySidebar presentation has its own compact icon control in the PrimarySidebar brand chrome
+- **AND** Agent, Main, management and Cut Panel presentation each has its own compact VS Code-style icon control overlaid at the right side of the existing Workbench top chrome
+- **AND** the Workspace control overlay does not allocate a grid row, add a header background or border, or move Main and dock content downward
+- **AND** its native-aligned position remains stable while the underlying Main, Interaction and Manager panels occupy their complete Workbench tracks without decorative outer margin or Dock padding
+- **AND** the Workspace Main tab strip and adjacent Resource management header share the same `38px` panel chrome height and aligned top/bottom edges
+- **AND** the controls follow the visible spatial order Agent, Main, Cut Panel, then management
+- **AND** a control is selected only while its exact Scene slot exists and its layout presentation is currently visible
+- **AND** a hidden or absent region remains unselected, while Cut stays enabled for restoration or exact draft creation whenever the Cut capability is available
 - **AND** each control changes only its owned region while Agent and Main keep at least one business region visible
 - **AND** active, hover and keyboard-focus states do not resize or shift the control row
-- **AND** no layout control is rendered in the sidebar footer, Workspace Main tab header or a domain Surface
+- **AND** a non-Workspace Scene does not mount the Workspace-only control group
+- **AND** no Workspace region control is rendered in the PrimarySidebar, sidebar footer, Workspace Main tab header or a domain Surface
+- **AND** Workspace Resource management does not render a duplicate close control in its panel header
+
+#### Scenario: User toggles an existing Cut Panel
+
+- **WHEN** the exact Workspace Workbench has at least one Cut Panel tab
+- **THEN** the Cut Panel control hides or restores the complete active Cut Root below Main
+- **AND** the upper Main Canvas, file Preview or Editor releases or yields the panel space without changing its active View
+- **AND** Agent, Main and management presentation remain unchanged
+- **AND** it does not create another draft or target a historical Cut runtime
+
+#### Scenario: User opens an empty Cut Panel
+
+- **WHEN** the active Workspace has no Cut tab and the Cut capability is available
+- **THEN** the Cut Panel control requests the Cut owner to create one exact unnamed in-memory draft
+- **AND** Workbench attaches and selects one Cut tab below Main whose active Cut Root shows Preview and an empty Timeline
+- **AND** the canonical empty OTIO tracks and commands render through the ordinary Timeline without a synthetic empty-state overlay or altered Timeline geometry
+- **AND** authorized media drop and Workspace Resource add continue through the canonical Cut command path
+- **AND** no OTIO file is written, no renderer-owned document is fabricated and a repeated toggle only hides or restores that same draft
+- **AND** the control is disabled only when the Cut capability itself is unavailable
+
+#### Scenario: User saves an unnamed Cut draft
+
+- **WHEN** the user saves an unnamed Cut draft
+- **THEN** the active Cut Root exposes a save icon in the existing Timeline toolbar and handles `Cmd/Ctrl+S` through the same package-owned controller command
+- **AND** neither entry adds another Workbench header, Desktop save implementation or alternate document route
+- **AND** Desktop requests one authorized `.otio` destination inside the exact Workspace
+- **AND** Cut rebases media references, exclusively writes canonical OTIO bytes and atomically rebinds the same View/session to that document identity and label
+- **AND** cancelling destination selection preserves the dirty unnamed draft without a file or alternate target
+- **AND** no save command is emitted when the active Cut document projection is unavailable
+
+#### Scenario: User closes an unnamed Cut draft
+
+- **WHEN** the user closes a dirty unnamed Cut draft tab
+- **THEN** the Cut owner requests explicit discard confirmation
+- **AND** cancelling preserves the exact draft, View and panel state
+- **AND** confirming removes only that View and releases only its draft runtime without writing a file or changing sibling tabs, upper Main or Workspace Resources
+
+#### Scenario: Multiple OTIO documents use Cut Panel tabs
+
+- **WHEN** the user opens two distinct OTIO documents in one Workspace
+- **THEN** Workbench owns two exact Cut View refs in the Main-below Cut Panel tab group
+- **AND** selecting either tab mounts only its one Cut Root containing Preview above Timeline
+- **AND** the active upper Main Canvas, file Preview or Editor remains unchanged
+- **AND** no Timeline-only portal target, standalone Timeline Surface or hidden inactive Cut Root is mounted
+
+#### Scenario: User quickly adds another Timeline
+
+- **WHEN** an existing Cut Panel is visible and the user activates the `+` control immediately after its final Cut tab
+- **THEN** Cut application creates one new exact unnamed in-memory draft and Workbench appends and selects its Cut View
+- **AND** a short tab list shrinks to its content so the control stays adjacent instead of moving to the far edge, while an overflowing tab list scrolls before the fixed-size control
+- **AND** the new draft uses a non-conflicting localized label, canonical empty OTIO tracks and the ordinary Preview + Timeline Root
+- **AND** no OTIO file, renderer-owned document, standalone Timeline Surface or second authority is created
+- **AND** separate completed activations add separate drafts while concurrent duplicate requests for the exact Workbench share one creation operation
+- **AND** the upper Main View, sibling Cut documents, Workspace Resources and top Cut Panel presentation control remain unchanged
+
+#### Scenario: User opens Cut content while Canvas is active
+
+- **WHEN** the user wants to open an existing OTIO document while Canvas remains the upper Main View
+- **THEN** Workspace Resources or an existing Cut tab opens or focuses that exact OTIO document in the Cut Panel
+- **AND** Canvas does not expose a file picker, duplicate OTIO catalog or alternate document-open route
+- **AND** Canvas may expose its owner-projected Open in Cut action only for the exact selected material, delegating the result to the Cut owner without selecting an arbitrary OTIO document
+
+#### Scenario: Desktop restarts with an expired unnamed Cut draft reference
+
+- **WHEN** persisted Window or Project presentation contains a `cut-draft:*` View whose in-memory Cut session ended with the prior application process
+- **THEN** Desktop Shell removes only that invalid View before composing the restored Scene and returns an owner-qualified presentation-reset diagnostic
+- **AND** a remaining sibling Cut View becomes active or the empty Cut Panel returns to its canonical absent state
+- **AND** no Workspace file resolution, `realpath`, fabricated empty OTIO or hidden Cut Root is attempted for the expired draft identity
+- **AND** real OTIO Views, Canvas/Preview Views, Project records, Workspace Resources and user files remain unchanged
+- **AND** a newly requested draft still contains the canonical default empty Video track
+
+#### Scenario: Timeline tracks scroll vertically
+
+- **WHEN** the active Cut Timeline track region scrolls vertically beyond the ruler height
+- **THEN** the canonical ruler remains visible at the top of the same Timeline scroll viewport
+- **AND** ruler ticks, playhead and clips continue to share one horizontal scroll coordinate
+- **AND** no duplicate or overlay ruler changes the canonical empty or populated Timeline geometry
+
+#### Scenario: Resource is dragged into the active Cut tab
+
+- **WHEN** the user drags an authorized Workspace resource from Resource management to the active Cut Timeline
+- **THEN** the Cut Root receives one canonical ContentLocator drag payload and adds exactly one clip through the active OTIO owner
+- **AND** renderer code does not construct or persist an absolute path
+- **AND** sibling Cut tabs and the upper Main View remain unchanged
 
 #### Scenario: Packaged layout control icons use canonical font assets
 
-- **WHEN** the PrimarySidebar top controls render from the packaged `openneko://desktop` application
+- **WHEN** the PrimarySidebar and Workbench title chrome controls render from the packaged `openneko://desktop` application
 - **THEN** their Codicon font resolves through a query-free hashed renderer asset URL with the `font/ttf` content type
 - **AND** the controls remain visibly identifiable while query-bearing application asset URLs continue to fail closed
 
 ### Requirement: Workbench uses explicit variable scene shapes
 
 The shared Workbench SHALL reuse the Workspace visual/layout primitives while supporting scene-specific slot counts. It MUST NOT force every scene into the same manager/main split, reinterpret Interaction as Main, place a management Main Root in a narrow manager dock, or drop the Workspace style scope while claiming component reuse.
+
+#### Scenario: Top-level scene panels preserve the complete Workbench extent
+
+- **WHEN** Entry, Workspace, Assets, Extensions, project management or Settings composes a Main, Interaction or Manager panel
+- **THEN** each panel fills its assigned Workbench grid track without decorative outer margin, Dock padding or responsive inset
+- **AND** package-owned Canvas, Preview, Agent, management and Webview Roots receive the complete resulting viewport
+- **AND** each top-level panel shell uses a zero-radius boundary so no Window background is exposed at the viewport or sibling edges
+- **AND** panel borders remain inside the panel box without changing grid sizing
+- **AND** readable page width and content spacing remain package-owned internal padding
+- **AND** a management/Preview resize gutter remains only when two qualified sibling Surfaces are present
 
 #### Scenario: Default Agent draft is shown
 
@@ -94,12 +196,12 @@ The Host-neutral scene authority SHALL produce one canonical projection with exa
 
 - **WHEN** Host activates an Agent scene with an Assistant scope
 - **THEN** the projection permits the exact Agent View, Assistant resources and authorized Preview session
-- **AND** it excludes Workspace Main, Workspace Resources and Timeline refs
+- **AND** it excludes Workspace Main and Workspace Resources refs
 
 #### Scenario: Workspace scene is projected
 
 - **WHEN** Host activates a validated Workspace grant
-- **THEN** the projection permits the exact Agent View, Workspace Main, Workspace Resources and applicable Timeline/Status refs for that Workspace
+- **THEN** the projection permits the exact Agent View, Workspace Main, Workspace Resources and Status refs for that Workspace
 - **AND** a mismatched Window, Workbench, Workspace, View, connection or conversation prevents mounting only that Surface
 
 #### Scenario: Invalid slot composition is decoded
@@ -135,10 +237,10 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 #### Scenario: User selects an explicit owner from Entry Draft
 
 - **WHEN** the user explicitly chooses a Workspace directory/Project or a future Character/Room for the current exact draft
-- **THEN** the owning adapter returns one exact target receipt for that draft and the package-owned Draft snapshot replaces its previous target selection
+- **THEN** Workbench delegates target resolution to the canonical Agent launch application and consumes its exact Draft projection
 - **AND** the Entry Draft remains in the same unbound Agent-only Scene without creating a conversation, Workspace composition or provider turn
-- **AND** the first submit freezes the target and configuration, creates one exact conversation/session and atomically activates its Agent phase and owner-qualified layout
-- **AND** a stale draft identity or unavailable Character/Room owner fails visibly
+- **AND** Workbench changes Scene only after Agent returns a committed exact Conversation/owner projection
+- **AND** a stale draft identity or uncomposed Character/Room provider remains owner-qualified unavailable rather than becoming a successful Scene
 
 #### Scenario: Direct Entry Draft submit uses Assistant
 
@@ -165,10 +267,10 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 #### Scenario: Workspace conversation renders normally
 
 - **WHEN** AgentWebviewRoot mounts an active Workspace conversation
-- **THEN** its transcript, model, typed commands/Skills, execution/approval, voice and Host-message behavior remain attached to the exact Workspace runtime
+- **THEN** Workbench mounts the same package Root against the exact Workspace Conversation projection without interpreting its catalog or execution behavior
 - **AND** Desktop dock does not render an empty package Header or its divider after the conversation starts
 - **AND** removing that inner divider does not remove, flatten or recolor the owning Workbench panel's outer border or rounded shell chrome
-- **AND** the shared conversation composer omits the locked Workspace label, Agent mode selector and `/` or `$` shortcut buttons while typed command and Skill discovery remains available
+- **AND** the shared conversation composer omits presentation controls already fixed by the Workspace Scene while executable input discovery remains owned by the Agent capability projection
 - **AND** draft-only branches do not affect its scope or route classification
 
 #### Scenario: Workspace scene restores an active conversation
@@ -188,7 +290,7 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 
 - **WHEN** the initial Agent scene has no conversation
 - **THEN** Workbench mounts the same AgentWebviewRoot in draft presentation
-- **AND** model configuration, launch-safe commands/Skills, authorized file/reference controls and available voice controls remain usable
+- **AND** Workbench passes through the canonical Agent Launch Draft projection without independently enabling or disabling model, command, Skill, reference or voice capabilities
 - **AND** conversation Tabs/history are hidden and no conversation or scratch is created by rendering or editing the draft
 
 #### Scenario: Agent-only draft uses the complete Agent layout
@@ -202,7 +304,7 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **WHEN** the package-owned Agent Root renders in Assistant or Workspace scope
 - **THEN** the existing composer is presented as one centered, elevated input surface with a compact control toolbar
 - **AND** Entry offers explicit single-target Workspace selection while conversation scope does not repeat its locked Workspace identity inside the composer
-- **AND** add/resource authorization, model configuration, typed commands/Skills, execution/approval, usage and send/stop behavior remain available according to their existing capability projection
+- **AND** all add/resource, model, typed input, execution, approval, usage and send/stop availability comes from the canonical Agent projection rather than Workbench presentation rules
 - **AND** branch and local-runtime metadata are not added to the composer
 - **AND** narrow Workbench docks keep the input, controls and upward-opening menus within the visible surface without overlap
 
@@ -402,7 +504,7 @@ Extensions and project management SHALL place their package-owned management Roo
 
 - **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
 - **THEN** management and Preview/Detail occupy two independent shared panel shells connected by the shared resize primitive
-- **AND** each sibling shell has its own DOM, border, radius, background, clipping and overflow boundary with a visible gutter between them
+- **AND** each sibling shell has its own DOM, border, zero-radius boundary, background, clipping and overflow boundary with a visible gutter between them
 - **AND** the composition does not render both contents on one continuous Main surface separated only by a line
 - **AND** neither shell renders a synthetic single-item Workbench tab strip
 - **AND** Preview/Detail content does not render a descriptor header and inherits the same theme background as its sibling management shell
@@ -646,3 +748,35 @@ MUST NOT classify Renderer instances as `hot-retained`, `suspendable` or `epheme
 - **THEN** every mounted Root, protected runtime, handle and subscription is disposed exactly once
 - **AND** user-scoped in-memory snapshots and pending UI drafts do not leak into the next context
 - **AND** durable project, conversation and explicitly persisted shadow data follow their owning retention policy
+
+### Requirement: Cut Save As rebinds one exact runtime and projection stream
+
+Desktop MUST revalidate the exact renderer, Workbench and unnamed draft View after the native Save As
+selection and before writing. A successful rebind MUST move the canonical document identity,
+subscription identity and authoritative event cursor together.
+
+#### Scenario: An unnamed draft is saved while subscribed
+
+- **WHEN** the user saves an unnamed Cut draft to an authorized Workspace OTIO path
+- **THEN** the returned snapshot and Shell View identify the same saved document and session
+- **AND** later events for that identity are delivered exactly once in sequence
+- **AND** events for the retired draft identity are rejected
+
+#### Scenario: Save As authority changes while the picker is open
+
+- **WHEN** the renderer, Workbench or exact draft View changes before the picker returns
+- **THEN** Desktop rejects the stale Save As before committing the file or session rebind
+- **AND** it does not leave a saved session behind an old draft View
+
+### Requirement: Cut representations tolerate overlapping viewport requests
+
+The Cut Webview MUST own representation requests by exact document/session, request identity and
+representation key. It MUST merge valid out-of-order results and release completed or failed
+in-flight keys without accepting stale-document or removed-Clip results.
+
+#### Scenario: Resize creates overlapping thumbnail batches
+
+- **WHEN** two representation batches for the same Cut session complete out of order
+- **THEN** every still-relevant result is merged by its exact representation key
+- **AND** a later batch does not invalidate an earlier successful batch
+- **AND** failed keys can be requested again without an unbounded retry loop

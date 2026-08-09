@@ -46,7 +46,7 @@ describe('EmptyState', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: /Start Chat/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Generate Assets/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Generate Assets/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Roleplay/ })).toBeTruthy();
     expect(screen.queryByText(/script|storyboard|shot description/i)).toBeNull();
     expect(document.querySelector('.agent-empty-state')).toBeTruthy();
@@ -60,7 +60,7 @@ describe('EmptyState', () => {
     expect(document.querySelector('.agent-empty-actions')?.className).not.toContain(
       'sm:grid-cols-3',
     );
-    expect(document.querySelectorAll('.agent-empty-action')).toHaveLength(3);
+    expect(document.querySelectorAll('.agent-empty-action')).toHaveLength(2);
     expect(document.querySelector('.agent-empty-action')?.className).toContain('min-w-0');
     expect(document.querySelector('.agent-empty-action')?.className).toContain('justify-center');
     expect(document.querySelector('.agent-empty-action')?.className).toContain('text-center');
@@ -68,13 +68,13 @@ describe('EmptyState', () => {
     expect(screen.getByText('Chat helper')).toBeTruthy();
   });
 
-  it('passes the selected entry action to the handler', () => {
+  it('passes the selected roleplay entry action to the handler', () => {
     const onEntryAction = vi.fn();
     render(<EmptyState onEntryAction={onEntryAction} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Roleplay/ }));
 
-    expect(onEntryAction).toHaveBeenCalledWith('generate-assets');
+    expect(onEntryAction).toHaveBeenCalledWith('roleplay');
   });
 
   it('does not block an unbound Entry Draft with owner choices', () => {

@@ -4,6 +4,67 @@ import { GenerationJobCoordinator } from '../coordinator';
 import { createInMemoryGenerationJobStore } from '../store';
 
 describe('GenerationJobCoordinator', () => {
+  it('executes Prompt generation through the same Job lifecycle and commits text output', async () => {
+    const execution = createExecution();
+    execution.generatePrompt.mockResolvedValue({
+      type: 'prompt',
+      providerId: 'provider-1',
+      modelId: 'text-model',
+      text: 'Generated scene',
+      request: { prompt: 'Write a scene' },
+    });
+    const resultLocator = createResultLocator('generated-text');
+    const committer = { commit: vi.fn(async () => [resultLocator]) };
+    const coordinator = createCoordinator(execution, committer);
+
+    const initial = await coordinator.submitGeneration({
+      lifecycleMode: 'detached',
+      generationType: 'prompt',
+      providerId: 'provider-1',
+      modelId: 'text-model',
+      request: { prompt: 'Write a scene' },
+    });
+    const terminal = await waitForTerminal(coordinator, initial.ref);
+
+    expect(execution.generatePrompt).toHaveBeenCalledWith(
+      {
+        prompt: 'Write a scene',
+        providerId: 'provider-1',
+        modelId: 'text-model',
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(committer.commit).toHaveBeenCalledWith({
+      ref: initial.ref,
+      generation: expect.objectContaining({ type: 'prompt', text: 'Generated scene' }),
+    });
+    expect(terminal).toMatchObject({ phase: 'succeeded', resultLocators: [resultLocator] });
+  });
+
+  it('maps equivalent submission identities to one Job and rejects conflicting payloads', async () => {
+    const execution = createExecution();
+    execution.generateImage.mockResolvedValue(generationResult());
+    const coordinator = createCoordinator(execution, {
+      commit: vi.fn(async () => [createResultLocator('generated-1')]),
+    });
+    const input = { ...createInput(), submissionId: 'canvas-submission-1' };
+
+    const [first, repeated] = await Promise.all([
+      coordinator.submitGeneration(input),
+      coordinator.submitGeneration(input),
+    ]);
+
+    expect(repeated.ref).toEqual(first.ref);
+    expect(execution.generateImage).toHaveBeenCalledTimes(1);
+    await expect(
+      coordinator.submitGeneration({
+        ...input,
+        request: { ...input.request, prompt: 'changed prompt' },
+      }),
+    ).rejects.toMatchObject({ code: 'generation-job-submission-conflict' });
+    expect(execution.generateImage).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects conflicting provider/model bindings before persistence or execution', async () => {
     const execution = createExecution();
     const store = createInMemoryGenerationJobStore();
@@ -94,13 +155,21 @@ describe('GenerationJobCoordinator', () => {
     });
   });
 
-  it('uses exact identity and refuses cancellation without a provider task', async () => {
+  it('cancels an active Prompt execution without requiring a provider task', async () => {
     const execution = createExecution();
-    execution.generateImage.mockImplementation(() => new Promise(() => undefined));
+    execution.generatePrompt.mockImplementation((_request, options) =>
+      rejectOnAbort(options.signal),
+    );
     const coordinator = createCoordinator(execution, {
       commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
-    const initial = await coordinator.submitGeneration(createInput());
+    const initial = await coordinator.submitGeneration({
+      lifecycleMode: 'detached',
+      generationType: 'prompt',
+      providerId: 'provider-1',
+      modelId: 'text-model',
+      request: { prompt: 'Write a scene' },
+    });
     await waitForPhase(coordinator, initial.ref, 'running');
 
     await expect(
@@ -110,9 +179,28 @@ describe('GenerationJobCoordinator', () => {
     ).rejects.toMatchObject({ code: 'job-not-found' });
     expect(execution.cancelExternalTask).not.toHaveBeenCalled();
 
-    await expect(coordinator.cancelGeneration({ ref: initial.ref })).rejects.toMatchObject({
+    await expect(coordinator.cancelGeneration({ ref: initial.ref })).resolves.toMatchObject({
+      phase: 'cancelled',
+      failure: { code: 'generation-job-cancelled' },
+    });
+    expect(execution.cancelExternalTask).not.toHaveBeenCalled();
+  });
+
+  it('rejects cancellation when a persisted Job has no cancellable runtime identity', async () => {
+    const execution = createExecution();
+    const store = createInMemoryGenerationJobStore();
+    const created = await store.create(snapshot());
+    const running = await store.save({ ...created, phase: 'running' });
+    const coordinator = new GenerationJobCoordinator({
+      store,
+      execution,
+      resultCommitter: { commit: vi.fn(async () => [createResultLocator('unused')]) },
+    });
+
+    await expect(coordinator.cancelGeneration({ ref: running.ref })).rejects.toMatchObject({
       code: 'generation-job-cancel-unsupported',
     });
+    expect((await coordinator.describeGeneration(running.ref)).phase).toBe('running');
   });
 
   it('reconciles only a stored provider task and preserves outcome-unknown without resubmission', async () => {
@@ -382,6 +470,7 @@ function createCoordinator(
 
 function createExecution() {
   return {
+    generatePrompt: vi.fn(),
     generateImage: vi.fn(),
     generateVideo: vi.fn(),
     generateAudio: vi.fn(),

@@ -263,34 +263,18 @@ describe('webview protocol parser', () => {
     ).toBeNull();
   });
 
-  it('accepts starting Character Dialogue from slash args without conversation scope', () => {
+  it('rejects the retired free-form Character Dialogue launch messages', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'startCharacterDialogueFromSlash',
         args: 'entity:char-xiaoju --roleplay',
       }),
-    ).toEqual({
-      type: 'startCharacterDialogueFromSlash',
-      args: 'entity:char-xiaoju --roleplay',
-    });
-  });
-
-  it('accepts an explicit roleplay Candidate confirmation with stable Search identity', () => {
+    ).toBeNull();
     expect(
       parseAgentWebviewToHostMessage({
         type: 'confirmRoleplayCandidate',
         projectSearchItemId: 'entity-projection:semantic-xiaoju',
         initialUserMessage: '你好，小橘',
-      }),
-    ).toEqual({
-      type: 'confirmRoleplayCandidate',
-      projectSearchItemId: 'entity-projection:semantic-xiaoju',
-      initialUserMessage: '你好，小橘',
-    });
-    expect(
-      parseAgentWebviewToHostMessage({
-        type: 'confirmRoleplayCandidate',
-        projectSearchItemId: '',
       }),
     ).toBeNull();
   });
@@ -1009,7 +993,7 @@ describe('webview protocol parser', () => {
     ).toBeNull();
   });
 
-  it('accepts music-capable audio models as audio media model refs', () => {
+  it('rejects audio direct mode even when the media model category matches', () => {
     expect(
       parseSendMessageWebviewMessage({
         type: 'sendMessage',
@@ -1018,14 +1002,7 @@ describe('webview protocol parser', () => {
         sessionMode: 'audio',
         mediaModel: { providerId: 'suno', modelId: 'chirp', category: 'audio' },
       }),
-    ).toEqual(
-      expect.objectContaining({
-        type: 'sendMessage',
-        conversationId: 'conv-1',
-        sessionMode: 'audio',
-        mediaModel: { providerId: 'suno', modelId: 'chirp', category: 'audio' },
-      }),
-    );
+    ).toBeNull();
   });
 
   it('rejects single mediaModel in agent mode', () => {

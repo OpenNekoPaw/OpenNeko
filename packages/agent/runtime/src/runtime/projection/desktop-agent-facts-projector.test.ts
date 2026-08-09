@@ -108,6 +108,37 @@ describe('Desktop Agent authoritative facts projector', () => {
     expect(projector.readLatestIdentity(identity.conversationId)).toEqual(identity);
   });
 
+  it('records a blocked Workspace Board delivery without changing the terminal Turn state', () => {
+    const projector = createProjector();
+    projector.beginTurn({ identity, systemPrompt: 'prompt' });
+    projector.completeTurn({
+      conversation: conversationEvidence(),
+      turn: {
+        ...turnResult(),
+        artifactDelivery: {
+          status: 'blocked',
+          diagnostic: {
+            code: 'projection-write-failed',
+            message: 'Host-only detail.',
+          },
+        },
+      },
+    });
+
+    expect(projector.readFacts(identity)).toMatchObject({
+      projection: { terminalState: 'completed' },
+      diagnostics: {
+        items: [
+          {
+            code: 'projection-write-failed',
+            severity: 'error',
+            message: 'Workspace Board delivery was blocked; durable artifacts were retained.',
+          },
+        ],
+      },
+    });
+  });
+
   it('preserves dropped-count failure when an authoritative collection is truncated', () => {
     const projector = createProjector(1);
     const events = projector.beginTurn({ identity, systemPrompt: 'prompt' });

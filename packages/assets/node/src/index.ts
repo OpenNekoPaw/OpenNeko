@@ -16,6 +16,7 @@ export * from './portable-media-library-snapshot';
 export * from './project-content-reference-readers';
 export * from './project-portability-runtime';
 export * from './workspace-media-library-sync';
+export * from './workspace-directory-observer';
 export * from './resource-browser-node-source';
 export * from './global-asset-files';
 export * from './resource-browser-node-runtime';

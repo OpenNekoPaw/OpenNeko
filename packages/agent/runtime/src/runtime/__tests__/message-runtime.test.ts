@@ -420,7 +420,7 @@ describe('message runtime helpers', () => {
     expect(createMediaProcessor).not.toHaveBeenCalled();
   });
 
-  it('prepares a complete media dispatch from files, attachments, and referenced media', async () => {
+  it('prepares a complete Agent dispatch from files, attachments, and referenced media', async () => {
     const createReferencedMediaProcessor = vi.fn().mockResolvedValue({
       process: vi.fn().mockResolvedValue({
         type: 'video-frames',
@@ -433,7 +433,7 @@ describe('message runtime helpers', () => {
         request: {
           conversationId: 'conv-1',
           messageText: 'render this [File: clip]\n/tmp/clip.mp4',
-          sessionMode: 'image',
+          sessionMode: 'agent',
           mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
           attachments: [{ id: 'att-1', name: 'notes.txt', type: 'file', path: '/tmp/notes.txt' }],
         },
@@ -465,10 +465,7 @@ describe('message runtime helpers', () => {
         { type: 'base64', media_type: 'image/png', data: 'attached' },
         { type: 'base64', media_type: 'image/jpeg', data: 'frame-1' },
       ],
-      route: {
-        kind: 'media',
-        mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
-      },
+      route: { kind: 'agent' },
     });
     expect(createReferencedMediaProcessor).toHaveBeenCalledTimes(1);
   });
@@ -812,10 +809,11 @@ describe('message runtime helpers', () => {
     ]);
   });
 
-  it('dispatches non-agent media turns when a media runtime is available', async () => {
+  it('poisons the removed media message dispatcher before persistence or execution', async () => {
     const executeMediaTurn = vi.fn(async () => undefined);
     const executeAgentTurn = vi.fn(async () => undefined);
     const postMessage = vi.fn();
+    const persistUserMessage = vi.fn();
 
     await expect(
       runAgentMessageTurnRuntime({
@@ -826,125 +824,17 @@ describe('message runtime helpers', () => {
           mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
         },
         processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
-        persistUserMessage: vi.fn(),
+        persistUserMessage,
         postMessage,
-        executeMediaTurn,
         executeAgentTurn,
         generateMessageId: () => 'user-1',
       }),
-    ).resolves.toEqual({ status: 'media-dispatched' });
+    ).rejects.toThrow("does not accept direct media session mode 'image'");
 
-    expect(executeMediaTurn).toHaveBeenCalledWith({
-      conversationId: 'conv-1',
-      prompt: 'render image',
-      mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
-      userMessage: {
-        id: 'user-1',
-        content: 'render image',
-        timestamp: expect.any(Number),
-      },
-    });
     expect(executeAgentTurn).not.toHaveBeenCalled();
-    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
-      expect.objectContaining({
-        type: 'agentPhase',
-        conversationId: 'conv-1',
-        phase: 'thinking',
-      }),
-      expect.objectContaining({
-        type: 'agentPhase',
-        conversationId: 'conv-1',
-        phase: 'idle',
-      }),
-    ]);
-  });
-
-  it('releases the direct media phase when generation fails', async () => {
-    const failure = new Error('provider failed');
-    const postMessage = vi.fn();
-
-    await expect(
-      runAgentMessageTurnRuntime({
-        request: {
-          conversationId: 'conv-1',
-          messageText: 'render image',
-          sessionMode: 'image',
-          mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
-        },
-        processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
-        persistUserMessage: vi.fn(),
-        postMessage,
-        executeMediaTurn: vi.fn(async () => {
-          throw failure;
-        }),
-        generateMessageId: () => 'user-1',
-      }),
-    ).rejects.toBe(failure);
-
-    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
-      expect.objectContaining({
-        type: 'agentPhase',
-        conversationId: 'conv-1',
-        phase: 'thinking',
-      }),
-      expect.objectContaining({
-        type: 'agentPhase',
-        conversationId: 'conv-1',
-        phase: 'idle',
-      }),
-    ]);
-  });
-
-  it('projects 3D reference roles into direct image media controls', async () => {
-    const executeMediaTurn = vi.fn(async () => undefined);
-
-    await expect(
-      runAgentMessageTurnRuntime({
-        request: {
-          conversationId: 'conv-1',
-          messageText: 'render image',
-          sessionMode: 'image',
-          mediaModel: { providerId: 'fal', modelId: 'flux-control', category: 'image' },
-          contextPayloads: [threeReferencePayload()],
-        },
-        processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
-        processContextImageResources: async (resources) =>
-          resources.map((resource) => ({
-            type: 'base64' as const,
-            media_type: 'image/png',
-            data: contentLocatorKey(resource.contentLocator),
-          })),
-        persistUserMessage: vi.fn(),
-        postMessage: vi.fn(),
-        executeMediaTurn,
-        generateMessageId: () => 'user-1',
-      }),
-    ).resolves.toEqual({ status: 'media-dispatched' });
-
-    expect(executeMediaTurn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-1',
-        mediaModel: { providerId: 'fal', modelId: 'flux-control', category: 'image' },
-        threeReferenceControls: {
-          appearanceReferences: [],
-          controlImage: {
-            imageRef: contentLocator('pose-control'),
-            mode: 'depth',
-            identity: { sessionId: 'session-1', requestId: 'request-pose' },
-          },
-          camera: {
-            value: {
-              cameraId: 'front',
-              position: { x: 0, y: 1, z: 3 },
-              target: { x: 0, y: 1, z: 0 },
-              fieldOfViewDeg: 45,
-              aspectRatio: 1,
-            },
-            identity: { sessionId: 'session-1', requestId: 'request-camera' },
-          },
-        },
-      }),
-    );
+    expect(executeMediaTurn).not.toHaveBeenCalled();
+    expect(persistUserMessage).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalled();
   });
 
   it('returns an unmet precondition with a scoped error when no agent runtime is available', async () => {
@@ -1578,6 +1468,8 @@ describe('message runtime helpers', () => {
 
     expect(plan.systemPrompt).toContain('Runtime Media Perception Routing');
     expect(plan.systemPrompt).toContain('perception.image.understand');
+    expect(plan.systemPrompt).toContain('input_ref or image_ref');
+    expect(plan.systemPrompt).toContain('Never construct a ContentLocator');
     expect(plan.systemPrompt).toContain(
       'do not stop because the chat model lacks native media input',
     );
@@ -1859,6 +1751,17 @@ describe('message runtime helpers', () => {
           summary: 'Selected text',
           data: { selectedText: 'Once upon a time' },
         },
+        {
+          type: 'file',
+          id: 'image-1',
+          label: 'reference.png',
+          summary: 'Workspace image',
+          data: {
+            kind: 'authorized-content-reference',
+            locator: { kind: 'workspace-file', path: 'reference.png' },
+            mediaType: 'image',
+          },
+        },
       ]),
     ).toEqual([
       {
@@ -1876,6 +1779,14 @@ describe('message runtime helpers', () => {
         navigationData: { nodeId: 'node-42' },
       },
       { type: 'story-selection', id: 's1', label: 'Scene 1', summary: 'Selected text' },
+      {
+        type: 'image',
+        id: 'image-1',
+        label: 'reference.png',
+        summary: 'Workspace image',
+        mediaType: 'image',
+        contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+      },
     ]);
   });
 

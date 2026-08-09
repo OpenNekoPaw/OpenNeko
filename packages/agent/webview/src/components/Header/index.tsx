@@ -7,8 +7,6 @@ import type { ConfiguredProvider } from '@neko/agent-contracts';
 import { PlusIcon } from '@neko/ui/icons';
 import type { DisplayTab } from '../../presenters/tab-display-presenter';
 import type { HistoryConversationItem } from '../../presenters/history-menu-presenter';
-import type { MentionItem } from '../ChatView/InputArea/types';
-import { RoleplayMenu } from './RoleplayMenu';
 
 interface HeaderProps {
   tabs: DisplayTab[];
@@ -16,12 +14,9 @@ interface HeaderProps {
   activeView: TabType;
   historyConversations: HistoryConversationItem[];
   activeConversationId: string | null;
-  roleplayItems: readonly MentionItem[];
   onSwitchTab: (tabId: string) => void;
   onCloseTab: (tabId: string, e?: React.MouseEvent) => void;
   onNewChat: () => void;
-  onRequestRoleplayItems: () => void;
-  onSelectRoleplayItem: (item: MentionItem) => void;
   onOpenConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
   onClearClosedConversations?: () => void;
@@ -40,12 +35,9 @@ export function Header({
   activeView,
   historyConversations,
   activeConversationId,
-  roleplayItems,
   onSwitchTab,
   onCloseTab,
   onNewChat,
-  onRequestRoleplayItems,
-  onSelectRoleplayItem,
   onOpenConversation,
   onDeleteConversation,
   onClearClosedConversations,
@@ -86,14 +78,6 @@ export function Header({
           >
             <PlusIcon className="w-4 h-4" />
           </button>
-        ) : null}
-
-        {showConversationNavigation ? (
-          <RoleplayMenu
-            items={roleplayItems}
-            onRequestItems={onRequestRoleplayItems}
-            onSelectItem={onSelectRoleplayItem}
-          />
         ) : null}
 
         {/* History dropdown */}

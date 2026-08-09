@@ -86,7 +86,7 @@ describe('createCanvasWebviewHost', () => {
     runtime.dispose();
   });
 
-  it('routes create mode to a Generation draft and projects only the authoritative Job', async () => {
+  it('creates one canonical Generation Node without submitting a Job', async () => {
     const identity = {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
@@ -97,38 +97,160 @@ describe('createCanvasWebviewHost', () => {
       sessionId: 'session-1',
       rendererSessionId: 'endpoint-1',
     };
-    const requestGenerationDraft = vi.fn(async () => ({
-      ref: { kind: 'generation' as const, jobId: 'generation-1' },
-      phase: 'pending' as const,
-      title: 'Generate image',
-      inputNodeIds: [],
-      mediaKind: 'image' as const,
-      summary: { prompt: 'Describe the image to generate' },
-    }));
+    const startNode = vi.fn(async () => {
+      throw new Error('Creating a Generation Node must not submit a Job.');
+    });
     const runtime = new CanvasHostRuntimeSession({
       identity,
       initialCanvas: DEFAULT_CANVAS_DATA,
-      effects: { requestGenerationDraft },
+      effects: {
+        generation: {
+          startNode,
+          resumeNode: async () => {
+            throw new Error('Generation recovery is not used by this test.');
+          },
+          observeNode: async function* () {
+            yield* [];
+            throw new Error('Generation observation is not used by this test.');
+          },
+          cancelNode: async () => {
+            throw new Error('Generation cancellation is not used by this test.');
+          },
+        },
+      },
     });
     const host = createCanvasWebviewHost(runtime);
 
-    const snapshot = await host.requestGenerationDraft('image', { x: 80, y: 120 });
+    const snapshot = await host.createGenerationNode('image', { x: 80, y: 120 });
 
-    expect(requestGenerationDraft).toHaveBeenCalledWith({
-      identity,
-      mediaKind: 'image',
-      position: { x: 80, y: 120 },
-      inputNodeIds: [],
-    });
+    expect(startNode).not.toHaveBeenCalled();
     expect(snapshot.canvas.nodes).toEqual([
       expect.objectContaining({
-        type: 'job',
+        type: 'generation',
         position: { x: 80, y: 120 },
         data: expect.objectContaining({
-          jobRef: { kind: 'generation', jobId: 'generation-1' },
+          recipe: { kind: 'image', prompt: '' },
+          outputs: [],
         }),
       }),
     ]);
+    host.dispose();
+    runtime.dispose();
+  });
+
+  it('commits a queued deletion before creating a Generation Node', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    const deletedNode = {
+      id: 'deleted-note',
+      type: 'markdown' as const,
+      position: { x: 20, y: 30 },
+      size: { width: 240, height: 160 },
+      zIndex: 0,
+      data: { content: 'Delete me' },
+    };
+    const initialCanvas = {
+      ...DEFAULT_CANVAS_DATA,
+      nodes: [deletedNode],
+    };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas,
+      effects: {
+        generation: {
+          startNode: async () => {
+            throw new Error('Generation execution is not used by this test.');
+          },
+          resumeNode: async () => {
+            throw new Error('Generation recovery is not used by this test.');
+          },
+          observeNode: async function* () {
+            yield* [];
+          },
+          cancelNode: async () => {
+            throw new Error('Generation cancellation is not used by this test.');
+          },
+        },
+      },
+    });
+    const host = createCanvasWebviewHost(runtime);
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+
+    host.postMessage({
+      type: 'canvasStatus',
+      data: {
+        ...initialCanvas,
+        nodes: [],
+        connections: [],
+        _selection: { nodeIds: [] },
+      },
+    });
+    const snapshot = await host.createGenerationNode('image', { x: 320, y: 180 });
+
+    expect(snapshot.canvas.nodes).toEqual([
+      expect.objectContaining({
+        type: 'generation',
+        position: { x: 320, y: 180 },
+      }),
+    ]);
+    expect(snapshot.canvas.nodes).not.toContainEqual(
+      expect.objectContaining({ id: deletedNode.id }),
+    );
+    expect((await runtime.getSnapshot()).canvas.nodes).toEqual(snapshot.canvas.nodes);
+    expect(messages.filter(isCanvasUpdateMessage).at(-1)).toEqual({
+      type: 'update',
+      data: snapshot.canvas,
+    });
+
+    host.dispose();
+    runtime.dispose();
+  });
+
+  it('keeps the command queue usable after one narrow operation fails locally', async () => {
+    const runtime = new CanvasHostRuntimeSession({
+      identity: {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        viewInstanceId: 'view-instance-1',
+        documentId: 'neko/boards/workspace.nkc',
+        sessionId: 'session-1',
+        rendererSessionId: 'endpoint-1',
+      },
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: {},
+    });
+    const host = createCanvasWebviewHost(runtime);
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+
+    await expect(host.createGenerationNode('image')).rejects.toThrow(
+      'Canvas Host intent "create-generation-node" is unavailable.',
+    );
+    host.postMessage({
+      type: 'canvasStatus',
+      data: {
+        ...DEFAULT_CANVAS_DATA,
+        name: 'Edited after local failure',
+        _selection: { nodeIds: [] },
+      },
+    });
+
+    await vi.waitFor(async () => {
+      expect((await runtime.getSnapshot()).canvas.name).toBe('Edited after local failure');
+    });
+    expect(messages).not.toContainEqual(expect.objectContaining({ type: 'canvas.loadFailed' }));
+
     host.dispose();
     runtime.dispose();
   });
@@ -887,5 +1009,17 @@ function isHostPresentationMessage(
     value !== null &&
     'type' in value &&
     value.type === 'canvas.hostPresentation'
+  );
+}
+
+function isCanvasUpdateMessage(
+  value: unknown,
+): value is { readonly type: 'update'; readonly data: unknown } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    value.type === 'update' &&
+    'data' in value
   );
 }

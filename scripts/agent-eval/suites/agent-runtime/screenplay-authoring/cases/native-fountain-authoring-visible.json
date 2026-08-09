@@ -1,0 +1,151 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "native-fountain-authoring-visible",
+  "suiteId": "agent-runtime.screenplay-authoring",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
+    "lifecycleChecks": ["composer-focus", "graceful-close"]
+  },
+  "evidenceContract": {
+    "userBehavior": "Read one existing Fountain file, freshness-replace it through the native Workspace file path, then create one new Fountain file.",
+    "canonicalPath": [
+      "Desktop Agent public composer",
+      "Pi Conversation runtime",
+      "core Read",
+      "Workspace-relative path plus fingerprint",
+      "core Write",
+      "Tool confirmation",
+      "AuthorizedWorkspaceWriter replace CAS",
+      "core Write",
+      "Tool confirmation",
+      "AuthorizedWorkspaceWriter fail-if-exists"
+    ],
+    "observables": [
+      {
+        "ref": "native-fountain-authoring-facts",
+        "kind": "runtime-fact",
+        "description": "Exact core Read and Write identities, approvals, freshness-protected replace, create result, absent retired screenplay Tools and terminal state.",
+        "required": true
+      },
+      {
+        "ref": "screenplay-files",
+        "kind": "post-check",
+        "description": "Exact final UTF-8 Fountain bytes in the mutable Workspace fixture.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The existing screenplay.fountain is replaced from its observed fingerprint and ai-draft.fountain is created through the same core Write path.",
+    "expectedFailure": "Missing Read freshness, a retired screenplay Tool, Agent-owned Text Document session, wrong operation, overwrite race, wrong bytes or non-terminal state fails visibly."
+  },
+  "fixtureRefs": ["screenplay-authoring-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "这是明确的文件写入请求。先调用 Read 读取 screenplay.fountain，并保留返回的精确 fingerprint。然后调用 Write，携带该 expected_fingerprint，把 screenplay.fountain 完整替换为以下精确文本：.INT. KITCHEN - NIGHT\\n\\n@MARA\\nWe leave now.\\n。等待批准并成功后，再调用 Write 创建 ai-draft.fountain，内容精确为：.INT. ROOM - NIGHT\\n\\n@NEKO\\nHello.\\n；创建时不得提供 expected_fingerprint。再次等待批准，成功后只回复 NATIVE_FOUNTAIN_AUTHORING_OK。不得调用 InspectScreenplay、CreateScreenplayDraft 或 ReplaceScreenplayScene。"
+    },
+    {
+      "id": "approve-replace",
+      "kind": "confirm",
+      "afterStepId": "submit",
+      "toolName": "Write",
+      "approved": true,
+      "timeoutMs": 180000
+    },
+    {
+      "id": "approve-create",
+      "kind": "confirm",
+      "afterStepId": "approve-replace",
+      "toolName": "Write",
+      "approved": true,
+      "timeoutMs": 180000
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "native-fountain-authoring-facts" },
+    {
+      "id": "read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "expectedArguments": { "file_path": "screenplay.fountain" },
+      "resultIncludes": { "path": "screenplay.fountain", "fingerprint": { "strategy": "mtime-size" } },
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    {
+      "id": "replace",
+      "kind": "tool-call",
+      "name": "Write",
+      "status": "success",
+      "resultIncludes": { "path": "screenplay.fountain", "operation": "replace" },
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    {
+      "id": "create",
+      "kind": "tool-call",
+      "name": "Write",
+      "status": "success",
+      "resultIncludes": { "path": "ai-draft.fountain", "operation": "create" },
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    {
+      "id": "no-inspect-screenplay",
+      "kind": "tool-call",
+      "name": "InspectScreenplay",
+      "status": "absent",
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    {
+      "id": "no-create-screenplay-draft",
+      "kind": "tool-call",
+      "name": "CreateScreenplayDraft",
+      "status": "absent",
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    {
+      "id": "no-replace-screenplay-scene",
+      "kind": "tool-call",
+      "name": "ReplaceScreenplayScene",
+      "status": "absent",
+      "evidenceRef": "native-fountain-authoring-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["NATIVE_FOUNTAIN_AUTHORING_OK"],
+      "evidenceRef": "native-fountain-authoring-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "replaced-fountain-file",
+      "kind": "file",
+      "evidenceRef": "screenplay-files",
+      "path": "screenplay.fountain",
+      "digest": "sha256:7d031fe5e0b8084f329f720940f90644b06c4368168cbf8cb693abf23273962f",
+      "validatorId": "utf8-text"
+    },
+    {
+      "id": "created-fountain-file",
+      "kind": "file",
+      "evidenceRef": "screenplay-files",
+      "path": "ai-draft.fountain",
+      "digest": "sha256:720c077f9436aac8fd98b1a5eece9ad3dc6cd4fc1fed9bde2017c910e460e573",
+      "validatorId": "utf8-text"
+    }
+  ],
+  "budget": { "timeoutMs": 360000, "repetitions": 1 }
+}

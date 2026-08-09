@@ -6,7 +6,10 @@ import {
   useReportWebviewKeyboardFocus,
 } from '@neko/ui/keyboard';
 import { CreativeWorkbenchShell } from '@neko/ui/workbench';
-import { validateCanvasBoardRef } from '@neko/canvas-domain';
+import {
+  resolveCanvasGenerationNodeDefaultSize,
+  validateCanvasBoardRef,
+} from '@neko/canvas-domain';
 import type { CanvasDroppedAsset, ProjectedCanvasStatus } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
 import type {
@@ -48,7 +51,6 @@ import { buildCanvasNode } from './utils/nodeFactory';
 import {
   getCanvasAddAction,
   type CanvasAddActionId,
-  type CanvasAddSourceKind,
   type CanvasAddSourceModeId,
 } from './utils/canvasAddActions';
 import type { CanvasWebviewHostPort } from './host-runtime';
@@ -70,6 +72,7 @@ import { resolveCanvasRenderRefreshDecision } from './utils/renderRefreshTiering
 import { t } from './i18n';
 import { getLogger } from './utils/logger';
 import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
+import { centerNodeAt } from './utils/nodeSizing';
 
 // =============================================================================
 // Constants & Host API
@@ -262,14 +265,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Node helpers
   // =========================================================================
 
-  const {
-    addMarkdownAt,
-    addTableAt,
-    addImportedMarkdownAt,
-    addMediaAt,
-    addFileAt,
-    addCanvasEmbedAt,
-  } = useNodeHelpers({
+  const { addImportedMarkdownAt, addMediaAt, addFileAt, addCanvasEmbedAt } = useNodeHelpers({
     addNode,
     nodeCount: nodes.length,
     reportAction,
@@ -353,6 +349,21 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       sourceMode?: CanvasAddSourceModeId,
     ) => {
       const action = getCanvasAddAction(actionId);
+      if (action.mode === 'generation') {
+        if (!action.generationKind) {
+          throw new Error(`Canvas generation action "${actionId}" has no Generation kind`);
+        }
+        const nodePosition = centerNodeAt(
+          position,
+          resolveCanvasGenerationNodeDefaultSize(action.generationKind),
+        );
+        void hostPort
+          .createGenerationNode(action.generationKind, nodePosition)
+          .catch((error: unknown) => {
+            logger.warn('Canvas Generation node creation failed', error);
+          });
+        return;
+      }
       if (action.mode === 'source') {
         if (!sourceMode) {
           throw new Error(`Canvas source action "${actionId}" requires an explicit source mode`);
@@ -360,29 +371,14 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
         if (!action.sourceKind) {
           throw new Error(`Canvas source action "${actionId}" has no source kind`);
         }
-        if (sourceMode === 'create') {
-          void hostPort
-            .requestGenerationDraft(action.sourceKind, position, selectedNodeIds)
-            .catch((error: unknown) => {
-              logger.warn('Canvas Generation draft request failed', error);
-            });
-          return;
-        }
+        if (sourceMode === 'create')
+          throw new Error('Source actions cannot create Generation Nodes.');
         requestCanvasFilePickerSource(actionId, sourceMode, position);
         return;
       }
-      switch (action.id) {
-        case 'text':
-          addMarkdownAt(position);
-          return;
-        case 'table':
-          addTableAt(position);
-          return;
-        default:
-          throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
-      }
+      throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
     },
-    [addMarkdownAt, addTableAt, requestCanvasFilePickerSource, selectedNodeIds, hostPort],
+    [requestCanvasFilePickerSource, hostPort],
   );
 
   const handleSelectAddAction = useCallback(
@@ -392,9 +388,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     [addActionAt, getViewportCenter],
   );
   const authoringCapabilities = hostPort.getAuthoringCapabilities();
-  const availableGenerationKinds = authoringCapabilities.generationMediaKinds.filter(
-    (kind): kind is CanvasAddSourceKind => kind !== 'document',
-  );
+  const availableGenerationKinds = authoringCapabilities.generationKinds;
 
   // =========================================================================
   // Drag & Drop

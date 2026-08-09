@@ -5,29 +5,17 @@
  */
 
 import { useCallback } from 'react';
-import type { Message } from '@neko/agent-contracts';
-import type {
-  SlashCommand,
-  SkillSummary,
-  PluginSlashCommandDef,
-} from '../components/ChatView/InputArea/types';
-import {
-  createSkillInvocationCatalog,
-  createSlashCommandCatalog,
-  extractSlashCommandArgs,
-  formatSkillInvocationHelpCatalog,
-  formatSlashCommandHelpCatalog,
-} from '../components/ChatView/InputArea/slash-command-catalog';
-import { useTranslation } from '../i18n/I18nContext';
+import type { AgentInputCatalogMessage } from '@neko/agent-contracts';
+import type { SlashCommand } from '../components/ChatView/InputArea/types';
+import { extractSlashCommandArgs } from '../components/ChatView/InputArea/slash-command-catalog';
 import { useAgentHostMessages } from '../host-runtime-context';
 
 export interface UseSlashCommandsProps {
-  skills: SkillSummary[];
-  pluginCommands: PluginSlashCommandDef[];
+  inputCatalog?: AgentInputCatalogMessage;
   inputValue: string;
   activeConversationId: string | null;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   clearInput: () => void;
+  reportInputDiagnostic?: (message: string) => void;
 }
 
 export interface UseSlashCommandsReturn {
@@ -35,79 +23,49 @@ export interface UseSlashCommandsReturn {
 }
 
 export function useSlashCommands({
-  skills,
-  pluginCommands,
+  inputCatalog,
   inputValue,
   activeConversationId,
-  setMessages,
   clearInput,
+  reportInputDiagnostic,
 }: UseSlashCommandsProps): UseSlashCommandsReturn {
-  const { t } = useTranslation();
   const agentHostMessages = useAgentHostMessages();
 
   const handleSlashCommand = useCallback(
     (command: SlashCommand) => {
       const args = extractSlashCommandArgs(inputValue, command);
 
-      // Handle plugin commands (registered by external extensions)
-      if (command.source === 'plugin' && command.pluginId) {
-        if (!activeConversationId) {
-          return;
+      try {
+        if (!activeConversationId || inputCatalog?.conversationId !== activeConversationId) {
+          throw new Error('The exact Conversation input catalog is unavailable.');
+        }
+        const entry = inputCatalog.entries.find((candidate) => candidate.id === command.id);
+        if (entry?.trigger !== 'command' || entry.availability.status !== 'available') {
+          throw new Error(`Agent command '${command.name}' is stale or unavailable.`);
         }
         clearInput();
-        agentHostMessages.invokePluginSlashCommand(
-          command.pluginId,
-          command.commandId ?? command.id,
-          activeConversationId,
-          args,
-        );
-        return;
-      }
-
-      if (command.commandId === 'help' || command.id === 'help') {
-        clearInput();
-
-        const catalog = createSlashCommandCatalog(skills, pluginCommands);
-        const skillCatalog = createSkillInvocationCatalog(skills);
-        const sections = [
-          formatSlashCommandHelpCatalog(catalog, t),
-          formatSkillInvocationHelpCatalog(skillCatalog, t),
-        ]
-          .filter(Boolean)
-          .join('\n\n');
-
-        const helpContent = `${sections}
-
-**Tips:**
-- Use \`$\` to invoke Skills
-- Use \`@\` to reference files
-- Attach files using the 📎 button
-- Press Enter to send, Shift+Enter for new line`;
-
-        setMessages((prev) => [
-          ...prev,
+        agentHostMessages.invokeAgentInput(
           {
-            id: Date.now().toString(),
-            role: 'assistant',
-            content: helpContent,
-            timestamp: Date.now(),
+            kind: 'command',
+            catalogEntryId: entry.id,
+            commandId: entry.executable.commandId,
+            handlerId: entry.executable.handlerId,
+            ...(args === undefined ? {} : { args }),
           },
-        ]);
-        return;
+          activeConversationId,
+        );
+      } catch (error) {
+        reportInputDiagnostic?.(error instanceof Error ? error.message : String(error));
       }
-
-      if (!activeConversationId) {
-        return;
-      }
-
-      clearInput();
-      agentHostMessages.invokeSlashCommand(
-        command.commandId ?? command.id,
-        args,
-        activeConversationId,
-      );
     },
-    [activeConversationId, clearInput, inputValue, pluginCommands, setMessages, skills, t],
+    [
+      activeConversationId,
+      agentHostMessages,
+      clearInput,
+      inputCatalog,
+      inputValue,
+      reportInputDiagnostic,
+    ],
   );
 
   return { handleSlashCommand };

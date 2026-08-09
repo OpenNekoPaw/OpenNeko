@@ -5,7 +5,7 @@ import type {
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
 } from '@neko/entity-domain';
-import type { FountainScriptIndex } from '@neko/content';
+import type { FountainScriptIndex } from '@neko/screenplay-domain';
 import type { NpcProfileFact, NpcTranscriptMessage } from '@neko/chara/contracts';
 
 export type CharacterEvidenceMode =

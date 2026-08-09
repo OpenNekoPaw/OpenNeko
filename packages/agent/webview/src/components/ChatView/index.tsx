@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, type ReactNode } from 'react';
 import {
   Message,
   AgentState,
@@ -28,6 +28,7 @@ import { projectMessageIdentities } from './message-identity';
 import { SubAgentCard } from './SubAgentCard';
 interface ChatViewProps {
   composerPresentation?: 'default' | 'compact';
+  conversationFeed?: ReactNode;
   messages: Message[];
   inputValue: string;
   isThinking: boolean;
@@ -91,6 +92,7 @@ interface ChatViewProps {
 
 export function ChatView({
   composerPresentation = 'default',
+  conversationFeed,
   messages,
   inputValue,
   isThinking,
@@ -195,6 +197,8 @@ export function ChatView({
                 ? t('chat.conversation.loading')
                 : foregroundConversationAvailability.diagnostic}
             </div>
+          ) : conversationFeed ? (
+            <div className="flex min-h-0 flex-1 overflow-hidden">{conversationFeed}</div>
           ) : isEmpty ? (
             <div className="agent-chat-empty-scroll flex-1 overflow-y-auto">
               <ConversationWorkItemShelf workItems={attentionWorkItems} />

@@ -1,14 +1,23 @@
 import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/functional/desktop-openneko-consumer.mjs';
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
-import { resourceBrowserEntityManagementScenario } from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
+import {
+  resourceBrowserEntityManagementScenario,
+  workspaceFileCreationScenario,
+} from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
 import { resourceBrowserInvalidEntityDocumentScenario } from '../../packages/assets/webview/functional/desktop-invalid-entity-document.mjs';
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
+import { desktopMarkdownMediaScenario } from '../../packages/text-editor/webview/functional/desktop-markdown-media.mjs';
+import { desktopTextEditorScenario } from '../../packages/text-editor/webview/functional/desktop-text-editor.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import {
+  desktopAgentEntryWorkspaceSkillScenario,
+  desktopAgentLinkedMediaMentionScenario,
+  desktopAgentWorkspaceRestartScenario,
+  desktopAgentWorkspaceRestartUnavailableScenario,
   desktopConversationNavigationScenario,
   desktopProjectSidebarManagementScenario,
   desktopWorkbenchScenesScenario,
@@ -23,13 +32,20 @@ const scenarios = new Map(
     desktopAgentProviderUiScenario,
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
+    desktopAgentEntryWorkspaceSkillScenario,
+    desktopAgentLinkedMediaMentionScenario,
+    desktopAgentWorkspaceRestartScenario,
+    desktopAgentWorkspaceRestartUnavailableScenario,
     desktopConversationNavigationScenario,
     desktopProjectSidebarManagementScenario,
     desktopWorkbenchScenesScenario,
     desktopWorkspaceResizeScenario,
+    workspaceFileCreationScenario,
     resourceBrowserEntityManagementScenario,
     resourceBrowserInvalidEntityDocumentScenario,
     assetLibraryRecordRemovalScenario,
+    desktopMarkdownMediaScenario,
+    desktopTextEditorScenario,
     noActiveProjectCatalogsScenario,
   ].map((scenario) => [scenario.id, scenario]),
 );

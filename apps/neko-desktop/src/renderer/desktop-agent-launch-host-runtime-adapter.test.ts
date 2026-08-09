@@ -2,11 +2,12 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentHostToWebviewMessage } from '@neko/agent-contracts';
+import { projectAgentConfigurationPolicy } from '@neko/agent-runtime/application';
 import { createElectronAgentLaunchHostRuntimeAdapter } from './desktop-agent-launch-host-runtime-adapter';
 import type { DesktopAgentPresentationStorage } from './desktop-agent-host-runtime-adapter';
 
 describe('Electron Agent launch Host runtime adapter', () => {
-  it('projects secret-free launch catalogs and denies Workspace routes in Assistant scope', () => {
+  it('projects secret-free launch catalogs and rejects Project search in Assistant scope', () => {
     const adapter = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
       catalog: createCatalog(),
@@ -16,7 +17,6 @@ describe('Electron Agent launch Host runtime adapter', () => {
     adapter.subscribe((message) => messages.push(message));
 
     adapter.send({ type: 'refreshConfigSnapshot' });
-    adapter.send({ type: 'getSkills' });
     adapter.send({ type: 'searchProjectFiles', filter: 'secret', purpose: 'entry' });
 
     expect(messages[0]).toMatchObject({
@@ -27,14 +27,133 @@ describe('Electron Agent launch Host runtime adapter', () => {
       },
     });
     expect(JSON.stringify(messages[0])).not.toContain('apiKey');
-    expect(messages[1]).toMatchObject({
-      type: 'skillsList',
-      skills: [expect.objectContaining({ name: 'general-help' })],
-    });
-    expect(messages[2]).toEqual({
+    expect(messages[1]).toEqual({
       type: 'globalError',
-      message:
-        "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+      message: "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+    });
+  });
+
+  it('projects exact Workspace mention results and ignores a late result after rebinding', async () => {
+    const bridge = createBridge();
+    const workspaceBinding = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace:1',
+      workspaceGrantId: 'workspace-grant:1',
+    };
+    const workspaceCatalog = createCatalog({ binding: workspaceBinding });
+    let resolveSearch:
+      | ((value: import('@neko/agent-contracts').AgentDraftMentionSearchProjection) => void)
+      | undefined;
+    bridge.agentLaunch.searchWorkspaceMentions.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSearch = resolve;
+        }),
+    );
+    bridge.agentLaunch.bindAssistant.mockResolvedValueOnce(
+      createCatalog({ bindingReceiptId: 'binding:assistant-replacement' }),
+    );
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: workspaceCatalog,
+      draftId: 'draft:entry',
+    });
+    const messages: AgentHostToWebviewMessage[] = [];
+    adapter.subscribe((message) => messages.push(message));
+
+    adapter.send({ type: 'searchProjectFiles', filter: 'hero', purpose: 'entry' });
+    expect(bridge.agentLaunch.searchWorkspaceMentions).toHaveBeenCalledWith(
+      workspaceCatalog.connection,
+      workspaceCatalog.interaction.bindingReceipt?.bindingReceiptId,
+      'hero',
+    );
+    await adapter.bindAssistant();
+    resolveSearch?.({
+      bindingReceiptId: workspaceCatalog.interaction.bindingReceipt?.bindingReceiptId ?? '',
+      filter: 'hero',
+      files: [
+        {
+          locator: { kind: 'workspace-file', path: 'hero.md' },
+          name: 'hero.md',
+          type: 'file',
+          referenceReceipt: {
+            catalogEntryId: 'mention:hero',
+            referenceId: 'workspace-reference:hero',
+            ownerKind: 'workspace',
+            ownerId: 'workspace:1',
+            bindingReceiptId: workspaceCatalog.interaction.bindingReceipt?.bindingReceiptId ?? '',
+          },
+        },
+      ],
+      mentionExtras: [],
+    });
+    await Promise.resolve();
+
+    expect(messages).toEqual([
+      { type: 'projectFiles', filter: '', purpose: 'entry', files: [], mentionExtras: [] },
+    ]);
+  });
+
+  it('emits exact Workspace mention results returned by the launch bridge', async () => {
+    const bridge = createBridge();
+    const catalog = createCatalog({
+      binding: {
+        kind: 'workspace',
+        workspaceId: 'workspace:1',
+        workspaceGrantId: 'workspace-grant:1',
+      },
+    });
+    const bindingReceiptId = catalog.interaction.bindingReceipt?.bindingReceiptId;
+    if (!bindingReceiptId) throw new Error('Expected a Workspace binding receipt.');
+    bridge.agentLaunch.searchWorkspaceMentions.mockResolvedValueOnce({
+      bindingReceiptId,
+      filter: 'hero',
+      files: [
+        {
+          locator: { kind: 'workspace-file', path: 'hero.md' },
+          name: 'hero.md',
+          type: 'file',
+          referenceReceipt: {
+            catalogEntryId: 'mention:hero',
+            referenceId: 'workspace-reference:hero',
+            ownerKind: 'workspace',
+            ownerId: 'workspace:1',
+            bindingReceiptId,
+          },
+        },
+      ],
+      mentionExtras: [],
+    });
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog,
+      draftId: 'draft:entry',
+    });
+    const messages: AgentHostToWebviewMessage[] = [];
+    adapter.subscribe((message) => messages.push(message));
+
+    adapter.send({ type: 'searchProjectFiles', filter: 'hero', purpose: 'entry' });
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+
+    expect(messages[0]).toEqual({
+      type: 'projectFiles',
+      filter: 'hero',
+      purpose: 'entry',
+      files: [
+        {
+          locator: { kind: 'workspace-file', path: 'hero.md' },
+          name: 'hero.md',
+          type: 'file',
+          referenceReceipt: {
+            catalogEntryId: 'mention:hero',
+            referenceId: 'workspace-reference:hero',
+            ownerKind: 'workspace',
+            ownerId: 'workspace:1',
+            bindingReceiptId,
+          },
+        },
+      ],
+      mentionExtras: [],
     });
   });
 
@@ -60,6 +179,29 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(bridge.agentLaunch.detach).toHaveBeenCalledOnce();
   });
 
+  it('rebinds the same adapter to the exact Host-returned Draft catalog', async () => {
+    const bridge = createBridge();
+    const workspaceBinding = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace:1',
+      workspaceGrantId: 'workspace-grant:1',
+    };
+    const workspaceCatalog = createCatalog({ binding: workspaceBinding });
+    bridge.agentLaunch.bindTarget.mockResolvedValueOnce(workspaceCatalog);
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
+
+    await expect(adapter.bindTarget(workspaceBinding)).resolves.toEqual(workspaceCatalog);
+    expect(bridge.agentLaunch.bindTarget).toHaveBeenCalledWith(
+      createCatalog().connection,
+      workspaceBinding,
+    );
+    expect(adapter.readLaunchCatalog()).toEqual(workspaceCatalog);
+  });
+
   it('restores the one Window entry draft across scope and connection replacement', () => {
     const storage = createStorage();
     const first = createElectronAgentLaunchHostRuntimeAdapter({
@@ -70,30 +212,20 @@ describe('Electron Agent launch Host runtime adapter', () => {
     });
     const replacement = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
-      catalog: {
-        ...createCatalog(),
-        connection: {
-          ...createCatalog().connection,
-          connectionId: 'launch-replacement',
-        },
-      },
+      catalog: createCatalog({ connectionId: 'launch-replacement' }),
       draftId: 'draft:entry',
       storage,
     });
     const workspaceReplacement = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
-      catalog: {
-        ...createCatalog(),
-        connection: {
-          ...createCatalog().connection,
-          connectionId: 'launch-workspace-replacement',
-          scope: {
-            kind: 'workspace' as const,
-            workspaceId: 'workspace:1',
-            workspaceGrantId: 'workspace-grant:1',
-          },
+      catalog: createCatalog({
+        connectionId: 'launch-workspace-replacement',
+        binding: {
+          kind: 'workspace',
+          workspaceId: 'workspace:1',
+          workspaceGrantId: 'workspace-grant:1',
         },
-      },
+      }),
       draftId: 'draft:entry',
       storage,
     });
@@ -111,14 +243,24 @@ describe('Electron Agent launch Host runtime adapter', () => {
     const bridge = createBridge();
     bridge.agentLaunch.authorizeResource.mockResolvedValueOnce({
       ...createCatalog(),
-      resources: [
+      inputs: [
+        ...createCatalog().inputs,
         {
-          kind: 'resource',
-          id: 'resource:grant-1',
-          label: 'notes.txt',
-          scopeRequirement: 'assistant',
-          resourceGrantId: 'grant-1',
-          resourceKind: 'file',
+          id: 'mention:resource:grant-1',
+          name: 'notes.txt',
+          description: 'Authorized file: notes.txt',
+          trigger: 'mention',
+          prefix: '@',
+          phaseRequirement: 'draft',
+          bindingRequirement: 'assistant',
+          source: { kind: 'personal', ownerId: 'assistant:1', sourceId: 'grant-1' },
+          availability: { status: 'available' },
+          executable: {
+            kind: 'reference',
+            referenceId: 'grant-1',
+            ownerKind: 'assistant',
+            ownerId: 'assistant:1',
+          },
         },
       ],
     });
@@ -135,7 +277,14 @@ describe('Electron Agent launch Host runtime adapter', () => {
       id: 'grant-1',
       label: 'notes.txt',
       summary: 'Authorized file: notes.txt',
-      data: { resourceGrantId: 'grant-1', resourceKind: 'file' },
+      data: {
+        catalogEntryId: 'mention:resource:grant-1',
+        resourceGrantId: 'grant-1',
+        resourceKind: 'file',
+        ownerKind: 'assistant',
+        ownerId: 'assistant:1',
+        bindingReceiptId: 'binding:launch-1',
+      },
     });
     expect(JSON.stringify(payload)).not.toContain('/');
   });
@@ -146,13 +295,51 @@ function createBridge() {
     agentLaunch: {
       attach: vi.fn(),
       authorizeResource: vi.fn(),
+      bindTarget: vi.fn(),
+      bindAssistant: vi.fn(),
+      updateConfiguration: vi.fn(),
+      searchWorkspaceMentions: vi.fn(),
       submitDraft: vi.fn(),
       detach: vi.fn(async () => undefined),
     },
   };
 }
 
-function createCatalog() {
+function createCatalog(
+  input: {
+    readonly connectionId?: string;
+    readonly binding?: import('@neko/agent-contracts').AgentBoundDomainBinding;
+    readonly bindingReceiptId?: string;
+  } = {},
+): import('@neko/agent-contracts').AgentLaunchCatalogProjection {
+  const connectionId = input.connectionId ?? 'launch-1';
+  const binding = input.binding ?? {
+    kind: 'assistant' as const,
+    assistantSpaceId: 'assistant:1',
+    baseGrantIds: [],
+  };
+  const models = [
+    {
+      id: 'openai:gpt-5',
+      label: 'GPT-5',
+      providerId: 'openai',
+      modelId: 'gpt-5',
+      modelType: 'llm' as const,
+      contextWindow: 128_000,
+      maximumOutputTokens: 16_384,
+      purposeCapabilities: ['agent.main'],
+      availability: { status: 'available' as const },
+    },
+  ];
+  const request = {
+    modelCatalogEntryId: 'openai:gpt-5',
+    providerId: 'openai',
+    modelId: 'gpt-5',
+    executionMode: 'ask' as const,
+    temperature: 0.7,
+    maximumOutputTokens: 4096,
+    thinkingBudget: 0,
+  };
   return {
     connection: {
       applicationInstanceId: 'app-1',
@@ -160,42 +347,73 @@ function createCatalog() {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'agent-surface-1',
       viewId: 'agent-view:window-1',
-      connectionId: 'launch-1',
-      scope: { kind: 'assistant' as const, assistantSpaceId: 'assistant:1' },
+      draftId: 'draft:entry',
+      connectionId,
     },
-    models: [
-      {
-        kind: 'model' as const,
-        id: 'openai:gpt-5',
-        label: 'GPT-5',
-        scopeRequirement: 'any' as const,
-        providerId: 'openai',
-        modelId: 'gpt-5',
-        modelType: 'llm' as const,
+    interaction: {
+      phase: 'draft',
+      draftId: 'draft:entry',
+      binding,
+      bindingReceipt: {
+        bindingReceiptId: input.bindingReceiptId ?? `binding:${connectionId}`,
+        draftId: 'draft:entry',
+        connectionId,
+        binding,
       },
-    ],
-    commands: [],
-    skills: [
+    },
+    models,
+    configuration: projectAgentConfigurationPolicy({
+      models,
+      request,
+      source: 'draft-request',
+      defaults: {
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
+      },
+    }),
+    inputs: [
       {
-        kind: 'skill' as const,
         id: 'skill:personal:general-help',
-        label: 'general-help',
-        scopeRequirement: 'any' as const,
         name: 'general-help',
         description: 'Help with general tasks.',
-        source: 'personal' as const,
+        trigger: 'skill',
+        prefix: '$',
+        phaseRequirement: 'any',
+        bindingRequirement: 'any',
+        source: { kind: 'personal', ownerId: 'local-user', sourceId: 'general-help' },
+        availability: { status: 'available' },
+        executable: {
+          kind: 'skill',
+          skillName: 'general-help',
+          activationId: 'skill:personal:general-help',
+        },
       },
       {
-        kind: 'skill' as const,
         id: 'skill:project:workspace-only',
-        label: 'workspace-only',
-        scopeRequirement: 'workspace' as const,
         name: 'workspace-only',
         description: 'Mutate Workspace facts.',
-        source: 'project' as const,
+        trigger: 'skill',
+        prefix: '$',
+        phaseRequirement: 'any',
+        bindingRequirement: 'workspace',
+        source: { kind: 'project', workspaceId: 'workspace:1', sourceId: 'workspace-only' },
+        availability: {
+          status: 'unavailable',
+          diagnostic: {
+            code: 'binding-required',
+            owner: 'agent-runtime',
+            message: 'Workspace binding required.',
+          },
+        },
+        executable: {
+          kind: 'skill',
+          skillName: 'workspace-only',
+          activationId: 'skill:project:workspace-only',
+        },
       },
     ],
-    resources: [],
   };
 }
 

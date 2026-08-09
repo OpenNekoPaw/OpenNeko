@@ -4,8 +4,11 @@ import { contentLocatorKey, type ContentLocator } from '@neko/content';
 import { createGeneratedAssetRevisionRef } from '@neko/generation';
 import {
   collectCreatorVisibleArtifacts,
+  collectCreatorVisibleArtifactsFromTurnProjection,
+  deliverCreatorVisibleArtifactsFromTurnProjection,
   type CreatorVisibleToolResult,
 } from '../turn/creator-visible-artifact-collector';
+import type { ConversationTurnProjection } from '@neko/agent-contracts';
 
 const sourceLocator = {
   kind: 'workspace-file' as const,
@@ -378,7 +381,211 @@ describe('collectCreatorVisibleArtifacts', () => {
       }),
     ).toThrowError(/requires a valid contentLocator/u);
   });
+
+  it('collects a completed Write Tool result as one Workspace output', () => {
+    const collected = collectCreatorVisibleArtifactsFromTurnProjection(
+      createTurn({
+        toolName: 'Write',
+        toolData: {
+          contentLocator: { kind: 'workspace-file', path: 'docs/output.md' },
+          mode: 'write',
+          bytesWritten: 12,
+        },
+      }),
+    );
+
+    expect(collected).toEqual([
+      expect.objectContaining({
+        role: 'output',
+        kind: 'file-reference',
+        contentLocator: { kind: 'workspace-file', path: 'docs/output.md' },
+      }),
+    ]);
+  });
+
+  it('does not promote a completed Read Tool without a reviewable artifact', () => {
+    expect(
+      collectCreatorVisibleArtifactsFromTurnProjection(
+        createTurn({
+          toolName: 'Read',
+          toolData: {
+            contentLocator: { kind: 'workspace-file', path: 'docs/source.md' },
+            content: '1\tsource',
+          },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps Read source provenance when the completed turn declares an analysis', () => {
+    const analysis = {
+      kind: 'composite-artifact',
+      artifactId: 'analysis-from-read',
+      title: 'Source Review',
+      blocks: [{ blockId: 'findings', kind: 'text', text: 'Reviewed.' }],
+    };
+    const collected = collectCreatorVisibleArtifactsFromTurnProjection(
+      createTurn({
+        toolName: 'Read',
+        toolData: {
+          contentLocator: { kind: 'workspace-file', path: 'docs/source.md' },
+          content: '1\tsource',
+        },
+        assistantMarkdown: `~~~NEKO\n${JSON.stringify(analysis)}\n~~~`,
+      }),
+    );
+
+    expect(collected.map((candidate) => candidate.role)).toEqual(['source', 'analysis']);
+  });
+
+  it('does not collect artifacts from failed or non-terminal turns', () => {
+    const failed = createTurn({
+      toolName: 'Write',
+      toolData: { contentLocator: { kind: 'workspace-file', path: 'docs/output.md' } },
+      completionStatus: 'failed',
+    });
+    const nonTerminal = { ...failed, completion: undefined };
+
+    expect(collectCreatorVisibleArtifactsFromTurnProjection(failed)).toEqual([]);
+    expect(collectCreatorVisibleArtifactsFromTurnProjection(nonTerminal)).toEqual([]);
+  });
+
+  it('preserves Generation Job evidence for generated Tool attachments', () => {
+    const locator = {
+      kind: 'generated-output' as const,
+      outputId: 'job-1:image:0',
+      digest: 'sha256:image-0',
+      path: 'neko/generated/image/job-1-image-0.png',
+    };
+    const collected = collectCreatorVisibleArtifacts({
+      toolResults: [
+        {
+          name: 'GenerateImage',
+          success: true,
+          data: {
+            jobKind: 'generation',
+            jobId: 'job-1',
+            message: 'Draw a city at night',
+            routedTo: { model: 'image-model' },
+          },
+          attachments: [{ type: 'image', contentLocator: locator, mimeType: 'image/png' }],
+        },
+      ],
+    });
+
+    expect(collected).toEqual([
+      expect.objectContaining({
+        contentLocator: locator,
+        mimeType: 'image/png',
+        generation: {
+          jobRef: { kind: 'generation', jobId: 'job-1' },
+          summary: { prompt: 'Draw a city at night', model: 'image-model' },
+        },
+      }),
+    ]);
+  });
+
+  it('invokes the terminal delivery port once and localizes Host delivery failure', async () => {
+    const turn = createTurn({
+      toolName: 'Write',
+      toolData: { contentLocator: { kind: 'workspace-file', path: 'docs/output.md' } },
+    });
+    let calls = 0;
+
+    await expect(
+      deliverCreatorVisibleArtifactsFromTurnProjection({
+        turn,
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        delivery: {
+          deliver: async () => {
+            calls += 1;
+            throw new Error('Board is unavailable.');
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'blocked',
+      diagnostic: {
+        code: 'agent-artifact-delivery-failed',
+        message: 'Board is unavailable.',
+      },
+    });
+    expect(calls).toBe(1);
+  });
+
+  it('localizes invalid creator-visible Tool results after the Turn is terminal', async () => {
+    const turn = createTurn({ toolName: 'ReadDocument', toolData: { title: 'Missing locator' } });
+
+    await expect(
+      deliverCreatorVisibleArtifactsFromTurnProjection({
+        turn,
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+      }),
+    ).resolves.toMatchObject({
+      status: 'blocked',
+      diagnostic: { code: 'agent-artifact-delivery-failed' },
+    });
+  });
 });
+
+function createTurn(input: {
+  readonly toolName: string;
+  readonly toolData: unknown;
+  readonly assistantMarkdown?: string;
+  readonly completionStatus?: 'completed' | 'failed' | 'cancelled';
+}): ConversationTurnProjection {
+  return {
+    turnId: 'turn-1',
+    runId: 'run-1',
+    messageId: 'message-1',
+    items: [
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'message-1',
+        itemId: 'tool-1',
+        sequence: 0,
+        kind: 'tool_call',
+        status: 'succeeded',
+        payload: {
+          toolCall: {
+            id: 'call-1',
+            name: input.toolName,
+            arguments: {},
+            result: { success: true, data: input.toolData },
+          },
+        },
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      ...(input.assistantMarkdown
+        ? [
+            {
+              conversationId: 'conversation-1',
+              turnId: 'turn-1',
+              runId: 'run-1',
+              messageId: 'message-1',
+              itemId: 'assistant-1',
+              sequence: 1,
+              kind: 'assistant_text' as const,
+              status: 'complete' as const,
+              payload: { content: input.assistantMarkdown, format: 'markdown' as const },
+              createdAt: 2,
+              updatedAt: 3,
+            },
+          ]
+        : []),
+    ],
+    completion: { status: input.completionStatus ?? 'completed', completedAt: 4 },
+  };
+}
 
 function contentSourceId(locator: ContentLocator): string {
   return `content:${hashStableValue(contentLocatorKey(locator))}`;

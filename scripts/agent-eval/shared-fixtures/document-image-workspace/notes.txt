@@ -1,0 +1,2 @@
+Workspace directory discovery fixture note.
+Read this file with the basic bounded text reader.

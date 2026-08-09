@@ -35,6 +35,20 @@ results retain their Entity owner identity. The package-owned `entity.manage` ro
 capability, identity, and expected project revision before delegating to the exact Entity owner. It does
 not infer Entity operations or write project files in the Renderer or Desktop application root.
 
+The `files` facet is a live projection of the authorized Workspace system directory. Assets Node owns
+Workspace-scoped observation and treats filesystem notifications only as invalidation hints before an
+authoritative reread. Files added through Finder, Explorer, a terminal, or another tool appear without
+an application import operation or a normal Refresh command. Observation failure retains the last valid
+projection and exposes a recovery-only Rescan action.
+
+Creation follows one explicit Resource Browser target: selected directory, selected-file parent, or
+Workspace root; directory and blank-area context menus target the invoked directory and root
+respectively. `@neko/content/project-file-io` owns ordinary zero-byte file and empty-directory creation,
+while Canvas and Cut exclusively produce valid `.nkc` and `.otio` bytes. Generic New File rejects those
+reserved extensions. Renderer receives only opaque projection identities and workspace-relative
+`ContentLocator` values. Import, normal Refresh, rename, and a generic filesystem bridge are not routes
+of the project Resource Browser.
+
 The browser projects safe required, unavailable, incomplete, conflict, and unreferenced statuses without
 receiving a physical target. Recovery is an explicit revisioned plan followed by confirmation and apply;
 generic repair routes fail closed. Add and relink create OS links through the machine-global alias

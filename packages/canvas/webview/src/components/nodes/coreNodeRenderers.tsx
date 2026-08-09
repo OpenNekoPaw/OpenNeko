@@ -1,6 +1,7 @@
 import { CanvasEmbedNode } from './CanvasEmbedNode';
 import { FileNode, JobNode, MarkdownNode, MediaNode } from './CanonicalContentNodes';
 import { GroupNode } from './GroupNode';
+import { GenerationNode } from './GenerationNode';
 import type { NodeRendererRegistry } from './nodeRendererTypes';
 
 export function createCoreNodeRendererRegistry(): NodeRendererRegistry {
@@ -54,6 +55,12 @@ export function createCoreNodeRendererRegistry(): NodeRendererRegistry {
           onOpenCanvas={context.onCanvasEmbedOpen}
         />
       );
+    },
+    generation: (context) => {
+      if (context.node.type !== 'generation') {
+        throw new Error(`Generation renderer received node type "${context.node.type}".`);
+      }
+      return <GenerationNode key={context.node.id} {...context} node={context.node} />;
     },
   };
 }

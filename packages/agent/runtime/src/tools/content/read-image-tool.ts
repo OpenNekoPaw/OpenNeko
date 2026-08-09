@@ -1,5 +1,8 @@
 import * as path from 'path';
-import { AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES } from '@neko/agent-contracts';
+import {
+  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
+  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES,
+} from '@neko/agent-contracts';
 import { createTool } from '../base';
 import { getMimeType } from '@neko/media';
 import {
@@ -21,7 +24,7 @@ import { probeImageMetadata, type ImageMetadata } from '@neko/content/document';
 
 const DEFAULT_READ_IMAGE_LIMIT = 4;
 const MAX_READ_IMAGE_LIMIT = AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES;
-export const MAX_READ_IMAGE_BYTES = 20 * 1024 * 1024;
+export const MAX_READ_IMAGE_BYTES = AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES;
 
 export interface ReadImageToolDeps {
   readonly contentAccessRuntime?: ReadImageContentAccessRuntime;
@@ -533,7 +536,7 @@ function createReadImagePerceptionCard(input: {
     ...(input.image.contentLocator
       ? { contentLocator: input.image.contentLocator }
       : input.image.representationLocator
-        ? { contentLocator: input.image.representationLocator.source }
+        ? { representationLocator: input.image.representationLocator }
         : {}),
     ...(input.image.label ? { label: input.image.label } : {}),
   };

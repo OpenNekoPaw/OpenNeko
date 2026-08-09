@@ -6,7 +6,7 @@ import {
 import { createEntitySearchAdapter } from './entity-search-adapter';
 
 describe('Entity project search projections', () => {
-  it('extracts @character markers and Story parser character elements without VSCode', () => {
+  it('extracts forced characters through the canonical Fountain parser', () => {
     const script = [
       'EXT. 猫猫家门口 - 清晨',
       '',
@@ -14,20 +14,18 @@ describe('Entity project search projections', () => {
       '今天是上学第一天！',
       '',
       '@猫妈妈',
+      '回家吃饭。',
+      '',
+      '@校长',
+      '欢迎。',
     ].join('\n');
 
-    const candidates = extractScriptCharacterCandidates(script, () => ({
-      elements: [
-        { type: 'character', text: '校长' },
-        { type: 'dialogue', text: '欢迎。' },
-        { type: 'character', text: '@小橘' },
-      ],
-    }));
+    const candidates = extractScriptCharacterCandidates(script);
 
     expect(candidates).toEqual([
       { name: '小橘', firstLine: 2 },
       { name: '猫妈妈', firstLine: 5 },
-      { name: '校长' },
+      { name: '校长', firstLine: 8 },
     ]);
   });
 

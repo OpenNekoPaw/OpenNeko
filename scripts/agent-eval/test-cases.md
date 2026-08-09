@@ -73,7 +73,7 @@ assertion refs，再交给通用 workflow interpreter。内部 resolved case 不
 | 输入规范        | 空值、边界、歧义、locale、多轮顺序、非法配置是否明确处理                       | schema、diagnostic、workflow trace   |
 | 输出规范        | 格式、字段、表格、引用、locale、禁止字段是否满足                               | structured-output hard gate          |
 | Skill 激活      | 正向、改写、邻近负向请求是否触发正确 Host identity                             | Skill trigger/injection facts        |
-| Tool/capability | 正确 Tool、参数/结果状态和错误路径                                             | Tool facts                            |
+| Tool/capability | 正确 Tool、参数/结果状态和错误路径                                             | Tool facts                           |
 | 模型与开关      | requested profile 是否等于 effective provider/model/runtime config             | configuration digest、model facts    |
 | 流程进度        | queue、turn、Tool、continuation、cancel/resume/recovery 是否有序并最终 idle    | workflow/process assertions          |
 | 产物规范        | 稳定 identity、格式、digest/revision、provenance、delivery、validator 是否成立 | artifact facts、contained post-check |
@@ -151,6 +151,10 @@ Capability、Tool、Model、Runtime、Workflow suites 位于
 `suites/agent-runtime/<owner>/`。新增 suite 后必须同步对应严格 index 和
 `coverage-index.json`。
 
+同一 case 声明多个显式 model profile 时，真实运行必须用同一 provider，并通过
+`OPENNEKO_AGENT_EVAL_MODEL_IDS` 明确授权全部模型；终态 `OPENNEKO_AGENT_EVAL_MODEL_ID` 仍须与
+terminal facts 一致。未授权 profile 在 Desktop 启动前失败，不能回退到默认模型。
+
 每个 case 文件使用 `neko.agent-eval.scenario`，并声明：
 
 - suite/case id、case group 与 public/holdout visibility；
@@ -161,16 +165,22 @@ Capability、Tool、Model、Runtime、Workflow suites 位于
 - timeout/repetition budget；
 - 可选的 domain rubric。
 
-Scenario schema 与 Desktop driver contract 已表达 `submit`、延迟 `submit`、`queue`、
-`wait-for-idle`、`cancel`、`confirm`、`resume`、closed-loop `feedback` 和 terminal `resize`。
+Scenario schema 与 Desktop driver contract 已表达 `draft-bind`、预 Session `draft-submit` 拒绝、
+`submit`、延迟 `submit`、`queue`、`wait-for-idle`、`cancel`、`confirm`、`resume`、
+Conversation `update-configuration`、typed `invoke-input`、closed-loop `feedback` 和 terminal
+`resize`。
 活跃 turn 中的新用户输入必须使用 `queue`；case 必须以 terminal idle 收敛。每条消息都通过
 Desktop Agent input queue，不能直接注入 Agent turn 或 history。当前通用 workflow interpreter
-执行 `submit`、`queue`、`confirm`、`cancel`、`resume`、`feedback` 与 `wait-for-idle`；`resize`
-尚未接入 Desktop Agent runner，必须在启动前以 `configuration-invalid` 失败。缺失公开产品操作或
-evidence adapter 时同样不得添加 per-case adapter 绕过。
+执行上述除 `resize` 外的步骤；Draft 拒绝 case 必须在同一 Scenario 中恢复真实 Renderer，并通过
+可见 composer 完成后续 Session Turn，不能把 typed launch bridge 的负向证据冒充完整用户路径。
+运行中配置更新必须引用前一条 active submission，并从首个 Turn 的 immutable facts 和后续 Turn 的
+effective facts 证明更新只影响 future Turn。`resize` 尚未接入 Desktop Agent runner，必须在启动前以
+`configuration-invalid` 失败。缺失公开产品操作或 evidence adapter 时同样不得添加 per-case adapter
+绕过。
 
 当前 hard gates 覆盖 runtime error、fully idle、canonical turn、final answer、
-Skill identity/status、prompt composition、Markdown path、model、Tool call、
+Skill identity/status、prompt composition、Markdown path、model/model sequence、Draft rejection、
+requested/effective configuration update、typed input invocation、Tool call、
 process order、queue state、cancellation、recovery、retry、terminal
 concerns、Timeline、脱敏 resource display projection、structured output、artifact 和
 current path refs。`resource-display-projection` 只接受 locator kind、授权状态和

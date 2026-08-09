@@ -175,8 +175,9 @@ describe('Canvas creative workbench layout boundary', () => {
 
   it('creates nodes through canonical add action ids', () => {
     expect(appSource).toContain('getCanvasAddAction(actionId)');
-    expect(appSource).toContain("case 'text'");
-    expect(appSource).toContain("case 'table'");
+    expect(appSource).toContain("action.mode === 'generation'");
+    expect(appSource).toContain('createGenerationNode(action.generationKind');
+    expect(appSource).not.toContain("case 'table'");
     expect(appSource).not.toContain("case 'markdown'");
     expect(appSource).not.toContain("case 'group'");
     expect(appSource).not.toContain("case 'job'");
@@ -365,11 +366,10 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(addActionPopoverSource).toMatch(/CANVAS_ADD_ACTIONS\.filter/);
     expect(addActionPopoverSource).toMatch(/visibleActions\.map/);
     expect(addActionPopoverSource).toMatch(/availableGenerationKinds\.includes/);
-    expect(addActionPopoverSource).toMatch(/availableSourceModes\.length > 0/);
     expect(addActionPopoverSource).toMatch(/data-canvas-add-action-popover="true"/);
     expect(addActionCatalogSource).toContain("id: 'text'");
-    expect(addActionCatalogSource).toContain("id: 'table'");
-    expect(addActionCatalogSource).toContain("id: 'director3d'");
+    expect(addActionCatalogSource).not.toContain("id: 'table'");
+    expect(addActionCatalogSource).not.toContain("id: 'director3d'");
     expect(addActionCatalogSource).not.toContain("id: 'markdown'");
     expect(addActionCatalogSource).not.toContain("id: 'subcanvas'");
   });

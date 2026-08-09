@@ -40,6 +40,42 @@ describe('neko-chara architecture boundaries', () => {
       );
     }
   });
+
+  it('keeps Character and Room contracts canonical and free of future control paths', () => {
+    const contractFiles = listTypeScriptFiles(resolve(packageRoot, 'src/contracts'));
+    const productionSources = contractFiles
+      .filter((file) => !file.endsWith('.test.ts'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(productionSources).not.toMatch(/schemaVersion|contractVersion|formatVersion/u);
+    expect(productionSources).not.toMatch(/browser-use|computer-use|play-use|external-game|VLA/u);
+    expect(productionSources).not.toMatch(/fallbackHandler|defaultHandler|tryNext/u);
+    expect(readFileSync(resolve(packageRoot, 'package.json'), 'utf8')).toContain(
+      '"./contracts": "./src/contracts/index.ts"',
+    );
+  });
+
+  it('keeps product interaction composition on the primary AgentSession port', () => {
+    const source = readFileSync(
+      resolve(packageRoot, 'src/application/character-interaction-service.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('CharacterPrimaryAgentSessionPort');
+    expect(source).toContain("purpose: 'character.primary'");
+    expect(source).not.toMatch(/CharacterDialogueSession|EmbodyCharacterSession/u);
+    expect(source).not.toMatch(
+      /createCharacterDialoguePurposeResponder|createEmbodyCharacterPurposeResponder/u,
+    );
+    const applicationEntry = readFileSync(resolve(packageRoot, 'src/application/index.ts'), 'utf8');
+    const coreEntry = readFileSync(resolve(packageRoot, 'src/core/index.ts'), 'utf8');
+    const testingEntry = readFileSync(resolve(packageRoot, 'src/testing/index.ts'), 'utf8');
+    expect(applicationEntry).not.toContain("'./character-dialogue-runtime'");
+    expect(coreEntry).not.toMatch(/character-dialogue-session|embody-character-session/u);
+    expect(testingEntry).toMatch(/character-dialogue-runtime/u);
+    expect(testingEntry).toMatch(/character-dialogue-session|embody-character-session/u);
+  });
 });
 
 function listTypeScriptFiles(directory: string): string[] {

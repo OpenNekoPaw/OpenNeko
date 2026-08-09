@@ -1,5 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { cp, lstat, mkdir, readdir, readFile, realpath, rename, rm } from 'node:fs/promises';
+import {
+  cp,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 
 import type {
@@ -32,6 +42,8 @@ export interface AgentExtensionSupportPort {
 export interface AgentExtensionManager {
   readCatalog(): Promise<AgentExtensionCatalogSnapshot>;
   installPlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot>;
+  enablePlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot>;
+  disablePlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot>;
   removePlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot>;
   refreshMarketplaces(): Promise<AgentExtensionCatalogSnapshot>;
   setRuntimeReadiness(
@@ -48,6 +60,8 @@ interface AgentExtensionRepositorySnapshot {
 export interface AgentExtensionRepositoryPort {
   read(): Promise<AgentExtensionRepositorySnapshot>;
   install(pluginId: string): Promise<void>;
+  enable(pluginId: string, acceptedPermissions: readonly string[]): Promise<void>;
+  disable(pluginId: string): Promise<void>;
   remove(pluginId: string): Promise<void>;
   reload(): Promise<void>;
 }
@@ -55,17 +69,19 @@ export interface AgentExtensionRepositoryPort {
 export function createOpenNekoExtensionRepository(options: {
   readonly marketplaceRoot: string;
   readonly installRoot: string;
+  readonly stateRoot: string;
   readonly trashItem: (absolutePath: string) => Promise<void>;
 }): AgentExtensionRepositoryPort {
   const marketplaceRoot = requireAbsoluteRoot(options.marketplaceRoot, 'marketplace');
   const installRoot = requireAbsoluteRoot(options.installRoot, 'install');
-  if (
-    isInsideOrEqual(marketplaceRoot, installRoot) ||
-    isInsideOrEqual(installRoot, marketplaceRoot)
-  ) {
-    throw new Error('OpenNeko extension marketplace and install roots must be separate.');
-  }
-  return new OpenNekoExtensionRepository(marketplaceRoot, installRoot, options.trashItem);
+  const stateRoot = requireAbsoluteRoot(options.stateRoot, 'state');
+  assertSeparateRoots([marketplaceRoot, installRoot, stateRoot]);
+  return new OpenNekoExtensionRepository(
+    marketplaceRoot,
+    installRoot,
+    stateRoot,
+    options.trashItem,
+  );
 }
 
 export function createAgentExtensionManager(options: {
@@ -94,29 +110,44 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
     }
 
     const visiblePlugins: VerifiedPlugin[] = [];
+    const invalidInstalledPlugins: Array<{
+      readonly entry: RepositoryPluginEntry;
+      readonly code: AgentExtensionDiagnosticCode;
+    }> = [];
     const runtimeDescriptors: AgentExtensionRuntimeDescriptor[] = [];
     const diagnosticCodes = [...repositorySnapshot.diagnostics];
     for (const entry of repositorySnapshot.entries) {
       const plugin = await readPluginPackage(entry);
       if (plugin.status === 'error') {
         diagnosticCodes.push(plugin.code);
+        if (entry.installed) invalidInstalledPlugins.push({ entry, code: plugin.code });
         continue;
       }
-      if (entry.installed || (await this.agentSupport.isSupported(plugin.value.runtime))) {
+      if (
+        entry.installed ||
+        entry.listed ||
+        (await this.agentSupport.isSupported(plugin.value.runtime))
+      ) {
         visiblePlugins.push(plugin.value);
       }
       if (entry.installed && entry.enabled) runtimeDescriptors.push(plugin.value.runtime);
     }
-    let records = visiblePlugins.map((plugin) => projectExtension(plugin, undefined));
+    let records = [
+      ...visiblePlugins.map((plugin) => projectExtension(plugin, undefined)),
+      ...invalidInstalledPlugins.map(({ entry, code }) => projectInvalidExtension(entry, code)),
+    ];
     records.sort(compareExtensionRecords);
     runtimeDescriptors.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
     const sourceFingerprint = createPluginRuntimeSourceFingerprint(
       createSnapshot(records, runtimeDescriptors, diagnosticCodes),
     );
     if (this.runtimeSourceFingerprint === sourceFingerprint) {
-      records = visiblePlugins.map((plugin) =>
-        projectExtension(plugin, this.runtimeReadiness.get(plugin.entry.pluginId)),
-      );
+      records = [
+        ...visiblePlugins.map((plugin) =>
+          projectExtension(plugin, this.runtimeReadiness.get(plugin.entry.pluginId)),
+        ),
+        ...invalidInstalledPlugins.map(({ entry, code }) => projectInvalidExtension(entry, code)),
+      ];
       records.sort(compareExtensionRecords);
     }
     return createSnapshot(records, runtimeDescriptors, diagnosticCodes);
@@ -129,6 +160,28 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
         id,
         (record) => record.canInstall,
         () => this.repository.install(id),
+      ),
+    );
+  }
+
+  async enablePlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot> {
+    const id = requireOpenNekoPluginId(pluginId);
+    return this.serializeMutation(() =>
+      this.mutate(
+        id,
+        (record) => record.canEnable,
+        (record) => this.repository.enable(id, record.declaredPermissions),
+      ),
+    );
+  }
+
+  async disablePlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot> {
+    const id = requireOpenNekoPluginId(pluginId);
+    return this.serializeMutation(() =>
+      this.mutate(
+        id,
+        (record) => record.canDisable,
+        () => this.repository.disable(id),
       ),
     );
   }
@@ -163,14 +216,14 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
   private async mutate(
     pluginId: string,
     allowed: (record: AgentExtensionCatalogItem) => boolean,
-    operation: () => Promise<void>,
+    operation: (record: AgentExtensionCatalogItem) => Promise<void>,
   ): Promise<AgentExtensionCatalogSnapshot> {
     const before = await this.readCatalog();
     const record = before.records.find((item) => item.id === pluginId);
     if (!record || !allowed(record)) {
       throw new Error(`OpenNeko extension '${pluginId}' does not allow this operation.`);
     }
-    await operation();
+    await operation(record);
     this.clearRuntimeReadiness();
     return this.readCatalog();
   }
@@ -199,13 +252,14 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
   constructor(
     private readonly marketplaceRoot: string,
     private readonly installRoot: string,
+    private readonly stateRoot: string,
     private readonly trashItem: (absolutePath: string) => Promise<void>,
   ) {}
 
   async read(): Promise<AgentExtensionRepositorySnapshot> {
     const [marketplace, installed] = await Promise.all([
       readMarketplaceEntries(this.marketplaceRoot),
-      readInstalledEntries(this.installRoot),
+      readInstalledEntries(this.installRoot, this.stateRoot),
     ]);
     const entries = new Map<string, RepositoryPluginEntry>();
     for (const entry of installed.entries) entries.set(entry.pluginId, entry);
@@ -218,6 +272,42 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
       ),
       diagnostics: Object.freeze([...marketplace.diagnostics, ...installed.diagnostics]),
     });
+  }
+
+  async enable(pluginId: string, acceptedPermissions: readonly string[]): Promise<void> {
+    const name = pluginNameFromId(pluginId);
+    if (
+      acceptedPermissions.some((permission) => !isExtensionIdentifier(permission)) ||
+      new Set(acceptedPermissions).size !== acceptedPermissions.length
+    ) {
+      throw new Error(`OpenNeko extension '${pluginId}' permissions are invalid.`);
+    }
+    const target = resolve(this.installRoot, name);
+    const identity = await readPluginIdentity(target);
+    if (!identity || identity.name !== name) {
+      throw new Error(`OpenNeko extension '${pluginId}' is not installed.`);
+    }
+    await mkdir(this.stateRoot, { recursive: true });
+    const grantPath = extensionGrantPath(this.stateRoot, name);
+    const staging = `${grantPath}.staging-${randomUUID()}`;
+    try {
+      await writeFile(
+        staging,
+        JSON.stringify({
+          pluginId,
+          acceptedPermissions: [...acceptedPermissions].sort(),
+        }),
+        { encoding: 'utf8', flag: 'wx' },
+      );
+      await rename(staging, grantPath);
+    } finally {
+      await rm(staging, { force: true });
+    }
+  }
+
+  async disable(pluginId: string): Promise<void> {
+    const name = pluginNameFromId(pluginId);
+    await rm(extensionGrantPath(this.stateRoot, name), { force: true });
   }
 
   async install(pluginId: string): Promise<void> {
@@ -256,6 +346,7 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
       if (verified.status === 'error') {
         throw new Error(`OpenNeko extension '${pluginId}' package is invalid.`);
       }
+      await rm(extensionGrantPath(this.stateRoot, name), { force: true });
       await rename(staging, target);
     } finally {
       await rm(staging, { recursive: true, force: true });
@@ -289,6 +380,7 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
       throw new Error(`OpenNeko extension '${pluginId}' install is invalid.`);
     }
     await this.trashItem(canonicalTarget);
+    await rm(extensionGrantPath(this.stateRoot, name), { force: true });
   }
 
   async reload(): Promise<void> {
@@ -303,10 +395,12 @@ interface RepositoryPluginEntry {
   readonly version: string;
   readonly installed: boolean;
   readonly enabled: boolean;
+  readonly acceptedPermissions: readonly string[];
   readonly authorityRoot: string;
   readonly sourcePath: string;
   readonly canInstall: boolean;
   readonly canRemove: boolean;
+  readonly listed: boolean;
 }
 
 interface VerifiedPlugin {
@@ -316,6 +410,7 @@ interface VerifiedPlugin {
   readonly developer: string;
   readonly category: string;
   readonly iconDataUrl: string;
+  readonly declaredPermissions: readonly string[];
   readonly runtime: AgentExtensionRuntimeDescriptor;
 }
 
@@ -346,6 +441,8 @@ async function readMarketplaceEntries(
         authorityRoot: marketplaceRoot,
         sourcePath: resolve(marketplaceRoot, definition.path),
         installed: false,
+        installable: definition.availability === 'installable',
+        listed: definition.availability === 'unavailable',
       }),
     ),
     diagnostics: [],
@@ -354,6 +451,7 @@ async function readMarketplaceEntries(
 
 async function readInstalledEntries(
   installRoot: string,
+  stateRoot: string,
 ): Promise<AgentExtensionRepositorySnapshot> {
   let children;
   try {
@@ -378,9 +476,23 @@ async function readInstalledEntries(
     const pluginRoot = resolve(installRoot, child.name);
     const identity = await readPluginIdentity(pluginRoot);
     if (!identity || identity.name !== child.name) {
-      diagnostics.push('manifest_invalid');
+      const grant = await readExtensionGrant(stateRoot, child.name);
+      if (grant.diagnostic) diagnostics.push(grant.diagnostic);
+      entries.push(
+        createRepositoryEntry({
+          name: child.name,
+          version: identity?.version ?? '',
+          authorityRoot: installRoot,
+          sourcePath: pluginRoot,
+          installed: true,
+          enabled: grant.enabled,
+          acceptedPermissions: grant.acceptedPermissions,
+        }),
+      );
       continue;
     }
+    const grant = await readExtensionGrant(stateRoot, identity.name);
+    if (grant.diagnostic) diagnostics.push(grant.diagnostic);
     entries.push(
       createRepositoryEntry({
         name: identity.name,
@@ -388,16 +500,48 @@ async function readInstalledEntries(
         authorityRoot: installRoot,
         sourcePath: pluginRoot,
         installed: true,
+        enabled: grant.enabled,
+        acceptedPermissions: grant.acceptedPermissions,
       }),
     );
   }
   return { entries, diagnostics };
 }
 
-function parseMarketplaceIndex(
-  value: Record<string, unknown>,
-):
-  | readonly { readonly name: string; readonly version: string; readonly path: string }[]
+async function readExtensionGrant(
+  stateRoot: string,
+  name: string,
+): Promise<{
+  readonly enabled: boolean;
+  readonly acceptedPermissions: readonly string[];
+  readonly diagnostic?: AgentExtensionDiagnosticCode;
+}> {
+  const pluginId = `${name}@${OPENNEKO_MARKETPLACE_ID}`;
+  const result = await readJsonFile(extensionGrantPath(stateRoot, name), stateRoot);
+  if (result.status === 'missing') {
+    return { enabled: false, acceptedPermissions: [] };
+  }
+  if (
+    result.status === 'error' ||
+    !hasOnlyKeys(result.value, ['pluginId', 'acceptedPermissions']) ||
+    result.value['pluginId'] !== pluginId
+  ) {
+    return { enabled: false, acceptedPermissions: [], diagnostic: 'state_invalid' };
+  }
+  const acceptedPermissions = parsePermissionList(result.value['acceptedPermissions']);
+  if (acceptedPermissions === undefined) {
+    return { enabled: false, acceptedPermissions: [], diagnostic: 'state_invalid' };
+  }
+  return { enabled: true, acceptedPermissions };
+}
+
+function parseMarketplaceIndex(value: Record<string, unknown>):
+  | readonly {
+      readonly name: string;
+      readonly version: string;
+      readonly path: string;
+      readonly availability: 'installable' | 'unavailable';
+    }[]
   | undefined {
   if (
     !hasOnlyKeys(value, ['publisher', 'plugins']) ||
@@ -406,16 +550,24 @@ function parseMarketplaceIndex(
   ) {
     return undefined;
   }
-  const records: { name: string; version: string; path: string }[] = [];
+  const records: {
+    name: string;
+    version: string;
+    path: string;
+    availability: 'installable' | 'unavailable';
+  }[] = [];
   const ids = new Set<string>();
   for (const item of value['plugins']) {
     if (
       !isRecord(item) ||
-      !hasOnlyKeys(item, ['name', 'version', 'path']) ||
+      !hasOnlyKeys(item, ['name', 'version', 'path'], ['availability']) ||
       !isPluginSegmentValue(item['name']) ||
       !isNonEmptyString(item['version']) ||
       !isNonEmptyString(item['path']) ||
-      isAbsolute(item['path'])
+      isAbsolute(item['path']) ||
+      (item['availability'] !== undefined &&
+        item['availability'] !== 'installable' &&
+        item['availability'] !== 'unavailable')
     ) {
       return undefined;
     }
@@ -433,6 +585,7 @@ function parseMarketplaceIndex(
       name: item['name'],
       version: item['version'],
       path: item['path'],
+      availability: item['availability'] ?? 'installable',
     });
   }
   records.sort((left, right) => left.name.localeCompare(right.name));
@@ -445,6 +598,10 @@ function createRepositoryEntry(input: {
   readonly authorityRoot: string;
   readonly sourcePath: string;
   readonly installed: boolean;
+  readonly enabled?: boolean;
+  readonly acceptedPermissions?: readonly string[];
+  readonly installable?: boolean;
+  readonly listed?: boolean;
 }): RepositoryPluginEntry {
   return Object.freeze({
     pluginId: `${input.name}@${OPENNEKO_MARKETPLACE_ID}`,
@@ -452,12 +609,26 @@ function createRepositoryEntry(input: {
     marketplace: OPENNEKO_MARKETPLACE_ID,
     version: input.version,
     installed: input.installed,
-    enabled: input.installed,
+    enabled: input.enabled ?? false,
+    acceptedPermissions: Object.freeze([...(input.acceptedPermissions ?? [])]),
     authorityRoot: resolve(input.authorityRoot),
     sourcePath: resolve(input.sourcePath),
-    canInstall: !input.installed,
-    canRemove: input.installed,
+    canInstall: !input.installed && (input.installable ?? true),
+    canRemove: input.installed && input.enabled !== true,
+    listed: input.listed ?? false,
   });
+}
+
+function parsePermissionList(value: unknown): readonly string[] | undefined {
+  if (value === undefined) return Object.freeze([]);
+  if (
+    !Array.isArray(value) ||
+    value.some((item) => typeof item !== 'string' || !isExtensionIdentifier(item)) ||
+    new Set(value).size !== value.length
+  ) {
+    return undefined;
+  }
+  return Object.freeze([...value].sort());
 }
 
 async function readPluginIdentity(
@@ -518,9 +689,13 @@ async function readPluginPackage(
   }
   const interfaceMetadata = optionalRecord(manifest['interface']);
   const author = optionalRecord(manifest['author']);
+  const declaredPermissions = parsePermissionList(manifest['permissions']);
+  const mcpToolExposure = manifest['mcpToolExposure'];
   if (
     interfaceMetadata === null ||
     author === null ||
+    declaredPermissions === undefined ||
+    (mcpToolExposure !== undefined && mcpToolExposure !== 'adapter-only') ||
     !isOptionalString(interfaceMetadata?.['displayName']) ||
     !isOptionalString(interfaceMetadata?.['shortDescription']) ||
     !isOptionalString(interfaceMetadata?.['developerName']) ||
@@ -549,12 +724,14 @@ async function readPluginPackage(
       developer: interfaceMetadata?.['developerName'] ?? author?.['name'] ?? '',
       category: interfaceMetadata?.['category'] ?? '',
       iconDataUrl: icon.value,
+      declaredPermissions,
       runtime: Object.freeze({
         pluginId: entry.pluginId,
         pluginRoot,
         ...(skills.value === undefined ? {} : { skillRoot: skills.value }),
         ...(mcp.value.path === undefined ? {} : { mcpDocumentPath: mcp.value.path }),
         mcpServerIds: mcp.value.ids,
+        ...(mcpToolExposure === undefined ? {} : { mcpToolExposure }),
         appIds: apps.value.ids,
       }),
     }),
@@ -569,7 +746,10 @@ function projectExtension(
   let agentStatus: AgentExtensionStatus;
   let runtimeDiagnosticCode: string;
   if (!entry.installed) {
-    agentStatus = 'not-installed';
+    agentStatus = entry.canInstall ? 'not-installed' : 'unsupported';
+    runtimeDiagnosticCode = entry.canInstall ? '' : 'artifact-unavailable';
+  } else if (!entry.enabled) {
+    agentStatus = 'disabled';
     runtimeDiagnosticCode = '';
   } else if (readiness) {
     agentStatus = readiness.status;
@@ -596,13 +776,47 @@ function projectExtension(
     installed: entry.installed,
     enabled: entry.enabled,
     canInstall: entry.canInstall,
+    canEnable: entry.installed && !entry.enabled,
+    canDisable: entry.installed && entry.enabled,
     canRemove: entry.canRemove,
+    declaredPermissions: plugin.declaredPermissions,
+    acceptedPermissions: entry.acceptedPermissions,
     agentStatus,
     runtimeDiagnosticCode,
     iconDataUrl: plugin.iconDataUrl,
     mcpServerIds: runtime.mcpServerIds,
     hasSkills: runtime.skillRoot !== undefined,
     appIds: runtime.appIds,
+  });
+}
+
+function projectInvalidExtension(
+  entry: RepositoryPluginEntry,
+  code: AgentExtensionDiagnosticCode,
+): AgentExtensionCatalogItem {
+  return Object.freeze({
+    id: entry.pluginId,
+    name: entry.name,
+    displayName: entry.name,
+    description: '',
+    version: entry.version,
+    developer: '',
+    marketplace: entry.marketplace,
+    category: '',
+    installed: true,
+    enabled: entry.enabled,
+    canInstall: false,
+    canEnable: false,
+    canDisable: entry.enabled,
+    canRemove: !entry.enabled,
+    declaredPermissions: entry.acceptedPermissions,
+    acceptedPermissions: entry.acceptedPermissions,
+    agentStatus: 'error',
+    runtimeDiagnosticCode: code.replaceAll('_', '-'),
+    iconDataUrl: '',
+    mcpServerIds: [],
+    hasSkills: false,
+    appIds: [],
   });
 }
 
@@ -828,6 +1042,27 @@ function requireAbsoluteRoot(value: string, name: string): string {
   return resolve(value);
 }
 
+function assertSeparateRoots(roots: readonly string[]): void {
+  for (const [index, root] of roots.entries()) {
+    for (const other of roots.slice(index + 1)) {
+      if (isInsideOrEqual(root, other) || isInsideOrEqual(other, root)) {
+        throw new Error(
+          'OpenNeko extension marketplace, install and state roots must be separate.',
+        );
+      }
+    }
+  }
+}
+
+function extensionGrantPath(stateRoot: string, name: string): string {
+  if (!isPluginSegment(name)) throw new Error('OpenNeko extension grant identity is invalid.');
+  const path = resolve(stateRoot, `${name}.json`);
+  if (!isInsideOrEqual(stateRoot, path)) {
+    throw new Error('OpenNeko extension grant path escaped its root.');
+  }
+  return path;
+}
+
 function isPluginSegment(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(value);
 }
@@ -840,8 +1075,13 @@ function isExtensionIdentifier(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(value);
 }
 
-function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+function hasOnlyKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+  optionalKeys: readonly string[] = [],
+): boolean {
   const allowed = new Set(keys);
+  for (const key of optionalKeys) allowed.add(key);
   return Object.keys(value).every((key) => allowed.has(key)) && keys.every((key) => key in value);
 }
 

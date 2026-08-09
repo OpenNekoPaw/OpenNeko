@@ -3,6 +3,9 @@ import * as path from 'node:path';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { describe, expect, it } from 'vitest';
 import { desktopFuseConfig } from '../fuse.config.js';
+import desktopRendererConfig, {
+  DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES,
+} from '../vite.renderer.config';
 
 const sourceRoot = path.resolve(import.meta.dirname);
 const repositoryRoot = path.resolve(sourceRoot, '../../..');
@@ -78,6 +81,28 @@ describe('Desktop architecture boundaries', () => {
     expect(composition).toContain('createPiTimelineProjector');
     expect(composition).not.toContain('AgentSession');
     expect(composition).not.toMatch(/\bactiveConversation(?:Id)?\b/u);
+  });
+
+  it('delegates Agent launch policy and first submit to package application services', () => {
+    const mainRoot = path.join(sourceRoot, 'main');
+    const application = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
+    const appHost = readFileSync(path.join(mainRoot, 'app-host.ts'), 'utf8');
+    const launchRuntime = readFileSync(
+      path.join(mainRoot, 'desktop-agent-launch-runtime.ts'),
+      'utf8',
+    );
+
+    expect(application).toContain('createAgentLaunchDraftSubmissionApplicationService');
+    expect(launchRuntime).toContain('createAgentLaunchApplicationService');
+    expect(launchRuntime).toContain('projectAgentLaunchBaseCatalog');
+    expect(appHost).toContain('this.agentLaunchSubmission.submit');
+    expect(appHost).not.toContain('projectAgentLaunchBaseCatalog');
+    expect(appHost).not.toContain('createAgentLaunchApplicationService');
+    for (const source of [appHost, launchRuntime]) {
+      expect(source).not.toMatch(/\b(?:active|current|recent|first)Project\b/u);
+      expect(source).not.toMatch(/\btryNext\b/u);
+      expect(source).not.toMatch(/\b(?:merge|resolve)Model/u);
+    }
   });
 
   it('keeps provider credentials in Host secret and protected native UI boundaries', () => {
@@ -170,7 +195,10 @@ describe('Desktop architecture boundaries', () => {
     );
     const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
 
-    expect(surface).toContain("from '@neko/canvas-webview/root'");
+    expect(surface).toContain("import('@neko/canvas-webview/root')");
+    expect(surface).not.toContain("from '@neko/canvas-webview/root'");
+    expect(surface).toContain('const CanvasWebviewRoot = lazy(');
+    expect(surface).toContain('<Suspense');
     expect(surface).toContain('<CanvasWebviewRoot');
     expect(surface).not.toContain('@neko/canvas-webview/host-adapter');
     expect(surface).not.toContain('CanvasHostAdapterSurface');
@@ -191,10 +219,14 @@ describe('Desktop architecture boundaries', () => {
 
     expect(cutSurface).toContain("import('@neko/cut-webview/root')");
     expect(cutSurface).toMatch(/<CutWebviewRoot[\s\S]*bridge=\{bridge\}/u);
-    expect(cutSurface).toContain('timelineTarget={timelineTarget}');
+    expect(cutSurface).not.toContain('timelineVisible');
+    expect(cutSurface).not.toContain('timelineTarget');
+    expect(shell).toContain('data-workbench-cut-panel="true"');
+    expect(shell).toContain("portalDeck('bottomPanel'");
     expect(previewSurface).toContain("import('@neko/preview-webview/root')");
     expect(previewSurface).toContain('<PreviewRoot');
-    expect(previewSurface).toContain('runtime={runtime}');
+    expect(previewSurface).toContain('bootstrap={bootstrap}');
+    expect(previewSurface).toContain('bootstrap.prepare()');
     expect(previewSurface).toContain('chrome="content-only"');
     for (const source of [cutSurface, previewSurface, shell]) {
       expect(source).not.toContain('/host-adapter');
@@ -270,18 +302,18 @@ describe('Desktop architecture boundaries', () => {
   });
 
   it('deduplicates shared runtimes and resolves embedded package Roots through public exports', () => {
-    const rendererConfig = readFileSync(
+    const rendererConfigSource = readFileSync(
       path.resolve(sourceRoot, '..', 'vite.renderer.config.ts'),
       'utf8',
     );
 
-    expect(rendererConfig).toContain("'zustand'");
-    expect(rendererConfig).toContain("'three'");
-    expect(rendererConfig).toContain("'three/addons/loaders/GLTFLoader.js'");
-    expect(rendererConfig).toContain("'use-sync-external-store/shim/with-selector.js'");
-    expect(rendererConfig).toMatch(/dedupe:\s*\[[^\]]*'react'[^\]]*'zustand'/s);
-    expect(rendererConfig).not.toContain('find: /^@neko');
-    expect(rendererConfig).not.toContain("'../../packages/");
+    expect(rendererConfigSource).toContain("'zustand'");
+    expect(rendererConfigSource).toContain("'three'");
+    expect(rendererConfigSource).toContain("'three/addons/loaders/GLTFLoader.js'");
+    expect(rendererConfigSource).toContain("'use-sync-external-store/shim/with-selector.js'");
+    expect(rendererConfigSource).toMatch(/dedupe:\s*\[[^\]]*'react'[^\]]*'zustand'/s);
+    expect(rendererConfigSource).not.toContain('find: /^@neko');
+    expect(rendererConfigSource).not.toContain("'../../packages/");
     const publicRoots = [
       ['packages/canvas/webview/package.json', './root'],
       ['packages/cut/webview/package.json', './root'],
@@ -295,57 +327,14 @@ describe('Desktop architecture boundaries', () => {
       ) as { readonly exports?: Readonly<Record<string, string>> };
       expect(manifest.exports?.[exportName]).toMatch(/^\.\/src\//u);
     }
-    expect(rendererConfig).toMatch(
-      /exclude:\s*\[[^\]]*'@neko\/canvas-domain'[^\]]*'@neko\/canvas-webview\/root'/s,
-    );
-    const optimizeDepsExclude = rendererConfig.match(/exclude:\s*\[([^\]]*)\]/s)?.[1];
-    const optimizeDepsInclude = rendererConfig.match(/include:\s*\[([^\]]*)\]/s)?.[1];
-    expect(optimizeDepsExclude).toContain("'@neko/agent-contracts'");
-    expect(optimizeDepsExclude).not.toContain("'@neko/agent-contracts/host-message-event'");
-    expect(optimizeDepsInclude).not.toContain("'@neko/agent-contracts'");
-    for (const sharedReactModule of [
-      '@neko/assets-webview/resource-browser/presentation-snapshot',
-      '@neko/assets-webview/resource-browser/root',
-      '@neko/preview-webview/presentation-snapshot',
-      '@neko/preview-webview/root',
-    ]) {
-      expect(optimizeDepsExclude).toContain(`'${sharedReactModule}'`);
-      expect(optimizeDepsInclude).not.toContain(`'${sharedReactModule}'`);
-    }
-    for (const assetsWireContract of [
-      '@neko/assets-domain/asset-center/contract',
-      '@neko/assets-domain/asset-center/host-contract',
-      '@neko/assets-domain/contracts',
-      '@neko/assets-domain/global-library/contract',
-      '@neko/assets-domain/resource-browser/contract',
-    ]) {
-      expect(optimizeDepsExclude).toContain(`'${assetsWireContract}'`);
-      expect(optimizeDepsInclude).not.toContain(`'${assetsWireContract}'`);
-    }
-    for (const hostWireContract of [
-      '@neko/host/application-settings',
-      '@neko/host/desktop-scene-contract',
-      '@neko/host/desktop-shell-contract',
-      '@neko/host/desktop-workbench-contract',
-      '@neko/host/desktop-window-composition-contract',
-    ]) {
-      expect(optimizeDepsExclude).toContain(`'${hostWireContract}'`);
-      expect(optimizeDepsInclude).not.toContain(`'${hostWireContract}'`);
-    }
-    for (const liveWorkspaceUiEntry of [
-      '@neko/ui',
-      '@neko/ui/creative',
-      '@neko/ui/hooks',
-      '@neko/ui/icons',
-      '@neko/ui/keyboard',
-      '@neko/ui/markdown',
-      '@neko/ui/primitives',
-      '@neko/ui/utils',
-      '@neko/ui/workbench',
-    ]) {
-      expect(optimizeDepsExclude).toContain(`'${liveWorkspaceUiEntry}'`);
-      expect(optimizeDepsInclude).not.toContain(`'${liveWorkspaceUiEntry}'`);
-    }
+    expect(desktopRendererConfig.optimizeDeps?.exclude).toEqual([
+      ...DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES,
+    ]);
+    expect(
+      desktopRendererConfig.optimizeDeps?.include?.filter((entry) => entry.startsWith('@neko/')),
+    ).toEqual([]);
+    expect(desktopRendererConfig.optimizeDeps?.include).toContain('three');
+    expect(desktopRendererConfig.optimizeDeps?.include).toContain('zustand');
   });
 
   it('releases window resources through the registered sender identity after Electron closes', () => {

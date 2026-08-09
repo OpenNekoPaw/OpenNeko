@@ -1,0 +1,62 @@
+{
+  "schema": "neko.agent-eval.suite",
+  "id": "agent-runtime.launch-binding",
+  "owner": { "kind": "agent-runtime", "id": "agent-launch-binding" },
+  "target": {
+    "kind": "workflow",
+    "id": "draft-binding-first-submit",
+    "contractHash": "sha256:1d8f56cd2f344126254df289f1f379c52559de9fcf7a1044e7b1a2a19e956072"
+  },
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "entry-assistant-first-submit",
+      "file": "cases/entry-assistant-first-submit.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "workspace-bound-first-submit",
+      "file": "cases/workspace-bound-first-submit.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "stale-binding-rejection",
+      "file": "cases/stale-binding-rejection.json",
+      "group": "failure",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

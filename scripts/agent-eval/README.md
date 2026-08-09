@@ -12,8 +12,9 @@ Evaluation infrastructure but is not itself AI behavior Evaluation.
 The Desktop application is the only product host. The previous TUI debug-automation driver has been
 removed. Desktop now exposes an isolated complete-session driver through the public Agent bridge and
 fixture-only automation contract. The focused runner has no case-id whitelist: it resolves an
-indexed Scenario into an immutable execution case and interprets supported submit, queue, confirm,
-cancel, resume, feedback and idle steps through one driver.
+indexed Scenario into an immutable execution case and interprets supported Draft binding/rejection,
+submit, queue, Conversation configuration update, typed input invocation, confirm, cancel, resume,
+feedback and idle steps through one driver.
 
 Therefore:
 
@@ -167,6 +168,11 @@ authorization for each invocation. The TOML contains only non-secret provider/mo
 the product resolves credentials through its SecretStorage owner. Evaluation never reads or copies
 secret bytes. The runner reports the exact missing authorization before Desktop launch or API use;
 configuration availability alone does not imply cost authorization.
+
+Cases that intentionally switch models under one provider additionally require the comma-separated
+`OPENNEKO_AGENT_EVAL_MODEL_IDS` allowlist. `OPENNEKO_AGENT_EVAL_MODEL_ID` remains the expected
+terminal model identity and must also be present in that set. A profile outside the exact provider
+and model allowlist is rejected before Desktop launch.
 
 Run a hidden packaged matrix with stable build identity and two Desktop workers:
 

@@ -1,7 +1,8 @@
 import { open, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Reader, Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
+import { Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
 import type { DocumentLowLevelAccess } from './document-access-service';
+import { NodeArchiveFileReader } from './node-file-reader';
 
 export interface CreateNodeDocumentLowLevelAccessOptions {
   readonly resolvePath?: (filePath: string) => string;
@@ -86,7 +87,7 @@ export function createNodeDocumentLowLevelAccess(
     },
     async readEntry(filePath, entryPath) {
       const normalizedEntryPath = normalizeArchiveEntryPath(entryPath);
-      const archive = new ZipReader(new NodeFileReader(resolvePath(filePath)), {
+      const archive = new ZipReader(new NodeArchiveFileReader(resolvePath(filePath)), {
         useWebWorkers: false,
       });
       try {
@@ -115,40 +116,6 @@ export function createNodeDocumentLowLevelAccess(
       }
     },
   };
-}
-
-class NodeFileReader extends Reader<string> {
-  constructor(private readonly filePath: string) {
-    super(filePath);
-  }
-
-  override async init(): Promise<void> {
-    Reader.prototype.init?.call(this);
-    const metadata = await stat(this.filePath);
-    this.size = metadata.size;
-  }
-
-  override async readUint8Array(index: number, length: number): Promise<Uint8Array> {
-    if (!Number.isSafeInteger(index) || !Number.isSafeInteger(length) || index < 0 || length < 0) {
-      throw new Error(`Invalid archive byte range: ${index}+${length}`);
-    }
-    const boundedLength = Math.min(length, this.size - index);
-    if (boundedLength < 0 || boundedLength > DEFAULT_DOCUMENT_RANGE_MAX_BYTES) {
-      throw new Error(
-        `Archive byte range exceeds the ${DEFAULT_DOCUMENT_RANGE_MAX_BYTES}-byte limit.`,
-      );
-    }
-    const handle = await open(this.filePath, 'r');
-    try {
-      const buffer = Buffer.allocUnsafe(boundedLength);
-      const { bytesRead } = await handle.read(buffer, 0, boundedLength, index);
-      // zip.js currently constructs DataView from array.buffer without honoring
-      // byteOffset, so return an isolated zero-offset array for every chunk.
-      return new Uint8Array(buffer.subarray(0, bytesRead));
-    } finally {
-      await handle.close();
-    }
-  }
 }
 
 function validateByteLimit(value: number, optionName: string): number {

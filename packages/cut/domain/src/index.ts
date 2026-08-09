@@ -11,3 +11,5 @@ export * from './session';
 export * from './time-format';
 export * from './types';
 export * from './user-diagnostics';
+export * from './creative-document-owner';
+export * from './cut-project-authoring-service';

@@ -4,6 +4,90 @@ import type { PiConversationTranscriptEntry } from '../../../pi';
 import { projectPiConversationEntries } from '../pi-conversation-history-projector';
 
 describe('projectPiConversationEntries', () => {
+  it('projects one clean referenced user message from the structured presentation entry', () => {
+    const entries: PiConversationTranscriptEntry[] = [
+      {
+        type: 'custom',
+        id: 'presentation-entry',
+        parentId: null,
+        timestamp: new Date(5).toISOString(),
+        customType: 'openneko.user-message-presentation',
+        data: {
+          turnId: 'turn-1',
+          content: '分析图片',
+          contextReferences: [
+            {
+              type: 'image',
+              id: 'file:test.png',
+              label: 'test.png',
+              mediaType: 'image',
+              contentLocator: { kind: 'workspace-file', path: 'test.png' },
+            },
+          ],
+        },
+      },
+      messageEntry('user-entry', 'presentation-entry', {
+        role: 'user',
+        content:
+          '分析图片\n\n--- Attached Context ---\n\n[Image: test.png]\nContentLocator: {"kind":"workspace-file","path":"test.png"}',
+        timestamp: 10,
+      }),
+    ];
+
+    expect(projectPiConversationEntries(entries)).toEqual([
+      {
+        id: 'user-entry',
+        role: 'user',
+        content: '分析图片',
+        timestamp: 10,
+        contextReferences: [
+          {
+            type: 'image',
+            id: 'file:test.png',
+            label: 'test.png',
+            mediaType: 'image',
+            contentLocator: { kind: 'workspace-file', path: 'test.png' },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('fails locally when a presentation entry is not paired with a user message', () => {
+    expect(() =>
+      projectPiConversationEntries([
+        {
+          type: 'custom',
+          id: 'presentation-entry',
+          parentId: null,
+          timestamp: new Date(5).toISOString(),
+          customType: 'openneko.user-message-presentation',
+          data: { turnId: 'turn-1', content: 'Analyze' },
+        },
+      ]),
+    ).toThrow('has no user message');
+  });
+
+  it('rejects a presentation attached to another Pi branch entry', () => {
+    expect(() =>
+      projectPiConversationEntries([
+        {
+          type: 'custom',
+          id: 'presentation-entry',
+          parentId: null,
+          timestamp: new Date(5).toISOString(),
+          customType: 'openneko.user-message-presentation',
+          data: { turnId: 'turn-1', content: 'Analyze' },
+        },
+        messageEntry('user-entry', null, {
+          role: 'user',
+          content: 'Internal locator prompt',
+          timestamp: 10,
+        }),
+      ]),
+    ).toThrow('does not own user message user-entry');
+  });
+
   it('projects the active Pi branch with stable entry ids and tool results', () => {
     const entries: PiConversationTranscriptEntry[] = [
       messageEntry('user-entry', null, {

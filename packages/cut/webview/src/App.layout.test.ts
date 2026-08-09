@@ -31,12 +31,26 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/<PreviewControls/);
     expect(app).toMatch(/<PropertyPanelInline/);
     expect(app).toMatch(/<Timeline/);
-    expect(app).toMatch(/createPortal\(/);
-    expect(app).toMatch(/timelineTarget/);
+    expect(app).toMatch(
+      /<Timeline[\s\S]*onOpenPackage=\{linkMediaToSelectedTrack\}[\s\S]*onSave=\{save\}[\s\S]*onSeek=\{seek\}/,
+    );
+    expect(app).not.toMatch(/timelineVisible|data-cut-timeline-visible/);
+    expect(app).not.toMatch(/createPortal\(/);
+    expect(app).not.toMatch(/timelineTarget|timeline-only/);
     expect(timeline).toMatch(/<TimelineControls/);
+    expect(timeline).toMatch(/onSave=\{props\.onSave\}/);
     expect(timeline).toMatch(/<TimelineMinimap/);
     expect(timeline).toMatch(/<TimelineRuler/);
     expect(timeline).toMatch(/<TimelineTrack/);
+  });
+
+  it('stretches the Cut editor through the Workbench height chain', () => {
+    expect(styles).toMatch(/\.cut-workbench-shell\s*\{[^}]*height:\s*100%;/);
+    expect(styles).toMatch(/\.cut-workbench-body\s*\{[^}]*height:\s*100%;/);
+    expect(styles).toMatch(
+      /\.cut-main-panel,\s*\.cut-preview-timeline-panel\s*\{[^}]*height:\s*100%;/,
+    );
+    expect(styles).toMatch(/\.cut-basic-editor\s*\{[^}]*height:\s*100%;/);
   });
 
   it('scopes standalone Webview resets and theme tokens to the embeddable Cut root', () => {
@@ -71,7 +85,7 @@ describe('Cut OTIO Webview boundary', () => {
   it('retains bounded track entry and direct file drop/link entry', () => {
     expect(timeline).toMatch(/audioTrackCount < 3/);
     expect(timeline).toMatch(/subtitleTrackCount < 1/);
-    expect(timeline).toMatch(/readDroppedMediaUris/);
+    expect(timeline).toMatch(/readDroppedMediaSource/);
     expect(timeline).toMatch(/controller\.dropLinkMedia/);
     expect(toolbar).toMatch(/timeline\.controls\.addMedia/);
     expect(track).not.toMatch(/cut-basic-track-add|props\.onLinkMedia/);
@@ -95,6 +109,9 @@ describe('Cut OTIO Webview boundary', () => {
     expect(timeline).toMatch(/timeline\.clip\.lock/);
     expect(timeline).toMatch(/timeline\.contextMenu\.addMedia/);
     expect(app).toMatch(/useKeyboardShortcuts/);
+    expect(app).toMatch(/if \(view\) controller\.save\(\)/);
+    expect(app).toMatch(/onSave=\{save\}/);
+    expect(timeline).toMatch(/onSave=\{props\.onSave\}/);
   });
 
   it('uses Host-derived thumbnail and waveform representations', () => {
@@ -115,6 +132,8 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/usePersistedResize/);
     expect(app).toMatch(/useResizable<HTMLDivElement>/);
     expect(app).toMatch(/edge: 'right'/);
+    expect(styles).toMatch(/\.cut-basic-ruler-row\s*\{[^}]*position:\s*sticky;/);
+    expect(styles).toMatch(/\.cut-basic-ruler-row\s*\{[^}]*top:\s*0;/);
     expect(styles).toMatch(/\.cut-basic-timeline-scroll[\s\S]*overflow: auto/);
     expect(styles).toMatch(/\.cut-basic-track-header[\s\S]*position: sticky/);
   });
@@ -165,7 +184,9 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app.match(/controller\.startPreview\(/g)).toHaveLength(2);
     expect(app).toMatch(/previewVideoClientRef\.current\?\.pause\(\)/);
     expect(app).toMatch(/activeVideoClient\.seek\(/);
-    expect(app).toMatch(/<Timeline onOpenPackage=\{linkMediaToSelectedTrack\} onSeek=\{seek\} \/>/);
+    expect(app).toMatch(/onOpenPackage=\{linkMediaToSelectedTrack\}/);
+    expect(app).toMatch(/onSave=\{save\}/);
+    expect(app).toMatch(/onSeek=\{seek\}/);
     expect(timeline).toMatch(/onSeek: \(seconds: number\) => void/);
     expect(timeline).toMatch(/props\.onSeek\(/);
     expect(timeline).toMatch(/onSeek=\{props\.onSeek\}/);

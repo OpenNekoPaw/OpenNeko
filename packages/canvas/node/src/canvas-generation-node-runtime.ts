@@ -1,417 +1,487 @@
-import * as path from 'node:path';
-import {
-  type GenerationJobPort,
-  type GenerationJobSnapshot,
-  type MediaGenerationResult,
-} from '@neko/generation';
-import {
-  GenerationJobCoordinator,
-  createPersistentGenerationJobStore,
-  initializeGenerationJobTables,
-} from '@neko/generation/job';
-import {
-  GeneratedAssetIndex,
-  createContentReadMediaRequestAssetMaterializer,
-  finalizeMediaGenerationOutputs,
-  createMediaPlatform,
-  type GeneratedMediaKind,
-} from '@neko/generation/media';
-import { ConfigManager, FileUserConfigManager } from '@neko/host/settings';
-import { PathResolver } from '@neko/shared';
-import { contentLocatorsEqual, type GeneratedOutputContentLocator } from '@neko/content';
-import { resolveWorkspaceGeneratedAssetRelativeDirectory } from '@neko/generation';
-import {
-  type CanvasGenerationApplicationPort,
-  type CanvasGenerationWorkspace,
-  type CanvasMaterialGenerationContext,
-} from '@neko/canvas-domain';
+import { createHash, randomUUID } from 'node:crypto';
 import { createNodeHostContentReadService } from '@neko/content/node';
-import { JobLifecycleError, isTerminalJobPhase } from '@neko/shared/job-lifecycle';
-import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/local-metadata/node';
-import { LocalMetadataGeneratedOutputProjectionStore } from '@neko/generation/media';
-import type {
-  CanvasGenerationProjectionSnapshot,
-  CanvasMaterialActionTarget,
+import {
+  type ContentLocator,
+  type ContentReadService,
+  type GeneratedOutputContentLocator,
+} from '@neko/content';
+import {
+  beginCanvasGenerationRun,
+  bindCanvasGenerationNodeJob,
+  requireCanvasGenerationNode,
+  resolveCanvasGenerationInputs,
+  selectedCanvasGenerationOutput,
+  type CanvasData,
+  type CanvasGenerationApplicationPort,
+  type CanvasGenerationKind,
+  type CanvasGenerationModelBinding,
+  type CanvasGenerationRecipe,
+  type CanvasGenerationResolvedInput,
+  type CanvasGenerationRunBinding,
+  type CanvasGenerationRuntimeProjection,
+  type CanvasGenerationStartResult,
+  type CanvasGenerationWorkspace,
 } from '@neko/canvas-domain';
+import {
+  GenerationJobError,
+  type GenerationJobPort,
+  type GenerationJobRequest,
+  type GenerationJobSnapshot,
+  type SubmitGenerationJobInput,
+} from '@neko/generation';
+import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
 
-export interface CanvasGenerationJobOwner {
-  readonly jobs: Pick<
-    GenerationJobPort,
-    'describeGeneration' | 'observeGeneration' | 'regenerateGeneration'
-  >;
-  dispose(): Promise<void>;
+export interface CanvasGenerationWorkspaceJobResolver {
+  getWorkspaceJobs(input: {
+    readonly workspaceId: string;
+    readonly workspaceRoot: string;
+  }): Promise<GenerationJobPort>;
+  validateBinding(input: {
+    readonly workspace: CanvasGenerationWorkspace;
+    readonly kind: CanvasGenerationKind;
+    readonly binding: CanvasGenerationModelBinding;
+  }): void | Promise<void>;
 }
 
 export interface CanvasGenerationNodeRuntimeOptions {
-  readonly homedir: string;
-  readonly createWorkspaceOwner?: (
-    workspace: CanvasGenerationWorkspace,
-  ) => Promise<CanvasGenerationJobOwner>;
+  readonly generation: CanvasGenerationWorkspaceJobResolver;
+  readonly createContentReader?: (workspaceRoot: string) => ContentReadService;
+  readonly createSubmissionId?: () => string;
 }
 
-interface WorkspaceOwnerEntry {
-  readonly workspacePath: string;
-  readonly owner: CanvasGenerationJobOwner;
-}
-
-/**
- * Node application runtime for owner-authored Generation Jobs.
- *
- * Canvas receives only immutable projections. The authoritative request,
- * provider execution, persistence, output commit, and regeneration lifecycle
- * remain owned by @neko/generation.
- */
 export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationPort {
-  private readonly workspaceOwners = new Map<string, Promise<WorkspaceOwnerEntry>>();
   private disposed = false;
+  private readonly createSubmissionId: () => string;
 
-  constructor(private readonly options: CanvasGenerationNodeRuntimeOptions) {}
-
-  async resolveResultActions(input: {
-    readonly workspace: CanvasGenerationWorkspace;
-    readonly target: CanvasMaterialActionTarget;
-  }): Promise<{ readonly regenerate: boolean; readonly editAndGenerate: boolean }> {
-    const snapshot = await this.resolveAuthorizedSnapshot(input.workspace, input.target);
-    return {
-      regenerate: snapshot?.phase === 'succeeded',
-      editAndGenerate: false,
-    };
+  constructor(private readonly options: CanvasGenerationNodeRuntimeOptions) {
+    this.createSubmissionId = options.createSubmissionId ?? randomUUID;
   }
 
-  async regenerateResult(input: {
-    readonly workspace: CanvasGenerationWorkspace;
-    readonly target: CanvasMaterialActionTarget;
-  }): Promise<CanvasGenerationProjectionSnapshot> {
+  async startNode(
+    input: Parameters<CanvasGenerationApplicationPort['startNode']>[0],
+  ): Promise<CanvasGenerationStartResult> {
     this.requireActive();
-    const current = await this.resolveAuthorizedSnapshot(input.workspace, input.target);
-    if (!current || current.phase !== 'succeeded') {
-      throw new Error(
-        'Desktop Canvas regeneration requires an authoritative succeeded Generation Job result.',
-      );
+    const node = requireCanvasGenerationNode(input.canvas, input.nodeId);
+    if (node.data.latestRun) {
+      if (!node.data.latestRun.jobRef) {
+        throw new Error(
+          `Canvas Generation node "${input.nodeId}" has an unresolved submission and must be resumed before another run.`,
+        );
+      }
+      const jobs = await this.requireWorkspaceJobs(input.workspace);
+      const current = await jobs.describeGeneration(node.data.latestRun.jobRef);
+      if (!isTerminalJobPhase(current.phase)) {
+        throw new Error(`Canvas Generation node "${input.nodeId}" already has an active Job.`);
+      }
     }
-    const owner = (await this.requireWorkspaceOwner(input.workspace)).owner;
-    const started = await owner.jobs.regenerateGeneration({
-      ref: current.ref,
+
+    const prepared = await this.prepare(input.workspace, input.canvas, input.nodeId);
+    const submissionId = this.createSubmissionId();
+    const runCanvas = replaceNodeData(
+      input.canvas,
+      input.nodeId,
+      beginCanvasGenerationRun(node.data, {
+        submissionId,
+        recipeInputFingerprint: prepared.fingerprint,
+      }),
+    );
+    await input.persistCanvas(runCanvas);
+    return this.submitAndBind({
+      ...input,
+      canvas: runCanvas,
+      submissionId,
+      recipeInputFingerprint: prepared.fingerprint,
+      request: prepared.request,
     });
-    const completed = await waitForTerminalGeneration(owner.jobs, started);
-    return projectGenerationSnapshot(completed, input.target.mediaKind);
+  }
+
+  async resumeNode(
+    input: Parameters<CanvasGenerationApplicationPort['resumeNode']>[0],
+  ): Promise<CanvasGenerationStartResult> {
+    this.requireActive();
+    const node = requireCanvasGenerationNode(input.canvas, input.nodeId);
+    if (node.data.latestRun?.submissionId !== input.run.submissionId) {
+      throw new Error(`Canvas Generation resume target "${input.nodeId}" is stale.`);
+    }
+    if (input.run.jobRef) {
+      const jobs = await this.requireWorkspaceJobs(input.workspace);
+      const prepared = await this.prepare(input.workspace, input.canvas, input.nodeId);
+      const snapshot = await jobs.describeGeneration(input.run.jobRef);
+      const selected = selectedCanvasGenerationOutput(node.data);
+      return {
+        canvas: input.canvas,
+        projection: {
+          ...(await this.projectSnapshot(
+            input.workspace,
+            input.nodeId,
+            input.run,
+            snapshot,
+            selected?.kind === 'prompt' ? selected.locator : undefined,
+          )),
+          recipeStale: prepared.fingerprint !== input.run.recipeInputFingerprint,
+        },
+      };
+    }
+    const prepared = await this.prepare(input.workspace, input.canvas, input.nodeId);
+    if (prepared.fingerprint !== input.run.recipeInputFingerprint) {
+      return {
+        canvas: input.canvas,
+        projection: {
+          nodeId: input.nodeId,
+          submissionId: input.run.submissionId,
+          recipeInputFingerprint: input.run.recipeInputFingerprint,
+          phase: 'outcome-unknown',
+          diagnostic: {
+            code: 'canvas-generation-resume-input-changed',
+            message:
+              'The persisted Generation submission cannot be resumed because its Recipe or inputs changed.',
+          },
+        },
+      };
+    }
+    return this.submitAndBind({
+      ...input,
+      submissionId: input.run.submissionId,
+      recipeInputFingerprint: input.run.recipeInputFingerprint,
+      request: prepared.request,
+    });
+  }
+
+  async *observeNode(
+    input: Parameters<CanvasGenerationApplicationPort['observeNode']>[0],
+  ): AsyncIterable<CanvasGenerationRuntimeProjection> {
+    this.requireActive();
+    const jobs = await this.requireWorkspaceJobs(input.workspace);
+    let updatedAt = -1;
+    const initial = await jobs.describeGeneration(input.run.jobRef);
+    assertSnapshotBinding(input.run, initial);
+    updatedAt = initial.updatedAt;
+    yield await this.projectSnapshot(input.workspace, input.nodeId, input.run, initial);
+    if (isTerminalJobPhase(initial.phase)) return;
+    for await (const snapshot of jobs.observeGeneration(input.run.jobRef)) {
+      this.requireActive();
+      assertSnapshotBinding(input.run, snapshot);
+      if (snapshot.updatedAt < updatedAt) continue;
+      updatedAt = snapshot.updatedAt;
+      yield await this.projectSnapshot(input.workspace, input.nodeId, input.run, snapshot);
+      if (isTerminalJobPhase(snapshot.phase)) return;
+    }
+    throw new Error(
+      `Canvas Generation observation ended before Job "${input.run.jobRef.jobId}" became terminal.`,
+    );
+  }
+
+  async cancelNode(
+    input: Parameters<CanvasGenerationApplicationPort['cancelNode']>[0],
+  ): Promise<CanvasGenerationRuntimeProjection> {
+    this.requireActive();
+    const jobs = await this.requireWorkspaceJobs(input.workspace);
+    const snapshot = await jobs.cancelGeneration({ ref: input.run.jobRef });
+    assertSnapshotBinding(input.run, snapshot);
+    return this.projectSnapshot(input.workspace, input.nodeId, input.run, snapshot);
   }
 
   detachWindow(_windowId: string): void {
-    // Generation Jobs are workspace-owned and survive renderer/window lifecycles.
+    // Workspace Jobs are detached from renderer and window lifecycles.
   }
 
   async dispose(): Promise<void> {
-    if (this.disposed) return;
     this.disposed = true;
-    const settled = await Promise.allSettled(this.workspaceOwners.values());
-    this.workspaceOwners.clear();
-    const failures: unknown[] = [];
-    for (const result of settled) {
-      if (result.status === 'rejected') {
-        failures.push(result.reason);
-        continue;
-      }
-      try {
-        await result.value.owner.dispose();
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    if (failures.length > 0) {
-      throw new AggregateError(failures, 'Desktop Canvas Generation disposal failed.');
-    }
   }
 
-  private async resolveAuthorizedSnapshot(
-    workspace: CanvasGenerationWorkspace,
-    target: CanvasMaterialActionTarget,
-  ): Promise<GenerationJobSnapshot | undefined> {
-    this.requireActive();
-    if (
-      target.origin !== 'generated' ||
-      target.locator.kind !== 'generated-output' ||
-      !target.generation
-    ) {
-      return undefined;
-    }
-    const owner = (await this.requireWorkspaceOwner(workspace)).owner;
+  private async submitAndBind(input: {
+    readonly workspace: CanvasGenerationWorkspace;
+    readonly canvas: CanvasData;
+    readonly nodeId: string;
+    readonly submissionId: string;
+    readonly recipeInputFingerprint: string;
+    readonly request: GenerationJobRequest;
+    readonly persistCanvas: (canvas: CanvasData) => Promise<void>;
+  }): Promise<CanvasGenerationStartResult> {
+    const jobs = await this.requireWorkspaceJobs(input.workspace);
     let snapshot: GenerationJobSnapshot;
     try {
-      snapshot = await owner.jobs.describeGeneration(target.generation.jobRef);
+      snapshot = await jobs.submitGeneration({
+        ...input.request,
+        submissionId: input.submissionId,
+        lifecycleMode: 'detached',
+      } as SubmitGenerationJobInput);
     } catch (error) {
-      if (error instanceof JobLifecycleError && error.code === 'job-not-found') return undefined;
-      throw error;
+      return {
+        canvas: input.canvas,
+        projection: {
+          nodeId: input.nodeId,
+          submissionId: input.submissionId,
+          recipeInputFingerprint: input.recipeInputFingerprint,
+          phase: 'outcome-unknown',
+          diagnostic: diagnosticFor(error),
+        },
+      };
     }
-    const ownsResult =
-      snapshot.resultLocators?.some((locator) => contentLocatorsEqual(locator, target.locator)) ??
-      false;
-    return ownsResult ? snapshot : undefined;
+    const boundCanvas = bindCanvasGenerationNodeJob({
+      canvas: input.canvas,
+      nodeId: input.nodeId,
+      submissionId: input.submissionId,
+      recipeInputFingerprint: input.recipeInputFingerprint,
+      jobRef: snapshot.ref,
+    });
+    await input.persistCanvas(boundCanvas);
+    const run = requireCanvasGenerationNode(boundCanvas, input.nodeId).data.latestRun;
+    if (!run?.jobRef) throw new Error('Canvas Generation Job binding was not persisted.');
+    return {
+      canvas: boundCanvas,
+      projection: await this.projectSnapshot(input.workspace, input.nodeId, run, snapshot),
+    };
   }
 
-  private requireWorkspaceOwner(
+  private async prepare(
     workspace: CanvasGenerationWorkspace,
-  ): Promise<WorkspaceOwnerEntry> {
-    const existing = this.workspaceOwners.get(workspace.workspaceId);
-    if (existing) {
-      return existing.then((entry) => {
-        if (entry.workspacePath !== workspace.workspacePath) {
-          throw new Error(
-            `Desktop Canvas Generation Workspace '${workspace.workspaceId}' changed its authorized root.`,
-          );
-        }
-        return entry;
-      });
+    canvas: CanvasData,
+    nodeId: string,
+  ): Promise<{ readonly request: GenerationJobRequest; readonly fingerprint: string }> {
+    const node = requireCanvasGenerationNode(canvas, nodeId);
+    const model = node.data.recipe.model;
+    if (!model) throw new Error('Canvas Generation Recipe requires an exact model binding.');
+    await this.options.generation.validateBinding({
+      workspace,
+      kind: node.data.recipe.kind,
+      binding: model,
+    });
+    const reader =
+      this.options.createContentReader?.(workspace.workspacePath) ??
+      createNodeHostContentReadService({ workspaceRoot: workspace.workspacePath });
+    const inputs = await resolveCanvasGenerationInputs({
+      canvas,
+      nodeId,
+      port: {
+        fingerprintText,
+        readText: async (locator) => {
+          const result = await reader.read(locator, { maxBytes: 4 * 1024 * 1024 });
+          if (result.status !== 'ready') {
+            throw new Error(
+              `Canvas Generation text input is unavailable: ${result.diagnostic.code}.`,
+            );
+          }
+          return {
+            text: new TextDecoder('utf-8', { fatal: true }).decode(result.bytes),
+            digest: result.fingerprint.value,
+          };
+        },
+        authorizeLocator: async (locator) => (await reader.stat(locator)).status === 'ready',
+      },
+    });
+    const fingerprint = fingerprintValue({ recipe: node.data.recipe, inputs });
+    return { request: projectGenerationRequest(node.data.recipe, inputs), fingerprint };
+  }
+
+  private requireWorkspaceJobs(workspace: CanvasGenerationWorkspace): Promise<GenerationJobPort> {
+    this.requireActive();
+    return this.options.generation.getWorkspaceJobs({
+      workspaceId: workspace.workspaceId,
+      workspaceRoot: workspace.workspacePath,
+    });
+  }
+
+  private async projectSnapshot(
+    workspace: CanvasGenerationWorkspace,
+    nodeId: string,
+    run: CanvasGenerationRunBinding,
+    snapshot: GenerationJobSnapshot,
+    selectedPromptLocator?: GeneratedOutputContentLocator,
+  ): Promise<CanvasGenerationRuntimeProjection> {
+    const projection = projectSnapshot(nodeId, run, snapshot);
+    if (
+      snapshot.phase !== 'succeeded' ||
+      snapshot.request.generationType !== 'prompt' ||
+      !(selectedPromptLocator ?? snapshot.resultLocators?.[0])
+    ) {
+      return projection;
     }
-    const createWorkspaceOwner =
-      this.options.createWorkspaceOwner ??
-      ((authorizedWorkspace) =>
-        createDefaultWorkspaceOwner({
-          homedir: this.options.homedir,
-          workspace: authorizedWorkspace,
-        }));
-    const pending = createWorkspaceOwner(workspace)
-      .then((owner) => ({
-        workspacePath: workspace.workspacePath,
-        owner,
-      }))
-      .catch((error: unknown) => {
-        this.workspaceOwners.delete(workspace.workspaceId);
-        throw error;
-      });
-    this.workspaceOwners.set(workspace.workspaceId, pending);
-    return pending;
+    const reader =
+      this.options.createContentReader?.(workspace.workspacePath) ??
+      createNodeHostContentReadService({ workspaceRoot: workspace.workspacePath });
+    const content = await reader.read(selectedPromptLocator ?? snapshot.resultLocators![0]!, {
+      maxBytes: 4 * 1024 * 1024,
+    });
+    if (content.status !== 'ready') {
+      return {
+        ...projection,
+        diagnostic: {
+          code: content.diagnostic.code,
+          message: 'Generated text output is unavailable.',
+        },
+      };
+    }
+    return {
+      ...projection,
+      text: new TextDecoder('utf-8', { fatal: true }).decode(content.bytes),
+    };
   }
 
   private requireActive(): void {
-    if (this.disposed) throw new Error('Desktop Canvas Generation runtime is disposed.');
+    if (this.disposed) throw new Error('Canvas Generation runtime is disposed.');
   }
 }
 
-async function createDefaultWorkspaceOwner(input: {
-  readonly homedir: string;
-  readonly workspace: CanvasGenerationWorkspace;
-}): Promise<CanvasGenerationJobOwner> {
-  const metadata = await createNodeWorkspaceResourceCacheMetadataBinding({
-    homedir: input.homedir,
-    workDir: input.workspace.workspacePath,
-  });
-  let configManager: ConfigManager | undefined;
-  let coordinator: GenerationJobCoordinator | undefined;
-  try {
-    if (metadata.workspaceId !== input.workspace.workspaceId) {
-      throw new Error(
-        `Desktop Canvas Generation Workspace identity mismatch: expected '${input.workspace.workspaceId}', received '${metadata.workspaceId}'.`,
-      );
+function projectGenerationRequest(
+  recipe: CanvasGenerationRecipe,
+  inputs: readonly CanvasGenerationResolvedInput[],
+): GenerationJobRequest {
+  if (!recipe.prompt.trim() || !recipe.model) {
+    throw new Error('Canvas Generation Recipe is not executable.');
+  }
+  const textInputs = inputs.filter(
+    (entry): entry is Extract<CanvasGenerationResolvedInput, { kind: 'text' }> =>
+      entry.kind === 'text',
+  );
+  const prompt = [recipe.prompt, ...textInputs.map((entry) => entry.text)]
+    .filter((value) => value.trim().length > 0)
+    .join('\n\n');
+  const binding = { providerId: recipe.model.providerId, modelId: recipe.model.modelId };
+  switch (recipe.kind) {
+    case 'prompt':
+      return {
+        generationType: 'prompt',
+        ...binding,
+        request: {
+          prompt: recipe.prompt,
+          ...(textInputs.length > 0 ? { context: textInputs } : {}),
+          ...(recipe.temperature === undefined ? {} : { temperature: recipe.temperature }),
+          ...(recipe.maxOutputTokens === undefined
+            ? {}
+            : { maxOutputTokens: recipe.maxOutputTokens }),
+        },
+      };
+    case 'image': {
+      const image = uniqueLocator(inputs, 'image');
+      return {
+        generationType: image ? 'image-to-image' : 'text-to-image',
+        ...binding,
+        request: {
+          prompt,
+          ...binding,
+          ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
+          ...(recipe.width === undefined ? {} : { width: recipe.width }),
+          ...(recipe.height === undefined ? {} : { height: recipe.height }),
+          ...(recipe.aspectRatio === undefined ? {} : { aspectRatio: recipe.aspectRatio }),
+          ...(recipe.count === undefined ? {} : { count: recipe.count }),
+          ...(recipe.quality === undefined ? {} : { quality: recipe.quality }),
+          ...(recipe.style === undefined ? {} : { style: recipe.style }),
+          ...(image ? { referenceImageLocator: image } : {}),
+        },
+      };
     }
-    await initializeGenerationJobTables(metadata.metadataStore);
-    const generatedAssetStore = new LocalMetadataGeneratedOutputProjectionStore({
-      manifestStore: metadata.manifestStore,
-      workspaceRoot: input.workspace.workspacePath,
-      pathResolver: new PathResolver(
-        new Map([
-          ['WORKSPACE', input.workspace.workspacePath],
-          ['HOME', input.homedir],
-        ]),
-      ),
-    });
-    const generatedAssets = new GeneratedAssetIndex(generatedAssetStore);
-    await generatedAssets.load();
-    configManager = new ConfigManager({
-      userConfigManager: new FileUserConfigManager(),
-      workspacePath: input.workspace.workspacePath,
-    });
-    const media = createMediaPlatform({
-      configManager,
-      requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
-        contentRead: createNodeHostContentReadService({
-          workspaceRoot: input.workspace.workspacePath,
-        }),
-        encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
-      }),
-    });
-    coordinator = new GenerationJobCoordinator({
-      store: createPersistentGenerationJobStore({
-        metadataStore: metadata.metadataStore,
-        workspaceId: metadata.workspaceId,
-      }),
-      execution: media.service,
-      resultCommitter: {
-        commit: ({ ref, generation }) =>
-          commitGenerationResult({
-            operationId: ref.jobId,
-            generation,
-            workspaceRoot: input.workspace.workspacePath,
-            generatedAssets,
-          }),
-      },
-    });
-    await coordinator.recoverPersistedGenerationJobs();
-    const ownedCoordinator = coordinator;
-    const ownedConfigManager = configManager;
-    return {
-      jobs: ownedCoordinator,
-      dispose: async () => {
-        const failures: unknown[] = [];
-        try {
-          await ownedCoordinator.dispose();
-        } catch (error) {
-          failures.push(error);
-        }
-        try {
-          await metadata.dispose();
-        } catch (error) {
-          failures.push(error);
-        }
-        ownedConfigManager.dispose();
-        if (failures.length > 0) {
-          throw new AggregateError(
-            failures,
-            'Desktop Canvas Generation Workspace owner disposal failed.',
-          );
-        }
-      },
-    };
-  } catch (error) {
-    const failures: unknown[] = [error];
-    if (coordinator) {
-      try {
-        await coordinator.dispose();
-      } catch (disposeError) {
-        failures.push(disposeError);
+    case 'video': {
+      const image = uniqueLocator(inputs, 'image');
+      const video = uniqueLocator(inputs, 'video');
+      return {
+        generationType: video ? 'video-to-video' : image ? 'image-to-video' : 'text-to-video',
+        ...binding,
+        request: {
+          prompt,
+          ...binding,
+          ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
+          ...(recipe.duration === undefined ? {} : { duration: recipe.duration }),
+          ...(recipe.resolution === undefined ? {} : { resolution: recipe.resolution }),
+          ...(recipe.fps === undefined ? {} : { fps: recipe.fps }),
+          ...(recipe.aspectRatio === undefined ? {} : { aspectRatio: recipe.aspectRatio }),
+          ...(recipe.motionStrength === undefined ? {} : { motionStrength: recipe.motionStrength }),
+          ...(recipe.cameraMovement === undefined ? {} : { cameraMovement: recipe.cameraMovement }),
+          ...(video ? { referenceVideoLocator: video } : {}),
+          ...(!video && image ? { startFrameLocator: image } : {}),
+        },
+      };
+    }
+    case 'audio':
+      if (inputs.some((entry) => entry.kind === 'audio')) {
+        throw new Error(
+          'The selected Audio generation contract does not support an audio reference input.',
+        );
       }
-    }
-    if (configManager) {
-      try {
-        configManager.dispose();
-      } catch (disposeError) {
-        failures.push(disposeError);
-      }
-    }
-    try {
-      await metadata.dispose();
-    } catch (disposeError) {
-      failures.push(disposeError);
-    }
-    if (failures.length === 1) throw error;
-    throw new AggregateError(
-      failures,
-      'Desktop Canvas Generation Workspace owner initialization failed.',
+      return {
+        generationType: recipe.isMusic ? 'text-to-music' : 'text-to-audio',
+        ...binding,
+        request: {
+          prompt,
+          ...binding,
+          ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
+          ...(recipe.duration === undefined ? {} : { duration: recipe.duration }),
+          ...(recipe.isMusic === undefined ? {} : { isMusic: recipe.isMusic }),
+          ...(recipe.genre === undefined ? {} : { genre: recipe.genre }),
+          ...(recipe.format === undefined ? {} : { format: recipe.format }),
+        },
+      };
+  }
+}
+
+function uniqueLocator(
+  inputs: readonly CanvasGenerationResolvedInput[],
+  kind: 'image' | 'video',
+): ContentLocator | undefined {
+  const matches: ContentLocator[] = [];
+  for (const entry of inputs) {
+    if (entry.kind === kind) matches.push(entry.locator);
+  }
+  if (matches.length > 1) {
+    throw new Error(`Canvas Generation accepts at most one ${kind} reference input.`);
+  }
+  return matches[0];
+}
+
+function projectSnapshot(
+  nodeId: string,
+  run: CanvasGenerationRunBinding,
+  snapshot: GenerationJobSnapshot,
+): CanvasGenerationRuntimeProjection {
+  assertSnapshotBinding(run, snapshot);
+  return {
+    nodeId,
+    submissionId: run.submissionId,
+    recipeInputFingerprint: run.recipeInputFingerprint,
+    jobRef: snapshot.ref,
+    phase: snapshot.phase,
+    progress: snapshot.progress,
+    ...(snapshot.resultLocators ? { resultLocators: snapshot.resultLocators } : {}),
+    ...(snapshot.failure ? { diagnostic: snapshot.failure } : {}),
+  };
+}
+
+function assertSnapshotBinding(
+  run: CanvasGenerationRunBinding,
+  snapshot: GenerationJobSnapshot,
+): void {
+  if (snapshot.submissionId !== run.submissionId || run.jobRef?.jobId !== snapshot.ref.jobId) {
+    throw new GenerationJobError(
+      'generation-job-binding-mismatch',
+      'Canvas Generation Job snapshot does not match the exact persisted run binding.',
     );
   }
 }
 
-async function waitForTerminalGeneration(
-  jobs: CanvasGenerationJobOwner['jobs'],
-  initial: GenerationJobSnapshot,
-): Promise<GenerationJobSnapshot> {
-  if (isTerminalJobPhase(initial.phase)) return initial;
-  for await (const snapshot of jobs.observeGeneration(initial.ref)) {
-    if (isTerminalJobPhase(snapshot.phase)) return snapshot;
-  }
-  throw new Error(
-    `Desktop Canvas Generation observation ended before Job '${initial.ref.jobId}' became terminal.`,
-  );
-}
-
-function projectGenerationSnapshot(
-  snapshot: GenerationJobSnapshot,
-  mediaKind: CanvasMaterialActionTarget['mediaKind'],
-): CanvasGenerationProjectionSnapshot {
+function replaceNodeData(
+  canvas: CanvasData,
+  nodeId: string,
+  data: ReturnType<typeof requireCanvasGenerationNode>['data'],
+): CanvasData {
   return {
-    ref: snapshot.ref,
-    ...(snapshot.retryOf ? { retryOf: snapshot.retryOf } : {}),
-    ...(snapshot.regenerateOf ? { regenerateOf: snapshot.regenerateOf } : {}),
-    phase: snapshot.phase,
-    title: `Regenerate ${mediaKind}`,
-    inputNodeIds: [],
-    mediaKind,
-    summary: generationSummary(snapshot),
-    ...(snapshot.resultLocators ? { resultLocators: snapshot.resultLocators } : {}),
-    ...(snapshot.failure ? { failure: snapshot.failure } : {}),
+    ...canvas,
+    nodes: canvas.nodes.map((node) =>
+      node.id === nodeId && node.type === 'generation' ? { ...node, data } : node,
+    ),
   };
 }
 
-function generationSummary(snapshot: GenerationJobSnapshot): CanvasMaterialGenerationContext {
-  const generationRequest = snapshot.request;
-  const base = {
-    prompt: generationRequest.request.prompt,
-    model: generationRequest.modelId,
+function fingerprintText(text: string): string {
+  return `sha256:${createHash('sha256').update(text).digest('hex')}`;
+}
+
+function fingerprintValue(value: unknown): string {
+  return fingerprintText(JSON.stringify(value));
+}
+
+function diagnosticFor(error: unknown) {
+  return {
+    code: error instanceof GenerationJobError ? error.code : 'canvas-generation-submit-failed',
+    message: error instanceof Error ? error.message : 'Canvas Generation submission failed.',
   };
-  switch (generationRequest.generationType) {
-    case 'text-to-image':
-    case 'image-to-image':
-    case 'image-edit':
-      return {
-        ...base,
-        ...(generationRequest.request.width !== undefined
-          ? { width: generationRequest.request.width }
-          : {}),
-        ...(generationRequest.request.height !== undefined
-          ? { height: generationRequest.request.height }
-          : {}),
-        ...(generationRequest.request.aspectRatio
-          ? { aspectRatio: generationRequest.request.aspectRatio }
-          : {}),
-      };
-    case 'text-to-video':
-    case 'image-to-video':
-    case 'video-to-video':
-    case 'video-edit':
-      return {
-        ...base,
-        ...(generationRequest.request.aspectRatio
-          ? { aspectRatio: generationRequest.request.aspectRatio }
-          : {}),
-        ...(generationRequest.request.duration !== undefined
-          ? { duration: generationRequest.request.duration }
-          : {}),
-      };
-    case 'text-to-audio':
-    case 'text-to-music':
-      return {
-        ...base,
-        ...(generationRequest.request.duration !== undefined
-          ? { duration: generationRequest.request.duration }
-          : {}),
-      };
-  }
-}
-
-async function commitGenerationResult(input: {
-  readonly operationId: string;
-  readonly generation: MediaGenerationResult;
-  readonly workspaceRoot: string;
-  readonly generatedAssets: GeneratedAssetIndex;
-}): Promise<readonly GeneratedOutputContentLocator[]> {
-  const mediaKind = toGeneratedMediaKind(input.generation.type);
-  const outputDir = path.join(
-    input.workspaceRoot,
-    resolveWorkspaceGeneratedAssetRelativeDirectory({ mediaKind }),
-  );
-  const finalized = await finalizeMediaGenerationOutputs({
-    workspaceRoot: input.workspaceRoot,
-    operationId: input.operationId,
-    generationType: input.generation.type,
-    mediaKind,
-    outputs: input.generation.outputs,
-    providerId: input.generation.providerId,
-    modelId: input.generation.modelId,
-    request: input.generation.request,
-    outputDir,
-    assetIndex: input.generatedAssets,
-  });
-  return finalized.generatedAssets.map((asset) => {
-    if (!asset.lifecycle) {
-      throw new Error(`Generated asset '${asset.id}' has no durable lifecycle.`);
-    }
-    return asset.lifecycle.contentLocator;
-  });
-}
-
-function toGeneratedMediaKind(type: string): GeneratedMediaKind {
-  if (type.includes('video')) return 'video';
-  if (type.includes('audio') || type.includes('music')) return 'audio';
-  if (type.includes('image')) return 'image';
-  throw new Error(`Unsupported generated media type '${type}'.`);
 }

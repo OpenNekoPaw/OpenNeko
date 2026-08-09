@@ -4,6 +4,18 @@ import { describe, expect, it } from 'vitest';
 const styles = readFileSync(new URL('./renderer/styles.css', import.meta.url), 'utf8');
 
 describe('Desktop renderer styles', () => {
+  it('keeps the pre-React startup diagnostic independent from runtime theme tokens', () => {
+    const bootstrapStyles = styles.slice(
+      styles.indexOf('.desktop-bootstrap-error'),
+      styles.indexOf('\nbutton {'),
+    );
+
+    expect(bootstrapStyles).toContain('--desktop-bootstrap-foreground: #1f2328');
+    expect(bootstrapStyles).toContain('--desktop-bootstrap-foreground: #f0f3f6');
+    expect(bootstrapStyles).toContain('.desktop-bootstrap-error__retry:focus-visible');
+    expect(bootstrapStyles).not.toContain('var(--neko-');
+  });
+
   it('scopes package-owned Workbench roots to the pure-white Main surface', () => {
     expect(styles).toMatch(
       /\.desktop-agent-root\s*\{[^}]*--neko-sideBar-background:\s*var\(--neko-desktop-main\)/u,
@@ -30,6 +42,21 @@ describe('Desktop renderer styles', () => {
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
   });
 
+  it('keeps the Cut add target adjacent to the final tab while allowing tab overflow', () => {
+    const tabsRule = styles.match(
+      /\.project-cut-panel__tabs \.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const addRule = styles.match(/\.project-cut-panel__add\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(tabsRule?.groups?.body).toMatch(/width\s*:\s*max-content/u);
+    expect(tabsRule?.groups?.body).toMatch(/max-width\s*:\s*calc\(100% - 32px\)/u);
+    expect(tabsRule?.groups?.body).toMatch(/flex\s*:\s*0 1 auto/u);
+    expect(tabsRule?.groups?.body).toMatch(/padding-right\s*:\s*2px/u);
+    expect(addRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(addRule?.groups?.body).toMatch(/height\s*:\s*24px/u);
+    expect(addRule?.groups?.body).toMatch(/margin\s*:\s*7px 8px 7px 0/u);
+  });
+
   it('reserves stable Project-group columns while actions use the overlay track', () => {
     const projectGroupRule = styles.match(
       /\.primary-conversation-group__header\s*\{(?<body>[\s\S]*?)\n\}/u,
@@ -38,6 +65,30 @@ describe('Desktop renderer styles', () => {
     expect(projectGroupRule?.groups?.body).toMatch(
       /grid-template-columns\s*:\s*24px minmax\(0, 1fr\) auto minmax\(24px, auto\)/u,
     );
+  });
+
+  it('uses one typography size for primary navigation directory entries', () => {
+    const groupHeadingRule = styles.match(
+      /\.primary-conversation-group__standalone-heading\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const expandRule = styles.match(
+      /\.primary-conversation-group__expand\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(styles).toMatch(/\.home-project-link\s*\{[^}]*font-size\s*:\s*11px/u);
+    expect(groupHeadingRule?.groups?.body).toMatch(/font-size\s*:\s*11px/u);
+    expect(expandRule?.groups?.body).toMatch(/font\s*:\s*inherit/u);
+    expect(expandRule?.groups?.body).toMatch(/font-size\s*:\s*11px/u);
+  });
+
+  it('uses one typography size for primary navigation counts', () => {
+    const countRule = styles.match(
+      /\.primary-conversation-group__count\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(styles).toMatch(/\.home-sidebar-heading\s*\{[^}]*font-size\s*:\s*10px/u);
+    expect(countRule?.groups?.body).toMatch(/font-size\s*:\s*10px/u);
+    expect(countRule?.groups?.body).toMatch(/line-height\s*:\s*1\.2/u);
   });
 
   it('uses icon-only status markers and reveals stable row actions on hover or focus', () => {
@@ -139,28 +190,109 @@ describe('Desktop renderer styles', () => {
     expect(styles).not.toContain('.home-composer-divider');
   });
 
-  it('keeps VS Code-style region controls in PrimarySidebar top chrome rather than Main content', () => {
+  it('overlays Workspace controls on existing Workbench chrome without adding a header row', () => {
     expect(styles).toContain("@import '@neko/ui/icons/codicon.css';");
     expect(styles).toMatch(
-      /\.primary-sidebar-brand__controls\s*\{[\s\S]*?position\s*:\s*absolute[\s\S]*?top\s*:\s*12px[\s\S]*?right\s*:\s*8px/u,
+      /\.project-workspace > \.neko-controlled-workbench-title\s*\{[\s\S]*?position\s*:\s*absolute[\s\S]*?top\s*:\s*4px[\s\S]*?right\s*:\s*8px[\s\S]*?height\s*:\s*28px/u,
     );
     expect(styles).toMatch(
-      /\.primary-sidebar-brand__controls \.workbench-region-toggle\s*\{[\s\S]*?width\s*:\s*22px[\s\S]*?height\s*:\s*22px[\s\S]*?border\s*:\s*0[\s\S]*?background\s*:\s*transparent/u,
-    );
-    expect(styles).not.toMatch(
-      /\.workbench-region-toggle\[aria-pressed='true'\]\s*\{[^}]*background/u,
+      /\.neko-controlled-workbench-title \.workbench-region-toggle\s*\{[\s\S]*?width\s*:\s*28px[\s\S]*?height\s*:\s*28px[\s\S]*?border\s*:\s*0[\s\S]*?background\s*:\s*transparent/u,
     );
     expect(styles).toMatch(
-      /\.workbench-region-toggle:active:not\(:disabled\)\s*\{[^}]*background\s*:\s*var\(--neko-desktop-control-pressed\)/u,
+      /\.neko-controlled-workbench-title \.workbench-region-toggle\[aria-pressed='true'\]\s*\{[^}]*color\s*:\s*var\(--neko-list-activeSelectionForeground[^}]*background\s*:\s*var\(--neko-list-activeSelectionBackground/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-controlled-workbench-title \.workbench-region-toggle:active:not\(:disabled\)\s*\{[^}]*background\s*:\s*var\(--neko-desktop-control-pressed\)/u,
     );
     expect(styles).toMatch(/\.workspace-region-controls\s*\{[\s\S]*?display\s*:\s*flex/u);
     expect(styles).toMatch(
-      /\.home-navigation--compact \.primary-sidebar-brand__controls\s*\{[\s\S]*?left\s*:\s*90px[\s\S]*?flex-direction\s*:\s*row/u,
+      /\.workspace-region-controls\s*\{[^}]*-webkit-app-region\s*:\s*no-drag/u,
     );
+    expect(styles).not.toMatch(/\.primary-sidebar-brand__controls \.workspace-region-controls/u);
+    expect(styles).not.toContain('.desktop-workbench-titlebar');
     expect(styles).not.toMatch(/\.project-workbench-controls\s*\{/u);
     expect(styles).not.toContain('.project-main-group__actions');
     expect(styles).not.toContain('.project-main-chat-host__controls');
     expect(styles).not.toContain('.project-display-menu');
+  });
+
+  it('keeps top-level Workbench panels full-bleed beneath native-aligned overlay chrome', () => {
+    const mainRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-main\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const leftDockRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-dock--left\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const rightDockRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-dock--right\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const dockedInteractionRule = styles.match(
+      /\.project-workspace > \.neko-controlled-workbench-interaction\[data-presentation='docked'\]\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const agentOnlyRule = styles.match(
+      /\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const overlayDockRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-dock\[data-presentation='overlay'\]\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const dockPanelRule = styles.match(/\.project-dock-panel\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(mainRule?.groups?.body).toMatch(/margin\s*:\s*0/u);
+    expect(mainRule?.groups?.body).toMatch(/border-radius\s*:\s*0/u);
+    expect(leftDockRule?.groups?.body).toMatch(/padding\s*:\s*0/u);
+    expect(rightDockRule?.groups?.body).toMatch(/padding\s*:\s*0/u);
+    expect(dockedInteractionRule?.groups?.body).toMatch(/margin\s*:\s*0/u);
+    expect(agentOnlyRule?.groups?.body).toMatch(/margin\s*:\s*0/u);
+    expect(overlayDockRule?.groups?.body).toMatch(/top\s*:\s*0/u);
+    expect(overlayDockRule?.groups?.body).toMatch(/bottom\s*:\s*0/u);
+    expect(overlayDockRule?.groups?.body).toMatch(/border-radius\s*:\s*0/u);
+    expect(dockPanelRule?.groups?.body).toMatch(/border-radius\s*:\s*0/u);
+    expect(styles).toMatch(
+      /\.neko-controlled-workbench-main\[data-main-composition='independent-shells'\][\s\S]*?> \.neko-controlled-workbench-main__secondary\s*\{[^}]*border-radius\s*:\s*0/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-controlled-workbench-dock--left\[data-presentation='overlay'\]\s*\{[^}]*left\s*:\s*var\(--neko-controlled-primary-width\)/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-controlled-workbench-dock--right\[data-presentation='overlay'\]\s*\{[^}]*right\s*:\s*0/u,
+    );
+    expect(styles).not.toMatch(
+      /\.project-workspace\[data-left-presentation='docked'\] \.neko-controlled-workbench-main/u,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 1120px\)[\s\S]*?\.neko-controlled-workbench-dock\[data-presentation='docked'\]\s*\{[^}]*top\s*:\s*0[^}]*bottom\s*:\s*0[^}]*border-radius\s*:\s*0/u,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 720px\)[\s\S]*?\.neko-controlled-workbench-main\s*\{[^}]*margin\s*:\s*0[^}]*border-radius\s*:\s*0/u,
+    );
+  });
+
+  it('aligns Workspace Main tabs with the adjacent resource header', () => {
+    const workspaceRule = styles.match(
+      /\.project-workspace\.neko-controlled-workbench-shell\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const mainHeaderRule = styles.match(/\.project-main-group__tabs\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const mainTabsRule = styles.match(
+      /\.project-main-group__tabs \.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const resourceDockRule = styles.match(/\.project-resource-dock\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(workspaceRule?.groups?.body).toMatch(
+      /--neko-desktop-workbench-panel-header-height\s*:\s*38px/u,
+    );
+    expect(mainHeaderRule?.groups?.body).toMatch(
+      /height\s*:\s*var\(--neko-desktop-workbench-panel-header-height\)/u,
+    );
+    expect(mainTabsRule?.groups?.body).toMatch(
+      /height\s*:\s*var\(--neko-desktop-workbench-panel-header-height\)/u,
+    );
+    expect(mainTabsRule?.groups?.body).toMatch(/padding-block\s*:\s*4px/u);
+    expect(styles).toMatch(
+      /\.project-workspace\[data-right-presentation='hidden'\] \.project-main-group__tabs,[\s\S]*?\.project-workspace\[data-right-presentation='overlay'\] \.project-main-group__tabs\s*\{[^}]*padding-right\s*:\s*132px/u,
+    );
+    expect(resourceDockRule?.groups?.body).toMatch(
+      /grid-template-rows\s*:\s*var\(--neko-desktop-workbench-panel-header-height\) minmax\(0, 1fr\)/u,
+    );
   });
 
   it('projects opaque shared Popover tokens for Desktop portals', () => {
@@ -185,15 +317,13 @@ describe('Desktop renderer styles', () => {
     const independentMainRule = styles.match(
       /> \.neko-controlled-workbench-main__secondary\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
-    const timelineRule = styles.match(
-      /\.project-workspace \.neko-controlled-workbench-timeline\s*\{(?<body>[\s\S]*?)\n\}/u,
-    );
     const dockPanelRule = styles.match(/\.project-dock-panel\s*\{(?<body>[\s\S]*?)\n\}/u);
 
-    for (const rule of [mainRule, independentMainRule, timelineRule, dockPanelRule]) {
+    for (const rule of [mainRule, independentMainRule, dockPanelRule]) {
       expect(rule?.groups?.body).toMatch(/box-shadow\s*:\s*none/u);
       expect(rule?.groups?.body).not.toMatch(/--neko-desktop-shadow-surface/u);
     }
+    expect(styles).not.toContain('.project-workspace .neko-controlled-workbench-timeline');
     expect(dockPanelRule?.groups?.body).toMatch(
       /border\s*:\s*1px solid var\(--neko-desktop-border\)/u,
     );
@@ -213,11 +343,8 @@ describe('Desktop renderer styles', () => {
     expect(shellRule?.groups?.body).toMatch(
       /grid-template-columns\s*:[\s\S]*?var\(--neko-controlled-primary-width\)[\s\S]*?0[\s\S]*?minmax\(420px, 1fr\)[\s\S]*?0/u,
     );
-    expect(dockedInteractionRule?.groups?.body).toMatch(/margin-block\s*:\s*8px/u);
-    expect(interactionRule?.groups?.body).toMatch(/margin\s*:\s*8px 8px 8px 0/u);
-    expect(styles).toMatch(
-      /@media \(max-width: 720px\)[\s\S]*?\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{[\s\S]*?margin\s*:\s*4px/u,
-    );
+    expect(dockedInteractionRule?.groups?.body).toMatch(/margin\s*:\s*0/u);
+    expect(interactionRule?.groups?.body).toMatch(/margin\s*:\s*0/u);
   });
 
   it('gives the package-owned Preview Root its complete Workbench viewport', () => {

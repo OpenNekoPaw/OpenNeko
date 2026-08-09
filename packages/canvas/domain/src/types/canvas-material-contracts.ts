@@ -169,6 +169,8 @@ export interface CanvasMaterialActionDescriptor {
   readonly origins: readonly CanvasMaterialOrigin[];
   readonly selection: CanvasMaterialActionSelection;
   readonly effect: CanvasMaterialActionEffect;
+  /** JSON-safe, owner-projected parameters that must still match at execution time. */
+  readonly executionPayload?: Readonly<Record<string, unknown>>;
 }
 
 export interface CanvasMaterialActionIntent<
@@ -383,6 +385,7 @@ export function isCanvasMaterialActionDescriptor(
       'origins',
       'selection',
       'effect',
+      'executionPayload',
     ]) &&
     isNonEmptyString(value['id']) &&
     isNonEmptyString(value['ownerId']) &&
@@ -390,8 +393,27 @@ export function isCanvasMaterialActionDescriptor(
     isNonEmptyArray(value['mediaKinds'], isCanvasMaterialMediaKind) &&
     isNonEmptyArray(value['origins'], isCanvasMaterialOrigin) &&
     isCanvasMaterialActionSelection(value['selection']) &&
-    isCanvasMaterialActionEffect(value['effect'])
+    isCanvasMaterialActionEffect(value['effect']) &&
+    (value['executionPayload'] === undefined || isJsonSafeRecord(value['executionPayload']))
   );
+}
+
+function isJsonSafeRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  if (!isRecord(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (
+    (prototype === Object.prototype || prototype === null) &&
+    Object.values(value).every(isJsonSafeValue)
+  );
+}
+
+function isJsonSafeValue(value: unknown): boolean {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return true;
+  }
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonSafeValue);
+  return isJsonSafeRecord(value);
 }
 
 export function isCanvasMaterialActionIntent(value: unknown): value is CanvasMaterialActionIntent {

@@ -20,6 +20,12 @@ The system SHALL automatically deliver a terminal Agent processing batch to the 
 - **WHEN** a recoverable background task reaches a successful terminal state with a durable generated-output ResourceRef
 - **THEN** the owning Host SHALL submit the generated artifact through the same typed delivery contract used by synchronous Agent results
 
+#### Scenario: Agent writes a durable creator-visible file
+
+- **WHEN** an Agent Tool successfully writes a creator-visible file through an authorized Workspace content operation and returns its stable Workspace `ContentLocator`
+- **THEN** terminal finalization SHALL classify that file as an output artifact and submit it through the same Workspace Board delivery contract
+- **AND** the file-write callback SHALL NOT directly mutate `workspace.nkc` or create a second delivery identity
+
 #### Scenario: Non-reviewable runtime content is produced
 
 - **WHEN** a turn contains ordinary conversational text, hidden reasoning, logs, provider scratch data, unselected search results, runtime handles, temporary paths, or a failure without a reviewable artifact
@@ -48,6 +54,11 @@ Electron Desktop Agent and recoverable background task owners SHALL submit Works
 - **WHEN** the canonical Desktop Agent session owner completes a typed artifact batch for a workspace
 - **THEN** its Desktop Host adapter SHALL persist and deliver the batch without requiring an active Canvas renderer
 
+#### Scenario: Agent Turn terminal finalization produces no eligible artifact
+
+- **WHEN** the canonical Desktop Agent Turn reaches terminal state without a creator-visible typed artifact batch
+- **THEN** finalization SHALL complete normally without enqueueing a Board delivery, and this absence SHALL NOT be replaced by file-write, active Canvas, or transcript-text heuristics
+
 #### Scenario: Agent core runs without a writable workspace Host
 
 - **WHEN** Agent core produces a typed artifact but the Host has no resolved writable workspace or supported delivery adapter
@@ -64,7 +75,7 @@ The canonical Workspace Board SHALL be the default destination only for creator-
 
 #### Scenario: Canvas-originated authoring has an explicit target
 
-- **WHEN** an Agent or Canvas action carries an explicit `.nkc` document identity and expected revision
+- **WHEN** an Agent or Canvas action carries an explicit `.nkc` document identity and authoring intent
 - **THEN** the owning authoring service SHALL mutate only that target and SHALL NOT enqueue a Workspace Board mirror delivery
 
 #### Scenario: Only an active or recent Canvas is available
@@ -133,7 +144,7 @@ The Canvas-owned projector SHALL atomically create or reuse ordinary Document, T
 #### Scenario: The same reference appears in multiple deliveries
 
 - **WHEN** two deliveries contain the same stable resource identity and fingerprint under different run, task, delivery, or artifact observation identities
-- **THEN** the Board SHALL contain one content node for that resource revision and both deliveries SHALL reuse it without changing its user-owned position, size, title, grouping, or annotations
+- **THEN** the Board SHALL contain one content node for that resource content fingerprint and both deliveries SHALL reuse it without changing its user-owned position, size, title, grouping, or annotations
 
 #### Scenario: One portable file is observed without and with a durable fingerprint
 
@@ -198,7 +209,7 @@ The Canvas-owned projector SHALL atomically create or reuse ordinary Document, T
 
 ### Requirement: Multi-Agent delivery is idempotent and single-writer per Board target
 
-Concurrent Agents and Hosts SHALL coordinate Workspace Board mutation through a target-scoped fenced writer claim stored in the shared user-level metadata boundary. The canonical write path SHALL reload the latest Canvas revision, apply one idempotent delivery batch, and atomically save the resulting `.nkc`; stale claim holders, stale revisions, duplicate identities, or conflicting identities SHALL NOT return success.
+Concurrent Agents and Hosts SHALL coordinate Workspace Board mutation through a target-scoped fenced writer claim stored in the shared user-level metadata boundary. The canonical write path SHALL reload the current authoritative Canvas document, apply one idempotent delivery batch, and atomically save the resulting `.nkc`; stale claim holders, duplicate identities, or conflicting identities SHALL NOT return success.
 
 #### Scenario: Two Agents submit distinct deliveries concurrently
 
@@ -207,17 +218,17 @@ Concurrent Agents and Hosts SHALL coordinate Workspace Board mutation through a 
 
 #### Scenario: The same delivery is submitted more than once
 
-- **WHEN** multiple Hosts submit the same `projectionId` and revision
+- **WHEN** multiple Hosts submit the same `deliveryId` and content fingerprint
 - **THEN** exactly one mutation SHALL be applied and all equivalent repeats SHALL resolve to the same projected receipt or no-op result
 
 #### Scenario: A stale Host continues after lease takeover
 
-- **WHEN** a writer claim expires or is explicitly taken over and the previous holder attempts to commit with an older fencing epoch
+- **WHEN** a writer claim expires or is explicitly taken over and the previous holder attempts to commit with a stale lease identity
 - **THEN** the stale commit SHALL fail visibly and SHALL NOT modify the Board or mark the delivery projected
 
-#### Scenario: Board revision changes during delivery
+#### Scenario: Board changes during delivery
 
-- **WHEN** the Board revision no longer matches the revision loaded by the writer
+- **WHEN** the authoritative Board document changes after the writer loaded it
 - **THEN** the coordinator SHALL reload and re-plan the append-only delivery under the current fenced claim or return a typed conflict; it SHALL NOT overwrite user edits, use last-write-wins, or route to another Canvas
 
 ### Requirement: Historical handoff remains explicit and current typed results avoid Send to Canvas
@@ -240,7 +251,7 @@ Board delivery status SHALL distinguish queued, claimed, projected, no-op, block
 
 #### Scenario: Artifact is durable but Board write is blocked
 
-- **WHEN** a generated or Markdown artifact is durable and the Board writer returns a permission, integrity, target, lease, or revision diagnostic
+- **WHEN** a generated or Markdown artifact is durable and the Board writer returns a permission, integrity, target, lease, or conflict diagnostic
 - **THEN** the Host SHALL retain the artifact, record the blocked delivery state and diagnostic, and present artifact durability separately from Board delivery failure
 
 #### Scenario: Failed delivery is retried after its recoverable condition clears
@@ -248,9 +259,37 @@ Board delivery status SHALL distinguish queued, claimed, projected, no-op, block
 - **WHEN** a blocked or expired-claim delivery remains valid and the owning Host explicitly resumes it
 - **THEN** the retry SHALL reuse the original delivery identity and SHALL either project once or return a current typed diagnostic without creating a parallel identity
 
+### Requirement: Stable content references have one authorized display projection
+
+Agent result cards and Canvas nodes SHALL resolve `ContentLocator` and `ContentRepresentationLocator` through the
+owning content runtime and SHALL expose the resulting bytes to the exact Renderer only through a short-lived
+`openneko://resource` URL. Transcript, Tool result authority, delivery metadata and Canvas documents SHALL retain the
+stable locator and SHALL NOT persist the URL, raw bytes, data URL, temporary extraction path or absolute source path.
+
+#### Scenario: EPUB image is displayed in Agent and Canvas
+
+- **WHEN** `ReadDocument` or `ReadImage` returns an EPUB `document-entry` image and that stable locator is also projected into a Workspace Board image node
+- **THEN** the Agent thumbnail and Canvas node SHALL each display the complete image pixels using contain semantics through an authorized `openneko://resource` URL
+- **AND** neither durable projection SHALL replace the `document-entry` locator with an extracted path or runtime URL
+
+#### Scenario: A derived document page is displayed
+
+- **WHEN** a Tool result contains a valid `ContentRepresentationLocator` for a rasterized document page
+- **THEN** display projection SHALL read that exact representation and SHALL NOT substitute its source `ContentLocator`
+
+#### Scenario: One locator in a batch cannot be projected
+
+- **WHEN** one image locator is missing, unauthorized, changed or unsupported while sibling image locators remain readable
+- **THEN** only the affected card or node SHALL show an explicit projection diagnostic and the valid siblings SHALL remain rendered and interactive
+
+#### Scenario: The owning Surface is detached
+
+- **WHEN** an Agent projection attachment, connection, Canvas View or renderer session is detached or replaced
+- **THEN** all exact-resource leases owned by that Surface SHALL be released without changing durable locator-backed content
+
 ### Requirement: Canvas renderer saves preserve authoritative Board content
 
-Desktop Main SHALL validate Canvas renderer save snapshots against the most recently loaded or Host-authored authoritative document. A candidate snapshot SHALL NOT remove an authoritative node unless the renderer reported explicit removal evidence for that node in the current document save epoch.
+Desktop Main SHALL validate Canvas renderer save snapshots against the most recently loaded or Host-authored authoritative document. A candidate snapshot SHALL NOT remove an authoritative node unless the renderer reported explicit removal evidence for that node in the same save request.
 
 #### Scenario: Webview state resets after a non-empty Board was loaded
 

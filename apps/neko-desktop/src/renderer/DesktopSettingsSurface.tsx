@@ -121,9 +121,6 @@ export function DesktopSettingsMainSurface({
     >
       <div className="desktop-settings__overview">
         <header className="desktop-settings__title home-launchpad-heading">
-          <span className="desktop-settings__title-icon home-launchpad-heading-icon">
-            <SettingsIcon size={18} />
-          </span>
           <div>
             <h1 id="desktop-settings-title">{t('settings.title')}</h1>
             <p>{t('settings.description')}</p>

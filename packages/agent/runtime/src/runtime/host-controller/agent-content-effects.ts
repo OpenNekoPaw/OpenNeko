@@ -16,6 +16,8 @@ import {
   type AgentProjectFileSearchPlan,
   type AgentProjectMentionCandidate,
 } from '@neko/agent-runtime/runtime/message-runtime';
+import { classifyAgentContentPath } from '../../input/content-path-classification';
+import type { ProjectFilesWebviewMessage } from '@neko/agent-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
   validateContentLocator,
@@ -88,6 +90,50 @@ export interface CreateAgentContentEffectsOptions {
   readonly workspace: AssetWorkspaceResolution;
   readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy' | 'external'>;
   readonly interaction: AgentContentInteractionPort;
+  readonly searchLinkedMediaLibraryFiles?: (
+    input: AgentLinkedMediaLibraryFileSearchInput,
+  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+  readonly reportMentionContributorError?: (error: Error) => void;
+}
+
+export interface AgentLinkedMediaLibraryFileSearchInput {
+  readonly query: string;
+  readonly limit: number;
+  readonly purpose: AgentProjectFileSearchPlan['purpose'];
+}
+
+export async function searchAgentWorkspaceMentions(input: {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy'>;
+  readonly filter: string;
+  readonly purpose: 'entry' | 'mention' | 'roleplay';
+  readonly searchLinkedMediaLibraryFiles?: (
+    input: AgentLinkedMediaLibraryFileSearchInput,
+  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+  readonly reportMentionContributorError?: (error: Error) => void;
+}): Promise<
+  ProjectFilesWebviewMessage &
+    Required<Pick<ProjectFilesWebviewMessage, 'filter' | 'files' | 'mentionExtras'>>
+> {
+  const projection = await executeAgentProjectFileSearch({
+    filter: input.filter,
+    purpose: input.purpose,
+    searchProjectFiles: (plan) => searchWorkspaceMentionFiles(input, plan),
+    getMentionCandidates: (plan) =>
+      searchGrantedWorkspaceEntities(input.workspace, input.host, plan),
+    onSearchError: (error) => {
+      throw error;
+    },
+  });
+  if (!projection.files || !projection.mentionExtras || projection.filter === undefined) {
+    throw new Error('Agent Workspace mention search produced an incomplete projection.');
+  }
+  return {
+    ...projection,
+    filter: projection.filter,
+    files: projection.files,
+    mentionExtras: projection.mentionExtras,
+  };
 }
 
 export function createAgentContentEffects(
@@ -96,18 +142,22 @@ export function createAgentContentEffects(
   return {
     async searchProjectFiles(input, context): Promise<void> {
       assertWorkspaceGrant(options.workspace, context);
-      const message = await executeAgentProjectFileSearch({
-        ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+      const message = await searchAgentWorkspaceMentions({
+        workspace: options.workspace,
+        host: options.host,
         filter: input.filter,
-        ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
-        searchProjectFiles: (plan) => searchGrantedWorkspace(options.workspace, options.host, plan),
-        getMentionCandidates: (plan) =>
-          searchGrantedWorkspaceEntities(options.workspace, options.host, plan),
-        onSearchError: (error) => {
-          throw error;
-        },
+        purpose: input.purpose ?? 'mention',
+        ...(options.searchLinkedMediaLibraryFiles
+          ? { searchLinkedMediaLibraryFiles: options.searchLinkedMediaLibraryFiles }
+          : {}),
+        ...(options.reportMentionContributorError
+          ? { reportMentionContributorError: options.reportMentionContributorError }
+          : {}),
       });
-      await context.post(message);
+      await context.post({
+        ...message,
+        ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+      });
     },
 
     async openFile(input, context): Promise<void> {
@@ -214,6 +264,46 @@ export function createAgentContentEffects(
       });
     },
   };
+}
+
+async function searchWorkspaceMentionFiles(
+  input: Parameters<typeof searchAgentWorkspaceMentions>[0],
+  plan: AgentProjectFileSearchPlan,
+): Promise<readonly AgentProjectFileCandidate[]> {
+  const workspaceFiles = await searchGrantedWorkspace(input.workspace, input.host, plan);
+  if (!input.searchLinkedMediaLibraryFiles) return workspaceFiles;
+  let linkedMediaLocators: readonly WorkspaceFileContentLocator[];
+  try {
+    linkedMediaLocators = await input.searchLinkedMediaLibraryFiles({
+      query: extractSearchFilter(plan.includePattern),
+      limit: plan.limit,
+      purpose: plan.purpose,
+    });
+  } catch (error) {
+    input.reportMentionContributorError?.(asError(error));
+    return workspaceFiles;
+  }
+  const candidates = new Map<string, AgentProjectFileCandidate>();
+  for (const candidate of workspaceFiles) candidates.set(candidate.relativePath, candidate);
+  for (const locator of linkedMediaLocators) {
+    const validation = validateContentLocator(locator);
+    if (!validation.ok || validation.locator.kind !== 'workspace-file') {
+      throw new Error('Agent linked Media Library contributor returned an invalid locator.');
+    }
+    candidates.set(validation.locator.path, {
+      relativePath: validation.locator.path,
+      source: 'media-library',
+      ...workspaceFilePresentation(validation.locator.path),
+    });
+  }
+  return [...candidates.values()]
+    .sort((left, right) =>
+      left.relativePath.localeCompare(right.relativePath, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      }),
+    )
+    .slice(0, plan.limit);
 }
 
 async function searchGrantedWorkspaceEntities(
@@ -542,13 +632,16 @@ function titleCaseEntityKind(value: string): string {
   return `${value.charAt(0).toLocaleUpperCase()}${value.slice(1)}`;
 }
 
-function workspaceFilePresentation(relativePath: string): Pick<AgentProjectFileCandidate, 'icon'> {
+function workspaceFilePresentation(
+  relativePath: string,
+): Pick<AgentProjectFileCandidate, 'icon' | 'mediaType'> {
   const extension = relativePath.split('.').pop()?.toLocaleLowerCase();
   if (extension === 'ts' || extension === 'tsx' || extension === 'js' || extension === 'jsx') {
-    return { icon: 'TS' };
+    return { icon: 'TS', mediaType: 'text' };
   }
-  if (extension === 'md' || extension === 'mdx') return { icon: 'MD' };
-  return {};
+  if (extension === 'md' || extension === 'mdx') return { icon: 'MD', mediaType: 'text' };
+  const mediaType = classifyAgentContentPath(relativePath).mediaType;
+  return mediaType === undefined ? {} : { mediaType };
 }
 
 function isNodeError(error: unknown, code: string): boolean {
@@ -558,4 +651,8 @@ function isNodeError(error: unknown, code: string): boolean {
     'code' in error &&
     Reflect.get(error, 'code') === code
   );
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }

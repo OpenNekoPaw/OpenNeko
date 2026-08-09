@@ -6,9 +6,11 @@ import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentConversationLifecycleRecord } from './agent-conversation-lifecycle-service';
 import {
+  createPersistentAgentConversationContextAuthority,
   createPersistentAgentConversationLifecycleRepository,
   initializeAgentConversationLifecycleTables,
 } from './agent-conversation-lifecycle-repository';
+import { projectAgentConfigurationPolicy } from './agent-launch-service';
 
 const roots: string[] = [];
 
@@ -17,6 +19,39 @@ afterEach(async () => {
 });
 
 describe('persistent Agent conversation lifecycle repository', () => {
+  it('binds exact Character and Room contexts without a second owner store', async () => {
+    const fixture = await createFixture();
+    const character = {
+      kind: 'character' as const,
+      characterId: 'character:neko',
+      characterVersionId: 'character-version:neko:1',
+      characterRunId: 'character-run:neko:1',
+      dialogueRunId: 'dialogue-run:neko:1',
+    };
+    const room = {
+      kind: 'room' as const,
+      roomId: 'room:studio',
+      roomRunId: 'room-run:studio:1',
+    };
+
+    await fixture.contexts.bindContext('conversation:character', character);
+    await fixture.contexts.bindContext('conversation:room', room);
+    await expect(fixture.contexts.readContext('conversation:character')).resolves.toEqual(
+      character,
+    );
+    await expect(fixture.contexts.readContext('conversation:room')).resolves.toEqual(room);
+    await expect(
+      fixture.contexts.bindContext('conversation:character', {
+        ...character,
+        characterId: 'other',
+      }),
+    ).rejects.toThrow('context changed');
+    await fixture.contexts.releaseContext('conversation:character');
+    await expect(fixture.contexts.readContext('conversation:character')).resolves.toBeUndefined();
+    await expect(fixture.contexts.readContext('conversation:room')).resolves.toEqual(room);
+    await fixture.store.dispose();
+  });
+
   it('recovers the exact canonical first-submit record, context and provider claim', async () => {
     const fixture = await createFixture();
     const record = createRecord('conversation:1', 'request:1', 'turn:1');
@@ -66,10 +101,113 @@ describe('persistent Agent conversation lifecycle repository', () => {
 
     await expect(
       fixture.repository.readConversationContext('conversation:invalid'),
-    ).rejects.toThrow("unknown field 'unexpectedField'");
+    ).rejects.toThrow("unsupported field 'unexpectedField'");
     await expect(fixture.repository.readConversationContext(valid.conversationId)).resolves.toEqual(
       valid.context,
     );
+    await fixture.store.dispose();
+  });
+
+  it('retains obsolete lifecycle payloads unchanged while a canonical sibling remains readable', async () => {
+    const fixture = await createFixture();
+    const valid = createRecord('conversation:valid', 'request:valid', 'turn:valid');
+    await fixture.repository.commitFirstSubmit(valid);
+    const missingReferenceRecord = createRecord(
+      'conversation:missing-context-references',
+      'request:missing-context-references',
+      'turn:missing-context-references',
+    );
+    const { contextReferences: _contextReferences, ...obsoleteInitialInput } =
+      missingReferenceRecord.initialInput;
+    const missingReferencePayload = JSON.stringify({
+      ...missingReferenceRecord,
+      initialInput: obsoleteInitialInput,
+    });
+    const initialMessageRecord = createRecord(
+      'conversation:initial-message',
+      'request:initial-message',
+      'turn:initial-message',
+    );
+    const { initialInput, ...obsoleteRecord } = initialMessageRecord;
+    const initialMessagePayload = JSON.stringify({
+      ...obsoleteRecord,
+      initialMessage: {
+        messageId: initialInput.messageId,
+        intent: initialInput.intent,
+        references: initialInput.references,
+        resourceGrantIds: initialInput.resourceGrantIds,
+      },
+    });
+    const obsoleteRows = [
+      {
+        record: missingReferenceRecord,
+        payload: missingReferencePayload,
+      },
+      {
+        record: initialMessageRecord,
+        payload: initialMessagePayload,
+      },
+    ];
+    await fixture.store.transaction(
+      { mode: 'state-write', ownership: 'state', operation: 'insert-obsolete-agent-lifecycle' },
+      async ({ sql }) => {
+        for (const { record, payload } of obsoleteRows) {
+          await sql.run(
+            `INSERT INTO agent_conversation_records(
+               conversation_id, request_id, turn_id, payload_json, provider_claimed
+             ) VALUES (?, ?, ?, ?, 0)`,
+            [
+              record.conversationId,
+              record.pendingTurn.requestId,
+              record.pendingTurn.turnId,
+              payload,
+            ],
+          );
+        }
+      },
+    );
+
+    for (const { record, payload } of obsoleteRows) {
+      await expect(
+        fixture.repository.readConversation(record.conversationId),
+      ).rejects.toMatchObject({ operation: 'decode-agent-conversation-lifecycle' });
+      const stored = await fixture.store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'inspect-obsolete-agent-lifecycle' },
+        async ({ sql }) =>
+          sql.all(`SELECT payload_json FROM agent_conversation_records WHERE conversation_id = ?`, [
+            record.conversationId,
+          ]),
+      );
+      expect(stored).toEqual([{ payload_json: payload }]);
+    }
+    await expect(fixture.repository.readConversation(valid.conversationId)).resolves.toEqual(valid);
+    await fixture.store.dispose();
+  });
+
+  it('restores independent future-turn configuration without changing the Turn snapshot', async () => {
+    const fixture = await createFixture();
+    const first = createRecord('conversation:first', 'request:first', 'turn:first');
+    const second = createRecord('conversation:second', 'request:second', 'turn:second');
+    await fixture.repository.commitFirstSubmit(first);
+    await fixture.repository.commitFirstSubmit(second);
+    const replacementConfiguration = createRecord(
+      'conversation:first',
+      'request:replacement',
+      'turn:replacement',
+      'anthropic',
+      'claude-sonnet-4',
+    ).configuration;
+
+    await fixture.repository.updateConfiguration('conversation:first', replacementConfiguration);
+    const replacement = createPersistentAgentConversationLifecycleRepository({
+      metadataStore: fixture.store,
+    });
+
+    await expect(replacement.readConversation('conversation:first')).resolves.toMatchObject({
+      configuration: { request: { providerId: 'anthropic', modelId: 'claude-sonnet-4' } },
+      pendingTurn: { configuration: { request: { providerId: 'openai', modelId: 'gpt-5' } } },
+    });
+    await expect(replacement.readConversation('conversation:second')).resolves.toEqual(second);
     await fixture.store.dispose();
   });
 
@@ -114,6 +252,7 @@ async function createFixture() {
   return {
     store,
     repository: createPersistentAgentConversationLifecycleRepository({ metadataStore: store }),
+    contexts: createPersistentAgentConversationContextAuthority({ metadataStore: store }),
   };
 }
 
@@ -121,7 +260,41 @@ function createRecord(
   conversationId: string,
   requestId: string,
   turnId: string,
+  providerId = 'openai',
+  modelId = 'gpt-5',
 ): AgentConversationLifecycleRecord {
+  const request = {
+    modelCatalogEntryId: `${providerId}:${modelId}`,
+    providerId,
+    modelId,
+    executionMode: 'ask' as const,
+    temperature: 0.7,
+    maximumOutputTokens: 4096,
+    thinkingBudget: 0,
+  };
+  const projection = projectAgentConfigurationPolicy({
+    models: [
+      {
+        id: request.modelCatalogEntryId,
+        label: 'GPT-5',
+        providerId: request.providerId,
+        modelId: request.modelId,
+        modelType: 'llm',
+        contextWindow: 128_000,
+        maximumOutputTokens: 16_384,
+        purposeCapabilities: ['agent.main'],
+        availability: { status: 'available' },
+      },
+    ],
+    request,
+    source: 'conversation',
+    defaults: {
+      executionMode: 'ask',
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    },
+  });
   return {
     conversationId,
     context: {
@@ -130,9 +303,20 @@ function createRecord(
       baseGrantIds: [],
     },
     createdAt: '2026-08-03T00:00:00.000Z',
-    initialMessage: { messageId: `message:${conversationId}`, text: 'Hello', resourceGrantIds: [] },
-    configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
-    pendingTurn: { requestId, turnId, status: 'pending' },
+    initialInput: {
+      messageId: `message:${conversationId}`,
+      intent: { kind: 'message', text: 'Hello' },
+      references: [],
+      contextReferences: [],
+      resourceGrantIds: [],
+    },
+    configuration: { conversationId, request, projection },
+    pendingTurn: {
+      requestId,
+      turnId,
+      status: 'pending',
+      configuration: { conversationId, turnId, request, projection },
+    },
     scratchArtifacts: [],
   };
 }

@@ -224,6 +224,21 @@ result 投影，不能改写为空数据或普通 assistant 成功消息。
 确认必须绑定 conversation/toolCall identity，并具有取消与有界超时。已授权的 workspace/internal
 read 可以免确认，但仍受 containment 和 trust 检查。
 
+### 内容文件与结构化项目写入
+
+Agent authoring 按 authority 使用两条且仅两条路径：
+
+- Markdown、Fountain、TXT、HTML、字幕和普通 JSON/YAML/CSV 等可移植内容源，通过
+  Workspace-scoped core file Tool 原生读写真实文件；Text Editor、parser、Search 和 Preview 只从
+  file change 重建 projection；
+- Canvas `.nkc`、Cut `.otio` 及未来 owner-declared 结构化/空间化/时间线项目，通过 owning-domain
+  query 与 revisioned authoring capability 读写；generic file Tool 必须拒绝其 raw bytes。
+
+内容写入不创建 Agent-owned `TextDocumentSession`，不经过格式专用 mutation Tool，也不要求可见
+Renderer。结构化 capability 失败不得回退 raw file、shell、其他 adapter/provider 或 active/recent
+target。完整约束见
+[`adr-agent-content-file-and-structured-project-authoring-boundary.md`](adr-agent-content-file-and-structured-project-authoring-boundary.md)。
+
 ## Tool Call 与 Domain Job
 
 普通同步工作在同一 Pi Tool Call 中完成。需要独立身份、跨页面/重启恢复、精确查询/取消/重试

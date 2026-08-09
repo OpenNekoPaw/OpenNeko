@@ -1,0 +1,130 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { CanvasData, CanvasNode } from '../types/canvas';
+import { resolveCanvasGenerationInputs } from '../canvas-generation-inputs';
+import { createCanvasGenerationNodeData } from '../types/canvas-generation-node';
+
+describe('Canvas Generation input resolution', () => {
+  it('resolves only explicit connected text and authorized media inputs', async () => {
+    const port = {
+      fingerprintText: vi.fn((text: string) => `digest:${text}`),
+      readText: vi.fn(),
+      authorizeLocator: vi.fn(async () => true),
+    };
+    const canvas = canvasWith([
+      markdown('text-1', 'reference notes'),
+      media('image-1', 'image'),
+      generation('target', 'image'),
+      markdown('nearby-but-unconnected', 'ignore me'),
+    ]);
+    canvas.connections = [connect('text-1', 'target'), connect('image-1', 'target')];
+
+    await expect(
+      resolveCanvasGenerationInputs({ canvas, nodeId: 'target', port }),
+    ).resolves.toEqual([
+      {
+        kind: 'text',
+        sourceNodeId: 'text-1',
+        text: 'reference notes',
+        digest: 'digest:reference notes',
+      },
+      {
+        kind: 'image',
+        sourceNodeId: 'image-1',
+        locator: { kind: 'workspace-file', path: 'images/reference.png' },
+      },
+    ]);
+    expect(port.authorizeLocator).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an upstream Generation Node without a selected output before authorization', async () => {
+    const port = {
+      fingerprintText: vi.fn(),
+      readText: vi.fn(),
+      authorizeLocator: vi.fn(),
+    };
+    const canvas = canvasWith([generation('source', 'image'), generation('target', 'video')]);
+    canvas.connections = [connect('source', 'target')];
+
+    await expect(
+      resolveCanvasGenerationInputs({ canvas, nodeId: 'target', port }),
+    ).rejects.toMatchObject({
+      code: 'generation-input-output-unavailable',
+      sourceNodeId: 'source',
+    });
+    expect(port.authorizeLocator).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthorized and incompatible inputs locally', async () => {
+    const canvas = canvasWith([media('audio-1', 'audio'), generation('target', 'image')]);
+    canvas.connections = [connect('audio-1', 'target')];
+    const unauthorizedPort = {
+      fingerprintText: vi.fn(),
+      readText: vi.fn(),
+      authorizeLocator: vi.fn(async () => false),
+    };
+
+    await expect(
+      resolveCanvasGenerationInputs({ canvas, nodeId: 'target', port: unauthorizedPort }),
+    ).rejects.toMatchObject({ code: 'generation-input-unauthorized' });
+
+    const authorizedPort = { ...unauthorizedPort, authorizeLocator: vi.fn(async () => true) };
+    await expect(
+      resolveCanvasGenerationInputs({ canvas, nodeId: 'target', port: authorizedPort }),
+    ).rejects.toMatchObject({ code: 'generation-input-type-mismatch' });
+  });
+});
+
+function canvasWith(nodes: CanvasNode[]): CanvasData {
+  return { name: 'Inputs', nodes, connections: [] };
+}
+
+function generation(id: string, kind: 'prompt' | 'image' | 'audio' | 'video'): CanvasNode {
+  return {
+    id,
+    type: 'generation',
+    position: { x: 0, y: 0 },
+    size: { width: 320, height: 240 },
+    zIndex: 0,
+    data: createCanvasGenerationNodeData(kind),
+  };
+}
+
+function markdown(id: string, content: string): CanvasNode {
+  return {
+    id,
+    type: 'markdown',
+    position: { x: 0, y: 0 },
+    size: { width: 280, height: 180 },
+    zIndex: 0,
+    data: { content },
+  };
+}
+
+function media(id: string, mediaType: 'image' | 'audio' | 'video'): CanvasNode {
+  return {
+    id,
+    type: 'media',
+    position: { x: 0, y: 0 },
+    size: { width: 280, height: 200 },
+    zIndex: 0,
+    data: {
+      assetPath: `${mediaType}s/reference.${mediaType === 'image' ? 'png' : 'bin'}`,
+      contentLocator: {
+        kind: 'workspace-file',
+        path: `${mediaType}s/reference.${mediaType === 'image' ? 'png' : 'bin'}`,
+      },
+      mediaType,
+    },
+  };
+}
+
+function connect(sourceId: string, targetId: string) {
+  return {
+    id: `${sourceId}-${targetId}`,
+    sourceId,
+    targetId,
+    type: 'reference' as const,
+    sourceEndpoint: { nodeId: sourceId, scope: 'node' as const },
+    targetEndpoint: { nodeId: targetId, scope: 'node' as const },
+  };
+}

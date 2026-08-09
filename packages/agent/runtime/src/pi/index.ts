@@ -27,6 +27,7 @@ export {
   PiSkillHost,
   PiSkillHostSnapshot,
   SkillHostError,
+  buildSkillActivationId,
   createNodePiSkillHost,
   type ExecuteSkillExternalProcessorInput,
   type SkillExternalProcessorAuthorizer,
@@ -62,6 +63,12 @@ export {
   type PiTurnCheckpointRecord,
   type PiTurnDurabilityState,
 } from './node-conversation-authority';
+export {
+  PI_USER_MESSAGE_PRESENTATION_CUSTOM_TYPE,
+  isPiUserMessagePresentationEntry,
+  parsePiUserMessagePresentation,
+  type PiUserMessagePresentation,
+} from './user-message-presentation';
 export {
   parsePortablePiConversationManifest,
   parsePortablePiConversationManifestJson,

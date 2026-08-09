@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { WebviewFoundationProvider, createWebviewFoundation } from '@neko/ui/foundation';
-import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
+import type { AgentHostRuntimeAdapter, AgentInteractionProjection } from '@neko/agent-contracts';
 import { AgentWebviewRoot } from './root';
 
 vi.mock('./components/ChatView/RichContent', () => ({
@@ -23,7 +23,7 @@ vi.mock('./components/AppShell', async () => {
       agentPresentation,
       presentation,
     }: {
-      readonly agentPresentation?: AgentRootPresentation;
+      readonly agentPresentation?: AgentInteractionProjection;
       readonly presentation?: string;
     }) => {
       const foundation = useWebviewFoundation();
@@ -43,7 +43,7 @@ vi.mock('./components/AppShell', async () => {
           <span data-testid="presentation">{presentation}</span>
           <span data-testid="agent-presentation">
             {agentPresentation
-              ? `${agentPresentation.kind}:${agentPresentation.scope.kind}`
+              ? `${agentPresentation.phase}:${agentPresentation.binding.kind}`
               : 'none'}
           </span>
         </>
@@ -109,9 +109,10 @@ describe('AgentWebviewRoot foundation wiring', () => {
     render(
       <AgentWebviewRoot
         agentPresentation={{
-          kind: 'draft',
+          phase: 'draft',
           draftId: 'draft-1',
-          scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+          binding: { kind: 'assistant', assistantSpaceId: 'assistant:1', baseGrantIds: [] },
+          bindingReceipt: null,
         }}
         hostRuntimeAdapter={createAdapter('assistant-draft-adapter')}
         locale="en"

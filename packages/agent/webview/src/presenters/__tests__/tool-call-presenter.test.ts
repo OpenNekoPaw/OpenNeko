@@ -617,6 +617,46 @@ describe('tool-call-presenter', () => {
       ].join('\n'),
     );
   });
+
+  it('projects an authorized EPUB document-entry image into a visible thumbnail', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/cover.png',
+    };
+    const projection = projectToolCallDisplayState({
+      id: 'tool-epub',
+      name: 'ReadDocument',
+      arguments: {},
+      result: {
+        success: true,
+        data: {
+          source: {
+            filePath: 'books/story.epub',
+            format: 'epub',
+            contentLocator: contentLocator.source,
+          },
+          imageInfo: [
+            {
+              entryPath: contentLocator.entryPath,
+              contentLocator,
+              mimeType: 'image/png',
+              renderUri: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/content',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(projection.documentThumbnails).toEqual([
+      expect.objectContaining({
+        path: 'OPS/images/cover.png',
+        contentLocator,
+        src: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/content',
+      }),
+    ]);
+    expect(projection.documentThumbnails[0]?.referenceJson).not.toContain('openneko://resource');
+  });
 });
 
 function generatedOutputLocator(outputId: string) {

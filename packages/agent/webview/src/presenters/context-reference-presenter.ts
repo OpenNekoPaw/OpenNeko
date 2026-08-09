@@ -1,4 +1,8 @@
-import type { AgentContextPayload, MessageContextReference } from '@neko/agent-contracts';
+import {
+  isAgentAuthorizedContentReferenceContextData,
+  type AgentContextPayload,
+  type MessageContextReference,
+} from '@neko/agent-contracts';
 import { isContentLocator, type ContentLocator } from '@neko/content';
 
 export function projectContextReferencesFromPayloads(
@@ -7,16 +11,31 @@ export function projectContextReferencesFromPayloads(
   if (!payloads || payloads.length === 0) return undefined;
   return payloads.map((payload) => {
     const navigationData = projectContextNavigationData(payload);
-    const contentLocator = projectContextContentLocator(payload);
+    const authorizedContent = isAgentAuthorizedContentReferenceContextData(payload.data)
+      ? payload.data
+      : undefined;
+    const contentLocator = authorizedContent?.locator ?? projectContextContentLocator(payload);
     return {
-      type: payload.type,
+      type: authorizedContent
+        ? authorizedContentReferenceType(authorizedContent.mediaType)
+        : payload.type,
       id: payload.id,
       label: payload.label,
       summary: payload.summary,
+      ...(authorizedContent?.mediaType ? { mediaType: authorizedContent.mediaType } : {}),
       ...(contentLocator ? { contentLocator } : {}),
       ...(Object.keys(navigationData).length > 0 ? { navigationData } : {}),
     };
   });
+}
+
+function authorizedContentReferenceType(
+  mediaType: import('@neko/agent-contracts').AgentFileReferenceMediaType | undefined,
+): MessageContextReference['type'] {
+  if (mediaType === 'image') return 'image';
+  if (mediaType === 'audio') return 'audio-clip';
+  if (mediaType === 'video' || mediaType === 'sequence') return 'media';
+  return 'file';
 }
 
 function projectContextNavigationData(payload: AgentContextPayload): Record<string, string> {

@@ -1,12 +1,8 @@
 import {
-  buildPluginSlashCommandId,
-  buildPluginSlashCommandInvocation,
   buildPluginsAvailableMessage,
   NEKO_PLUGIN_IDS,
-  type InvokePluginSlashCommandWebviewMessage,
   type NekoPluginKey,
   type PluginSlashCommandDef,
-  type PluginSlashCommandInvocation,
   type PluginTransferPayload,
   type PluginTransferAssetRef,
   type PluginsAvailableMessage,
@@ -29,11 +25,6 @@ export interface ExpandPluginTransferInputsInput {
   readonly assetPath?: string;
   readonly mediaType?: string;
   readonly payload?: PluginTransferPayload;
-}
-
-export interface RuntimePluginSlashCommandDispatch {
-  readonly command: string;
-  readonly invocation: PluginSlashCommandInvocation;
 }
 
 interface RuntimePluginSlashCommandRegistryEntry {
@@ -76,15 +67,6 @@ function resolveBatchTransferDefaults(
   return {
     ...(!asset.target && batch.target ? { target: batch.target } : {}),
     ...(!asset.provenance && batch.provenance ? { provenance: batch.provenance } : {}),
-  };
-}
-
-export function buildRuntimePluginSlashCommandDispatch(
-  message: InvokePluginSlashCommandWebviewMessage,
-): RuntimePluginSlashCommandDispatch {
-  return {
-    command: buildPluginSlashCommandId(message),
-    invocation: buildPluginSlashCommandInvocation(message),
   };
 }
 

@@ -54,6 +54,15 @@ export function createCutHostSessionId(viewId: string, viewInstanceId: string): 
   return `cut-session:${viewId}:${viewInstanceId}`;
 }
 
+export const CUT_DRAFT_DOCUMENT_ID_PREFIX = 'cut-draft:';
+
+export function isCutDraftDocumentId(documentId: string): boolean {
+  return (
+    documentId.startsWith(CUT_DRAFT_DOCUMENT_ID_PREFIX) &&
+    documentId.length > CUT_DRAFT_DOCUMENT_ID_PREFIX.length
+  );
+}
+
 export interface CutHostPresentationState {
   readonly playheadSeconds: number;
   readonly previewVolume: number;
@@ -113,6 +122,10 @@ export interface CutHostRuntimeResult {
     | {
         readonly type: 'agent-context';
         readonly payload: AgentContextPayload;
+      }
+    | {
+        readonly type: 'identity-rebound';
+        readonly eventSequence: number;
       };
 }
 
@@ -377,6 +390,19 @@ export function parseCutHostRuntimeResult(value: unknown): CutHostRuntimeResult 
       output: {
         type: 'preview',
         message: parseCutHostPreviewMessage(output['message']),
+      },
+    };
+  }
+  if (output['type'] === 'identity-rebound') {
+    requireExactKeys(output, ['type', 'eventSequence']);
+    return {
+      snapshot,
+      output: {
+        type: 'identity-rebound',
+        eventSequence: requirePositiveInteger(
+          output['eventSequence'],
+          'Cut identity rebind event sequence must be a positive integer.',
+        ),
       },
     };
   }

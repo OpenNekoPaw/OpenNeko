@@ -97,6 +97,29 @@ describe('createWorkspaceFileAccessPolicy', () => {
     });
   });
 
+  it('rejects exact Canvas and Cut project bytes while retaining list metadata access', () => {
+    const policy = createWorkspaceFileAccessPolicy({ workspaceRoot });
+
+    expect(policy.authorize('boards/story.NKC', 'read')).toMatchObject({
+      allowed: false,
+      reason: 'protected-project-document',
+      protectedProjectOwner: 'canvas',
+    });
+    expect(policy.authorize('timeline/edit.otio', 'write')).toMatchObject({
+      allowed: false,
+      reason: 'protected-project-document',
+      protectedProjectOwner: 'cut',
+    });
+    expect(policy.authorize('boards/story.nkc', 'list')).toMatchObject({
+      allowed: true,
+      contentLocator: { kind: 'workspace-file', path: 'boards/story.nkc' },
+    });
+    expect(policy.authorize('notes/project.nkc.md', 'read')).toMatchObject({
+      allowed: true,
+      contentLocator: { kind: 'workspace-file', path: 'notes/project.nkc.md' },
+    });
+  });
+
   it('does not treat .gitignore negation rules as read re-authorization', () => {
     const policy = createWorkspaceFileAccessPolicy({
       workspaceRoot,

@@ -26,7 +26,7 @@ const identity: ResourceBrowserIdentity = {
 };
 
 describe('Resource Browser controller', () => {
-  it('uses one projection source for snapshot, facets, refresh and monotonic events', async () => {
+  it('uses one projection source for snapshot, facets, reconciliation and monotonic events', async () => {
     const source = createSource();
     const interactions = createInteractions();
     const controller = new ResourceBrowserController({
@@ -69,11 +69,7 @@ describe('Resource Browser controller', () => {
         query: 'neko',
       }),
     );
-    const refreshed = await controller.execute({
-      requestId: 'refresh-1',
-      identity,
-      route: RESOURCE_BROWSER_ROUTES.refresh,
-    });
+    const refreshed = await controller.reconcile();
     const withGlobalLibrary = await controller.execute({
       requestId: 'global-library-1',
       identity,
@@ -139,6 +135,33 @@ describe('Resource Browser controller', () => {
         },
       ],
     });
+  });
+
+  it('allows Rescan only after an observation failure and clears the local diagnostic', async () => {
+    const source = createSource();
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+    await controller.getSnapshot();
+
+    await expect(
+      controller.execute({
+        requestId: 'rescan-before-failure',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.reconcile,
+      }),
+    ).rejects.toThrow('only after an observation failure');
+
+    await controller.reportObservationFailure('Watcher stopped.');
+    const reconciled = await controller.execute({
+      requestId: 'rescan-after-failure',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.reconcile,
+    });
+    expect(reconciled.diagnostics).toBeUndefined();
+    expect(source.refresh).toHaveBeenCalledWith(identity);
   });
 
   it('fences stale owners and stale resource identity before an effect runs', async () => {
@@ -275,12 +298,20 @@ describe('Resource Browser controller', () => {
       requestId: 'create-directory-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.createDirectory,
-      directoryName: 'References',
+      entryName: 'References',
     });
     await controller.execute({
-      requestId: 'import-files-1',
+      requestId: 'create-file-1',
       identity,
-      route: RESOURCE_BROWSER_ROUTES.importFiles,
+      route: RESOURCE_BROWSER_ROUTES.createFile,
+      entryName: 'notes.md',
+    });
+    await controller.execute({
+      requestId: 'create-cut-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createCreativeDocument,
+      entryName: 'Rough Cut',
+      documentKind: 'cut',
     });
     const current = await controller.getSnapshot();
     const file = current.items[0];
@@ -293,8 +324,171 @@ describe('Resource Browser controller', () => {
     });
 
     expect(interactions.createDirectory).toHaveBeenCalledWith({ identity, name: 'References' });
-    expect(interactions.importFiles).toHaveBeenCalledWith({ identity });
+    expect(interactions.createFile).toHaveBeenCalledWith({ identity, name: 'notes.md' });
+    expect(interactions.createCreativeDocument).toHaveBeenCalledWith({
+      identity,
+      kind: 'cut',
+      name: 'Rough Cut',
+    });
     expect(interactions.trashContent).toHaveBeenCalledWith({ identity, item: file });
+  });
+
+  it('preserves the Files projection when a published creative document cannot open', async () => {
+    const interactions = createInteractions();
+    vi.mocked(interactions.createCreativeDocument).mockResolvedValue({
+      status: 'created',
+      diagnostic: {
+        code: 'creative-document-open-failed',
+        message: 'Created Board.nkc, but its editor could not open.',
+        recordId: 'content:board',
+      },
+    });
+    const controller = new ResourceBrowserController({
+      identity,
+      source: createSource(),
+      interactions,
+    });
+    await controller.getSnapshot();
+
+    const result = await controller.execute({
+      requestId: 'create-canvas-open-failed',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createCreativeDocument,
+      entryName: 'Board',
+      documentKind: 'canvas',
+    });
+
+    expect(result.items).not.toHaveLength(0);
+    expect(result.diagnostics).toContainEqual({
+      code: 'creative-document-open-failed',
+      message: 'Created Board.nkc, but its editor could not open.',
+      recordId: 'content:board',
+    });
+  });
+
+  it('reconciles the exact target directory after nested creative document creation', async () => {
+    const directory: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'References' },
+      label: 'References',
+      availability: 'available',
+      capabilities: ['read'],
+      metadata: { mediaType: 'directory' },
+      role: 'directory',
+      depth: 0,
+    };
+    const board: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'References/Board.nkc' },
+      parentLocator: directory.locator,
+      label: 'Board.nkc',
+      availability: 'available',
+      capabilities: ['read'],
+      metadata: { mediaType: 'application/json' },
+      role: 'content',
+      depth: 1,
+    };
+    const source = createSource();
+    source.files.list = vi.fn(async () => [directory]);
+    source.files.children = vi.fn(async () => [board]);
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+    const snapshot = await controller.getSnapshot();
+    const target = snapshot.items[0];
+    if (!target) throw new Error('Creation target fixture is missing.');
+
+    const result = await controller.execute({
+      requestId: 'create-board-in-references',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createCreativeDocument,
+      resourceId: target.resourceId,
+      entryName: 'Board',
+      documentKind: 'canvas',
+    });
+
+    expect(result.items.map((item) => item.label)).toEqual(['References', 'Board.nkc']);
+    expect(source.files.children).toHaveBeenCalledWith({
+      identity,
+      parent: expect.objectContaining({ resourceId: target.resourceId }),
+      limit: 100,
+    });
+  });
+
+  it('resolves selected directories, selected-file parents, and no selection without fallback', async () => {
+    const directory: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'References' },
+      label: 'References',
+      availability: 'available',
+      capabilities: ['read'],
+      metadata: { mediaType: 'directory' },
+      role: 'directory',
+      depth: 0,
+    };
+    const file: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'References/notes.md' },
+      parentLocator: directory.locator,
+      label: 'notes.md',
+      availability: 'available',
+      capabilities: ['read'],
+      metadata: { mediaType: 'text' },
+      role: 'content',
+      depth: 1,
+    };
+    const source = createSource();
+    source.files.list = vi.fn(async () => [directory]);
+    source.files.children = vi.fn(async () => [file]);
+    const interactions = createInteractions();
+    const controller = new ResourceBrowserController({ identity, source, interactions });
+    const snapshot = await controller.getSnapshot();
+    const directoryItem = snapshot.items.find((item) => item.label === 'References');
+    if (!directoryItem) throw new Error('Creation directory fixture is missing.');
+    const expanded = await controller.children(
+      createResourceBrowserChildrenRequest({
+        requestId: 'load-creation-directory',
+        identity,
+        facet: 'files',
+        parentResourceId: directoryItem.resourceId,
+      }),
+    );
+    const fileItem = expanded.items.find((item) => item.label === 'notes.md');
+    if (!fileItem) throw new Error('Creation file fixture is missing.');
+
+    await controller.execute({
+      requestId: 'create-under-directory',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createFile,
+      resourceId: directoryItem.resourceId,
+      entryName: 'sources.md',
+    });
+    await controller.execute({
+      requestId: 'create-beside-file',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createDirectory,
+      resourceId: fileItem.resourceId,
+      entryName: 'Drafts',
+    });
+    await controller.execute({
+      requestId: 'create-at-root',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createFile,
+      entryName: 'README.md',
+    });
+
+    expect(interactions.createFile).toHaveBeenNthCalledWith(1, {
+      identity,
+      parent: directoryItem,
+      name: 'sources.md',
+    });
+    expect(interactions.createDirectory).toHaveBeenCalledWith({
+      identity,
+      parent: directoryItem,
+      name: 'Drafts',
+    });
+    expect(interactions.createFile).toHaveBeenNthCalledWith(2, {
+      identity,
+      name: 'README.md',
+    });
   });
 
   it('delegates Entity intents only after capability and exact identity checks', async () => {
@@ -366,6 +560,55 @@ describe('Resource Browser controller', () => {
     controller.dispose();
     await expect(controller.getSnapshot()).rejects.toThrow('disposed');
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('routes admitted text only to the editor and never falls back to Preview on admission failure', async () => {
+    const source = createSource();
+    const textEntry: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'notes/story.fountain' },
+      label: 'story.fountain',
+      availability: 'available',
+      capabilities: ['read', 'preview'],
+      metadata: { mediaType: 'text', byteLength: 128 },
+      role: 'content',
+      depth: 0,
+    };
+    source.files.list = vi.fn(async () => [textEntry]);
+    const interactions = createInteractions();
+    interactions.editText.mockRejectedValueOnce(new Error('text-document-invalid-utf8'));
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions,
+      initialFacet: 'files',
+    });
+    const snapshot = await controller.getSnapshot();
+    const item = snapshot.items[0];
+    if (!item) throw new Error('Missing editable text fixture.');
+
+    await expect(
+      controller.execute({
+        requestId: 'edit-invalid-text',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.editText,
+        resourceId: item.resourceId,
+      }),
+    ).rejects.toThrow('text-document-invalid-utf8');
+    expect(interactions.editText).toHaveBeenCalledWith({ identity, item });
+    expect(interactions.preview).not.toHaveBeenCalled();
+
+    await controller.execute({
+      requestId: 'explicit-preview',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.preview,
+      resourceId: item.resourceId,
+      targetPreview: { viewId: 'preview-1', presentation: 'temporary' },
+    });
+    expect(interactions.preview).toHaveBeenCalledWith({
+      identity,
+      item,
+      target: { viewId: 'preview-1', presentation: 'temporary' },
+    });
   });
 
   it('does not publish a stale search that resolves after a newer request', async () => {
@@ -469,6 +712,53 @@ describe('Resource Browser controller', () => {
     expect(next.items.map((item) => item.label)).toEqual(['characters', 'hero.glb']);
     expect(next.items[1]?.parentResourceId).toBe(parentItem.resourceId);
   });
+
+  it('re-reads loaded empty directories during authoritative reconciliation', async () => {
+    const parent: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'References' },
+      label: 'References',
+      availability: 'available',
+      capabilities: ['read'],
+      metadata: { mediaType: 'directory' },
+      role: 'directory',
+      depth: 0,
+    };
+    const child: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'References/Board.nkc' },
+      parentLocator: parent.locator,
+      label: 'Board.nkc',
+      availability: 'available',
+      capabilities: ['read'],
+      metadata: { mediaType: 'application/json' },
+      role: 'content',
+      depth: 1,
+    };
+    const source = createSource();
+    source.files.list = vi.fn(async () => [parent]);
+    source.files.children = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([child]);
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+      initialFacet: 'files',
+    });
+    const snapshot = await controller.getSnapshot();
+    const parentItem = snapshot.items[0];
+    if (!parentItem) throw new Error('Missing empty directory fixture.');
+
+    await controller.children(
+      createResourceBrowserChildrenRequest({
+        requestId: 'load-empty-directory',
+        identity,
+        facet: 'files',
+        parentResourceId: parentItem.resourceId,
+      }),
+    );
+    const reconciled = await controller.reconcile();
+
+    expect(reconciled.items.map((item) => item.label)).toEqual(['References', 'Board.nkc']);
+    expect(source.files.children).toHaveBeenCalledTimes(2);
+  });
 });
 
 function createSource(): ResourceBrowserProjectionSource & {
@@ -543,15 +833,17 @@ function createInteractions(): ResourceBrowserInteractionPort & {
   readonly linkGlobalLibrary: ReturnType<typeof vi.fn>;
   readonly addDirectoryLibrary: ReturnType<typeof vi.fn>;
   readonly preview: ReturnType<typeof vi.fn>;
-  readonly openCut: ReturnType<typeof vi.fn>;
+  readonly openCreativeDocument: ReturnType<typeof vi.fn>;
+  readonly editText: ReturnType<typeof vi.fn>;
   readonly reveal: ReturnType<typeof vi.fn>;
   readonly resolveThumbnail: ReturnType<typeof vi.fn>;
   readonly addToCanvas: ReturnType<typeof vi.fn>;
   readonly addToCut: ReturnType<typeof vi.fn>;
 } {
   return {
+    createCreativeDocument: vi.fn(async () => ({ status: 'opened' as const })),
+    createFile: vi.fn(async () => undefined),
     createDirectory: vi.fn(async () => undefined),
-    importFiles: vi.fn(async () => 'imported' as const),
     trashContent: vi.fn(async () => undefined),
     manageEntity: vi.fn(async () => undefined),
     linkGlobalLibrary: vi.fn(async () => 'linked' as const),
@@ -559,7 +851,8 @@ function createInteractions(): ResourceBrowserInteractionPort & {
     relinkSource: vi.fn(async () => 'relinked' as const),
     removeSource: vi.fn(async () => undefined),
     preview: vi.fn(async () => undefined),
-    openCut: vi.fn(async () => undefined),
+    openCreativeDocument: vi.fn(async () => undefined),
+    editText: vi.fn(async () => undefined),
     reveal: vi.fn(async () => undefined),
     resolveThumbnail: vi.fn(async () => 'data:image/png;base64,aW1hZ2U='),
     addToCanvas: vi.fn(async () => undefined),

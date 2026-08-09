@@ -2,6 +2,7 @@ import {
   ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
   type ActivateConversationWebviewMessage,
   type AgentHostToWebviewMessage,
+  type AgentInputInvocationIntent,
   type AgentWebviewToHostMessage,
   type ProjectionAttachRequest,
   type ProjectionDetachMessage,
@@ -129,20 +130,14 @@ export interface AgentConfigControllerEffectPort {
 }
 
 export interface AgentSkillControllerEffectPort {
-  listSkills(context: AgentHostRouteEffectContext): void | Promise<void>;
-  invokeSlashCommand(
-    input: {
-      readonly conversationId: string;
-      readonly command: string;
-      readonly args?: string;
-    },
+  readInputCatalog(
+    conversationId: string,
     context: AgentHostRouteEffectContext,
   ): void | Promise<void>;
-  invokeSkill(
+  invokeInput(
     input: {
       readonly conversationId: string;
-      readonly skillName: string;
-      readonly args?: string;
+      readonly input: AgentInputInvocationIntent;
     },
     context: AgentHostRouteEffectContext,
   ): void | Promise<void>;
@@ -251,9 +246,8 @@ export const AGENT_CONFIG_CONTROLLER_ROUTE_TYPES = [
 ] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
 export const AGENT_SKILL_CONTROLLER_ROUTE_TYPES = [
-  'getSkills',
-  'invokeSlashCommand',
-  'invokeSkill',
+  'getAgentInputCatalog',
+  'invokeAgentInput',
   'getContextTokenCount',
   'compressContext',
 ] as const satisfies readonly AgentWebviewToHostMessage['type'][];

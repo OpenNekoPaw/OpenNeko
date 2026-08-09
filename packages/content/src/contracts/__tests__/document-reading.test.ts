@@ -2,16 +2,44 @@ import { describe, expect, it } from 'vitest';
 import type {
   DocumentBatchCursor,
   DocumentContextData,
+  DocumentFormat,
   DocumentImageInfo,
   DocumentLocator,
   DocumentManifest,
   DocumentReadResult,
   DocumentSourceRef,
 } from '../document-reading';
-import { createDocumentEntryContentLocator, isDocumentFormat } from '../document-reading';
+import {
+  createDocumentEntryContentLocator,
+  isDocumentFormat,
+  isTextualDocumentFormat,
+} from '../document-reading';
 import { isContentLocator } from '../content-locator';
 
 describe('document reading contracts', () => {
+  it('distinguishes natively readable text from structured binary documents', () => {
+    const textual = [
+      'text',
+      'markdown',
+      'fountain',
+      'html',
+      'json',
+      'yaml',
+    ] satisfies readonly DocumentFormat[];
+    const structured = [
+      'pdf',
+      'docx',
+      'epub',
+      'cbz',
+      'pptx',
+      'xlsx',
+      'unknown',
+    ] satisfies readonly DocumentFormat[];
+
+    expect(textual.every(isTextualDocumentFormat)).toBe(true);
+    expect(structured.some(isTextualDocumentFormat)).toBe(false);
+  });
+
   it('represents stable page, chapter, text, and region locators', () => {
     const locators: DocumentLocator[] = [
       { kind: 'page', pageNumber: 3, pageIndex: 2 },

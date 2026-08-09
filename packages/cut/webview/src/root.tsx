@@ -18,17 +18,13 @@ import './index.css';
 export interface CutWebviewRootProps {
   readonly locale?: SupportedLocale;
   readonly bridge: CutWebviewHostBridge;
-  readonly presentation?: 'editor' | 'timeline-only';
   readonly lifecyclePresentation?: 'active' | 'suspended';
-  readonly timelineTarget?: Element;
 }
 
 export function CutWebviewRoot({
   bridge,
   lifecyclePresentation = 'active',
   locale,
-  presentation,
-  timelineTarget,
 }: CutWebviewRootProps): ReactElement {
   useEffect(() => {
     if (locale) {
@@ -45,7 +41,7 @@ export function CutWebviewRoot({
               <CutWebviewHostBridgeProvider bridge={bridge}>
                 <CutOtioControllerProvider>
                   {lifecyclePresentation === 'active' ? (
-                    <App presentation={presentation} timelineTarget={timelineTarget} />
+                    <App />
                   ) : (
                     <div data-cut-suspended="true" hidden />
                   )}

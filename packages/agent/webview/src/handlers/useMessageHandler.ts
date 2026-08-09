@@ -26,11 +26,7 @@ import type {
 import type { AgentWorkItemStore } from '../components/AgentWorkItem';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 import type { ProjectFileInfo } from '../hooks/useConfigState';
-import type {
-  SkillSummary,
-  MentionItem,
-  PluginSlashCommandDef,
-} from '../components/ChatView/InputArea/types';
+import type { MentionItem, PluginSlashCommandDef } from '../components/ChatView/InputArea/types';
 import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import type { AgentHostToWebviewMessage } from './messages';
@@ -125,8 +121,7 @@ export interface UseMessageHandlerProps {
   // Force re-render when agent state changes (for useMemo recalculation)
   forceAgentStateUpdate: () => void;
 
-  // State setters - Skills
-  setSkills: React.Dispatch<React.SetStateAction<SkillSummary[]>>;
+  setAgentInputCatalogByConversation?: MessageHandlerContext['setAgentInputCatalogByConversation'];
   setActivationProgressByConversation: React.Dispatch<
     React.SetStateAction<Map<string, readonly ActivationProgressTimeline[]>>
   >;
@@ -208,7 +203,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     setAgentState,
     conversationAgentStateRef,
     forceAgentStateUpdate,
-    setSkills,
+    setAgentInputCatalogByConversation,
     setActivationProgressByConversation,
     updateSettings,
     setShowOnboarding,
@@ -266,7 +261,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       setAgentState,
       conversationAgentStateRef,
       forceAgentStateUpdate,
-      setSkills,
+      setAgentInputCatalogByConversation,
       setActivationProgressByConversation,
       updateSettings,
       setShowOnboarding,
@@ -319,7 +314,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       setAgentState,
       conversationAgentStateRef,
       forceAgentStateUpdate,
-      setSkills,
+      setAgentInputCatalogByConversation,
       setActivationProgressByConversation,
       updateSettings,
       setShowOnboarding,

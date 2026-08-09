@@ -9,7 +9,6 @@ import {
   getCanvasAddAction,
   type CanvasAddActionId,
   type CanvasAddSourceModeId,
-  type CanvasAddSourceKind,
 } from '../../utils/canvasAddActions';
 
 export interface CanvasAddActionPopoverProps {
@@ -18,7 +17,7 @@ export interface CanvasAddActionPopoverProps {
     sourceMode?: CanvasAddSourceModeId,
   ) => void;
   readonly availableSourceModes: readonly CanvasAddSourceModeId[];
-  readonly availableGenerationKinds: readonly CanvasAddSourceKind[];
+  readonly availableGenerationKinds: readonly ('prompt' | 'image' | 'video' | 'audio')[];
 }
 
 export function CanvasAddActionPopover({
@@ -31,17 +30,17 @@ export function CanvasAddActionPopover({
   const sourceAction = sourceActionId ? getCanvasAddAction(sourceActionId) : undefined;
   const sourceKind = sourceAction?.sourceKind;
   const visibleSourceModes = sourceKind
-    ? CANVAS_ADD_SOURCE_MODES.filter((mode) =>
-        mode.id === 'create'
-          ? availableGenerationKinds.includes(sourceKind)
-          : availableSourceModes.includes(mode.id),
+    ? CANVAS_ADD_SOURCE_MODES.filter(
+        (mode) => mode.id !== 'create' && availableSourceModes.includes(mode.id),
       )
     : [];
   const visibleActions = CANVAS_ADD_ACTIONS.filter(
     (action) =>
       action.mode === 'direct' ||
-      (action.sourceKind !== undefined &&
-        (availableGenerationKinds.includes(action.sourceKind) || availableSourceModes.length > 0)),
+      (action.mode === 'generation' &&
+        action.generationKind !== undefined &&
+        availableGenerationKinds.includes(action.generationKind)) ||
+      (action.sourceKind !== undefined && availableSourceModes.length > 0),
   );
 
   const close = (): void => {

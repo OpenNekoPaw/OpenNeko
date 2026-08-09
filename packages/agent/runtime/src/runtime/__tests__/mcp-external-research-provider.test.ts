@@ -55,6 +55,7 @@ describe('createMcpExternalResearchProvider', () => {
       mcpManager: { callTool },
     });
 
+    const signal = new AbortController().signal;
     await expect(
       provider.search(
         {
@@ -64,7 +65,7 @@ describe('createMcpExternalResearchProvider', () => {
           allowedDomains: ['example.com'],
           blockedDomains: ['blocked.example'],
         },
-        new AbortController().signal,
+        signal,
       ),
     ).resolves.toEqual({
       query: 'period rooms',
@@ -81,12 +82,17 @@ describe('createMcpExternalResearchProvider', () => {
         },
       ],
     });
-    expect(callTool).toHaveBeenCalledWith('research', 'web_search', {
-      q: 'period rooms',
-      limit: 3,
-      allowed: ['example.com'],
-      blocked: ['blocked.example'],
-    });
+    expect(callTool).toHaveBeenCalledWith(
+      'research',
+      'web_search',
+      {
+        q: 'period rooms',
+        limit: 3,
+        allowed: ['example.com'],
+        blocked: ['blocked.example'],
+      },
+      { signal },
+    );
   });
 
   it('maps fetch input to explicit MCP tool arguments and normalizes fetched content', async () => {
@@ -96,10 +102,11 @@ describe('createMcpExternalResearchProvider', () => {
       mcpManager: { callTool },
     });
 
+    const signal = new AbortController().signal;
     await expect(
       provider.fetch(
         { url: 'https://example.com/source', mode: 'live', maxContentTokens: 12000 },
-        new AbortController().signal,
+        signal,
       ),
     ).resolves.toEqual({
       url: 'https://example.com/source',
@@ -113,10 +120,33 @@ describe('createMcpExternalResearchProvider', () => {
       }),
       content: 'Fetched content',
     });
-    expect(callTool).toHaveBeenCalledWith('research', 'fetch_url', {
-      target: 'https://example.com/source',
-      max_tokens: 12000,
+    expect(callTool).toHaveBeenCalledWith(
+      'research',
+      'fetch_url',
+      {
+        target: 'https://example.com/source',
+        max_tokens: 12000,
+      },
+      { signal },
+    );
+  });
+
+  it('prefers canonical MCP structured content over compatibility text data', async () => {
+    const structuredContent = JSON.parse(searchEnvelope) as Record<string, unknown>;
+    const provider = createMcpExternalResearchProvider({
+      config: createConfig(),
+      mcpManager: {
+        callTool: vi.fn(async () => ({
+          success: true,
+          data: 'ignored compatibility data',
+          structuredContent,
+        })),
+      },
     });
+
+    await expect(
+      provider.search({ query: 'x', mode: 'indexed', maxResults: 1 }, new AbortController().signal),
+    ).resolves.toMatchObject({ sources: [{ url: 'https://example.com/source' }] });
   });
 
   it('fails visibly for prose-only MCP output', async () => {

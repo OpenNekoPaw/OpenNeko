@@ -1,0 +1,15 @@
+{
+  "name": "computer-use",
+  "version": "0.19.2",
+  "description": "Observe an exact authorized application window through the reviewed Cua Driver MCP runtime.",
+  "author": { "name": "OpenNeko" },
+  "permissions": ["screen-recording", "computer-window-observe"],
+  "mcpServers": "./.mcp.json",
+  "mcpToolExposure": "adapter-only",
+  "interface": {
+    "displayName": "Computer Use",
+    "shortDescription": "Reviewed target-window observation on qualified macOS builds",
+    "developerName": "OpenNeko",
+    "category": "Automation"
+  }
+}

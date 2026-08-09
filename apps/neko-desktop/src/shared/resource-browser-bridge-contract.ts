@@ -3,6 +3,7 @@ import {
   type ResourceBrowserChildrenRequest,
   ResourceBrowserIdentity,
   ResourceBrowserIntentRequest,
+  ResourceBrowserIntentResult,
   ResourceBrowserProjection,
   ResourceBrowserProjectionEvent,
   ResourceBrowserQuickPreviewReleaseRequest,
@@ -55,7 +56,7 @@ export interface OpenNekoDesktopResourceBrowserBridge {
     ): Promise<ResourceBrowserRecoveryCancelResult>;
     children(request: ResourceBrowserChildrenRequest): Promise<ResourceBrowserProjection>;
     search(request: ResourceBrowserSearchRequest): Promise<ResourceBrowserProjection>;
-    execute(request: ResourceBrowserIntentRequest): Promise<ResourceBrowserProjection>;
+    execute(request: ResourceBrowserIntentRequest): Promise<ResourceBrowserIntentResult>;
     subscribe(listener: (event: ResourceBrowserProjectionEvent) => void): () => void;
   };
 }

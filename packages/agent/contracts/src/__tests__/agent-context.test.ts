@@ -3,6 +3,10 @@ import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
   isAgentResolvedEntityContextData,
 } from '../agent-context';
+import {
+  AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
+  isAgentAuthorizedContentReferenceContextData,
+} from '../message';
 
 describe('Agent resolved Entity context contract', () => {
   const context = {
@@ -51,6 +55,41 @@ describe('Agent resolved Entity context contract', () => {
         type: 'entity',
         navigationData: { sourceId: 'char-xiaoju', sourceKind: 'character' },
       }),
+    ).toBe(false);
+  });
+});
+
+describe('Agent authorized content reference contract', () => {
+  const reference = {
+    kind: AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
+    locator: { kind: 'workspace-file', path: 'books/story.epub' },
+    mediaType: 'document',
+    source: 'workspace',
+  } as const;
+
+  it('accepts one exact locator-only content reference', () => {
+    expect(isAgentAuthorizedContentReferenceContextData(reference)).toBe(true);
+  });
+
+  it('rejects raw paths, extracted bytes and unknown fields locally', () => {
+    expect(
+      isAgentAuthorizedContentReferenceContextData({
+        ...reference,
+        rawPath: '/private/books/story.epub',
+      }),
+    ).toBe(false);
+    expect(isAgentAuthorizedContentReferenceContextData(reference)).toBe(true);
+  });
+
+  it('rejects invalid locators and media types', () => {
+    expect(
+      isAgentAuthorizedContentReferenceContextData({
+        ...reference,
+        locator: { kind: 'workspace-file', path: '../story.epub' },
+      }),
+    ).toBe(false);
+    expect(
+      isAgentAuthorizedContentReferenceContextData({ ...reference, mediaType: 'binary' }),
     ).toBe(false);
   });
 });

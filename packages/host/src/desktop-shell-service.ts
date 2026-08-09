@@ -19,6 +19,7 @@ import {
   type DesktopUnavailableProjectProfile,
 } from './desktop-shell-contract';
 import {
+  closeCutView,
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
   openOrFocusMainView,
@@ -58,7 +59,7 @@ import {
 } from './desktop-shell-state';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import type { CutHostRuntimeIdentity } from '@neko/cut-domain';
+import { isCutDraftDocumentId, type CutHostRuntimeIdentity } from '@neko/cut-domain';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createCutHostSessionId } from '@neko/cut-domain';
 import type { DesktopStartupTargetPreference } from './application-settings-contract';
@@ -66,7 +67,7 @@ import type {
   DesktopWorkspaceGrantAuthorityPort,
   DesktopWorkspaceGrantResolution,
 } from './desktop-workspace-grant-authority';
-import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 
 const UNAVAILABLE_DOMAIN_CAPABILITIES: readonly DesktopDomainCapabilityProjection[] = [
   unavailableDomain('agent', 'P1.3'),
@@ -284,13 +285,29 @@ export class DesktopShellService {
         return windowId;
       }
       const restoredWindow = requireStoredWindow(state, windowId);
-      const qualifiedWindow = this.agentHomeProjectionSource
+      const agentQualifiedWindow = this.agentHomeProjectionSource
         ? reconcilePersistedAgentSurface(
             restoredWindow,
             this.readAgentHomeProjection(),
             this.createIdentity,
           )
         : restoredWindow;
+      const cutDraftCleanup = discardExpiredCutDraftPresentations(agentQualifiedWindow);
+      const qualifiedWindow = cutDraftCleanup.window;
+      if (cutDraftCleanup.removedViewIds.length > 0) {
+        this.isolatedWindowDiagnostics = [
+          ...this.isolatedWindowDiagnostics,
+          {
+            code: 'desktop-presentation-reset',
+            severity: 'warning',
+            windowId,
+            owner: 'cut',
+            removedViewIds: cutDraftCleanup.removedViewIds,
+            message:
+              'Expired unnamed Cut draft presentation was removed because its in-memory document ended with the previous application process.',
+          },
+        ];
+      }
       const restoredWorkbench = restoreWindowWorkbench(state, qualifiedWindow, this.createIdentity);
       const restoredScene = synchronizeWorkspaceSceneWithWorkbench(
         activeDesktopWorkbench(qualifiedWindow).scene,
@@ -542,7 +559,7 @@ export class DesktopShellService {
     readonly rendererSessionId: string;
     readonly agentViewId: string;
     readonly draftId: string;
-    readonly context: AgentConversationContext;
+    readonly context: AgentBoundDomainBinding;
     readonly conversationId: string;
   }): Promise<DesktopWorkbenchSceneProjection> {
     return this.enqueue(async () => {
@@ -552,6 +569,22 @@ export class DesktopShellService {
       const window = requireStoredWindow(state, input.windowId);
       const current = activeDesktopWorkbench(window).scene;
       const interaction = current.slots.interaction;
+      if (
+        current.context.kind === 'character-interaction' &&
+        (input.context.kind === 'character' || input.context.kind === 'room') &&
+        current.context.scope.draftId === input.draftId &&
+        current.context.scope.conversationId === input.conversationId &&
+        isSameAgentConversationOwner(
+          current.context.owner,
+          characterConversationOwnerFromContext(input.context),
+        ) &&
+        interaction?.kind === 'agent' &&
+        interaction.phase === 'session' &&
+        interaction.scope.kind !== 'unbound' &&
+        interaction.scope.conversationId === input.conversationId
+      ) {
+        return current;
+      }
       if (
         current.context.kind === 'agent' &&
         current.context.scope.kind !== 'unbound' &&
@@ -587,7 +620,18 @@ export class DesktopShellService {
       }
       let nextState = state;
       let scene: DesktopWorkbenchSceneProjection;
-      if (current.context.scope.kind === 'unbound' && input.context.kind === 'workspace') {
+      if (
+        current.context.scope.kind === 'unbound' &&
+        (input.context.kind === 'character' || input.context.kind === 'room')
+      ) {
+        scene = createCharacterInteractionScene({
+          current,
+          draftId: input.draftId,
+          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          conversationId: input.conversationId,
+          owner: characterConversationOwnerFromContext(input.context),
+        });
+      } else if (current.context.scope.kind === 'unbound' && input.context.kind === 'workspace') {
         const workspaceGrantAuthority = this.options.workspaceGrantAuthority;
         if (!workspaceGrantAuthority) {
           throw new DesktopSceneContractError(
@@ -652,7 +696,7 @@ export class DesktopShellService {
 
   async restoreAgentConversation(input: {
     readonly request: DesktopSceneTransitionRequest;
-    readonly context: AgentConversationContext;
+    readonly context: AgentBoundDomainBinding;
   }): Promise<DesktopSceneTransitionResult> {
     const request = parseDesktopSceneTransitionRequest(input.request);
     if (request.intent.kind !== 'restore-conversation') {
@@ -693,10 +737,14 @@ export class DesktopShellService {
           homeConversation.unavailable.message,
         );
       }
-      const contextOwner =
-        context.kind === 'assistant'
-          ? { kind: 'assistant' as const, assistantSpaceId: context.assistantSpaceId }
-          : { kind: 'workspace' as const, workspaceId: context.workspaceId };
+      if (context.kind === 'world') {
+        return unavailableConversationSceneTransition(
+          request,
+          context.kind,
+          `Desktop ${context.kind} Conversation scene provider is unavailable.`,
+        );
+      }
+      const contextOwner = conversationOwnerFromContext(context);
       if (!isSameAgentConversationOwner(navigation.owner, contextOwner)) {
         throw new DesktopSceneContractError(
           'desktop-scene-scope-mismatch',
@@ -710,6 +758,26 @@ export class DesktopShellService {
             readonly workbench: DesktopWorkbenchLayoutProjection;
           }
         | undefined;
+      if (context.kind === 'character' || context.kind === 'room') {
+        const scene = createCharacterInteractionScene({
+          current: activeDesktopWorkbench(window).scene,
+          draftId: `draft:${this.createIdentity()}`,
+          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          conversationId,
+          owner: characterConversationOwnerFromContext(context),
+        });
+        this.assertMutationContext(request.windowId, request.rendererSessionId);
+        const committed = await this.options.stateRepository.commit({
+          ...state,
+          windows: state.windows.map((candidate) =>
+            candidate.windowId === request.windowId
+              ? putSceneWorkbench({ window, scene })
+              : candidate,
+          ),
+        });
+        await this.emitAll(committed);
+        return { status: 'transitioned', requestId: request.requestId, scene };
+      }
       if (context.kind === 'assistant') {
         draft = createAssistantAgentScene({
           current: activeDesktopWorkbench(window).scene,
@@ -1043,8 +1111,8 @@ export class DesktopShellService {
     ) {
       throw new Error('Desktop Cut Window or renderer identity is stale.');
     }
-    const view = projection.window.workbench.layout.main.views.find(
-      (candidate) => candidate.viewId === identity.viewId && candidate.kind === 'cut',
+    const view = projection.window.workbench.layout.cutPanel?.views.find(
+      (candidate) => candidate.viewId === identity.viewId,
     );
     if (
       !view ||
@@ -1586,17 +1654,66 @@ function reconcilePersistedAgentSurface(
   createIdentity: () => string,
 ): DesktopStoredWindow {
   const interaction = window.workbench.scene.slots.interaction;
-  if (!interaction || isPersistedAgentSurfaceQualified(interaction, agentHome)) return window;
+  if (
+    !interaction ||
+    isPersistedAgentSurfaceQualified(window.workbench.scene, interaction, agentHome)
+  ) {
+    return window;
+  }
   return replaceActiveDesktopWorkbench(window, {
     scene: createReplacementAgentDraftScene(window.workbench.scene, `draft:${createIdentity()}`),
   });
 }
 
+function discardExpiredCutDraftPresentations(window: DesktopStoredWindow): {
+  readonly window: DesktopStoredWindow;
+  readonly removedViewIds: readonly string[];
+} {
+  const removedViewIds = new Set<string>();
+  const discardFromLayout = (
+    layout: DesktopWorkbenchLayoutProjection,
+  ): DesktopWorkbenchLayoutProjection => {
+    let next = layout;
+    for (const view of layout.cutPanel?.views ?? []) {
+      if (view.documentId && isCutDraftDocumentId(view.documentId)) {
+        removedViewIds.add(view.viewId);
+        next = closeCutView(next, view.viewId);
+      }
+    }
+    return next;
+  };
+  const active = activeDesktopWorkbench(window);
+  const activeLayout = discardFromLayout(active.layout);
+  const tabs = window.tabs.map((tab) => {
+    if (!tab.presentation) return tab;
+    const presentation = discardFromLayout(tab.presentation);
+    return presentation === tab.presentation ? tab : { ...tab, presentation };
+  });
+  const tabsChanged = tabs.some((tab, index) => tab !== window.tabs[index]);
+  const withActiveLayout =
+    activeLayout === active.layout
+      ? window
+      : replaceActiveDesktopWorkbench(window, { layout: activeLayout });
+  return {
+    window: tabsChanged ? { ...withActiveLayout, tabs } : withActiveLayout,
+    removedViewIds: [...removedViewIds],
+  };
+}
+
 function isPersistedAgentSurfaceQualified(
+  scene: DesktopWorkbenchSceneProjection,
   interaction: DesktopAgentInteractionSurfaceRef,
   agentHome: DesktopAgentHomeProjection,
 ): boolean {
   if (interaction.phase === 'draft') return true;
+  if (scene.context.kind === 'character-interaction') {
+    const context = scene.context;
+    return agentHome.conversations.some(
+      (conversation) =>
+        conversation.navigation.conversationId === context.scope.conversationId &&
+        isSameAgentConversationOwner(conversation.navigation.owner, context.owner),
+    );
+  }
   const scope = interaction.scope;
   if (scope.kind === 'unbound' || scope.conversationId === undefined) return false;
   const owner =
@@ -1614,6 +1731,13 @@ function createReplacementAgentDraftScene(
   current: DesktopWorkbenchSceneProjection,
   draftId: string,
 ): DesktopWorkbenchSceneProjection {
+  if (current.context.kind === 'character-interaction') {
+    return createAssistantAgentScene({
+      current,
+      assistantSpaceId: current.context.scope.assistantSpaceId,
+      draftId,
+    });
+  }
   if (current.context.kind === 'agent' && current.context.scope.kind === 'assistant') {
     return createAssistantAgentScene({
       current,
@@ -2174,7 +2298,7 @@ function unavailableWorkspaceSceneTransition(
 
 function unavailableConversationSceneTransition(
   request: DesktopSceneTransitionRequest,
-  conversationOwnerKind: AgentConversationOwnerRef['kind'],
+  conversationOwnerKind: AgentConversationOwnerRef['kind'] | 'world',
   message: string,
 ): DesktopSceneTransitionResult {
   if (request.intent.kind !== 'restore-conversation') {
@@ -2200,20 +2324,62 @@ function unavailableConversationSceneTransition(
 }
 
 function conversationContextMatchesSceneScope(
-  context: AgentConversationContext,
+  context: AgentBoundDomainBinding,
   scope: DesktopAgentScopeProjection,
 ): boolean {
   if (scope.kind === 'unbound') return false;
-  return context.kind === 'assistant'
-    ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
-    : scope.kind === 'workspace' &&
-        context.workspaceId === scope.workspaceId &&
-        context.workspaceGrantId === scope.workspaceGrantId;
+  if (context.kind === 'assistant') {
+    return scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId;
+  }
+  if (context.kind === 'workspace') {
+    return (
+      scope.kind === 'workspace' &&
+      context.workspaceId === scope.workspaceId &&
+      context.workspaceGrantId === scope.workspaceGrantId
+    );
+  }
+  return false;
+}
+
+function conversationOwnerFromContext(context: AgentBoundDomainBinding): AgentConversationOwnerRef {
+  if (context.kind === 'assistant') {
+    return { kind: 'assistant', assistantSpaceId: context.assistantSpaceId };
+  }
+  if (context.kind === 'workspace') {
+    return { kind: 'workspace', workspaceId: context.workspaceId };
+  }
+  if (context.kind === 'world') {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'World Conversation scene provider is unavailable.',
+    );
+  }
+  return characterConversationOwnerFromContext(context);
+}
+
+function characterConversationOwnerFromContext(
+  context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>,
+): Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }> {
+  if (context.kind === 'room') {
+    return { kind: 'room', roomId: context.roomId, roomRunId: context.roomRunId };
+  }
+  if (context.characterRunId === undefined || context.dialogueRunId === undefined) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'Character Conversation requires exact Character Run and Dialogue Run identities.',
+    );
+  }
+  return {
+    kind: 'character',
+    characterId: context.characterId,
+    characterRunId: context.characterRunId,
+    dialogueRunId: context.dialogueRunId,
+  };
 }
 
 function createAssistantConversationScope(
   draftId: string,
-  context: AgentConversationContext,
+  context: AgentBoundDomainBinding,
   conversationId: string,
 ): Extract<DesktopAgentScopeProjection, { readonly kind: 'assistant' }> {
   if (context.kind !== 'assistant') {
@@ -2232,7 +2398,7 @@ function createAssistantConversationScope(
 
 function attachConversationToDraftScene(
   draft: DesktopWorkbenchSceneProjection,
-  context: AgentConversationContext,
+  context: AgentBoundDomainBinding,
   conversationId: string,
 ): DesktopWorkbenchSceneProjection {
   if (
@@ -2253,6 +2419,48 @@ function attachConversationToDraftScene(
     slots: {
       ...draft.slots,
       interaction: { ...draft.slots.interaction, phase: 'session', scope },
+    },
+  });
+}
+
+function createCharacterInteractionScene(input: {
+  readonly current: DesktopWorkbenchSceneProjection;
+  readonly draftId: string;
+  readonly assistantSpaceId: string;
+  readonly conversationId: string;
+  readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
+}): DesktopWorkbenchSceneProjection {
+  const sceneId = `scene:${input.current.windowId}:character-interaction:${input.conversationId}`;
+  const agentViewId = `agent-view:${input.current.windowId}:${input.conversationId}`;
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: input.draftId,
+    assistantSpaceId: input.assistantSpaceId,
+    conversationId: input.conversationId,
+  };
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: input.current.windowId,
+    context: {
+      kind: 'character-interaction',
+      agentViewId,
+      owner: input.owner,
+      scope,
+    },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: `agent-surface:${input.current.windowId}:${input.conversationId}`,
+        agentViewId,
+        phase: 'session',
+        scope,
+      },
+      main: { kind: 'character-avatar', owner: input.owner },
+      rightManager: { kind: 'character-runtime-manager', owner: input.owner },
+      ...(input.owner.kind === 'room'
+        ? { cutPanel: { kind: 'character-room-timeline', owner: input.owner } }
+        : {}),
+      status: { kind: 'scene-status', sceneId },
     },
   });
 }
@@ -2319,6 +2527,20 @@ function createWorkspaceAgentScene(input: {
       `Workspace '${input.workspaceId}' active Main View is not attached to its Workbench.`,
     );
   }
+  const cutView =
+    input.workbench.cutPanel?.presentation === 'docked'
+      ? input.workbench.cutPanel.views.find(
+          (view) =>
+            view.viewId === input.workbench.cutPanel?.activeViewId &&
+            view.workspaceId === input.workspaceId,
+        )
+      : undefined;
+  if (input.workbench.cutPanel?.presentation === 'docked' && !cutView) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      `Workspace '${input.workspaceId}' Cut Panel has no authoritative active Cut View.`,
+    );
+  }
   const sceneId = `scene:${input.current.windowId}:${input.workspaceId}`;
   const scope = {
     kind: 'workspace' as const,
@@ -2326,13 +2548,6 @@ function createWorkspaceAgentScene(input: {
     workspaceId: input.workspaceId,
     workspaceGrantId: input.workspaceGrantId,
   };
-  const timelineOwner = input.workbench.timeline.ownerViewId
-    ? input.workbench.main.views.find(
-        (view) =>
-          view.viewId === input.workbench.timeline.ownerViewId &&
-          view.workspaceId === input.workspaceId,
-      )
-    : undefined;
   return parseDesktopWorkbenchSceneProjection({
     sceneId,
     windowId: input.current.windowId,
@@ -2351,18 +2566,18 @@ function createWorkspaceAgentScene(input: {
         viewId: mainView.viewId,
         viewInstanceId: mainView.viewInstanceId,
       },
-      rightManager: { kind: 'workspace-resources', workspaceId: input.workspaceId },
-      ...(timelineOwner
+      ...(cutView
         ? {
-            timeline: {
-              kind: 'workspace-timeline',
+            cutPanel: {
+              kind: 'workspace-cut',
               workspaceId: input.workspaceId,
-              viewId: timelineOwner.viewId,
-              viewInstanceId: timelineOwner.viewInstanceId,
-              ownerId: timelineOwner.ownerId,
+              viewId: cutView.viewId,
+              viewInstanceId: cutView.viewInstanceId,
+              ownerId: cutView.ownerId,
             },
           }
         : {}),
+      rightManager: { kind: 'workspace-resources', workspaceId: input.workspaceId },
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -2383,74 +2598,70 @@ function synchronizeWorkspaceSceneWithWorkbench(
         (view) => view.viewId === activeGroup.activeViewId && view.workspaceId === workspaceId,
       )
     : undefined;
-  if (!activeView) {
-    if (workbench.main.views.length > 0) {
-      throw new DesktopSceneContractError(
-        'desktop-scene-scope-mismatch',
-        `Workspace '${workspaceId}' has Views without an authoritative active Main View.`,
-      );
-    }
-    const { main: _main, timeline: _timeline, ...retainedSlots } = scene.slots;
-    if (!_main && !_timeline) return scene;
-    return parseDesktopWorkbenchSceneProjection({
-      ...scene,
-      slots: retainedSlots,
-    });
-  }
-
-  const timelineView = workbench.timeline.ownerViewId
-    ? workbench.main.views.find(
-        (view) =>
-          view.viewId === workbench.timeline.ownerViewId && view.workspaceId === workspaceId,
-      )
-    : undefined;
-  if (workbench.timeline.ownerViewId && !timelineView) {
+  if (!activeView && workbench.main.views.length > 0) {
     throw new DesktopSceneContractError(
       'desktop-scene-scope-mismatch',
-      `Workspace '${workspaceId}' Timeline owner is not attached to its Workbench.`,
+      `Workspace '${workspaceId}' has Views without an authoritative active Main View.`,
+    );
+  }
+  const cutView =
+    workbench.cutPanel?.presentation === 'docked'
+      ? workbench.cutPanel.views.find(
+          (view) =>
+            view.viewId === workbench.cutPanel?.activeViewId && view.workspaceId === workspaceId,
+        )
+      : undefined;
+  if (workbench.cutPanel?.presentation === 'docked' && !cutView) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      `Workspace '${workspaceId}' Cut Panel has no authoritative active Cut View.`,
     );
   }
 
-  const main = {
-    kind: 'workspace-main' as const,
-    workspaceId,
-    viewId: activeView.viewId,
-    viewInstanceId: activeView.viewInstanceId,
-  };
-  const timeline = timelineView
+  const main = activeView
     ? {
-        kind: 'workspace-timeline' as const,
+        kind: 'workspace-main' as const,
         workspaceId,
-        viewId: timelineView.viewId,
-        viewInstanceId: timelineView.viewInstanceId,
-        ownerId: timelineView.ownerId,
+        viewId: activeView.viewId,
+        viewInstanceId: activeView.viewInstanceId,
+      }
+    : undefined;
+  const cutPanel = cutView
+    ? {
+        kind: 'workspace-cut' as const,
+        workspaceId,
+        viewId: cutView.viewId,
+        viewInstanceId: cutView.viewInstanceId,
+        ownerId: cutView.ownerId,
       }
     : undefined;
   const currentMain = scene.slots.main;
-  const currentTimeline = scene.slots.timeline;
+  const currentCutPanel = scene.slots.cutPanel;
   if (
-    currentMain?.kind === 'workspace-main' &&
-    currentMain.workspaceId === main.workspaceId &&
-    currentMain.viewId === main.viewId &&
-    currentMain.viewInstanceId === main.viewInstanceId &&
-    ((!currentTimeline && !timeline) ||
-      (currentTimeline &&
-        timeline &&
-        currentTimeline.workspaceId === timeline.workspaceId &&
-        currentTimeline.viewId === timeline.viewId &&
-        currentTimeline.viewInstanceId === timeline.viewInstanceId &&
-        currentTimeline.ownerId === timeline.ownerId))
+    ((!currentMain && !main) ||
+      (currentMain?.kind === 'workspace-main' &&
+        main &&
+        currentMain.workspaceId === main.workspaceId &&
+        currentMain.viewId === main.viewId &&
+        currentMain.viewInstanceId === main.viewInstanceId)) &&
+    ((!currentCutPanel && !cutPanel) ||
+      (currentCutPanel?.kind === 'workspace-cut' &&
+        cutPanel &&
+        currentCutPanel.workspaceId === cutPanel.workspaceId &&
+        currentCutPanel.viewId === cutPanel.viewId &&
+        currentCutPanel.viewInstanceId === cutPanel.viewInstanceId &&
+        currentCutPanel.ownerId === cutPanel.ownerId))
   ) {
     return scene;
   }
 
-  const { main: _main, timeline: _timeline, ...retainedSlots } = scene.slots;
+  const { main: _main, cutPanel: _cutPanel, ...retainedSlots } = scene.slots;
   return parseDesktopWorkbenchSceneProjection({
     ...scene,
     slots: {
       ...retainedSlots,
-      main,
-      ...(timeline ? { timeline } : {}),
+      ...(main ? { main } : {}),
+      ...(cutPanel ? { cutPanel } : {}),
     },
   });
 }
@@ -2534,6 +2745,35 @@ function createTransitionedScene(
       slots: {
         main: { kind: 'asset-management', assetCenterSessionId },
         status: { kind: 'scene-status', sceneId },
+      },
+    });
+  }
+  if (intent.kind === 'open-character-management') {
+    const sceneId = `scene:${windowId}:character-management`;
+    return parseDesktopWorkbenchSceneProjection({
+      sceneId,
+      windowId,
+      context: { kind: 'character-management' },
+      slots: {
+        main: { kind: 'character-management' },
+        status: { kind: 'scene-status', sceneId },
+      },
+    });
+  }
+  if (intent.kind === 'select-character-detail') {
+    if (current.context.kind !== 'character-management') {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        'Character detail selection requires the active Character Management Scene.',
+      );
+    }
+    return parseDesktopWorkbenchSceneProjection({
+      ...current,
+      context: { kind: 'character-management', detail: intent.selection },
+      slots: {
+        ...current.slots,
+        main: { kind: 'character-management' },
+        secondaryMain: { kind: 'character-detail', selection: intent.selection },
       },
     });
   }

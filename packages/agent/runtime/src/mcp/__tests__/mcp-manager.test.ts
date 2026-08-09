@@ -35,6 +35,7 @@ function createMockClient(connected = true): IMCPClient {
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     isConnected: vi.fn().mockReturnValue(connected),
+    getConnectionInfo: vi.fn().mockReturnValue(undefined),
     listTools: vi.fn().mockResolvedValue([]),
     callTool: vi.fn().mockResolvedValue({
       isError: false,
@@ -609,51 +610,45 @@ describe('MCPManager', () => {
 
       const result = await manager.callTool('test-server', 'myTool', { arg: 'value' });
 
-      expect(mockClient.callTool).toHaveBeenCalledWith('myTool', { arg: 'value' });
-      expect(result).toEqual({ success: true, data: 'Tool result' });
+      expect(mockClient.callTool).toHaveBeenCalledWith('myTool', { arg: 'value' }, {});
+      expect(result).toEqual({
+        success: true,
+        data: 'Tool result',
+        content: mockResult.content,
+      });
     });
 
-    it('should auto-reconnect when server is disconnected', async () => {
+    it('does not auto-reconnect when server is disconnected', async () => {
       const config = createServerConfig();
       const mockClient = createMockClient();
-      let connectCount = 0;
-
-      // First connection succeeds, then client appears disconnected,
-      // then reconnect succeeds and client is connected again
-      mockClient.isConnected = vi.fn().mockImplementation(() => connectCount > 0);
-      mockClient.connect = vi.fn().mockImplementation(() => {
-        connectCount++;
-        return Promise.resolve();
-      });
-      const mockResult = {
-        isError: false,
-        content: [{ type: 'text', text: 'reconnected result' }],
-      };
-      mockClient.callTool = vi.fn().mockResolvedValue(mockResult);
       mockCreateMCPClient.mockReturnValue(mockClient);
 
       manager.register(config);
-      // First connect
       await manager.connect('test-server');
-
-      // Reset isConnected to simulate disconnection
-      connectCount = 0;
-      mockClient.isConnected = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+      vi.mocked(mockClient.isConnected).mockReturnValue(false);
+      mockCreateMCPClient.mockClear();
 
       const result = await manager.callTool('test-server', 'myTool', {});
 
-      expect(result.success).toBe(true);
-      expect(result.data).toBe('reconnected result');
+      expect(result).toEqual({
+        success: false,
+        error: 'MCP server test-server is not connected',
+      });
+      expect(mockCreateMCPClient).not.toHaveBeenCalled();
+      expect(mockClient.callTool).not.toHaveBeenCalled();
     });
 
-    it('should return error when reconnect fails', async () => {
-      const config = createServerConfig({ enabled: false }); // disabled so reconnect will fail
+    it('returns a local disconnected error for a registered but unconnected server', async () => {
+      const config = createServerConfig({ enabled: false });
       manager.register(config);
 
       const result = await manager.callTool('test-server', 'myTool', {});
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('reconnect failed');
+      expect(result).toEqual({
+        success: false,
+        error: 'MCP server test-server is not connected',
+      });
+      expect(mockCreateMCPClient).not.toHaveBeenCalled();
     });
 
     it('should return error for completely unknown server', async () => {
@@ -681,6 +676,7 @@ describe('MCPManager', () => {
 
       expect(result).toEqual({
         success: false,
+        content: mockResult.content,
         error: 'Tool execution failed',
       });
     });
@@ -707,6 +703,7 @@ describe('MCPManager', () => {
 
       expect(result).toEqual({
         success: false,
+        content: mockResult.content,
         error: 'Error line 1\nError line 2',
       });
     });
@@ -729,6 +726,7 @@ describe('MCPManager', () => {
 
       expect(result).toEqual({
         success: false,
+        content: mockResult.content,
         error: 'Tool call failed',
       });
     });
@@ -755,6 +753,7 @@ describe('MCPManager', () => {
       expect(result).toEqual({
         success: true,
         data: 'Line 1\nLine 2',
+        content: mockResult.content,
       });
     });
 
@@ -777,7 +776,47 @@ describe('MCPManager', () => {
       expect(result).toEqual({
         success: true,
         data: mockResult.content,
+        content: mockResult.content,
       });
+    });
+
+    it('preserves mixed content order and prefers structured output for compatible data', async () => {
+      const config = createServerConfig();
+      const mockClient = createMockClient();
+      const mockResult = {
+        content: [
+          { type: 'text' as const, text: 'before' },
+          { type: 'image' as const, data: 'aW1hZ2U=', mimeType: 'image/png' },
+          { type: 'text' as const, text: 'after' },
+        ],
+        structuredContent: { answer: 42 },
+      };
+      mockClient.callTool = vi.fn().mockResolvedValue(mockResult);
+      mockCreateMCPClient.mockReturnValue(mockClient);
+      manager.register(config);
+      await manager.connect('test-server');
+
+      const result = await manager.callTool('test-server', 'myTool', {});
+
+      expect(result).toEqual({
+        success: true,
+        data: { answer: 42 },
+        content: mockResult.content,
+        structuredContent: { answer: 42 },
+      });
+    });
+
+    it('passes request cancellation to the MCP client', async () => {
+      const config = createServerConfig();
+      const mockClient = createMockClient();
+      mockCreateMCPClient.mockReturnValue(mockClient);
+      manager.register(config);
+      await manager.connect('test-server');
+      const signal = new AbortController().signal;
+
+      await manager.callTool('test-server', 'myTool', {}, { signal });
+
+      expect(mockClient.callTool).toHaveBeenCalledWith('myTool', {}, { signal });
     });
 
     it('should handle exceptions during tool call', async () => {

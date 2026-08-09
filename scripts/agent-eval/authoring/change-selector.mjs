@@ -62,6 +62,13 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/pi/personal-skill-manager',
     'packages/skills/src/builtins/',
   ]),
+  rule('screenplay-authoring', 'agent-runtime.screenplay-authoring', [
+    'packages/agent/runtime/src/tools/core/file-access-policy',
+    'packages/agent/runtime/src/tools/core/read-tool',
+    'packages/agent/runtime/src/tools/core/write-tool',
+    'packages/content/src/node/workspace-content-writer',
+    'packages/text-editor/domain/src/text-document-session',
+  ]),
   rule('capability-tool-routing', 'agent-runtime.perception-routing', [
     'packages/quality/src/',
     'packages/agent/runtime/src/tools/',
@@ -74,12 +81,21 @@ const RULES = Object.freeze([
     'packages/host/src/settings/',
     'packages/ai/sdk/src/',
   ]),
+  rule('launch-domain-binding', 'agent-runtime.launch-binding', [
+    'packages/agent/contracts/src/agent-draft-submit',
+    'packages/agent/contracts/src/agent-interaction-binding',
+    'packages/agent/contracts/src/agent-launch',
+    'packages/agent/runtime/src/application/agent-domain-binding-service',
+    'packages/agent/runtime/src/application/agent-launch-service',
+    'packages/agent/runtime/src/application/agent-launch-submit-service',
+    'apps/neko-desktop/src/main/desktop-agent-launch-runtime',
+    'apps/neko-desktop/src/renderer/desktop-agent-launch-host-runtime-adapter',
+  ]),
   rule('session-workflows', 'agent-runtime.workflow-controller', [
     'packages/agent/runtime/src/session/',
     'packages/agent/runtime/src/subagent/',
     'apps/neko-desktop/src/main/desktop-agent-app-host-composition',
     'apps/neko-desktop/src/main/desktop-agent-controller-composition',
-    'apps/neko-desktop/src/main/desktop-agent-launch-runtime',
     'apps/neko-desktop/src/renderer/DesktopAgentSurface',
   ]),
   rule('tool-call-lifecycle', 'agent-runtime.workflow-controller', [

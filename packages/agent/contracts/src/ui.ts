@@ -68,14 +68,8 @@ export interface EmbodyCharacterSessionProjection {
 // Session mode
 // ---------------------------------------------------------------------------
 
-/**
- * Session mode — controls the primary workflow / capability routing.
- * - agent:  LLM reasoning + tool calls (default)
- * - image:  image generation (routes to image media model)
- * - video:  video generation (routes to video media model)
- * - audio:  audio generation, including music-capable audio models
- */
-export type SessionMode = 'agent' | 'image' | 'video' | 'audio';
+/** Agent composers always submit conversational turns. */
+export type SessionMode = 'agent';
 
 export type MediaUnderstandingCategory = 'image' | 'audio' | 'video';
 export type MediaUnderstandingPurpose =
@@ -142,4 +136,5 @@ export interface SettingsState {
   mediaUnderstandingModels?: MediaUnderstandingModels;
   /** Safe config file diagnostic for the active snapshot, if loading failed. */
   configDiagnostic?: AgentConfigDiagnostic;
+  agentConfiguration?: import('./agent-model-catalog').AgentConfigurationPolicyProjection;
 }

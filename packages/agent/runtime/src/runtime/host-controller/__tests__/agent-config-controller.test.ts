@@ -106,6 +106,12 @@ describe('Agent config controller', () => {
     const effects = createEffects();
     const context = createContext();
 
-    expect(tryHandleAgentConfigControllerRoute({ type: 'getSkills' }, effects, context)).toBeNull();
+    expect(
+      tryHandleAgentConfigControllerRoute(
+        { type: 'getAgentInputCatalog', conversationId: 'conversation-1' },
+        effects,
+        context,
+      ),
+    ).toBeNull();
   });
 });

@@ -87,7 +87,7 @@ async function discoverPersonalSkills(personalRoot: string) {
       isTrusted: () => true,
       isEnabled: () => true,
     },
-  }).discover([{ path: personalRoot, source: { kind: 'personal' } }]);
+  }).discover([{ path: personalRoot, source: { kind: 'personal' }, entryPointKind: 'skill' }]);
 }
 
 async function writeSkill(root: string, name: string): Promise<void> {

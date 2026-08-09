@@ -8,3 +8,4 @@ export {
   type CanvasMediaLibraryCopyResult,
 } from './canvas-media-library-copy';
 export * from './canvas-generation-node-runtime';
+export * from './workspace-board-node-mutation';

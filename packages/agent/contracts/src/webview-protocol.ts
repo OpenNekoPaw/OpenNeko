@@ -22,7 +22,6 @@ import {
 } from './agent-capability-lifecycle';
 import type { AgentContextPayload, AgentContextType } from './agent-context';
 import type { MessageAttachment } from './message-attachment';
-import type { SkillSummary } from './skill';
 import type { StoryboardTextCue, StoryboardVoiceCue } from '@neko/canvas-domain';
 import type { NpcTranscriptArtifact } from '@neko/chara/contracts';
 import { isThreeReferenceContextData } from '@neko/preview-domain';
@@ -53,7 +52,6 @@ import type {
   SettingsState,
   TabState,
 } from './ui';
-import type { PluginSlashCommandInvocation } from './plugin-slash-command';
 import type { SubAgentWorkItem, SubAgentWorkItemEvent } from './work-item';
 import type {
   PluginTransferAssetRef,
@@ -65,6 +63,12 @@ import type {
   PluginTransferTargetRef,
 } from './plugin-transfer-contract';
 import type { AgentConfigDiagnostic } from './config-diagnostic';
+import {
+  parseAgentInputInvocationIntent,
+  type AgentInputInvocationIntent,
+} from './agent-draft-submit';
+import type { AgentBindingKind } from './agent-interaction-binding';
+import { parseAgentInputCatalog, type AgentInputCatalogEntry } from './agent-input-trigger';
 import type {
   ProjectionAttachRequest,
   ProjectionAttachmentHostFrame,
@@ -205,7 +209,6 @@ export interface EmptyWebviewMessage {
     | 'getAgentStates'
     | 'getConfig'
     | 'refreshConfigSnapshot'
-    | 'getSkills'
     | 'openUserConfigFile'
     | 'getTabState';
 }
@@ -364,42 +367,20 @@ export interface DownloadSvgWebviewMessage {
   filename: string;
 }
 
-export interface InvokeSlashCommandWebviewMessage {
-  type: 'invokeSlashCommand';
-  command: string;
-  args?: string;
+export interface GetAgentInputCatalogWebviewMessage {
+  type: 'getAgentInputCatalog';
   conversationId: string;
 }
 
-export interface InvokeSkillWebviewMessage {
-  type: 'invokeSkill';
-  skillName: string;
+export interface InvokeAgentInputWebviewMessage {
+  type: 'invokeAgentInput';
   conversationId: string;
-  args?: string;
-}
-
-export interface InvokePluginSlashCommandWebviewMessage {
-  type: 'invokePluginSlashCommand';
-  pluginId: string;
-  commandId: string;
-  conversationId: string;
-  args?: string;
+  input: AgentInputInvocationIntent;
 }
 
 export interface ExitCharacterDialogueSessionWebviewMessage {
   type: 'exitCharacterDialogueSession';
   sessionId: string;
-}
-
-export interface StartCharacterDialogueFromSlashWebviewMessage {
-  type: 'startCharacterDialogueFromSlash';
-  args?: string;
-}
-
-export interface ConfirmRoleplayCandidateWebviewMessage {
-  type: 'confirmRoleplayCandidate';
-  projectSearchItemId: string;
-  initialUserMessage?: string;
 }
 
 export interface ExitEmbodyCharacterSessionWebviewMessage {
@@ -465,11 +446,8 @@ export type AgentWebviewToHostMessage =
   | DragStartWebviewMessage
   | MermaidErrorWebviewMessage
   | DownloadSvgWebviewMessage
-  | InvokeSlashCommandWebviewMessage
-  | InvokeSkillWebviewMessage
-  | InvokePluginSlashCommandWebviewMessage
-  | StartCharacterDialogueFromSlashWebviewMessage
-  | ConfirmRoleplayCandidateWebviewMessage
+  | GetAgentInputCatalogWebviewMessage
+  | InvokeAgentInputWebviewMessage
   | ExitCharacterDialogueSessionWebviewMessage
   | ExitEmbodyCharacterSessionWebviewMessage
   | RevealContextSourceWebviewMessage
@@ -487,6 +465,7 @@ export interface ProjectFileMentionInfo {
   icon?: string;
   source?: ProjectMentionSource;
   mediaType?: ProjectMentionMediaType;
+  referenceReceipt?: import('./agent-draft-submit').AgentInputReferenceReceipt;
 }
 
 export type ProjectMentionExtraType =
@@ -511,6 +490,11 @@ export interface ProjectMentionExtra {
   mediaType?: ProjectMentionMediaType;
   entityType?: string;
   navigationData?: Record<string, string>;
+  characterLaunchSelection?: {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+  };
+  referenceReceipt?: import('./agent-draft-submit').AgentInputReferenceReceipt;
 }
 
 export interface ProjectFilesWebviewMessage {
@@ -714,6 +698,7 @@ export interface SettingsDataMessage {
   defaultMediaModels?: Partial<Record<MediaModelCategory, string>>;
   mediaUnderstandingModels?: SettingsState['mediaUnderstandingModels'];
   configDiagnostic?: AgentConfigDiagnostic;
+  agentConfiguration?: import('./agent-model-catalog').AgentConfigurationPolicyProjection;
 }
 
 export type ProjectFilesMessage = ProjectFilesWebviewMessage;
@@ -737,6 +722,7 @@ export interface ConfigStateMessage {
     defaultMediaModels?: Partial<Record<MediaModelCategory, string>>;
     mediaUnderstandingModels?: SettingsState['mediaUnderstandingModels'];
     configDiagnostic?: AgentConfigDiagnostic;
+    agentConfiguration?: import('./agent-model-catalog').AgentConfigurationPolicyProjection;
   };
 }
 
@@ -834,9 +820,12 @@ export interface EmbodyCharacterSessionExitedMessage {
   savedPath?: string;
 }
 
-export interface SkillsListMessage {
-  type: 'skillsList';
-  skills?: SkillSummary[];
+export interface AgentInputCatalogMessage {
+  type: 'agentInputCatalog';
+  conversationId: string;
+  phase: 'session';
+  bindingKind: Exclude<AgentBindingKind, 'unbound'>;
+  entries: readonly AgentInputCatalogEntry[];
 }
 
 export interface ContextTokenCountMessage {
@@ -916,7 +905,7 @@ export type AgentHostToWebviewMessage =
   | CharacterDialogueSessionExitedMessage
   | EmbodyCharacterSessionStartedMessage
   | EmbodyCharacterSessionExitedMessage
-  | SkillsListMessage
+  | AgentInputCatalogMessage
   | ContextTokenCountMessage
   | CompressionResultMessage
   | CompressionErrorMessage
@@ -932,7 +921,7 @@ export type MessageOfType<T extends AgentHostToWebviewMessage['type']> = Extract
   { type: T }
 >;
 
-const SESSION_MODES: readonly SessionMode[] = ['agent', 'image', 'video', 'audio'];
+const SESSION_MODES: readonly SessionMode[] = ['agent'];
 const MODEL_CATEGORIES: readonly ProtocolModelCategory[] = ['llm', 'image', 'video', 'audio'];
 const AGENT_MODEL_SLOTS: readonly AgentModelSlot[] = [
   'primary',
@@ -974,7 +963,6 @@ const EMPTY_MESSAGE_TYPES: readonly EmptyWebviewMessage['type'][] = [
   'getAgentStates',
   'getConfig',
   'refreshConfigSnapshot',
-  'getSkills',
   'openUserConfigFile',
   'getTabState',
 ];
@@ -1007,11 +995,8 @@ export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'dnd:start',
   'mermaidError',
   'downloadSvg',
-  'invokeSlashCommand',
-  'invokeSkill',
-  'invokePluginSlashCommand',
-  'startCharacterDialogueFromSlash',
-  'confirmRoleplayCandidate',
+  'getAgentInputCatalog',
+  'invokeAgentInput',
   'exitCharacterDialogueSession',
   'exitEmbodyCharacterSession',
   'revealContextSource',
@@ -1420,16 +1405,10 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
       return parseMermaidErrorMessage(raw);
     case 'downloadSvg':
       return parseDownloadSvgMessage(raw);
-    case 'invokeSlashCommand':
-      return parseInvokeSlashCommandMessage(raw);
-    case 'invokeSkill':
-      return parseInvokeSkillMessage(raw);
-    case 'invokePluginSlashCommand':
-      return parseInvokePluginSlashCommandMessage(raw);
-    case 'startCharacterDialogueFromSlash':
-      return parseStartCharacterDialogueFromSlashMessage(raw);
-    case 'confirmRoleplayCandidate':
-      return parseConfirmRoleplayCandidateMessage(raw);
+    case 'getAgentInputCatalog':
+      return parseGetAgentInputCatalogMessage(raw);
+    case 'invokeAgentInput':
+      return parseInvokeAgentInputMessage(raw);
     case 'exitCharacterDialogueSession':
       return parseExitCharacterDialogueSessionMessage(raw);
     case 'exitEmbodyCharacterSession':
@@ -1520,13 +1499,7 @@ export function parseSendMessageWebviewMessage(raw: unknown): SendMessageWebview
   const messageTrackingId = optionalString(raw.messageTrackingId);
   if (raw.messageTrackingId !== undefined && messageTrackingId === undefined) return null;
 
-  if (raw.sessionMode === 'agent') {
-    if (mediaModel) return null;
-  } else {
-    if (!mediaModel || mediaModel.category !== raw.sessionMode) return null;
-    if (purposeModels) return null;
-    if (agentModels || llmConfig) return null;
-  }
+  if (mediaModel) return null;
 
   return {
     type: 'sendMessage',
@@ -2642,72 +2615,40 @@ function parseDownloadSvgMessage(raw: Record<string, unknown>): DownloadSvgWebvi
   return { type: 'downloadSvg', svg: raw.svg, filename };
 }
 
-function parseInvokeSlashCommandMessage(
+function parseGetAgentInputCatalogMessage(
   raw: Record<string, unknown>,
-): InvokeSlashCommandWebviewMessage | null {
-  const command = requiredString(raw.command);
+): GetAgentInputCatalogWebviewMessage | null {
   const conversationId = requiredString(raw.conversationId);
-  const args = optionalStringStrict(raw.args);
-  if (!command || !conversationId || args === null) return null;
-  return {
-    type: 'invokeSlashCommand',
-    command,
-    conversationId,
-    ...(args !== undefined ? { args } : {}),
-  };
+  return conversationId ? { type: 'getAgentInputCatalog', conversationId } : null;
 }
 
-function parseInvokeSkillMessage(raw: Record<string, unknown>): InvokeSkillWebviewMessage | null {
-  const skillName = requiredString(raw.skillName);
+function parseInvokeAgentInputMessage(
+  raw: Record<string, unknown>,
+): InvokeAgentInputWebviewMessage | null {
   const conversationId = requiredString(raw.conversationId);
-  const args = optionalStringStrict(raw.args);
-  if (!skillName || !conversationId || args === null) return null;
-  return {
-    type: 'invokeSkill',
-    skillName,
-    conversationId,
-    ...(args !== undefined ? { args } : {}),
-  };
+  if (!conversationId) return null;
+  try {
+    return {
+      type: 'invokeAgentInput',
+      conversationId,
+      input: parseAgentInputInvocationIntent(raw.input),
+    };
+  } catch {
+    return null;
+  }
 }
 
-function parseInvokePluginSlashCommandMessage(
-  raw: Record<string, unknown>,
-): InvokePluginSlashCommandWebviewMessage | null {
-  const pluginId = requiredString(raw.pluginId);
-  const commandId = requiredString(raw.commandId);
-  const conversationId = requiredString(raw.conversationId);
-  const args = optionalStringStrict(raw.args);
-  if (!pluginId || !commandId || !conversationId || args === null) return null;
+export function buildAgentInputCatalogMessage(input: {
+  readonly conversationId: string;
+  readonly bindingKind: Exclude<AgentBindingKind, 'unbound'>;
+  readonly entries: readonly AgentInputCatalogEntry[];
+}): AgentInputCatalogMessage {
   return {
-    type: 'invokePluginSlashCommand',
-    pluginId,
-    commandId,
-    conversationId,
-    ...(args !== undefined ? { args } : {}),
-  };
-}
-
-function parseStartCharacterDialogueFromSlashMessage(
-  raw: Record<string, unknown>,
-): StartCharacterDialogueFromSlashWebviewMessage | null {
-  const args = optionalStringStrict(raw.args);
-  if (args === null) return null;
-  return {
-    type: 'startCharacterDialogueFromSlash',
-    ...(args !== undefined ? { args } : {}),
-  };
-}
-
-function parseConfirmRoleplayCandidateMessage(
-  raw: Record<string, unknown>,
-): ConfirmRoleplayCandidateWebviewMessage | null {
-  const projectSearchItemId = requiredString(raw.projectSearchItemId);
-  const initialUserMessage = optionalStringStrict(raw.initialUserMessage);
-  if (!projectSearchItemId || initialUserMessage === null) return null;
-  return {
-    type: 'confirmRoleplayCandidate',
-    projectSearchItemId,
-    ...(initialUserMessage !== undefined ? { initialUserMessage } : {}),
+    type: 'agentInputCatalog',
+    conversationId: requireBuilderConversationId(input.conversationId, 'agentInputCatalog'),
+    phase: 'session',
+    bindingKind: input.bindingKind,
+    entries: parseAgentInputCatalog(input.entries),
   };
 }
 
@@ -2725,17 +2666,6 @@ function parseExitEmbodyCharacterSessionMessage(
   const sessionId = requiredString(raw.sessionId);
   if (!sessionId) return null;
   return { type: 'exitEmbodyCharacterSession', sessionId };
-}
-
-export function buildPluginSlashCommandInvocation(
-  message: InvokePluginSlashCommandWebviewMessage,
-): PluginSlashCommandInvocation {
-  return {
-    pluginId: message.pluginId,
-    commandId: message.commandId,
-    conversationId: message.conversationId,
-    ...(message.args !== undefined ? { args: message.args } : {}),
-  };
 }
 
 export function buildCharacterDialogueSessionStartedMessage(input: {

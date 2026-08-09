@@ -28,19 +28,19 @@ file bytes SHALL remain authoritative, and every read and save MUST use the cano
 ### Requirement: Text edits are revisioned and atomic
 
 Every edit command SHALL carry exact project, workspace, document, session and request identities plus
-the expected document revision. The session SHALL apply only ordered, non-overlapping in-bounds
+the expected document edit sequence. The session SHALL apply only ordered, non-overlapping in-bounds
 changes to the observed source and SHALL publish one new immutable projection for an accepted
 command.
 
 #### Scenario: Renderer submits an accepted edit
 
-- **WHEN** an edit references the current session revision and valid source ranges
-- **THEN** the session applies all changes atomically, increments its concurrency revision and marks the document dirty
+- **WHEN** an edit references the current session edit sequence and valid source ranges
+- **THEN** the session applies all changes atomically, increments its concurrency edit sequence and marks the document dirty
 - **AND** diagnostics and format projections are associated with the accepted source only
 
 #### Scenario: A stale edit arrives
 
-- **WHEN** an edit carries a stale revision, mismatched identity, reused request identity or invalid range
+- **WHEN** an edit carries a stale edit sequence, mismatched identity, reused request identity or invalid range
 - **THEN** the owning session rejects only that command with a typed diagnostic
 - **AND** it does not retry against current text, switch documents or partially apply changes
 
@@ -54,13 +54,13 @@ command.
 
 Save SHALL encode the accepted working source with the loaded UTF-8 BOM and LF/CRLF convention and
 SHALL publish atomically with the loaded Content fingerprint. Save MUST NOT format, normalize,
-overwrite externally changed bytes or clear dirty state for an unsaved later revision.
+overwrite externally changed bytes or clear dirty state for an unsaved later edit sequence.
 
-#### Scenario: User saves the current revision
+#### Scenario: User saves the current edit sequence
 
 - **WHEN** the current working source is dirty and the file fingerprint still matches the loaded base
 - **THEN** the authorized writer atomically replaces the file and returns the new fingerprint
-- **AND** the session clears dirty state only if no later revision remains unsaved
+- **AND** the session clears dirty state only if no later edit sequence remains unsaved
 
 #### Scenario: Workspace file changed externally
 
@@ -123,6 +123,15 @@ intent for admitted editable text to that View, replacing the previous text-to-P
 - **THEN** Workbench uses the existing bounded Secondary Main group with an independent exact document session
 - **AND** it does not exceed the canonical split limit or copy source between sessions
 
+#### Scenario: Main View capacity rejects a Resource Browser open operation locally
+
+- **WHEN** an exact Resource Browser open intent would exceed the canonical Main View capacity
+- **THEN** Desktop returns an Assets-owned typed operation rejection for that request
+- **AND** Resource Browser keeps its authoritative projection visible and shows a localized dismissible diagnostic
+- **AND** all existing Main Views, sibling Workspace capabilities and the Resource Dock remain unchanged
+- **AND** Desktop does not close, replace or focus another View and does not retry through Preview or another handler
+- **AND** after the user explicitly closes a Main View, resubmitting the same exact intent can succeed through the canonical handler
+
 #### Scenario: A non-canonical editor View is restored
 
 - **WHEN** persisted Workbench state contains an unknown editor kind or mismatched editor identities
@@ -173,12 +182,38 @@ session.
 - **THEN** it requests the exact editor-session projection and Desktop revokes the prior attachment
 - **AND** it does not attach to an active or recent document or accept messages from the old sender binding
 
+#### Scenario: A released clean session is restored
+
+- **WHEN** the exact Text Editor View remains present but its clean Main-owned session was released
+- **THEN** `projection.get` reopens the View's exact authorized Workspace document and returns a new session identity
+- **AND** Desktop updates only that View, rejects subsequent commands carrying the prior session identity and leaves sibling Views available
+
 ### Requirement: Editing controls are localized, accessible and IME safe
 
 Editor commands, diagnostics and accessibility labels SHALL use package-owned `en` and `zh-cn`
 bundles, with domain diagnostics expressed as stable codes and parameters. IME composition SHALL
 preserve the composing range and SHALL defer completion, formatting and semantic replacement until
 composition ends.
+
+The visible Text Editor SHALL use the existing Workbench editor-tab row as its only persistent
+command row. Package-owned controls SHALL mount on the right of that row and SHALL change with the
+exact active View; switching to another Text Editor format or another domain View MUST remove stale
+controls. Save, undo, redo, presentation-mode selection, outline visibility and JSON formatting
+SHALL have keyboard commands. Common editing commands SHOULD rely on those commands instead of
+duplicating permanent buttons.
+
+#### Scenario: Active Text Editor contributes contextual Workbench controls
+
+- **WHEN** a Text Editor View becomes the active View in a Main group
+- **THEN** its package-owned format and presentation controls appear at the right of that group's existing tab row
+- **AND** the document surface does not add a second toolbar or duplicate the active filename
+- **AND** switching to Canvas, Preview or another text format replaces or removes those controls with no stale command target
+
+#### Scenario: User invokes an editor keyboard command
+
+- **WHEN** focus is within the exact Text Editor and the user invokes save, undo, redo, presentation-mode, outline or format commands
+- **THEN** the command targets only that document's visible projection and canonical runtime path
+- **AND** another visible editor group, hidden View or active/recent document cannot receive the command
 
 #### Scenario: User enters Chinese with an IME
 
@@ -192,20 +227,21 @@ composition ends.
 - **THEN** command labels, tooltips, diagnostics and accessibility names update without reloading or rewriting the document
 - **AND** source language and editor locale remain independent
 
-### Requirement: Future non-UI authoring reuses the same application port
+### Requirement: External content authoring remains file-native
 
 The text-document owner SHALL expose one host-neutral open, project, apply-edits, save and close port
-for authorized callers. The port MUST require exact document/session identity and concurrency tokens
-and MUST NOT expose raw paths, a parallel writer or a second format authority.
+for the exact Window editor lifecycle. Agent content authoring MUST NOT consume that port or create an
+Agent-owned Text Document session; it changes the authoritative Workspace file through the separately
+authorized native file path.
 
-#### Scenario: Future Agent adapter edits a document
+#### Scenario: Agent changes a clean open content file
 
-- **WHEN** a separately authorized Agent capability later submits bounded edits for the current exact revision
-- **THEN** the same Text Document session validates, applies and projects those edits
-- **AND** no Markdown screenplay convention, Agent-owned file store or direct filesystem path is required
+- **WHEN** an Agent-native write changes the exact Workspace file observed by a clean Text Document session
+- **THEN** the editor handles it through the canonical external-file change policy
+- **AND** no Agent editor session, format-specific mutation Tool or second writer is created
 
-#### Scenario: AI integration is absent in this change
+#### Scenario: Agent changes a dirty open content file
 
-- **WHEN** this capability is installed without a separately approved Agent authoring change
-- **THEN** no Agent Tool, Prompt, Skill, write grant or autonomous save entry is registered
-- **AND** user editing remains fully available through the same package-owned session path
+- **WHEN** an Agent-native write changes the exact Workspace file while the Window session is dirty
+- **THEN** the Window session preserves its accepted buffer and reports an external-change conflict
+- **AND** it does not merge, overwrite or transfer the dirty buffer to the Agent

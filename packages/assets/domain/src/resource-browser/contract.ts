@@ -14,6 +14,7 @@ import {
   type WorkspaceMediaLibraryRecoveryPlan,
   type WorkspaceMediaLibraryStatus,
 } from '@neko/assets-domain/contracts';
+import { isPortablePathSegment } from '@neko/shared/path';
 
 export function createResourceBrowserViewId(projectViewId: string): string {
   return `resource-browser:${projectViewId}`;
@@ -29,16 +30,18 @@ export const RESOURCE_BROWSER_ROUTES = {
   recoveryApply: 'source.recovery.apply',
   recoveryCancel: 'source.recovery.cancel',
   search: 'search',
-  refresh: 'refresh',
+  reconcile: 'projection.reconcile',
   linkGlobalLibrary: 'source.link-global-library',
   addDirectoryLibrary: 'source.add-directory-library',
   relinkSource: 'source.relink',
   removeSource: 'source.remove',
-  createDirectory: 'content.create-directory',
-  importFiles: 'content.import-files',
+  createFile: 'workspace-entry.create-file',
+  createDirectory: 'workspace-entry.create-directory',
+  createCreativeDocument: 'creative-document.create',
+  openCreativeDocument: 'creative-document.open',
   trashContent: 'content.trash',
   preview: 'preview',
-  openCut: 'cut.open',
+  editText: 'text.edit',
   addToCut: 'cut.add',
   reveal: 'reveal',
   addToCanvas: 'canvas.add',
@@ -62,7 +65,7 @@ export type ResourceBrowserItemKind =
   | 'location'
   | 'style';
 export type ResourceBrowserCapability =
-  'preview' | 'open-cut' | 'add-to-cut' | 'reveal' | 'add-to-canvas';
+  'preview' | 'edit-text' | 'open-creative-document' | 'add-to-cut' | 'reveal' | 'add-to-canvas';
 
 export interface ResourceBrowserDiagnostic {
   readonly code: string;
@@ -277,22 +280,25 @@ export interface ResourceBrowserRecoveryCancelResult {
 
 export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
   readonly route:
-    | typeof RESOURCE_BROWSER_ROUTES.refresh
+    | typeof RESOURCE_BROWSER_ROUTES.reconcile
     | typeof RESOURCE_BROWSER_ROUTES.linkGlobalLibrary
     | typeof RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
     | typeof RESOURCE_BROWSER_ROUTES.relinkSource
     | typeof RESOURCE_BROWSER_ROUTES.removeSource
+    | typeof RESOURCE_BROWSER_ROUTES.createFile
     | typeof RESOURCE_BROWSER_ROUTES.createDirectory
-    | typeof RESOURCE_BROWSER_ROUTES.importFiles
+    | typeof RESOURCE_BROWSER_ROUTES.createCreativeDocument
+    | typeof RESOURCE_BROWSER_ROUTES.openCreativeDocument
     | typeof RESOURCE_BROWSER_ROUTES.trashContent
     | typeof RESOURCE_BROWSER_ROUTES.preview
-    | typeof RESOURCE_BROWSER_ROUTES.openCut
+    | typeof RESOURCE_BROWSER_ROUTES.editText
     | typeof RESOURCE_BROWSER_ROUTES.addToCut
     | typeof RESOURCE_BROWSER_ROUTES.reveal
     | typeof RESOURCE_BROWSER_ROUTES.addToCanvas
     | typeof RESOURCE_BROWSER_ROUTES.manageEntity;
   readonly resourceId?: string;
-  readonly directoryName?: string;
+  readonly entryName?: string;
+  readonly documentKind?: 'canvas' | 'cut';
   readonly targetPreview?: {
     readonly viewId: string;
     readonly presentation: 'temporary' | 'side';
@@ -309,6 +315,26 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
   };
   readonly entityIntent?: ProjectEntityInspectorIntent;
 }
+
+export interface ResourceBrowserIntentCompletedResult {
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly status: 'completed';
+  readonly projection: ResourceBrowserProjection;
+}
+
+export interface ResourceBrowserIntentRejectedResult {
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly status: 'rejected';
+  readonly rejection: {
+    readonly code: 'main-view-capacity-reached';
+    readonly maximum: number;
+  };
+}
+
+export type ResourceBrowserIntentResult =
+  ResourceBrowserIntentCompletedResult | ResourceBrowserIntentRejectedResult;
 
 export interface ResourceBrowserProjectionEvent {
   readonly sequence: number;
@@ -347,6 +373,18 @@ export class ResourceBrowserContractError extends Error {
     super(message, options);
     this.name = 'ResourceBrowserContractError';
     this.code = code;
+  }
+}
+
+export class ResourceBrowserOperationRejectedError extends Error {
+  readonly code: ResourceBrowserIntentRejectedResult['rejection']['code'];
+  readonly maximum: number;
+
+  constructor(rejection: ResourceBrowserIntentRejectedResult['rejection']) {
+    super(`Resource Browser operation rejected: ${rejection.code}.`);
+    this.name = 'ResourceBrowserOperationRejectedError';
+    this.code = rejection.code;
+    this.maximum = rejection.maximum;
   }
 }
 
@@ -937,7 +975,8 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     'identity',
     'route',
     'resourceId',
-    'directoryName',
+    'entryName',
+    'documentKind',
     'targetPreview',
     'targetCut',
     'targetCanvas',
@@ -945,16 +984,18 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
   ]);
   const route = record['route'];
   if (
-    route !== RESOURCE_BROWSER_ROUTES.refresh &&
+    route !== RESOURCE_BROWSER_ROUTES.reconcile &&
     route !== RESOURCE_BROWSER_ROUTES.linkGlobalLibrary &&
     route !== RESOURCE_BROWSER_ROUTES.addDirectoryLibrary &&
     route !== RESOURCE_BROWSER_ROUTES.relinkSource &&
     route !== RESOURCE_BROWSER_ROUTES.removeSource &&
+    route !== RESOURCE_BROWSER_ROUTES.createFile &&
     route !== RESOURCE_BROWSER_ROUTES.createDirectory &&
-    route !== RESOURCE_BROWSER_ROUTES.importFiles &&
+    route !== RESOURCE_BROWSER_ROUTES.createCreativeDocument &&
     route !== RESOURCE_BROWSER_ROUTES.trashContent &&
     route !== RESOURCE_BROWSER_ROUTES.preview &&
-    route !== RESOURCE_BROWSER_ROUTES.openCut &&
+    route !== RESOURCE_BROWSER_ROUTES.openCreativeDocument &&
+    route !== RESOURCE_BROWSER_ROUTES.editText &&
     route !== RESOURCE_BROWSER_ROUTES.addToCut &&
     route !== RESOURCE_BROWSER_ROUTES.reveal &&
     route !== RESOURCE_BROWSER_ROUTES.addToCanvas &&
@@ -970,7 +1011,7 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     identity: parseResourceBrowserIdentity(record['identity']),
     route,
   } as const;
-  if (route === RESOURCE_BROWSER_ROUTES.refresh) {
+  if (route === RESOURCE_BROWSER_ROUTES.reconcile) {
     return request;
   }
   if (
@@ -980,8 +1021,9 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     return request;
   }
   if (
+    route === RESOURCE_BROWSER_ROUTES.createFile ||
     route === RESOURCE_BROWSER_ROUTES.createDirectory ||
-    route === RESOURCE_BROWSER_ROUTES.importFiles
+    route === RESOURCE_BROWSER_ROUTES.createCreativeDocument
   ) {
     const resourceId =
       record['resourceId'] === undefined
@@ -990,13 +1032,13 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
             record['resourceId'],
             'Resource Browser parent identity is invalid.',
           );
-    if (route === RESOURCE_BROWSER_ROUTES.importFiles) {
-      return { ...request, ...(resourceId ? { resourceId } : {}) };
-    }
     return {
       ...request,
       ...(resourceId ? { resourceId } : {}),
-      directoryName: requirePortableEntryName(record['directoryName']),
+      entryName: requirePortableEntryName(record['entryName']),
+      ...(route === RESOURCE_BROWSER_ROUTES.createCreativeDocument
+        ? { documentKind: requireCreativeDocumentKind(record['documentKind']) }
+        : {}),
     };
   }
   const resourceId = requireOpaqueIdentity(
@@ -1037,6 +1079,9 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
         presentation,
       },
     };
+  }
+  if (route === RESOURCE_BROWSER_ROUTES.editText) {
+    return { ...request, resourceId };
   }
   if (route === RESOURCE_BROWSER_ROUTES.addToCut) {
     const target = requireRecord(
@@ -1089,10 +1134,68 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
   };
 }
 
+export function parseResourceBrowserIntentResult(value: unknown): ResourceBrowserIntentResult {
+  const record = requireRecord(value, 'Resource Browser intent result must be an object.');
+  const status = record['status'];
+  if (status === 'completed') {
+    requireOnlyKeys(record, ['requestId', 'identity', 'status', 'projection']);
+    const identity = parseResourceBrowserIdentity(record['identity']);
+    const projection = parseResourceBrowserProjection(record['projection']);
+    assertResourceBrowserIdentity(identity, projection.identity);
+    return {
+      requestId: requireNonEmptyString(
+        record['requestId'],
+        'Resource Browser request identity is required.',
+      ),
+      identity,
+      status,
+      projection,
+    };
+  }
+  if (status === 'rejected') {
+    requireOnlyKeys(record, ['requestId', 'identity', 'status', 'rejection']);
+    const rejection = requireRecord(
+      record['rejection'],
+      'Resource Browser intent rejection is required.',
+    );
+    requireOnlyKeys(rejection, ['code', 'maximum']);
+    if (rejection['code'] !== 'main-view-capacity-reached') {
+      throw invalidPayload('Resource Browser intent rejection code is invalid.');
+    }
+    return {
+      requestId: requireNonEmptyString(
+        record['requestId'],
+        'Resource Browser request identity is required.',
+      ),
+      identity: parseResourceBrowserIdentity(record['identity']),
+      status,
+      rejection: {
+        code: rejection['code'],
+        maximum: requireBoundedInteger(
+          rejection['maximum'],
+          1,
+          100,
+          'Resource Browser Main View maximum must be between 1 and 100.',
+        ),
+      },
+    };
+  }
+  throw invalidPayload('Resource Browser intent result status is invalid.');
+}
+
+function requireCreativeDocumentKind(value: unknown): 'canvas' | 'cut' {
+  if (value !== 'canvas' && value !== 'cut') {
+    throw invalidPayload('Resource Browser creative document kind must be Canvas or Cut.');
+  }
+  return value;
+}
+
 function requirePortableEntryName(value: unknown): string {
-  const name = requireNonEmptyString(value, 'Resource Browser directory name is required.').trim();
-  if (name === '.' || name === '..' || name.startsWith('.') || /[\\/\0]/u.test(name)) {
-    throw invalidPayload('Resource Browser directory name is not a portable visible entry name.');
+  const name = requireNonEmptyString(value, 'Resource Browser entry name is required.').normalize(
+    'NFC',
+  );
+  if (!isPortablePathSegment(name)) {
+    throw invalidPayload('Resource Browser entry name is not a portable visible path segment.');
   }
   return name;
 }
@@ -1752,7 +1855,8 @@ function requireLibraryName(value: unknown, message: string): string {
 function requireCapability(value: unknown): ResourceBrowserCapability {
   const allowed: readonly ResourceBrowserCapability[] = [
     'preview',
-    'open-cut',
+    'edit-text',
+    'open-creative-document',
     'add-to-cut',
     'reveal',
     'add-to-canvas',

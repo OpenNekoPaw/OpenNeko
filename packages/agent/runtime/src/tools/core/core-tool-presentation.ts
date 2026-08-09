@@ -34,6 +34,50 @@ export function presentCoreFileAccessDenial(
       return zh
         ? `路径位于受管理的工作区运行时或缓存目录中，已被忽略：${decision.path}`
         : `Path is ignored because it is in a managed workspace runtime or cache directory: ${decision.path}`;
+    case 'protected-project-document': {
+      const owner = decision.protectedProjectOwner;
+      if (!owner) throw new Error('Protected project denial requires an owning domain.');
+      return zh
+        ? `受保护的项目文档只能通过 ${owner} 领域能力访问，不能读取或写入原始文件：${decision.path}`
+        : `Protected project document must use the ${owner} domain capability and cannot be read or written as a raw file: ${decision.path}`;
+    }
+  }
+}
+
+export function presentContentWriteDiagnostic(
+  code: import('@neko/content').ContentIoDiagnosticCode,
+  workspacePath: string,
+  locale: unknown,
+): string {
+  const zh = isChinesePromptLocale(locale);
+  switch (code) {
+    case 'content-changed':
+    case 'content-conflict':
+      return zh
+        ? `${code}：文件“${workspacePath}”已变化或已存在；请重新读取并使用返回的 freshness。`
+        : `${code}: File "${workspacePath}" changed or already exists; read it again and use the returned freshness.`;
+    case 'content-cancelled':
+      return zh ? `${code}：文件写入已取消。` : `${code}: File write was cancelled.`;
+    case 'content-too-large':
+      return zh ? `${code}：写入内容超过允许大小。` : `${code}: Content exceeds the write limit.`;
+    case 'content-missing':
+      return zh
+        ? `${code}：文件或授权目录不存在：${workspacePath}`
+        : `${code}: File or authorized directory is missing: ${workspacePath}`;
+    case 'content-unauthorized':
+      return zh
+        ? `${code}：文件写入未获授权：${workspacePath}`
+        : `${code}: File write is not authorized: ${workspacePath}`;
+    case 'content-write-failed':
+      return zh
+        ? `${code}：文件写入失败：${workspacePath}`
+        : `${code}: File write failed: ${workspacePath}`;
+    case 'content-allocation-failed':
+    case 'content-projection-failed':
+    case 'content-range-invalid':
+    case 'content-read-failed':
+    case 'content-unsupported':
+      throw new Error(`Unexpected Workspace write diagnostic: ${code}`);
   }
 }
 
@@ -59,6 +103,35 @@ export function presentReadFailure(
   }
 }
 
+export function presentReadTextBoundaryFailure(
+  code: 'non-text' | 'too-large' | 'invalid-utf8' | 'contains-null',
+  value: string,
+  locale: unknown,
+  contentClass?: string,
+): string {
+  const zh = isChinesePromptLocale(locale);
+  switch (code) {
+    case 'non-text':
+      return zh
+        ? `Read 只读取有界 UTF-8 文本；“${value}”属于 ${contentClass ?? '非文本'}，请使用对应内容或领域能力。`
+        : `Read accepts only bounded UTF-8 text; "${value}" is ${contentClass ?? 'non-text'} content and requires its exact content or domain capability.`;
+    case 'too-large':
+      return zh
+        ? `文本文件超过 Read 的 ${MAX_TEXT_READ_MIB} MiB 上限：${value}`
+        : `Text file exceeds the ${MAX_TEXT_READ_MIB} MiB Read limit: ${value}`;
+    case 'invalid-utf8':
+      return zh
+        ? `文件不是有效的 UTF-8 文本，Read 已拒绝：${value}`
+        : `File is not valid UTF-8 text and was rejected by Read: ${value}`;
+    case 'contains-null':
+      return zh
+        ? `文件包含 NUL 字节，不能作为文本读取：${value}`
+        : `File contains NUL bytes and cannot be read as text: ${value}`;
+  }
+}
+
+const MAX_TEXT_READ_MIB = 4;
+
 export function presentWriteFailure(detail: string, locale: unknown): string {
   return isChinesePromptLocale(locale)
     ? `写入文件失败：${detail}`
@@ -66,7 +139,7 @@ export function presentWriteFailure(detail: string, locale: unknown): string {
 }
 
 export function presentListDirectoryFailure(
-  code: 'not-found' | 'not-directory' | 'list-failed',
+  code: 'not-found' | 'not-directory' | 'list-failed' | 'symlink-denied' | 'cursor-invalid',
   value: string,
   locale: unknown,
 ): string {
@@ -78,6 +151,14 @@ export function presentListDirectoryFailure(
       return zh ? `路径不是目录：${value}` : `Path is not a directory: ${value}`;
     case 'list-failed':
       return zh ? `列出目录失败：${value}` : `Failed to list directory: ${value}`;
+    case 'symlink-denied':
+      return zh
+        ? `普通工作区目录读取不会跟随符号链接：${value}`
+        : `Ordinary Workspace directory listing does not follow symbolic links: ${value}`;
+    case 'cursor-invalid':
+      return zh
+        ? `目录内容已变化或游标无效：${value}`
+        : `Directory contents changed or the cursor is invalid: ${value}`;
   }
 }
 

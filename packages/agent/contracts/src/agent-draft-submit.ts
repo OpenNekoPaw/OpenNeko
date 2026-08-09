@@ -1,100 +1,124 @@
 import {
-  parseAgentConversationContext,
-  type AgentConversationContext,
-} from './agent-conversation-context';
+  parseAgentDraftInteractionProjection,
+  parseAgentSessionInteractionProjection,
+  type AgentDraftInteractionProjection,
+  type AgentSessionInteractionProjection,
+} from './agent-interaction-binding';
+import {
+  parseAgentConfigurationRequest,
+  type AgentConfigurationRequest,
+} from './agent-model-catalog';
 
-export interface AgentDraftSubmitInput {
-  readonly target: AgentDraftSubmitTarget;
-  readonly messageText: string;
-  readonly resourceGrantIds: readonly string[];
-  readonly configuration: {
-    readonly providerId: string;
-    readonly modelId: string;
-    readonly executionMode: 'plan' | 'ask' | 'auto';
-  };
-}
-
-export type AgentDraftSubmitTarget =
+export type AgentDraftInputIntent =
+  | { readonly kind: 'message'; readonly text: string }
   | {
-      readonly kind: 'automatic-assistant';
-      readonly draftId: string;
+      readonly kind: 'command';
+      readonly catalogEntryId: string;
+      readonly commandId: string;
+      readonly handlerId: string;
+      readonly args?: string;
     }
   | {
-      readonly kind: 'bound-context';
-      readonly draftId: string;
-      readonly context: AgentConversationContext;
+      readonly kind: 'skill';
+      readonly catalogEntryId: string;
+      readonly skillName: string;
+      readonly activationId: string;
+      readonly args?: string;
     };
 
+export type AgentInputInvocationIntent = Exclude<
+  AgentDraftInputIntent,
+  { readonly kind: 'message' }
+>;
+
+export function parseAgentInputInvocationIntent(value: unknown): AgentInputInvocationIntent {
+  const intent = parseAgentDraftInputIntent(value);
+  if (intent.kind === 'message') {
+    throw new Error('Agent input invocation cannot be an ordinary message.');
+  }
+  return intent;
+}
+
+export interface AgentInputReferenceReceipt {
+  readonly catalogEntryId: string;
+  readonly referenceId: string;
+  readonly ownerKind: 'assistant' | 'workspace' | 'character' | 'room' | 'world';
+  readonly ownerId: string;
+  readonly bindingReceiptId?: string;
+}
+
+export interface AgentDraftSubmitInput {
+  readonly draft: AgentDraftInteractionProjection;
+  readonly input: AgentDraftInputIntent;
+  readonly references: readonly AgentInputReferenceReceipt[];
+  readonly resourceGrantIds: readonly string[];
+  readonly configuration: AgentConfigurationRequest;
+}
+
 export interface AgentDraftSubmitProjection {
-  readonly conversationId: string;
+  readonly session: AgentSessionInteractionProjection;
   readonly turnId: string;
   readonly turnStatus: 'pending' | 'running' | 'completed' | 'failed';
   readonly diagnostic?: string;
 }
 
 export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInput {
-  const record = requireRecord(value, 'Agent draft submit input must be an object.');
+  const record = requireRecord(value, 'Agent Draft submit input must be an object.');
   requireExactKeys(
     record,
-    ['target', 'messageText', 'resourceGrantIds', 'configuration'],
-    'Agent draft submit input',
+    ['draft', 'input', 'references', 'resourceGrantIds', 'configuration'],
+    'Agent Draft submit input',
   );
-  const configuration = requireRecord(
-    record['configuration'],
-    'Agent draft submit configuration must be an object.',
-  );
-  requireExactKeys(
-    configuration,
-    ['providerId', 'modelId', 'executionMode'],
-    'Agent draft submit configuration',
-  );
-  const executionMode = configuration['executionMode'];
-  if (executionMode !== 'plan' && executionMode !== 'ask' && executionMode !== 'auto') {
-    throw new Error(`Unknown Agent draft execution mode '${String(executionMode)}'.`);
+  const draft = parseAgentDraftInteractionProjection(record['draft']);
+  if (draft.binding.kind !== 'unbound' && draft.bindingReceipt === null) {
+    throw new Error('Bound Agent Draft submit requires an exact binding receipt.');
   }
   return {
-    target: parseTarget(record['target']),
-    messageText: requireIdentity(record['messageText'], 'message'),
+    draft,
+    input: parseAgentDraftInputIntent(record['input']),
+    references: parseReferenceReceipts(record['references']),
     resourceGrantIds: requireIdentityArray(record['resourceGrantIds'], 'Resource grant'),
-    configuration: {
-      providerId: requireIdentity(configuration['providerId'], 'Provider'),
-      modelId: requireIdentity(configuration['modelId'], 'Model'),
-      executionMode,
-    },
+    configuration: parseAgentConfigurationRequest(record['configuration']),
   };
 }
 
-function parseTarget(value: unknown): AgentDraftSubmitTarget {
-  const record = requireRecord(value, 'Agent draft submit target must be an object.');
-  if (record['kind'] === 'automatic-assistant') {
-    requireExactKeys(record, ['kind', 'draftId'], 'Automatic Assistant draft target');
+export function parseAgentDraftInputIntent(value: unknown): AgentDraftInputIntent {
+  const record = requireRecord(value, 'Agent Draft input intent must be an object.');
+  if (record['kind'] === 'message') {
+    requireExactKeys(record, ['kind', 'text'], 'Agent message input intent');
+    return { kind: 'message', text: requireIdentity(record['text'], 'message') };
+  }
+  if (record['kind'] === 'command') {
+    requireInvocationKeys(record, ['kind', 'catalogEntryId', 'commandId', 'handlerId']);
     return {
-      kind: 'automatic-assistant',
-      draftId: requireIdentity(record['draftId'], 'Draft'),
+      kind: 'command',
+      catalogEntryId: requireIdentity(record['catalogEntryId'], 'catalog entry'),
+      commandId: requireIdentity(record['commandId'], 'command'),
+      handlerId: requireIdentity(record['handlerId'], 'command handler'),
+      ...parseOptionalArgs(record['args']),
     };
   }
-  if (record['kind'] === 'bound-context') {
-    requireExactKeys(record, ['kind', 'draftId', 'context'], 'Bound Agent draft target');
+  if (record['kind'] === 'skill') {
+    requireInvocationKeys(record, ['kind', 'catalogEntryId', 'skillName', 'activationId']);
     return {
-      kind: 'bound-context',
-      draftId: requireIdentity(record['draftId'], 'Draft'),
-      context: parseAgentConversationContext(record['context']),
+      kind: 'skill',
+      catalogEntryId: requireIdentity(record['catalogEntryId'], 'catalog entry'),
+      skillName: requireIdentity(record['skillName'], 'Skill'),
+      activationId: requireIdentity(record['activationId'], 'Skill activation'),
+      ...parseOptionalArgs(record['args']),
     };
   }
-  throw new Error(`Unknown Agent draft submit target '${String(record['kind'])}'.`);
+  throw new Error(`Unknown Agent Draft input intent '${String(record['kind'])}'.`);
 }
 
 export function parseAgentDraftSubmitProjection(value: unknown): AgentDraftSubmitProjection {
-  const record = requireRecord(value, 'Agent draft submit projection must be an object.');
-  const allowed = ['conversationId', 'turnId', 'turnStatus', 'diagnostic'];
-  const unknown = Object.keys(record).find((key) => !allowed.includes(key));
-  if (unknown)
-    throw new Error(`Agent draft submit projection contains unknown field '${unknown}'.`);
-  for (const required of ['conversationId', 'turnId', 'turnStatus']) {
-    if (!(required in record)) {
-      throw new Error(`Agent draft submit projection is missing field '${required}'.`);
-    }
-  }
+  const record = requireRecord(value, 'Agent Draft submit projection must be an object.');
+  requireAllowedKeys(
+    record,
+    ['session', 'turnId', 'turnStatus', 'diagnostic'],
+    ['session', 'turnId', 'turnStatus'],
+    'Agent Draft submit projection',
+  );
   const turnStatus = record['turnStatus'];
   if (
     turnStatus !== 'pending' &&
@@ -102,21 +126,75 @@ export function parseAgentDraftSubmitProjection(value: unknown): AgentDraftSubmi
     turnStatus !== 'completed' &&
     turnStatus !== 'failed'
   ) {
-    throw new Error(`Unknown Agent draft turn status '${String(turnStatus)}'.`);
+    throw new Error(`Unknown Agent Draft turn status '${String(turnStatus)}'.`);
   }
   const diagnostic = record['diagnostic'];
   if (
     diagnostic !== undefined &&
     (typeof diagnostic !== 'string' || diagnostic.trim().length === 0)
   ) {
-    throw new Error('Agent draft submit diagnostic must be a non-empty string.');
+    throw new Error('Agent Draft submit diagnostic must be a non-empty string.');
   }
   return {
-    conversationId: requireIdentity(record['conversationId'], 'Conversation'),
+    session: parseAgentSessionInteractionProjection(record['session']),
     turnId: requireIdentity(record['turnId'], 'Turn'),
     turnStatus,
     ...(diagnostic === undefined ? {} : { diagnostic }),
   };
+}
+
+function parseReferenceReceipts(value: unknown): readonly AgentInputReferenceReceipt[] {
+  if (!Array.isArray(value)) throw new Error('Agent input reference receipts must be an array.');
+  const receipts = value.map(parseAgentInputReferenceReceipt);
+  const duplicate = receipts.find(
+    (receipt, index) =>
+      receipts.findIndex((candidate) => candidate.referenceId === receipt.referenceId) !== index,
+  );
+  if (duplicate) throw new Error(`Duplicate Agent reference receipt '${duplicate.referenceId}'.`);
+  return receipts;
+}
+
+export function parseAgentInputReferenceReceipt(value: unknown): AgentInputReferenceReceipt {
+  const record = requireRecord(value, 'Agent input reference receipt must be an object.');
+  requireAllowedKeys(
+    record,
+    ['catalogEntryId', 'referenceId', 'ownerKind', 'ownerId', 'bindingReceiptId'],
+    ['catalogEntryId', 'referenceId', 'ownerKind', 'ownerId'],
+    'Agent input reference receipt',
+  );
+  const ownerKind = parseReferenceOwnerKind(record['ownerKind']);
+  return {
+    catalogEntryId: requireIdentity(record['catalogEntryId'], 'catalog entry'),
+    referenceId: requireIdentity(record['referenceId'], 'reference'),
+    ownerKind,
+    ownerId: requireIdentity(record['ownerId'], 'reference owner'),
+    ...(record['bindingReceiptId'] === undefined
+      ? {}
+      : { bindingReceiptId: requireIdentity(record['bindingReceiptId'], 'binding receipt') }),
+  };
+}
+
+function parseReferenceOwnerKind(value: unknown): AgentInputReferenceReceipt['ownerKind'] {
+  if (
+    value !== 'assistant' &&
+    value !== 'workspace' &&
+    value !== 'character' &&
+    value !== 'room' &&
+    value !== 'world'
+  ) {
+    throw new Error(`Unknown Agent reference owner '${String(value)}'.`);
+  }
+  return value;
+}
+
+function requireInvocationKeys(record: Record<string, unknown>, required: readonly string[]): void {
+  requireAllowedKeys(record, [...required, 'args'], required, 'Agent invocation input intent');
+}
+
+function parseOptionalArgs(value: unknown): { readonly args?: string } {
+  if (value === undefined) return {};
+  if (typeof value !== 'string') throw new Error('Agent invocation args must be a string.');
+  return value.length === 0 ? {} : { args: value };
 }
 
 function requireRecord(value: unknown, message: string): Record<string, unknown> {
@@ -129,24 +207,33 @@ function requireExactKeys(
   keys: readonly string[],
   label: string,
 ): void {
-  const actual = Object.keys(record);
-  if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) {
-    throw new Error(`${label} contains unsupported fields.`);
-  }
+  requireAllowedKeys(record, keys, keys, label);
+}
+
+function requireAllowedKeys(
+  record: Record<string, unknown>,
+  allowedKeys: readonly string[],
+  requiredKeys: readonly string[],
+  label: string,
+): void {
+  const unknown = Object.keys(record).find((key) => !allowedKeys.includes(key));
+  if (unknown) throw new Error(`${label} contains unsupported field '${unknown}'.`);
+  const missing = requiredKeys.find((key) => !(key in record));
+  if (missing) throw new Error(`${label} is missing field '${missing}'.`);
 }
 
 function requireIdentity(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`Agent draft ${label} identity is required.`);
+    throw new Error(`Agent Draft ${label} identity is required.`);
   }
   return value;
 }
 
 function requireIdentityArray(value: unknown, label: string): readonly string[] {
-  if (!Array.isArray(value)) throw new Error(`Agent draft ${label} list must be an array.`);
+  if (!Array.isArray(value)) throw new Error(`${label} identities must be an array.`);
   const identities = value.map((entry) => requireIdentity(entry, label));
   if (new Set(identities).size !== identities.length) {
-    throw new Error(`Agent draft ${label} list must not contain duplicates.`);
+    throw new Error(`${label} identities must not contain duplicates.`);
   }
   return identities;
 }

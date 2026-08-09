@@ -13,16 +13,18 @@ export function useTrackReordering(input: {
   }, []);
   const over = useCallback(
     (event: React.DragEvent, trackIndex: number) => {
+      if (!draggingTrackId) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
-      if (draggingTrackId) setDragOverTrackIndex(trackIndex);
+      setDragOverTrackIndex(trackIndex);
     },
     [draggingTrackId],
   );
   const drop = useCallback(
     (event: React.DragEvent, targetIndex: number) => {
+      if (!draggingTrackId) return;
       event.preventDefault();
-      if (draggingTrackId) input.onReorder(draggingTrackId, targetIndex);
+      input.onReorder(draggingTrackId, targetIndex);
       setDraggingTrackId(undefined);
       setDragOverTrackIndex(undefined);
     },

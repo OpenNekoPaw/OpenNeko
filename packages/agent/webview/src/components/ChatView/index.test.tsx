@@ -120,6 +120,16 @@ describe('ChatView empty state', () => {
     expect(screen.getByTestId('input-area').textContent).toContain('true:tab-a:input:focus-a');
   });
 
+  it('renders an owning-domain conversation feed while retaining the Agent composer', () => {
+    renderChatView({
+      conversationFeed: <div data-testid="room-feed">Room authority message</div>,
+    });
+
+    expect(screen.getByTestId('room-feed').textContent).toBe('Room authority message');
+    expect(screen.queryByTestId('message-list')).toBeNull();
+    expect(screen.getByTestId('input-area')).toBeTruthy();
+  });
+
   it('renders active execution inside the transcript without a composer-adjacent status', () => {
     const { container, rerender } = renderChatView({
       isThinking: true,

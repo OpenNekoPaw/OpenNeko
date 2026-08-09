@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { ImageContent } from '@earendil-works/pi-ai';
 import type { ILogger } from '@neko/shared/logger';
+import sharp from 'sharp';
+
+import { classifyAgentContentPath } from '../input/content-path-classification';
 
 import {
   NodePiConversationAuthority,
@@ -22,8 +26,8 @@ import {
   type PiSkillHostSnapshot,
   type SkillHostRecord,
   type PiToolPermissionPolicy,
-  type PiToolResultAssetLoader,
   type PiToolRunIdentity,
+  type PiUserMessagePresentation,
   type SkillSourceRoot,
   type SkillSourceKind,
 } from '@neko/agent-runtime/pi';
@@ -34,8 +38,21 @@ import {
 } from '@neko/agent-runtime/conversation-projection';
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
 import {
+  createCanvasProjectCapabilityProvider,
+  createCoreTools,
+  createCutProjectCapabilityProvider,
+  registerMediaAgentTools,
+} from '@neko/agent-runtime/tools';
+import type { GenerationJobPort } from '@neko/generation';
+import {
   buildEnhancedAgentMessage,
+  projectContextReferences,
+  CapabilityRegistryRuntime,
+  deliverCreatorVisibleArtifactsFromTurnProjection,
   createHostAgentContentAccessRuntime,
+  type AgentCreatorVisibleArtifactDeliveryOutcome,
+  type AgentCreatorVisibleArtifactDeliveryPort,
+  type AgentContentAccessRuntime,
 } from '@neko/agent-runtime/runtime';
 import { createContentReadCapabilityProvider } from '@neko/agent-runtime';
 import {
@@ -43,11 +60,21 @@ import {
   createNodeDocumentLowLevelAccess,
 } from '@neko/content/document/node';
 import {
+  isAgentAuthorizedContentReferenceContextData,
+  TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
+  TOOL_NAMES_TRANSCRIBE,
   type AgentContextPayload,
   type IToolRegistry,
+  type PromptFragment,
 } from '@neko/agent-contracts';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import {
+  createNodeHostContentReadService,
+  NodeAuthorizedWorkspaceWriter,
+} from '@neko/content/node';
+import { CanvasProjectAuthoringService } from '@neko/canvas-domain';
+import { CutProjectAuthoringService } from '@neko/cut-domain';
+import type { ContentLocator, ContentRepresentationLocator } from '@neko/content';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
   AgentHomeActivitySummary,
@@ -75,6 +102,8 @@ import {
   createAgentProviderTurnScheduler,
   type AgentProviderTurnScheduler,
 } from './agent-provider-turn-scheduler';
+import { createPiToolResultAssetLoader } from './pi-tool-result-asset-loader';
+import { PiContentToolModelProtocol } from './pi-content-tool-model-protocol';
 import {
   AgentMessageQueueOperationError,
   createAgentConversationMessageQueue,
@@ -91,6 +120,7 @@ export interface AgentConversationOpenInput {
 export interface AgentTurnInput {
   readonly conversationId: string;
   readonly prompt: string;
+  readonly presentationText?: string;
   readonly turnId?: string;
   readonly modelPolicy: AgentModelPolicy;
   readonly configuration: AgentTurnConfigurationSnapshot;
@@ -101,15 +131,22 @@ export interface AgentTurnInput {
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly systemPrompt?: string;
   readonly skillName?: string;
+  readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
   readonly events?: PiProductEventSink;
 }
+
+const MAX_AGENT_TURN_IMAGES = 4;
+const MAX_AGENT_TURN_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_AGENT_TURN_IMAGE_DIMENSION = 8_192;
+const MAX_AGENT_TURN_TEXT_BYTES = 256 * 1024;
 
 export interface AgentTurnResult {
   readonly identity: PiToolRunIdentity;
   readonly durability: NonNullable<ReturnType<NodePiConversationAuthority['getTurnDurability']>>;
   readonly projection: ReturnType<ConversationProjectionStore['snapshot']>;
   readonly configuration: AgentTurnConfigurationSnapshot;
+  readonly artifactDelivery?: AgentCreatorVisibleArtifactDeliveryOutcome;
   readonly path: {
     readonly runtime: 'pi-conversation-runtime';
     readonly transcript: 'pi-session';
@@ -192,8 +229,15 @@ export interface AgentWorkspaceRuntime {
   readonly workspace: AssetWorkspaceResolution;
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
   readonly tools: IToolRegistry;
+  loadDisplayAsset?(input: {
+    readonly locator: ContentLocator | ContentRepresentationLocator;
+    readonly maxBytes: number;
+    readonly signal?: AbortSignal;
+  }): Promise<
+    import('../runtime/capability/agent-content-access-runtime').AgentProviderAssetResult
+  >;
   createConversation(conversationId: string): Promise<void>;
-  ensureConversation(conversationId: string): Promise<void>;
+  ensureConversation(conversationId: string, title: string): Promise<void>;
   deleteConversation(conversationId: string): Promise<void>;
   clearAllConversations(): Promise<void>;
   openConversation(input: AgentConversationOpenInput): Promise<void>;
@@ -201,6 +245,7 @@ export interface AgentWorkspaceRuntime {
     readonly conversationId: string;
     readonly turnId: string;
     readonly messageText: string;
+    readonly contextPayloads?: readonly AgentContextPayload[];
   }): Promise<void>;
   startTurn(input: AgentTurnInput): AgentTurnOperation;
   executeTurn(input: AgentTurnInput): Promise<AgentTurnResult>;
@@ -230,6 +275,7 @@ export interface AgentWorkspaceRuntime {
     contextWindow: number,
   ): Promise<Awaited<ReturnType<PiConversationRuntime['compactContext']>>>;
   readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog>;
+  readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[];
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']>;
   readConversationEvidence(conversationId: string): AgentConversationEvidence;
   readConversationProjection(
@@ -291,9 +337,12 @@ export interface CreateAgentAppHostOptions {
   readonly catalogReader: PiConversationCatalogReader;
   readonly assistantSpaceIds?: readonly string[];
   readonly builtinSkillRoot?: string;
-  readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity?: () => string;
   readonly createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger;
+  readonly resolveWorkspaceGenerationJobs: (
+    workspace: AssetWorkspaceResolution,
+  ) => Promise<GenerationJobPort>;
+  readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
 }
 
 export function createAgentAppHost(options: CreateAgentAppHostOptions): AgentAppHost {
@@ -589,6 +638,9 @@ class DefaultAgentAppHost implements AgentAppHost {
       workspaceId: workspace.workspaceId,
       hostId: `${this.options.hostId}:${workspace.workspaceId}`,
     });
+    const generationJobs = createDeferredGenerationJobPort(() =>
+      this.options.resolveWorkspaceGenerationJobs(workspace),
+    );
     if (this.disposed) {
       await authority.dispose();
       throw new Error('Agent AppHost composition was disposed during workspace attach.');
@@ -603,13 +655,17 @@ class DefaultAgentAppHost implements AgentAppHost {
       ...(this.options.builtinSkillRoot === undefined
         ? {}
         : { builtinSkillRoot: this.options.builtinSkillRoot }),
-      ...(this.options.assetLoader === undefined ? {} : { assetLoader: this.options.assetLoader }),
       createIdentity: this.options.createIdentity ?? randomUUID,
       credentialRuntime: this.options.credentialRuntime,
+      generationJobs,
       onHomeProjectionChanged: this.emitHomeProjectionChanged,
       canStartTurn: () => !this.pluginRuntimeChanging,
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
+      structuredProjectAuthoring: !this.assistantSpaceIds.includes(workspace.workspaceId),
+      ...(this.options.creatorVisibleArtifactDelivery
+        ? { creatorVisibleArtifactDelivery: this.options.creatorVisibleArtifactDelivery }
+        : {}),
     });
     if (this.pluginRuntime) runtime.applyPluginRuntime(this.pluginRuntime);
     this.workspaces.set(workspace.workspaceId, runtime);
@@ -644,19 +700,47 @@ class DefaultAgentAppHost implements AgentAppHost {
   }
 }
 
+function createDeferredGenerationJobPort(
+  resolve: () => Promise<GenerationJobPort>,
+): GenerationJobPort {
+  let pending: Promise<GenerationJobPort> | undefined;
+  const requirePort = (): Promise<GenerationJobPort> => {
+    if (pending) return pending;
+    const attempt = resolve();
+    pending = attempt.catch((error: unknown) => {
+      pending = undefined;
+      throw error;
+    });
+    return pending;
+  };
+  return {
+    submitGeneration: async (input) => (await requirePort()).submitGeneration(input),
+    describeGeneration: async (ref) => (await requirePort()).describeGeneration(ref),
+    observeGeneration: async function* (ref) {
+      yield* (await requirePort()).observeGeneration(ref);
+    },
+    cancelGeneration: async (input) => (await requirePort()).cancelGeneration(input),
+    retryGeneration: async (input) => (await requirePort()).retryGeneration(input),
+    regenerateGeneration: async (input) => (await requirePort()).regenerateGeneration(input),
+    reconcileGeneration: async (input) => (await requirePort()).reconcileGeneration(input),
+  };
+}
+
 interface DefaultAgentWorkspaceRuntimeOptions {
   readonly workspace: AssetWorkspaceResolution;
   readonly authority: NodePiConversationAuthority;
   readonly logger?: ILogger;
   readonly userHome: string;
   readonly builtinSkillRoot?: string;
-  readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity: () => string;
   readonly credentialRuntime: AgentCredentialRuntime;
+  readonly generationJobs: GenerationJobPort;
   readonly onHomeProjectionChanged: () => void;
   readonly canStartTurn: () => boolean;
   readonly onReleaseEligible: (workspace: DefaultAgentWorkspaceRuntime) => Promise<void>;
   readonly providerTurnAdmission: AgentProviderTurnScheduler;
+  readonly structuredProjectAuthoring: boolean;
+  readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
 }
 
 interface PendingAgentTurnOperation {
@@ -676,6 +760,10 @@ interface PendingAgentConversationTurns {
 class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   readonly tools = createToolRegistry();
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
+  private readonly contentAccessRuntime: AgentContentAccessRuntime;
+  private readonly toolResultAssetLoader: ReturnType<typeof createPiToolResultAssetLoader>;
+  private readonly contentToolModelProtocol = new PiContentToolModelProtocol();
+  private readonly capabilities: CapabilityRegistryRuntime;
   private readonly conversations = new Map<string, AgentConversationOwner>();
   private readonly projections = new Map<string, ConversationProjectionStore>();
   private readonly opening = new Map<string, Promise<AgentConversationOwner>>();
@@ -700,9 +788,41 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   constructor(private readonly options: DefaultAgentWorkspaceRuntimeOptions) {
     this.models = createOpenNekoPiModels(options.credentialRuntime.credentials);
-    for (const tool of createAgentContentReadTools(options.workspace)) {
+    this.contentAccessRuntime = createAgentContentAccessRuntime(options.workspace);
+    this.toolResultAssetLoader = createPiToolResultAssetLoader(this.contentAccessRuntime);
+    this.capabilities = new CapabilityRegistryRuntime(
+      { toolRegistry: this.tools },
+      options.logger ? { logger: options.logger } : {},
+    );
+    for (const tool of createCoreTools({ defaultCwd: options.workspace.workspacePath })) {
       this.tools.register(tool);
     }
+    const context = { hostContext: null };
+    this.capabilities.registerProvider(
+      createContentReadCapabilityProvider({ contentAccessRuntime: this.contentAccessRuntime }),
+      context,
+    );
+    if (options.structuredProjectAuthoring) {
+      const contentRead = createNodeHostContentReadService({
+        workspaceRoot: options.workspace.workspacePath,
+      });
+      const workspaceWriter = new NodeAuthorizedWorkspaceWriter({
+        workspaceRoot: options.workspace.workspacePath,
+      });
+      this.capabilities.registerProvider(
+        createCanvasProjectCapabilityProvider(
+          new CanvasProjectAuthoringService({ contentRead, workspaceWriter }),
+        ),
+        context,
+      );
+      this.capabilities.registerProvider(
+        createCutProjectCapabilityProvider(
+          new CutProjectAuthoringService({ contentRead, workspaceWriter }),
+        ),
+        context,
+      );
+    }
+    registerMediaAgentTools(this.tools, options.generationJobs);
   }
 
   get workspaceId(): string {
@@ -711,6 +831,40 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   get workspace(): AssetWorkspaceResolution {
     return this.options.workspace;
+  }
+
+  loadDisplayAsset(input: {
+    readonly locator: ContentLocator | ContentRepresentationLocator;
+    readonly maxBytes: number;
+    readonly signal?: AbortSignal;
+  }): Promise<
+    import('../runtime/capability/agent-content-access-runtime').AgentProviderAssetResult
+  > {
+    this.requireActive();
+    if (input.locator.kind === 'content-representation') {
+      const loadRepresentationAsset = this.contentAccessRuntime.loadRepresentationAsset;
+      if (!loadRepresentationAsset) {
+        return Promise.resolve({
+          status: 'failed',
+          diagnostics: [
+            {
+              code: 'agent-content-access-unavailable',
+              severity: 'error',
+              message: 'Content representation display access is unavailable.',
+            },
+          ],
+        });
+      }
+      return loadRepresentationAsset.call(this.contentAccessRuntime, {
+        locator: input.locator,
+        maxBytes: input.maxBytes,
+      });
+    }
+    return this.contentAccessRuntime.loadContentAsset({
+      locator: input.locator,
+      maxBytes: input.maxBytes,
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
   }
 
   assertWorkspace(workspace: AssetWorkspaceResolution): void {
@@ -728,7 +882,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.options.logger?.info('Workspace runtime attached.', { workspaceId: this.workspaceId });
   }
 
-  async createConversation(conversationId: string): Promise<void> {
+  async createConversation(conversationId: string, title?: string): Promise<void> {
     this.requireActive();
     requireIdentity(conversationId, 'Conversation');
     const lease = this.options.authority.acquireLease(conversationId);
@@ -737,6 +891,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         lease,
         conversationId,
         branchId: 'main',
+        ...(title === undefined ? {} : { title }),
       });
     } finally {
       this.options.authority.releaseLease(lease);
@@ -749,7 +904,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     });
   }
 
-  async ensureConversation(conversationId: string): Promise<void> {
+  async ensureConversation(conversationId: string, title: string): Promise<void> {
     this.requireActive();
     requireIdentity(conversationId, 'Conversation');
     if (this.options.authority.readConversation(conversationId)) {
@@ -758,7 +913,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }
     const pending = this.materializing.get(conversationId);
     if (pending) return pending;
-    const operation = this.createConversation(conversationId);
+    const operation = this.createConversation(conversationId, title);
     this.materializing.set(conversationId, operation);
     try {
       await operation;
@@ -778,6 +933,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       this.conversations.delete(conversationId);
     }
     await deletePersistedConversation(this.options.authority, conversationId);
+    this.contentToolModelProtocol.releaseConversation(conversationId);
     this.projections.get(conversationId)?.dispose();
     this.projections.delete(conversationId);
     this.options.onHomeProjectionChanged();
@@ -802,6 +958,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     readonly conversationId: string;
     readonly turnId: string;
     readonly messageText: string;
+    readonly contextPayloads?: readonly AgentContextPayload[];
   }): Promise<void> {
     this.requireActive();
     const record = this.options.authority.readConversation(input.conversationId);
@@ -822,6 +979,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         branchId: record.activeBranchId,
         turnId: input.turnId,
         terminalState: 'failed',
+        userMessagePresentation: projectAgentUserMessagePresentation({
+          turnId: input.turnId,
+          content: input.messageText,
+          contextPayloads: input.contextPayloads,
+        }),
         messages: [
           {
             role: 'user',
@@ -1094,12 +1256,22 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     const owner = this.requireConversation(input.conversationId);
     const messageId = this.options.createIdentity();
     const skills = await this.discoverSkills(input.workspaceTrusted);
+    const contextPayloads = await materializeAgentTurnContextPayloads({
+      contextPayloads: input.contextPayloads,
+      contentAccessRuntime: this.contentAccessRuntime,
+      toolNames: new Set(this.tools.list().map((tool) => tool.name)),
+    });
+    const contentReferenceIds = this.contentToolModelProtocol.bindInputs(
+      input.conversationId,
+      input.contextPayloads,
+    );
     const capabilityTools = projectOpenNekoTools(this.tools.list(), {
       locale: input.locale,
       purposesForTool: resolveOpenNekoToolModelPurposes,
       purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
       isPurposeOptionalForTool: (tool) => tool.name === TOOL_NAMES_QUALITY.QUALITY_CHECK,
-      ...(this.options.assetLoader === undefined ? {} : { assetLoader: this.options.assetLoader }),
+      assetLoader: this.toolResultAssetLoader,
+      modelProtocol: this.contentToolModelProtocol,
       metadata: Object.freeze({
         workspaceId: identity.workspaceId,
         conversationId: identity.conversationId,
@@ -1118,24 +1290,69 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       typeof input.permissionPolicy === 'function'
         ? input.permissionPolicy(events)
         : input.permissionPolicy;
+    const images = await materializeAgentTurnImages({
+      contextPayloads,
+      modelPolicy: input.modelPolicy,
+      contentAccessRuntime: this.contentAccessRuntime,
+      hasImagePerceptionTool: this.tools
+        .list()
+        .some((tool) => tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND),
+    });
+    const prompt = buildEnhancedAgentMessage({
+      message: input.prompt,
+      contextPayloads,
+      contentReferenceIds,
+      locale: input.locale,
+    });
+    const durablePrompt = buildEnhancedAgentMessage({
+      message: input.prompt,
+      contextPayloads: input.contextPayloads,
+      contentReferenceIds,
+      locale: input.locale,
+    });
+    const userMessagePresentation = projectAgentUserMessagePresentation({
+      turnId: identity.turnId,
+      content: input.presentationText ?? input.prompt,
+      contextPayloads: input.contextPayloads,
+    });
+    const hasContextPayloads = (input.contextPayloads?.length ?? 0) > 0;
+    const additionalInstructions =
+      input.skillName !== undefined && hasContextPayloads
+        ? buildEnhancedAgentMessage({
+            message: input.additionalInstructions ?? '',
+            contextPayloads,
+            contentReferenceIds,
+            locale: input.locale,
+          })
+        : input.additionalInstructions;
+    const durableAdditionalInstructions =
+      input.skillName !== undefined && hasContextPayloads
+        ? buildEnhancedAgentMessage({
+            message: input.additionalInstructions ?? '',
+            contextPayloads: input.contextPayloads,
+            contentReferenceIds,
+            locale: input.locale,
+          })
+        : undefined;
     const operation = owner.execute({
       identity,
-      prompt: buildEnhancedAgentMessage({
-        message: input.prompt,
-        contextPayloads: input.contextPayloads,
-        locale: input.locale,
-      }),
+      prompt,
+      durablePrompt,
+      userMessagePresentation,
       modelPolicy: input.modelPolicy,
       skillSnapshot: skills,
       capabilityTools,
       permissionPolicy,
       workspaceTrusted: input.workspaceTrusted,
       events,
+      ...(images.length === 0 ? {} : { images }),
       ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
       ...(input.skillName === undefined ? {} : { skillName: input.skillName }),
-      ...(input.additionalInstructions === undefined
+      ...(input.skillActivationId === undefined
         ? {}
-        : { additionalInstructions: input.additionalInstructions }),
+        : { skillActivationId: input.skillActivationId }),
+      ...(additionalInstructions === undefined ? {} : { additionalInstructions }),
+      ...(durableAdditionalInstructions === undefined ? {} : { durableAdditionalInstructions }),
     });
     this.options.onHomeProjectionChanged();
     try {
@@ -1152,11 +1369,31 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         `Agent turn ${input.conversationId}/${identity.turnId} completed without durability state.`,
       );
     }
+    const projection = owner.projection.snapshot();
+    const turn = projection.turns.find(
+      (candidate) => candidate.turnId === identity.turnId && candidate.runId === identity.runId,
+    );
+    if (!turn) {
+      throw new Error(
+        `Agent turn ${identity.conversationId}/${identity.turnId} has no terminal projection.`,
+      );
+    }
+    const artifactDelivery = await deliverCreatorVisibleArtifactsFromTurnProjection({
+      turn,
+      workspaceId: identity.workspaceId,
+      conversationId: identity.conversationId,
+      turnId: identity.turnId,
+      runId: identity.runId,
+      ...(this.options.creatorVisibleArtifactDelivery
+        ? { delivery: this.options.creatorVisibleArtifactDelivery }
+        : {}),
+    });
     return Object.freeze({
       identity,
       durability,
-      projection: owner.projection.snapshot(),
+      projection,
       configuration: input.configuration,
+      ...(artifactDelivery ? { artifactDelivery } : {}),
       path: Object.freeze({
         runtime: 'pi-conversation-runtime',
         transcript: 'pi-session',
@@ -1219,6 +1456,12 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   async readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog> {
     return projectAgentSkillCatalog(await this.discoverSkills(workspaceTrusted));
+  }
+
+  readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[] {
+    this.requireActive();
+    this.capabilities.setCapabilityContext({ hostContext: null, locale });
+    return Object.freeze(this.capabilities.getAllPromptFragments());
   }
 
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']> {
@@ -1419,10 +1662,12 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.activeConversationTurns.clear();
     this.visibleBindings.clear();
     this.runtimeProtections.clear();
+    this.capabilities.dispose();
     this.tools.clear();
     this.models.clearProviders();
     this.pluginSkillRoots = [];
     this.pluginToolNames.clear();
+    this.contentToolModelProtocol.clear();
     let authorityError: unknown;
     try {
       await this.options.authority.dispose();
@@ -1490,6 +1735,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
           branchId,
         });
       }
+      this.contentToolModelProtocol.restoreConversation(
+        input.conversationId,
+        await this.options.authority.readBranchEntries(input.conversationId, branchId),
+      );
       projection = this.projections.get(input.conversationId);
       if (!projection) {
         projection = this.createProjection(input.conversationId);
@@ -1708,9 +1957,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   }
 }
 
-function createAgentContentReadTools(workspace: AssetWorkspaceResolution) {
+function createAgentContentAccessRuntime(
+  workspace: AssetWorkspaceResolution,
+): AgentContentAccessRuntime {
   const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
-  const contentAccessRuntime = createHostAgentContentAccessRuntime({
+  return createHostAgentContentAccessRuntime({
     contentRead: createNodeHostContentReadService({
       workspaceRoot: workspace.workspacePath,
       documentEntryReader: {
@@ -1721,14 +1972,240 @@ function createAgentContentReadTools(workspace: AssetWorkspaceResolution) {
     documentAccess: createNodeDocumentAccessService(),
     resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
   });
-  return createContentReadCapabilityProvider({ contentAccessRuntime }).getTools({
-    hostContext: null,
+}
+
+async function materializeAgentTurnContextPayloads(input: {
+  readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly contentAccessRuntime: AgentContentAccessRuntime;
+  readonly toolNames: ReadonlySet<string>;
+}): Promise<readonly AgentContextPayload[]> {
+  return Promise.all(
+    (input.contextPayloads ?? []).map(async (payload) => {
+      if (!isAgentAuthorizedContentReferenceContextData(payload.data)) return payload;
+      if (payload.data.mediaType === 'audio') {
+        requireAgentReferenceCapability(payload.label, input.toolNames, [
+          TOOL_NAMES_TRANSCRIBE.TRANSCRIBE_AUDIO,
+          TOOL_NAMES_PERCEPTION.AUDIO_TRANSCRIBE,
+          TOOL_NAMES_PERCEPTION.PERCEIVE,
+        ]);
+        return payload;
+      }
+      if (payload.data.mediaType === 'video') {
+        requireAgentReferenceCapability(payload.label, input.toolNames, [
+          TOOL_NAMES_PERCEPTION.VIDEO_DETECT_SHOTS,
+          TOOL_NAMES_PERCEPTION.PERCEIVE,
+        ]);
+        return payload;
+      }
+      if (payload.data.mediaType && payload.data.mediaType !== 'text') return payload;
+      const unsupportedClass = classifyUnregisteredContentProcessor(payload.data.locator);
+      if (unsupportedClass) {
+        throw new Error(
+          `Agent reference '${payload.label}' requires an exact ${unsupportedClass} processor that is not registered for this Turn.`,
+        );
+      }
+      const loaded = await input.contentAccessRuntime.loadContentAsset({
+        locator: payload.data.locator,
+        maxBytes: MAX_AGENT_TURN_TEXT_BYTES,
+      });
+      if (loaded.status !== 'ready' || !loaded.bytes) {
+        const diagnostic = loaded.diagnostics[0]?.code ?? loaded.status;
+        throw new Error(
+          `Agent text reference '${payload.label}' could not be loaded: ${diagnostic}.`,
+        );
+      }
+      let text: string;
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(loaded.bytes);
+      } catch {
+        throw new Error(
+          `Agent reference '${payload.label}' is unsupported binary content and no exact processor is registered for this Turn.`,
+        );
+      }
+      if (text.includes('\u0000')) {
+        throw new Error(
+          `Agent reference '${payload.label}' is unsupported binary content and no exact processor is registered for this Turn.`,
+        );
+      }
+      return {
+        ...payload,
+        data: { ...payload.data, text },
+      };
+    }),
+  );
+}
+
+function classifyUnregisteredContentProcessor(locator: ContentLocator): string | undefined {
+  const classification = classifyAgentContentPath(contentLocatorPortablePath(locator));
+  return classification.kind === 'score' ||
+    classification.kind === 'archive' ||
+    classification.kind === 'executable'
+    ? classification.processorRequirement
+    : undefined;
+}
+
+function contentLocatorPortablePath(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return locator.entryPath;
+    case 'package-resource':
+      return locator.resourcePath;
+  }
+}
+
+function requireAgentReferenceCapability(
+  label: string,
+  toolNames: ReadonlySet<string>,
+  acceptedToolNames: readonly string[],
+): void {
+  if (acceptedToolNames.some((toolName) => toolNames.has(toolName))) return;
+  throw new Error(
+    `Agent reference '${label}' requires a media perception capability that is not registered for this Turn.`,
+  );
+}
+
+async function materializeAgentTurnImages(input: {
+  readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly modelPolicy: AgentModelPolicy;
+  readonly contentAccessRuntime: AgentContentAccessRuntime;
+  readonly hasImagePerceptionTool: boolean;
+}): Promise<readonly ImageContent[]> {
+  const references = (input.contextPayloads ?? []).flatMap((payload) => {
+    if (!isAgentAuthorizedContentReferenceContextData(payload.data)) return [];
+    if (payload.data.mediaType !== 'image' && payload.data.mediaType !== 'sequence') return [];
+    return [{ label: payload.label, locator: payload.data.locator }];
   });
+  if (references.length === 0) return [];
+  if (!input.modelPolicy['agent.main'].model.input.includes('image')) {
+    if (input.hasImagePerceptionTool) return [];
+    throw new Error(
+      `Agent model '${input.modelPolicy['agent.main'].model.provider}/${input.modelPolicy['agent.main'].model.id}' does not support image input and no image perception capability is registered.`,
+    );
+  }
+  if (references.length > MAX_AGENT_TURN_IMAGES) {
+    throw new Error(
+      `Agent Turn contains ${references.length} image references; maximum is ${MAX_AGENT_TURN_IMAGES}.`,
+    );
+  }
+  return Promise.all(
+    references.map(async (reference) => {
+      const loaded = await input.contentAccessRuntime.loadContentAsset({
+        locator: reference.locator,
+        maxBytes: MAX_AGENT_TURN_IMAGE_BYTES,
+      });
+      if (loaded.status !== 'ready' || !loaded.bytes || !loaded.mimeType) {
+        const diagnostic = loaded.diagnostics[0]?.code ?? loaded.status;
+        throw new Error(
+          `Agent image reference '${reference.label}' could not be loaded: ${diagnostic}.`,
+        );
+      }
+      const mimeType = await validateAgentTurnImage(
+        reference.label,
+        reference.locator,
+        loaded.bytes,
+        loaded.mimeType,
+      );
+      return {
+        type: 'image' as const,
+        data: Buffer.from(loaded.bytes).toString('base64'),
+        mimeType,
+      };
+    }),
+  );
+}
+
+async function validateAgentTurnImage(
+  label: string,
+  locator: ContentLocator,
+  bytes: Uint8Array,
+  declaredMimeType: string,
+): Promise<string> {
+  let metadata: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
+  try {
+    metadata = await sharp(bytes, {
+      limitInputPixels: MAX_AGENT_TURN_IMAGE_DIMENSION * MAX_AGENT_TURN_IMAGE_DIMENSION,
+    }).metadata();
+  } catch {
+    throw new Error(`Agent image reference '${label}' is not a valid supported image.`);
+  }
+  const detectedMimeType =
+    metadata.format === 'png'
+      ? 'image/png'
+      : metadata.format === 'jpeg'
+        ? 'image/jpeg'
+        : metadata.format === 'webp'
+          ? 'image/webp'
+          : metadata.format === 'gif'
+            ? 'image/gif'
+            : undefined;
+  if (!detectedMimeType) {
+    throw new Error(
+      `Agent image reference '${label}' uses unsupported image format '${metadata.format ?? 'unknown'}'.`,
+    );
+  }
+  if (declaredMimeType !== detectedMimeType) {
+    throw new Error(
+      `Agent image reference '${label}' MIME '${declaredMimeType}' does not match '${detectedMimeType}'.`,
+    );
+  }
+  if (
+    !metadata.width ||
+    !metadata.height ||
+    metadata.width > MAX_AGENT_TURN_IMAGE_DIMENSION ||
+    metadata.height > MAX_AGENT_TURN_IMAGE_DIMENSION
+  ) {
+    throw new Error(`Agent image reference '${label}' exceeds the supported image dimensions.`);
+  }
+  if (
+    locator.kind === 'workspace-file' &&
+    !imageExtensions(detectedMimeType).some((extension) =>
+      locator.path.toLowerCase().endsWith(extension),
+    )
+  ) {
+    throw new Error(
+      `Agent image reference '${label}' extension does not match '${detectedMimeType}'.`,
+    );
+  }
+  return detectedMimeType;
+}
+
+function imageExtensions(mimeType: string): readonly string[] {
+  switch (mimeType) {
+    case 'image/png':
+      return ['.png'];
+    case 'image/jpeg':
+      return ['.jpg', '.jpeg'];
+    case 'image/webp':
+      return ['.webp'];
+    case 'image/gif':
+      return ['.gif'];
+    default:
+      throw new Error(`Unsupported Agent image MIME '${mimeType}'.`);
+  }
+}
+
+function projectAgentUserMessagePresentation(input: {
+  readonly turnId: string;
+  readonly content: string;
+  readonly contextPayloads?: readonly AgentContextPayload[];
+}): PiUserMessagePresentation {
+  const contextReferences = projectContextReferences(input.contextPayloads);
+  return {
+    turnId: input.turnId,
+    content: input.content,
+    ...(contextReferences === undefined ? {} : { contextReferences }),
+  };
 }
 
 interface ExecuteAgentConversationInput {
   readonly identity: PiToolRunIdentity;
   readonly prompt: string;
+  readonly durablePrompt: string;
+  readonly userMessagePresentation: PiUserMessagePresentation;
+  readonly images?: readonly ImageContent[];
   readonly modelPolicy: AgentModelPolicy;
   readonly skillSnapshot: Awaited<ReturnType<ReturnType<typeof createNodePiSkillHost>['discover']>>;
   readonly capabilityTools: ReturnType<typeof projectOpenNekoTools>;
@@ -1737,7 +2214,9 @@ interface ExecuteAgentConversationInput {
   readonly events: PiProductEventSink;
   readonly systemPrompt?: string;
   readonly skillName?: string;
+  readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
+  readonly durableAdditionalInstructions?: string;
 }
 
 class AgentConversationOwner {
@@ -1768,11 +2247,14 @@ class AgentConversationOwner {
   async execute(input: ExecuteAgentConversationInput): Promise<void> {
     this.requireReady();
     const operation =
-      input.skillName === undefined
+      input.skillName === undefined && input.skillActivationId === undefined
         ? this.runtime.execute({
             turnId: input.identity.turnId,
             runId: input.identity.runId,
             prompt: input.prompt,
+            durablePrompt: input.durablePrompt,
+            userMessagePresentation: input.userMessagePresentation,
+            ...(input.images === undefined ? {} : { images: input.images }),
             modelPolicy: input.modelPolicy,
             skillSnapshot: input.skillSnapshot,
             capabilityTools: input.capabilityTools,
@@ -1784,10 +2266,16 @@ class AgentConversationOwner {
         : this.runtime.executeSkill({
             turnId: input.identity.turnId,
             runId: input.identity.runId,
-            skillName: input.skillName,
+            skillName: requireSkillInvocationIdentity(input).skillName,
+            activationId: requireSkillInvocationIdentity(input).activationId,
             ...(input.additionalInstructions === undefined
               ? {}
               : { additionalInstructions: input.additionalInstructions }),
+            userMessagePresentation: input.userMessagePresentation,
+            ...(input.durableAdditionalInstructions === undefined
+              ? {}
+              : { durableAdditionalInstructions: input.durableAdditionalInstructions }),
+            ...(input.images === undefined ? {} : { images: input.images }),
             modelPolicy: input.modelPolicy,
             skillSnapshot: input.skillSnapshot,
             capabilityTools: input.capabilityTools,
@@ -1872,6 +2360,16 @@ class AgentConversationOwner {
       throw new Error('Pi conversation owner already has an active turn.');
     }
   }
+}
+
+function requireSkillInvocationIdentity(input: {
+  readonly skillName?: string;
+  readonly skillActivationId?: string;
+}): { readonly skillName: string; readonly activationId: string } {
+  if (!input.skillName || !input.skillActivationId) {
+    throw new Error('Agent Skill execution requires an exact Skill name and activation identity.');
+  }
+  return { skillName: input.skillName, activationId: input.skillActivationId };
 }
 
 function composeEventSinks(
@@ -2043,6 +2541,31 @@ function projectAgentConversationOwner(
       owner: { kind: 'workspace', workspaceId: record.context.workspaceId },
     };
   }
+  if (
+    record.context?.kind === 'character' &&
+    record.context.characterRunId !== undefined &&
+    record.context.dialogueRunId !== undefined
+  ) {
+    return {
+      kind: 'valid',
+      owner: {
+        kind: 'character',
+        characterId: record.context.characterId,
+        characterRunId: record.context.characterRunId,
+        dialogueRunId: record.context.dialogueRunId,
+      },
+    };
+  }
+  if (record.context?.kind === 'room') {
+    return {
+      kind: 'valid',
+      owner: {
+        kind: 'room',
+        roomId: record.context.roomId,
+        roomRunId: record.context.roomRunId,
+      },
+    };
+  }
   if (hasLocalConversationProjection) {
     return {
       kind: 'valid',
@@ -2072,9 +2595,24 @@ function invalidAgentConversationOwner(
         ? { kind: 'assistant', assistantSpaceId: record.context.assistantSpaceId }
         : record.context?.kind === 'workspace'
           ? { kind: 'workspace', workspaceId: record.context.workspaceId }
-          : assistantSpaceIds.includes(record.workspaceId)
-            ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
-            : { kind: 'workspace', workspaceId: record.workspaceId },
+          : record.context?.kind === 'character' &&
+              record.context.characterRunId !== undefined &&
+              record.context.dialogueRunId !== undefined
+            ? {
+                kind: 'character',
+                characterId: record.context.characterId,
+                characterRunId: record.context.characterRunId,
+                dialogueRunId: record.context.dialogueRunId,
+              }
+            : record.context?.kind === 'room'
+              ? {
+                  kind: 'room',
+                  roomId: record.context.roomId,
+                  roomRunId: record.context.roomRunId,
+                }
+              : assistantSpaceIds.includes(record.workspaceId)
+                ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
+                : { kind: 'workspace', workspaceId: record.workspaceId },
     fieldNames,
     message,
   };
@@ -2182,10 +2720,22 @@ async function existingSkillRoots(input: {
     {
       path: join(input.workspacePath, '.agents', 'skills'),
       source: { kind: 'project' },
+      entryPointKind: 'skill',
+    },
+    {
+      path: join(input.workspacePath, 'neko', 'commands'),
+      source: { kind: 'project' },
+      entryPointKind: 'command-artifact',
     },
     {
       path: join(input.userHome, '.agents', 'skills'),
       source: { kind: 'personal' },
+      entryPointKind: 'skill',
+    },
+    {
+      path: join(input.userHome, '.neko', 'commands'),
+      source: { kind: 'personal' },
+      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -2193,6 +2743,7 @@ async function existingSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
+            entryPointKind: 'skill' as const,
           },
         ]),
   ];
@@ -2207,6 +2758,12 @@ async function existingGlobalSkillRoots(input: {
     {
       path: join(input.userHome, '.agents', 'skills'),
       source: { kind: 'personal' },
+      entryPointKind: 'skill',
+    },
+    {
+      path: join(input.userHome, '.neko', 'commands'),
+      source: { kind: 'personal' },
+      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -2214,6 +2771,7 @@ async function existingGlobalSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
+            entryPointKind: 'skill' as const,
           },
         ]),
   ];

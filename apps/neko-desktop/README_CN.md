@@ -16,11 +16,19 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
   confirmation、Home Activity/Attention 和跨 reload/restart 生命周期测试；
 - package-owned Resource Browser Root，Files/Media/Entity facet、ContentLocator 搜索、
   metadata/thumbnail、授权预览和显式添加到目标 Canvas；
+- Resource Browser 的 Files facet 直接投影授权 Workspace 系统目录；Assets Node 的工作区级
+  watcher 仅触发权威重读，外部新增/移除自动展示。Files 不提供导入或常驻刷新按钮，仅在观察
+  失败时显示一次性“重新扫描”；
+- Files 的单一 `+` 菜单与目录/空白区右键菜单支持新建普通文件、目录、Canvas `.nkc` 和 Cut
+  `.otio`。目标严格取选中目录、选中文件父目录或工作区根；Content 拥有普通文件/目录创建，
+  Canvas/Cut 独占领域文档字节，Renderer 不接收绝对路径；重命名保持不可达并另行设计；
 - 项目 Resource Browser 在 Media facet 投影由 Canvas、Cut 与 Entity representation 权威
   引用派生的缺失/不可用/不完整媒体库；恢复仅经 exact-name plan、确认与 apply，add/relink
   只维护全局 alias 与项目 link，不复制整库；
-- 项目侧栏 footer 独立拥有便携快照 readiness、计划、确认、进度、取消与跨重启恢复；快照在
-  sibling staging 中只收集被引用字节并 atomic publish，不修改源项目或外部媒体库；
+- 项目右键菜单提供“项目可移植性”生命周期命令，对话框承载计划、确认、进度、取消与跨重启
+  恢复；一级侧栏不常驻显示便携按钮或健康零引用状态，媒体库状态由项目 Resource Browser 的
+  Media facet 展示；快照在 sibling staging 中只收集被引用字节并 atomic publish，不修改源项目
+  或外部媒体库；
 - package-owned Global Library Browser Root，为全局 Media Library 与 owned Asset Library
   提供列表/网格、双击或 Enter 目录导航、点号隐藏项过滤、revisioned 图像/视频缩略图和静态
   hover 预览；Asset 导入由 Main 复制到 owned root，删除只进入系统废纸篓，Media Library

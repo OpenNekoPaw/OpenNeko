@@ -22,7 +22,7 @@ describe('Desktop Canvas Webview delegate', () => {
   it('resolves a package PreviewSurface request through the owner-bound Desktop bridge', async () => {
     const resolvePreviewVariant = vi.fn(async () => ({
       requestId: 'preview-1',
-      url: 'data:image/png;base64,Y2F0',
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
     }));
     vi.stubGlobal('openNekoDesktop', {
       canvas: { resolvePreviewVariant },
@@ -36,6 +36,7 @@ describe('Desktop Canvas Webview delegate', () => {
     delegate.postMessage({
       type: 'preview:resolveVariant',
       requestId: 'preview-1',
+      sourceId: 'image-node-1',
       contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
       role: 'thumbnail',
       mediaType: 'image',
@@ -45,6 +46,7 @@ describe('Desktop Canvas Webview delegate', () => {
     expect(resolvePreviewVariant).toHaveBeenCalledWith({
       identity,
       requestId: 'preview-1',
+      sourceId: 'image-node-1',
       locator: { kind: 'workspace-file', path: 'media/cat.png' },
       role: 'thumbnail',
       mediaType: 'image',
@@ -52,7 +54,7 @@ describe('Desktop Canvas Webview delegate', () => {
     expect(message.mock.calls.at(-1)?.[0]).toEqual({
       type: 'preview:variantResolved',
       requestId: 'preview-1',
-      url: 'data:image/png;base64,Y2F0',
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
     });
   });
 

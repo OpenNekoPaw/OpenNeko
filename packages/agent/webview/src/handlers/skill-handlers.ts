@@ -1,19 +1,22 @@
 /**
  * Skill Message Handlers
  *
- * Handles: Pi Skill catalog projection.
+ * Handles the exact Agent input catalog projection.
  */
 
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
-import type { SkillsListMessage } from './messages';
-import { projectInputSkillSummaries } from '../presenters/skill-presenter';
-
-/**
- * Handle 'skillsList' - Available skills from extension
- */
-const handleSkillsList: MessageHandler<'skillsList'> = (message: SkillsListMessage, context) => {
-  context.setSkills(projectInputSkillSummaries(message.skills));
+const handleAgentInputCatalog: MessageHandler<'agentInputCatalog'> = (message, context) => {
+  if (!context.setAgentInputCatalogByConversation) {
+    throw new Error('Agent input catalog handler has no Conversation catalog store.');
+  }
+  context.setAgentInputCatalogByConversation((previous) => {
+    const next = new Map(previous);
+    next.set(message.conversationId, message);
+    return next;
+  });
 };
 
-export const skillHandlers: HandlerRegistration[] = [defineHandler('skillsList', handleSkillsList)];
+export const skillHandlers: HandlerRegistration[] = [
+  defineHandler('agentInputCatalog', handleAgentInputCatalog),
+];

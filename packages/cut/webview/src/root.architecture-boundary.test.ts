@@ -14,7 +14,10 @@ describe('Cut Root architecture boundary', () => {
       'utf8',
     );
 
-    expect(root).toContain('<App presentation={presentation} timelineTarget={timelineTarget} />');
+    expect(root).toContain('<App />');
+    expect(root).not.toContain('timelineVisible');
+    expect(root).not.toContain('timelineTarget');
+    expect(root).not.toContain('timeline-only');
     expect(root).toContain('<CutWebviewHostBridgeProvider bridge={bridge}>');
     expect(root).not.toContain('CutHostAdapterSurface');
     expect(root).not.toContain('getGlobalVSCodeApi');

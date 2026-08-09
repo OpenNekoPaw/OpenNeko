@@ -21,9 +21,10 @@ import { PiConversationRuntime } from '../conversation-runtime';
 import { DEFAULT_PI_MODEL_REQUEST_TIMEOUT_MS, resolveAgentModelPolicy } from '../model-policy';
 import { NodePiConversationAuthority } from '../node-conversation-authority';
 import { projectOpenNekoTool } from '../openneko-tool';
-import { PiSkillHost } from '../skill-host';
+import { PiSkillHost, buildSkillActivationId } from '../skill-host';
 import type { PiProductAgentEvent } from '../event-projector';
 import { createReadDocumentTool } from '../../tools';
+import { projectPiConversationEntries } from '../../runtime/projection/pi-conversation-history-projector';
 
 const MODEL: Model<'openai-completions'> = {
   id: 'main',
@@ -599,6 +600,83 @@ describe('PiConversationRuntime', () => {
     runtime.dispose();
   });
 
+  it('uses transient provider context while checkpointing only the durable locator prompt', async () => {
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+    const prompts: string[] = [];
+    const models = createFixtureModels((_model, context) => {
+      const content = context.messages.at(-1)?.content;
+      prompts.push(typeof content === 'string' ? content : JSON.stringify(content));
+      return completedStream(assistant('stop', 'context read'));
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+
+    await runtime.execute({
+      turnId: 'turn-transient-context',
+      runId: 'run-transient-context',
+      prompt: 'Analyze\n\nTRANSIENT_REFERENCE_CONTENT',
+      durablePrompt: 'Analyze\n\nContentLocator: {"kind":"workspace-file","path":"notes.txt"}',
+      userMessagePresentation: {
+        turnId: 'turn-transient-context',
+        content: 'Analyze',
+        contextReferences: [
+          {
+            type: 'file',
+            id: 'file:notes.txt',
+            label: 'notes.txt',
+            mediaType: 'text',
+            contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
+          },
+        ],
+      },
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: { emit: () => undefined },
+    });
+
+    expect(prompts[0]).toContain('TRANSIENT_REFERENCE_CONTENT');
+    const persisted = JSON.stringify(
+      await authority.readBranchEntries('conversation-1', 'branch-main'),
+    );
+    expect(persisted).toContain('ContentLocator');
+    expect(persisted).not.toContain('TRANSIENT_REFERENCE_CONTENT');
+    expect(JSON.stringify(runtime.messages)).not.toContain('TRANSIENT_REFERENCE_CONTENT');
+    expect(
+      projectPiConversationEntries(
+        await authority.readBranchEntries('conversation-1', 'branch-main'),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: 'Analyze',
+        contextReferences: [
+          expect.objectContaining({
+            label: 'notes.txt',
+            contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
+          }),
+        ],
+      }),
+      expect.objectContaining({ role: 'assistant', content: 'context read' }),
+    ]);
+    runtime.dispose();
+  });
+
   it('keeps the writer lease alive between turns for the lifetime of the runtime', async () => {
     await authority.dispose();
     vi.useFakeTimers();
@@ -812,7 +890,13 @@ describe('PiConversationRuntime', () => {
     const skills = await new PiSkillHost(skillEnv, {
       isTrusted: () => true,
       isEnabled: () => true,
-    }).discover([{ path: join(root, 'project-skills'), source: { kind: 'project' } }]);
+    }).discover([
+      {
+        path: join(root, 'project-skills'),
+        source: { kind: 'project' },
+        entryPointKind: 'skill',
+      },
+    ]);
     let capturedContext: Context | undefined;
     const models = createFixtureModels((_model, context) => {
       capturedContext = context;
@@ -828,11 +912,29 @@ describe('PiConversationRuntime', () => {
       initialModelPolicy: modelPolicy,
       baseSystemPrompt: 'base',
     });
+    const skill = skills.records[0];
+    if (!skill) throw new Error('Expected the fixture Skill record.');
+
+    await expect(
+      runtime.executeSkill({
+        turnId: 'turn-stale-skill',
+        runId: 'run-stale-skill',
+        skillName: 'fixture-skill',
+        activationId: 'skill:project:stale',
+        modelPolicy,
+        skillSnapshot: skills,
+        capabilityTools: [],
+        permissionPolicy: { preflight: () => ({ allowed: true }) },
+        workspaceTrusted: true,
+        events: { emit: () => undefined },
+      }),
+    ).rejects.toThrow('is not available in this turn snapshot');
 
     await runtime.executeSkill({
       turnId: 'turn-skill',
       runId: 'run-skill',
       skillName: 'fixture-skill',
+      activationId: buildSkillActivationId(skill),
       additionalInstructions: 'Be concise',
       modelPolicy,
       skillSnapshot: skills,
@@ -875,7 +977,13 @@ describe('PiConversationRuntime', () => {
     const skills = await new PiSkillHost(skillEnv, {
       isTrusted: () => true,
       isEnabled: () => true,
-    }).discover([{ path: join(root, 'project-skills'), source: { kind: 'project' } }]);
+    }).discover([
+      {
+        path: join(root, 'project-skills'),
+        source: { kind: 'project' },
+        entryPointKind: 'skill',
+      },
+    ]);
     const locator = skills.records[0]!.locator.value;
     const contexts: Context[] = [];
     let request = 0;

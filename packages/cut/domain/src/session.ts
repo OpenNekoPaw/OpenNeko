@@ -55,7 +55,7 @@ export class CutDocumentSession {
   private dirtyValue: boolean;
   private undoStack: OtioTimeline[] = [];
   private redoStack: OtioTimeline[] = [];
-  private readonly storage: CutDocumentStorage;
+  private storage: CutDocumentStorage;
   private readonly createClipId: CutClipIdFactory;
   private readonly createTrackId: CutTrackIdFactory;
 
@@ -192,6 +192,7 @@ export class CutDocumentSession {
 
   async saveAs(input: {
     readonly documentUri: string;
+    readonly storage?: CutDocumentStorage;
     readonly rebase: (
       document: OtioTimeline,
       oldUri: string,
@@ -199,9 +200,11 @@ export class CutDocumentSession {
     ) => OtioTimeline | Promise<OtioTimeline>;
   }): Promise<void> {
     const rebased = await input.rebase(this.document, this.documentUri, input.documentUri);
-    const result = await this.storage.write(input.documentUri, serializeOtio(rebased), {});
+    const storage = input.storage ?? this.storage;
+    const result = await storage.write(input.documentUri, serializeOtio(rebased), {});
     this.document = rebased;
     this.documentUri = input.documentUri;
+    this.storage = storage;
     this.storageFingerprint = result.fingerprint;
     this.dirtyValue = false;
     this.undoStack = [];

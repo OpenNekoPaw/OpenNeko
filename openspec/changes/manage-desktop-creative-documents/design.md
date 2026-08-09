@@ -1,304 +1,238 @@
 ## Context
 
-Project Resource Browser is an Assets-owned browser-safe projection mounted only in the fixed-right
-Desktop Resource Dock. It currently exposes Files, Media, and Materials facets, opens `.nkc` through
-a renderer callback, opens `.otio` through a Host interaction, and uses `removeSource` only for
-unlinking a Media Library root. It has no project-document create, import, or trash contract and no
-item/blank-area context menu.
+The Assets-owned Resource Browser is a browser-safe Files/Media/Materials projection mounted in the
+Desktop Resource Dock. The Files facet reads the Workspace directory, but the projection is cached
+and no package-owned watcher currently reconciles external filesystem mutations. The current
+`content.import-files` action opens an Electron picker and copies external files into the Workspace,
+which conflicts with the product decision that the Files facet directly represents a system folder:
+placing a file in that folder is already sufficient.
 
-Desktop opens every project with the protected `neko/boards/workspace.nkc` View. Canvas currently
-constructs an empty in-memory document whenever the requested file is missing and writes it only on a
-later save; Cut opens only an existing OTIO file even though the Cut domain already supports
-`CutDocumentSession.create`. The empty Main surface contains only a diagnostic. Closing a Main View
-changes presentation state but does not inspect dirty state or delete bytes.
-
-The implementation crosses Assets UI, Desktop shared/Main/preload/renderer contracts, Workbench
-projection, Canvas and Cut owner runtimes, workspace file authorization, project-content reference
-inspection, and Electron's recoverable system trash. Renderer/Webview code cannot access Node or
-Electron, and project paths must remain portable workspace-relative locators outside Main.
+The Files facet cannot create an ordinary file, directory, Canvas, or Cut. Canvas can construct an
+empty in-memory document for a missing default `workspace.nkc`, while Cut already has a canonical
+OTIO creation path, but neither behavior is exposed as a coherent Resource Browser operation.
+Renderer/Webview code cannot access Node or Electron, and all filesystem mutations require
+sender-bound Workspace authorization in Main.
 
 ### Five-layer analysis
 
-- **Responsibility:** Assets owns Resource Browser interaction presentation;
-  `@neko/content/project-file-io` owns the host-neutral lifecycle transaction and cross-owner
-  orchestration; Canvas/Cut own document construction, validation, serialization, dirty state, and
-  session disposal; Desktop owns sender/path authorization, native adapters and Workbench projection.
-- **Dependencies:** Renderer depends on one package-owned creative-document L0 contract and public UI
-  primitives. The project-file-io application service depends on narrow Canvas/Cut owner, workspace,
-  reference, publication and trash ports. Desktop supplies their Electron implementations without
-  exposing package internals.
-- **Interfaces:** one canonical create/import/open/trash-plan/trash-apply command family carries
-  explicit Project/Workspace/Window/endpoint identity, portable target locators, request identity, and
-  expected revisions/fingerprints.
-- **Extension:** document kinds are an exhaustive `.nkc | .otio` union with explicit owner adapters.
-  A future kind requires a new owner adapter and an atomic contract/consumer update rather than an extension-string
-  fallback. Menus derive from projected capabilities rather than maintaining per-surface rules.
-- **Testing:** producer/consumer contract tests, owner codec/session tests, path and reference tests,
-  Resource Browser interaction tests, Workbench/session reconciliation tests, and an isolated real
-  Electron workflow prove both result and canonical execution path.
+- **Responsibility:** Assets owns Resource Browser presentation and projection; Content owns
+  host-neutral workspace-entry creation and cross-owner document lifecycle; Canvas/Cut own their
+  document bytes and session rules; Desktop owns sender/path authorization and concrete native ports.
+- **Dependencies:** Assets Webview depends only on browser-safe contracts. Assets Node observes and
+  projects filesystem state. Content application services depend on narrow publication, directory,
+  Canvas, Cut, Workbench, reference, and trash ports. Desktop supplies Electron-specific adapters.
+- **Interfaces:** one canonical command family carries explicit project/workspace/endpoint identity,
+  a workspace-relative target directory, a portable name, and request identity. Observation emits
+  invalidation/reconciliation signals, not file facts.
+- **Extension:** ordinary file/directory creation is exhaustive and `.nkc | .otio` creation is routed
+  through explicit owners. A future authored format requires an atomic owner/contract update rather
+  than an extension hook, wildcard registry, or first-compatible fallback.
+- **Testing:** contract, path-policy, publication, watcher, owner, UI, Desktop delegation, and real
+  Electron tests prove both the visible result and the one canonical execution path.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Provide one canonical Desktop command path for explicit creative-document create, import, open, and
-  recoverable trash operations.
-- Keep Resource Browser as the primary management UI and make empty Main a discoverable shortcut
-  without duplicating lifecycle logic.
-- Produce valid NKC/OTIO through owning domain code and publish without overwrite or partial files.
-- Provide contextual, keyboard-accessible menus using existing `@neko/ui` primitives.
-- Protect workspace ownership, symlink/trust boundaries, dirty sessions, running tasks, project
-  references, multi-View identity, and valuable user data.
-- Keep unlink, close, trash, generated-output lifecycle, and entity binding lifecycle distinct.
+- Make the Files facet behave as a live projection of the Workspace system directory.
+- Provide discoverable New File, New Folder, New Canvas, and New Cut actions.
+- Resolve root-versus-directory creation targets deterministically and visibly.
+- Create ordinary files/directories without overwrite and create valid NKC/OTIO through their owners.
+- Use inline naming and contextual actions modeled on the useful parts of VS Code Explorer.
 
 **Non-Goals:**
 
-- Permanent deletion, recursive directory deletion, application-managed trash restore, bulk
-  operations, rename, move, duplicate, templates, or autosave policy changes.
-- Automatic import/copy of media referenced by an external OTIO, automatic relink, or project bundle
-  creation.
-- Deleting Media Library target contents through a library root, deleting external linked files, or
-  deleting Creative Entity identity when representation bytes are removed.
-- Replacing Canvas/Cut codecs, creating a generic document framework, persisting operation plans in
-  SQLite, or adding another Workbench/runtime registry.
-- Turning `workspace.nkc` deletion into reset. Reset requires a separate destructive workflow.
+- Importing/copying existing files into the Workspace through the application. Users manage existing
+  files through Finder, Explorer, terminal, or other filesystem tools.
+- A normal always-visible Refresh action. Rescan is an error-recovery action only.
+- Rename, move, trash lifecycle changes, duplicate, recursive directory deletion, permanent deletion,
+  templates, untitled documents, bulk operations, or autosave policy changes.
+- A generic document framework, extension registry, compatibility route, second filesystem catalog,
+  or Renderer filesystem access.
 
 ## Decisions
 
-### 1. Content project-file-io owns one creative-document lifecycle coordinator
+### 1. Content owns one canonical creation command family
 
-Add a host-neutral `CreativeDocumentLifecycleCoordinator` under the public
-`@neko/content/project-file-io` application entry, composed from narrow
-`CanvasDocumentOwner`, `CutDocumentOwner`, workspace authorization, reference inspection, Shell
-projection, publication and `trashItem(absolutePath)` ports. The coordinator is the only
-create/import/trash executor. Desktop binds sender/path identity and supplies concrete ports; Assets
-and empty Main submit intents and do not serialize files or update Workbench first.
+Expose host-neutral workspace-entry and creative-document application services through the public
+`@neko/content/project-file-io` entry. Desktop binds sender identity, authorizes the exact Workspace
+and target directory, supplies concrete ports, invokes the service, and projects the result. Assets
+and empty Main submit intents only.
 
-The shared contract uses exhaustive document kinds and routes:
+The canonical command family is:
 
 ```text
+workspace-entry.create-file
+workspace-entry.create-directory
 creative-document.create
-creative-document.import
 creative-document.open
-creative-document.trash.plan
-creative-document.trash.apply
-creative-directory.trash.plan
-creative-directory.trash.apply
 ```
 
-Every request includes a request ID and explicit project/workspace/endpoint identity. Resource Browser
-requests additionally carry its owner identity and current projection revision. Main resolves the
-sender-owned Window and validates every supplied identity; no active/recent project fallback is
-allowed.
+There is no import command, picker bridge, alias, or fallback. Each request includes explicit
+Project, Workspace, Window/endpoint, request, target-directory, and Resource Browser owner/projection
+identity where applicable. Main rejects stale or mismatched identities locally.
 
-**Alternative considered:** put create/delete directly in `ResourceBrowserController`. Rejected
-because empty Main also needs the operations and Assets must not own workspace IO, Canvas/Cut codecs,
-or Workbench/session lifecycle.
+### 2. UI context resolves one explicit target directory
 
-### 2. Owner adapters construct and validate canonical files
+All creation commands require a workspace-relative target directory. The Renderer derives it from
+the visible Resource Browser state and Main re-authorizes the exact directory:
 
-Canvas owner exposes explicit `createEmptyDocument(name)` and `validateDocument(bytes)` behavior over
-the canonical empty Canvas factory and NKC codec. Cut owner exposes explicit
-`createEmptyDocument(name)` and `validateDocument(bytes)` behavior over `createOtioTimeline`,
-`CutDocumentSession.create`, and the canonical OTIO codec. The Cut v1 project profile remains `30/1`
-and is produced by the Cut owner, not copied into Desktop.
+| Invocation                          | Target directory           |
+| ----------------------------------- | -------------------------- |
+| Files `+` with a selected directory | The selected directory     |
+| Files `+` with a selected file      | The selected file's parent |
+| Files `+` with no selection         | Workspace root             |
+| Directory context menu              | The invoked directory      |
+| Blank-area context menu             | Workspace root             |
 
-Create resolves a workspace-relative directory from the selected Resource Browser directory or the
-owner's declared default directory. Empty Main supplies no path and therefore uses that same
-Host-owned default resolver. Canvas defaults under `neko/boards`; Cut consumes its declared
-workspace-relative default-project-root provider. Renderer never receives an absolute path.
+A file context menu does not contain creation commands; it remains scoped to the selected file.
+When a collapsed directory is the target, the tree expands it and places the inline name editor at
+the future row. The UI may show the target directory in the menu, and the inline editor itself is the
+authoritative visible confirmation.
 
-Names are NFC-normalized, portable, visible, non-reserved filenames. The Host appends the required
-extension only when absent, rejects a mismatched extension, and returns a conflict diagnostic if the
-target exists. It does not silently overwrite or choose a suffix for an explicitly named project.
+No layer falls back to a recent directory, active View, active Workspace, process working directory,
+or domain default after an explicit Resource Browser target fails. A missing, stale, external,
+symlinked, hidden-internal, or unauthorized target fails visibly at the smallest owning boundary.
 
-The package application service writes owner-produced bytes through an injected same-directory
-staging/publication port and publishes exclusively. A publish
-failure removes staging and leaves Workbench and the Resource Browser unchanged. Only after
-publication succeeds does Main open/focus the exact document and refresh its Resource Browser
-projection.
+### 3. Generic entries and domain documents have different producers
 
-**Alternative considered:** open an untitled in-memory View and save later. Rejected because it
-creates a second unsaved-document lifecycle, makes target ownership ambiguous, and repeats the
-implicit `workspace.nkc` asymmetry.
+Generic New File creates one zero-byte regular file. New Folder creates one empty directory. Names
+are NFC-normalized, non-empty, visible, single path segments that satisfy the existing portable path
+policy: no separators, absolute paths, `.`/`..`, Windows reserved names, trailing dot/space, control
+characters, or Workspace escape. Publication uses fail-if-exists semantics and never overwrites,
+chooses an implicit suffix, or leaves a partial successful projection.
 
-### 3. Import copies only a validated project document
+`.nkc` and `.otio` are reserved domain extensions. Generic New File rejects them with a diagnostic
+that identifies New Canvas or New Cut as the required command. New Canvas obtains canonical bytes
+from the Canvas owner; New Cut obtains canonical bytes from the Cut owner. The Host appends the
+required extension only when absent and rejects a mismatched extension. Owner-produced bytes publish
+exclusively before the exact Workbench document opens/focuses.
 
-Import is initiated through a sender-bound native file picker restricted to the requested document
-kind. Desktop authorizes the returned source; the package service requires an external regular
-non-symlink file through its injected port, validates bytes through the matching owner,
-and copies it through same-directory staging and exclusive publication into an explicit authorized
-workspace directory. Existing workspace documents are opened from Resource Browser rather than
-re-imported.
-
-The imported NKC/OTIO bytes are not rewritten. Workspace-relative NKC locators or OTIO-relative media
-references that are unavailable in the destination remain explicit missing-content diagnostics and
-are repaired only through existing owner relink workflows. Import does not infer a source project
-root, copy an adjacent media tree, or use the source directory as hidden runtime context.
-
-**Alternative considered:** automatically copy every OTIO media reference and rebase it. Rejected
-because that is a bundle/import-project feature with separate conflict, containment, symlink, codec,
-and partial-failure semantics.
-
-### 4. Resource Browser projects capabilities and composes two discoverable entry styles
-
-Extend the Resource Browser contract with explicit document/open/trash capabilities and available
-container actions. Assets derives toolbar and context-menu items from those capabilities and reuses
-`@neko/ui` `ContextMenu`; it does not create a package-local menu primitive.
-
-- Files toolbar/blank area: create Canvas, create Cut, import document, refresh.
-- Workspace directory: open, create Canvas, create Cut, import document, reveal, and trash only when
-  empty.
-- NKC: open, explicit side-open when supported, reveal, and trash.
-- OTIO: open in Cut, reveal, and trash. Side-open remains absent until Cut supports that layout.
-- Workspace media: preview, add to explicit Canvas/Cut, reveal, and trash only when the source is an
-  owned regular workspace file.
-- Media Library root: recover, relink, and unlink only. It never receives file-trash capability.
-- Materials: owner-projected material actions; removing representation bytes does not delete Entity
-  identity.
-
-Toolbar actions remain visible for discoverability. Right-click selects the target before opening,
-supports `Shift+F10`/Menu key, uses separators before destructive actions, and displays unavailable
-actions only when a diagnostic helps explain the state. Menu composition does not duplicate Host
-authorization.
-
-The current top `+` changes from an unconditional Media Library configuration menu to a facet-aware
-create/add menu. Media retains link-global-library and add-directory-library; Files receives the
-creative-document actions; Materials receives only implemented owner actions.
-
-### 5. Empty Main is a shortcut, not a document owner
-
-Replace the diagnostic-only empty Main body with compact create Canvas, create Cut, and import/open
-actions when their domain capabilities are ready. The surface submits the same lifecycle requests
-without a target directory, so Main uses the owner default resolver. It neither constructs document
-bytes nor mutates Workbench optimistically.
-
-The empty state is shown only when a Main group has no View. `workspace.nkc` remains the default
-project Canvas created by the existing project attachment policy; if the user closes all Views, the
-empty state becomes available. Ordinary create operations never reuse or overwrite
-`neko/boards/workspace.nkc`.
-
-### 6. Trash uses a short-lived two-phase plan
-
-Deletion is presented as “Move to Trash,” never permanent delete. `trash.plan` authorizes and
-canonicalizes the target, rejects a symlink or external/library-root target, fingerprints the exact
-file, reads all open Views/sessions, obtains owner dirty state and running task state, and performs a
-complete registered project-reference inspection.
-
-The plan result contains:
-
-- opaque short-lived `planId`, target locator, kind, and fingerprint;
-- open View identities and dirty state;
-- running task blockers;
-- reference coverage, referencing owner identities, and warnings;
-- allowed dirty resolutions (`save-and-trash`, `discard-and-trash`) and typed diagnostics.
-
-Plans live only in the coordinator's bounded in-memory registry and are bound to sender, window,
-project, target, renderer session, request and plan identity. `trash.apply` repeats authorization and requires the same
-fingerprint, a non-expired plan, explicit dirty resolution, and explicit reference acknowledgement
-when references exist. Missing reference coverage, invalid project documents, changed bytes, stale
-sessions, or active owner tasks reject apply visibly.
-
-After validation, the coordinator marks the operation as deleting, asks the owner to save or discard
-and release all document-scoped preview/media/session resources, calls the injected trash port, then
-requests matching View removal and Resource refresh through projection ports.
-Workbench mutation is committed only after trash succeeds. If `trashItem` fails while the file
-remains, Main remounts/reopens the previous Views from the unchanged file and returns a diagnostic.
-
-References are never cascaded, removed, or rewritten. A successful explicit trash may leave missing
-references, which existing owners project as diagnostics. `neko/boards/workspace.nkc` is rejected
-before planning.
-
-**Alternative considered:** one-step confirmation followed by `files.delete`. Rejected because
-generic delete is permanent, cannot safely reconcile dirty/multi-View state, and cannot detect stale
-reference results between confirmation and mutation.
-
-### 7. Empty directory trash is deliberately narrow
-
-The first version allows only visible, workspace-owned, non-symlink directories with zero entries and
-no protected-path role. Plan/apply uses the same identity/fingerprint pattern and system trash
-adapter. Non-empty directories return a typed diagnostic; there is no recursive flag or descendant
-reference inference.
-
-### 8. Existing operations retain distinct contracts
-
-`closeMainView` remains presentation-only. `source.remove` continues to unlink one workspace Media
-Library entry and never mutates target bytes. Generated outputs continue using their specialized
-reference-checked lifecycle. Entity representation unbinding/deprecation remains independent of
-resource bytes. No compatibility alias maps any of these operations to creative-document trash.
-
-The old Canvas `onOpenCanvas` renderer callback and asymmetric Cut open path are replaced inside this
-boundary by the canonical creative-document open request. Legacy callbacks/routes are removed or
-deleted after all callers switch atomically; new-path tests assert they do not participate.
-
-### 9. Validation proves ownership and the actual execution path
-
-Focused tests cover contract parsing, sender binding, portable names, exclusive publication, staging
-cleanup, codec rejection, import reference preservation, path containment, symlink rejection,
-protected paths, reference coverage, dirty resolution, task blockers, plan expiry/fingerprint
-staleness, trash failure recovery, multi-View reconciliation, and directory emptiness.
-
-Renderer tests cover facet-aware toolbar content, item/blank-area menus, selection-before-menu,
-keyboard invocation, destructive separation, and accessibility. Owner tests prove canonical NKC/OTIO
-factories and sessions are invoked. Retired open callbacks and direct delete paths are absent.
-
-An isolated synthetic Electron workspace validates:
+This preserves one successful producer per intent:
 
 ```text
-open project
-  -> create NKC from Files directory
-  -> create OTIO from empty Main
-  -> import valid NKC/OTIO
-  -> open from context menu
-  -> reject protected/external/referenced-without-acknowledgement trash
-  -> resolve dirty state and move a document to system trash
-  -> close matching View, refresh Resources, and preserve unrelated Views
+ordinary file -> Content empty-file operation
+directory     -> Content directory operation
+.nkc          -> Canvas owner
+.otio         -> Cut owner
 ```
 
-The test uses a controlled trash adapter/fixture location rather than the developer's real workspace
-or valuable system trash contents.
+Unknown ordinary extensions are valid filesystem entries. After creation the Resource Browser
+selects them; it opens them only when an explicit editor owner exists. Creation does not invent a
+generic editor, parse the file, or treat an unknown extension as a creative document.
+
+### 4. Filesystem observation invalidates the authoritative projection
+
+`packages/assets/node` owns a Workspace-scoped directory observation service aligned with the
+Resource Browser projection lifecycle. The Desktop composition root supplies any OS-specific watch
+adapter required by the package and binds it to the exact Project/Workspace authority.
+
+Watcher notifications are hints only:
+
+```text
+filesystem notification
+  -> coalesce affected Workspace paths
+  -> invalidate the corresponding Resource Browser projection
+  -> read the authoritative directory state
+  -> publish a new immutable snapshot
+```
+
+Events are coalesced and may cause a subtree or bounded full-Workspace reconciliation; no event is
+applied as an authoritative create/delete/rename fact. Scene mount performs an initial read.
+Window/application focus restoration and watcher restart perform a bounded reconciliation to cover
+coalesced or missed OS notifications. Switching away unmounts the visible Root and releases its
+subscription without changing Workspace files.
+
+Successful in-app create/trash operations invalidate the affected projection immediately instead of
+waiting for the watcher to echo the mutation. Duplicate watcher notifications remain semantically
+transparent. Watcher failure keeps the last valid sibling entries visible, projects a local
+diagnostic, and exposes a one-shot Rescan recovery action. It does not return an empty successful
+catalog, silently poll forever, or display a normal Refresh control.
+
+### 5. The `+` menu is primary; context menus are contextual accelerators
+
+The Files toolbar places one icon-only `+` button next to the existing view controls with a localized
+tooltip and accessible name. Its menu contains New File, New Folder, New Canvas, and New Cut. Four
+separate toolbar icons would be noisy at the Resource Dock's width; a single menu keeps the commands
+discoverable without crowding the search row.
+
+Directory and blank-area context menus expose the same applicable creation actions. Directory menus
+target the invoked directory; blank-area menus target Workspace root. File item menus expose open,
+rename only when a future rename capability exists, reveal, and trash actions, but do not contain New
+commands. Right-click selects the target before opening, and `Shift+F10`/Menu key invokes the same
+capability-derived menu with focus restoration.
+
+Selecting a creation command creates an inline naming row. Enter submits, Escape cancels, and a
+conflict/validation failure keeps the editor active with an adjacent diagnostic. No command opens a
+native save/open dialog. Media and Materials keep their own facet-specific add actions; the Files
+menu never shows Media Library configuration.
+
+Canvas and Cut naming edit only the document stem. The inline field renders the owning extension as
+a fixed, non-editable suffix (`.nkc` or `.otio`) and includes that suffix in the submitted canonical
+entry name. Directory tree rows keep single-click selection, while a single click on the disclosure
+triangle alone expands or collapses that directory; double-click and Arrow Left/Right remain
+equivalent tree navigation paths.
+
+### 6. Empty Main and trash remain outside this creation change
+
+The Project Resource Browser is the only creation surface in this change. Empty Main remains a
+presentation-only state and does not acquire directory-selection, naming, or filesystem authority.
+Existing trash behavior is not replaced or expanded here. A future trash change must define its own
+dirty-session, task, reference, authorization, system-trash, rollback, and directory policies before
+changing the reachable operation.
+
+### 7. Rename is a separate lifecycle, not a generic filesystem escape hatch
+
+The target experience should eventually expose F2 and a Rename item, but this change does not add a
+rename command. Workbench document identity is path-based, Canvas/Cut sessions may be dirty, tasks
+may hold the old path, and project documents may reference the target. A later OpenSpec must define
+same-directory scope, extension policy, open-session coordination, reference policy, case-only rename,
+atomicity, rollback, and tests before a Host rename port becomes reachable.
+
+### 8. Validation proves ownership and actual paths
+
+Tests must prove strict command parsing, sender binding, target-resolution mapping, portable names,
+reserved-extension rejection, fail-if-exists publication, directory atomicity, owner-produced
+NKC/OTIO bytes, projection invalidation, external filesystem reconciliation, watcher failure
+recovery, context-menu focus, inline naming, and exact Workbench reconciliation.
+
+Path-level tests assert that `content.import-files`, its Electron picker/copy handler, normal Refresh,
+Renderer filesystem access, generic `.nkc/.otio` creation, active/recent-directory fallback, direct
+permanent delete, and an exposed rename command cannot report success.
 
 ## Risks / Trade-offs
 
-- **[Risk] External OTIO import preserves references that may become missing** → Show the import
-  boundary explicitly, preserve structure, surface owner diagnostics, and leave media bundle import
-  to a separate change.
-- **[Risk] Reference inspection can be incomplete because another project document is invalid** →
-  Fail closed before trash and identify the invalid owner instead of assuming zero references.
-- **[Risk] Disposing sessions before `trashItem` can temporarily remove an editor if trash fails** →
-  Do not commit Workbench removal until success and remount the unchanged file on failure.
-- **[Risk] System trash behavior differs across macOS and Windows** → Keep the adapter injected,
-  exercise platform packaging/typechecks, and test application orchestration with a controlled fake.
-- **[Risk] Context menus hide features from new users** → Retain facet-aware visible toolbar/empty
-  state actions; context menus are an efficiency layer, not the only entry.
-- **[Risk] Capability growth makes Resource Browser contracts broad** → Project only stable action
-  identities and keep filesystem/session implementations in Desktop; do not expose paths or domain
-  services to Assets.
-- **[Trade-off] No recursive directory deletion or managed restore** → The initial destructive surface
-  remains understandable and recoverable at OS level but requires users to manage non-empty folders
-  externally.
+- **OS watcher behavior differs and notifications may be lost.** Treat notifications only as
+  invalidations and reconcile on mount/focus/restart; keep a fail-visible one-shot Rescan recovery.
+- **A single `+` menu adds one click.** It avoids four cramped icons and remains more discoverable than
+  context-menu-only creation; keyboard/context accelerators retain efficiency.
+- **Selected-file parent targeting may surprise users.** Show the target directory in the menu and
+  insert the inline editor at the exact parent before commit.
+- **Rejecting `.nkc/.otio` from New File is stricter than a generic file manager.** It prevents invalid
+  domain files and preserves a single producer; the diagnostic routes users to the correct action.
+- **Rename is deferred.** This avoids corrupting path identity or references; the UI must not advertise
+  it until the dedicated lifecycle exists.
 
-## Replacement Plan
+## Migration Plan
 
-1. Add owner-neutral lifecycle contract, producer/consumer tests, and Desktop owner ports without
-   exposing actions in UI.
-2. Implement create/import and owner adapters, then switch Canvas/Cut open atomically to the same command path.
-3. Add two-phase trash planning/apply, reference inspection, task/session checks, and Workbench
-   reconciliation.
-4. Add capability projection, facet-aware toolbar, context menus, keyboard behavior, and empty-Main
-   shortcuts using the new path.
-5. Remove the old Canvas callback, asymmetric creative-document open routing, and any
-   direct delete entry in this boundary.
-6. Run focused package tests/build/typecheck and the isolated real Electron scenario before enabling
-   destructive actions by default.
+1. Freeze the revised contracts and delete import/normal-refresh requirements from all artifacts.
+2. Add ordinary file/directory creation and Canvas/Cut owner adapters with strict path tests.
+3. Add authoritative directory observation and projection invalidation/reconciliation.
+4. Add Files `+`, contextual menus, inline naming, and diagnostics.
+5. Switch NKC/OTIO open to the canonical lifecycle and remove replaced callbacks.
+6. Run package, Desktop, architecture, headless functional, visible Electron UI, and packaging gates.
 
-Rollback removes the UI capability projection first so no new mutation can be submitted, then removes
-the coordinator/bridge. Already created/imported documents remain ordinary valid project files.
-Files moved to OS trash are user-recoverable through the operating system; rollback does not promise
-application-managed restoration.
+No project-data migration is required. Existing files remain ordinary Workspace files. Removing the
+import UI/IPC does not remove or rewrite files previously copied into the Workspace.
 
 ## Open Questions
 
-None. Rename/move, recursive directory trash, project bundle import, `workspace.nkc` reset, bulk
-operations, and in-app trash restore are intentionally deferred rather than left as implementation
-ambiguities.
+None. Rename/move and recursive directory management require separate OpenSpec changes.
+
+### 9. Observation disposal is a terminal ownership boundary
+
+Disposing a Workspace directory observer cancels scheduled work and makes completion of any already
+running reconciliation locally irrelevant. A rejection that settles after disposal must not call the
+observer error callback. Runtime diagnostic publication explicitly handles a controller that was
+disposed concurrently, preventing an unhandled rejection while preserving fail-visible errors for a
+still-current observer/controller pair.

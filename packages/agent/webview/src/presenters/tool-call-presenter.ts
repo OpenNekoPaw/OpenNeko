@@ -522,6 +522,8 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
       readString(info, 'entryPath') ??
       (locator ? formatDocumentLocator(locator) : locatorIdentity.path);
     const documentFilePath = locatorIdentity.filePath || filePath;
+    const src = readString(info, 'renderUri');
+    const previewDiagnostic = readResourceProjectionDiagnostic(info);
     thumbnails.push({
       id: `${path}:${index}`,
       index,
@@ -535,6 +537,8 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
       ...(locator ? { locator } : {}),
       ...(contentLocator ? { contentLocator } : {}),
       ...(representationLocator ? { representationLocator } : {}),
+      ...(src ? { src } : {}),
+      ...(previewDiagnostic ? { previewDiagnostic } : {}),
       label: formatDocumentThumbnailLabel(locator, index),
       referenceJson: formatDocumentImageReferenceJson({
         filePath: documentFilePath,
@@ -611,7 +615,9 @@ function extractReadImageThumbnails(
         readString(perceptionThumbnailRef, 'previewUri');
       const previewDiagnostic =
         readString(attachmentAssetRef, 'previewDiagnostic') ??
-        readString(perceptionThumbnailRef, 'previewDiagnostic');
+        readString(perceptionThumbnailRef, 'previewDiagnostic') ??
+        readResourceProjectionDiagnostic(image) ??
+        readResourceProjectionDiagnostic(documentImage);
       const locatorIdentity =
         contentLocator || representationLocator
           ? describeContentLocatorForDisplay(contentLocator ?? representationLocator!.source)
@@ -666,6 +672,19 @@ function extractReadImageThumbnails(
   return [];
 }
 
+function readResourceProjectionDiagnostic(
+  record: Record<string, unknown> | undefined,
+): string | undefined {
+  const diagnostics = record?.['resourceProjectionDiagnostics'];
+  if (!Array.isArray(diagnostics)) return undefined;
+  for (const value of diagnostics) {
+    const diagnostic = asRecord(value);
+    const message = readString(diagnostic, 'message');
+    if (message) return message;
+  }
+  return undefined;
+}
+
 function extractToolDocumentThumbnails(
   toolName: string,
   args: unknown,
@@ -673,6 +692,9 @@ function extractToolDocumentThumbnails(
   attachments?: readonly unknown[],
   perceptionCards?: readonly unknown[],
 ): DocumentImageThumbnailProjection[] {
+  if (toolName === 'ReadDocument') {
+    return extractDocumentImageThumbnails(resultData);
+  }
   if (toolName === 'ReadImage') {
     const resultRecord = asRecord(resultData);
     const hydratedData = asRecord(resultRecord?.data);
