@@ -3,6 +3,7 @@ import {
   editorViewCtx,
   editorViewOptionsCtx,
   Editor,
+  nodeViewCtx,
   parserCtx,
   prosePluginsCtx,
   rootAttrsCtx,
@@ -19,6 +20,10 @@ import type { TextDocumentProjection } from '@neko/text-editor-domain';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import type { TextEditorHostRuntime } from './host-runtime';
 import { textEditorLabel, type TextEditorLocale } from './labels';
+import {
+  createMarkdownMediaMilkdownPlugins,
+  MarkdownMediaPresentation,
+} from './markdown-media-presentation';
 
 export interface MilkdownEditorActions {
   readonly undo: () => boolean;
@@ -37,6 +42,7 @@ export interface MilkdownRichEditorProps {
   readonly onFocus: () => void;
   readonly onActions: (actions: MilkdownEditorActions | undefined) => void;
   readonly onOpenSource: () => void;
+  readonly onRevealSource: (offset: number) => void;
   readonly readOnly: boolean;
 }
 
@@ -57,6 +63,7 @@ export function MilkdownRichEditor({
   onFocus,
   onActions,
   onOpenSource,
+  onRevealSource,
   readOnly,
 }: MilkdownRichEditorProps): ReactElement {
   const mount = useRef<HTMLDivElement>(null);
@@ -69,6 +76,11 @@ export function MilkdownRichEditor({
   const attemptedSource = useRef<string>();
   const [state, setState] = useState<RichState>('loading');
   const [failure, setFailure] = useState<string>();
+  const surfaceId = useRef<string>();
+  if (!surfaceId.current) {
+    markdownMediaSurfaceOrdinal += 1;
+    surfaceId.current = `markdown-media-surface:${projection.sessionId}:${markdownMediaSurfaceOrdinal}`;
+  }
 
   accepted.current = projection;
 
@@ -181,6 +193,18 @@ export function MilkdownRichEditor({
   return (
     <div className="neko-text-editor-rich" data-rich-state={state}>
       <div className="neko-text-editor-milkdown-mount" ref={mount} />
+      {state === 'ready' || state === 'unavailable' ? (
+        <MarkdownMediaPresentation
+          root={mount.current}
+          projection={projection}
+          runtime={runtime}
+          locale={locale}
+          surfaceId={surfaceId.current}
+          nextRequestId={nextRequestId}
+          onError={onError}
+          onRevealSource={onRevealSource}
+        />
+      ) : null}
       {state === 'loading' ? (
         <div className="neko-text-editor-rich-status">{textEditorLabel(locale, 'richLoading')}</div>
       ) : null}
@@ -224,14 +248,18 @@ async function createMilkdownController({
   let initialized = false;
   let lastSerialized = '';
   let mutationAvailable = false;
+  let mediaSource = source;
+  const mediaPlugins = createMarkdownMediaMilkdownPlugins(() => mediaSource);
   const editor = await Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, source);
       ctx.set(rootAttrsCtx, { 'aria-label': ariaLabel });
       ctx.set(editorViewOptionsCtx, { editable: () => false });
+      ctx.update(nodeViewCtx, (views) => [...views, mediaPlugins.imageNodeView]);
       ctx.update(prosePluginsCtx, (plugins) => [
         ...plugins,
+        mediaPlugins.resourceDecorationPlugin,
         history(),
         keymap({ 'Mod-z': undo, 'Shift-Mod-z': redo, 'Mod-y': redo }),
         new Plugin({
@@ -306,6 +334,7 @@ async function createMilkdownController({
     reconcile(nextSource) {
       if (destroyed) return false;
       return editor.action((ctx) => {
+        mediaSource = nextSource;
         const parser = ctx.get(parserCtx);
         const nextDocument = parser(nextSource);
         if (!nextDocument) return false;
@@ -316,6 +345,11 @@ async function createMilkdownController({
           assessOpenNekoMarkdownRichRoundTrip(nextSource, serialized).status === 'ready';
         const view = ctx.get(editorViewCtx);
         if (view.state.doc.eq(nextDocument)) {
+          view.dispatch(
+            view.state.tr
+              .setMeta(mediaPlugins.resourceDecorationPlugin, true)
+              .setMeta('addToHistory', false),
+          );
           lastSerialized = serialized;
           applyEditableState();
           return presentationState();
@@ -369,6 +403,8 @@ async function createMilkdownController({
     onSourceChange(serialized);
   }
 }
+
+let markdownMediaSurfaceOrdinal = 0;
 
 const safeTableCellSchema = withoutInlineTableAlignment(tableCellSchema, 'td');
 const safeTableHeaderSchema = withoutInlineTableAlignment(tableHeaderSchema, 'th');

@@ -349,7 +349,7 @@ export function TextEditorRoot({
               }
             >
               <MilkdownRichEditor
-                key={effectiveMode}
+                key={`${effectiveMode}:${projection.identity.workspaceId}:${projection.identity.documentId}:${projection.sessionId}`}
                 projection={projection}
                 runtime={runtime}
                 locale={locale}
@@ -359,6 +359,15 @@ export function TextEditorRoot({
                 onFocus={activateRichEditor}
                 onActions={bindRichEditorActions}
                 onOpenSource={() => updatePresentationMode('source')}
+                onRevealSource={(offset) => {
+                  const view = editorView.current;
+                  if (view) {
+                    revealSourceOffset(view, offset);
+                    return;
+                  }
+                  pendingSourceOffset.current = offset;
+                  updatePresentationMode('source');
+                }}
                 readOnly={effectiveMode === 'split'}
               />
             </Suspense>

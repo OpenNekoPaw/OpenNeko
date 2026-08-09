@@ -8,6 +8,7 @@ import type {
   ReleaseTextEditorMarkdownMediaRequest,
   TextDocumentChange,
   TextDocumentProjection,
+  TextEditorMarkdownMediaProjection,
   TextEditorMarkdownReferenceSearchRequest,
   TextEditorMarkdownReferenceSearchResult,
 } from '@neko/text-editor-domain';
@@ -491,9 +492,200 @@ describe('TextEditorRoot', () => {
     await unmount(rendered.root);
   });
 
+  it('renders authorized CommonMark and Workspace images without exposing source targets', async () => {
+    const source = '# 媒体\n\n![分镜图](images/board.png)\n\n![[images/cover.png]]';
+    const runtime = createRuntime(textProjection('markdown', source));
+    runtime.prepareMarkdownMedia.mockImplementation(async (request) =>
+      readyMediaProjection(request, 'image', `lease:${request.token.target}`),
+    );
+    const rendered = await renderEditor(runtime, 'zh-cn');
+
+    await clickText(rendered.container, '所见即所得');
+    await waitFor(
+      () => rendered.container.querySelectorAll('.neko-markdown-media img').length === 2,
+    );
+    const images = [
+      ...rendered.container.querySelectorAll<HTMLImageElement>('.neko-markdown-media img'),
+    ];
+    expect(images.map((image) => image.alt)).toEqual(['分镜图', 'images/cover.png']);
+    expect(images.map((image) => image.src)).toEqual([
+      'http://127.0.0.1:43125/resources/images%2Fboard.png',
+      'http://127.0.0.1:43125/resources/images%2Fcover.png',
+    ]);
+    expect(rendered.container.querySelector('img[src="images/board.png"]')).toBeNull();
+    expect(runtime.applyEdits).not.toHaveBeenCalled();
+    expect(runtime.prepareMarkdownMedia.mock.calls.map(([request]) => request.token)).toEqual([
+      {
+        kind: 'commonmark-image',
+        from: source.indexOf('!['),
+        to: source.indexOf('![') + '![分镜图](images/board.png)'.length,
+        target: 'images/board.png',
+        altText: '分镜图',
+      },
+      {
+        kind: 'resource-embed',
+        from: source.indexOf('![[images'),
+        to: source.length,
+        target: 'images/cover.png',
+        altText: 'images/cover.png',
+      },
+    ]);
+    expect(rendered.container.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe(
+      'true',
+    );
+
+    const reveal = rendered.container.querySelector<HTMLButtonElement>(
+      '.neko-markdown-media__reveal',
+    );
+    if (!reveal) throw new Error('Markdown media fixture requires a Source reveal action.');
+    await act(async () => {
+      reveal.click();
+      await settle();
+    });
+    expect(editorView(rendered.container).state.selection.main.anchor).toBe(source.indexOf('!['));
+
+    await unmount(rendered.root);
+    expect(runtime.releaseMarkdownMedia).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses native non-autoplay audio and video controls and releases a removed token', async () => {
+    const source = '![[media/theme.mp3]]\n\n![[media/scene.mp4]]';
+    const runtime = createRuntime(textProjection('markdown', source));
+    runtime.prepareMarkdownMedia.mockImplementation(async (request) => {
+      const video = request.token.target.endsWith('.mp4');
+      return readyMediaProjection(
+        request,
+        video ? 'video' : 'audio',
+        video ? 'lease-video' : `lease-audio:${request.editSequence}`,
+      );
+    });
+    const rendered = await renderEditor(runtime, 'zh-cn');
+
+    await clickText(rendered.container, '所见即所得');
+    await waitFor(
+      () =>
+        rendered.container.querySelector('.neko-markdown-media audio') !== null &&
+        rendered.container.querySelector('.neko-markdown-media video') !== null,
+    );
+    const audio = rendered.container.querySelector<HTMLAudioElement>('audio');
+    const video = rendered.container.querySelector<HTMLVideoElement>('video');
+    expect(audio?.controls).toBe(true);
+    expect(audio?.autoplay).toBe(false);
+    expect(audio?.preload).toBe('metadata');
+    expect(video?.controls).toBe(true);
+    expect(video?.autoplay).toBe(false);
+    expect(video?.preload).toBe('metadata');
+    expect(video?.playsInline).toBe(true);
+
+    runtime.emit({
+      ...textProjection('markdown', '![[media/theme.mp3]]'),
+      editSequence: 1,
+    });
+    await waitFor(() => rendered.container.querySelector('video') === null);
+    await waitFor(() =>
+      runtime.releaseMarkdownMedia.mock.calls.some(
+        ([request]) => request.leaseId === 'lease-video',
+      ),
+    );
+    expect(rendered.container.querySelector('audio')).not.toBeNull();
+    await unmount(rendered.root);
+  });
+
+  it('contains missing, ambiguous and unauthorized media diagnostics beside a ready sibling', async () => {
+    const source = [
+      '![可用图片](images/ready.png)',
+      '![[images/missing.png]]',
+      '![[images/ambiguous.png]]',
+      '![[/private/secret.png]]',
+    ].join('\n\n');
+    const runtime = createRuntime(textProjection('markdown', source));
+    runtime.prepareMarkdownMedia.mockImplementation(async (request) => {
+      if (request.token.target === 'images/ready.png') {
+        return readyMediaProjection(request, 'image', 'lease-ready');
+      }
+      return {
+        ...request,
+        status: 'unavailable',
+        diagnostic: {
+          code:
+            request.token.target === 'images/missing.png'
+              ? 'text-editor-markdown-media-missing'
+              : 'text-editor-markdown-media-ambiguous',
+        },
+      };
+    });
+    const rendered = await renderEditor(runtime, 'zh-cn');
+
+    await clickText(rendered.container, '所见即所得');
+    await waitFor(
+      () => rendered.container.querySelectorAll('[data-media-state="unavailable"]').length === 3,
+    );
+    expect(rendered.container.querySelector('.neko-markdown-media img')).not.toBeNull();
+    const diagnostics = [...rendered.container.querySelectorAll('[data-media-state="unavailable"]')]
+      .map((node) => node.textContent)
+      .join('\n');
+    expect(diagnostics).toContain('找不到媒体文件');
+    expect(diagnostics).toContain('媒体目标匹配到多个资源');
+    expect(diagnostics).toContain('当前工作区无权访问该媒体目标');
+    expect(
+      runtime.prepareMarkdownMedia.mock.calls.some(([request]) =>
+        request.token.target.startsWith('/'),
+      ),
+    ).toBe(false);
+    await unmount(rendered.root);
+  });
+
+  it('revokes late media preparation and prepares only the replacement document surface', async () => {
+    const sourceA = '![A](images/a.png)';
+    const sourceB = '![B](images/b.png)';
+    const projectionA = textProjection('markdown', sourceA);
+    const projectionB = {
+      ...textProjection('markdown', sourceB, 'replacement.md'),
+      sessionId: 'session-2',
+      editSequence: 3,
+    };
+    const late = createDeferred<TextEditorMarkdownMediaProjection>();
+    const runtime = createRuntime(projectionA);
+    runtime.prepareMarkdownMedia.mockImplementation(async (request) =>
+      request.token.target === 'images/a.png'
+        ? late.promise
+        : readyMediaProjection(request, 'image', 'lease-b'),
+    );
+    const rendered = await renderEditor(runtime);
+
+    await clickText(rendered.container, 'Rich');
+    await waitFor(() => runtime.prepareMarkdownMedia.mock.calls.length === 1);
+    const requestA = runtime.prepareMarkdownMedia.mock.calls[0]![0];
+    await act(async () => {
+      runtime.emit(projectionB);
+      await settle();
+    });
+    await waitFor(() =>
+      runtime.prepareMarkdownMedia.mock.calls.some(
+        ([request]) => request.token.target === 'images/b.png',
+      ),
+    );
+    await waitFor(
+      () =>
+        rendered.container.querySelector<HTMLImageElement>('.neko-markdown-media img')?.alt === 'B',
+    );
+
+    await act(async () => {
+      late.resolve(readyMediaProjection(requestA, 'image', 'lease-a'));
+      await settle();
+    });
+    await waitFor(() =>
+      runtime.releaseMarkdownMedia.mock.calls.some(([request]) => request.leaseId === 'lease-a'),
+    );
+    expect(
+      rendered.container.querySelector<HTMLImageElement>('.neko-markdown-media img')?.alt,
+    ).toBe('B');
+    await unmount(rendered.root);
+  });
+
   it('keeps incomplete Markdown visible in the read-only Split preview', async () => {
     const source = '# 草稿\n\n完整段落。';
-    const incomplete = '# 草稿\n\n未完成 **强调\n\n[链接](';
+    const incomplete = '# 草稿\n\n未完成 **强调\n\n[[引用\n\n![[媒体\n\n![海报](';
     const runtime = createRuntime(textProjection('markdown', source));
     const rendered = await renderEditor(runtime, 'zh-cn');
 
@@ -510,11 +702,13 @@ describe('TextEditorRoot', () => {
         rendered.container.querySelector('.ProseMirror')?.textContent?.includes('未完成') === true,
     );
     expect(rendered.container.querySelector('[data-rich-state="ready"]')).not.toBeNull();
-    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toContain('[链接](');
+    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toContain('![[媒体');
+    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toContain('![海报](');
     expect(rendered.container.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe(
       'true',
     );
     expect(runtime.applyEdits).toHaveBeenCalledTimes(1);
+    expect(runtime.prepareMarkdownMedia).not.toHaveBeenCalled();
     await unmount(rendered.root);
   });
 
@@ -735,11 +929,15 @@ function createRuntime(initial: TextDocumentProjection) {
       projection: referenceProjection(request),
     }),
   );
-  const prepareMarkdownMedia = vi.fn(async (request: PrepareTextEditorMarkdownMediaRequest) => ({
-    ...request,
-    status: 'unavailable' as const,
-    diagnostic: { code: 'text-editor-markdown-media-missing' as const },
-  }));
+  const prepareMarkdownMedia = vi.fn(
+    async (
+      request: PrepareTextEditorMarkdownMediaRequest,
+    ): Promise<TextEditorMarkdownMediaProjection> => ({
+      ...request,
+      status: 'unavailable',
+      diagnostic: { code: 'text-editor-markdown-media-missing' },
+    }),
+  );
   const releaseMarkdownMedia = vi.fn(async (_request: ReleaseTextEditorMarkdownMediaRequest) => {});
   return {
     project: vi.fn(async () => current),
@@ -780,6 +978,24 @@ function referenceProjection(request: TextEditorMarkdownReferenceSearchRequest) 
     query: request.query,
     candidates: [],
     diagnostics: [],
+  };
+}
+
+function readyMediaProjection(
+  request: PrepareTextEditorMarkdownMediaRequest,
+  kind: 'image' | 'audio' | 'video',
+  leaseId: string,
+): TextEditorMarkdownMediaProjection {
+  return {
+    ...request,
+    status: 'ready',
+    descriptor: {
+      leaseId,
+      kind,
+      renderUri: `http://127.0.0.1:43125/resources/${encodeURIComponent(request.token.target)}`,
+      contentType: kind === 'image' ? 'image/png' : kind === 'audio' ? 'audio/mpeg' : 'video/mp4',
+      displayName: request.token.target.split('/').at(-1) ?? request.token.target,
+    },
   };
 }
 

@@ -247,6 +247,106 @@
   border-inline-start: 3px solid var(--neko-input-border, #9aa0a6);
 }
 
+.neko-markdown-media {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(100%, 52rem);
+  margin: 16px 0;
+  color: var(--neko-editor-foreground, #202124);
+  white-space: normal;
+}
+
+.neko-markdown-media img,
+.neko-markdown-media video {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(68vh, 680px);
+  border: 1px solid color-mix(in srgb, var(--neko-border, #d9dce1) 86%, transparent);
+  border-radius: 5px;
+  background: var(--neko-sideBar-background, #f1f3f4);
+  object-fit: contain;
+}
+
+.neko-markdown-media video {
+  width: min(100%, 52rem);
+  aspect-ratio: 16 / 9;
+}
+
+.neko-markdown-media audio {
+  display: block;
+  width: min(100%, 36rem);
+  min-height: 40px;
+}
+
+.neko-markdown-media__caption,
+.neko-markdown-media__diagnostic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  color: var(--neko-descriptionForeground, #5f6368);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.neko-markdown-media__caption > span:first-child,
+.neko-markdown-media__diagnostic > span:last-child,
+.neko-markdown-media__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.neko-markdown-media__caption .neko-markdown-media__reveal {
+  margin-inline-start: auto;
+}
+
+.neko-markdown-media[data-media-state='loading'],
+.neko-markdown-media[data-media-state='unavailable'] {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-inline-start: 3px solid var(--neko-input-border, #9aa0a6);
+  background: color-mix(in srgb, var(--neko-sideBar-background, #f1f3f4) 52%, transparent);
+}
+
+.neko-markdown-media[data-media-state='loading'] {
+  flex-direction: row;
+  align-items: center;
+  color: var(--neko-descriptionForeground, #5f6368);
+  font-size: 12px;
+}
+
+.neko-markdown-media[data-media-state='unavailable'] {
+  border-inline-start-color: var(--neko-inputValidation-warningBorder, #b58105);
+}
+
+.neko-markdown-media__reveal {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  border: 0;
+  border-radius: 3px;
+  padding: 3px 6px;
+  background: transparent;
+  color: var(--neko-textLink-foreground, #1672a3);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.neko-markdown-media__reveal:hover {
+  background: var(--neko-toolbar-hoverBackground, #e7eaee);
+}
+
+.neko-markdown-media__reveal:focus-visible {
+  outline: 1px solid var(--neko-focusBorder, #2563eb);
+  outline-offset: 1px;
+}
+
 .neko-text-editor-rich-status {
   display: flex;
   align-items: center;

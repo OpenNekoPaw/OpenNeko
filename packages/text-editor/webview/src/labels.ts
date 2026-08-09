@@ -1,6 +1,7 @@
 import {
   isTextDocumentDiagnosticCode,
   type TextDocumentDiagnosticCode,
+  type TextEditorMarkdownMediaDiagnosticCode,
 } from '@neko/text-editor-domain';
 
 export type TextEditorLocale = 'en' | 'zh-cn';
@@ -30,6 +31,8 @@ const LABELS = {
       'Preview is available, but Rich editing cannot preserve this syntax. Continue in Source.',
     richInitializationFailed: 'Rich editor could not be opened.',
     openSource: 'Open Source',
+    revealMediaSource: 'Show in Source',
+    mediaLoading: 'Loading media',
     unsavedChanges: 'Unsaved changes',
   },
   'zh-cn': {
@@ -55,6 +58,8 @@ const LABELS = {
     richUnavailable: '当前内容可以预览，但所见即所得编辑无法保留该语法，请继续使用源码模式。',
     richInitializationFailed: '无法打开所见即所得编辑器。',
     openSource: '打开源码',
+    revealMediaSource: '在源码中显示',
+    mediaLoading: '正在加载媒体',
     unsavedChanges: '未保存的更改',
   },
 } as const;
@@ -96,6 +101,36 @@ export function textEditorDiagnosticLabel(
     'text-document-reload-confirmation-required': [
       'Confirm before discarding edits',
       '放弃编辑前需要确认',
+    ],
+  };
+  return labels[code][locale === 'en' ? 0 : 1];
+}
+
+export function textEditorMarkdownMediaDiagnosticLabel(
+  locale: TextEditorLocale,
+  code: TextEditorMarkdownMediaDiagnosticCode,
+): string {
+  const labels: Record<TextEditorMarkdownMediaDiagnosticCode, readonly [string, string]> = {
+    'text-editor-markdown-media-missing': ['Media file was not found', '找不到媒体文件'],
+    'text-editor-markdown-media-ambiguous': [
+      'Media target matches more than one resource',
+      '媒体目标匹配到多个资源',
+    ],
+    'text-editor-markdown-media-unauthorized': [
+      'Media target is not authorized for this Workspace',
+      '当前工作区无权访问该媒体目标',
+    ],
+    'text-editor-markdown-media-unsupported': [
+      'This resource type cannot be embedded',
+      '不支持嵌入此资源类型',
+    ],
+    'text-editor-markdown-media-projection-failed': [
+      'Media could not be displayed',
+      '无法显示媒体',
+    ],
+    'text-editor-markdown-media-stale-surface': [
+      'Media belongs to a previous document view',
+      '媒体属于先前的文档视图',
     ],
   };
   return labels[code][locale === 'en' ? 0 : 1];
