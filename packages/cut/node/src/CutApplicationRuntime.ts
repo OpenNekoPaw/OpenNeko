@@ -8,6 +8,7 @@ import {
   isCutDraftDocumentId,
   DEFAULT_CUT_HOST_PRESENTATION,
   assertCutHostRuntimeIdentity,
+  isCutCommand,
   parseCutHostPresentationState,
   parseCutHostRuntimeRequest,
   type CutCommand,
@@ -1115,39 +1116,6 @@ const UNAVAILABLE_MEDIA_PUBLISHER = {
   },
 } satisfies NodeMediaPublisher;
 
-const CUT_COMMAND_TYPES = new Set<string>([
-  'set-project-canvas',
-  'link-media',
-  'add-track',
-  'remove-track',
-  'rename-track',
-  'move-track',
-  'relink-media',
-  'split',
-  'trim',
-  'move-item',
-  'place-clip',
-  'rename-clip',
-  'set-clip-duration',
-  'set-playback-rate',
-  'ripple-delete',
-  'trim-trailing-gaps',
-  'insert-gap',
-  'remove-gap',
-  'set-audio',
-  'set-clip-enabled',
-  'set-track-enabled',
-  'set-track-muted',
-  'set-clip-locked',
-  'set-track-locked',
-  'duplicate-clip',
-  'clone-clip-at-time',
-  'duplicate-track',
-  'separate-audio',
-  'unseparate-audio',
-  'append-route',
-]);
-
 function requireCutCommand(value: unknown): CutCommand {
   if (!isCutCommand(value)) throw new Error('Cut command payload is invalid.');
   return value;
@@ -1491,17 +1459,6 @@ function requireNonNegativeFinite(value: unknown, message: string): number {
 function requireIdentity(value: unknown, message: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) throw new Error(message);
   return value;
-}
-
-function isCutCommand(value: unknown): value is CutCommand {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    'type' in value &&
-    typeof value.type === 'string' &&
-    CUT_COMMAND_TYPES.has(value.type)
-  );
 }
 
 function cutSessionKey(identity: CutHostRuntimeIdentity): string {

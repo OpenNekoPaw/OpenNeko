@@ -8,13 +8,16 @@ import {
 import { clipPlaybackRate } from './document';
 import type { OtioTimeline, OtioTrackKind } from './types';
 
-export interface TimelineView {
+export interface TimelineDocumentView {
   readonly documentUri: string;
-  readonly sessionId: string;
   readonly name: string;
   readonly profile?: ReturnType<typeof readProjectProfile>;
   readonly tracks: readonly TimelineTrackView[];
   readonly durationSeconds: number;
+}
+
+export interface TimelineView extends TimelineDocumentView {
+  readonly sessionId: string;
 }
 
 export interface TimelineTrackView {
@@ -81,6 +84,19 @@ export function projectTimelineView(input: {
   readonly documentUri: string;
   readonly sessionId: string;
 }): TimelineView {
+  return {
+    sessionId: input.sessionId,
+    ...projectTimelineDocumentView({
+      document: input.document,
+      documentUri: input.documentUri,
+    }),
+  };
+}
+
+export function projectTimelineDocumentView(input: {
+  readonly document: OtioTimeline;
+  readonly documentUri: string;
+}): TimelineDocumentView {
   let maxDuration = 0;
   const tracks = input.document.tracks.children.map((track) => {
     const trackIdentity = readTrackIdentity(track.metadata);
@@ -147,7 +163,6 @@ export function projectTimelineView(input: {
   const profile = readProjectProfile(input.document.metadata);
   return {
     documentUri: input.documentUri,
-    sessionId: input.sessionId,
     name: input.document.name,
     ...(profile ? { profile } : {}),
     tracks,

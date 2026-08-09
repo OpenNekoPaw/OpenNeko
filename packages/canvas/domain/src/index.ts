@@ -88,6 +88,14 @@ export {
   type ResolvedCanvasMaterialDescriptor,
 } from './canvas-content-authoring';
 export {
+  CanvasProjectAuthoringError,
+  CanvasProjectAuthoringService,
+  type CanvasProjectConnectionMutationResult,
+  type CanvasProjectAuthoringServiceOptions,
+  type CanvasProjectNodeMutationResult,
+  type CanvasProjectSnapshot,
+} from './canvas-project-authoring-service';
+export {
   projectGenerationSnapshotToCanvas,
   type CanvasGenerationProjectionInput,
   type CanvasGenerationProjectionSnapshot,

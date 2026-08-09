@@ -176,6 +176,47 @@ export class CutCommandError extends Error {
   }
 }
 
+const CUT_COMMAND_TYPES = new Set<string>([
+  'set-project-canvas',
+  'link-media',
+  'add-track',
+  'remove-track',
+  'rename-track',
+  'move-track',
+  'relink-media',
+  'split',
+  'trim',
+  'move-item',
+  'place-clip',
+  'rename-clip',
+  'set-clip-duration',
+  'set-playback-rate',
+  'ripple-delete',
+  'trim-trailing-gaps',
+  'insert-gap',
+  'remove-gap',
+  'set-audio',
+  'set-clip-enabled',
+  'set-track-enabled',
+  'set-track-muted',
+  'set-clip-locked',
+  'set-track-locked',
+  'duplicate-clip',
+  'clone-clip-at-time',
+  'duplicate-track',
+  'separate-audio',
+  'unseparate-audio',
+  'append-route',
+]);
+
+export function isCutCommand(value: unknown): value is CutCommand {
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || !('type' in value)) {
+    return false;
+  }
+  const type = value.type;
+  return typeof type === 'string' && CUT_COMMAND_TYPES.has(type);
+}
+
 export function applyCutCommand(document: OtioTimeline, command: CutCommand): OtioTimeline {
   assertCommandUnlocked(document, command);
   switch (command.type) {

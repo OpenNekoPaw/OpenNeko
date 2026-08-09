@@ -310,6 +310,9 @@ importers:
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
+      '@neko/cut-domain':
+        specifier: workspace:*
+        version: link:../../cut/domain
       '@neko/entity-domain':
         specifier: workspace:*
         version: link:../../entity/domain
@@ -810,6 +813,9 @@ importers:
       '@neko/agent-contracts':
         specifier: workspace:*
         version: link:../../agent/contracts
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../../content
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/agent-contracts": "workspace:*"
+    "@neko/agent-contracts": "workspace:*",
+    "@neko/content": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

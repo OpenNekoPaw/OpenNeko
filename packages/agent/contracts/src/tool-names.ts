@@ -44,6 +44,11 @@ export const TOOL_NAMES_CANVAS = {
   CANVAS_CREATE_CONNECTION: 'canvas_create_connection',
 } as const;
 
+export const TOOL_NAMES_CUT = {
+  CUT_QUERY_TIMELINE: 'cut_query_timeline',
+  CUT_APPLY_COMMANDS: 'cut_apply_commands',
+} as const;
+
 // =============================================================================
 // Platform Media — Generation Tools
 // =============================================================================
@@ -168,6 +173,7 @@ export const TOOL_NAMES_EXECUTION = {
  */
 export const TOOL_NAMES = {
   ...TOOL_NAMES_CANVAS,
+  ...TOOL_NAMES_CUT,
   ...TOOL_NAMES_MEDIA,
   ...TOOL_NAMES_QUALITY,
   ...TOOL_NAMES_EFFECTS,
