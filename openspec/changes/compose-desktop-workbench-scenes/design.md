@@ -133,6 +133,20 @@ Surface 并原子切换 Scene，使 renderer 不会先挂载一个必然 bootstr
 
 PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects` 与 `agentHome.conversations`，因此删除 Home composer/management page 时必须保留最近项目、最近会话、attention 和显式恢复/删除操作。
 
+#### Window claim always enters a fresh Entry Draft
+
+应用启动或用户重新打开一个已经释放的 Window 时，Host Shell 的 `claimWindowId()` 是唯一 startup
+presentation owner。它先把当前 Project layout 捕获到 exact tab snapshot，再保留 Window identity、
+PrimarySidebar、Project tabs/catalog 与所有 durable domain records，随后用新的 `draftId` 原子替换当前
+Workbench layout/Scene 为 canonical unbound Entry。上次可见 Workspace、conversation、Assets、Extensions、
+Projects 或 Settings Scene 不参与启动选择，也不自动 attach runtime。
+
+该语义不同于 Renderer reload：同一已 claim Window 的 renderer session replacement 继续读取当前 exact
+Scene，不创建 draft、不切换入口。Application Settings 因此删除 `startupTarget` 与“恢复上次工作区”UI；
+Desktop Main 不再把 preference 传给 Shell，Shell 也不保留 `home | restore` 分支。旧 Settings 文档不能走
+兼容 reader 或字段迁移；既有 authority-local strict recovery 将原记录 quarantine 后只初始化 canonical
+Settings defaults，并投影 diagnostic。Shell、Project、Conversation、Assets 与用户文件不受影响。
+
 PrimarySidebar 顶部品牌区只承载自身显隐控件。Exact Workspace composition 通过 `ControlledWorkbenchShell.titleBar` 插槽把 Agent、Main、管理面板与 Cut Panel 四个独立控件浮置在现有窗口顶部 chrome 右侧；该插槽在 Desktop 视觉层使用 absolute overlay，不参与 Workbench grid track sizing，不增加背景、边框、标题或额外 header 高度，并保持与 macOS 原生 title chrome 的垂直对齐。每个控件只改变其所属区域的 presentation，不能通过一个混合菜单或 Main 内按钮同时管理多个区域；Agent 与 Main 仍必须保证至少一个业务区域可见。
 
 Window 级 Main、Interaction 与 Manager Surface 必须 full-bleed 占用 `ControlledWorkbenchShell` 分配的完整 grid track。Desktop 不得通过 panel 外层 margin、Dock padding、responsive inset 或顶层圆角缩小 package Root/Webview viewport 或露出 Window 背景；顶层 panel shell 使用直角边界，Sidebar/Main 和兄弟 Surface 的结构关系由 divider、现有 resize primitive 与功能性 gutter 表达。Overlay/Docked manager 在其当前业务 track 内同样使用完整高度、直角和外侧边界。领域页面的 readable width、toolbar alignment、内容 padding 和内部组件圆角继续由 owning package 管理，因此删除 Window 装饰性 inset 与圆角不得拉伸管理控件或把页面内容贴到窗口边缘。
@@ -433,6 +447,7 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 8. 删除 Home composer、agentInitialInput、模型 intent scene routing 与所有隐式 Project owner selection。
 9. 运行 package tests/build、Agent evaluation、legacy/boundary gates和隔离真实 Electron大/小窗口场景。
 10. 引入 unbound Entry Draft identity、确定性的自动 Assistant 首次提交、显式 Workspace/Role binding 与 package-owned presentation reset；修复 renderer runtime StrictMode lifecycle并复验用户启动路径。
+11. 将 Window claim 收敛为 fresh Entry 的唯一启动路径，删除 startup destination preference，并以持久 Workspace/Settings 冷启动与 renderer reload 验证区分两种生命周期。
 
 回滚只能整体恢复上一稳定 commit 的 composition，不能删除实施期间创建的 conversation、published Asset、Workspace或用户授权记录。非 canonical shape 必须在精确 owner 边界明确拒绝并保持原字节；不能执行产品迁移，也不能静默回退 Home composer、默认 Project或双 sidebar路径。
 

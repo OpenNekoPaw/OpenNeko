@@ -149,3 +149,9 @@ preserve or a legacy path to keep after the replacement is complete.
 - [x] 12.20 Revalidate exact Save As authority before writing, atomically rebind preload Cut listener/cursor identity from the authoritative runtime sequence, and add stale-renderer/View plus post-save event regressions.
 - [x] 12.21 Track overlapping Cut representation requests by exact request/key ownership, merge valid out-of-order results, release failed/completed keys for bounded retry, preserve typed media diagnostics, and add controller/bridge regressions.
 - [x] 12.22 Keep the memoized Cut Webview bridge active across React StrictMode effect replay, dispose it only after final Surface unmount, and rerun the isolated Cut Electron scenario.
+
+## 13. Canonical Startup Entry
+
+- [x] 13.1 Update proposal/design/spec so Window claim always creates a fresh unbound Entry while renderer reload preserves the current Scene; remove restore-last as a supported startup path and record Application Settings local reset semantics.
+- [x] 13.2 Add red Host/SQLite/Settings/renderer tests, implement fresh Entry Window claim, and remove `startupTarget` from the canonical settings contract, Desktop wiring, settings UI and fixtures in one pass.
+- [x] 13.3 Run focused Host/Desktop tests, typecheck, strict OpenSpec and quality gates, then validate persisted Workspace cold startup and same-process renderer reload in real Electron with direct visual evidence.

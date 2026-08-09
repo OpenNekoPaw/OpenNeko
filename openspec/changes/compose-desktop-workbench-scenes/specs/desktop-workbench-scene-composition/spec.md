@@ -293,6 +293,20 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **AND** Workbench passes through the canonical Agent Launch Draft projection without independently enabling or disabling model, command, Skill, reference or voice capabilities
 - **AND** conversation Tabs/history are hidden and no conversation or scratch is created by rendering or editing the draft
 
+#### Scenario: Application reopens after another scene was visible
+
+- **WHEN** Desktop claims a released Window after the previous application lifecycle ended while Workspace, conversation or management content was visible
+- **THEN** Host captures any active Project presentation snapshot and atomically replaces the visible Workbench with a new unbound Entry Draft and default Entry layout
+- **AND** the new draft, Scene, Agent View and Agent Surface identities differ from the prior visible presentation
+- **AND** Project tabs/catalog, conversations, package snapshots and user files remain available through their explicit navigation paths
+- **AND** no startup preference, active/recent Project or last visible Scene restores that content automatically
+
+#### Scenario: Renderer reloads inside the current application lifecycle
+
+- **WHEN** the renderer session is replaced after the Window has already been claimed
+- **THEN** it reattaches the current exact Scene and draft/session identity
+- **AND** renderer reload does not create a new Entry Draft or reinterpret the operation as application startup
+
 #### Scenario: Agent-only draft uses the complete Agent layout
 
 - **WHEN** the Agent draft is the only business panel in a wide Workbench

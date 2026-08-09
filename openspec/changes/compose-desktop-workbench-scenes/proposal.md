@@ -38,6 +38,10 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Window 只保留唯一 `ControlledWorkbenchShell`、当前 Scene/Workspace identity 和必要布局；Create 与
   Assets/Extensions/Projects/Settings 是当前导航场景，不创建长期 open Workbench instance。只有用户显式
   分屏时才允许第二个同时可见的业务 Surface。
+- 每次应用启动或重新打开一个已释放的 Window 都创建新的 unbound Entry Draft 并显示入口界面；上次可见
+  Workspace、conversation 或管理 Scene 只保留在各自 durable catalog/presentation snapshot 中，不作为启动
+  目标。Renderer reload 仍恢复当前进程内的 exact Scene，不触发新的 Entry。删除 Application Settings 中
+  “恢复上次工作区”的启动目标选项，保持一条 canonical startup path。
 - Workspace、Conversation、Room、Project、Asset 和文档是可持久、可恢复且不设总量硬上限的业务记录，
   但 inactive UI 不常驻。Renderer 只挂载当前和显式分屏 package Root；切换前由 owning package 保存最小
   View snapshot，切回时从 durable facts 与 snapshot 重建。
@@ -73,6 +77,10 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Agent extension management UI 必须通过 Agent package public Root/port 暴露；项目目录与 Settings 只保留 app-level placement，领域状态与操作继续委托 owning Host/package contract。
 - `apps/neko-desktop` 只保留 Electron Window/View 生命周期、typed IPC/preload、目录/文件/麦克风授权 adapter 和将公开 Roots 放入已验证 slots 的 presentation composition。
 - `@neko/host` 同时拥有 Entry Draft identity 与 `unbound entry -> committed owner-qualified session` Scene transition fencing；`@neko/agent-webview` 拥有同一 Root 内 presentation reset 和未发送 target/configuration snapshot，Desktop renderer 不推断 scope 或以 Scene 表示 Draft target。
+- `@neko/host` 的 Window claim 负责把已释放 Window 的可见 presentation 原子切换为 fresh Entry，同时保留
+  Project tabs/catalog、conversation authority 和 package snapshots。Application Settings 不再拥有 startup
+  destination；旧 Settings shape 由既有 strict recovery/quarantine 边界局部拒绝并重置该 settings record，
+  不修改 Shell、Project、Conversation、Assets 或用户文件。
 - `@neko/host` 拥有 Window 当前 Scene/Workspace/View identity 与布局，不拥有 Renderer residency policy；
   package runtime 继续拥有业务状态与后台任务，Desktop renderer 只挂载当前和显式分屏 Roots。
 - 用户数据不删除、不复制，产品运行时不迁移、不兼容读取也不自动修复。持久记录必须长期保持单一稳定 shape；无法满足 canonical shape 的记录在其最小实例边界返回明确 diagnostic，其他 Window、Workbench、conversation 和 Project 继续可用。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。

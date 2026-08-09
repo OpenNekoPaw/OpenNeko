@@ -233,3 +233,23 @@ proved the composer-driven Entry-to-Assistant transaction and exact session rest
 functional provider. The process did not provide explicit provider/model/cost authorization, so the
 provider-backed cases were not run. Packaged UI attempts did not reach a complete runner terminal and
 remain infrastructure failures. Neither result is promoted to real-provider Agent behavior evidence.
+
+## Canonical Startup Entry Evaluation Decision
+
+Date: 2026-08-10
+
+- Disposition: `excluded`. Startup claim changes only Window-level presentation selection before any
+  Agent turn. It does not change prompt composition, Skill/capability routing, provider/model binding,
+  transcript projection, queue/task execution, Conversation persistence or model output.
+- Canonical path: application owner claims a released persisted Window -> validates/captures the exact
+  Project presentation -> installs a new unbound Entry Draft and default Window layout. A renderer
+  reload reuses the claimed Window/runtime and keeps the exact Scene.
+- Forbidden paths: restoring the last management/Workspace/Conversation Scene on application claim,
+  deleting Project or Conversation authority, selecting active/recent identity, converting renderer
+  reload into application claim, or using a provider/model call as proof of presentation state.
+- Evidence: focused Host/SQLite/renderer/Settings tests prove the unique path, catalog retention,
+  strict old-settings rejection and refresh boundary. Visible real Electron evidence proves cold
+  restart from Extensions enters Entry while the catalogs remain, and `Cmd+R` preserves Extensions.
+- Real-provider execution is not required because no Agent behavior or output can change. The
+  foundational session/persistence matrix remains unaffected; this change only replaces the Window's
+  initial presentation reference and preserves all owning authorities.

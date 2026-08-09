@@ -1210,3 +1210,39 @@ passed. The full Desktop suite also remained red in concurrent Preview progressi
 one parallel Resource Browser timeout; the focused Resource Browser timeout test passed alone. These
 failures do not invalidate the focused Cut/Assets or inspected thumbnail evidence, but they remain
 visible as adjacent product/test risks.
+
+## Canonical Startup Entry
+
+Date: 2026-08-10
+
+Window claim now captures the valid active Project presentation, removes process-local temporary
+Preview and expired Cut draft refs, and atomically replaces only the current Window composition with
+a fresh unbound Entry Draft and default layout. Project tabs/catalogs, Conversation authority and
+package-owned Project presentation snapshots remain available for explicit navigation. A renderer
+session refresh does not claim the Window again and therefore preserves the exact current Scene.
+
+Deterministic verification passed:
+
+- focused Host startup/settings suite: `2 files / 53 tests`;
+- focused Desktop Settings/renderer/SQLite suite: `3 files / 10 tests`;
+- `@neko/host` and `@neko/app-desktop` TypeScript checks;
+- strict OpenSpec (`70/70`), package boundaries (`43` packages), package product reachability and
+  application boundaries (`1553` files);
+- Prettier for every touched implementation, fixture and OpenSpec artifact, plus `git diff --check`.
+
+The real development Electron app was first observed on the persisted Extensions scene. After the
+exact development owner was stopped and the same application was cold-started, direct Computer Use
+inspection showed a fresh “Hi，用对话开启创作” Entry Draft while the existing Project and Conversation
+catalogs remained visible. Navigating to Extensions and pressing `Cmd+R` preserved Extensions after
+renderer reconnection. Settings General showed a read-only “应用入口” policy without a restore-last
+selector. Directly inspected screenshots:
+
+- `reports/ui-validation/compose-desktop-workbench-scenes/2026-08-10-startup-entry/01-fresh-entry-after-cold-restart.jpeg`
+- `reports/ui-validation/compose-desktop-workbench-scenes/2026-08-10-startup-entry/02-extensions-after-renderer-reload.jpeg`
+- `reports/ui-validation/compose-desktop-workbench-scenes/2026-08-10-startup-entry/03-read-only-application-entry-setting.jpeg`
+
+The isolated automated Canvas UI scenario was attempted but failed before CDP attachment because the
+development launcher rejected the forwarded `--openneko-functional-fixture` option. Its fail-visible
+report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T18-46-13.957Z-canvas-openneko-consumer-development/report.json`.
+No scenario assertions ran, so it is not counted as acceptance and no fallback target was used.
