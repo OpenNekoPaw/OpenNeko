@@ -29,7 +29,8 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(JSON.stringify(messages[0])).not.toContain('apiKey');
     expect(messages[1]).toEqual({
       type: 'globalError',
-      message: "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+      message:
+        "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
     });
   });
 
@@ -50,7 +51,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
           resolveSearch = resolve;
         }),
     );
-    bridge.agentLaunch.bindAssistant.mockResolvedValueOnce(
+    bridge.agentLaunch.bindTarget.mockResolvedValueOnce(
       createCatalog({ bindingReceiptId: 'binding:assistant-replacement' }),
     );
     const adapter = createElectronAgentLaunchHostRuntimeAdapter({
@@ -67,7 +68,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       workspaceCatalog.interaction.bindingReceipt?.bindingReceiptId,
       'hero',
     );
-    await adapter.bindAssistant();
+    await adapter.bindTarget({ kind: 'unbound' });
     resolveSearch?.({
       bindingReceiptId: workspaceCatalog.interaction.bindingReceipt?.bindingReceiptId ?? '',
       filter: 'hero',
@@ -296,7 +297,6 @@ function createBridge() {
       attach: vi.fn(),
       authorizeResource: vi.fn(),
       bindTarget: vi.fn(),
-      bindAssistant: vi.fn(),
       updateConfiguration: vi.fn(),
       searchWorkspaceMentions: vi.fn(),
       submitDraft: vi.fn(),

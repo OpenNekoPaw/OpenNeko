@@ -20,12 +20,32 @@ describe('Desktop Project Management surfaces', () => {
     document.body.replaceChildren();
   });
 
+  it('keeps folder authorization as an explicit Project Management action', async () => {
+    const onOpenDirectory = vi.fn();
+    const { container, root } = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        conversations={[]}
+        interactive
+        onDeleteConversations={vi.fn()}
+        onOpen={vi.fn()}
+        onOpenDirectory={onOpenDirectory}
+        onRemove={vi.fn()}
+        projects={[]}
+      />,
+    );
+
+    await act(async () => findButton(container, 'Open folder').click());
+    expect(onOpenDirectory).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+  });
+
   it('selects on click and opens the exact Workspace on double click without an open button', async () => {
     const onOpen = vi.fn();
     const { container, root } = await renderWithI18n(
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={onOpen}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}
@@ -57,6 +77,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onDeleteConversations={vi.fn()}
         onRemove={onRemove}
@@ -129,6 +150,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}
@@ -162,6 +184,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={onOpen}
         onDeleteConversations={vi.fn()}
         onRemove={onRemove}
@@ -220,6 +243,7 @@ describe('Desktop Project Management surfaces', () => {
         conversations={[workspaceConversation('conversation-1', demo.workspaceId)]}
         interactive
         onDeleteConversations={onDeleteConversations}
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onRemove={vi.fn()}
         projects={[demo]}
@@ -238,6 +262,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}
@@ -269,6 +294,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}

@@ -23,6 +23,7 @@ export function DesktopProjectCatalogSurface({
   conversations,
   interactive,
   onDeleteConversations,
+  onOpenDirectory,
   onOpen,
   onRemove,
   projects,
@@ -30,6 +31,7 @@ export function DesktopProjectCatalogSurface({
   readonly conversations: readonly DesktopAgentHomeConversationSummary[];
   readonly interactive: boolean;
   readonly onDeleteConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onOpenDirectory: () => void;
   readonly onOpen: (projectId: string) => void;
   readonly onRemove: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly projects: readonly DesktopProjectCatalogItem[];
@@ -90,6 +92,12 @@ export function DesktopProjectCatalogSurface({
         <div>
           <p className="section-label">{t('home.projects.eyebrow')}</p>
           <h2>{t('home.allProjects')}</h2>
+        </div>
+        <div className="management-surface-actions">
+          <button type="button" disabled={!interactive} onClick={onOpenDirectory}>
+            <FolderIcon size={15} />
+            <span>{t('home.projects.openDirectory')}</span>
+          </button>
         </div>
       </header>
       <div className="management-surface-toolbar">

@@ -332,6 +332,15 @@ describe('Desktop Scene contract', () => {
         intent: { kind: 'open-home' },
       }),
     ).toThrow("Unknown Desktop Scene transition intent 'open-home'");
+    expect(() =>
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-removed-assistant-binding',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-2',
+        intent: { kind: 'bind-agent-assistant', draftId: 'draft-1' },
+      }),
+    ).toThrow("Unknown Desktop Scene transition intent 'bind-agent-assistant'");
   });
 
   it('strictly decodes transitioned and owner-unavailable results', () => {

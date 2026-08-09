@@ -59,61 +59,9 @@ export const chat = {
   'chat.emptyState.desktopDockDescription':
     'Describe an idea, reference a project resource, or mention a character.',
   'chat.emptyState.desktopDockSkills': 'Try a Skill',
-  'chat.emptyState.entry.startChat': 'Start Chat',
-  'chat.emptyState.entry.generateAssets': 'Generate Assets',
-  'chat.emptyState.entry.roleplay': 'Roleplay',
-  'chat.emptyState.scope.title': 'Choose a creative space',
-  'chat.emptyState.scope.description': 'Choose Assistant, a Workspace, or Character and Room.',
-  'chat.emptyState.scope.assistant': 'Assistant',
-  'chat.emptyState.scope.assistantHelper':
-    'Start a new Assistant session with user-space resources.',
-  'chat.emptyState.scope.workspace': 'Workspace',
-  'chat.emptyState.scope.workspaceHelper':
-    'Choose a folder and enable canvas, preview, and project resources.',
-  'chat.emptyState.scope.characterRoom': 'Character / Room',
-  'chat.emptyState.scope.characterRoomHelper':
-    'Character and Room capabilities are not available yet.',
   'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
   'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
   'chat.emptyState.scope.activeDescription': 'Enter a message to start a new conversation.',
-  'chat.emptyState.entry.startChatHelper':
-    'Develop story, character, world, or creative direction directly with the Agent.',
-  'chat.emptyState.entry.generateAssetsHelper':
-    'Choose image, video, or sound generation after the tab opens.',
-  'chat.emptyState.entry.roleplayHelper':
-    'Choose a character after the tab opens; your text becomes the opening line.',
-  'chat.entryExperience.label': 'Choose an experience',
-  'chat.entryExperience.mode.assistant': 'Assistant',
-  'chat.entryExperience.mode.workspace': 'Workspace',
-  'chat.entryExperience.mode.character': 'Character',
-  'chat.entryExperience.mode.world': 'World',
-  'chat.entryExperience.assistant.title': 'What would you like to explore?',
-  'chat.entryExperience.assistant.description':
-    'Start a conversation without selecting a project or directory.',
-  'chat.entryExperience.workspace.title': 'What should we work on?',
-  'chat.entryExperience.workspace.description':
-    'Choose an authorized project or directory, then describe the work.',
-  'chat.entryExperience.character.title': 'Enter a character conversation',
-  'chat.entryExperience.character.description':
-    'Character requires a published CharacterVersion and the Chara-owned dialogue or room launcher.',
-  'chat.entryExperience.world.title': 'Enter an interactive world',
-  'chat.entryExperience.world.description':
-    'World requires a WorldExperienceVersion and the World-owned run launcher.',
-  'chat.entryExperience.validation.bindingPending': 'Updating the selected experience…',
-  'chat.entryExperience.validation.configurationRequired':
-    'Choose a configured provider and model before sending.',
-  'chat.entryExperience.validation.assistantBindingMismatch':
-    'Assistant is waiting for the current Workspace binding to be released.',
-  'chat.entryExperience.validation.workspaceChooserUnavailable':
-    'Project and directory selection is unavailable in this window.',
-  'chat.entryExperience.validation.workspaceRequired':
-    'Choose a project or authorized directory before sending.',
-  'chat.entryExperience.validation.workspaceBindingMismatch':
-    'The selected Workspace is not authorized for this draft. Select it again.',
-  'chat.entryExperience.validation.characterUnavailable':
-    'Character is not available yet. Publish a character and connect the Chara dialogue or room launcher first.',
-  'chat.entryExperience.validation.worldUnavailable':
-    'World is not available yet. Create a World experience and connect the World run launcher first.',
   'chat.skill.active': 'Active Skill records',
   'chat.skill.toolLimit': 'Tool limit: {count}',
   'chat.skill.clear': 'Clear record',
@@ -282,15 +230,13 @@ export const chat = {
   'chat.input.attachments': 'attachment(s)',
   'chat.input.templates': 'Prompt Templates (Cmd/Ctrl+T)',
   'chat.input.send': 'Send (Enter)',
+  'chat.input.configurationRequired': 'Choose a configured provider and model before sending.',
   'chat.input.queue': 'Queue message (Enter)',
   'chat.input.cancel': 'Cancel (Esc)',
   'chat.input.attach': 'Attach file',
   'chat.input.attachUnavailableWhileRunning': 'Attach files after the current response finishes',
   'chat.input.attachFile': 'Attach file',
   'chat.input.workspace.label': 'Working directory',
-  'chat.input.workspace.openProject': 'Open project',
-  'chat.input.workspace.chooseDirectory': 'Choose from system directories',
-  'chat.input.workspace.clear': 'Clear project selection',
   'chat.input.commands': 'Commands',
   'chat.input.skills': 'Skills',
   'chat.input.mediaModelCalls': 'Media model calls: {count}',

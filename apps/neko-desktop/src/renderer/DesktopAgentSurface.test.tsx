@@ -590,7 +590,6 @@ function installBridge(
         attach: launch?.attach ?? vi.fn(),
         authorizeResource: vi.fn(),
         bindTarget: vi.fn(),
-        bindAssistant: vi.fn(),
         updateConfiguration: vi.fn(),
         searchWorkspaceMentions: vi.fn(),
         submitDraft: vi.fn(),

@@ -2716,24 +2716,6 @@ function createTransitionedScene(
     }
     return createReplacementAgentDraftScene(current, `draft:${createIdentity()}`);
   }
-  if (intent.kind === 'bind-agent-assistant') {
-    if (
-      current.context.kind !== 'agent' ||
-      current.context.scope.kind !== 'unbound' ||
-      current.context.scope.draftId !== intent.draftId ||
-      current.slots.interaction?.phase !== 'draft'
-    ) {
-      throw new DesktopSceneContractError(
-        'desktop-scene-stale-identity',
-        `Agent Draft '${intent.draftId}' is not the exact active Entry Draft.`,
-      );
-    }
-    return createAssistantAgentScene({
-      current,
-      assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
-      draftId: intent.draftId,
-    });
-  }
   if (intent.kind === 'open-asset-center') {
     const assetCenterSessionId = `asset-center:${createIdentity()}`;
     const sceneId = `scene:${windowId}:asset-center`;

@@ -50,32 +50,22 @@ describe('Desktop scene Workbench', () => {
       workbench: false,
       navigation: false,
       sidebar: false,
-      targetSelection: false,
     };
 
     expect(projectDesktopShellInteractionLocks({ ...base, workbench: true })).toEqual({
       workbench: true,
       navigation: false,
       sidebar: false,
-      targetSelection: false,
     });
     expect(projectDesktopShellInteractionLocks({ ...base, sidebar: true })).toEqual({
       workbench: false,
       navigation: false,
       sidebar: true,
-      targetSelection: false,
-    });
-    expect(projectDesktopShellInteractionLocks({ ...base, targetSelection: true })).toEqual({
-      workbench: false,
-      navigation: false,
-      sidebar: false,
-      targetSelection: true,
     });
     expect(projectDesktopShellInteractionLocks({ ...base, scene: true })).toEqual({
       workbench: true,
       navigation: true,
       sidebar: true,
-      targetSelection: true,
     });
   });
 
@@ -394,11 +384,11 @@ describe('Desktop scene Workbench', () => {
     });
   });
 
-  it('keeps non-Workspace scenes limited to the PrimarySidebar presentation control', () => {
+  it('keeps entry navigation separate from Workspace presentation controls', () => {
     const markup = renderShell(<DesktopShellView projection={agentProjection()} />);
     expect(markup.match(/data-workbench-region-control=/gu) ?? []).toHaveLength(1);
     expect(markup).toContain('data-workbench-region-control="primary-sidebar"');
-    expect(markup).not.toContain('class="neko-controlled-workbench-title"');
+    expect(markup).toContain('class="desktop-home-experience-navigation"');
     expect(markup).not.toContain('class="workspace-region-controls"');
   });
 
@@ -598,6 +588,8 @@ describe('Desktop scene Workbench', () => {
 
   it('uses one Workbench shell and the package-owned Asset Management surface', () => {
     expect(desktopShellSource.match(/<ControlledWorkbenchShell/gu) ?? []).toHaveLength(1);
+    expect(desktopShellSource).not.toContain('onChooseWorkspaceTarget');
+    expect(desktopShellSource).not.toContain('AgentComposerWorkspaceTarget');
     expect(assetManagementSurfaceSource).toContain('@neko/assets-webview/asset-management/root');
   });
 });

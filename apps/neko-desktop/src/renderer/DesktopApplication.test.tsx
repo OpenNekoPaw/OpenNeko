@@ -2283,7 +2283,6 @@ function installBridge({
         attach: vi.fn(() => new Promise(() => undefined)),
         authorizeResource: vi.fn(),
         bindTarget: vi.fn(),
-        bindAssistant: vi.fn(),
         searchWorkspaceMentions: vi.fn(),
         submitDraft: vi.fn(),
         detach: vi.fn(),

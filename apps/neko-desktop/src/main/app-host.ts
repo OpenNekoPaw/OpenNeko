@@ -726,17 +726,6 @@ export class DesktopAppHost {
     ) {
       throw new Error('Agent launch connection does not match its sender-bound Desktop identity.');
     }
-    if (request.operation === 'bind-assistant') {
-      return {
-        requestId: request.requestId,
-        status: 'ready',
-        catalog: await this.agentLaunch.bindTarget(connection, {
-          kind: 'assistant',
-          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
-          baseGrantIds: [],
-        }),
-      };
-    }
     if (request.operation === 'bind-target') {
       if (request.binding.kind === 'assistant') {
         if (

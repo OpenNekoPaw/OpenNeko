@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -774,45 +774,6 @@ describe('InputArea composer controls', () => {
       true,
     );
     expect(screen.getByRole('status').textContent).toBe('请选择项目或已授权目录。');
-  });
-
-  it('keeps Entry Workspace target selection in the package-owned composer', async () => {
-    const target = {
-      label: 'OpenNeko',
-      context: {
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'workspace-grant-1',
-      },
-    };
-    const onSelectProject = vi.fn().mockResolvedValue(target);
-    const onTargetChange = vi.fn();
-    render(
-      <Harness
-        composerWorkspace={{
-          kind: 'entry',
-          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
-          onChooseDirectory: vi.fn().mockResolvedValue(undefined),
-          onSelectProject,
-        }}
-      >
-        <InputArea
-          presentation="entry"
-          inputValue=""
-          isThinking={false}
-          onInputChange={vi.fn()}
-          onSend={vi.fn()}
-          onDraftWorkspaceTargetChange={onTargetChange}
-        />
-      </Harness>,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'OpenNeko' }));
-
-    await waitFor(() => expect(onTargetChange).toHaveBeenCalledWith(target));
-    expect(onSelectProject).toHaveBeenCalledWith('project-1');
-    expect(screen.queryByRole('button', { name: 'chat.emptyState.entry.startChat' })).toBeNull();
   });
 
   it('keeps unbound Entry @ discovery local and closes its empty menu with Escape', () => {

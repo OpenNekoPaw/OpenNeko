@@ -99,6 +99,24 @@ describe('Agent launch Host contract', () => {
     ).toThrow('unsupported fields');
   });
 
+  it('rejects the removed assistant-only binding operation', () => {
+    expect(() =>
+      parseAgentLaunchHostRequest({
+        requestId: 'bind-assistant-1',
+        operation: 'bind-assistant',
+        connection: {
+          applicationInstanceId: 'application-1',
+          windowId: 'window-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'agent-surface-1',
+          viewId: 'view-1',
+          draftId: 'draft-1',
+          connectionId: 'connection-1',
+        },
+      }),
+    ).toThrow("Unknown Agent launch Host operation 'bind-assistant'.");
+  });
+
   it('parses exact Workspace mention requests and receipt-fenced results', () => {
     const connection = {
       applicationInstanceId: 'application-1',

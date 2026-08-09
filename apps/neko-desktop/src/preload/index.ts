@@ -411,19 +411,6 @@ const bridge: OpenNekoDesktopBridge &
       }
       return result.catalog;
     },
-    async bindAssistant(connection) {
-      const request = parseAgentLaunchHostRequest({
-        requestId: nextRequestId('agent-launch-bind-assistant'),
-        operation: 'bind-assistant',
-        connection,
-      });
-      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
-      const result = parseAgentLaunchHostResult(response, request.requestId);
-      if (result.status !== 'ready') {
-        throw new Error(`Agent launch Assistant binding returned '${result.status}'.`);
-      }
-      return result.catalog;
-    },
     async updateConfiguration(connection, configuration) {
       const request = parseAgentLaunchHostRequest({
         requestId: nextRequestId('agent-launch-update-configuration'),

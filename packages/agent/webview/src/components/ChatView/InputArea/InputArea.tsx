@@ -66,10 +66,7 @@ import type {
   SessionMode,
 } from '@neko/agent-contracts';
 import { projectCharacterDraftBindingFromRoleplayItem } from '../roleplay-entry-action';
-import {
-  useComposerWorkspacePresentation,
-  type AgentComposerWorkspaceTarget,
-} from '../../ComposerWorkspaceContext';
+import { useComposerWorkspacePresentation } from '../../ComposerWorkspaceContext';
 
 interface InputAreaProps {
   presentation?: 'entry' | 'conversation';
@@ -102,15 +99,11 @@ interface InputAreaProps {
   onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   disabled?: boolean;
   submissionBlockedReason?: string;
-  showDraftWorkspaceControl?: boolean;
-  draftTargetSelectionPending?: boolean;
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
-  draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
-  onDraftWorkspaceTargetChange?: (target: AgentComposerWorkspaceTarget | undefined) => void;
   onDraftCharacterTargetSelect?: (
     binding: Extract<AgentDomainBinding, { readonly kind: 'character' }>,
   ) => Promise<void>;
@@ -220,13 +213,9 @@ export function InputArea({
   onComposerMenuStateChange,
   disabled = false,
   submissionBlockedReason,
-  showDraftWorkspaceControl = true,
-  draftTargetSelectionPending = false,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
-  draftWorkspaceTarget,
-  onDraftWorkspaceTargetChange,
   onDraftCharacterTargetSelect,
   selectedCharacterLaunches = [],
   onRemoveCharacterLaunch,
@@ -240,7 +229,6 @@ export function InputArea({
   focusRequestId,
 }: InputAreaProps) {
   const composerWorkspace = useComposerWorkspacePresentation();
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -1114,76 +1102,15 @@ export function InputArea({
             />
 
             {composerWorkspace &&
-            (composerWorkspace.kind === 'workspace' || showDraftWorkspaceControl) &&
             (presentation === 'entry' || composerPresentation === 'default') ? (
               <div
                 className="agent-composer-workspace"
                 aria-label={t('chat.input.workspace.label')}
               >
                 <FolderIcon size={14} />
-                {composerWorkspace.kind === 'workspace' ? (
-                  <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
-                    {composerWorkspace.label}
-                  </span>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="agent-composer-workspace-button"
-                      disabled={composerWorkspace.disabled || draftTargetSelectionPending}
-                      onClick={() => setWorkspaceMenuOpen((open) => !open)}
-                      aria-expanded={workspaceMenuOpen}
-                    >
-                      {draftWorkspaceTarget?.label ?? t('chat.input.workspace.openProject')}
-                    </button>
-                    {draftWorkspaceTarget ? (
-                      <button
-                        type="button"
-                        className="agent-composer-workspace-clear"
-                        title={t('chat.input.workspace.clear')}
-                        disabled={draftTargetSelectionPending}
-                        onClick={() => onDraftWorkspaceTargetChange?.(undefined)}
-                      >
-                        <CloseIcon size={12} />
-                      </button>
-                    ) : null}
-                    {workspaceMenuOpen ? (
-                      <div className="agent-composer-workspace-menu" role="menu">
-                        {composerWorkspace.projects.map((project) => (
-                          <button
-                            key={project.projectId}
-                            type="button"
-                            role="menuitem"
-                            disabled={project.disabled || draftTargetSelectionPending}
-                            onClick={() => {
-                              void composerWorkspace
-                                .onSelectProject(project.projectId)
-                                .then((target) => {
-                                  if (target) onDraftWorkspaceTargetChange?.(target);
-                                  setWorkspaceMenuOpen(false);
-                                });
-                            }}
-                          >
-                            {project.label}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={draftTargetSelectionPending}
-                          onClick={() => {
-                            void composerWorkspace.onChooseDirectory().then((target) => {
-                              if (target) onDraftWorkspaceTargetChange?.(target);
-                              setWorkspaceMenuOpen(false);
-                            });
-                          }}
-                        >
-                          {t('chat.input.workspace.chooseDirectory')}
-                        </button>
-                      </div>
-                    ) : null}
-                  </>
-                )}
+                <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
+                  {composerWorkspace.label}
+                </span>
               </div>
             ) : null}
 

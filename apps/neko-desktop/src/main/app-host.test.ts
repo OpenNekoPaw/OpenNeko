@@ -521,90 +521,6 @@ describe('DesktopAppHost', () => {
     ).toHaveLength(workspaceConversationCount);
   });
 
-  it('binds Agent launch operations to the exact Assistant Scene and connection identity', async () => {
-    const agentLaunch = createAgentLaunchRuntime();
-    const fixture = await createShellAppHost({ agentLaunch });
-    const projection = await bindAssistantDraft(fixture);
-    const scene = activeScene(projection);
-    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'assistant') {
-      throw new Error('Agent launch AppHost fixture requires an Assistant Scene.');
-    }
-    const launchBinding = {
-      kind: 'assistant' as const,
-      assistantSpaceId: scene.context.scope.assistantSpaceId,
-      baseGrantIds: [],
-    };
-    const launchWorkbench = activeWorkbench(projection);
-    const launchAgentSurfaceId = currentAgentSurfaceId(projection);
-    const catalog = createLaunchCatalog({
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: launchWorkbench.workbenchInstanceId,
-      agentSurfaceId: launchAgentSurfaceId,
-      viewId: scene.context.agentViewId,
-      connectionId: 'launch-1',
-      draftId: scene.context.scope.draftId,
-      binding: launchBinding,
-    });
-    vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
-    vi.spyOn(agentLaunch, 'authorizeResource').mockResolvedValue(catalog);
-
-    await fixture.appHost.transitionScene(
-      fixture.sender,
-      createDesktopSceneTransitionRequest({
-        requestId: 'open-settings-before-launch-attach',
-        rendererSessionId: projection.rendererSessionId,
-        windowId: fixture.windowId,
-        sceneId: scene.sceneId,
-        intent: { kind: 'open-settings', sectionId: 'general' },
-      }),
-    );
-
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-attach-1',
-        operation: 'attach',
-        workbenchInstanceId: launchWorkbench.workbenchInstanceId,
-        agentSurfaceId: launchAgentSurfaceId,
-        viewId: scene.context.agentViewId,
-        draft: {
-          phase: 'draft',
-          draftId: scene.context.scope.draftId,
-          binding: launchBinding,
-          bindingReceipt: null,
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
-    expect(agentLaunch.attach).not.toHaveBeenCalled();
-
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-attach-forged-surface',
-        operation: 'attach',
-        workbenchInstanceId: launchWorkbench.workbenchInstanceId,
-        agentSurfaceId: 'agent-surface:forged',
-        viewId: scene.context.agentViewId,
-        draft: {
-          phase: 'draft',
-          draftId: scene.context.scope.draftId,
-          binding: launchBinding,
-          bindingReceipt: null,
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
-
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-authorize-1',
-        operation: 'authorize-resource',
-        connection: catalog.connection,
-        resourceKind: 'file',
-      }),
-    ).resolves.toEqual({ requestId: 'launch-authorize-1', status: 'ready', catalog });
-    expect(agentLaunch.authorizeResource).toHaveBeenCalledWith(catalog.connection, 'file');
-    await fixture.appHost.dispose();
-  });
-
   it('binds Agent launch attach to the exact unbound Entry Draft identity', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
@@ -650,34 +566,6 @@ describe('DesktopAppHost', () => {
       viewId: scene.context.agentViewId,
       draft,
     });
-    const assistantBinding = {
-      kind: 'assistant' as const,
-      assistantSpaceId: 'assistant-space:local-user',
-      baseGrantIds: [],
-    };
-    const boundCatalog = createLaunchCatalog({
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: workbench.workbenchInstanceId,
-      agentSurfaceId,
-      viewId: scene.context.agentViewId,
-      connectionId: catalog.connection.connectionId,
-      draftId: scene.context.scope.draftId,
-      binding: assistantBinding,
-    });
-    vi.mocked(agentLaunch.bindTarget).mockResolvedValueOnce(boundCatalog);
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-entry-bind-assistant-1',
-        operation: 'bind-assistant',
-        connection: catalog.connection,
-      }),
-    ).resolves.toEqual({
-      requestId: 'launch-entry-bind-assistant-1',
-      status: 'ready',
-      catalog: boundCatalog,
-    });
-    expect(agentLaunch.bindTarget).toHaveBeenCalledWith(catalog.connection, assistantBinding);
     await fixture.appHost.dispose();
   });
 
@@ -3478,24 +3366,6 @@ function createAssetCenterRuntime(): AssetCenterNodeRuntime {
       releaseSession: vi.fn(),
     },
   });
-}
-
-async function bindAssistantDraft(fixture: Awaited<ReturnType<typeof createShellAppHost>>) {
-  const scene = activeScene(fixture.projection);
-  if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
-    throw new Error('Assistant binding fixture requires an unbound Entry Draft.');
-  }
-  await fixture.appHost.transitionScene(
-    fixture.sender,
-    createDesktopSceneTransitionRequest({
-      requestId: 'bind-assistant-fixture',
-      rendererSessionId: fixture.projection.rendererSessionId,
-      windowId: fixture.windowId,
-      sceneId: scene.sceneId,
-      intent: { kind: 'bind-agent-assistant', draftId: scene.context.scope.draftId },
-    }),
-  );
-  return fixture.appHost.shell.getProjection(fixture.windowId);
 }
 
 function createLaunchCatalog(input: {

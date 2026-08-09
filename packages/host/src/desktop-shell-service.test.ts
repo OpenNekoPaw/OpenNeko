@@ -408,24 +408,11 @@ describe('DesktopShellService', () => {
     ) {
       throw new Error('Entry Draft fixture is unavailable.');
     }
-    projection = await first.service.getProjection(windowId);
-    const bound = await first.service.transitionScene(
-      createDesktopSceneTransitionRequest({
-        requestId: 'bind-invalid-assistant-session',
-        rendererSessionId: projection.rendererSessionId,
-        windowId,
-        sceneId: activeScene(projection.window).sceneId,
-        intent: { kind: 'bind-agent-assistant', draftId: entry.scene.context.scope.draftId },
-      }),
-    );
-    if (bound.status !== 'transitioned' || bound.scene.context.kind !== 'agent') {
-      throw new Error('Assistant fixture did not bind.');
-    }
     await first.service.attachAgentConversation({
       windowId,
       rendererSessionId: projection.rendererSessionId,
-      agentViewId: bound.scene.context.agentViewId,
-      draftId: bound.scene.context.scope.draftId,
+      agentViewId: entry.scene.context.agentViewId,
+      draftId: entry.scene.context.scope.draftId,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -450,27 +437,11 @@ describe('DesktopShellService', () => {
     ) {
       throw new Error('Sibling Entry Draft fixture is unavailable.');
     }
-    projection = await first.service.getProjection(windowId);
-    const siblingBound = await first.service.transitionScene(
-      createDesktopSceneTransitionRequest({
-        requestId: 'bind-valid-assistant-sibling',
-        rendererSessionId: projection.rendererSessionId,
-        windowId,
-        sceneId: activeScene(projection.window).sceneId,
-        intent: {
-          kind: 'bind-agent-assistant',
-          draftId: siblingEntry.scene.context.scope.draftId,
-        },
-      }),
-    );
-    if (siblingBound.status !== 'transitioned' || siblingBound.scene.context.kind !== 'agent') {
-      throw new Error('Sibling Assistant fixture did not bind.');
-    }
     await first.service.attachAgentConversation({
       windowId,
       rendererSessionId: projection.rendererSessionId,
-      agentViewId: siblingBound.scene.context.agentViewId,
-      draftId: siblingBound.scene.context.scope.draftId,
+      agentViewId: siblingEntry.scene.context.agentViewId,
+      draftId: siblingEntry.scene.context.scope.draftId,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -797,49 +768,6 @@ describe('DesktopShellService', () => {
       context: { kind: 'agent', scope: { kind: 'unbound' } },
       slots: { interaction: { kind: 'agent', phase: 'draft', scope: { kind: 'unbound' } } },
     });
-    expect((await fixture.service.getProjection(windowId)).agentHome.conversations).toEqual([]);
-  });
-
-  it('binds only the exact active Entry Draft to Assistant without creating a conversation', async () => {
-    const fixture = createFixture();
-    const windowId = await fixture.service.claimWindowId();
-    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
-    const initial = await fixture.service.getProjection(windowId);
-    const initialContext = activeScene(initial.window).context;
-    if (initialContext.kind !== 'agent' || initialContext.scope.kind !== 'unbound') {
-      throw new Error('Assistant binding fixture requires an unbound Entry Draft.');
-    }
-    const draftId = initialContext.scope.draftId;
-    const bound = await fixture.service.transitionScene(
-      createDesktopSceneTransitionRequest({
-        requestId: 'bind-assistant-1',
-        rendererSessionId: initial.rendererSessionId,
-        windowId,
-        sceneId: activeScene(initial.window).sceneId,
-        intent: { kind: 'bind-agent-assistant', draftId },
-      }),
-    );
-    if (bound.status !== 'transitioned') throw new Error('Assistant draft did not bind.');
-    expect(bound.scene).toMatchObject({
-      context: {
-        kind: 'agent',
-        scope: { kind: 'assistant', draftId, assistantSpaceId: 'assistant-space:local-user' },
-      },
-      slots: { interaction: { phase: 'draft' } },
-    });
-    const afterBound = await fixture.service.getProjection(windowId);
-
-    await expect(
-      fixture.service.transitionScene(
-        createDesktopSceneTransitionRequest({
-          requestId: 'bind-assistant-stale',
-          rendererSessionId: afterBound.rendererSessionId,
-          windowId,
-          sceneId: activeScene(afterBound.window).sceneId,
-          intent: { kind: 'bind-agent-assistant', draftId },
-        }),
-      ),
-    ).rejects.toMatchObject({ code: 'desktop-scene-stale-identity' });
     expect((await fixture.service.getProjection(windowId)).agentHome.conversations).toEqual([]);
   });
 
@@ -1326,23 +1254,11 @@ describe('DesktopShellService', () => {
     if (currentContext.kind !== 'agent' || currentContext.scope.kind !== 'unbound') {
       throw new Error('Active Conversation rejection fixture requires an Entry Draft.');
     }
-    const bound = await fixture.service.transitionScene(
-      createDesktopSceneTransitionRequest({
-        requestId: 'scene-request-assistant-fixture',
-        rendererSessionId: initial.rendererSessionId,
-        windowId,
-        sceneId: activeScene(initial.window).sceneId,
-        intent: { kind: 'bind-agent-assistant', draftId: currentContext.scope.draftId },
-      }),
-    );
-    if (bound.status !== 'transitioned' || bound.scene.context.kind !== 'agent') {
-      throw new Error('Active Conversation fixture did not bind Assistant scope.');
-    }
     await fixture.service.attachAgentConversation({
       windowId,
       rendererSessionId: initial.rendererSessionId,
-      agentViewId: bound.scene.context.agentViewId,
-      draftId: bound.scene.context.scope.draftId,
+      agentViewId: currentContext.agentViewId,
+      draftId: currentContext.scope.draftId,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',

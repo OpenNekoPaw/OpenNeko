@@ -225,22 +225,6 @@ describe('Tab render realm state', () => {
     expect(parsed.state).toEqual({ drafts: [tabDraft] });
     expect(parsed.diagnostics).toEqual([expect.objectContaining({ code: 'invalid-entry-draft' })]);
   });
-
-  it('resets only an invalid experience mode while preserving the Entry Draft input', () => {
-    const stored = entryDraft('draft-a', 'keep this unsent text');
-    const parsed = parseTabRenderRealmState({
-      drafts: [],
-      entryDraft: { ...stored, experienceMode: 'unsupported-mode' },
-    });
-
-    expect(parsed.state.entryDraft).toEqual(stored);
-    expect(parsed.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'invalid-entry-draft',
-        message: expect.stringContaining('experienceMode'),
-      }),
-    ]);
-  });
 });
 
 function createHost(state: unknown): {
