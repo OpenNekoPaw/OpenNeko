@@ -69,26 +69,26 @@ const GFM_SNIPPETS: readonly MarkdownAuthoringCompletionItem[] = Object.freeze([
   {
     id: 'gfm:heading',
     kind: 'gfm-snippet',
-    label: 'Heading',
-    insertText: '# Heading',
+    label: '#',
+    insertText: '# ',
   },
   {
     id: 'gfm:task-list',
     kind: 'gfm-snippet',
-    label: 'Task list',
-    insertText: '- [ ] Task',
+    label: '- [ ]',
+    insertText: '- [ ] ',
   },
   {
     id: 'gfm:table',
     kind: 'gfm-snippet',
-    label: 'Table',
-    insertText: '| Column | Value |\n| --- | --- |\n|  |  |',
+    label: '| |',
+    insertText: '|  |  |\n| --- | --- |\n|  |  |',
   },
   {
     id: 'gfm:fenced-code',
     kind: 'gfm-snippet',
-    label: 'Fenced code',
-    insertText: '```\ncode\n```',
+    label: '```',
+    insertText: '```\n\n```',
   },
 ]);
 
@@ -149,7 +149,14 @@ export function projectMarkdownAuthoringAssistance(
 }
 
 export function isPortableMarkdownResourceTarget(target: string): boolean {
-  if (target.length === 0 || target.trim() !== target || target.includes('\u0000')) return false;
+  if (
+    target.length === 0 ||
+    target.trim() !== target ||
+    target.includes('\u0000') ||
+    target.includes('\\')
+  ) {
+    return false;
+  }
   if (
     target.startsWith('/') ||
     target.startsWith('\\') ||
@@ -160,8 +167,15 @@ export function isPortableMarkdownResourceTarget(target: string): boolean {
   }
   const path = target.split('#', 1)[0] ?? '';
   if (path.length === 0) return false;
-  const segments = path.replaceAll('\\', '/').split('/');
-  return segments.every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
+  const segments = path.split('/');
+  return segments.every(
+    (segment) =>
+      segment.length > 0 &&
+      segment !== '.' &&
+      segment !== '..' &&
+      !segment.startsWith('.') &&
+      !segment.includes(':'),
+  );
 }
 
 function projectMentionAssistance(

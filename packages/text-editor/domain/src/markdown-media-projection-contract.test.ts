@@ -50,6 +50,7 @@ describe('Text Editor Markdown media projection contract', () => {
     '/Users/neko/cover.png',
     'https://example.com/cover.png',
     'assets/cover.png',
+    'data:image/png;base64,AAAA',
   ])('rejects a non-Host-projected render URI: %s', (renderUri) => {
     expect(() =>
       assertTextEditorMarkdownMediaProjection(request, {

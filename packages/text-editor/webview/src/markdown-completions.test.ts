@@ -17,12 +17,7 @@ describe('Markdown CodeMirror completion source', () => {
     const fixture = createFixture('# Title\n\n');
     const completion = await fixture.complete(fixture.projection.source.length, true);
 
-    expect(completion?.options.map((item) => item.label)).toEqual([
-      'Heading',
-      'Task list',
-      'Table',
-      'Fenced code',
-    ]);
+    expect(completion?.options.map((item) => item.label)).toEqual(['#', '- [ ]', '| |', '```']);
     expect(fixture.searchReferences).not.toHaveBeenCalled();
   });
 

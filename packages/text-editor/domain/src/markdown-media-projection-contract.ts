@@ -126,7 +126,10 @@ function assertDescriptor(descriptor: TextEditorMarkdownMediaDescriptor): void {
   if (descriptor.kind !== 'image' && descriptor.kind !== 'audio' && descriptor.kind !== 'video') {
     throw new TextEditorMarkdownMediaContractError('Text Editor Markdown media kind is invalid.');
   }
-  if (!isHostProjectedRuntimeValue(descriptor.renderUri)) {
+  if (
+    !isHostProjectedRuntimeValue(descriptor.renderUri) ||
+    descriptor.renderUri.startsWith('data:')
+  ) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media requires a Host-projected runtime URI.',
     );

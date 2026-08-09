@@ -179,6 +179,9 @@ describe('Markdown authoring assistance', () => {
     'assets/../secret.png',
     './assets/image.png',
     'assets//image.png',
+    'assets\\image.png',
+    'assets/.hidden.png',
+    'assets/image:alternate.png',
     ' assets/image.png',
   ])('rejects non-portable resource candidate target: %s', (target) => {
     expect(isPortableMarkdownResourceTarget(target)).toBe(false);
