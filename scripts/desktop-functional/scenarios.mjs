@@ -7,6 +7,7 @@ import {
 } from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
 import { resourceBrowserInvalidEntityDocumentScenario } from '../../packages/assets/webview/functional/desktop-invalid-entity-document.mjs';
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
+import { desktopMarkdownMediaScenario } from '../../packages/text-editor/webview/functional/desktop-markdown-media.mjs';
 import { desktopTextEditorScenario } from '../../packages/text-editor/webview/functional/desktop-text-editor.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
@@ -43,6 +44,7 @@ const scenarios = new Map(
     resourceBrowserEntityManagementScenario,
     resourceBrowserInvalidEntityDocumentScenario,
     assetLibraryRecordRemovalScenario,
+    desktopMarkdownMediaScenario,
     desktopTextEditorScenario,
     noActiveProjectCatalogsScenario,
   ].map((scenario) => [scenario.id, scenario]),

@@ -320,7 +320,7 @@ function MarkdownMediaPresenter({
     >
       {media}
       <span className="neko-markdown-media__caption">
-        <span>{label}</span>
+        <span title={label}>{label}</span>
         {reveal}
       </span>
     </span>

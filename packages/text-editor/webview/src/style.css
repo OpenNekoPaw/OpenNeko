@@ -293,11 +293,17 @@
   line-height: 1.45;
 }
 
-.neko-markdown-media__caption > span:first-child,
 .neko-markdown-media__diagnostic > span:last-child,
 .neko-markdown-media__label {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.neko-markdown-media__caption > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .neko-markdown-media__caption .neko-markdown-media__reveal {
@@ -325,6 +331,7 @@
 
 .neko-markdown-media__reveal {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 5px;
   min-height: 26px;
@@ -336,6 +343,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .neko-markdown-media__reveal:hover {
