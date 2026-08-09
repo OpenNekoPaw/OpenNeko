@@ -185,6 +185,54 @@ describe('Desktop extension manager', () => {
     });
   });
 
+  it('lists reviewed first-party automation extensions without allowing an unavailable artifact install', async () => {
+    await withRepository(async (fixture) => {
+      const sourceRoot = join(fixture.marketplaceRoot, 'plugins', 'browser-use');
+      await writePlugin(sourceRoot, {
+        name: 'browser-use',
+        version: '0.13.7',
+        permissions: ['browser-observe'],
+        mcpServers: './.mcp.json',
+        mcpToolExposure: 'adapter-only',
+        interface: { displayName: 'Browser Use' },
+      });
+      await writeFile(
+        join(sourceRoot, '.mcp.json'),
+        JSON.stringify({
+          mcpServers: {
+            'browser-use': { command: './runtime/bin/browser-use', args: ['--mcp'] },
+          },
+        }),
+        'utf8',
+      );
+      await writeMarketplace(fixture.marketplaceRoot, [
+        {
+          name: 'browser-use',
+          version: '0.13.7',
+          path: 'plugins/browser-use',
+          availability: 'unavailable',
+        },
+      ]);
+
+      const manager = createManager(fixture);
+      await expect(manager.readCatalog()).resolves.toMatchObject({
+        records: [
+          {
+            id: 'browser-use@openneko',
+            installed: false,
+            canInstall: false,
+            agentStatus: 'unsupported',
+            runtimeDiagnosticCode: 'artifact-unavailable',
+          },
+        ],
+        runtimeDescriptors: [],
+      });
+      await expect(manager.installPlugin('browser-use@openneko')).rejects.toThrow(
+        'does not allow this operation',
+      );
+    });
+  });
+
   it('rejects a marketplace package that escapes the OpenNeko snapshot through a parent symlink', async () => {
     await withRepository(async (fixture) => {
       const externalRoot = join(fixture.root, 'external-packages');
@@ -401,6 +449,7 @@ async function writeMarketplace(
     readonly name: string;
     readonly version: string;
     readonly path: string;
+    readonly availability?: 'installable' | 'unavailable';
   }[],
 ): Promise<void> {
   await writeFile(

@@ -24,9 +24,11 @@ import {
 } from '@neko/automation-contracts';
 
 export * from './browser-use';
+export * from './computer-use';
 export * from './mcp-provider';
 export * from './schema-digest';
 export * from './session-owned-mcp-runtime';
+export * from './transient-observation-store';
 
 export interface AutomationExtensionRuntimePort {
   isEnabled(extensionId: string): Promise<boolean>;

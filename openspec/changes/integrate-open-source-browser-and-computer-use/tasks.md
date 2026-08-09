@@ -17,7 +17,7 @@
       resource result blocks without adding internal contract or schema versions.
 - [x] 2.3 Add producer/consumer tests for protocol negotiation, cancellation, mixed text/image delivery, `isError`,
       malformed single-Tool isolation and sibling Tool/server availability.
-- [ ] 2.4 Add transient sensitive-observation projection and transcript-safe receipt tests proving raw screenshot bytes,
+- [x] 2.4 Add transient sensitive-observation projection and transcript-safe receipt tests proving raw screenshot bytes,
       Host paths and secret/window handles are not persisted or exposed to Renderer.
 - [x] 2.5 Prevent automation providers from using generic raw MCP exposure; assert unknown, contradictory and changed-schema
       Tools remain absent in plan, ask and auto modes even when upstream annotations claim read-only.
@@ -51,18 +51,18 @@
       diagnostic with one canonical shape and strict invalid-input isolation.
 - [x] 4.2 Create `@neko/automation-node` L1 application service and narrow Browser/Computer provider, Host permission,
       transient observation and extension runtime ports; add package boundary tests forbidding Electron/React imports.
-- [ ] 4.3 Implement the Agent Capability adapter that freezes exact session/target/mode/budget, intersects reviewed policy
+- [x] 4.3 Implement the Agent Capability adapter that freezes exact session/target/mode/budget, intersects reviewed policy
       with MCP annotations, revalidates mutations and delegates to one explicitly selected provider without fallback.
 - [ ] 4.4 Add Desktop Main concrete download/process/window/OS-permission/resource adapters and typed IPC while keeping
       automation policy, target selection and completion semantics out of `apps/neko-desktop`.
 - [ ] 4.5 Add Tool Call/Timeline projection for target, mode, budget, observation/action state, Pause, Stop, Take over and
       evidence status without a second Task/session catalog or retained hidden Root.
-- [ ] 4.6 Implement layered authorization tests for install confirmation, enable grant, queried OS permission, exact
+- [x] 4.6 Implement layered authorization tests for install confirmation, enable grant, queried OS permission, exact
       session scope and single-action mutation approval; prove none substitutes for another and hard blocks are not
       approval-overridable.
-- [ ] 4.7 Revalidate the exact target before showing mutation approval and immediately before input; include target,
+- [x] 4.7 Revalidate the exact target before showing mutation approval and immediately before input; include target,
       effect/data exposure, mode and remaining budget in the approval projection.
-- [ ] 4.8 Keep first-delivery mutation approval single-action and reject persistent, cross-target or cross-session allow;
+- [x] 4.8 Keep first-delivery mutation approval single-action and reject persistent, cross-target or cross-session allow;
       add approval replay and stale-target poison tests.
 
 ## 5. Browser Use extension
@@ -79,7 +79,7 @@
 - [ ] 5.4 Qualify Browser Use on packaged `darwin-arm64` with real local fixture sites for state, HTML, screenshot,
       Pi-owned page understanding, navigation and denied mutation; prove no nested model call and record other platform
       blockers.
-- [ ] 5.5 Launch Browser Use with extension/session-scoped home/temp/browser-data directories and exact contained paths;
+- [x] 5.5 Launch Browser Use with extension/session-scoped home/temp/browser-data directories and exact contained paths;
       prove real user `HOME`, general `PATH`, existing profiles and unrelated secrets are absent.
 - [ ] 5.6 Enforce domains for navigation, redirects and new tabs at the qualified upstream browser boundary; block `file:`
       and external application protocols, require explicit localhost/private-network scope and keep download/upload

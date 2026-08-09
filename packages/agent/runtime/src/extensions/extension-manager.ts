@@ -123,7 +123,11 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
         if (entry.installed) invalidInstalledPlugins.push({ entry, code: plugin.code });
         continue;
       }
-      if (entry.installed || (await this.agentSupport.isSupported(plugin.value.runtime))) {
+      if (
+        entry.installed ||
+        entry.listed ||
+        (await this.agentSupport.isSupported(plugin.value.runtime))
+      ) {
         visiblePlugins.push(plugin.value);
       }
       if (entry.installed && entry.enabled) runtimeDescriptors.push(plugin.value.runtime);
@@ -396,6 +400,7 @@ interface RepositoryPluginEntry {
   readonly sourcePath: string;
   readonly canInstall: boolean;
   readonly canRemove: boolean;
+  readonly listed: boolean;
 }
 
 interface VerifiedPlugin {
@@ -436,6 +441,8 @@ async function readMarketplaceEntries(
         authorityRoot: marketplaceRoot,
         sourcePath: resolve(marketplaceRoot, definition.path),
         installed: false,
+        installable: definition.availability === 'installable',
+        listed: definition.availability === 'unavailable',
       }),
     ),
     diagnostics: [],
@@ -528,10 +535,13 @@ async function readExtensionGrant(
   return { enabled: true, acceptedPermissions };
 }
 
-function parseMarketplaceIndex(
-  value: Record<string, unknown>,
-):
-  | readonly { readonly name: string; readonly version: string; readonly path: string }[]
+function parseMarketplaceIndex(value: Record<string, unknown>):
+  | readonly {
+      readonly name: string;
+      readonly version: string;
+      readonly path: string;
+      readonly availability: 'installable' | 'unavailable';
+    }[]
   | undefined {
   if (
     !hasOnlyKeys(value, ['publisher', 'plugins']) ||
@@ -540,16 +550,24 @@ function parseMarketplaceIndex(
   ) {
     return undefined;
   }
-  const records: { name: string; version: string; path: string }[] = [];
+  const records: {
+    name: string;
+    version: string;
+    path: string;
+    availability: 'installable' | 'unavailable';
+  }[] = [];
   const ids = new Set<string>();
   for (const item of value['plugins']) {
     if (
       !isRecord(item) ||
-      !hasOnlyKeys(item, ['name', 'version', 'path']) ||
+      !hasOnlyKeys(item, ['name', 'version', 'path'], ['availability']) ||
       !isPluginSegmentValue(item['name']) ||
       !isNonEmptyString(item['version']) ||
       !isNonEmptyString(item['path']) ||
-      isAbsolute(item['path'])
+      isAbsolute(item['path']) ||
+      (item['availability'] !== undefined &&
+        item['availability'] !== 'installable' &&
+        item['availability'] !== 'unavailable')
     ) {
       return undefined;
     }
@@ -567,6 +585,7 @@ function parseMarketplaceIndex(
       name: item['name'],
       version: item['version'],
       path: item['path'],
+      availability: item['availability'] ?? 'installable',
     });
   }
   records.sort((left, right) => left.name.localeCompare(right.name));
@@ -581,6 +600,8 @@ function createRepositoryEntry(input: {
   readonly installed: boolean;
   readonly enabled?: boolean;
   readonly acceptedPermissions?: readonly string[];
+  readonly installable?: boolean;
+  readonly listed?: boolean;
 }): RepositoryPluginEntry {
   return Object.freeze({
     pluginId: `${input.name}@${OPENNEKO_MARKETPLACE_ID}`,
@@ -592,8 +613,9 @@ function createRepositoryEntry(input: {
     acceptedPermissions: Object.freeze([...(input.acceptedPermissions ?? [])]),
     authorityRoot: resolve(input.authorityRoot),
     sourcePath: resolve(input.sourcePath),
-    canInstall: !input.installed,
+    canInstall: !input.installed && (input.installable ?? true),
     canRemove: input.installed && input.enabled !== true,
+    listed: input.listed ?? false,
   });
 }
 
@@ -724,8 +746,8 @@ function projectExtension(
   let agentStatus: AgentExtensionStatus;
   let runtimeDiagnosticCode: string;
   if (!entry.installed) {
-    agentStatus = 'not-installed';
-    runtimeDiagnosticCode = '';
+    agentStatus = entry.canInstall ? 'not-installed' : 'unsupported';
+    runtimeDiagnosticCode = entry.canInstall ? '' : 'artifact-unavailable';
   } else if (!entry.enabled) {
     agentStatus = 'disabled';
     runtimeDiagnosticCode = '';
@@ -1053,8 +1075,13 @@ function isExtensionIdentifier(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(value);
 }
 
-function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+function hasOnlyKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+  optionalKeys: readonly string[] = [],
+): boolean {
   const allowed = new Set(keys);
+  for (const key of optionalKeys) allowed.add(key);
   return Object.keys(value).every((key) => allowed.has(key)) && keys.every((key) => key in value);
 }
 

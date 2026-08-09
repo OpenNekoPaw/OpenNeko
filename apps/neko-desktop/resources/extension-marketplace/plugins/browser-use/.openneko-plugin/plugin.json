@@ -1,0 +1,15 @@
+{
+  "name": "browser-use",
+  "version": "0.13.7",
+  "description": "Observe explicitly authorized browser sessions through the reviewed Browser Use MCP runtime.",
+  "author": { "name": "OpenNeko" },
+  "permissions": ["browser-observe", "network-approved-domains", "screen-content"],
+  "mcpServers": "./.mcp.json",
+  "mcpToolExposure": "adapter-only",
+  "interface": {
+    "displayName": "Browser Use",
+    "shortDescription": "Reviewed browser observation for approved domains",
+    "developerName": "OpenNeko",
+    "category": "Automation"
+  }
+}

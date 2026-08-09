@@ -171,20 +171,32 @@ export function AgentExtensionManagementRoot({
                 <strong>{skill?.name ?? extension?.displayName}</strong>
                 <small>{skill?.description || extension?.description || item.id}</small>
                 {extension ? (
-                  <small>
-                    {t(`home.capabilities.agentStatus.${extension.agentStatus}`)}
-                    {extension.declaredPermissions.length > 0
-                      ? ` · ${t('home.capabilities.permissions', {
-                          permissions: extension.declaredPermissions.join(', '),
-                        })}`
-                      : ''}
-                  </small>
+                  <>
+                    <small>
+                      {extension.version}
+                      {extension.developer ? ` · ${extension.developer}` : ''}
+                      {' · '}
+                      {describeExtensionContributions(extension, t)}
+                    </small>
+                    <small>
+                      {t(`home.capabilities.agentStatus.${extension.agentStatus}`)}
+                      {extension.runtimeDiagnosticCode
+                        ? ` · ${describeRuntimeDiagnostic(extension.runtimeDiagnosticCode, t)}`
+                        : ''}
+                      {extension.declaredPermissions.length > 0
+                        ? ` · ${t('home.capabilities.permissions', {
+                            permissions: extension.declaredPermissions.join(', '),
+                          })}`
+                        : ''}
+                    </small>
+                  </>
                 ) : null}
               </span>
               <span className="management-surface-row-actions">
                 {extension?.canInstall ? (
                   <button
                     type="button"
+                    aria-label={t('home.capabilities.install')}
                     disabled={!projection || operationKey !== undefined}
                     onClick={() => {
                       void Promise.resolve(
@@ -307,4 +319,30 @@ export function searchAndOrderAgentExtensions(
 
 function describeError(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
+}
+
+function describeExtensionContributions(
+  extension: AgentExtensionCatalogItem,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  const contributions = [
+    ...(extension.mcpServerIds.length === 0
+      ? []
+      : [t('home.capabilities.extensionMcp', { ids: extension.mcpServerIds.join(', ') })]),
+    ...(extension.hasSkills ? [t('home.capabilities.extensionSkills')] : []),
+    ...(extension.appIds.length === 0
+      ? []
+      : [t('home.capabilities.extensionApps', { ids: extension.appIds.join(', ') })]),
+  ];
+  return contributions.join(' · ') || t('home.capabilities.extensionNoContributions');
+}
+
+function describeRuntimeDiagnostic(
+  code: string,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  if (code === 'artifact-unavailable') {
+    return t('home.capabilities.runtimeDiagnostic.artifact-unavailable');
+  }
+  return t('home.capabilities.runtimeDiagnostic.other', { code });
 }

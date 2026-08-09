@@ -55,7 +55,7 @@ Desktop adapter 因此必须把 cwd 固定到新建 session directory，并在�
 - Artifact host：`github.com` release assets；上游 `checksums.txt` SHA-256 为
   `2aa497943793980bba915ebd6ebfab3aae9b7837064464055804862fd03068b4`
 
-上游生成的 `libs/cua-driver/contract/manifest.json` 是 54 个 MCP Tool 的审计来源。其第三方
+上游生成的 `libs/cua-driver/contract/manifest.json` 在固定 commit 中包含 23 个 MCP Tool，是本次审计来源。其第三方
 `contract_version`、`tools_list_schema_version`、`capability_version` 必须保留为 upstream provenance，
 不得复制为 OpenNeko 内部 contract/version dispatch。Computer observe profile 仍需从此 manifest 精确选择
 Tool、锁定 schema digest，并完成 target/permission 实机资格化。
@@ -63,6 +63,11 @@ Tool、锁定 schema digest，并完成 target/permission 实机资格化。
 macOS arm64 仅代表上游 artifact 存在，尚不代表 OpenNeko packaged qualification 完成。Windows x64
 artifact 同样只记录供应链事实；在 packaged Windows OpenNeko、标准用户、窗口/权限/input matrix 完成前，
 产品状态必须保持 unavailable。Linux 不在本变更交付范围。
+
+初始 macOS observe profile 只选择 `verify_state`。其 canonical `input_schema` digest 为
+`sha256:8bb240b986195599be93f88443dbe3c97203489be33f82b8d7b26b5b15f328e4`；Host 必须覆盖
+`pid`、`window_id` 和 `session`，模型参数不得声明这些 routing fields。该记录只证明 schema 审核，
+不证明 macOS TCC、target-only capture 或 packaged qualification 已完成。
 
 ## Official MCP SDK
 
@@ -78,5 +83,5 @@ artifact 同样只记录供应链事实；在 packaged Windows OpenNeko、标准
 - Browser Use Python/Chromium 自包含 artifact、可复现 build recipe、完整 dependency lock 和 SBOM 未完成。
 - Browser Use/Cua Driver 的生产 transitive license inventory 尚未生成和审查。
 - 两个 artifact 的 OpenNeko catalog signature/provenance、archive poison tests 和 packaged qualification 未完成。
-- Cua Driver 精确 observe Tool profile、macOS signing/notarization/TCC 实机证据未完成。
+- Cua Driver macOS signing/notarization、TCC、target-only capture 实机证据未完成。
 - Windows 只记录 artifact，不声明产品支持；Browser Use 其他 OS/arch 也未资格化。

@@ -62,16 +62,31 @@ export interface AutomationMcpResultProjector {
   }): AutomationProviderExecutionResult;
 }
 
+export interface AutomationMcpArgumentProjector {
+  project(input: {
+    readonly providerSessionId: string;
+    readonly target: AutomationTarget;
+    readonly mode: AutomationMode;
+    readonly operation: string;
+    readonly arguments: Readonly<Record<string, unknown>>;
+  }): Readonly<Record<string, unknown>>;
+}
+
 export function createReviewedMcpAutomationProvider(options: {
   readonly identity: AutomationProviderIdentity;
   readonly allowedOperations: readonly string[];
   readonly runtime: AutomationMcpRuntimePort;
   readonly resultProjector: AutomationMcpResultProjector;
+  readonly argumentProjector?: AutomationMcpArgumentProjector;
 }): AutomationProviderPort {
   const allowedOperations = new Set(options.allowedOperations);
   if (allowedOperations.size !== options.allowedOperations.length) {
     throw new Error('Automation MCP operation allowlist contains duplicates.');
   }
+  const sessions = new Map<
+    string,
+    { readonly target: AutomationTarget; readonly mode: AutomationMode }
+  >();
 
   const provider: AutomationProviderPort = {
     identity: options.identity,
@@ -95,21 +110,62 @@ export function createReviewedMcpAutomationProvider(options: {
         })),
       };
     },
-    openSession: (input) => options.runtime.openSession(input),
+    async openSession(input) {
+      const opened = await options.runtime.openSession(input);
+      if (sessions.has(opened.providerSessionId)) {
+        const duplicateError = new Error(
+          `Automation MCP provider session '${opened.providerSessionId}' is duplicated.`,
+        );
+        try {
+          await options.runtime.closeSession(opened.providerSessionId);
+        } catch (closeError) {
+          throw new AggregateError(
+            [duplicateError, closeError],
+            `Automation MCP provider session '${opened.providerSessionId}' duplicated and cleanup failed.`,
+          );
+        }
+        throw duplicateError;
+      }
+      sessions.set(opened.providerSessionId, {
+        target: input.target,
+        mode: input.mode,
+      });
+      return opened;
+    },
     revalidateTarget: (input) => options.runtime.revalidateTarget(input),
     async execute(input) {
       if (!allowedOperations.has(input.operation)) {
         throw new Error(`Automation MCP operation '${input.operation}' is not reviewed.`);
       }
+      const session = sessions.get(input.providerSessionId);
+      if (!session) {
+        throw new Error(
+          `Automation MCP provider session '${input.providerSessionId}' is unavailable.`,
+        );
+      }
+      const projectedArguments =
+        options.argumentProjector?.project({
+          providerSessionId: input.providerSessionId,
+          target: session.target,
+          mode: session.mode,
+          operation: input.operation,
+          arguments: input.arguments,
+        }) ?? input.arguments;
       const result = await options.runtime.callTool({
         providerSessionId: input.providerSessionId,
         name: input.operation,
-        arguments: input.arguments,
+        arguments: projectedArguments,
         ...(input.signal === undefined ? {} : { signal: input.signal }),
       });
       return options.resultProjector.project({ operation: input.operation, result });
     },
-    closeSession: (providerSessionId) => options.runtime.closeSession(providerSessionId),
+    async closeSession(providerSessionId) {
+      if (!sessions.has(providerSessionId)) {
+        throw new Error(`Automation MCP provider session '${providerSessionId}' is unavailable.`);
+      }
+      await options.runtime.closeSession(providerSessionId);
+      sessions.delete(providerSessionId);
+    },
   };
   return Object.freeze(provider);
 }

@@ -249,7 +249,7 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     'Agent Extension Management accepted permissions are invalid.',
   );
   if (
-    canInstall !== !installed ||
+    (canInstall && installed) ||
     (canEnable && (!installed || enabled)) ||
     canDisable !== (installed && enabled) ||
     canRemove !== (installed && !enabled) ||
@@ -261,7 +261,9 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
   }
   const agentStatus = requireExtensionStatus(record['agentStatus']);
   if (
-    (!installed && agentStatus !== 'not-installed') ||
+    (!installed &&
+      agentStatus !== 'not-installed' &&
+      !(agentStatus === 'unsupported' && !canInstall)) ||
     (installed && !enabled && agentStatus !== 'disabled' && agentStatus !== 'error')
   ) {
     throw new Error('Agent Extension Management extension status is inconsistent.');

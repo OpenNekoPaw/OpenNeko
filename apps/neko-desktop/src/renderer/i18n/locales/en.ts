@@ -202,6 +202,9 @@ export const en = {
   'home.capabilities.agentStatus.partial': 'Partially ready',
   'home.capabilities.agentStatus.unsupported': 'Unsupported',
   'home.capabilities.agentStatus.error': 'Runtime error',
+  'home.capabilities.runtimeDiagnostic.artifact-unavailable':
+    'Reviewed runtime artifact is not published for this build',
+  'home.capabilities.runtimeDiagnostic.other': 'Diagnostic: {code}',
   'home.capabilities.discoveryIssues':
     '{count} catalog issue(s) were found. Invalid or shadowed records are not shown.',
   'home.capabilities.noSkills': 'No matching global Skills',

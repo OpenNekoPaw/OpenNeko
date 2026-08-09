@@ -331,6 +331,12 @@ importers:
       '@neko/assets-node':
         specifier: workspace:*
         version: link:../../assets/node
+      '@neko/automation-contracts':
+        specifier: workspace:*
+        version: link:../../automation/contracts
+      '@neko/automation-node':
+        specifier: workspace:*
+        version: link:../../automation/node
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../canvas/domain

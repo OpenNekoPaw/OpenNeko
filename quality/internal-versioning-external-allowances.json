@@ -1559,6 +1559,26 @@
       "normativeSource": "https://nodejs.org/api/process.html#processversions",
       "path": "scripts/test-orchestration/node-toolchain-policy.test.mjs",
       "token": "nodeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cua Driver bounded session policy",
+      "fieldScope": "Cua Driver bounded policy fixture format release",
+      "id": "26a2ac7e95b6de386fb9",
+      "isolationRule": "The field is emitted only into the pinned upstream Cua Driver policy document; mismatch rejects that exact external runtime and cannot dispatch an OpenNeko contract, migration, component generation, provider, or fallback path.",
+      "normativeSource": "https://github.com/trycua/cua/tree/20bb34b16ad7c6c56221c332e46b1875e9d8af8c/libs/cua-driver",
+      "path": "apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cua Driver bounded session policy",
+      "fieldScope": "Cua Driver bounded policy document format release",
+      "id": "bd4bf5e2e0653b0ca1b3",
+      "isolationRule": "The field is written only for the pinned upstream Cua Driver policy parser; mismatch rejects that exact external runtime and cannot dispatch an OpenNeko contract, migration, component generation, provider, or fallback path.",
+      "normativeSource": "https://github.com/trycua/cua/tree/20bb34b16ad7c6c56221c332e46b1875e9d8af8c/libs/cua-driver",
+      "path": "apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.ts",
+      "token": "version"
     }
   ]
 }

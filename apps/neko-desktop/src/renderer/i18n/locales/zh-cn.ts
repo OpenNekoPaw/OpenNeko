@@ -184,6 +184,8 @@ export const zhCN = {
   'home.capabilities.agentStatus.partial': '部分就绪',
   'home.capabilities.agentStatus.unsupported': '不支持',
   'home.capabilities.agentStatus.error': '运行时错误',
+  'home.capabilities.runtimeDiagnostic.artifact-unavailable': '此构建尚未发布已审核的运行时制品',
+  'home.capabilities.runtimeDiagnostic.other': '诊断：{code}',
   'home.capabilities.discoveryIssues': '发现 {count} 个目录问题；无效或被覆盖的记录未显示。',
   'home.capabilities.noSkills': '没有匹配的全局 Skill',
   'home.capabilities.noExtensions': '没有匹配的扩展',

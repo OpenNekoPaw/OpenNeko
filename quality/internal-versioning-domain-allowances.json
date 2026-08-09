@@ -753,7 +753,7 @@
       "category": "internal-version-field",
       "domainOwner": "@neko/agent-runtime",
       "fieldScope": "Strict marketplace index parser result type package release field only",
-      "id": "493d6457fbcfc48e02c0",
+      "id": "8e9eaab3d2a6a93d6d3a",
       "isolationRule": "The field is package release metadata in one strict canonical parser and never an OpenNeko data-shape discriminator or migration selector.",
       "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
       "token": "version",
@@ -764,7 +764,7 @@
       "category": "internal-version-field",
       "domainOwner": "@neko/agent-runtime",
       "fieldScope": "Strict marketplace parser record collection package release field only",
-      "id": "e99e4753b487001e5559",
+      "id": "df7821c378e72fa8f3cc",
       "isolationRule": "The record is package metadata only; parsing has no version dispatch, compatibility branch, migration, or fallback.",
       "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
       "token": "version",
@@ -2540,6 +2540,83 @@
       "path": "packages/chara/src/__tests__/character-room-conversation-service.test.ts",
       "token": "characterVersion",
       "userWorkflow": "Run an exact published Character through its primary AgentSession as one Room participant."
+    },
+    {
+      "businessRequirement": "The signed bundled marketplace lists the exact Browser Use Extension package release offered to the user.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Bundled Browser Use marketplace package release",
+      "id": "14521109a3ce6848ad73",
+      "isolationRule": "The value identifies one immutable Extension package release and cannot dispatch an OpenNeko contract, migration, component generation, provider, or alternate success path.",
+      "path": "apps/neko-desktop/resources/extension-marketplace/marketplace.json",
+      "token": "version",
+      "userWorkflow": "Inspect the exact Browser Use Extension release represented in the signed application catalog."
+    },
+    {
+      "businessRequirement": "The signed bundled marketplace lists the exact Computer Use Extension package release offered to the user.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Bundled Computer Use marketplace package release",
+      "id": "6f4a13e760a5dc3c1f9c",
+      "isolationRule": "The value identifies one immutable Extension package release and cannot dispatch an OpenNeko contract, migration, component generation, provider, or alternate success path.",
+      "path": "apps/neko-desktop/resources/extension-marketplace/marketplace.json",
+      "token": "version",
+      "userWorkflow": "Inspect the exact Computer Use Extension release represented in the signed application catalog."
+    },
+    {
+      "businessRequirement": "The Browser Use Extension manifest retains its exact upstream-derived package release for user inspection and qualification.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Bundled Browser Use Extension manifest package release",
+      "id": "1993059cbe6c43474469",
+      "isolationRule": "The release belongs only to this unavailable Extension package and cannot select an OpenNeko contract, migration, component generation, provider, or fallback path.",
+      "path": "apps/neko-desktop/resources/extension-marketplace/plugins/browser-use/.openneko-plugin/plugin.json",
+      "token": "version",
+      "userWorkflow": "Inspect and later qualify the exact Browser Use Extension package release."
+    },
+    {
+      "businessRequirement": "The Computer Use Extension manifest retains its exact upstream-derived package release for user inspection and qualification.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Bundled Computer Use Extension manifest package release",
+      "id": "a16542f923eae7c598d0",
+      "isolationRule": "The release belongs only to this unavailable Extension package and cannot select an OpenNeko contract, migration, component generation, provider, or fallback path.",
+      "path": "apps/neko-desktop/resources/extension-marketplace/plugins/computer-use/.openneko-plugin/plugin.json",
+      "token": "version",
+      "userWorkflow": "Inspect and later qualify the exact Computer Use Extension package release."
+    },
+    {
+      "businessRequirement": "Extension catalog tests preserve the exact unavailable Browser Use package release exposed to the user.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Unavailable Browser Use Extension manifest release fixture",
+      "id": "09900563d4874d273245",
+      "isolationRule": "The release identifies one test Extension package and cannot dispatch an internal schema, migration, component generation, provider, or alternate success path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Verify that an exact unavailable Browser Use release remains visible but cannot be installed."
+    },
+    {
+      "businessRequirement": "Extension catalog tests bind the unavailable Browser Use marketplace entry to its exact package release.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Unavailable Browser Use marketplace release fixture",
+      "id": "556661199541043cf178",
+      "isolationRule": "The release validates one unavailable marketplace package only and cannot select an internal schema, migration, component generation, provider, or fallback path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Verify the exact Browser Use marketplace release is classified as visible and unavailable."
+    },
+    {
+      "businessRequirement": "Extensions UI tests display the exact Browser Use package release represented by the catalog item.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-webview",
+      "fieldScope": "Unavailable Browser Use catalog projection fixture package release",
+      "id": "afc6d64b5806c8304356",
+      "isolationRule": "The value is display metadata for one Extension package and cannot dispatch an internal schema, migration, component generation, provider, or alternate rendering path.",
+      "path": "packages/agent/webview/src/extension-management/root.test.tsx",
+      "token": "version",
+      "userWorkflow": "Inspect the exact Browser Use Extension release and its unavailable status in Extensions."
     }
   ]
 }

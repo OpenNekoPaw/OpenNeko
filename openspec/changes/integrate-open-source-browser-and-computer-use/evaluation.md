@@ -1,6 +1,6 @@
 # Agent Evaluation Evidence
 
-更新日期：2026-08-09
+更新日期：2026-08-10
 
 ## Evaluation Scope
 
@@ -30,6 +30,20 @@
   环境不继承 Host secret，显式 config 不含 LLM，且 realpath 越界/symlink poison 在启动前失败。
 - 每次 Automation action 现在都会重新查询 mode 所需 OS permission 并重校验 exact target；权限丢失或
   target mismatch 只暂停当前 session。一次性 mutation approval 在 Host 调用前消费，失败后不可重放。
+- reviewed MCP provider 在 open 时冻结 exact target/mode；Cua Driver `verify_state` projector 拒绝模型声明
+  pid/window/session，并从授权 target 注入这些字段。Computer observe 仅保留这一项 reviewed Tool。
+- Agent Capability adapter 已绑定 exact profile、opaque targetKey、mode、timeout、budget 与
+  conversation/run/toolCall owner，执行后关闭 owned session，结果不返回 pid/window/tab；provider 失败不尝试
+  raw MCP 或另一 provider。
+- transient observation store 使用 byte limit、TTL、exact session/action owner 与 single-consume；可持久化 receipt
+  不含 raw screenshot bytes、Host path 或窗口 handle。
+- Desktop Cua Driver client factory 只允许 macOS observe，使用 `mcp --direct` 与 approved bounded policy，
+  不继承 Host environment；Windows 和 interact 在 factory boundary 直接 unavailable。
+- bundled catalog source 现在可显示 Browser Use / Computer Use 的审核范围，但 artifact 未就绪时
+  `canInstall=false`、`artifact-unavailable`，catalog refresh 不触发下载。
+- 开发态真实 Electron 的 Extensions 页面已由 image-capable Computer Use 直接检查：Browser Use `0.13.7` 与
+  Computer Use `0.19.2` 均显示审核范围、声明权限和 artifact unavailable diagnostic，没有安装入口。该检查
+  只验证当前 UI 投影，不是 packaged runtime 或 Agent 行为证据。
 
 ## Real Cases
 
@@ -37,7 +51,7 @@
 
 - Desktop 用户首次 session 授权和 target/domain 选择 UI；
 - installed Browser Use artifact resolver、contained client factory 的 production composition 与真实 process；
-- canonical Agent Automation Capability provider 与 Tool/Timeline projection；
+- production Agent Automation Capability registration、Host authorization target UI 与 Tool/Timeline projection；
 - packaged Browser Use artifact 和真实 local fixture qualification；
 - qualified Cua Driver macOS app/process/window observation path 与 OS permission fixture。
 
@@ -49,8 +63,9 @@ hidden complete-session cases 均为 `infrastructure-blocked`。Key-free schema 
 
 - 当前证据不证明 Browser Use 或 Computer Use 已在产品中可用。
 - Browser Use `--mcp` 的单 browser session 语义要求每个 Automation session 独占进程；contained client
-  factory 已实现，但在 verified artifact resolver 和 production composition 接通前不得注册 Agent Tool。
-- Cua Driver 只完成上游 artifact 锁定；macOS target-only capture、TCC responsibility chain 和输入动作均未
-  资格化，Windows 保持 unavailable。
+  factory 与 Capability adapter 已实现，但在 verified artifact resolver、Host authorization 与 production
+  composition 接通前不得注册 Agent Tool。
+- Cua Driver 已完成 exact observe schema/profile、target argument injection 和 contained bounded client factory；
+  macOS target-only capture、TCC responsibility chain 和输入动作仍未资格化，Windows 保持 unavailable。
 - 完成 Capability/UI/Desktop wiring 后必须补一条 visible Desktop + real provider 路径和一条 hidden
   complete Desktop + real provider 路径；deterministic 或 mock 结果不能替代。

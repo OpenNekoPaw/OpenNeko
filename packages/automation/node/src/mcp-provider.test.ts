@@ -69,9 +69,15 @@ describe('reviewed MCP Automation provider', () => {
   it('passes cancellation and projects structured text plus transient PNG bytes', async () => {
     const runtime = createRuntime();
     const provider = createProvider(runtime);
+    const opened = await provider.openSession({
+      sessionId: 'session-cancel',
+      target,
+      mode: 'observe',
+      timeoutMs: 30_000,
+    });
     const controller = new AbortController();
     const result = await provider.execute({
-      providerSessionId: 'provider-session',
+      providerSessionId: opened.providerSessionId,
       operation: 'browser_screenshot',
       arguments: { full_page: false },
       signal: controller.signal,
@@ -79,7 +85,7 @@ describe('reviewed MCP Automation provider', () => {
 
     expect(runtime.callTool).toHaveBeenCalledWith(
       expect.objectContaining({
-        providerSessionId: 'provider-session',
+        providerSessionId: opened.providerSessionId,
         signal: controller.signal,
         name: 'browser_screenshot',
       }),
@@ -115,13 +121,26 @@ describe('reviewed MCP Automation provider', () => {
     const runtime = createRuntime();
     const provider = createProvider(runtime);
 
+    const first = await provider.openSession({
+      sessionId: 'session-a',
+      target,
+      mode: 'observe',
+      timeoutMs: 30_000,
+    });
+    const second = await provider.openSession({
+      sessionId: 'session-b',
+      target,
+      mode: 'observe',
+      timeoutMs: 30_000,
+    });
+
     await provider.execute({
-      providerSessionId: 'provider:session-a',
+      providerSessionId: first.providerSessionId,
       operation: 'browser_screenshot',
       arguments: {},
     });
     await provider.execute({
-      providerSessionId: 'provider:session-b',
+      providerSessionId: second.providerSessionId,
       operation: 'browser_screenshot',
       arguments: {},
     });
