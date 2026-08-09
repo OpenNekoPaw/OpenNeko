@@ -188,11 +188,17 @@ export const en = {
   'home.capabilities.removeSkill': 'Remove personal Skill',
   'home.capabilities.confirmRemoveSkill': 'Remove personal Skill "{name}"?',
   'home.capabilities.confirmInstallPlugin':
-    'Install extension "{name}" and make its supported Skills and MCP tools available to the Agent?',
+    'Install extension "{name}"? Installation does not enable its Agent capabilities.',
+  'home.capabilities.confirmEnablePlugin':
+    'Enable extension "{name}" with these permissions: {permissions}?',
   'home.capabilities.confirmRemovePlugin': 'Remove extension "{name}"?',
+  'home.capabilities.enablement': 'Enable {name}',
+  'home.capabilities.permissions': 'Permissions: {permissions}',
+  'home.capabilities.permissions.none': 'No additional permissions',
   'home.capabilities.status.installed': 'Installed',
   'home.capabilities.status.available': 'Available',
   'home.capabilities.agentStatus.not-installed': 'Not installed',
+  'home.capabilities.agentStatus.disabled': 'Disabled',
   'home.capabilities.agentStatus.ready': 'Agent ready',
   'home.capabilities.agentStatus.partial': 'Partially ready',
   'home.capabilities.agentStatus.unsupported': 'Unsupported',

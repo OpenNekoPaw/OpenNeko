@@ -412,6 +412,7 @@ async function startDesktop(): Promise<void> {
         'extension-marketplace',
       ),
       installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
+      stateRoot: path.join(globalStorage.root, 'extensions', 'state'),
       trashItem: (absolutePath) => shell.trashItem(absolutePath),
     }),
     agentSupport: createAgentExtensionSupport(),

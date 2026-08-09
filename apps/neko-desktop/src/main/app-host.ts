@@ -1205,6 +1205,18 @@ export class DesktopAppHost {
         await this.activatePluginSnapshot(snapshot);
         break;
       }
+      case 'plugin.enable': {
+        this.requireAgentIdleForPluginMutation();
+        const snapshot = await this.options.extensionManager.enablePlugin(request.pluginId);
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
+      case 'plugin.disable': {
+        this.requireAgentIdleForPluginMutation();
+        const snapshot = await this.options.extensionManager.disablePlugin(request.pluginId);
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
       case 'plugin.remove': {
         this.requireAgentIdleForPluginMutation();
         const snapshot = await this.options.extensionManager.removePlugin(request.pluginId);
