@@ -167,14 +167,6 @@ import {
   parseAssistantResourceHostRequest,
   type AssistantResourceHostResult,
 } from '@neko/agent-contracts/assistant-resource-host';
-import type {
-  DirectGenerationOperationPort,
-  DirectGenerationOperationProjection,
-} from '@neko/generation';
-import {
-  parseDesktopDirectGenerationRequest,
-  type DesktopDirectGenerationResult,
-} from '../shared/generation-contract';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -185,9 +177,6 @@ export interface DesktopAppHostOptions {
   readonly assistantWorkspace: AssetWorkspaceResolution;
   readonly agentControllerComposition?: AgentControllerComposition;
   readonly generationLifecycle?: { dispose(): Promise<void> };
-  readonly resolveDirectGeneration?: (
-    workspace: AssetWorkspaceResolution,
-  ) => Promise<DirectGenerationOperationPort>;
   readonly workspaceConfigLifecycle?: { dispose(): void };
   readonly agentLaunch: DesktopAgentLaunchRuntime;
   readonly agentLaunchSubmission: AgentLaunchDraftSubmissionApplicationService;
@@ -659,23 +648,6 @@ export class DesktopAppHost {
     };
   }
 
-  async executeDirectGenerationRequest(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopDirectGenerationResult> {
-    this.requireActive();
-    const request = parseDesktopDirectGenerationRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    const workspace = await this.resolveDirectGenerationWorkspace(window.windowId, request.scope);
-    const resolveDirectGeneration = this.options.resolveDirectGeneration;
-    if (!resolveDirectGeneration) {
-      throw new Error('Desktop Direct Generation composition is unavailable.');
-    }
-    const port = await resolveDirectGeneration(workspace);
-    const projection: DirectGenerationOperationProjection = await port.submit(request.operation);
-    return { requestId: request.requestId, projection };
-  }
-
   async executeAssistantResourceRequest(
     sender: DesktopSenderIdentity,
     payload: unknown,
@@ -754,58 +726,6 @@ export class DesktopAppHost {
       route: 'preview.release',
       status: 'released',
     };
-  }
-
-  private async resolveDirectGenerationWorkspace(
-    windowId: string,
-    scope: import('../shared/generation-contract').DesktopDirectGenerationScope,
-  ): Promise<AssetWorkspaceResolution> {
-    if (scope.connection.applicationInstanceId !== this.applicationIdentity.instanceId) {
-      throw new Error('Desktop Direct Generation scope belongs to another application instance.');
-    }
-    if (scope.connection.windowId !== windowId) {
-      throw new Error('Desktop Direct Generation scope belongs to another Window.');
-    }
-    if (scope.kind === 'agent-draft') {
-      const catalog = this.agentLaunch.readCatalog(scope.connection);
-      const binding = catalog.interaction.binding;
-      if (binding.kind === 'workspace') {
-        const resolution = await this.workspaceGrants.resolve(windowId, binding.workspaceGrantId);
-        if (resolution.workspace.workspaceId !== binding.workspaceId) {
-          throw new Error(
-            'Desktop Direct Generation Workspace grant resolved to another Workspace.',
-          );
-        }
-        return resolution.workspace;
-      }
-      if (binding.kind === 'assistant') {
-        if (binding.assistantSpaceId !== this.options.assistantWorkspace.workspaceId) {
-          throw new Error('Desktop Direct Generation Assistant scope has no matching Workspace.');
-        }
-        return this.options.assistantWorkspace;
-      }
-      throw new Error(
-        `Desktop Direct Generation requires Workspace authority; Draft binding '${binding.kind}' is unsupported.`,
-      );
-    }
-    const connection = this.agentBridge.resolveExactConnection(scope.connection, {
-      applicationInstanceId: this.applicationIdentity.instanceId,
-      windowId,
-    });
-    if ('assistantSpaceId' in connection) {
-      if (
-        connection.assistantSpaceId !== this.options.assistantWorkspace.workspaceId ||
-        connection.workspaceId !== this.options.assistantWorkspace.workspaceId
-      ) {
-        throw new Error('Desktop Direct Generation Assistant Session has no matching Workspace.');
-      }
-      return this.options.assistantWorkspace;
-    }
-    const workspace = await this.shell.resolveAgentWorkspace(connection.workspaceId);
-    if (workspace.workspaceId !== connection.workspaceId) {
-      throw new Error('Desktop Direct Generation Session resolved to another Workspace.');
-    }
-    return workspace;
   }
 
   async resolveWorkspaceTarget(

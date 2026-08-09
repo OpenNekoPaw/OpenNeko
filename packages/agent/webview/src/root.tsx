@@ -20,8 +20,6 @@ import {
   type AgentComposerWorkspacePresentation,
 } from './components/ComposerWorkspaceContext';
 import './index.css';
-import { DirectGenerationOperationProvider } from './direct-generation-context';
-import type { DirectGenerationOperationPort } from '@neko/generation';
 
 registerDefaultRenderers();
 
@@ -34,7 +32,6 @@ export interface AgentWebviewRootProps {
   readonly presentation?: 'default' | 'desktop-dock';
   readonly agentPresentation?: AgentInteractionProjection;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
-  readonly directGeneration?: DirectGenerationOperationPort;
 }
 
 export function AgentWebviewRoot({
@@ -42,7 +39,6 @@ export function AgentWebviewRoot({
   hostRuntimeAdapter,
   agentPresentation,
   composerWorkspace,
-  directGeneration,
   initialConversation,
   initialInput,
   locale,
@@ -63,16 +59,14 @@ export function AgentWebviewRoot({
       >
         <AgentHostRuntimeProvider adapter={hostRuntimeAdapter}>
           <I18nProvider service={i18nService}>
-            <DirectGenerationOperationProvider value={directGeneration}>
-              <ComposerWorkspaceProvider value={composerWorkspace}>
-                <AppShell
-                  agentPresentation={agentPresentation}
-                  initialConversation={initialConversation}
-                  initialInput={initialInput}
-                  presentation={presentation}
-                />
-              </ComposerWorkspaceProvider>
-            </DirectGenerationOperationProvider>
+            <ComposerWorkspaceProvider value={composerWorkspace}>
+              <AppShell
+                agentPresentation={agentPresentation}
+                initialConversation={initialConversation}
+                initialInput={initialInput}
+                presentation={presentation}
+              />
+            </ComposerWorkspaceProvider>
           </I18nProvider>
         </AgentHostRuntimeProvider>
       </AgentWebviewFoundationBoundary>

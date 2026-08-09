@@ -80,7 +80,8 @@ describe('@neko/generation architecture boundaries', () => {
     expect(canvasGenerationSource).not.toContain('createNodeWorkspaceGenerationJobOwner');
     expect(canvasGenerationSource).not.toContain('new GenerationJobCoordinator');
     expect(canvasGenerationSource).not.toContain('createPersistentGenerationJobStore');
-    expect(canvasGenerationSource).toContain('jobs.regenerateGeneration');
+    expect(canvasGenerationSource).toContain('jobs.submitGeneration');
+    expect(canvasGenerationSource).not.toContain('jobs.regenerateGeneration');
     expect(canvasGenerationSource).not.toMatch(
       /\b(?:executeCanvasCreativeAi|CanvasMediaService)\b/u,
     );
@@ -97,6 +98,14 @@ describe('@neko/generation architecture boundaries', () => {
     expect(allEntrySource).not.toContain('purposeMediaService');
     expect(allEntrySource).not.toContain('ICapabilityMediaService');
     expect(allEntrySource).not.toContain('allowCreateBackgroundConversation');
+    expect(existsSync(resolve(workspaceRoot, 'packages/generation/src/direct-operation.ts'))).toBe(
+      false,
+    );
+    expect(
+      existsSync(resolve(workspaceRoot, 'packages/generation/src/job/direct-operation-port.ts')),
+    ).toBe(false);
+    expect(generation).not.toHaveProperty('parseDirectGenerationOperationInput');
+    expect(generationJob).not.toHaveProperty('createDirectGenerationOperationPort');
   });
 
   it('keeps creator-visible contract owners independent from Resource Cache types', () => {

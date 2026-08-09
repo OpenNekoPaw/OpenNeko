@@ -7,6 +7,7 @@
 
 import { CANVAS_CONNECTION_TYPES, CANVAS_NODE_TYPES } from '../types/canvas';
 import { validateCanvasMaterialNodePersistence } from '../types/canvas-material-contracts';
+import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
 import { isContentLocator, normalizeWorkspaceContentPath } from '@neko/content';
 import { validateNkcNodeDurableResourceIdentity } from '../utils/canvasDurableResourceIdentity';
 import { isJobRef } from '@neko/shared/job-lifecycle';
@@ -262,6 +263,13 @@ function validateNode(
   );
   if (node['type'] === 'job') {
     validateJobNodeData(node['data'], `${path}.data`, errors);
+  }
+  if (node['type'] === 'generation' && !isCanvasGenerationNodeData(node['data'])) {
+    errors.push({
+      field: `${path}.data`,
+      message: 'Generation node data does not satisfy the canonical Recipe/run/output contract',
+      severity: 'error',
+    });
   }
   for (const diagnostic of validateCanvasMaterialNodePersistence(
     node['type'],

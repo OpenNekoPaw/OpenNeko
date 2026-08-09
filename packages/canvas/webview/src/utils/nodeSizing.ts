@@ -5,6 +5,11 @@ export interface NodeSize {
   height: number;
 }
 
+export interface NodePosition {
+  x: number;
+  y: number;
+}
+
 export interface NodeSizingInput {
   type: string;
   size?: NodeSize;
@@ -18,6 +23,7 @@ const KNOWN_NODE_TYPE_MIN_SIZES = {
   markdown: { width: 180, height: 120 },
   media: { width: 200, height: 120 },
   group: { width: 260, height: 180 },
+  generation: { width: 320, height: 240 },
   job: { width: 240, height: 150 },
   file: { width: 180, height: 160 },
   'canvas-embed': { width: 220, height: 150 },
@@ -32,6 +38,13 @@ export function resolveNodeMinSize(node: NodeSizingInput): NodeSize {
   }
 
   return node.container ? DEFAULT_CONTAINER_MIN_SIZE : DEFAULT_NODE_MIN_SIZE;
+}
+
+export function centerNodeAt(position: NodePosition, size: NodeSize): NodePosition {
+  return {
+    x: position.x - size.width / 2,
+    y: position.y - size.height / 2,
+  };
 }
 
 export function clampNodeSize(size: NodeSize, minSize: NodeSize): NodeSize {

@@ -4,7 +4,6 @@ import {
   createCanvasHostPresentationSnapshotStore,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostIntentRequest,
-  projectGenerationSnapshotToCanvas,
   type CanvasHostIntentRequest,
   type CanvasHostIntentResult,
   type CanvasHostProjectionEvent,
@@ -312,9 +311,6 @@ export class DesktopCanvasRuntime {
     const requestProjectMediaLibraryCopy = this.options.requestProjectMediaLibraryCopy;
     const requestGlobalMediaLibraryCopy = this.options.requestGlobalMediaLibraryCopy;
     const generation = this.options.generation;
-    const resolveGeneration = generation?.resolveResultActions;
-    const regenerate = generation?.regenerateResult;
-    const editAndGenerate = generation?.editAndGenerateResult;
     const previewEffect = previewResource
       ? async (requestIdentity: CanvasHostRuntimeIdentity, locator: ContentLocator) => {
           const absolutePath = await resolveWorkspaceContentLocator(grant.workspace, locator);
@@ -472,56 +468,7 @@ export class DesktopCanvasRuntime {
             },
           }
         : {}),
-      ...(resolveGeneration
-        ? {
-            resolveGeneration: ({
-              identity: requestIdentity,
-              target,
-            }: {
-              readonly identity: CanvasHostRuntimeIdentity;
-              readonly target: CanvasMaterialActionTarget;
-            }) =>
-              resolveGeneration({
-                identity: requestIdentity,
-                workspace: grant.workspace,
-                target,
-              }),
-          }
-        : {}),
-      ...(regenerate
-        ? {
-            regenerate: ({
-              identity: requestIdentity,
-              target,
-            }: {
-              readonly identity: CanvasHostRuntimeIdentity;
-              readonly target: CanvasMaterialActionTarget;
-            }) =>
-              regenerate({
-                identity: requestIdentity,
-                workspace: grant.workspace,
-                target,
-              }),
-          }
-        : {}),
-      ...(editAndGenerate
-        ? {
-            editAndGenerate: ({
-              identity: requestIdentity,
-              target,
-            }: {
-              readonly identity: CanvasHostRuntimeIdentity;
-              readonly target: CanvasMaterialActionTarget;
-            }) =>
-              editAndGenerate({
-                identity: requestIdentity,
-                workspace: grant.workspace,
-                target,
-              }),
-          }
-        : {}),
     });
-    const requestGenerationDraft = generation?.requestDraft;
     const session = new CanvasHostRuntimeSession({
       identity,
       initialCanvas,
@@ -571,15 +518,40 @@ export class DesktopCanvasRuntime {
               });
             }
           : undefined,
-        requestGenerationDraft: requestGenerationDraft
-          ? async ({ identity: requestIdentity, mediaKind, position, inputNodeIds }) =>
-              requestGenerationDraft({
-                identity: requestIdentity,
-                workspace: grant.workspace,
-                mediaKind,
-                ...(position ? { position } : {}),
-                inputNodeIds,
-              })
+        generation: generation
+          ? {
+              startNode: ({ canvas, identity: requestIdentity, nodeId, persistCanvas }) =>
+                generation.startNode({
+                  canvas,
+                  identity: requestIdentity,
+                  workspace: grant.workspace,
+                  nodeId,
+                  persistCanvas,
+                }),
+              resumeNode: ({ canvas, identity: requestIdentity, nodeId, run, persistCanvas }) =>
+                generation.resumeNode({
+                  canvas,
+                  identity: requestIdentity,
+                  workspace: grant.workspace,
+                  nodeId,
+                  run,
+                  persistCanvas,
+                }),
+              observeNode: ({ identity: requestIdentity, nodeId, run }) =>
+                generation.observeNode({
+                  identity: requestIdentity,
+                  workspace: grant.workspace,
+                  nodeId,
+                  run,
+                }),
+              cancelNode: ({ identity: requestIdentity, nodeId, run }) =>
+                generation.cancelNode({
+                  identity: requestIdentity,
+                  workspace: grant.workspace,
+                  nodeId,
+                  run,
+                }),
+            }
           : undefined,
         previewResource: previewEffect
           ? ({ identity: requestIdentity, locator }) => previewEffect(requestIdentity, locator)
@@ -599,20 +571,10 @@ export class DesktopCanvasRuntime {
             action,
             targets,
           });
-          if (!result.generationProjection) return {};
-          const projectionIdentity = {
-            projectId: requestIdentity.projectId,
-            canvasId: requestIdentity.documentId,
-            canvasSessionId: requestIdentity.sessionId,
-          };
-          return {
-            canvas: projectGenerationSnapshotToCanvas({
-              identity: projectionIdentity,
-              expectedIdentity: projectionIdentity,
-              canvas,
-              snapshot: result.generationProjection,
-            }),
-          };
+          if (result.generationProjection) {
+            throw new Error('Historical Canvas material regeneration is no longer supported.');
+          }
+          return {};
         },
       },
     });
@@ -624,6 +586,7 @@ export class DesktopCanvasRuntime {
       session,
     };
     this.sessions.set(key, entry);
+    await session.reattachGenerationNodes();
     return entry;
   }
 

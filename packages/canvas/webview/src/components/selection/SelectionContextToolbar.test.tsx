@@ -330,9 +330,25 @@ function createMaterialHost(
     requestSource: async () => {
       throw new Error('Not used by this static component test.');
     },
-    requestGenerationDraft: async () => {
+    createGenerationNode: async () => {
       throw new Error('Not used by this static component test.');
     },
+    updateGenerationRecipe: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    runGenerationNode: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    cancelGenerationNode: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    selectGenerationOutput: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    authorGenerationText: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    getGenerationProjection: () => undefined,
     projectContent: async () => {
       throw new Error('Not used by this static component test.');
     },
@@ -340,7 +356,7 @@ function createMaterialHost(
     revealResource: async () => undefined,
     getAuthoringCapabilities: () => ({
       sourceModes: [],
-      generationMediaKinds: [],
+      generationKinds: [],
     }),
     resolveMaterialActions: async () => descriptors,
     executeMaterialAction,
@@ -428,6 +444,7 @@ function materialActionSnapshot(): CanvasHostSnapshot {
       viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
       selectedNodeIds: [],
     },
-    authoringCapabilities: { sourceModes: [], generationMediaKinds: [] },
+    authoringCapabilities: { sourceModes: [], generationKinds: [] },
+    generationNodes: [],
   };
 }

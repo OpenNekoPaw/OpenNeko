@@ -21,7 +21,6 @@ describe('input area presenter', () => {
     ).toEqual(
       expect.objectContaining({
         canSend: true,
-        showSessionModeSelector: false,
         showModelConfig: false,
         showExecutionModeSelector: false,
         showMediaCallCount: false,
@@ -45,7 +44,6 @@ describe('input area presenter', () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        showSessionModeSelector: true,
         showModelConfig: true,
         showExecutionModeSelector: true,
         showMediaCallCount: true,
@@ -69,7 +67,6 @@ describe('input area presenter', () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        showSessionModeSelector: true,
         showModelConfig: true,
         showExecutionModeSelector: true,
       }),
@@ -121,7 +118,6 @@ describe('input area presenter', () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        showSessionModeSelector: false,
         showModelConfig: true,
         showExecutionModeSelector: true,
       }),
@@ -169,7 +165,6 @@ describe('input area presenter', () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        showSessionModeSelector: false,
         showModelConfig: false,
         showExecutionModeSelector: false,
         showMediaCallCount: false,

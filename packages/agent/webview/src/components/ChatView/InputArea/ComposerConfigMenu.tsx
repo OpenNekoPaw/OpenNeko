@@ -641,12 +641,5 @@ function findTriggerModel(input: {
   readonly mediaModelSelection: Readonly<MediaModelSelection>;
   readonly availableMediaModels: readonly ChatModelOption[];
 }): ChatModelOption | undefined {
-  if (input.activeMode === 'agent') {
-    return input.primaryModels.find((model) => model.id === input.selectedModel);
-  }
-  const selectedId = input.mediaModelSelection[input.activeMode];
-  if (selectedId === 'none') return undefined;
-  return input.availableMediaModels.find(
-    (model) => model.category === input.activeMode && model.id === selectedId,
-  );
+  return input.primaryModels.find((model) => model.id === input.selectedModel);
 }

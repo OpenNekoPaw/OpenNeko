@@ -38,7 +38,6 @@ export interface InputAreaUiProjection {
   showMediaCallCount: boolean;
   showExecutionModeSelector: boolean;
   showModelConfig: boolean;
-  showSessionModeSelector: boolean;
   inputPlaceholderKey:
     | 'chat.input.entryPlaceholder'
     | 'chat.input.placeholder'
@@ -115,7 +114,6 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     showMediaCallCount: !isCharacterRoleSession && input.mediaModelCallCount > 0,
     showExecutionModeSelector: !isEntry && executionModePolicy !== 'unavailable' && isAgentMode,
     showModelConfig: modelPolicy !== 'unavailable' && (isAgentMode || hasCurrentSessionMediaModels),
-    showSessionModeSelector: !isEntry && !isCharacterRoleSession && !input.compactControls,
     inputPlaceholderKey: isEntry
       ? 'chat.input.entryPlaceholder'
       : queuedMessageCount > 0

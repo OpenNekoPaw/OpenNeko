@@ -12,7 +12,6 @@ import type {
   ChatWorkspaceModelStateInput,
   ChatWorkspaceModelStateProjection,
   ConfigStateMessage,
-  MediaModelCategory,
   MediaModelDefaults,
   MediaModelSelectionDefaultsProjection,
   MediaModelSelectionState,
@@ -153,15 +152,9 @@ export function projectMessageModelSelection(
   input: MessageModelProjectionInput,
 ): MessageModelProjection {
   const chatModel = projectSelectedChatModel(input.selectedModel, input.chatModelOptions);
-  const mediaModel = projectDirectMediaModel({
-    sessionMode: input.sessionMode,
-    providerId: input.mediaProviderId,
-    modelId: input.mediaModelId,
-  });
 
   return {
     ...(chatModel ? { chatModel } : {}),
-    ...(mediaModel ? { mediaModel } : {}),
     ...(input.agentMediaModels
       ? {
           purposeModels: projectAgentGenerationPurposeModels(
@@ -252,20 +245,10 @@ export function projectChatWorkspaceModelState(
     modelMaxOutputTokens: selectedModelOption?.maxOutputTokens,
     defaultMaxOutputTokens: input.defaultMaxOutputTokens,
   });
-  let activeMediaModel: ChatModelOption | undefined;
-  let agentMediaModels: AgentMediaModelSelections | undefined;
-
-  if (input.sessionMode === 'agent') {
-    agentMediaModels = projectAgentMediaModelSelections(
-      input.mediaModelSelection,
-      availableMediaModels,
-    );
-  } else {
-    const sessionMode = input.sessionMode;
-    activeMediaModel = availableMediaModels.find(
-      (model) => model.id === input.mediaModelSelection[sessionMode],
-    );
-  }
+  const agentMediaModels = projectAgentMediaModelSelections(
+    input.mediaModelSelection,
+    availableMediaModels,
+  );
 
   return {
     allModels,
@@ -283,7 +266,6 @@ export function projectChatWorkspaceModelState(
     ...(selectedTokenBudget.modelMaxOutputTokens !== undefined
       ? { selectedMaxOutputTokens: selectedTokenBudget.modelMaxOutputTokens }
       : {}),
-    ...(activeMediaModel ? { activeMediaModel } : {}),
     ...(agentMediaModels ? { agentMediaModels } : {}),
   };
 }
@@ -299,29 +281,10 @@ export function projectMediaModelSelectionForSessionModeChange(input: {
     audio: input.mediaModelSelection.audio,
   };
 
-  if (input.sessionMode === 'agent') {
-    return {
-      sessionMode: input.sessionMode,
-      mediaModelSelection,
-      updated: false,
-    };
-  }
-
-  const allModels = normalizeChatModelOptions(input.chatModelOptions);
-  const firstModel = allModels.find((model) => model.category === input.sessionMode);
-  if (!firstModel || mediaModelSelection[input.sessionMode] === firstModel.id) {
-    return {
-      sessionMode: input.sessionMode,
-      mediaModelSelection,
-      updated: false,
-    };
-  }
-
-  mediaModelSelection[input.sessionMode] = firstModel.id;
   return {
     sessionMode: input.sessionMode,
     mediaModelSelection,
-    updated: true,
+    updated: false,
   };
 }
 
@@ -674,27 +637,6 @@ function resolveAgentMediaModel<Category extends AgentMediaModelCategory>(
     providerId: model.providerId,
     modelId: model.modelId,
     category,
-  };
-}
-
-function projectDirectMediaModel(input: {
-  sessionMode: MessageModelProjectionInput['sessionMode'];
-  providerId?: string;
-  modelId?: string;
-}): ModelRef<MediaModelCategory> | undefined {
-  if (
-    input.sessionMode === 'agent' ||
-    !input.providerId ||
-    !input.modelId ||
-    input.modelId === 'none'
-  ) {
-    return undefined;
-  }
-
-  return {
-    providerId: input.providerId,
-    modelId: input.modelId,
-    category: input.sessionMode,
   };
 }
 

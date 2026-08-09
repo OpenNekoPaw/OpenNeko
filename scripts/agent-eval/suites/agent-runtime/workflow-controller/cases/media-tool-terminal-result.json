@@ -5,7 +5,7 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Generate an image, wait for the terminal GenerateImage Tool result, inspect its generated-output resource through ReadImage, and continue the same Agent turn without a generic Task.",
+    "userBehavior": "Generate an image through the Agent Tool path, inspect its durable output and Workspace Board delivery, then fail visibly in the same Conversation when a later turn has no image-generation binding.",
     "canonicalPath": [
       "Desktop Agent input queue",
       "PiConversationRuntime",
@@ -13,19 +13,21 @@
       "GenerateImage Tool call",
       "Tool confirmation",
       "terminal Tool result",
-      "generated-output ContentLocator",
-      "ReadImage Tool call"
+      "generated-output image_ref binding",
+      "ReadImage short-reference Tool call",
+      "exact Workspace Board delivery",
+      "same-Conversation missing-binding Tool failure"
     ],
     "observables": [
       {
         "ref": "tool-result-facts",
         "kind": "runtime-fact",
-        "description": "GenerateImage and ReadImage Tool identities and terminal results, generated-output ContentLocator artifact digest/provenance/validator, ordering, and terminal idle facts.",
+        "description": "Effective model, Conversation/Turn/Tool identities, terminal Generation Job and generated-output evidence, Workspace Board target, missing-binding failure, and forbidden direct/fallback path facts.",
         "required": true
       }
     ],
-    "expectedResult": "GenerateImage remains active until it returns a generated resource, ReadImage inspects that resource successfully in the same Agent turn, and no generic Task or continuation participates.",
-    "expectedFailure": "Missing terminal Tool result, generated resource evidence, ReadImage success, ordering, forbidden Task participation, or terminal idle evidence fails."
+    "expectedResult": "The first GenerateImage call reaches one exact Workspace Generation Job, durable artifact and Board target; the second call fails in the same Conversation before Job success because its exact image binding is unavailable.",
+    "expectedFailure": "Missing effective configuration, Job/artifact/Board evidence, same-Conversation failure, or participation by direct generation, Canvas routing, alternate Job tools, provider/model fallback, generic Task or another Workspace fails."
   },
   "fixtureRefs": [
     "empty-workspace"
@@ -38,7 +40,7 @@
     {
       "id": "generate",
       "kind": "submit",
-      "prompt": "Generate one image of a cat playing with a red ball. Wait for the terminal GenerateImage Tool result, then pass its delivered generated-output ContentLocator unchanged to ReadImage before summarizing it. Do not use resourceRef, provider URL, localPath, data URL, base64, or GetAsset unless an explicit add-to-AssetLibrary operation has returned a separate AssetEntity id."
+      "prompt": "Generate one image of a cat playing with a red ball. Wait for the terminal GenerateImage Tool result, then pass its delivered image_ref unchanged in ReadImage.image_refs before summarizing it. Do not construct a ContentLocator or use resourceRef, provider URL, localPath, data URL, base64, or GetAsset unless an explicit add-to-AssetLibrary operation has returned a separate AssetEntity id."
     },
     {
       "id": "confirm-generate-image",
@@ -52,6 +54,25 @@
       "id": "idle",
       "kind": "wait-for-idle",
       "timeoutMs": 300000
+    },
+    {
+      "id": "missing-binding",
+      "kind": "submit",
+      "prompt": "Call GenerateImage exactly once for a blue square. Report its owner-qualified failure without using DirectGeneration, SubmitGenerationJob, Canvas, another provider/model, another Workspace, or a generic Task.",
+      "modelProfileId": "nekoapi-chat-without-image-generation"
+    },
+    {
+      "id": "confirm-missing-binding",
+      "kind": "confirm",
+      "afterStepId": "missing-binding",
+      "toolName": "GenerateImage",
+      "approved": true,
+      "timeoutMs": 180000
+    },
+    {
+      "id": "failure-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
     }
   ],
   "assertions": [
@@ -72,6 +93,12 @@
       "evidenceRef": "tool-result-facts"
     },
     {
+      "id": "effective-model",
+      "kind": "model",
+      "profileId": "nekoapi-chat-without-image-generation",
+      "evidenceRef": "tool-result-facts"
+    },
+    {
       "id": "generate-image",
       "kind": "tool-call",
       "name": "GenerateImage",
@@ -87,6 +114,34 @@
       "kind": "tool-call",
       "name": "ReadImage",
       "status": "success",
+      "evidenceRef": "tool-result-facts"
+    },
+    {
+      "id": "missing-binding-fails",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "error",
+      "evidenceRef": "tool-result-facts"
+    },
+    {
+      "id": "no-direct-generation",
+      "kind": "tool-call",
+      "name": "DirectGeneration",
+      "status": "absent",
+      "evidenceRef": "tool-result-facts"
+    },
+    {
+      "id": "no-canvas-generation-routing",
+      "kind": "tool-call",
+      "name": "CreateCanvasGenerationNode",
+      "status": "absent",
+      "evidenceRef": "tool-result-facts"
+    },
+    {
+      "id": "no-generic-generation-job-fallback",
+      "kind": "tool-call",
+      "name": "SubmitGenerationJob",
+      "status": "absent",
       "evidenceRef": "tool-result-facts"
     },
     {
@@ -132,6 +187,16 @@
       "evidenceRef": "tool-result-facts"
     },
     {
+      "id": "workspace-board",
+      "kind": "workspace-board-projection",
+      "status": "projected",
+      "targetKind": "workspace",
+      "minNodeIds": 1,
+      "sourceFingerprintRequired": true,
+      "diagnosticsEmpty": true,
+      "evidenceRef": "tool-result-facts"
+    },
+    {
       "id": "order",
       "kind": "process-order",
       "events": [
@@ -154,6 +219,21 @@
           "kind": "tool",
           "name": "ReadImage",
           "status": "success"
+        },
+        {
+          "kind": "workflow-step",
+          "stepId": "missing-binding",
+          "method": "message.submit"
+        },
+        {
+          "kind": "workflow-step",
+          "stepId": "confirm-missing-binding",
+          "method": "tool.confirm"
+        },
+        {
+          "kind": "tool",
+          "name": "GenerateImage",
+          "status": "error"
         }
       ],
       "evidenceRef": "tool-result-facts"

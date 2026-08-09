@@ -9,7 +9,7 @@
 
 import type {
   AudioGenerationRequest,
-  GenerationExecutionPort,
+  MediaGenerationExecutionPort,
   ImageGenerationRequest,
   MediaGenerationExecutionOptions,
   MediaGenerationResult,
@@ -53,7 +53,7 @@ interface PreparedMediaGeneration {
 /**
  * Media generation service - unified API for all media generation
  */
-export class MediaGenerationService implements GenerationExecutionPort {
+export class MediaGenerationService implements MediaGenerationExecutionPort {
   private readonly configManager: MediaGenerationConfigPort;
   private readonly routingManager: MediaRoutingManager;
   private readonly executor: MediaGenerationExecutor;

@@ -20,10 +20,6 @@ export {
 export { GenerationJobCoordinator, type GenerationJobCoordinatorOptions } from './coordinator';
 export { createPurposeGenerationJobPort } from './purpose-port';
 export {
-  createDirectGenerationOperationPort,
-  type DirectGenerationBindingValidator,
-} from './direct-operation-port';
-export {
   WorkspaceGenerationApplicationRuntime,
   WorkspaceGenerationRuntimeError,
   type WorkspaceGenerationApplicationRuntimeOptions,

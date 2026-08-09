@@ -2,11 +2,6 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRef } from 'react';
 import { type AgentInputCatalogMessage } from '@neko/agent-contracts';
-import type {
-  DirectGenerationMediaKind,
-  DirectGenerationOperationProjection,
-} from '@neko/generation';
-import type { GenerationParams } from '../../components/ChatView/InputArea/types';
 import { useChatActions } from '../useChatActions';
 
 const hostMocks = vi.hoisted(() => ({
@@ -475,91 +470,6 @@ describe('useChatActions', () => {
     );
   });
 
-  it('routes direct image generation without sending an Agent message', async () => {
-    const setMessages = vi.fn();
-    const setIsThinking = vi.fn();
-    const setStreamingMessageId = vi.fn();
-    const directGeneration = {
-      submit: vi.fn(async () => createSucceededDirectGeneration('image')),
-    };
-    const onDirectGenerationState = vi.fn();
-
-    const { result } = renderHook(() => {
-      const activeConversationIdRef = useRef<string | null>('conv-image');
-      return useChatActions({
-        inputValue: '生成一张图片',
-        isThinking: false,
-        selectedModel: 'openai:gpt-4.1',
-        availableModels: [
-          {
-            id: 'openai:gpt-4.1',
-            label: 'OpenAI / GPT 4.1',
-            providerId: 'openai',
-            modelId: 'gpt-4.1',
-            category: 'llm',
-          },
-          {
-            id: 'flux:flux-pro',
-            label: 'Flux / Flux Pro',
-            providerId: 'flux',
-            modelId: 'flux-pro',
-            category: 'image',
-            capabilities: ['text_to_image'],
-          },
-        ],
-        sessionMode: 'image',
-        mediaProviderId: 'flux',
-        mediaModelId: 'flux-pro',
-        directGeneration,
-        generationParams: createGenerationParams(),
-        onDirectGenerationState,
-        agentMediaModels: {
-          image: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
-          video: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
-        },
-        understandingModels: {
-          image: { providerId: 'google', modelId: 'gemini-image', category: 'llm' },
-        },
-        activeConversationId: 'conv-image',
-        activeConversationIdRef,
-        streamingMessageIdRef: { current: null },
-        messages: [],
-        setMessages,
-        setIsThinking,
-        setStreamingMessageId,
-        setActiveTab: vi.fn(),
-        clearInput: vi.fn(),
-        setAttachedFiles: vi.fn(),
-      });
-    });
-
-    await act(async () => {
-      result.current.handleSend();
-    });
-
-    expect(directGeneration.submit).toHaveBeenCalledWith({
-      mediaKind: 'image',
-      prompt: '生成一张图片',
-      providerId: 'flux',
-      modelId: 'flux-pro',
-      aspectRatio: '16:9',
-      width: 1920,
-      height: 1080,
-    });
-    expect(onDirectGenerationState).toHaveBeenNthCalledWith(1, {
-      phase: 'running',
-      mediaKind: 'image',
-    });
-    expect(onDirectGenerationState).toHaveBeenNthCalledWith(2, {
-      phase: 'completed',
-      projection: createSucceededDirectGeneration('image'),
-    });
-    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
-    expect(setMessages).not.toHaveBeenCalled();
-    expect(setIsThinking).not.toHaveBeenCalled();
-    expect(setStreamingMessageId).not.toHaveBeenCalled();
-  });
-
   it('sends a music-only audio selection with the music generation purpose', () => {
     const { result } = renderHook(() => {
       const activeConversationIdRef = useRef<string | null>('conv-music');
@@ -624,59 +534,6 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage.mock.calls[0]?.[0]?.purposeModels).not.toHaveProperty([
       'audio.generate',
     ]);
-  });
-
-  it('does not create a Conversation or retain understanding models for direct video generation', async () => {
-    const ensureConversationForSend = vi.fn();
-    const directGeneration = {
-      submit: vi.fn(async () => createSucceededDirectGeneration('video')),
-    };
-
-    const { result } = renderHook(() => {
-      const activeConversationIdRef = useRef<string | null>(null);
-      return useChatActions({
-        inputValue: '生成视频',
-        isThinking: false,
-        selectedModel: 'model-a',
-        sessionMode: 'video',
-        mediaProviderId: 'runway',
-        mediaModelId: 'gen-4',
-        directGeneration,
-        generationParams: createGenerationParams(),
-        activeConversationId: null,
-        activeConversationIdRef,
-        streamingMessageIdRef: { current: null },
-        messages: [],
-        setMessages: vi.fn(),
-        setIsThinking: vi.fn(),
-        setStreamingMessageId: vi.fn(),
-        setActiveTab: vi.fn(),
-        clearInput: vi.fn(),
-        setAttachedFiles: vi.fn(),
-        ensureConversationForSend,
-      });
-    });
-
-    await act(async () => {
-      result.current.handleSend({
-        sessionMode: 'video',
-        understandingModels: {
-          video: { providerId: 'google', modelId: 'gemini-video', category: 'llm' },
-        },
-      });
-    });
-
-    expect(directGeneration.submit).toHaveBeenCalledWith({
-      mediaKind: 'video',
-      prompt: '生成视频',
-      providerId: 'runway',
-      modelId: 'gen-4',
-      aspectRatio: '16:9',
-      resolution: '1080p',
-      fps: 24,
-    });
-    expect(ensureConversationForSend).not.toHaveBeenCalled();
-    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it('gives the explicit Agent primary model precedence for LLM routing', () => {
@@ -1367,40 +1224,3 @@ describe('useChatActions', () => {
     );
   });
 });
-
-function createGenerationParams(): GenerationParams {
-  return {
-    ratio: '16:9',
-    resolution: '1080p',
-    videoDuration: 'auto',
-    videoFps: 24,
-    audioDuration: 'auto',
-    audioType: 'sfx',
-  };
-}
-
-function createSucceededDirectGeneration(
-  mediaKind: DirectGenerationMediaKind,
-): DirectGenerationOperationProjection {
-  const purpose = {
-    image: 'image.generate',
-    video: 'video.generate',
-    audio: 'audio.generate',
-  } as const;
-  return {
-    jobId: `job-${mediaKind}`,
-    mediaKind,
-    purpose: purpose[mediaKind],
-    providerId: mediaKind === 'video' ? 'runway' : 'flux',
-    modelId: mediaKind === 'video' ? 'gen-4' : 'flux-pro',
-    phase: 'succeeded',
-    resultLocators: [
-      {
-        kind: 'generated-output',
-        outputId: `output-${mediaKind}`,
-        digest: `sha256:${mediaKind}`,
-        path: `generated/${mediaKind}/output.bin`,
-      },
-    ],
-  };
-}

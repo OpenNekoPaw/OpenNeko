@@ -6,7 +6,11 @@ import type {
   MediaGenerationType,
   VideoGenerationRequest,
 } from '../contracts';
-import type { GenerationProviderTaskRef, MediaGenerationResult } from '../execution';
+import type {
+  GenerationExecutionResult,
+  GenerationProviderTaskRef,
+  PromptGenerationRequest,
+} from '../execution';
 
 export const GENERATION_JOB_KIND = 'generation' as const;
 
@@ -24,6 +28,10 @@ interface GenerationJobRequestBase {
 }
 
 export type GenerationJobRequest =
+  | (GenerationJobRequestBase & {
+      readonly generationType: 'prompt';
+      readonly request: PromptGenerationRequest;
+    })
   | (GenerationJobRequestBase & {
       readonly generationType: Extract<
         MediaGenerationType,
@@ -49,6 +57,7 @@ export interface GenerationJobProgress {
 }
 
 export interface GenerationJobSnapshot extends JobSnapshotBase<typeof GENERATION_JOB_KIND> {
+  readonly submissionId?: string;
   readonly regenerateOf?: GenerationJobRef;
   readonly lifecycleMode: GenerationJobLifecycleMode;
   readonly request: GenerationJobRequest;
@@ -70,10 +79,12 @@ export interface GenerationJobRecoveryRecords {
 
 export interface GenerationJobStore extends JobStore<GenerationJobSnapshot> {
   listRecoverable(): Promise<GenerationJobRecoveryRecords>;
+  findBySubmissionId(submissionId: string): Promise<GenerationJobSnapshot | undefined>;
 }
 
 export type SubmitGenerationJobInput = GenerationJobRequest & {
   readonly lifecycleMode: GenerationJobLifecycleMode;
+  readonly submissionId?: string;
   readonly retryOf?: GenerationJobRef;
   readonly regenerateOf?: GenerationJobRef;
 };
@@ -95,7 +106,7 @@ export interface GenerationJobCommandInput {
 export interface GenerationJobResultCommitter {
   commit(input: {
     readonly ref: GenerationJobRef;
-    readonly generation: MediaGenerationResult;
+    readonly generation: GenerationExecutionResult;
   }): Promise<readonly GeneratedOutputContentLocator[]>;
 }
 
@@ -130,6 +141,7 @@ export type GenerationJobErrorCode =
   | 'generation-job-reconcile-unavailable'
   | 'generation-job-retry-unavailable'
   | 'generation-job-regenerate-unavailable'
+  | 'generation-job-submission-conflict'
   | 'generation-job-persistence-invalid';
 
 export class GenerationJobError extends Error {

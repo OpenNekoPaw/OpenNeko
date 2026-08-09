@@ -25,7 +25,6 @@ import {
 } from '@neko/agent-contracts';
 import { useAgentHostMessages } from '../host-runtime-context';
 import type {
-  GenerationParams,
   MessageAttachment,
   SelectedFileReference,
 } from '../components/ChatView/InputArea/types';
@@ -40,9 +39,6 @@ import { projectMessageModelSelection } from '../presenters/config-message-prese
 import { projectContextReferencesFromPayloads } from '../presenters/context-reference-presenter';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
-import type { DirectGenerationOperationPort } from '@neko/generation';
-import { projectDirectGenerationOperationInput } from '../direct-generation-input';
-import type { DirectGenerationUiState } from '../components/DirectGenerationStatus';
 
 /** Per-category resolved media model for agent mode */
 export type AgentMediaModels = AgentMediaModelSelections;
@@ -71,9 +67,7 @@ export interface UseChatActionsProps {
   selectedModel: string;
   availableModels?: readonly ChatModelOption[];
   sessionMode?: SessionMode;
-  mediaProviderId?: string;
-  mediaModelId?: string;
-  /** Per-category media models for agent mode (overrides mediaModelId when set) */
+  /** Per-category generation models exposed to approved Agent Tools. */
   agentMediaModels?: AgentMediaModels;
   /** Per-category media understanding models for the current webview session. */
   understandingModels?: MediaUnderstandingModelSelections;
@@ -92,9 +86,6 @@ export interface UseChatActionsProps {
   setSelectedFileReferences?: (references: SelectedFileReference[]) => void;
   ensureConversationForSend?: (input: PendingSendInput) => void;
   onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
-  directGeneration?: DirectGenerationOperationPort;
-  generationParams?: GenerationParams;
-  onDirectGenerationState?: (state: DirectGenerationUiState) => void;
 }
 
 export interface UseChatActionsReturn {
@@ -112,8 +103,6 @@ export function useChatActions({
   selectedModel,
   availableModels,
   sessionMode,
-  mediaProviderId,
-  mediaModelId,
   agentMediaModels,
   understandingModels,
   activeConversationId,
@@ -130,9 +119,6 @@ export function useChatActions({
   setSelectedFileReferences,
   ensureConversationForSend,
   onUserMessageSent,
-  directGeneration,
-  generationParams,
-  onDirectGenerationState,
 }: UseChatActionsProps): UseChatActionsReturn {
   const agentHostMessages = useAgentHostMessages();
   // Lightweight dedup guard: prevent double-click within 1s
@@ -169,46 +155,7 @@ export function useChatActions({
       const selectedFileReferenceCount = input?.fileReferences?.length ?? 0;
       const hasFileReferences = selectedFileReferenceCount > 0;
       if (!trimmed && !hasAttachments && !hasContextPayloads && !hasFileReferences) return;
-      const effectiveSessionMode = inputSessionMode ?? sessionMode ?? 'agent';
-      if (effectiveSessionMode !== 'agent') {
-        if (hasAttachments || hasContextPayloads || hasFileReferences) {
-          reportInputDiagnostic?.(
-            'Direct media generation does not accept attachments or context references.',
-          );
-          return;
-        }
-        if (!directGeneration || !mediaProviderId || !mediaModelId || !generationParams) {
-          reportInputDiagnostic?.(
-            'Direct media generation requires an exact Workspace, provider, model, and parameter binding.',
-          );
-          return;
-        }
-        if (isDuplicate(`${effectiveSessionMode}:${mediaProviderId}:${mediaModelId}:${trimmed}`)) {
-          return;
-        }
-        clearInput();
-        setAttachedFiles([]);
-        setSelectedFileReferences?.([]);
-        onDirectGenerationState?.({ phase: 'running', mediaKind: effectiveSessionMode });
-        void directGeneration
-          .submit(
-            projectDirectGenerationOperationInput({
-              sessionMode: effectiveSessionMode,
-              prompt: trimmed,
-              providerId: mediaProviderId,
-              modelId: mediaModelId,
-              params: generationParams,
-            }),
-          )
-          .then((projection) => onDirectGenerationState?.({ phase: 'completed', projection }))
-          .catch((error: unknown) =>
-            onDirectGenerationState?.({
-              phase: 'failed',
-              message: error instanceof Error ? error.message : String(error),
-            }),
-          );
-        return;
-      }
+      const effectiveSessionMode: SessionMode = inputSessionMode ?? sessionMode ?? 'agent';
       if (
         isQueueingSend &&
         !isQueueableRunningTextSend({
@@ -308,8 +255,6 @@ export function useChatActions({
         selectedModel,
         chatModelOptions: availableModels,
         sessionMode: effectiveSessionMode,
-        mediaProviderId,
-        mediaModelId,
         agentMediaModels,
       });
       const purposeModels = projectAgentPurposeModels(
@@ -325,10 +270,8 @@ export function useChatActions({
           modelProjection,
           agentModels: input?.agentModels,
         }),
-        ...(effectiveSessionMode === 'agent' && input?.agentModels
-          ? { agentModels: input.agentModels }
-          : {}),
-        ...(effectiveSessionMode === 'agent' && purposeModels ? { purposeModels } : {}),
+        ...(input?.agentModels ? { agentModels: input.agentModels } : {}),
+        ...(purposeModels ? { purposeModels } : {}),
         ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
         ...(outboundContextPayloads.length > 0 ? { contextPayloads: outboundContextPayloads } : {}),
         ...(input?.fileReferences && input.fileReferences.length > 0
@@ -343,8 +286,6 @@ export function useChatActions({
       reportInputDiagnostic,
       selectedModel,
       sessionMode,
-      mediaProviderId,
-      mediaModelId,
       agentMediaModels,
       understandingModels,
       activeConversationId,
@@ -360,9 +301,6 @@ export function useChatActions({
       setSelectedFileReferences,
       ensureConversationForSend,
       onUserMessageSent,
-      directGeneration,
-      generationParams,
-      onDirectGenerationState,
     ],
   );
 
@@ -488,9 +426,6 @@ interface AgentModelSendProjectionInput {
 function projectAgentModelSendProjection(
   input: AgentModelSendProjectionInput,
 ): MessageModelProjection {
-  if (input.sessionMode !== 'agent') {
-    return input.modelProjection.mediaModel ? { mediaModel: input.modelProjection.mediaModel } : {};
-  }
   if (!input.agentModels?.primary) {
     return input.modelProjection;
   }

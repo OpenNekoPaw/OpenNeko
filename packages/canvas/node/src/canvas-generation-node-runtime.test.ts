@@ -1,7 +1,17 @@
-import type { GenerationJobPort, GenerationJobRef, GenerationJobSnapshot } from '@neko/generation';
-import type { CanvasGenerationWorkspace, CanvasMaterialActionTarget } from '@neko/canvas-domain';
-import { JobLifecycleError } from '@neko/shared/job-lifecycle';
-import { WorkspaceGenerationApplicationRuntime } from '@neko/generation/job';
+import {
+  createCanvasGenerationNode,
+  requireCanvasGenerationNode,
+  updateCanvasGenerationNodeRecipe,
+  type CanvasData,
+  type CanvasGenerationRunBinding,
+  type CanvasGenerationWorkspace,
+  type CanvasHostRuntimeIdentity,
+} from '@neko/canvas-domain';
+import type {
+  GenerationJobPort,
+  GenerationJobSnapshot,
+  SubmitGenerationJobInput,
+} from '@neko/generation';
 import { describe, expect, it, vi } from 'vitest';
 import { CanvasGenerationNodeRuntime } from './canvas-generation-node-runtime';
 
@@ -10,274 +20,388 @@ const workspace: CanvasGenerationWorkspace = {
   workspacePath: '/fixture/workspace',
 };
 
-const resultLocator = {
-  kind: 'generated-output' as const,
-  outputId: 'generated-output-1',
-  digest: 'sha256:generated-output-1',
-  path: 'neko/generated/image/generated-output-1.png',
-};
-
-const target: CanvasMaterialActionTarget = {
-  nodeId: 'generated-media-1',
-  mediaKind: 'image',
-  origin: 'generated',
-  locator: resultLocator,
-  generation: {
-    jobRef: { kind: 'generation', jobId: 'generation-job-1' },
-    summary: {
-      prompt: 'Historical Canvas summary',
-      model: 'historical-model',
-    },
-  },
+const identity: CanvasHostRuntimeIdentity = {
+  projectId: 'project-1',
+  workspaceId: 'workspace-1',
+  windowId: 'window-1',
+  viewId: 'canvas:board-1',
+  viewInstanceId: 'view-instance-1',
+  documentId: 'boards/board-1.nkc',
+  sessionId: 'canvas-session-1',
+  rendererSessionId: 'renderer-session-1',
 };
 
 describe('CanvasGenerationNodeRuntime', () => {
-  it('exposes regeneration only for an authoritative succeeded Job that owns the exact output', async () => {
-    const { owner, describeGeneration } = createOwner({
-      current: generationSnapshot({
-        phase: 'succeeded',
-        resultLocators: [resultLocator],
-      }),
+  it('persists run intent before exact Workspace submission and persists the Job binding afterward', async () => {
+    const persisted: CanvasData[] = [];
+    const submitGeneration = vi.fn(async (input: SubmitGenerationJobInput) => {
+      expect(persisted).toHaveLength(1);
+      expect(requireCanvasGenerationNode(persisted[0]!, 'generation-1').data.latestRun).toEqual({
+        submissionId: 'submission-1',
+        recipeInputFingerprint: expect.stringMatching(/^sha256:/),
+      });
+      return snapshot({ submissionId: input.submissionId, phase: 'running' });
     });
-    const runtime = createRuntime(owner);
-
-    await expect(runtime.resolveResultActions({ workspace, target })).resolves.toEqual({
-      regenerate: true,
-      editAndGenerate: false,
-    });
-    expect(describeGeneration).toHaveBeenCalledWith(target.generation?.jobRef);
-
-    await runtime.dispose();
-  });
-
-  it('does not expose generated actions for missing Jobs, referenced nodes, or locator mismatches', async () => {
-    const missingOwner = createOwner({
-      describeError: new JobLifecycleError('job-not-found', 'missing fixture Job'),
-    });
-    const missingRuntime = createRuntime(missingOwner.owner);
-    await expect(missingRuntime.resolveResultActions({ workspace, target })).resolves.toEqual({
-      regenerate: false,
-      editAndGenerate: false,
-    });
-    await missingRuntime.dispose();
-
-    const mismatchedOwner = createOwner({
-      current: generationSnapshot({
-        phase: 'succeeded',
-        resultLocators: [{ ...resultLocator, outputId: 'another-output' }],
-      }),
-    });
-    const mismatchedRuntime = createRuntime(mismatchedOwner.owner);
-    await expect(mismatchedRuntime.resolveResultActions({ workspace, target })).resolves.toEqual({
-      regenerate: false,
-      editAndGenerate: false,
-    });
-    await expect(
-      mismatchedRuntime.resolveResultActions({
-        workspace,
-        target: {
-          nodeId: 'referenced-media-1',
-          mediaKind: 'image',
-          origin: 'referenced',
-          locator: { kind: 'workspace-file', path: 'media/reference.png' },
-        },
-      }),
-    ).resolves.toEqual({
-      regenerate: false,
-      editAndGenerate: false,
-    });
-    await mismatchedRuntime.dispose();
-  });
-
-  it('regenerates from the authoritative Job and projects new immutable Job lineage', async () => {
-    const current = generationSnapshot({
-      phase: 'succeeded',
-      resultLocators: [resultLocator],
-    });
-    const started = generationSnapshot({
-      jobId: 'generation-job-2',
-      phase: 'running',
-      regenerateOf: current.ref,
-      prompt: 'Authoritative regenerated prompt',
-      modelId: 'image-model-regenerated',
-      width: 1536,
-      height: 1024,
-    });
-    const completed = generationSnapshot({
-      jobId: 'generation-job-2',
-      phase: 'succeeded',
-      regenerateOf: current.ref,
-      prompt: 'Authoritative regenerated prompt',
-      modelId: 'image-model-regenerated',
-      width: 1536,
-      height: 1024,
-      resultLocators: [
-        {
-          ...resultLocator,
-          outputId: 'generated-output-2',
-          digest: 'sha256:generated-output-2',
-          path: 'neko/generated/image/generated-output-2.png',
-        },
-      ],
-    });
-    const { owner, regenerateGeneration, observeGeneration } = createOwner({
-      current,
-      regenerated: started,
-      observed: [completed],
-    });
-    const runtime = createRuntime(owner);
-
-    await expect(runtime.regenerateResult({ workspace, target })).resolves.toEqual({
-      ref: completed.ref,
-      regenerateOf: current.ref,
-      phase: 'succeeded',
-      title: 'Regenerate image',
-      inputNodeIds: [],
-      mediaKind: 'image',
-      summary: {
-        prompt: 'Authoritative regenerated prompt',
-        model: 'image-model-regenerated',
-        width: 1536,
-        height: 1024,
-      },
-      resultLocators: completed.resultLocators,
-    });
-    expect(regenerateGeneration).toHaveBeenCalledWith({ ref: current.ref });
-    expect(observeGeneration).toHaveBeenCalledWith(started.ref);
-
-    await runtime.dispose();
-  });
-
-  it('delegates exact Workspace ownership without disposing the shared Generation runtime', async () => {
-    const fixture = createOwner({
-      current: generationSnapshot({
-        phase: 'succeeded',
-        resultLocators: [resultLocator],
-      }),
-    });
-    const createWorkspaceOwner = vi.fn(async () => ({
-      jobs: fixture.owner.jobs as GenerationJobPort,
-      dispose: fixture.owner.dispose,
-    }));
-    const generation = new WorkspaceGenerationApplicationRuntime({
-      createOwner: createWorkspaceOwner,
-    });
+    const jobs = createJobs({ submitGeneration });
+    const getWorkspaceJobs = vi.fn(async () => jobs);
+    const validateBinding = vi.fn();
     const runtime = new CanvasGenerationNodeRuntime({
-      generation,
+      generation: { getWorkspaceJobs, validateBinding },
+      createSubmissionId: () => 'submission-1',
     });
 
-    await runtime.resolveResultActions({ workspace, target });
-    await runtime.resolveResultActions({ workspace, target });
-    expect(createWorkspaceOwner).toHaveBeenCalledTimes(1);
+    const result = await runtime.startNode({
+      identity,
+      workspace,
+      canvas: configuredCanvas(),
+      nodeId: 'generation-1',
+      persistCanvas: async (canvas) => {
+        persisted.push(canvas);
+      },
+    });
+
+    expect(getWorkspaceJobs).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      workspaceRoot: '/fixture/workspace',
+    });
+    expect(validateBinding).toHaveBeenCalledWith({
+      workspace,
+      kind: 'image',
+      binding: {
+        purpose: 'image.generate',
+        providerId: 'provider-1',
+        modelId: 'image-model-1',
+      },
+    });
+    expect(submitGeneration).toHaveBeenCalledWith({
+      generationType: 'text-to-image',
+      providerId: 'provider-1',
+      modelId: 'image-model-1',
+      lifecycleMode: 'detached',
+      submissionId: 'submission-1',
+      request: {
+        prompt: 'Create a quiet concept frame',
+        providerId: 'provider-1',
+        modelId: 'image-model-1',
+        width: 1024,
+        height: 768,
+      },
+    });
+    expect(persisted).toHaveLength(2);
+    expect(requireCanvasGenerationNode(persisted[1]!, 'generation-1').data.latestRun).toEqual({
+      submissionId: 'submission-1',
+      recipeInputFingerprint: result.projection.recipeInputFingerprint,
+      jobRef: { kind: 'generation', jobId: 'job-1' },
+    });
+    expect(result.canvas.nodes).toHaveLength(1);
+    expect(result.canvas.nodes[0]?.type).toBe('generation');
+  });
+
+  it('resumes an uncertain unbound submission with the same idempotency identity', async () => {
+    const submitGeneration = vi
+      .fn<(input: SubmitGenerationJobInput) => Promise<GenerationJobSnapshot>>()
+      .mockRejectedValueOnce(new Error('connection lost after submit'))
+      .mockImplementationOnce(async (input) =>
+        snapshot({ submissionId: input.submissionId, phase: 'pending' }),
+      );
+    const runtime = createRuntime(createJobs({ submitGeneration }));
+    const first = await runtime.startNode({
+      identity,
+      workspace,
+      canvas: configuredCanvas(),
+      nodeId: 'generation-1',
+      persistCanvas: async () => undefined,
+    });
+    const run = requireRun(first.canvas);
+
+    expect(first.projection).toMatchObject({ phase: 'outcome-unknown' });
+    const resumed = await runtime.resumeNode({
+      identity,
+      workspace,
+      canvas: first.canvas,
+      nodeId: 'generation-1',
+      run,
+      persistCanvas: async () => undefined,
+    });
+
+    expect(submitGeneration).toHaveBeenCalledTimes(2);
+    expect(submitGeneration.mock.calls[0]?.[0].submissionId).toBe('submission-1');
+    expect(submitGeneration.mock.calls[1]?.[0].submissionId).toBe('submission-1');
+    expect(resumed.projection).toMatchObject({
+      phase: 'pending',
+      jobRef: { kind: 'generation', jobId: 'job-1' },
+    });
+  });
+
+  it('does not submit an unbound run when its Recipe or input fingerprint changed', async () => {
+    const submitGeneration = vi.fn();
+    const runtime = createRuntime(createJobs({ submitGeneration }));
+    const canvas = withRun(configuredCanvas(), {
+      submissionId: 'submission-1',
+      recipeInputFingerprint: 'sha256:stale',
+    });
+
     await expect(
-      runtime.resolveResultActions({
-        workspace: { ...workspace, workspacePath: '/fixture/rebound-workspace' },
-        target,
+      runtime.resumeNode({
+        identity,
+        workspace,
+        canvas,
+        nodeId: 'generation-1',
+        run: requireRun(canvas),
+        persistCanvas: async () => undefined,
       }),
-    ).rejects.toThrow('already bound to another authorized root');
+    ).resolves.toMatchObject({
+      canvas,
+      projection: {
+        phase: 'outcome-unknown',
+        diagnostic: { code: 'canvas-generation-resume-input-changed' },
+      },
+    });
+    expect(submitGeneration).not.toHaveBeenCalled();
+  });
+
+  it('reattaches the exact bound Job and marks a changed Recipe/input fingerprint stale', async () => {
+    const run = boundRun();
+    const submitGeneration = vi.fn();
+    const describeGeneration = vi.fn(async () =>
+      snapshot({ submissionId: run.submissionId, phase: 'running' }),
+    );
+    const runtime = createRuntime(createJobs({ submitGeneration, describeGeneration }));
+    const canvas = withRun(configuredCanvas(), run);
+
+    await expect(
+      runtime.resumeNode({
+        identity,
+        workspace,
+        canvas,
+        nodeId: 'generation-1',
+        run,
+        persistCanvas: async () => undefined,
+      }),
+    ).resolves.toMatchObject({
+      canvas,
+      projection: {
+        jobRef: run.jobRef,
+        phase: 'running',
+        recipeStale: true,
+      },
+    });
+    expect(describeGeneration).toHaveBeenCalledWith(run.jobRef);
+    expect(submitGeneration).not.toHaveBeenCalled();
+  });
+
+  it('observes the authoritative snapshot first and drops older updates', async () => {
+    const run = boundRun();
+    const describeGeneration = vi.fn(async () =>
+      snapshot({ submissionId: run.submissionId, phase: 'running', updatedAt: 10 }),
+    );
+    const observeGeneration = vi.fn(() =>
+      observe([
+        snapshot({ submissionId: run.submissionId, phase: 'running', updatedAt: 9 }),
+        snapshot({
+          submissionId: run.submissionId,
+          phase: 'succeeded',
+          updatedAt: 11,
+          resultLocators: [resultLocator()],
+        }),
+      ]),
+    );
+    const runtime = createRuntime(createJobs({ describeGeneration, observeGeneration }));
+
+    const projections = await collect(
+      runtime.observeNode({ identity, workspace, nodeId: 'generation-1', run }),
+    );
+
+    expect(projections.map((projection) => projection.phase)).toEqual(['running', 'succeeded']);
+    expect(projections[1]?.resultLocators).toEqual([resultLocator()]);
+    expect(describeGeneration).toHaveBeenCalledWith(run.jobRef);
+    expect(observeGeneration).toHaveBeenCalledWith(run.jobRef);
+  });
+
+  it('cancels only the exact persisted Job binding', async () => {
+    const run = boundRun();
+    const cancelGeneration = vi.fn(async () =>
+      snapshot({ submissionId: run.submissionId, phase: 'cancelled', updatedAt: 12 }),
+    );
+    const runtime = createRuntime(createJobs({ cancelGeneration }));
+
+    await expect(
+      runtime.cancelNode({ identity, workspace, nodeId: 'generation-1', run }),
+    ).resolves.toMatchObject({
+      phase: 'cancelled',
+      jobRef: run.jobRef,
+    });
+    expect(cancelGeneration).toHaveBeenCalledWith({ ref: run.jobRef });
+  });
+
+  it('rejects active reruns, mismatched snapshots and use after disposal without fallback', async () => {
+    const run = boundRun();
+    const describeGeneration = vi.fn(async () =>
+      snapshot({ submissionId: run.submissionId, phase: 'running' }),
+    );
+    const jobs = createJobs({ describeGeneration });
+    const runtime = createRuntime(jobs);
+    const canvas = withRun(configuredCanvas(), run);
+
+    await expect(
+      runtime.startNode({
+        identity,
+        workspace,
+        canvas,
+        nodeId: 'generation-1',
+        persistCanvas: async () => undefined,
+      }),
+    ).rejects.toThrow('already has an active Job');
+
+    describeGeneration.mockResolvedValueOnce(
+      snapshot({ submissionId: 'another-submission', phase: 'running' }),
+    );
+    await expect(
+      collect(runtime.observeNode({ identity, workspace, nodeId: 'generation-1', run })),
+    ).rejects.toMatchObject({ code: 'generation-job-binding-mismatch' });
 
     await runtime.dispose();
-    await runtime.dispose();
-    expect(fixture.dispose).not.toHaveBeenCalled();
-    await expect(runtime.resolveResultActions({ workspace, target })).rejects.toThrow(
-      'runtime is disposed',
-    );
-    await generation.dispose();
-    expect(fixture.dispose).toHaveBeenCalledTimes(1);
+    await expect(
+      runtime.startNode({
+        identity,
+        workspace,
+        canvas: configuredCanvas(),
+        nodeId: 'generation-1',
+        persistCanvas: async () => undefined,
+      }),
+    ).rejects.toThrow('runtime is disposed');
   });
 });
 
-function createRuntime(
-  owner: ReturnType<typeof createOwner>['owner'],
-): CanvasGenerationNodeRuntime {
-  return new CanvasGenerationNodeRuntime({
-    generation: {
-      getWorkspaceJobs: vi.fn(async () => owner.jobs as GenerationJobPort),
+function configuredCanvas(): CanvasData {
+  const empty: CanvasData = {
+    name: 'Fixture',
+    viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+    nodes: [],
+    connections: [],
+  };
+  return updateCanvasGenerationNodeRecipe({
+    canvas: createCanvasGenerationNode({
+      canvas: empty,
+      nodeId: 'generation-1',
+      kind: 'image',
+      position: { x: 32, y: 48 },
+    }),
+    nodeId: 'generation-1',
+    recipe: {
+      kind: 'image',
+      prompt: 'Create a quiet concept frame',
+      model: {
+        purpose: 'image.generate',
+        providerId: 'provider-1',
+        modelId: 'image-model-1',
+      },
+      width: 1024,
+      height: 768,
     },
   });
 }
 
-function createOwner(options: {
-  readonly current?: GenerationJobSnapshot;
-  readonly describeError?: Error;
-  readonly regenerated?: GenerationJobSnapshot;
-  readonly observed?: readonly GenerationJobSnapshot[];
-}) {
-  const describeGeneration = vi.fn(
-    async (_ref: GenerationJobRef): Promise<GenerationJobSnapshot> => {
-      if (options.describeError) throw options.describeError;
-      if (!options.current) throw new Error('Fixture current Job is missing.');
-      return options.current;
-    },
-  );
-  const regenerateGeneration = vi.fn(async (): Promise<GenerationJobSnapshot> => {
-    if (!options.regenerated) throw new Error('Fixture regenerated Job is missing.');
-    return options.regenerated;
-  });
-  const observeGeneration = vi.fn((_ref: GenerationJobRef): AsyncIterable<GenerationJobSnapshot> =>
-    observe(options.observed ?? []),
-  );
-  const jobs: Pick<
-    GenerationJobPort,
-    'describeGeneration' | 'observeGeneration' | 'regenerateGeneration'
-  > = {
-    describeGeneration,
-    regenerateGeneration,
-    observeGeneration,
-  };
-  const dispose = vi.fn(async () => undefined);
+function withRun(canvas: CanvasData, run: CanvasGenerationRunBinding): CanvasData {
+  const node = requireCanvasGenerationNode(canvas, 'generation-1');
   return {
-    owner: { jobs, dispose },
-    describeGeneration,
-    regenerateGeneration,
-    observeGeneration,
-    dispose,
+    ...canvas,
+    nodes: canvas.nodes.map((candidate) =>
+      candidate.id === node.id ? { ...node, data: { ...node.data, latestRun: run } } : candidate,
+    ),
+  };
+}
+
+function requireRun(canvas: CanvasData): CanvasGenerationRunBinding {
+  const run = requireCanvasGenerationNode(canvas, 'generation-1').data.latestRun;
+  if (!run) throw new Error('Fixture run is missing.');
+  return run;
+}
+
+function boundRun(): CanvasGenerationRunBinding & {
+  readonly jobRef: { readonly kind: 'generation'; readonly jobId: string };
+} {
+  return {
+    submissionId: 'submission-1',
+    recipeInputFingerprint: 'sha256:recipe-input',
+    jobRef: { kind: 'generation', jobId: 'job-1' },
+  };
+}
+
+function createRuntime(jobs: GenerationJobPort): CanvasGenerationNodeRuntime {
+  return new CanvasGenerationNodeRuntime({
+    generation: {
+      getWorkspaceJobs: vi.fn(async () => jobs),
+      validateBinding: vi.fn(),
+    },
+    createSubmissionId: () => 'submission-1',
+  });
+}
+
+function createJobs(overrides: Partial<GenerationJobPort> = {}): GenerationJobPort {
+  const unavailable = async (): Promise<GenerationJobSnapshot> => {
+    throw new Error('Unexpected Generation Job operation.');
+  };
+  return {
+    submitGeneration: unavailable,
+    describeGeneration: unavailable,
+    observeGeneration: () => observe([]),
+    cancelGeneration: unavailable,
+    retryGeneration: unavailable,
+    regenerateGeneration: unavailable,
+    reconcileGeneration: unavailable,
+    ...overrides,
+  };
+}
+
+function snapshot(input: {
+  readonly submissionId?: string;
+  readonly phase: GenerationJobSnapshot['phase'];
+  readonly updatedAt?: number;
+  readonly resultLocators?: GenerationJobSnapshot['resultLocators'];
+}): GenerationJobSnapshot {
+  return {
+    ref: { kind: 'generation', jobId: 'job-1' },
+    ...(input.submissionId === undefined ? {} : { submissionId: input.submissionId }),
+    lifecycleMode: 'detached',
+    phase: input.phase,
+    createdAt: 1,
+    updatedAt: input.updatedAt ?? 2,
+    request: {
+      generationType: 'text-to-image',
+      providerId: 'provider-1',
+      modelId: 'image-model-1',
+      request: {
+        prompt: 'Create a quiet concept frame',
+        providerId: 'provider-1',
+        modelId: 'image-model-1',
+      },
+    },
+    progress: {
+      stage: input.phase === 'succeeded' ? 'completed' : 'waiting-provider',
+      percent: input.phase === 'succeeded' ? 100 : 50,
+    },
+    ...(input.resultLocators === undefined ? {} : { resultLocators: input.resultLocators }),
+  };
+}
+
+function resultLocator() {
+  return {
+    kind: 'generated-output' as const,
+    outputId: 'output-1',
+    digest: 'sha256:output-1',
+    path: 'neko/generated/image/output-1.png',
   };
 }
 
 async function* observe(
   snapshots: readonly GenerationJobSnapshot[],
 ): AsyncIterable<GenerationJobSnapshot> {
-  for (const snapshot of snapshots) yield snapshot;
+  for (const current of snapshots) yield current;
 }
 
-function generationSnapshot(options: {
-  readonly jobId?: string;
-  readonly phase: GenerationJobSnapshot['phase'];
-  readonly regenerateOf?: GenerationJobRef;
-  readonly prompt?: string;
-  readonly modelId?: string;
-  readonly width?: number;
-  readonly height?: number;
-  readonly resultLocators?: GenerationJobSnapshot['resultLocators'];
-}): GenerationJobSnapshot {
-  const ref = {
-    kind: 'generation' as const,
-    jobId: options.jobId ?? 'generation-job-1',
-  };
-  return {
-    ref,
-    ...(options.regenerateOf ? { regenerateOf: options.regenerateOf } : {}),
-    lifecycleMode: 'linked',
-    phase: options.phase,
-    createdAt: 100,
-    updatedAt: options.phase === 'succeeded' ? 102 : 101,
-    request: {
-      generationType: 'text-to-image',
-      providerId: 'provider-1',
-      modelId: options.modelId ?? 'image-model-default',
-      request: {
-        prompt: options.prompt ?? 'Authoritative original prompt',
-        providerId: 'provider-1',
-        modelId: options.modelId ?? 'image-model-default',
-        ...(options.width !== undefined ? { width: options.width } : {}),
-        ...(options.height !== undefined ? { height: options.height } : {}),
-      },
-    },
-    progress: {
-      stage: options.phase === 'succeeded' ? 'completed' : 'waiting-provider',
-      percent: options.phase === 'succeeded' ? 100 : 50,
-    },
-    ...(options.resultLocators ? { resultLocators: options.resultLocators } : {}),
-  };
+async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
+  const collected: T[] = [];
+  for await (const value of values) collected.push(value);
+  return collected;
 }

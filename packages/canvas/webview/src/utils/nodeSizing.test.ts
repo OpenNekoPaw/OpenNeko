@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  centerNodeAt,
   clampNodeRenderSize,
   clampNodeSize,
   clampNodeStoredSize,
@@ -8,6 +9,13 @@ import {
 } from './nodeSizing';
 
 describe('nodeSizing', () => {
+  it('converts a viewport target into a centered node position', () => {
+    expect(centerNodeAt({ x: 400, y: 300 }, { width: 320, height: 240 })).toEqual({
+      x: 240,
+      y: 180,
+    });
+  });
+
   it('resolves minimum sizes for known container and leaf nodes', () => {
     expect(resolveNodeMinSize({ type: 'group' })).toEqual({ width: 260, height: 180 });
     expect(resolveNodeMinSize({ type: 'media' })).toEqual({ width: 200, height: 120 });

@@ -34,6 +34,7 @@ import {
   isCanvasGenerationEvidence,
   isCanvasMaterialMediaKind,
 } from '../types/canvas-material-contracts';
+import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
 import { isJobRef } from '@neko/shared/job-lifecycle';
 import { validateContentLocator } from '@neko/content';
 import { isJsonPointerPath, writeJsonPointer } from './fieldBinding';
@@ -64,6 +65,7 @@ const DEFAULT_NODE_SIZES = {
   job: { width: 300, height: 180 },
   file: { width: 260, height: 180 },
   'canvas-embed': { width: 260, height: 180 },
+  generation: { width: 320, height: 240 },
 } satisfies Readonly<Record<CanonicalCanvasNodeType, { width: number; height: number }>>;
 
 const TARGETABLE_FIELD_PATHS = {
@@ -73,6 +75,7 @@ const TARGETABLE_FIELD_PATHS = {
   job: ['/title', '/objective'],
   file: ['/title', '/path'],
   'canvas-embed': ['/canvasTitle', '/canvasPath'],
+  generation: ['/recipe/prompt'],
 } as const satisfies Readonly<Record<CanonicalCanvasNodeType, readonly JsonPointerPath[]>>;
 
 export function createCanvasHeadlessAuthoringIdFactory(
@@ -620,6 +623,15 @@ function createNodeFromSpec(
         },
       };
     }
+    case 'generation':
+      if (!isCanvasGenerationNodeData(input)) {
+        throw new Error('Canvas Generation creation requires canonical node data');
+      }
+      return {
+        ...base,
+        type,
+        data: input,
+      };
   }
 }
 
@@ -661,6 +673,11 @@ function replaceNodeData(node: CanvasNode, value: unknown): CanvasNode {
     case 'canvas-embed': {
       const rebuilt = createNodeFromSpec('canvas-embed', { data }, node.id, node.zIndex);
       if (rebuilt.type !== 'canvas-embed') throw new Error('CanvasEmbed node rebuild failed');
+      return { ...node, data: rebuilt.data };
+    }
+    case 'generation': {
+      const rebuilt = createNodeFromSpec('generation', { data }, node.id, node.zIndex);
+      if (rebuilt.type !== 'generation') throw new Error('Generation node rebuild failed');
       return { ...node, data: rebuilt.data };
     }
   }

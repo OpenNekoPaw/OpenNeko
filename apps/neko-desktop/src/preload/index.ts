@@ -17,12 +17,6 @@ import {
   type OpenNekoDesktopAgentBridge,
 } from '../shared/agent-contract';
 import {
-  createDesktopDirectGenerationRequest,
-  DESKTOP_DIRECT_GENERATION_CHANNEL,
-  parseDesktopDirectGenerationResult,
-  type OpenNekoDesktopDirectGenerationBridge,
-} from '../shared/generation-contract';
-import {
   createDesktopAgentAutomationRequest,
   DESKTOP_AGENT_AUTOMATION_CHANNEL,
   DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT,
@@ -253,7 +247,6 @@ const settingsListeners = new Set<
 const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopShellBridge &
   OpenNekoDesktopAgentBridge &
-  OpenNekoDesktopDirectGenerationBridge &
   OpenNekoDesktopAgentAutomationBridge &
   OpenNekoDesktopResourceBrowserBridge &
   OpenNekoDesktopPreviewBridge &
@@ -272,20 +265,6 @@ const bridge: OpenNekoDesktopBridge &
       const request = parseAssistantResourceHostRequest(value);
       const response: unknown = await ipcRenderer.invoke(ASSISTANT_RESOURCE_HOST_CHANNEL, request);
       return parseAssistantResourceHostResult(response, request.requestId);
-    },
-  },
-  directGeneration: {
-    async submit(scope, operation) {
-      const request = createDesktopDirectGenerationRequest(
-        nextRequestId('desktop-direct-generation'),
-        scope,
-        operation,
-      );
-      const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_DIRECT_GENERATION_CHANNEL,
-        request,
-      );
-      return parseDesktopDirectGenerationResult(response, request.requestId).projection;
     },
   },
   agentLaunch: {

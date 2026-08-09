@@ -14,7 +14,6 @@ import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contrac
 import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
 import type { OpenNekoAssistantResourceBridge } from '@neko/agent-contracts/assistant-resource-host';
 import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-workspace-grant-contract';
-import type { OpenNekoDesktopDirectGenerationBridge } from './generation-contract';
 
 declare global {
   interface Window {
@@ -31,7 +30,6 @@ declare global {
       OpenNekoAgentLaunchBridge &
       OpenNekoAssistantResourceBridge &
       OpenNekoDesktopWorkspaceGrantBridge &
-      OpenNekoDesktopDirectGenerationBridge &
       OpenNekoAgentExtensionManagementBridge &
       OpenNekoDesktopApplicationSettingsBridge &
       OpenNekoDesktopProjectPortabilityBridge;

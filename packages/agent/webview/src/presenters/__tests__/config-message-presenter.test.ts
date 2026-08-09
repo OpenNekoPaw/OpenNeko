@@ -448,7 +448,7 @@ describe('config message presenter', () => {
     });
   });
 
-  it('projects selected chat and media models for sendMessage payloads', () => {
+  it('projects selected chat and Agent Tool purpose models for sendMessage payloads', () => {
     expect(
       projectMessageModelSelection({
         selectedModel: 'openai:gpt-4.1',
@@ -463,26 +463,6 @@ describe('config message presenter', () => {
         'image.generate': { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
       },
     });
-
-    expect(
-      projectMessageModelSelection({
-        selectedModel: '',
-        sessionMode: 'video',
-        mediaProviderId: 'runway',
-        mediaModelId: 'gen-4',
-      }),
-    ).toEqual({
-      mediaModel: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
-    });
-
-    expect(
-      projectMessageModelSelection({
-        selectedModel: '',
-        sessionMode: 'image',
-        mediaProviderId: 'openai',
-        mediaModelId: 'none',
-      }),
-    ).toEqual({});
 
     expect(
       projectMessageModelSelection({
@@ -596,7 +576,6 @@ describe('config message presenter', () => {
       'runway:gen-4',
       'suno:chirp',
     ]);
-    expect(projection.activeMediaModel).toBeUndefined();
     expect(projection.agentMediaModels).toEqual({
       image: { providerId: 'flux', modelId: 'pro', category: 'image' },
       video: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
@@ -606,49 +585,6 @@ describe('config message presenter', () => {
     expect(projection.selectedEffectiveInputBudget).toBe(200000);
     expect(projection.selectedOutputTokenCap).toBe(8192);
     expect(projection.selectedMaxOutputTokens).toBe(128000);
-  });
-
-  it('projects direct media mode active model and default model list', () => {
-    expect(
-      projectChatWorkspaceModelState({
-        chatModelOptions: [],
-        selectedModel: '',
-        defaultMaxOutputTokens: 4096,
-        sessionMode: 'agent',
-        mediaModelSelection: { image: 'none', video: 'none', audio: 'none' },
-      }),
-    ).toMatchObject({
-      allModels: [],
-      availableModels: [],
-      availableMediaModels: [],
-      selectedOutputTokenCap: 4096,
-    });
-
-    const directProjection = projectChatWorkspaceModelState({
-      chatModelOptions: [
-        {
-          id: 'runway:gen-4',
-          label: 'Runway / Gen 4',
-          providerId: 'runway',
-          modelId: 'gen-4',
-          category: 'video',
-        },
-      ],
-      selectedModel: 'missing:model',
-      defaultMaxOutputTokens: 4096,
-      sessionMode: 'video',
-      mediaModelSelection: {
-        image: 'none',
-        video: 'runway:gen-4',
-        audio: 'none',
-      },
-    });
-
-    expect(directProjection.activeMediaModel?.id).toBe('runway:gen-4');
-    expect(directProjection.agentMediaModels).toBeUndefined();
-    expect(directProjection.selectedContextWindow).toBeUndefined();
-    expect(directProjection.selectedEffectiveInputBudget).toBeUndefined();
-    expect(directProjection.selectedMaxOutputTokens).toBeUndefined();
   });
 
   it('does not use the default output-token cap as a context-window fallback', () => {
@@ -678,31 +614,7 @@ describe('config message presenter', () => {
     expect(projection.selectedOutputTokenCap).toBe(128000);
   });
 
-  it('projects media model selection changes from session mode transitions', () => {
-    expect(
-      projectMediaModelSelectionForSessionModeChange({
-        sessionMode: 'video',
-        mediaModelSelection: { image: 'flux:pro', video: 'none', audio: 'none' },
-        chatModelOptions: [
-          {
-            id: 'runway:gen-4',
-            label: 'Runway / Gen 4',
-            providerId: 'runway',
-            modelId: 'gen-4',
-            category: 'video',
-          },
-        ],
-      }),
-    ).toEqual({
-      sessionMode: 'video',
-      mediaModelSelection: {
-        image: 'flux:pro',
-        video: 'runway:gen-4',
-        audio: 'none',
-      },
-      updated: true,
-    });
-
+  it('preserves exact Agent Tool model selections when the Agent composer is initialized', () => {
     expect(
       projectMediaModelSelectionForSessionModeChange({
         sessionMode: 'agent',
@@ -721,35 +633,6 @@ describe('config message presenter', () => {
         audio: 'none',
       },
       updated: false,
-    });
-
-    expect(
-      projectMediaModelSelectionForSessionModeChange({
-        sessionMode: 'audio',
-        mediaModelSelection: {
-          image: 'flux:pro',
-          video: 'runway:gen-4',
-          audio: 'none',
-        },
-        chatModelOptions: [
-          {
-            id: 'suno:chirp',
-            label: 'Suno / Chirp',
-            providerId: 'suno',
-            modelId: 'chirp',
-            category: 'audio',
-            capabilities: ['audio.music.generate'],
-          },
-        ],
-      }),
-    ).toEqual({
-      sessionMode: 'audio',
-      mediaModelSelection: {
-        image: 'flux:pro',
-        video: 'runway:gen-4',
-        audio: 'suno:chirp',
-      },
-      updated: true,
     });
   });
 

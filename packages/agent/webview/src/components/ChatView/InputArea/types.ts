@@ -54,7 +54,7 @@ export interface SkillSummary {
 // Generation params -------------------------------------------------------
 
 export type GenCategory = 'image' | 'video' | 'audio';
-export type EntryPromptMenu = 'generate-assets' | 'roleplay';
+export type EntryPromptMenu = 'roleplay';
 export type GenerationDuration = 'auto' | number;
 
 export interface GenerationParams {

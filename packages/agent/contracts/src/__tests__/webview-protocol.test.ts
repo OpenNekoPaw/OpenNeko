@@ -993,7 +993,7 @@ describe('webview protocol parser', () => {
     ).toBeNull();
   });
 
-  it('accepts music-capable audio models as audio media model refs', () => {
+  it('rejects audio direct mode even when the media model category matches', () => {
     expect(
       parseSendMessageWebviewMessage({
         type: 'sendMessage',
@@ -1002,14 +1002,7 @@ describe('webview protocol parser', () => {
         sessionMode: 'audio',
         mediaModel: { providerId: 'suno', modelId: 'chirp', category: 'audio' },
       }),
-    ).toEqual(
-      expect.objectContaining({
-        type: 'sendMessage',
-        conversationId: 'conv-1',
-        sessionMode: 'audio',
-        mediaModel: { providerId: 'suno', modelId: 'chirp', category: 'audio' },
-      }),
-    );
+    ).toBeNull();
   });
 
   it('rejects single mediaModel in agent mode', () => {

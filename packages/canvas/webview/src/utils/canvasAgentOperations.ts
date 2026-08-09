@@ -70,6 +70,7 @@ const TARGETABLE_FIELDS: Record<CanonicalCanvasNodeType, readonly JsonPointerPat
   markdown: ['/content', '/title'],
   media: ['/title', '/assetPath'],
   group: ['/label', '/color'],
+  generation: [],
   job: ['/title', '/objective'],
   file: ['/title', '/path'],
   'canvas-embed': ['/canvasTitle', '/canvasPath'],

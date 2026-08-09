@@ -50,6 +50,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     screenshot,
     waitForSelector,
   }) {
+    await resizeWindow(evaluate, 1200, 800);
     await waitForSelector('[data-primary-sidebar="application"]');
     const unifiedWorkbench = await evaluate(`(() => ({
       shellCount: document.querySelectorAll('[data-neko-controlled-workbench="true"]').length,
@@ -112,13 +113,16 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
     );
-    await click(
-      '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
-    );
-    await waitForSelector('[data-canvas-add-action="text"]');
-    await click('[data-canvas-add-action="text"]');
-    const authoredNodeCount = await waitForCanvasNodeCount(evaluate, 'canvas:functional:video', 3);
-    checkpoint('canvas-node-authored', { nodeCount: authoredNodeCount });
+    const generationAuthoring = await exerciseCanvasGenerationAuthoring({
+      click,
+      evaluate,
+      pressKey,
+      screenshot,
+      viewId: 'canvas:functional:video',
+      waitForSelector,
+    });
+    const authoredNodeCount = generationAuthoring.maximumNodeCount;
+    checkpoint('canvas-generation-authoring', generationAuthoring);
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
       0,
@@ -447,6 +451,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           document.querySelectorAll('.project-resource-dock__header strong'),
           (element) => element.textContent?.trim() ?? '',
         ),
+        agentDirectModeControlCount: agent.querySelectorAll(
+          '.agent-control-chip-mode, .agent-composer-session-mode-menu',
+        ).length,
+        agentDirectGenerationStatusCount: agent.querySelectorAll(
+          '.direct-generation-status, [data-direct-generation-status]',
+        ).length,
         desktopMain: rootStyle.getPropertyValue('--neko-desktop-main').trim(),
         desktopSurface: rootStyle.getPropertyValue('--neko-desktop-surface').trim(),
         desktopSurfaceMuted: rootStyle.getPropertyValue('--neko-desktop-surface-muted').trim(),
@@ -461,6 +471,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       unifiedWorkbenchScreenshot,
       rootCount: 2,
       authoredNodeCount,
+      generationAuthoring,
       selectedNodePresentation,
       selectedNodeScreenshot,
       videoActions,
@@ -507,6 +518,15 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       evidence.rootCount !== 2 ||
       evidence.authoredNodeCount !== 3 ||
+      evidence.generationAuthoring.catalog.actionIds.join('|') !==
+        'text|table|image|video|audio|director3d' ||
+      evidence.generationAuthoring.kinds.map((item) => item.kind).join('|') !==
+        'prompt|image|video|audio' ||
+      evidence.generationAuthoring.kinds.some(
+        (item) => item.runButtonCount !== 1 || item.alertCount !== 0,
+      ) ||
+      evidence.generationAuthoring.kinds[0]?.compact?.bodyScrollWidth !==
+        evidence.generationAuthoring.kinds[0]?.compact?.bodyClientWidth ||
       evidence.selectedNodePresentation.nodeLocalActionCount === 0 ||
       evidence.selectedNodePresentation.propertyDockCount !== 0 ||
       !evidence.isolatedUrls ||
@@ -563,6 +583,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         ['列表视图', 'List view', '网格视图', 'Grid view'].includes(label),
       ) ||
       evidence.themeSurfaces.resourceManagementTitles.length !== 1 ||
+      evidence.themeSurfaces.agentDirectModeControlCount !== 0 ||
+      evidence.themeSurfaces.agentDirectGenerationStatusCount !== 0 ||
       !['资源管理', 'Resource management'].includes(
         evidence.themeSurfaces.resourceManagementTitles[0],
       )
@@ -573,6 +595,125 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
   },
 });
+
+async function exerciseCanvasGenerationAuthoring({
+  click,
+  evaluate,
+  pressKey,
+  screenshot,
+  viewId,
+  waitForSelector,
+}) {
+  const viewSelector = `[data-owner-view-id=${JSON.stringify(viewId)}]`;
+  const openMenuSelector = `${viewSelector} [data-canvas-toolbar-action="open-add-node-popover"]`;
+  await click(openMenuSelector);
+  await waitForSelector('[data-canvas-add-action-popover="true"]');
+  const catalog = await evaluate(`(() => ({
+    actionIds: [...document.querySelectorAll(
+      '[data-canvas-add-action-popover="true"] [data-canvas-add-action]',
+    )].map((element) => element.getAttribute('data-canvas-add-action')),
+    labels: [...document.querySelectorAll(
+      '[data-canvas-add-action-popover="true"] .canvas-add-action-popover__label',
+    )].map((element) => element.childNodes[0]?.textContent?.trim() ?? ''),
+  }))()`);
+  const expectedActionIds = ['text', 'table', 'image', 'video', 'audio', 'director3d'];
+  if (catalog.actionIds.join('|') !== expectedActionIds.join('|')) {
+    throw new Error(`Canvas add catalog order is invalid: ${JSON.stringify(catalog)}`);
+  }
+  const screenshots = [await screenshot('canvas-generation-add-menu-large')];
+  const kinds = [];
+  const actions = [
+    { actionId: 'text', kind: 'prompt' },
+    { actionId: 'image', kind: 'image' },
+    { actionId: 'video', kind: 'video' },
+    { actionId: 'audio', kind: 'audio' },
+  ];
+  let maximumNodeCount = 0;
+
+  for (const [index, action] of actions.entries()) {
+    if (index > 0) {
+      await click(openMenuSelector);
+      await waitForSelector('[data-canvas-add-action-popover="true"]');
+    }
+    await click(`[data-canvas-add-action=${JSON.stringify(action.actionId)}]`);
+    maximumNodeCount = Math.max(
+      maximumNodeCount,
+      await waitForCanvasNodeCount(evaluate, viewId, 3),
+    );
+    const nodeSelector = `${viewSelector} [data-node-presentation]:has([data-canvas-generation-node=${JSON.stringify(action.kind)}])`;
+    await waitForInteractiveSelector(evaluate, nodeSelector);
+    await click(nodeSelector);
+    await waitForSelector(`${nodeSelector} textarea`);
+    const state = await evaluate(`(() => {
+      const node = document.querySelector(${JSON.stringify(nodeSelector)});
+      if (!(node instanceof HTMLElement)) throw new Error('Generation Node is unavailable.');
+      const bounds = node.getBoundingClientRect();
+      const controls = [...node.querySelectorAll('textarea, input, select, button')];
+      return {
+        kind: node.querySelector('[data-canvas-generation-node]')?.getAttribute(
+          'data-canvas-generation-node',
+        ),
+        title: node.querySelector('strong')?.textContent?.trim() ?? '',
+        phase: node.querySelector('strong')?.nextElementSibling?.textContent?.trim() ?? '',
+        labels: controls.map((control) =>
+          control.getAttribute('aria-label') ?? control.getAttribute('title') ?? '',
+        ),
+        runButtonCount: [...node.querySelectorAll('button')].filter((button) =>
+          ['Run', '生成'].includes(button.getAttribute('title') ?? ''),
+        ).length,
+        alertCount: node.querySelectorAll('[role="alert"]').length,
+        bounds: { width: bounds.width, height: bounds.height },
+        clipped: node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight,
+      };
+    })()`);
+    if (
+      state.kind !== action.kind ||
+      state.runButtonCount !== 1 ||
+      state.alertCount !== 0 ||
+      state.bounds.width <= 0 ||
+      state.bounds.height <= 0
+    ) {
+      throw new Error(`Canvas Generation Node state is invalid: ${JSON.stringify(state)}`);
+    }
+    kinds.push(state);
+    screenshots.push(await screenshot(`canvas-generation-${action.kind}-selected-large`));
+
+    if (action.kind === 'prompt') {
+      await resizeWindow(evaluate, 1040, 700);
+      const compact = await evaluate(`(() => {
+        const node = document.querySelector(${JSON.stringify(nodeSelector)});
+        if (!(node instanceof HTMLElement)) throw new Error('Compact Generation Node is unavailable.');
+        const bounds = node.getBoundingClientRect();
+        return {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          nodeWidth: bounds.width,
+          nodeHeight: bounds.height,
+          bodyScrollWidth: document.body.scrollWidth,
+          bodyClientWidth: document.body.clientWidth,
+        };
+      })()`);
+      kinds[kinds.length - 1] = { ...state, compact };
+      screenshots.push(await screenshot('canvas-generation-prompt-selected-compact'));
+      await resizeWindow(evaluate, 1200, 800);
+    }
+
+    await pressKey('Backspace');
+    await waitForCanvasNodeCount(evaluate, viewId, 2);
+  }
+
+  return { catalog, kinds, maximumNodeCount, screenshots };
+}
+
+async function resizeWindow(evaluate, width, height) {
+  await evaluate(`window.resizeTo(${String(width)}, ${String(height)})`);
+  await waitForCondition(
+    evaluate,
+    `window.innerWidth <= ${String(width)} && window.innerHeight <= ${String(height)}`,
+    `Desktop window did not resize to ${String(width)}x${String(height)}.`,
+  );
+  await delay(250);
+}
 
 function readInteractionWidth(evaluate) {
   return evaluate(`(() => {

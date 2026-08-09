@@ -3,6 +3,26 @@ import type { GenerationJobSnapshot } from '../contracts';
 import { decodeGenerationJobSnapshot, encodeGenerationJobSnapshot } from '../codec';
 
 describe('Generation Job codec', () => {
+  it('round-trips Prompt generation and caller submission identity', () => {
+    const value: GenerationJobSnapshot = {
+      ...snapshot(),
+      submissionId: 'canvas-submission-1',
+      request: {
+        generationType: 'prompt',
+        providerId: 'provider-1',
+        modelId: 'text-model',
+        request: {
+          prompt: 'Write a scene',
+          context: [{ sourceNodeId: 'notes-1', text: 'Rainy station', digest: 'sha256:notes' }],
+          temperature: 0.4,
+          maxOutputTokens: 800,
+        },
+      },
+    };
+
+    expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
+  });
+
   it('round-trips locator-backed durable requests', () => {
     const value: GenerationJobSnapshot = {
       ...snapshot(),

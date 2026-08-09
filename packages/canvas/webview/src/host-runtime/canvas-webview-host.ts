@@ -6,6 +6,9 @@ import {
   type CanvasHostPresentationState,
   type CanvasHostRuntime,
   type CanvasHostSnapshot,
+  type CanvasGenerationKind,
+  type CanvasGenerationRecipe,
+  type CanvasGenerationRuntimeProjection,
 } from '@neko/canvas-domain';
 import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
@@ -36,14 +39,19 @@ export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
     sourceMode: Extract<CanvasHostIntent, { readonly type: 'request-source' }>['sourceMode'],
     position?: { readonly x: number; readonly y: number },
   ): Promise<CanvasHostSnapshot>;
-  requestGenerationDraft(
-    mediaKind: Extract<
-      CanvasHostIntent,
-      { readonly type: 'request-generation-draft' }
-    >['mediaKind'],
+  createGenerationNode(
+    kind: CanvasGenerationKind,
     position?: { readonly x: number; readonly y: number },
-    inputNodeIds?: readonly string[],
   ): Promise<CanvasHostSnapshot>;
+  updateGenerationRecipe(
+    nodeId: string,
+    recipe: CanvasGenerationRecipe,
+  ): Promise<CanvasHostSnapshot>;
+  runGenerationNode(nodeId: string): Promise<CanvasHostSnapshot>;
+  cancelGenerationNode(nodeId: string): Promise<CanvasHostSnapshot>;
+  selectGenerationOutput(nodeId: string, outputId: string): Promise<CanvasHostSnapshot>;
+  authorGenerationText(nodeId: string, text: string): Promise<CanvasHostSnapshot>;
+  getGenerationProjection(nodeId: string): CanvasGenerationRuntimeProjection | undefined;
   projectContent(
     locator: CanvasReferencedContentLocator,
     mediaKind: CanvasMaterialMediaKind,
@@ -346,7 +354,7 @@ export function createCanvasWebviewHost(
       structuredClone(
         snapshot?.authoringCapabilities ?? {
           sourceModes: [],
-          generationMediaKinds: [],
+          generationKinds: [],
         },
       ),
     async executeMaterialAction(actionId, selectedNodeIds, payload = {}) {
@@ -362,15 +370,42 @@ export function createCanvasWebviewHost(
       };
       return executeIntent({ type: 'execute-material-action', action });
     },
-    async requestGenerationDraft(mediaKind, position, inputNodeIds = []) {
+    async createGenerationNode(kind, position) {
       const next = await executeIntent({
-        type: 'request-generation-draft',
-        mediaKind,
-        inputNodeIds: [...inputNodeIds],
+        type: 'create-generation-node',
+        kind,
         ...(position ? { position } : {}),
       });
       publishSnapshot(next);
       return next;
+    },
+    async updateGenerationRecipe(nodeId, recipe) {
+      const next = await executeIntent({ type: 'update-generation-recipe', nodeId, recipe });
+      publishSnapshot(next);
+      return next;
+    },
+    async runGenerationNode(nodeId) {
+      const next = await executeIntent({ type: 'run-generation-node', nodeId });
+      publishSnapshot(next);
+      return next;
+    },
+    async cancelGenerationNode(nodeId) {
+      const next = await executeIntent({ type: 'cancel-generation-node', nodeId });
+      publishSnapshot(next);
+      return next;
+    },
+    async selectGenerationOutput(nodeId, outputId) {
+      const next = await executeIntent({ type: 'select-generation-output', nodeId, outputId });
+      publishSnapshot(next);
+      return next;
+    },
+    async authorGenerationText(nodeId, text) {
+      const next = await executeIntent({ type: 'author-generation-text', nodeId, text });
+      publishSnapshot(next);
+      return next;
+    },
+    getGenerationProjection(nodeId) {
+      return snapshot?.generationNodes.find((projection) => projection.nodeId === nodeId);
     },
     async projectContent(locator, mediaKind, position, title) {
       const current = snapshot ?? (await runtime.getSnapshot());

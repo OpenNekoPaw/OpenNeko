@@ -117,9 +117,6 @@ import {
   useComposerWorkspacePresentation,
   type AgentComposerWorkspaceTarget,
 } from './ComposerWorkspaceContext';
-import { useDirectGenerationOperationPort } from '../direct-generation-context';
-import { projectDirectGenerationOperationInput } from '../direct-generation-input';
-import { DirectGenerationStatus, type DirectGenerationUiState } from './DirectGenerationStatus';
 
 // =============================================================================
 // Props
@@ -222,7 +219,6 @@ export function ConversationController({
   const hostRuntimeAdapter = useAgentHostRuntimeAdapter();
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
-  const directGeneration = useDirectGenerationOperationPort();
   const isDraftPresentation = agentPresentation?.phase === 'draft';
   // ---- Conversation state ----
   const conversation = useConversationState();
@@ -268,8 +264,6 @@ export function ConversationController({
     new Map(),
   );
   const [globalError, setGlobalError] = useState<string | null>(null);
-  const [directGenerationState, setDirectGenerationState] =
-    useState<DirectGenerationUiState | null>(null);
   const [initialNavigationHydration, setInitialNavigationHydration] = useState({
     runtimeId: hostRuntimeAdapter.runtimeId,
     conversationList: false,
@@ -280,7 +274,6 @@ export function ConversationController({
   >(() => new Map());
   const [entryAction, setEntryAction] = useState<EmptyStateEntryAction>('start-chat');
   const [entryInputValue, setEntryInputValue] = useState('');
-  const entryInputValueRef = useRef('');
   const [entryContextReferences, setEntryContextReferences] = useState<AgentContextPayload[]>([]);
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
@@ -311,7 +304,6 @@ export function ConversationController({
     [setMentionSearchFilter],
   );
   const updateEntryInputValue = useCallback((value: string) => {
-    entryInputValueRef.current = value;
     setEntryInputValue(value);
   }, []);
   const appliedInitialInputRef = useRef<string>();
@@ -397,12 +389,10 @@ export function ConversationController({
     id: number;
     input: PendingSendInput;
   } | null>(null);
-  const nextInitialInputRequestIdRef = useRef(0);
   const [initialInputRequest, setInitialInputRequest] = useState<{
     id: number;
     messageText: string;
   } | null>(null);
-  const nextInitialSessionModeRequestIdRef = useRef(0);
   const [initialSessionModeRequest, setInitialSessionModeRequest] = useState<{
     id: number;
     mode: SessionMode;
@@ -1063,25 +1053,6 @@ export function ConversationController({
     setGlobalError('Start a Character interaction from an exact Character Version surface.');
   }, []);
 
-  const startNewForegroundConversationWithGenerationMode = useCallback(
-    (mode: Extract<SessionMode, GenCategory>, messageText?: string) => {
-      const sessionModeRequestId = nextInitialSessionModeRequestIdRef.current + 1;
-      nextInitialSessionModeRequestIdRef.current = sessionModeRequestId;
-      setPendingSendRequest(null);
-      setInitialSessionModeRequest({ id: sessionModeRequestId, mode });
-      setEntryPromptMenu(null);
-      if (messageText?.trim()) {
-        const inputRequestId = nextInitialInputRequestIdRef.current + 1;
-        nextInitialInputRequestIdRef.current = inputRequestId;
-        setInitialInputRequest({ id: inputRequestId, messageText: messageText.trim() });
-      } else {
-        setInitialInputRequest(null);
-      }
-      startNewForegroundConversation();
-    },
-    [startNewForegroundConversation],
-  );
-
   const handleEntryAction = useCallback(
     (action: EmptyStateEntryAction) => {
       setEntryAction(action);
@@ -1098,12 +1069,6 @@ export function ConversationController({
             return;
           }
           startNewForegroundConversation();
-          return;
-        case 'generate-assets':
-          setPendingSendRequest(null);
-          setInitialInputRequest(null);
-          setInitialSessionModeRequest(null);
-          setEntryPromptMenu('generate-assets');
           return;
         case 'roleplay':
           setPendingSendRequest(null);
@@ -1145,45 +1110,6 @@ export function ConversationController({
       const messageText = (input?.messageText ?? entryInputValue).trim();
       if (!messageText) return;
       const contextPayloads = input?.contextPayloads ?? entryContextReferences;
-      const effectiveSessionMode = input?.sessionMode ?? entrySessionMode;
-
-      if (effectiveSessionMode !== 'agent') {
-        if (
-          (input?.attachments?.length ?? 0) > 0 ||
-          contextPayloads.length > 0 ||
-          (input?.fileReferences?.length ?? 0) > 0
-        ) {
-          setGlobalError(
-            'Direct media generation does not accept attachments or context references.',
-          );
-          return;
-        }
-        const mediaModel = entryModelState.activeMediaModel;
-        if (!directGeneration || !mediaModel) {
-          setGlobalError(
-            'Direct media generation requires an exact Workspace, provider, and model binding.',
-          );
-          return;
-        }
-        updateEntryInputValue('');
-        setEntryContextReferences([]);
-        setDirectGenerationState({ phase: 'running', mediaKind: effectiveSessionMode });
-        void directGeneration
-          .submit(
-            projectDirectGenerationOperationInput({
-              sessionMode: effectiveSessionMode,
-              prompt: messageText,
-              providerId: mediaModel.providerId,
-              modelId: mediaModel.modelId,
-              params: entryGenParams,
-            }),
-          )
-          .then((projection) => setDirectGenerationState({ phase: 'completed', projection }))
-          .catch((error: unknown) =>
-            setDirectGenerationState({ phase: 'failed', message: describeError(error) }),
-          );
-        return;
-      }
 
       if (isDraftPresentation) {
         const draftHostRuntimeAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
@@ -1265,12 +1191,6 @@ export function ConversationController({
           setEntryContextReferences([]);
           return;
         }
-        case 'generate-assets':
-          setPendingSendRequest(null);
-          setInitialInputRequest(null);
-          setInitialSessionModeRequest(null);
-          setEntryPromptMenu('generate-assets');
-          return;
         case 'roleplay':
           setPendingSendRequest(null);
           setInitialInputRequest(null);
@@ -1285,9 +1205,7 @@ export function ConversationController({
       activeSettings.chatModelOptions,
       agentPresentation,
       entryContextReferences,
-      directGeneration,
       entryGenParams,
-      entryModelState.activeMediaModel,
       entryInputValue,
       entrySessionMode,
       entrySelectedModel,
@@ -1327,26 +1245,6 @@ export function ConversationController({
       });
     },
     [activeSettings.chatModelOptions],
-  );
-
-  const handleEntryGenerationModeSelect = useCallback(
-    (mode: Extract<SessionMode, GenCategory>) => {
-      if (isDraftPresentation) {
-        handleEntrySessionModeChange(mode);
-        setEntryPromptMenu(null);
-        return;
-      }
-      const messageText = entryInputValueRef.current.trim();
-      handleEntrySessionModeChange(mode);
-      startNewForegroundConversationWithGenerationMode(mode, messageText);
-      updateEntryInputValue('');
-    },
-    [
-      handleEntrySessionModeChange,
-      isDraftPresentation,
-      startNewForegroundConversationWithGenerationMode,
-      updateEntryInputValue,
-    ],
   );
 
   const handleEntryMediaModelSelect = useCallback((category: MediaCategory, modelId: string) => {
@@ -1760,7 +1658,6 @@ export function ConversationController({
                 disabled={isForegroundConversationActivationPending || !hasConfigSnapshot}
                 entryPromptMenu={entryPromptMenu}
                 onEntryPromptMenuChange={setEntryPromptMenu}
-                onEntryGenerationModeSelect={handleEntryGenerationModeSelect}
               />
             </InputAreaProvider>
           </div>
@@ -1865,7 +1762,6 @@ export function ConversationController({
       {globalError ? (
         <AgentDiagnosticToast title="全局错误">{globalError}</AgentDiagnosticToast>
       ) : null}
-      {directGenerationState ? <DirectGenerationStatus state={directGenerationState} /> : null}
     </>
   );
 }

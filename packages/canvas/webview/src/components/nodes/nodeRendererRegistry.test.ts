@@ -6,11 +6,11 @@ import { createCoreNodeRendererRegistry } from './coreNodeRenderers';
 import { renderCanvasNode } from './nodeRendererRegistry';
 
 describe('nodeRendererRegistry', () => {
-  it('registers only the six canonical renderers', () => {
+  it('registers only the seven canonical renderers', () => {
     const renderers = createCoreNodeRendererRegistry();
 
     expect(Object.keys(renderers).sort()).toEqual(
-      ['canvas-embed', 'file', 'group', 'job', 'markdown', 'media'].sort(),
+      ['canvas-embed', 'file', 'generation', 'group', 'job', 'markdown', 'media'].sort(),
     );
   });
 

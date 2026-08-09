@@ -70,8 +70,6 @@ import { isCharacterRoleConversationKind } from '../presenters/character-role-se
 import type { ForegroundConversationAvailability } from '../render-lifecycle/conversation-render-contract';
 import type { TabRenderStore, TabViewportSnapshot } from '../render-runtime/tab-render-runtime';
 import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
-import { useDirectGenerationOperationPort } from '../direct-generation-context';
-import { DirectGenerationStatus, type DirectGenerationUiState } from './DirectGenerationStatus';
 
 // =============================================================================
 // Props
@@ -189,9 +187,6 @@ export function ChatWorkspace({
   queuedEditDraftConflictMessage,
 }: ChatWorkspaceProps) {
   const agentHostMessages = useAgentHostMessages();
-  const directGeneration = useDirectGenerationOperationPort();
-  const [directGenerationState, setDirectGenerationState] =
-    useState<DirectGenerationUiState | null>(null);
   const { snapshot: tabRenderSnapshot, updateState: updateTabRenderState } =
     useTabRenderStore(tabRenderStore);
   const tabState = tabRenderSnapshot.state;
@@ -386,7 +381,6 @@ export function ChatWorkspace({
   const {
     availableModels,
     availableMediaModels,
-    activeMediaModel,
     agentMediaModels,
     selectedEffectiveInputBudget,
     selectedOutputTokenCap,
@@ -398,16 +392,6 @@ export function ChatWorkspace({
     sessionMode,
     mediaModelSelection,
   });
-
-  useEffect(() => {
-    if (sessionMode === 'agent') return;
-    const hasCurrentSessionModel = availableMediaModels.some(
-      (model) => model.category === sessionMode,
-    );
-    if (!hasCurrentSessionModel) {
-      setVisibleSessionMode('agent');
-    }
-  }, [availableMediaModels, sessionMode, setVisibleSessionMode]);
 
   // ---- Behavior hooks ----
   const handleSendWithoutConversation = useCallback(
@@ -426,8 +410,6 @@ export function ChatWorkspace({
     selectedModel,
     availableModels: settings.chatModelOptions,
     sessionMode,
-    mediaProviderId: activeMediaModel?.providerId,
-    mediaModelId: activeMediaModel?.modelId,
     agentMediaModels,
     understandingModels: buildRuntimeUnderstandingModelSelections(
       mediaUnderstandingSelection,
@@ -446,9 +428,6 @@ export function ChatWorkspace({
     setSelectedFileReferences,
     ensureConversationForSend: handleSendWithoutConversation,
     onUserMessageSent,
-    directGeneration,
-    generationParams: genParams,
-    onDirectGenerationState: setDirectGenerationState,
   });
   const pendingSendRequestId = pendingSendRequest?.id;
   const pendingSendIdentity = useMemo<PendingSendIdentity | undefined>(
@@ -815,9 +794,6 @@ export function ChatWorkspace({
       onGenCategoryChange={setGenCategory}
       onGenParamsChange={updateGenParams}
     >
-      {isVisible && directGenerationState ? (
-        <DirectGenerationStatus state={directGenerationState} />
-      ) : null}
       {isVisible &&
       latestSessionDiagnostic &&
       foregroundConversationAvailability?.kind !== 'unavailable' ? (

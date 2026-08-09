@@ -35,16 +35,18 @@ export interface CanvasAddAction {
   readonly labelKey: string;
   readonly descriptionKey?: string;
   readonly badgeKey?: string;
-  readonly mode: 'direct' | 'source';
+  readonly mode: 'direct' | 'generation' | 'source';
+  readonly generationKind?: 'prompt' | 'image' | 'video' | 'audio';
   readonly sourceKind?: CanvasAddSourceKind;
 }
 
 export const CANVAS_ADD_ACTIONS: readonly CanvasAddAction[] = [
   {
     id: 'text',
-    nodeType: 'markdown',
+    nodeType: 'generation',
     labelKey: 'node.text',
-    mode: 'direct',
+    mode: 'generation',
+    generationKind: 'prompt',
   },
   {
     id: 'table',
@@ -55,24 +57,24 @@ export const CANVAS_ADD_ACTIONS: readonly CanvasAddAction[] = [
   },
   {
     id: 'image',
-    nodeType: 'media',
+    nodeType: 'generation',
     labelKey: 'node.image',
-    mode: 'source',
-    sourceKind: 'image',
+    mode: 'generation',
+    generationKind: 'image',
   },
   {
     id: 'video',
-    nodeType: 'media',
+    nodeType: 'generation',
     labelKey: 'node.video',
-    mode: 'source',
-    sourceKind: 'video',
+    mode: 'generation',
+    generationKind: 'video',
   },
   {
     id: 'audio',
-    nodeType: 'media',
+    nodeType: 'generation',
     labelKey: 'node.audio',
-    mode: 'source',
-    sourceKind: 'audio',
+    mode: 'generation',
+    generationKind: 'audio',
   },
   {
     id: 'director3d',

@@ -57,25 +57,6 @@ const hostRuntimeMocks = vi.hoisted(() => ({
   getState: vi.fn<() => unknown>(() => undefined),
   setState: vi.fn(),
 }));
-const directGenerationMocks = vi.hoisted(() => ({
-  submit: vi.fn(async () => ({
-    jobId: 'job-draft-video',
-    mediaKind: 'video' as const,
-    purpose: 'video.generate' as const,
-    providerId: 'video-provider',
-    modelId: 'video-model',
-    phase: 'succeeded' as const,
-    resultLocators: [
-      {
-        kind: 'generated-output' as const,
-        outputId: 'output-video',
-        digest: 'sha256:video',
-        path: 'generated/video/output.mp4',
-      },
-    ],
-  })),
-}));
-
 vi.mock('../host-runtime-context', () => ({
   useAgentHostMessages: () => hostMocks,
   useAgentHostRuntimeAdapter: () => ({
@@ -103,10 +84,6 @@ vi.mock('../host-runtime-context', () => ({
     getState: hostRuntimeMocks.getState,
     setState: hostRuntimeMocks.setState,
   }),
-}));
-
-vi.mock('../direct-generation-context', () => ({
-  useDirectGenerationOperationPort: () => directGenerationMocks,
 }));
 
 beforeEach(() => {
@@ -437,9 +414,8 @@ vi.mock('./ChatView/InputArea', async () => {
       onInputChange: (value: string) => void;
       onSend: () => void;
       disabled?: boolean;
-      entryPromptMenu?: 'generate-assets' | 'roleplay' | null;
-      onEntryPromptMenuChange?: (menu: 'generate-assets' | 'roleplay' | null) => void;
-      onEntryGenerationModeSelect?: (mode: 'image' | 'video' | 'audio') => void;
+      entryPromptMenu?: 'roleplay' | null;
+      onEntryPromptMenuChange?: (menu: 'roleplay' | null) => void;
       onDraftWorkspaceTargetChange?: (
         target:
           | {
@@ -530,9 +506,6 @@ vi.mock('./ChatView/InputArea', async () => {
           <span data-testid="entry-page-menu">{props.entryPromptMenu ?? 'none'}</span>
           <button type="button" onClick={() => props.onEntryPromptMenuChange?.(null)}>
             Close Entry Menu
-          </button>
-          <button type="button" onClick={() => props.onEntryGenerationModeSelect?.('video')}>
-            Select Video Generation
           </button>
         </div>
       );
@@ -823,55 +796,6 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('submits Draft media directly without creating a Conversation or Agent Turn', async () => {
-    vi.clearAllMocks();
-    const launchCatalog = createBoundAssistantLaunchCatalog('draft-direct-video');
-    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
-    const settings = createSettings();
-    render(
-      <ConversationController
-        {...createProps({
-          settings: {
-            ...settings,
-            chatModelOptions: [
-              ...settings.chatModelOptions,
-              {
-                id: 'video-provider:video-model',
-                providerId: 'video-provider',
-                modelId: 'video-model',
-                label: 'Video Model',
-                category: 'video',
-                capabilities: ['text_to_video'],
-              },
-            ],
-            defaultMediaModels: { video: 'video-provider:video-model' },
-          },
-        })}
-        agentPresentation={launchCatalog.interaction}
-        emptyStatePresentation="desktop-dock"
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Generate a short clip' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    await waitFor(() =>
-      expect(directGenerationMocks.submit).toHaveBeenCalledWith({
-        mediaKind: 'video',
-        prompt: 'Generate a short clip',
-        providerId: 'video-provider',
-        modelId: 'video-model',
-        aspectRatio: '16:9',
-        resolution: '1080p',
-        fps: 24,
-      }),
-    );
-    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByRole('textbox')).toHaveProperty('value', '');
-  });
-
   it('reports a Session-only command in Draft without submitting or creating a Turn', async () => {
     vi.clearAllMocks();
     const launchCatalog = {
@@ -956,26 +880,6 @@ describe('ConversationController entry state', () => {
         executionMode: 'ask',
       }),
     });
-  });
-
-  it('keeps draft mode selection scope-neutral until an owner is selected', () => {
-    vi.clearAllMocks();
-    render(
-      <ConversationController
-        {...createProps()}
-        agentPresentation={createDraftProjection('draft-entry-mode', {
-          kind: 'unbound',
-        })}
-        emptyStatePresentation="desktop-dock"
-      />,
-    );
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'keep this draft' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
-
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
-    expect(screen.getByRole('textbox')).toHaveProperty('value', 'keep this draft');
   });
 
   it('keeps unavailable Character and Room selection out of the Entry Draft', () => {
@@ -1370,20 +1274,6 @@ describe('ConversationController entry state', () => {
     );
   });
 
-  it('shows the asset picker on the tabless entry page', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
-    expect(screen.queryByTestId('chat-workspace')).toBeNull();
-    expect(hostMocks.getTabState).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
-    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
-  });
-
   it('opens a new chat tab from the start chat entry button', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
@@ -1483,79 +1373,6 @@ describe('ConversationController entry state', () => {
     expect(screen.getByText(/exact Character Version surface/)).toBeTruthy();
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.getByTestId('tab-count').textContent).toBe('0');
-  });
-
-  it('does not create a chat tab when the asset generation picker is closed without a selection', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
-
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close Entry Menu' }));
-
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
-    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
-  });
-
-  it('creates one chat tab after generation mode confirmation and transfers the entry draft', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
-      target: { value: 'make a rain scene' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
-
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
-
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('entry-menu').textContent).toBe('none');
-    expect(screen.getByTestId('initial-session-mode').textContent).toBe('video');
-    expect(screen.getByTestId('initial-input').textContent).toBe('make a rain scene');
-  });
-
-  it('disables entry controls while the new tab is being activated', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
-
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Generate Assets/ }).hasAttribute('disabled')).toBe(
-      false,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
-
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: /Generate Assets/ }).hasAttribute('disabled')).toBe(
-      true,
-    );
-    expect(screen.getByPlaceholderText('Type anything...').hasAttribute('disabled')).toBe(true);
-
-    fireEvent.click(screen.getByRole('button', { name: /Roleplay/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
   });
 
   it('starts a new tab and sends entry text in chat mode', () => {
@@ -1731,24 +1548,6 @@ describe('ConversationController entry state', () => {
 
     expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
     expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
-  });
-
-  it('reopens the asset picker on entry send without creating a tab before mode selection', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
-      target: { value: 'make a rain scene' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
-    expect(screen.getByPlaceholderText('Type anything...')).toHaveProperty(
-      'value',
-      'make a rain scene',
-    );
   });
 
   it('does not project activation progress from a different conversation into the active tab', () => {

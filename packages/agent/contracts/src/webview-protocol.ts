@@ -917,7 +917,7 @@ export type MessageOfType<T extends AgentHostToWebviewMessage['type']> = Extract
   { type: T }
 >;
 
-const SESSION_MODES: readonly SessionMode[] = ['agent', 'image', 'video', 'audio'];
+const SESSION_MODES: readonly SessionMode[] = ['agent'];
 const MODEL_CATEGORIES: readonly ProtocolModelCategory[] = ['llm', 'image', 'video', 'audio'];
 const AGENT_MODEL_SLOTS: readonly AgentModelSlot[] = [
   'primary',
@@ -1495,13 +1495,7 @@ export function parseSendMessageWebviewMessage(raw: unknown): SendMessageWebview
   const messageTrackingId = optionalString(raw.messageTrackingId);
   if (raw.messageTrackingId !== undefined && messageTrackingId === undefined) return null;
 
-  if (raw.sessionMode === 'agent') {
-    if (mediaModel) return null;
-  } else {
-    if (!mediaModel || mediaModel.category !== raw.sessionMode) return null;
-    if (purposeModels) return null;
-    if (agentModels || llmConfig) return null;
-  }
+  if (mediaModel) return null;
 
   return {
     type: 'sendMessage',

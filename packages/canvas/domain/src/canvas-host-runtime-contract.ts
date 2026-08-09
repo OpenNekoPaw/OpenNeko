@@ -9,6 +9,13 @@ import {
 } from './types/canvas-material-contracts';
 import { isValidNkc } from './nkc/codec';
 import { type CanvasData } from './types/canvas';
+import {
+  isCanvasGenerationKind,
+  isCanvasGenerationRecipe,
+  type CanvasGenerationKind,
+  type CanvasGenerationRecipe,
+} from './types/canvas-generation-node';
+import type { CanvasGenerationRuntimeProjection } from './canvas-generation-application-port';
 
 export function createCanvasHostSessionId(viewId: string, viewInstanceId: string): string {
   requireNonEmptyString(viewId, 'Canvas Host View identity is required.');
@@ -47,7 +54,7 @@ export interface CanvasHostPresentationState {
 
 export interface CanvasHostAuthoringCapabilities {
   readonly sourceModes: readonly ('import' | 'reference')[];
-  readonly generationMediaKinds: readonly ('image' | 'video' | 'audio' | 'model' | 'document')[];
+  readonly generationKinds: readonly CanvasGenerationKind[];
 }
 
 export interface CanvasHostSnapshot {
@@ -57,6 +64,8 @@ export interface CanvasHostSnapshot {
   readonly presentation: CanvasHostPresentationState;
   /** Runtime-only add-surface capabilities rebuilt from executable Host effects. */
   readonly authoringCapabilities: CanvasHostAuthoringCapabilities;
+  /** Runtime-only projections rebuilt from authoritative Generation Jobs. */
+  readonly generationNodes: readonly CanvasGenerationRuntimeProjection[];
 }
 
 export interface CanvasMaterialActionResolutionRequest {
@@ -91,10 +100,28 @@ export type CanvasHostIntent =
       readonly position?: { readonly x: number; readonly y: number };
     }
   | {
-      readonly type: 'request-generation-draft';
-      readonly mediaKind: 'image' | 'video' | 'audio' | 'model' | 'document';
+      readonly type: 'create-generation-node';
+      readonly kind: CanvasGenerationKind;
       readonly position?: { readonly x: number; readonly y: number };
-      readonly inputNodeIds: readonly string[];
+    }
+  | {
+      readonly type: 'update-generation-recipe';
+      readonly nodeId: string;
+      readonly recipe: CanvasGenerationRecipe;
+    }
+  | {
+      readonly type: 'run-generation-node' | 'cancel-generation-node';
+      readonly nodeId: string;
+    }
+  | {
+      readonly type: 'select-generation-output';
+      readonly nodeId: string;
+      readonly outputId: string;
+    }
+  | {
+      readonly type: 'author-generation-text';
+      readonly nodeId: string;
+      readonly text: string;
     }
   | {
       readonly type: 'preview-resource' | 'reveal-resource';
@@ -244,6 +271,7 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
     'canvas',
     'presentation',
     'authoringCapabilities',
+    'generationNodes',
   ]);
   const canvas = record['canvas'];
   if (!isValidNkc(canvas)) {
@@ -255,6 +283,10 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
     canvas,
     presentation: parseCanvasHostPresentationState(record['presentation']),
     authoringCapabilities: parseCanvasHostAuthoringCapabilities(record['authoringCapabilities']),
+    generationNodes: requireArray(
+      record['generationNodes'],
+      'Canvas Host Generation node projections must be an array.',
+    ).map(parseCanvasGenerationRuntimeProjection),
   };
 }
 
@@ -406,17 +438,61 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
       ...readOptionalPosition(record['position']),
     };
   }
-  if (type === 'request-generation-draft') {
+  if (type === 'create-generation-node') {
+    requireExactKeys(record, ['type', 'kind', 'position']);
     return {
       type,
-      mediaKind: requireGenerationMediaKind(record['mediaKind']),
-      inputNodeIds: requireArray(
-        record['inputNodeIds'],
-        'Canvas Host Generation input node identities must be an array.',
-      ).map((nodeId) =>
-        requireOpaqueIdentity(nodeId, 'Canvas Host Generation input node identity is invalid.'),
-      ),
+      kind: requireGenerationKind(record['kind']),
       ...readOptionalPosition(record['position']),
+    };
+  }
+  if (type === 'update-generation-recipe') {
+    requireExactKeys(record, ['type', 'nodeId', 'recipe']);
+    if (!isCanvasGenerationRecipe(record['recipe'])) {
+      throw invalidPayload('Canvas Host Generation Recipe is invalid.');
+    }
+    return {
+      type,
+      nodeId: requireOpaqueIdentity(
+        record['nodeId'],
+        'Canvas Generation node identity is invalid.',
+      ),
+      recipe: structuredClone(record['recipe']),
+    };
+  }
+  if (type === 'run-generation-node' || type === 'cancel-generation-node') {
+    requireExactKeys(record, ['type', 'nodeId']);
+    return {
+      type,
+      nodeId: requireOpaqueIdentity(
+        record['nodeId'],
+        'Canvas Generation node identity is invalid.',
+      ),
+    };
+  }
+  if (type === 'select-generation-output') {
+    requireExactKeys(record, ['type', 'nodeId', 'outputId']);
+    return {
+      type,
+      nodeId: requireOpaqueIdentity(
+        record['nodeId'],
+        'Canvas Generation node identity is invalid.',
+      ),
+      outputId: requireOpaqueIdentity(
+        record['outputId'],
+        'Canvas Generation output identity is invalid.',
+      ),
+    };
+  }
+  if (type === 'author-generation-text') {
+    requireExactKeys(record, ['type', 'nodeId', 'text']);
+    return {
+      type,
+      nodeId: requireOpaqueIdentity(
+        record['nodeId'],
+        'Canvas Generation node identity is invalid.',
+      ),
+      text: requireString(record['text'], 'Canvas Generation authored text is invalid.'),
     };
   }
   if (type === 'preview-resource' || type === 'reveal-resource') {
@@ -490,10 +566,10 @@ function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthori
       ['import', 'reference'] as const,
       'Canvas Host source-mode capability',
     ),
-    generationMediaKinds: requireUniqueEnumArray(
-      record['generationMediaKinds'],
-      ['image', 'video', 'audio', 'model', 'document'] as const,
-      'Canvas Host Generation media-kind capability',
+    generationKinds: requireUniqueEnumArray(
+      record['generationKinds'],
+      ['prompt', 'image', 'audio', 'video'] as const,
+      'Canvas Host Generation kind capability',
     ),
   };
 }
@@ -570,15 +646,135 @@ function requireSourceMode(
   return value;
 }
 
-function requireGenerationMediaKind(
-  value: unknown,
-): Extract<CanvasHostIntent, { readonly type: 'request-generation-draft' }>['mediaKind'] {
-  const allowed = ['image', 'video', 'audio', 'model', 'document'] as const;
-  const match = allowed.find((candidate) => candidate === value);
-  if (!match) {
-    throw invalidPayload('Canvas Host Generation media kind is invalid.');
+function requireGenerationKind(value: unknown): CanvasGenerationKind {
+  if (!isCanvasGenerationKind(value)) {
+    throw invalidPayload('Canvas Host Generation kind is invalid.');
   }
-  return match;
+  return value;
+}
+
+function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGenerationRuntimeProjection {
+  const record = requireRecord(value, 'Canvas Generation runtime projection must be an object.');
+  const allowed = new Set([
+    'nodeId',
+    'submissionId',
+    'recipeInputFingerprint',
+    'jobRef',
+    'phase',
+    'progress',
+    'resultLocators',
+    'text',
+    'diagnostic',
+  ]);
+  if (Object.keys(record).some((key) => !allowed.has(key))) {
+    throw invalidPayload('Canvas Generation runtime projection contains unsupported fields.');
+  }
+  const phase = record['phase'];
+  if (
+    phase !== 'binding' &&
+    phase !== 'pending' &&
+    phase !== 'running' &&
+    phase !== 'succeeded' &&
+    phase !== 'failed' &&
+    phase !== 'cancelled' &&
+    phase !== 'outcome-unknown'
+  ) {
+    throw invalidPayload('Canvas Generation runtime phase is invalid.');
+  }
+  const jobRef = record['jobRef'];
+  const progress = record['progress'];
+  const resultLocators = record['resultLocators'];
+  const diagnostic = record['diagnostic'];
+  const text = record['text'];
+  return {
+    nodeId: requireOpaqueIdentity(record['nodeId'], 'Canvas Generation node identity is invalid.'),
+    submissionId: requireOpaqueIdentity(
+      record['submissionId'],
+      'Canvas Generation submission identity is invalid.',
+    ),
+    recipeInputFingerprint: requireNonEmptyString(
+      record['recipeInputFingerprint'],
+      'Canvas Generation fingerprint is invalid.',
+    ),
+    ...(jobRef === undefined ? {} : { jobRef: parseGenerationJobRef(jobRef) }),
+    phase,
+    ...(progress === undefined ? {} : { progress: parseGenerationProgress(progress) }),
+    ...(resultLocators === undefined
+      ? {}
+      : {
+          resultLocators: requireArray(
+            resultLocators,
+            'Canvas Generation outputs must be an array.',
+          ).map(requireGeneratedOutputLocator),
+        }),
+    ...(text === undefined
+      ? {}
+      : { text: requireString(text, 'Canvas Generation text output is invalid.') }),
+    ...(diagnostic === undefined ? {} : { diagnostic: parseGenerationDiagnostic(diagnostic) }),
+  };
+}
+
+function parseGenerationJobRef(value: unknown) {
+  const record = requireRecord(value, 'Canvas Generation JobRef is invalid.');
+  requireExactKeys(record, ['kind', 'jobId']);
+  if (record['kind'] !== 'generation')
+    throw invalidPayload('Canvas Generation JobRef kind is invalid.');
+  return {
+    kind: 'generation' as const,
+    jobId: requireOpaqueIdentity(record['jobId'], 'Canvas Generation Job identity is invalid.'),
+  };
+}
+
+function parseGenerationProgress(
+  value: unknown,
+): NonNullable<CanvasGenerationRuntimeProjection['progress']> {
+  const record = requireRecord(value, 'Canvas Generation progress is invalid.');
+  requireExactKeys(record, ['stage', 'percent']);
+  const stage = record['stage'];
+  if (
+    stage !== 'queued' &&
+    stage !== 'submitting' &&
+    stage !== 'waiting-provider' &&
+    stage !== 'committing-result' &&
+    stage !== 'completed'
+  ) {
+    throw invalidPayload('Canvas Generation progress stage is invalid.');
+  }
+  const percent = requireFiniteNumber(
+    record['percent'],
+    'Canvas Generation progress percent is invalid.',
+  );
+  if (percent < 0 || percent > 100)
+    throw invalidPayload('Canvas Generation progress percent is invalid.');
+  return {
+    stage: stage as NonNullable<CanvasGenerationRuntimeProjection['progress']>['stage'],
+    percent,
+  };
+}
+
+function requireGeneratedOutputLocator(value: unknown) {
+  const result = validateContentLocator(value);
+  if (!result.ok || result.locator.kind !== 'generated-output') {
+    throw invalidPayload('Canvas Generation output locator is invalid.');
+  }
+  return result.locator;
+}
+
+function parseGenerationDiagnostic(value: unknown) {
+  const record = requireRecord(value, 'Canvas Generation diagnostic is invalid.');
+  requireExactKeys(record, ['code', 'message', 'retryable']);
+  const retryable = record['retryable'];
+  if (retryable !== undefined && typeof retryable !== 'boolean') {
+    throw invalidPayload('Canvas Generation diagnostic retryable flag is invalid.');
+  }
+  return {
+    code: requireNonEmptyString(record['code'], 'Canvas Generation diagnostic code is invalid.'),
+    message: requireNonEmptyString(
+      record['message'],
+      'Canvas Generation diagnostic message is invalid.',
+    ),
+    ...(retryable === undefined ? {} : { retryable }),
+  };
 }
 
 function requireDiagnosticCode(
@@ -624,6 +820,11 @@ function requireNonEmptyString(value: unknown, message: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw invalidPayload(message);
   }
+  return value;
+}
+
+function requireString(value: unknown, message: string): string {
+  if (typeof value !== 'string') throw invalidPayload(message);
   return value;
 }
 

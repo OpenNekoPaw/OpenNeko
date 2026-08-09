@@ -560,7 +560,6 @@ function installBridge(
         send: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
-      directGeneration: { submit: vi.fn() },
       bootstrap: { get: vi.fn() },
       lifecycle: { subscribe: vi.fn(() => () => undefined) },
       settings: {

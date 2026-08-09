@@ -48,7 +48,7 @@ describe('Canvas Host runtime contract', () => {
     expect(snapshot.canvas.name).toBe(DEFAULT_CANVAS_DATA.name);
   });
 
-  it('requires explicit source intent semantics and preserves Generation draft inputs', () => {
+  it('requires explicit source semantics and typed Generation Node creation', () => {
     const source = createCanvasHostIntentRequest({
       requestId: 'request-source',
       commandId: 'command-source',
@@ -59,15 +59,14 @@ describe('Canvas Host runtime contract', () => {
         sourceMode: 'reference',
       },
     });
-    const draft = createCanvasHostIntentRequest({
-      requestId: 'request-generation-draft',
-      commandId: 'command-generation-draft',
+    const generation = createCanvasHostIntentRequest({
+      requestId: 'request-generation-create',
+      commandId: 'command-generation-create',
       identity,
       intent: {
-        type: 'request-generation-draft',
-        mediaKind: 'video',
+        type: 'create-generation-node',
+        kind: 'video',
         position: { x: 24, y: 48 },
-        inputNodeIds: ['source-1'],
       },
     });
 
@@ -76,11 +75,10 @@ describe('Canvas Host runtime contract', () => {
       sourceKind: 'image',
       sourceMode: 'reference',
     });
-    expect(draft.intent).toEqual({
-      type: 'request-generation-draft',
-      mediaKind: 'video',
+    expect(generation.intent).toEqual({
+      type: 'create-generation-node',
+      kind: 'video',
       position: { x: 24, y: 48 },
-      inputNodeIds: ['source-1'],
     });
     expect(() =>
       parseCanvasHostIntentRequest({
@@ -177,7 +175,8 @@ function validSnapshot() {
     },
     authoringCapabilities: {
       sourceModes: ['import', 'reference'],
-      generationMediaKinds: ['image', 'video', 'audio', 'model', 'document'],
+      generationKinds: ['prompt', 'image', 'audio', 'video'],
     },
+    generationNodes: [],
   };
 }

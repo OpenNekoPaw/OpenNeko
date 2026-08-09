@@ -27,7 +27,28 @@ export interface MediaGenerationResult {
   readonly request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest;
 }
 
-export interface GenerationExecutionPort {
+export interface PromptGenerationRequest {
+  readonly prompt: string;
+  readonly context?: readonly {
+    readonly sourceNodeId: string;
+    readonly text: string;
+    readonly digest: string;
+  }[];
+  readonly temperature?: number;
+  readonly maxOutputTokens?: number;
+}
+
+export interface PromptGenerationResult {
+  readonly type: 'prompt';
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly text: string;
+  readonly request: PromptGenerationRequest;
+}
+
+export type GenerationExecutionResult = MediaGenerationResult | PromptGenerationResult;
+
+export interface MediaGenerationExecutionPort {
   generateImage(
     request: ImageGenerationRequest,
     options?: MediaGenerationExecutionOptions,
@@ -43,3 +64,16 @@ export interface GenerationExecutionPort {
   describeExternalTask(task: GenerationProviderTaskRef): Promise<MediaAdapterResult>;
   cancelExternalTask(task: GenerationProviderTaskRef): Promise<void>;
 }
+
+export interface PromptGenerationExecutionPort {
+  generatePrompt(
+    request: PromptGenerationRequest & {
+      readonly providerId: string;
+      readonly modelId: string;
+    },
+    options?: Pick<MediaGenerationExecutionOptions, 'signal'>,
+  ): Promise<PromptGenerationResult>;
+}
+
+export interface GenerationExecutionPort
+  extends MediaGenerationExecutionPort, PromptGenerationExecutionPort {}

@@ -38,6 +38,16 @@ export function createInMemoryGenerationJobStore(): GenerationJobStore {
         diagnostics: [],
       };
     },
+    findBySubmissionId: async (submissionId: string) => {
+      const snapshots = await Promise.all(refs.map((ref) => store.get(ref)));
+      const matches = snapshots.filter((snapshot) => snapshot.submissionId === submissionId);
+      if (matches.length > 1) {
+        throw invalidPersistence(
+          `Generation submission '${submissionId}' is bound to multiple Jobs.`,
+        );
+      }
+      return matches[0];
+    },
   });
 }
 
@@ -197,6 +207,40 @@ export function createPersistentGenerationJobStore(
             }
           }
           return { snapshots, diagnostics };
+        },
+      );
+    },
+
+    findBySubmissionId: (submissionId) => {
+      if (!submissionId.trim()) {
+        throw invalidPersistence('Generation submission identity must be non-empty.');
+      }
+      return options.metadataStore.transaction(
+        {
+          mode: 'read',
+          ownership: 'state',
+          operation: 'find-generation-job-by-submission',
+        },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT job_id, phase, snapshot_json, created_at, updated_at
+              FROM generation_jobs
+              WHERE workspace_id = ?
+              ORDER BY created_at ASC, job_id ASC`,
+            [options.workspaceId],
+          );
+          const matches: GenerationJobSnapshot[] = [];
+          for (const row of rows) {
+            const ref = readGenerationRef(row);
+            const snapshot = decodeRow(row, ref);
+            if (snapshot.submissionId === submissionId) matches.push(snapshot);
+          }
+          if (matches.length > 1) {
+            throw invalidPersistence(
+              `Generation submission '${submissionId}' is bound to multiple Jobs.`,
+            );
+          }
+          return matches[0];
         },
       );
     },

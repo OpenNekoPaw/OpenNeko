@@ -1,5 +1,11 @@
 import * as path from 'node:path';
-import type { GenerationExecutionPort, MediaGenerationResult } from '@neko/generation';
+import * as fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import type {
+  GenerationExecutionResult,
+  MediaGenerationExecutionPort,
+  PromptGenerationExecutionPort,
+} from '@neko/generation';
 import type { GeneratedOutputContentLocator } from '@neko/content';
 import { resolveWorkspaceGeneratedAssetRelativeDirectory } from '@neko/generation';
 import {
@@ -13,13 +19,15 @@ import { PathResolver } from '@neko/shared';
 import { GeneratedAssetIndex } from './generated-asset-index';
 import { finalizeMediaGenerationOutputs } from './media-generation-output-finalizer';
 import type { GeneratedMediaKind } from './media-generated-asset';
+import { createStableGeneratedOutputId } from './media-generated-asset';
 import { LocalMetadataGeneratedOutputProjectionStore } from './local-metadata/generated-output-projection-store';
 
 export interface NodeWorkspaceGenerationJobOwnerOptions {
   readonly workspaceId: string;
   readonly workspaceRoot: string;
   readonly homedir: string;
-  readonly execution: GenerationExecutionPort;
+  readonly mediaExecution: MediaGenerationExecutionPort;
+  readonly promptExecution: PromptGenerationExecutionPort;
 }
 
 export async function createNodeWorkspaceGenerationJobOwner(
@@ -56,7 +64,18 @@ export async function createNodeWorkspaceGenerationJobOwner(
         metadataStore: metadata.metadataStore,
         workspaceId: metadata.workspaceId,
       }),
-      execution: options.execution,
+      execution: {
+        generatePrompt: (request, executionOptions) =>
+          options.promptExecution.generatePrompt(request, executionOptions),
+        generateImage: (request, executionOptions) =>
+          options.mediaExecution.generateImage(request, executionOptions),
+        generateVideo: (request, executionOptions) =>
+          options.mediaExecution.generateVideo(request, executionOptions),
+        generateAudio: (request, executionOptions) =>
+          options.mediaExecution.generateAudio(request, executionOptions),
+        describeExternalTask: (task) => options.mediaExecution.describeExternalTask(task),
+        cancelExternalTask: (task) => options.mediaExecution.cancelExternalTask(task),
+      },
       resultCommitter: {
         commit: ({ ref, generation }) =>
           commitGenerationResult({
@@ -102,10 +121,17 @@ export async function createNodeWorkspaceGenerationJobOwner(
 
 async function commitGenerationResult(input: {
   readonly operationId: string;
-  readonly generation: MediaGenerationResult;
+  readonly generation: GenerationExecutionResult;
   readonly workspaceRoot: string;
   readonly generatedAssets: GeneratedAssetIndex;
 }): Promise<readonly GeneratedOutputContentLocator[]> {
+  if (input.generation.type === 'prompt') {
+    return commitPromptGenerationResult({
+      operationId: input.operationId,
+      text: input.generation.text,
+      workspaceRoot: input.workspaceRoot,
+    });
+  }
   const mediaKind = toGeneratedMediaKind(input.generation.type);
   const finalized = await finalizeMediaGenerationOutputs({
     workspaceRoot: input.workspaceRoot,
@@ -128,6 +154,21 @@ async function commitGenerationResult(input: {
     }
     return asset.lifecycle.contentLocator;
   });
+}
+
+async function commitPromptGenerationResult(input: {
+  readonly operationId: string;
+  readonly text: string;
+  readonly workspaceRoot: string;
+}): Promise<readonly GeneratedOutputContentLocator[]> {
+  const bytes = Buffer.from(input.text, 'utf8');
+  const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  const outputId = createStableGeneratedOutputId(input.operationId, 0, digest);
+  const relativePath = path.posix.join('neko', 'generated', 'text', `${outputId}.md`);
+  const outputPath = path.join(input.workspaceRoot, ...relativePath.split('/'));
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  await fs.writeFile(outputPath, bytes);
+  return [{ kind: 'generated-output', outputId, digest, path: relativePath }];
 }
 
 function toGeneratedMediaKind(type: string): GeneratedMediaKind {

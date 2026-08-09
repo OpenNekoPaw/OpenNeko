@@ -14,7 +14,6 @@ import {
 } from './desktop-agent-launch-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
-import type { DirectGenerationOperationPort } from '@neko/generation';
 
 const AgentWebviewRoot = lazy(() =>
   loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
@@ -26,7 +25,6 @@ type DesktopAgentSurfaceState =
       readonly kind: 'ready';
       readonly connectionKey: string;
       readonly adapter: DesktopAgentSurfaceRuntimeAdapter;
-      readonly directGeneration: DirectGenerationOperationPort;
       readonly agentPresentation?: AgentInteractionProjection;
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly initialInput?: { readonly id: string; readonly value: string };
@@ -163,13 +161,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             kind: 'ready',
             connectionKey,
             adapter: launchAdapter,
-            directGeneration: {
-              submit: (operation) =>
-                window.openNekoDesktop.directGeneration.submit(
-                  { kind: 'agent-draft', connection: catalog.connection },
-                  operation,
-                ),
-            },
             agentPresentation: catalog.interaction,
             ...(props.binding === 'workspace' && props.initialConversation
               ? { initialConversation: props.initialConversation }
@@ -187,13 +178,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             bridge: window.openNekoDesktop,
             bootstrap,
           }),
-          directGeneration: {
-            submit: (operation) =>
-              window.openNekoDesktop.directGeneration.submit(
-                { kind: 'agent-session', connection: bootstrap.connection },
-                operation,
-              ),
-          },
           ...(agentPresentation ? { agentPresentation } : {}),
           ...(props.binding === 'workspace' && props.initialConversation
             ? { initialConversation: props.initialConversation }
@@ -253,7 +237,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
             <AgentWebviewRoot
               hostRuntimeAdapter={state.adapter}
-              directGeneration={state.directGeneration}
               agentPresentation={state.agentPresentation}
               composerWorkspace={props.composerWorkspace}
               initialConversation={

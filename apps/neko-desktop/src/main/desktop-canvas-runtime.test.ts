@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import {
   createCanvasHostIntentRequest,
+  type CanvasGenerationApplicationPort,
   type CanvasHostIntent,
   type CanvasHostRuntimeIdentity,
   type CanvasHostSnapshot,
@@ -17,7 +18,6 @@ import {
   CANVAS_ADD_TO_CUT_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
-  CANVAS_REGENERATE_ACTION_ID,
 } from '@neko/canvas-domain';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import type { DesktopCanvasViewGrant } from '@neko/host/desktop-shell-service';
@@ -755,22 +755,11 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('routes an empty material request to the instance-scoped Generation owner', async () => {
+  it('creates one empty Generation Node without submitting a Job or sibling material', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-generation-'));
     roots.push(workspacePath);
     const identity = createIdentity();
-    const generation = {
-      requestDraft: vi.fn(async () => ({
-        ref: { kind: 'generation' as const, jobId: 'generation-desktop-1' },
-        phase: 'pending' as const,
-        title: 'Generate image',
-        inputNodeIds: [],
-        mediaKind: 'image' as const,
-        summary: { prompt: 'Create an image' },
-      })),
-      detachWindow: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    };
+    const generation = createGenerationPort();
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -797,38 +786,26 @@ describe('DesktopCanvasRuntime', () => {
     const result = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
-        requestId: 'request-generation-draft',
-        commandId: 'command-generation-draft',
+        requestId: 'create-generation-node',
+        commandId: 'create-generation-node',
         identity,
         intent: {
-          type: 'request-generation-draft',
-          mediaKind: 'image',
+          type: 'create-generation-node',
+          kind: 'image',
           position: { x: 64, y: 96 },
-          inputNodeIds: [],
         },
       }),
     );
 
-    expect(generation.requestDraft).toHaveBeenCalledWith({
-      identity,
-      workspace: expect.objectContaining({
-        workspaceId: 'workspace-1',
-        workspacePath,
-      }),
-      mediaKind: 'image',
-      position: { x: 64, y: 96 },
-      inputNodeIds: [],
-    });
     expect(result.status).toBe('accepted');
     if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
     expect(result.snapshot.canvas.nodes).toEqual([
       expect.objectContaining({
-        type: 'job',
+        type: 'generation',
         position: { x: 64, y: 96 },
         data: expect.objectContaining({
-          jobRef: { kind: 'generation', jobId: 'generation-desktop-1' },
-          status: 'queued',
-          outputRefs: [],
+          recipe: { kind: 'image', prompt: '' },
+          outputs: [],
         }),
       }),
     ]);
@@ -836,8 +813,10 @@ describe('DesktopCanvasRuntime', () => {
       expect.arrayContaining([
         expect.objectContaining({ type: 'media' }),
         expect.objectContaining({ type: 'file' }),
+        expect.objectContaining({ type: 'job' }),
       ]),
     );
+    expect(generation.startNode).not.toHaveBeenCalled();
 
     runtime.detachWindow('window-1');
     expect(generation.detachWindow).toHaveBeenCalledWith('window-1');
@@ -845,26 +824,15 @@ describe('DesktopCanvasRuntime', () => {
     expect(generation.dispose).toHaveBeenCalledOnce();
   });
 
-  it('does not advertise empty Generation nodes when the owner exposes result actions only', async () => {
+  it('does not advertise Generation kinds without the Generation application port', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-result-only-'));
     roots.push(workspacePath);
     const identity = createIdentity();
-    const generation = {
-      resolveResultActions: vi.fn(async () => ({
-        regenerate: true,
-        editAndGenerate: false,
-      })),
-      regenerateResult: vi.fn(async () => {
-        throw new Error('Result regeneration is not exercised by this capability test.');
-      }),
-      detachWindow: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    };
-    const runtime = createRuntimeWithGeneration(workspacePath, identity, generation);
+    const runtime = createRuntime(workspacePath, identity);
 
     const snapshot = await runtime.getSnapshot('window-1', identity);
 
-    expect(snapshot.authoringCapabilities.generationMediaKinds).toEqual([]);
+    expect(snapshot.authoringCapabilities.generationKinds).toEqual([]);
     await runtime.dispose();
   });
 
@@ -1171,112 +1139,79 @@ describe('DesktopCanvasRuntime', () => {
     await restartedRuntime.dispose();
   });
 
-  it('restores generated material evidence after restart and rebuilds owner actions', async () => {
+  it('keeps historical generated Job and Media nodes readable without regenerate actions', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-generation-restart-'));
     roots.push(workspacePath);
-    await writeFixtureFile(workspacePath, 'neko/generated/frame-1.png', 'generated-image');
     const identity = createIdentity();
-    const generationSnapshot = {
-      ref: { kind: 'generation' as const, jobId: 'generation-restart-1' },
-      phase: 'succeeded' as const,
-      title: 'Generate concept frame',
-      inputNodeIds: [],
-      mediaKind: 'image' as const,
-      summary: {
-        prompt: 'Create a quiet night-time concept frame',
-        model: 'fixture-image-model',
-      },
-      position: { x: 120, y: 160 },
-      resultLocators: [
-        {
-          kind: 'generated-output' as const,
-          outputId: 'output-frame-1',
-          digest: 'sha256:generated-frame-1',
-          path: 'neko/generated/frame-1.png',
-        },
-      ],
+    const locator = {
+      kind: 'generated-output' as const,
+      outputId: 'output-frame-1',
+      digest: 'sha256:generated-frame-1',
+      path: 'neko/generated/frame-1.png',
     };
-    const generation = {
-      requestDraft: vi.fn(async () => generationSnapshot),
-      resolveResultActions: vi.fn(async () => ({
-        regenerate: true,
-        editAndGenerate: false,
-      })),
-      regenerateResult: vi.fn(async () => generationSnapshot),
-      detachWindow: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    };
-    const runtime = createRuntimeWithGeneration(workspacePath, identity, generation);
-    await runtime.getSnapshot('window-1', identity);
-
-    const projected = await runtime.executeIntent(
-      'window-1',
-      createCanvasHostIntentRequest({
-        requestId: 'request-generation-restart',
-        commandId: 'command-generation-restart',
-        identity,
-        intent: {
-          type: 'request-generation-draft',
-          mediaKind: 'image',
-          position: { x: 120, y: 160 },
-          inputNodeIds: [],
-        },
-      }),
-    );
-    expect(projected.status).toBe('accepted');
-    if (projected.status !== 'accepted') throw new Error(projected.diagnostic.message);
-    const generatedNode = projected.snapshot.canvas.nodes.find(
-      (node) => node.type === 'media' && node.data.contentLocator?.kind === 'generated-output',
-    );
-    if (!generatedNode || generatedNode.type !== 'media') {
-      throw new Error('Generated Canvas material was not projected.');
-    }
-
-    const save = await runtime.executeIntent(
-      'window-1',
-      createCanvasHostIntentRequest({
-        requestId: 'save-generation-restart',
-        commandId: 'save-generation-restart',
-        identity,
-        intent: { type: 'save' },
-      }),
-    );
-    expect(save.status).toBe('accepted');
-    const documentPath = path.join(workspacePath, identity.documentId);
-    const serialized = await readFile(documentPath, 'utf8');
-    expect(JSON.parse(serialized)).toMatchObject({
-      nodes: expect.arrayContaining([
-        expect.objectContaining({
-          type: 'media',
-          data: expect.objectContaining({
-            contentLocator: generationSnapshot.resultLocators[0],
-            generation: {
-              jobRef: generationSnapshot.ref,
-              summary: generationSnapshot.summary,
+    await writeFixtureFile(workspacePath, locator.path, 'generated-image');
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Historical Canvas',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'generation-job:generation-restart-1',
+            type: 'job',
+            position: { x: 120, y: 160 },
+            size: { width: 240, height: 150 },
+            zIndex: 0,
+            data: {
+              jobRef: { kind: 'generation', jobId: 'generation-restart-1' },
+              title: 'Generate concept frame',
+              status: 'completed',
+              inputRefs: [],
+              outputRefs: [{ kind: 'canvas-node', nodeId: 'historical-media-1' }],
             },
-          }),
-        }),
-      ]),
-    });
-    expect(serialized).not.toContain('"actionId"');
-    expect(serialized).not.toContain('blob:');
-    expect(serialized).not.toContain('data:');
-    await runtime.dispose();
-
-    const restartedGeneration = {
-      requestDraft: vi.fn(async () => undefined),
-      resolveResultActions: vi.fn(async () => ({
-        regenerate: true,
-        editAndGenerate: false,
-      })),
-      regenerateResult: vi.fn(async () => generationSnapshot),
-      detachWindow: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    };
+          },
+          {
+            id: 'historical-media-1',
+            type: 'media',
+            position: { x: 400, y: 160 },
+            size: { width: 320, height: 240 },
+            zIndex: 1,
+            data: {
+              assetPath: locator.path,
+              mediaType: 'image',
+              contentLocator: locator,
+              generation: {
+                jobRef: { kind: 'generation', jobId: 'generation-restart-1' },
+                summary: {
+                  prompt: 'Create a quiet night-time concept frame',
+                  model: 'fixture-image-model',
+                },
+              },
+            },
+          },
+        ],
+        connections: [
+          {
+            id: 'historical-generation-output',
+            sourceId: 'generation-job:generation-restart-1',
+            targetId: 'historical-media-1',
+            sourceEndpoint: {
+              nodeId: 'generation-job:generation-restart-1',
+              scope: 'node',
+            },
+            targetEndpoint: { nodeId: 'historical-media-1', scope: 'node' },
+            sourceAnchor: 'right',
+            targetAnchor: 'left',
+            type: 'derived-from',
+          },
+        ],
+      }),
+    );
     const restartedRuntime = createRuntimeWithGeneration(
       workspacePath,
       identity,
-      restartedGeneration,
+      createGenerationPort(),
     );
     const restarted = await restartedRuntime.getSnapshot('window-1', identity);
     expect(restarted.canvas.nodes).toEqual(
@@ -1289,13 +1224,16 @@ describe('DesktopCanvasRuntime', () => {
           }),
         }),
         expect.objectContaining({
-          id: generatedNode.id,
+          id: 'historical-media-1',
           type: 'media',
           data: expect.objectContaining({
-            contentLocator: generationSnapshot.resultLocators[0],
+            contentLocator: locator,
             generation: {
               jobRef: { kind: 'generation', jobId: 'generation-restart-1' },
-              summary: generationSnapshot.summary,
+              summary: {
+                prompt: 'Create a quiet night-time concept frame',
+                model: 'fixture-image-model',
+              },
             },
           }),
         }),
@@ -1305,7 +1243,7 @@ describe('DesktopCanvasRuntime', () => {
       expect.arrayContaining([
         expect.objectContaining({
           sourceId: 'generation-job:generation-restart-1',
-          targetId: generatedNode.id,
+          targetId: 'historical-media-1',
           type: 'derived-from',
         }),
       ]),
@@ -1314,29 +1252,12 @@ describe('DesktopCanvasRuntime', () => {
     const resolution = await restartedRuntime.resolveMaterialActions('window-1', {
       requestId: 'resolve-restarted-generation-actions',
       identity,
-      selectedNodeIds: [generatedNode.id],
+      selectedNodeIds: ['historical-media-1'],
     });
-    expect(resolution.descriptors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: CANVAS_REGENERATE_ACTION_ID,
-          ownerId: 'generation',
-        }),
-      ]),
+    expect(resolution.descriptors.map((descriptor) => descriptor.ownerId)).not.toContain(
+      'generation',
     );
-    expect(restartedGeneration.resolveResultActions).toHaveBeenCalledWith({
-      identity,
-      workspace: expect.objectContaining({ workspacePath }),
-      target: expect.objectContaining({
-        nodeId: generatedNode.id,
-        origin: 'generated',
-        locator: generationSnapshot.resultLocators[0],
-        generation: {
-          jobRef: { kind: 'generation', jobId: 'generation-restart-1' },
-          summary: generationSnapshot.summary,
-        },
-      }),
-    });
+    expect(restarted.canvas.nodes.some((node) => node.type === 'generation')).toBe(false);
     await restartedRuntime.dispose();
   });
 
@@ -1348,7 +1269,6 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath, linkedLibraryPath, globalLibraryPath, externalSourcePath);
     await Promise.all([
       writeFixtureFile(workspacePath, 'cases/test.png', 'workspace-image'),
-      writeFixtureFile(workspacePath, 'neko/generated/concept-frame.png', 'generated-image'),
       writeFixtureFile(workspacePath, 'neko/derived/crop/test-cropped.png', 'derived-image'),
       writeFixtureFile(linkedLibraryPath, 'clips/linked.mp4', 'linked-video'),
       writeFixtureFile(globalLibraryPath, 'stills/global-frame.png', 'global-image'),
@@ -1366,57 +1286,6 @@ describe('DesktopCanvasRuntime', () => {
       locationKind: 'local',
     });
     const identity = createIdentity();
-    const generation: NonNullable<
-      ConstructorParameters<typeof DesktopCanvasRuntime>[0]['generation']
-    > = {
-      requestDraft: vi.fn(async (input) =>
-        input.mediaKind === 'image'
-          ? {
-              ref: { kind: 'generation' as const, jobId: 'generation-phase-1-success' },
-              phase: 'succeeded' as const,
-              title: 'Generate concept frame',
-              inputNodeIds: [...input.inputNodeIds],
-              mediaKind: 'image' as const,
-              summary: {
-                prompt: 'Create a concept frame from the referenced image',
-                model: 'fixture-image-model',
-              },
-              resultLocators: [
-                {
-                  kind: 'generated-output' as const,
-                  outputId: 'concept-frame',
-                  digest: 'sha256:phase-1-generated',
-                  path: 'neko/generated/concept-frame.png',
-                },
-              ],
-            }
-          : {
-              ref: { kind: 'generation' as const, jobId: 'generation-phase-1-failure' },
-              phase: 'failed' as const,
-              title: 'Generate video',
-              inputNodeIds: [...input.inputNodeIds],
-              mediaKind: 'video' as const,
-              summary: {
-                prompt: 'Generate a short video',
-                model: 'fixture-video-model',
-              },
-              failure: {
-                code: 'provider-failed',
-                message: 'Fixture provider rejected the request',
-                retryable: true,
-              },
-            },
-      ),
-      resolveResultActions: vi.fn(async () => ({
-        regenerate: true,
-        editAndGenerate: false,
-      })),
-      regenerateResult: vi.fn(async () => {
-        throw new Error('Regeneration is not exercised by the lifecycle fixture.');
-      }),
-      detachWindow: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    };
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -1443,7 +1312,6 @@ describe('DesktopCanvasRuntime', () => {
           sourceName: 'outside.png',
         },
       })),
-      generation,
     });
 
     let snapshot = await runtime.getSnapshot('window-1', identity);
@@ -1500,18 +1368,6 @@ describe('DesktopCanvasRuntime', () => {
       sourceKind: 'image',
       sourceMode: 'import',
     });
-    snapshot = await executeAcceptedIntent(runtime, identity, snapshot, 'generation-success', {
-      type: 'request-generation-draft',
-      mediaKind: 'image',
-      position: { x: 420, y: 120 },
-      inputNodeIds: [referencedSource.id],
-    });
-    snapshot = await executeAcceptedIntent(runtime, identity, snapshot, 'generation-failure', {
-      type: 'request-generation-draft',
-      mediaKind: 'video',
-      position: { x: 680, y: 120 },
-      inputNodeIds: [],
-    });
     snapshot = await executeAcceptedIntent(runtime, identity, snapshot, 'derived-output', {
       type: 'author-material',
       request: {
@@ -1560,34 +1416,6 @@ describe('DesktopCanvasRuntime', () => {
           }),
         }),
         expect.objectContaining({
-          type: 'job',
-          data: expect.objectContaining({
-            jobRef: { kind: 'generation', jobId: 'generation-phase-1-success' },
-            status: 'completed',
-          }),
-        }),
-        expect.objectContaining({
-          type: 'media',
-          data: expect.objectContaining({
-            contentLocator: expect.objectContaining({
-              kind: 'generated-output',
-              outputId: 'concept-frame',
-            }),
-            generation: expect.objectContaining({
-              jobRef: { kind: 'generation', jobId: 'generation-phase-1-success' },
-            }),
-          }),
-        }),
-        expect.objectContaining({
-          type: 'job',
-          data: expect.objectContaining({
-            jobRef: { kind: 'generation', jobId: 'generation-phase-1-failure' },
-            status: 'failed',
-            diagnostic: 'provider-failed: Fixture provider rejected the request',
-            outputRefs: [],
-          }),
-        }),
-        expect.objectContaining({
           data: expect.objectContaining({
             contentLocator: {
               kind: 'workspace-file',
@@ -1604,13 +1432,6 @@ describe('DesktopCanvasRuntime', () => {
           connection.sourceId === referencedSource.id && connection.type === 'derived-from',
       ),
     ).toBe(true);
-    expect(
-      snapshot.canvas.nodes.filter(
-        (node) =>
-          (node.type === 'media' || node.type === 'file') &&
-          node.data.generation?.jobRef.jobId === 'generation-phase-1-failure',
-      ),
-    ).toEqual([]);
     expect(
       await readFile(path.join(workspacePath, 'neko/imports/image/global-frame.png'), 'utf8'),
     ).toBe('global-image');
@@ -1631,28 +1452,13 @@ describe('DesktopCanvasRuntime', () => {
     expect(serialized).not.toContain('data:');
     await runtime.dispose();
 
-    const restartedRuntime = createRuntimeWithGeneration(workspacePath, identity, {
-      requestDraft: vi.fn(async () => undefined),
-      resolveResultActions: vi.fn(async () => ({
-        regenerate: true,
-        editAndGenerate: false,
-      })),
-      regenerateResult: vi.fn(async () => {
-        throw new Error('Regeneration is not exercised after restart.');
-      }),
-      detachWindow: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    });
+    const restartedRuntime = createRuntime(workspacePath, identity);
     const restarted = await restartedRuntime.getSnapshot('window-1', identity);
     expect(restarted.canvas).toEqual(snapshot.canvas);
     expect(restarted.canvas.connections).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           sourceId: referencedSource.id,
-          type: 'derived-from',
-        }),
-        expect.objectContaining({
-          sourceId: 'generation-job:generation-phase-1-success',
           type: 'derived-from',
         }),
       ]),
@@ -1838,6 +1644,25 @@ function createRuntimeWithGeneration(
     globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
     generation,
   });
+}
+
+function createGenerationPort() {
+  return {
+    startNode: vi.fn(async () => {
+      throw new Error('Generation execution is not expected by this fixture.');
+    }),
+    resumeNode: vi.fn(async () => {
+      throw new Error('Generation recovery is not expected by this fixture.');
+    }),
+    observeNode: vi.fn(async function* () {
+      throw new Error('Generation observation is not expected by this fixture.');
+    }),
+    cancelNode: vi.fn(async () => {
+      throw new Error('Generation cancellation is not expected by this fixture.');
+    }),
+    detachWindow: vi.fn(),
+    dispose: vi.fn(async () => undefined),
+  } satisfies CanvasGenerationApplicationPort;
 }
 
 function materialIdentity(identity: CanvasHostRuntimeIdentity) {

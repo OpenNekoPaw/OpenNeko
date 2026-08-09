@@ -8,6 +8,7 @@ import type {
 } from '@neko/canvas-domain';
 import { isContentLocator } from '@neko/content';
 import {
+  isCanvasGenerationNodeData,
   isCanvasMaterialMediaKind,
   isCanvasNodeType,
   parseDocumentResourceStatus,
@@ -165,6 +166,11 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
         },
       };
     }
+    case 'generation':
+      if (!isCanvasGenerationNodeData(data)) {
+        throw new Error('Canvas Generation creation requires canonical Recipe data');
+      }
+      return { ...base, type, data };
   }
 
   throw new Error(`Unsupported Canvas node type "${String(type)}"`);

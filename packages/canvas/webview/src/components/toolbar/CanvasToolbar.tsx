@@ -17,7 +17,6 @@ import { useScopedHistoryStore as useHistoryStore } from '../../stores/canvasSto
 import { t } from '../../i18n';
 import { DownloadIcon, UndoIcon, RedoIcon, PackageIcon, PointerIcon } from '@neko/ui/icons';
 import type { CanvasAddActionId, CanvasAddSourceModeId } from '../../utils/canvasAddActions';
-import type { CanvasAddSourceKind } from '../../utils/canvasAddActions';
 import { CanvasAddActionPopover } from './CanvasAddActionPopover';
 
 // =============================================================================
@@ -33,7 +32,7 @@ export interface CanvasToolbarProps {
   /** Creates or binds one user-authorable Canvas action. */
   onSelectAddAction?: (actionId: CanvasAddActionId, sourceMode?: CanvasAddSourceModeId) => void;
   availableSourceModes?: readonly CanvasAddSourceModeId[];
-  availableGenerationKinds?: readonly CanvasAddSourceKind[];
+  availableGenerationKinds?: readonly ('prompt' | 'image' | 'video' | 'audio')[];
   /** Unified Storyline Overlay visibility, controlled from the floating toolbar. */
   playbackWorkspaceVisible?: boolean;
   onTogglePlaybackWorkspace?: () => void;

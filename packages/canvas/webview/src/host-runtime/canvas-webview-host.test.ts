@@ -86,7 +86,7 @@ describe('createCanvasWebviewHost', () => {
     runtime.dispose();
   });
 
-  it('routes create mode to a Generation draft and projects only the authoritative Job', async () => {
+  it('creates one canonical Generation Node without submitting a Job', async () => {
     const identity = {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
@@ -97,35 +97,40 @@ describe('createCanvasWebviewHost', () => {
       sessionId: 'session-1',
       rendererSessionId: 'endpoint-1',
     };
-    const requestGenerationDraft = vi.fn(async () => ({
-      ref: { kind: 'generation' as const, jobId: 'generation-1' },
-      phase: 'pending' as const,
-      title: 'Generate image',
-      inputNodeIds: [],
-      mediaKind: 'image' as const,
-      summary: { prompt: 'Describe the image to generate' },
-    }));
+    const startNode = vi.fn(async () => {
+      throw new Error('Creating a Generation Node must not submit a Job.');
+    });
     const runtime = new CanvasHostRuntimeSession({
       identity,
       initialCanvas: DEFAULT_CANVAS_DATA,
-      effects: { requestGenerationDraft },
+      effects: {
+        generation: {
+          startNode,
+          resumeNode: async () => {
+            throw new Error('Generation recovery is not used by this test.');
+          },
+          observeNode: async function* () {
+            yield* [];
+            throw new Error('Generation observation is not used by this test.');
+          },
+          cancelNode: async () => {
+            throw new Error('Generation cancellation is not used by this test.');
+          },
+        },
+      },
     });
     const host = createCanvasWebviewHost(runtime);
 
-    const snapshot = await host.requestGenerationDraft('image', { x: 80, y: 120 });
+    const snapshot = await host.createGenerationNode('image', { x: 80, y: 120 });
 
-    expect(requestGenerationDraft).toHaveBeenCalledWith({
-      identity,
-      mediaKind: 'image',
-      position: { x: 80, y: 120 },
-      inputNodeIds: [],
-    });
+    expect(startNode).not.toHaveBeenCalled();
     expect(snapshot.canvas.nodes).toEqual([
       expect.objectContaining({
-        type: 'job',
+        type: 'generation',
         position: { x: 80, y: 120 },
         data: expect.objectContaining({
-          jobRef: { kind: 'generation', jobId: 'generation-1' },
+          recipe: { kind: 'image', prompt: '' },
+          outputs: [],
         }),
       }),
     ]);

@@ -23,31 +23,8 @@ const hostMocks = vi.hoisted(() => ({
   clearActiveSkill: vi.fn(),
 }));
 
-const directGenerationMocks = vi.hoisted(() => ({
-  submit: vi.fn(async () => ({
-    jobId: 'job-direct-image',
-    mediaKind: 'image' as const,
-    purpose: 'image.generate' as const,
-    providerId: 'image-provider',
-    modelId: 'image-model',
-    phase: 'succeeded' as const,
-    resultLocators: [
-      {
-        kind: 'generated-output' as const,
-        outputId: 'output-image',
-        digest: 'sha256:image',
-        path: 'generated/image/output.png',
-      },
-    ],
-  })),
-}));
-
 vi.mock('../host-runtime-context', () => ({
   useAgentHostMessages: () => hostMocks,
-}));
-
-vi.mock('../direct-generation-context', () => ({
-  useDirectGenerationOperationPort: () => directGenerationMocks,
 }));
 
 vi.mock('../i18n/I18nContext', () => ({
@@ -59,8 +36,8 @@ vi.mock('../i18n/I18nContext', () => ({
 vi.mock('./ChatView/InputAreaContext', () => ({
   InputAreaProvider: (props: {
     children: ReactNode;
-    sessionMode?: 'agent' | 'image' | 'video' | 'audio';
-    onSessionModeChange?: (mode: 'agent' | 'image' | 'video' | 'audio') => void;
+    sessionMode?: 'agent';
+    onSessionModeChange?: (mode: 'agent') => void;
     mediaModelSelection?: { image: string; video: string; audio: string };
     onCompressContext?: () => Promise<void>;
     selectedModel?: string;
@@ -95,11 +72,6 @@ vi.mock('./ChatView/InputAreaContext', () => ({
       />
       <button
         type="button"
-        data-testid="set-image-session"
-        onClick={() => props.onSessionModeChange?.('image')}
-      />
-      <button
-        type="button"
         data-testid="compress-context"
         onClick={() => void props.onCompressContext?.()}
       />
@@ -124,8 +96,8 @@ vi.mock('./ChatView', () => ({
     onPromoteQueuedMessage?: (queueItemId: string) => void;
     onCancelQueuedMessage?: (queueItemId: string) => void;
     onEditQueuedMessage?: (queueItemId: string) => void;
-    entryPromptMenu?: 'generate-assets' | 'roleplay' | null;
-    onEntryPromptMenuChange?: (menu: 'generate-assets' | 'roleplay' | null) => void;
+    entryPromptMenu?: 'roleplay' | null;
+    onEntryPromptMenuChange?: (menu: 'roleplay' | null) => void;
     isComposing?: boolean;
     onCompositionChange?: (isComposing: boolean) => void;
     focusRequestOwner?: string;
@@ -356,54 +328,6 @@ describe('ChatWorkspace pending send', () => {
     expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('replays a pending image entry through direct generation without an Agent message', async () => {
-    const runtime = createTabRenderRuntime({ tabId: 'tab-image', conversationId: 'conv-image' });
-    const settings = createSettingsWithAgentMediaModels();
-    const setMessages = vi.fn();
-
-    render(
-      <ChatWorkspace
-        {...createProps({
-          tabRenderStore: runtime.store,
-          settings,
-          setMessages,
-          pendingSendRequest: {
-            id: 2,
-            input: {
-              messageText: 'generate a red circle',
-              displayMessageText: 'generate a red circle',
-              sessionMode: 'image',
-            },
-          },
-        })}
-      />,
-    );
-
-    await act(async () => {
-      runtime.store.updateState({
-        modelConfigurationInitialized: true,
-        selectedModel: 'test-model',
-        mediaModelSelection: {
-          image: 'image-provider:image-model',
-          video: 'video-provider:video-model',
-          audio: 'audio-provider:audio-model',
-        },
-      });
-    });
-
-    expect(directGenerationMocks.submit).toHaveBeenCalledWith({
-      mediaKind: 'image',
-      prompt: 'generate a red circle',
-      providerId: 'image-provider',
-      modelId: 'image-model',
-      aspectRatio: '16:9',
-      width: 1920,
-      height: 1080,
-    });
-    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
-    expect(setMessages).not.toHaveBeenCalled();
-  });
-
   it('projects hydrated Agent media defaults into the pending send turn policy', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
     const settings = createSettingsWithAgentMediaModels();
@@ -513,26 +437,6 @@ describe('ChatWorkspace pending send', () => {
     expect(onMentionSearchFilterChange).toHaveBeenCalledWith('hero');
     expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', 'conv-1');
     expect(onInitialInputRequestConsumed).toHaveBeenCalledWith(3);
-  });
-
-  it('applies an initial generation mode once and projects its media model default', () => {
-    const onInitialSessionModeRequestConsumed = vi.fn();
-    const request = { id: 4, mode: 'image' as const };
-    const props = createProps({
-      settings: createSettingsWithImageModel(),
-      initialSessionModeRequest: request,
-      onInitialSessionModeRequestConsumed,
-    });
-    const { rerender } = render(<ChatWorkspace {...props} />);
-
-    expect(screen.getByTestId('session-mode').textContent).toBe('image');
-    expect(screen.getByTestId('media-model-selection').textContent).toBe('image-model|none|none');
-    expect(onInitialSessionModeRequestConsumed).toHaveBeenCalledTimes(1);
-    expect(onInitialSessionModeRequestConsumed).toHaveBeenCalledWith(4);
-
-    rerender(<ChatWorkspace {...props} />);
-
-    expect(onInitialSessionModeRequestConsumed).toHaveBeenCalledTimes(1);
   });
 
   it('restores a queued edit from its owning Tab store into an empty composer', () => {
@@ -733,7 +637,7 @@ describe('ChatWorkspace pending send', () => {
     expect(runtimeA.store.getSnapshot().state.inputValue).toBe('draft-a');
   });
 
-  it('keeps session mode isolated per visible conversation', () => {
+  it('keeps every visible conversation on the canonical Agent mode', () => {
     const storeA = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' }).store;
     const storeB = createTabRenderRuntime({ tabId: 'tab-b', conversationId: 'conv-b' }).store;
     const { getByTestId, rerender } = render(
@@ -746,8 +650,6 @@ describe('ChatWorkspace pending send', () => {
     );
 
     expect(getByTestId('session-mode').textContent).toBe('agent');
-    fireEvent.click(getByTestId('set-image-session'));
-    expect(getByTestId('session-mode').textContent).toBe('image');
 
     rerender(
       <ChatWorkspace
@@ -769,7 +671,7 @@ describe('ChatWorkspace pending send', () => {
       />,
     );
 
-    expect(getByTestId('session-mode').textContent).toBe('image');
+    expect(getByTestId('session-mode').textContent).toBe('agent');
   });
 
   it('keeps hidden Tab workspaces mounted but non-interactive', () => {

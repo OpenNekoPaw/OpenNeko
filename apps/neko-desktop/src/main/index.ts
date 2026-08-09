@@ -106,10 +106,11 @@ import {
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
+import { WorkspaceGenerationApplicationRuntime } from '@neko/generation/job';
 import {
-  createDirectGenerationOperationPort,
-  WorkspaceGenerationApplicationRuntime,
-} from '@neko/generation/job';
+  PromptGenerationService,
+  createAiSdkPromptCompletionPort,
+} from '@neko/generation/prompt';
 import {
   createContentReadMediaRequestAssetMaterializer,
   createMediaPlatform,
@@ -447,7 +448,11 @@ async function startDesktop(): Promise<void> {
         workspaceId,
         workspaceRoot,
         homedir,
-        execution: media.service,
+        mediaExecution: media.service,
+        promptExecution: new PromptGenerationService(
+          configManager,
+          createAiSdkPromptCompletionPort(),
+        ),
       });
     },
   });
@@ -649,7 +654,30 @@ async function startDesktop(): Promise<void> {
   });
   const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
   const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
-    generation: generationRuntime,
+    generation: {
+      getWorkspaceJobs: (input) => generationRuntime.getWorkspaceJobs(input),
+      validateBinding: ({ workspace, binding }) => {
+        const config = workspaceConfigAuthority.getWorkspaceConfig({
+          workspaceId: workspace.workspaceId,
+          workspacePath: workspace.workspacePath,
+        });
+        const provider = config.getProvider(binding.providerId);
+        const model = config.getModel(binding.modelId);
+        if (!provider || provider.enabled === false) {
+          throw new Error(`Canvas Generation provider '${binding.providerId}' is unavailable.`);
+        }
+        if (!model || model.enabled === false || model.providerId !== binding.providerId) {
+          throw new Error(
+            `Canvas Generation model '${binding.modelId}' is not available from provider '${binding.providerId}'.`,
+          );
+        }
+        if (!modelSupportsPurpose(model, binding.purpose)) {
+          throw new Error(
+            `Canvas Generation model '${binding.modelId}' does not support purpose '${binding.purpose}'.`,
+          );
+        }
+      },
+    },
   });
   const canvasRuntime = new DesktopCanvasRuntime({
     shell: shellService,
@@ -1512,38 +1540,6 @@ async function startDesktop(): Promise<void> {
     agentLaunch,
     agentLaunchSubmission,
     generationLifecycle: generationRuntime,
-    resolveDirectGeneration: async (workspace) => {
-      const config = workspaceConfigAuthority.getWorkspaceConfig({
-        workspaceId: workspace.workspaceId,
-        workspacePath: workspace.workspacePath,
-      });
-      const jobs = await generationRuntime.getWorkspaceJobs({
-        workspaceId: workspace.workspaceId,
-        workspaceRoot: workspace.workspacePath,
-      });
-      return createDirectGenerationOperationPort({
-        jobs,
-        bindings: {
-          validate: ({ purpose, providerId, modelId }) => {
-            const provider = config.getProvider(providerId);
-            const model = config.getModel(modelId);
-            if (!provider || provider.enabled === false) {
-              throw new Error(`Direct Generation provider '${providerId}' is unavailable.`);
-            }
-            if (!model || model.enabled === false || model.providerId !== providerId) {
-              throw new Error(
-                `Direct Generation model '${modelId}' is not available from provider '${providerId}'.`,
-              );
-            }
-            if (!modelSupportsPurpose(model, purpose)) {
-              throw new Error(
-                `Direct Generation model '${modelId}' does not support purpose '${purpose}'.`,
-              );
-            }
-          },
-        },
-      });
-    },
     workspaceConfigLifecycle: workspaceConfigAuthority,
     workspaceGrants: workspaceGrantAuthority,
     conversationLifecycle,

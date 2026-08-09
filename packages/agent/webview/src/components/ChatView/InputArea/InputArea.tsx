@@ -14,7 +14,6 @@ import {
 } from 'react';
 import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon, FolderIcon } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
-import { SessionModeSelector } from './SessionModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
 import { EntryPromptMenu as ComposerEntryPromptMenu } from './EntryPromptMenu';
 import { AttachmentPreview } from './FileAttachment';
@@ -34,7 +33,6 @@ import {
   EntryPromptMenu,
   DEFAULT_COMPOSER_MENU_STATE,
   type ComposerMenuState,
-  type GenCategory,
   type SelectedFileReference,
 } from './types';
 import {
@@ -98,7 +96,6 @@ interface InputAreaProps {
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
-  onEntryGenerationModeSelect?: (mode: Extract<SessionMode, GenCategory>) => void;
   composerMenuState?: ComposerMenuState;
   onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   disabled?: boolean;
@@ -211,7 +208,6 @@ export function InputArea({
   onCancel,
   entryPromptMenu,
   onEntryPromptMenuChange,
-  onEntryGenerationModeSelect,
   composerMenuState: controlledComposerMenuState,
   onComposerMenuStateChange,
   disabled = false,
@@ -235,7 +231,6 @@ export function InputArea({
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
-    onSessionModeChange,
     selectedModel,
     availableModels,
     onModelSelect,
@@ -436,13 +431,9 @@ export function InputArea({
     filterSkillInvocations(skillInvocations, skillFilter, t),
   );
   const filteredMentionItems = getFilteredMentionItems(mentionItems, atFilter);
-  const mediaModelCounts = countMediaModelsByCategory(availableMediaModels);
-  const availableSessionModes = getAvailableSessionModes(mediaModelCounts);
-  const currentSessionMediaModelCount = getSessionMediaModelCount(sessionMode, mediaModelCounts);
+  const currentSessionMediaModelCount = 0;
   const showEntryPromptMenu = Boolean(entryPromptMenu);
-  const isMediaGenerationSession = isMediaGenerationMode(sessionMode);
-  const allowCommandMenus =
-    !isMediaGenerationSession && (slashCommands.length > 0 || skillInvocations.length > 0);
+  const allowCommandMenus = slashCommands.length > 0 || skillInvocations.length > 0;
   const modelConfigurationPolicy = configurationPolicy?.fields.model.policy;
   const executionModePolicy = configurationPolicy?.fields.executionMode.policy;
   const modelConfigurationLocked = modelConfigurationPolicy?.status === 'locked';
@@ -910,16 +901,6 @@ export function InputArea({
     [onAddContextChip, updateAttachedFiles],
   );
 
-  const handleEntryGenerationModeSelect = (mode: Extract<SessionMode, GenCategory>) => {
-    closeEntryPromptMenu();
-    if (onEntryGenerationModeSelect) {
-      onEntryGenerationModeSelect(mode);
-    } else {
-      onSessionModeChange(mode);
-    }
-    textareaRef.current?.focus();
-  };
-
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
     if (!onDraftCharacterTargetSelect) {
@@ -1014,10 +995,7 @@ export function InputArea({
 
           <ComposerEntryPromptMenu
             isOpen={showEntryPromptMenu}
-            menu={entryPromptMenu ?? null}
-            availableMediaModels={availableMediaModels}
             mentionItems={mentionItems}
-            onSelectGenerationMode={handleEntryGenerationModeSelect}
             onSelectRoleplayEntity={handleEntryRoleplaySelect}
             onClose={closeEntryPromptMenu}
           />
@@ -1159,22 +1137,13 @@ export function InputArea({
               </div>
             ) : null}
 
-            {(inputAreaProjection.showSessionModeSelector ||
-              inputAreaProjection.showModelConfig) && (
+            {inputAreaProjection.showModelConfig && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
                 <div
                   className="agent-composer-mode-controls"
                   role="group"
                   aria-label={t('chat.input.control.mode')}
                 >
-                  {inputAreaProjection.showSessionModeSelector ? (
-                    <SessionModeSelector
-                      mode={sessionMode}
-                      onChange={onSessionModeChange}
-                      availableModes={availableSessionModes}
-                      disabled={isBusy}
-                    />
-                  ) : null}
                   {inputAreaProjection.showModelConfig ? (
                     <ComposerConfigMenu
                       activeMode={sessionMode}
@@ -1351,38 +1320,6 @@ function promoteCompletedFileReferencesFromInput(
   }
 
   return { value: normalizeInputWhitespace(nextValue), references };
-}
-
-function countMediaModelsByCategory(
-  models: readonly { category?: string }[],
-): Record<GenCategory, number> {
-  return {
-    image: models.filter((model) => model.category === 'image').length,
-    video: models.filter((model) => model.category === 'video').length,
-    audio: models.filter((model) => model.category === 'audio').length,
-  };
-}
-
-function getAvailableSessionModes(counts: Record<GenCategory, number>): SessionMode[] {
-  const modes: SessionMode[] = ['agent'];
-  if (counts.image > 0) modes.push('image');
-  if (counts.video > 0) modes.push('video');
-  if (counts.audio > 0) modes.push('audio');
-  return modes;
-}
-
-function getSessionMediaModelCount(
-  sessionMode: SessionMode,
-  counts: Record<GenCategory, number>,
-): number {
-  if (sessionMode === 'image' || sessionMode === 'video' || sessionMode === 'audio') {
-    return counts[sessionMode];
-  }
-  return 0;
-}
-
-function isMediaGenerationMode(sessionMode: SessionMode): boolean {
-  return sessionMode === 'image' || sessionMode === 'video' || sessionMode === 'audio';
 }
 
 function buildAgentModelSendConfig(

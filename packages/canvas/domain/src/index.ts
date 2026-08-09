@@ -1,5 +1,7 @@
 export * from './canvas-cut-draft';
 export * from './canvas-generation-application-port';
+export * from './canvas-generation-authoring';
+export * from './canvas-generation-inputs';
 export * from './canvas-drop';
 export * from './canvas-markdown-capabilities';
 export * from './canvas-projection';

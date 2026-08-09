@@ -29,7 +29,8 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
       workspaceId: WORKSPACE_ID,
       workspaceRoot,
       homedir,
-      execution: createExecution(path.join(root, 'unused.png')),
+      mediaExecution: createExecution(path.join(root, 'unused.png')),
+      promptExecution: createExecution(path.join(root, 'unused.png')),
     });
     await owner.dispose();
 
@@ -60,7 +61,8 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
       workspaceId: WORKSPACE_ID,
       workspaceRoot,
       homedir,
-      execution,
+      mediaExecution: execution,
+      promptExecution: execution,
     });
 
     const started = await owner.jobs.submitGeneration({
@@ -95,6 +97,47 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
     await owner.dispose();
   });
 
+  it('commits Prompt output as a durable generated text locator', async () => {
+    const root = await createTemporaryDirectory();
+    const homedir = path.join(root, 'home');
+    const workspaceRoot = path.join(root, 'workspace');
+    await Promise.all([fs.mkdir(homedir), fs.mkdir(workspaceRoot)]);
+    const execution = createExecution(path.join(root, 'unused.png'));
+    execution.generatePrompt.mockResolvedValue({
+      type: 'prompt',
+      providerId: 'provider-1',
+      modelId: 'text-model',
+      text: '# Generated scene',
+      request: { prompt: 'Write a scene' },
+    });
+    const owner = await createNodeWorkspaceGenerationJobOwner({
+      workspaceId: WORKSPACE_ID,
+      workspaceRoot,
+      homedir,
+      mediaExecution: execution,
+      promptExecution: execution,
+    });
+
+    const started = await owner.jobs.submitGeneration({
+      lifecycleMode: 'detached',
+      generationType: 'prompt',
+      providerId: 'provider-1',
+      modelId: 'text-model',
+      request: { prompt: 'Write a scene' },
+    });
+    const completed = await waitForTerminal(owner.jobs.observeGeneration(started.ref));
+    const locator = completed.resultLocators?.[0];
+
+    expect(locator).toMatchObject({
+      kind: 'generated-output',
+      path: expect.stringMatching(/^neko\/generated\/text\//u),
+    });
+    await expect(fs.readFile(path.join(workspaceRoot, locator!.path), 'utf8')).resolves.toBe(
+      '# Generated scene',
+    );
+    await owner.dispose();
+  });
+
   it('rejects a mismatched authoritative Workspace identity', async () => {
     const root = await createTemporaryDirectory();
     const homedir = path.join(root, 'home');
@@ -112,7 +155,8 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
         workspaceId: OTHER_WORKSPACE_ID,
         workspaceRoot,
         homedir,
-        execution: createExecution(path.join(root, 'unused.png')),
+        mediaExecution: createExecution(path.join(root, 'unused.png')),
+        promptExecution: createExecution(path.join(root, 'unused.png')),
       }),
     ).rejects.toThrow(`expected '${OTHER_WORKSPACE_ID}', received '${WORKSPACE_ID}'`);
   });
@@ -120,6 +164,7 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
 
 function createExecution(sourcePath: string) {
   return {
+    generatePrompt: vi.fn(),
     generateImage: vi.fn(async (request) => ({
       type: 'text-to-image' as const,
       providerId: request.providerId,

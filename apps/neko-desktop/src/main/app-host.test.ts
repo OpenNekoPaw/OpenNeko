@@ -60,7 +60,6 @@ import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { AssetCenterNodeRuntime, type AssetCenterNodeRuntimeOptions } from '@neko/assets-node';
-import { createDesktopDirectGenerationRequest } from '../shared/generation-contract';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
@@ -442,141 +441,7 @@ describe('DesktopAppHost', () => {
     ).toHaveLength(workspaceConversationCount);
   });
 
-  it('runs direct generation only through the exact Draft Workspace grant', async () => {
-    const agentLaunch = createAgentLaunchRuntime();
-    const submit = vi.fn(async () => createDirectGenerationProjection('image'));
-    const resolveDirectGeneration = vi.fn(async () => ({ submit }));
-    const fixture = await createShellAppHost({ agentLaunch, resolveDirectGeneration });
-    const resolution: AssetWorkspaceResolution = {
-      workspaceId: 'workspace-direct',
-      workspacePath: '/Users/fixture/direct',
-      displayName: 'Direct',
-      locator: { kind: 'variable', value: '${HOME}/direct' },
-    };
-    fixture.registry.resolve.mockResolvedValue(resolution);
-    const selected = await fixture.appHost.resolveWorkspaceTarget(
-      fixture.sender,
-      createDesktopWorkspaceDirectoryTargetRequest({
-        requestId: 'workspace-direct-select',
-        rendererSessionId: fixture.projection.rendererSessionId,
-        windowId: fixture.windowId,
-      }),
-      async () => ({ label: 'Direct', hostResource: resolution.workspacePath }),
-    );
-    if (selected.status !== 'authorized') throw new Error('Expected a Workspace grant.');
-    const scene = activeScene(fixture.projection);
-    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
-      throw new Error('Expected an Entry Draft.');
-    }
-    const catalog = createLaunchCatalog({
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
-      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
-      viewId: scene.context.agentViewId,
-      connectionId: 'launch-direct-workspace',
-      draftId: scene.context.scope.draftId,
-      binding: {
-        kind: 'workspace',
-        workspaceId: resolution.workspaceId,
-        workspaceGrantId: selected.grant.workspaceGrantId,
-      },
-    });
-    vi.mocked(agentLaunch.readCatalog).mockReturnValue(catalog);
-    const operation = {
-      mediaKind: 'image' as const,
-      prompt: 'Generate an exact image',
-      providerId: 'image-provider',
-      modelId: 'image-model',
-      aspectRatio: '16:9',
-      width: 1920,
-      height: 1080,
-    };
 
-    await expect(
-      fixture.appHost.executeDirectGenerationRequest(
-        fixture.sender,
-        createDesktopDirectGenerationRequest(
-          'direct-draft-1',
-          { kind: 'agent-draft', connection: catalog.connection },
-          operation,
-        ),
-      ),
-    ).resolves.toEqual({
-      requestId: 'direct-draft-1',
-      projection: createDirectGenerationProjection('image'),
-    });
-    expect(resolveDirectGeneration).toHaveBeenCalledWith(resolution);
-    expect(submit).toHaveBeenCalledWith(operation);
-
-    vi.mocked(agentLaunch.readCatalog).mockReturnValue({
-      ...catalog,
-      interaction: {
-        ...catalog.interaction,
-        binding: {
-          kind: 'workspace',
-          workspaceId: 'workspace-forged',
-          workspaceGrantId: selected.grant.workspaceGrantId,
-        },
-      },
-    });
-    await expect(
-      fixture.appHost.executeDirectGenerationRequest(
-        fixture.sender,
-        createDesktopDirectGenerationRequest(
-          'direct-draft-forged',
-          { kind: 'agent-draft', connection: catalog.connection },
-          operation,
-        ),
-      ),
-    ).rejects.toThrow('resolved to another Workspace');
-    expect(submit).toHaveBeenCalledTimes(1);
-  });
-
-  it('resolves direct generation from an exact registered Session connection', async () => {
-    const submit = vi.fn(async () => createDirectGenerationProjection('video'));
-    const resolveDirectGeneration = vi.fn(async () => ({ submit }));
-    const fixture = await createShellAppHost({ resolveDirectGeneration });
-    const workspace = createWorkspaceResolution();
-    const connection = {
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: 'workbench-session',
-      agentSurfaceId: 'surface-session',
-      projectId: 'project-session',
-      workspaceId: workspace.workspaceId,
-      viewId: 'view-session',
-      connectionId: 'connection-session',
-    };
-    const resolveExactConnection = vi
-      .spyOn(fixture.appHost.agentBridge, 'resolveExactConnection')
-      .mockReturnValue(connection);
-    vi.spyOn(fixture.appHost.shell, 'resolveAgentWorkspace').mockResolvedValue(workspace);
-    const operation = {
-      mediaKind: 'video' as const,
-      prompt: 'Generate an exact video',
-      providerId: 'video-provider',
-      modelId: 'video-model',
-      resolution: '1080p',
-      fps: 24,
-    };
-
-    await fixture.appHost.executeDirectGenerationRequest(
-      fixture.sender,
-      createDesktopDirectGenerationRequest(
-        'direct-session-1',
-        { kind: 'agent-session', connection },
-        operation,
-      ),
-    );
-
-    expect(resolveExactConnection).toHaveBeenCalledWith(connection, {
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-    });
-    expect(resolveDirectGeneration).toHaveBeenCalledWith(workspace);
-    expect(submit).toHaveBeenCalledWith(operation);
-  });
 
   it('binds Agent launch operations to the exact Assistant Scene and connection identity', async () => {
     const agentLaunch = createAgentLaunchRuntime();
@@ -3055,7 +2920,6 @@ async function createShellAppHost(options?: {
   readonly conversationLifecycle?: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
   readonly assetCenter?: AssetCenterNodeRuntime;
-  readonly resolveDirectGeneration?: DesktopAppHostOptions['resolveDirectGeneration'];
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -3148,9 +3012,6 @@ async function createShellAppHost(options?: {
     projectManagement: createProjectManagementService(fixture.service, agent),
     agent,
     assistantWorkspace: createAssistantWorkspaceResolution(),
-    ...(options?.resolveDirectGeneration
-      ? { resolveDirectGeneration: options.resolveDirectGeneration }
-      : {}),
     agentLaunch,
     agentLaunchSubmission,
     workspaceGrants: fixture.workspaceGrants,
@@ -3613,25 +3474,6 @@ function createAssistantWorkspaceResolution(): AssetWorkspaceResolution {
     workspacePath: '/Users/fixture/.openneko/assistant-spaces/local-user',
     displayName: 'Assistant',
     locator: { kind: 'relative', value: 'assistant-spaces/local-user' },
-  };
-}
-
-function createDirectGenerationProjection(mediaKind: 'image' | 'video') {
-  return {
-    jobId: `job-${mediaKind}`,
-    mediaKind,
-    purpose: mediaKind === 'image' ? ('image.generate' as const) : ('video.generate' as const),
-    providerId: `${mediaKind}-provider`,
-    modelId: `${mediaKind}-model`,
-    phase: 'succeeded' as const,
-    resultLocators: [
-      {
-        kind: 'generated-output' as const,
-        outputId: `output-${mediaKind}`,
-        digest: `sha256:${mediaKind}`,
-        path: `generated/${mediaKind}/output.bin`,
-      },
-    ],
   };
 }
 

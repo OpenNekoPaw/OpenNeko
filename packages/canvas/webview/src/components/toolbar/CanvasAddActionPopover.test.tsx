@@ -43,7 +43,10 @@ describe('CanvasAddActionPopover', () => {
     ]);
     expect(
       CANVAS_ADD_ACTIONS.filter((action) => action.mode === 'direct').map(({ id }) => id),
-    ).toEqual(['text', 'table']);
+    ).toEqual(['table']);
+    expect(
+      CANVAS_ADD_ACTIONS.filter((action) => action.mode === 'generation').map(({ id }) => id),
+    ).toEqual(['text', 'image', 'video', 'audio']);
     expect(CANVAS_ADD_ACTIONS.find(({ id }) => id === 'director3d')).toMatchObject({
       nodeType: 'file',
       mode: 'source',
@@ -60,7 +63,7 @@ describe('CanvasAddActionPopover', () => {
         <CanvasAddActionPopover
           onSelectAction={onSelectAction}
           availableSourceModes={['import', 'reference']}
-          availableGenerationKinds={['image', 'video', 'audio', 'model']}
+          availableGenerationKinds={['prompt', 'image', 'video', 'audio']}
         />,
       );
     });
@@ -89,7 +92,7 @@ describe('CanvasAddActionPopover', () => {
     expect(document.body.querySelector('[data-canvas-add-action-popover="true"]')).toBeNull();
   });
 
-  it('requires an explicit create, import or reference mode for material nodes', () => {
+  it('creates Generation Nodes directly while 3D Director requires an explicit source mode', () => {
     const onSelectAction = vi.fn();
 
     act(() => {
@@ -97,7 +100,7 @@ describe('CanvasAddActionPopover', () => {
         <CanvasAddActionPopover
           onSelectAction={onSelectAction}
           availableSourceModes={['import', 'reference']}
-          availableGenerationKinds={['image', 'video', 'audio', 'model']}
+          availableGenerationKinds={['prompt', 'image', 'video', 'audio']}
         />,
       );
     });
@@ -110,22 +113,33 @@ describe('CanvasAddActionPopover', () => {
       document.body.querySelector<HTMLButtonElement>('[data-canvas-add-action="image"]')?.click();
     });
 
-    const popover = document.body.querySelector('[data-canvas-add-action-popover="true"]');
-    expect(popover?.textContent).toContain('Create with AI');
-    expect(popover?.textContent).toContain('Import file');
-    expect(popover?.textContent).toContain('Reference project content');
-    expect(onSelectAction).not.toHaveBeenCalled();
+    expect(onSelectAction).toHaveBeenCalledWith('image');
+    expect(document.body.querySelector('[data-canvas-add-action-popover="true"]')).toBeNull();
 
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-canvas-toolbar-action="open-add-node-popover"]')
+        ?.click();
+    });
+    act(() => {
+      document.body
+        .querySelector<HTMLButtonElement>('[data-canvas-add-action="director3d"]')
+        ?.click();
+    });
+    const sourcePopover = document.body.querySelector('[data-canvas-add-action-popover="true"]');
+    expect(sourcePopover?.textContent).not.toContain('Create with AI');
+    expect(sourcePopover?.textContent).toContain('Import file');
+    expect(sourcePopover?.textContent).toContain('Reference project content');
     act(() => {
       document.body
         .querySelector<HTMLButtonElement>('[data-canvas-add-source-mode="reference"]')
         ?.click();
     });
-    expect(onSelectAction).toHaveBeenCalledWith('image', 'reference');
+    expect(onSelectAction).toHaveBeenCalledWith('director3d', 'reference');
     expect(document.body.querySelector('[data-canvas-add-action-popover="true"]')).toBeNull();
   });
 
-  it('omits Generation create mode and source actions when their owners are unavailable', () => {
+  it('omits Generation and source actions when their owners are unavailable', () => {
     const onSelectAction = vi.fn();
 
     act(() => {
@@ -146,8 +160,8 @@ describe('CanvasAddActionPopover', () => {
       document.body.querySelector<HTMLButtonElement>('[data-canvas-add-action="image"]')?.click();
     });
 
-    expect(document.body.querySelector('[data-canvas-add-source-mode="create"]')).toBeNull();
-    expect(document.body.querySelector('[data-canvas-add-source-mode="import"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-canvas-add-action="image"]')).toBeNull();
+    expect(document.body.querySelector('[data-canvas-add-action="director3d"]')).not.toBeNull();
 
     act(() => {
       host
@@ -168,7 +182,8 @@ describe('CanvasAddActionPopover', () => {
         .querySelector<HTMLButtonElement>('[data-canvas-toolbar-action="open-add-node-popover"]')
         ?.click();
     });
-    expect(document.body.querySelector('[data-canvas-add-action="text"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-canvas-add-action="table"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-canvas-add-action="text"]')).toBeNull();
     expect(document.body.querySelector('[data-canvas-add-action="image"]')).toBeNull();
   });
 });

@@ -13,6 +13,7 @@ import type {
   CanvasGenerationEvidence,
   CanvasMaterialMediaKind,
 } from './canvas-material-contracts';
+import type { CanvasGenerationNodeData } from './canvas-generation-node';
 
 // =============================================================================
 // Canvas Types - Infinite Canvas Editor Data Model
@@ -30,6 +31,7 @@ export const CORE_CANVAS_NODE_TYPES = [
   'job',
   'file',
   'canvas-embed',
+  'generation',
 ] as const;
 
 export type CanonicalCanvasNodeType = (typeof CORE_CANVAS_NODE_TYPES)[number];
@@ -443,6 +445,11 @@ export interface CanvasEmbedCanvasNode extends CanvasNodeBase {
   };
 }
 
+export interface GenerationCanvasNode extends CanvasNodeBase {
+  type: 'generation';
+  data: CanvasGenerationNodeData;
+}
+
 /**
  * Union type of all canvas node types
  */
@@ -452,7 +459,8 @@ export type CanvasNode =
   | GroupCanvasNode
   | JobCanvasNode
   | FileCanvasNode
-  | CanvasEmbedCanvasNode;
+  | CanvasEmbedCanvasNode
+  | GenerationCanvasNode;
 
 // =============================================================================
 // Connection Types
@@ -560,6 +568,10 @@ export function isFileNode(node: CanvasNode): node is FileCanvasNode {
   return node.type === 'file';
 }
 
+export function isGenerationNode(node: CanvasNode): node is GenerationCanvasNode {
+  return node.type === 'generation';
+}
+
 // =============================================================================
 // Port Helpers
 // =============================================================================
@@ -588,6 +600,11 @@ export function getDefaultPorts(nodeType: CanvasNodeType): PortDefinition[] {
       return MEDIA_NODE_PORTS;
     case 'group':
       return GROUP_NODE_PORTS;
+    case 'generation':
+      return [
+        { id: 'in', type: 'input', position: 'left', dataType: 'any', label: 'Reference' },
+        { id: 'out', type: 'output', position: 'right', dataType: 'any', label: 'Output' },
+      ];
     default:
       return [];
   }
