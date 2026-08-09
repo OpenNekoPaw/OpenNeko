@@ -656,13 +656,30 @@
   min-width: 0;
   min-height: 44px;
   align-items: center;
+  overflow: hidden;
+  background: var(--neko-workbench-tabs-background, var(--neko-workbench-chrome, #f1f3f6));
+}
+
+.neko-workbench-editor-tabs__list {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 7px 10px;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
-  background: var(--neko-workbench-tabs-background, var(--neko-workbench-chrome, #f1f3f6));
+}
+
+.neko-workbench-editor-tabs__context-actions {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 4px 8px 4px 0;
 }
 
 .neko-workbench-editor-tab {

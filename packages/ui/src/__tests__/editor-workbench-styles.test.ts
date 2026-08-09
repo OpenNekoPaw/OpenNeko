@@ -6,9 +6,11 @@ const styles = readFileSync('src/workbench/editor-workbench.css', 'utf8');
 describe('Workbench editor tab styles', () => {
   it('keeps labels bounded inside a horizontally scrollable editor strip', () => {
     const strip = styles.match(/\.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const list = styles.match(/\.neko-workbench-editor-tabs__list\s*\{(?<body>[\s\S]*?)\n\}/u);
     const tab = styles.match(/\.neko-workbench-editor-tab\s*\{(?<body>[\s\S]*?)\n\}/u);
 
-    expect(strip?.groups?.body).toMatch(/overflow-x\s*:\s*auto/u);
+    expect(strip?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
+    expect(list?.groups?.body).toMatch(/overflow-x\s*:\s*auto/u);
     expect(tab?.groups?.body).toMatch(/min-width\s*:\s*\d+px/u);
     expect(tab?.groups?.body).toMatch(/max-width\s*:\s*\d+px/u);
     expect(styles).toMatch(
@@ -18,10 +20,11 @@ describe('Workbench editor tab styles', () => {
 
   it('uses compact pill tabs without table-like dividers or an active underline', () => {
     const strip = styles.match(/\.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const list = styles.match(/\.neko-workbench-editor-tabs__list\s*\{(?<body>[\s\S]*?)\n\}/u);
     const tab = styles.match(/\.neko-workbench-editor-tab\s*\{(?<body>[\s\S]*?)\n\}/u);
 
-    expect(strip?.groups?.body).toMatch(/gap\s*:\s*4px/u);
-    expect(strip?.groups?.body).toMatch(/padding\s*:\s*7px 10px/u);
+    expect(list?.groups?.body).toMatch(/gap\s*:\s*4px/u);
+    expect(list?.groups?.body).toMatch(/padding\s*:\s*7px 10px/u);
     expect(strip?.groups?.body).not.toMatch(/border-bottom/u);
     expect(tab?.groups?.body).toMatch(/height\s*:\s*30px/u);
     expect(tab?.groups?.body).toMatch(/border-radius\s*:\s*10px/u);

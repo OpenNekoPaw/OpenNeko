@@ -459,6 +459,28 @@ describe('editor workbench shell primitives', () => {
 
     expect(onTabReorder).toHaveBeenCalledWith('a', 'b');
   });
+
+  it('provides a right-side contextual action target outside the tablist', () => {
+    let contextTarget: HTMLDivElement | null = null;
+    act(() => {
+      root.render(
+        <WorkbenchEditorTabs
+          label="Open editors"
+          activeId="a"
+          contextActionsRef={(target) => {
+            contextTarget = target;
+          }}
+          emptyLabel="No editors"
+          tabs={[{ id: 'a', label: 'notes.md' }]}
+          onSelect={() => undefined}
+        />,
+      );
+    });
+
+    expect(contextTarget).toBeInstanceOf(HTMLDivElement);
+    expect(contextTarget?.parentElement).toBe(host.querySelector('.neko-workbench-editor-tabs'));
+    expect(contextTarget?.closest('[role="tablist"]')).toBeNull();
+  });
 });
 
 function LifecycleProbe({

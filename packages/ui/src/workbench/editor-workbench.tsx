@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type React from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { useResizable } from '../hooks';
 import { ResizeHandle } from '../primitives';
 import { cn } from '../utils';
@@ -56,6 +56,7 @@ export interface WorkbenchEditorTabsProps {
   readonly onSelect: (id: string) => void;
   readonly onClose?: (id: string) => void;
   readonly onReorder?: (sourceId: string, targetId: string) => void;
+  readonly contextActionsRef?: Ref<HTMLDivElement>;
 }
 
 export interface WorkbenchPanelHeaderProps {
@@ -569,6 +570,7 @@ export function WorkbenchActivityBar({
 export function WorkbenchEditorTabs({
   activeId,
   className,
+  contextActionsRef,
   emptyLabel,
   label,
   onClose,
@@ -594,68 +596,73 @@ export function WorkbenchEditorTabs({
   };
 
   return (
-    <div className={cn('neko-workbench-editor-tabs', className)} role="tablist" aria-label={label}>
-      {tabs.length > 0 ? (
-        tabs.map((tab) => {
-          const active = tab.id === activeId;
-          const closable = tab.closable ?? Boolean(onClose);
-          return (
-            <div
-              key={tab.id}
-              className="neko-workbench-editor-tab"
-              data-active={active ? 'true' : 'false'}
-              draggable={Boolean(onReorder) && !tab.disabled}
-              role="tab"
-              tabIndex={tab.disabled ? -1 : 0}
-              aria-selected={active}
-              aria-disabled={tab.disabled ? 'true' : undefined}
-              title={tab.title ?? tab.label}
-              onDragOver={(event) => {
-                if (onReorder) event.preventDefault();
-              }}
-              onDragStart={(event) => handleDragStart(event, tab.id)}
-              onDrop={(event) => handleDrop(event, tab.id)}
-              onClick={() => {
-                if (!tab.disabled) onSelect(tab.id);
-              }}
-              onKeyDown={(event) => {
-                if (tab.disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
-                event.preventDefault();
-                onSelect(tab.id);
-              }}
-            >
-              {tab.icon ? (
-                <span className="neko-workbench-editor-tab__icon">{tab.icon}</span>
-              ) : null}
-              <span className="neko-workbench-editor-tab__label">{tab.label}</span>
-              {closable && onClose ? (
-                <button
-                  type="button"
-                  aria-label={tab.closeLabel ?? `Close ${tab.label}`}
-                  className="neko-workbench-editor-tab__close"
-                  title={tab.closeLabel ?? `Close ${tab.label}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onClose(tab.id);
-                  }}
-                >
-                  ×
-                </button>
-              ) : null}
-            </div>
-          );
-        })
-      ) : (
-        <button
-          type="button"
-          className="neko-workbench-editor-tab"
-          data-active="true"
-          role="tab"
-          aria-selected
-        >
-          <span className="neko-workbench-editor-tab__label">{emptyLabel}</span>
-        </button>
-      )}
+    <div className={cn('neko-workbench-editor-tabs', className)}>
+      <div className="neko-workbench-editor-tabs__list" role="tablist" aria-label={label}>
+        {tabs.length > 0 ? (
+          tabs.map((tab) => {
+            const active = tab.id === activeId;
+            const closable = tab.closable ?? Boolean(onClose);
+            return (
+              <div
+                key={tab.id}
+                className="neko-workbench-editor-tab"
+                data-active={active ? 'true' : 'false'}
+                draggable={Boolean(onReorder) && !tab.disabled}
+                role="tab"
+                tabIndex={tab.disabled ? -1 : 0}
+                aria-selected={active}
+                aria-disabled={tab.disabled ? 'true' : undefined}
+                title={tab.title ?? tab.label}
+                onDragOver={(event) => {
+                  if (onReorder) event.preventDefault();
+                }}
+                onDragStart={(event) => handleDragStart(event, tab.id)}
+                onDrop={(event) => handleDrop(event, tab.id)}
+                onClick={() => {
+                  if (!tab.disabled) onSelect(tab.id);
+                }}
+                onKeyDown={(event) => {
+                  if (tab.disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
+                  event.preventDefault();
+                  onSelect(tab.id);
+                }}
+              >
+                {tab.icon ? (
+                  <span className="neko-workbench-editor-tab__icon">{tab.icon}</span>
+                ) : null}
+                <span className="neko-workbench-editor-tab__label">{tab.label}</span>
+                {closable && onClose ? (
+                  <button
+                    type="button"
+                    aria-label={tab.closeLabel ?? `Close ${tab.label}`}
+                    className="neko-workbench-editor-tab__close"
+                    title={tab.closeLabel ?? `Close ${tab.label}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onClose(tab.id);
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            );
+          })
+        ) : (
+          <button
+            type="button"
+            className="neko-workbench-editor-tab"
+            data-active="true"
+            role="tab"
+            aria-selected
+          >
+            <span className="neko-workbench-editor-tab__label">{emptyLabel}</span>
+          </button>
+        )}
+      </div>
+      {contextActionsRef ? (
+        <div className="neko-workbench-editor-tabs__context-actions" ref={contextActionsRef} />
+      ) : null}
     </div>
   );
 }
