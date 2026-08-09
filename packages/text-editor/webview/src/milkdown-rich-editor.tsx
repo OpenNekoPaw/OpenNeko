@@ -320,6 +320,13 @@ async function createMilkdownController({
           applyEditableState();
           return presentationState();
         }
+        const currentSerialized = serializer(view.state.doc);
+        if (!readOnly && lastSerialized === nextSource && currentSerialized === nextSource) {
+          // Trailing whitespace cannot reconstruct an empty block; keep it until later input fills it.
+          lastSerialized = serialized;
+          applyEditableState();
+          return presentationState();
+        }
         reconciling = true;
         view.dispatch(
           view.state.tr

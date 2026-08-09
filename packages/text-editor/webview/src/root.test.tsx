@@ -218,6 +218,81 @@ describe('TextEditorRoot', () => {
     await unmount(rendered.root);
   });
 
+  it('keeps a single Rich paragraph break while the preceding edit is being accepted', async () => {
+    const initial = textProjection('markdown', '初稿');
+    const textAccepted = {
+      ...initial,
+      source: '初稿一\n',
+      editSequence: 1,
+      dirty: true,
+    };
+    const breakAccepted = {
+      ...textAccepted,
+      source: '初稿一\n\n',
+      editSequence: 2,
+    };
+    const paragraphAccepted = {
+      ...breakAccepted,
+      source: '初稿一\n\n第二段\n',
+      editSequence: 3,
+    };
+    const first = createDeferred<TextDocumentProjection>();
+    const second = createDeferred<TextDocumentProjection>();
+    const third = createDeferred<TextDocumentProjection>();
+    const runtime = createRuntime(initial);
+    runtime.applyEdits
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+      .mockImplementationOnce(() => third.promise);
+    const rendered = await renderEditor(runtime, 'zh-cn');
+
+    await clickText(rendered.container, '所见即所得');
+    await waitFor(() => rendered.container.querySelector('[data-rich-state="ready"]') !== null);
+    const rich = rendered.container.querySelector<HTMLElement>('.ProseMirror');
+    if (!rich) throw new Error('Rich paragraph-break fixture requires ProseMirror.');
+
+    await replaceRichParagraphText(rich, '初稿一');
+    await waitFor(() => runtime.applyEdits.mock.calls.length === 1);
+    await pressRichEnter(rich);
+    expect(rich.querySelectorAll('p')).toHaveLength(2);
+
+    await act(async () => {
+      first.resolve(textAccepted);
+      await settle();
+    });
+    await waitFor(() => runtime.applyEdits.mock.calls.length === 2);
+    expect(runtime.applyEdits).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        expectedEditSequence: 1,
+        changes: [{ from: 0, to: textAccepted.source.length, insert: breakAccepted.source }],
+      }),
+    );
+    await act(async () => {
+      second.resolve(breakAccepted);
+      await settle();
+    });
+    expect(rich.querySelectorAll('p')).toHaveLength(2);
+    expect(rich.querySelector('p:last-child')?.textContent).toBe('');
+    await replaceRichParagraphTextAt(rich, 1, '第二段');
+    await waitFor(() => runtime.applyEdits.mock.calls.length === 3);
+    expect(runtime.applyEdits).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        expectedEditSequence: 2,
+        changes: [{ from: 0, to: breakAccepted.source.length, insert: paragraphAccepted.source }],
+      }),
+    );
+    await act(async () => {
+      third.resolve(paragraphAccepted);
+      await settle();
+    });
+    await clickText(rendered.container, '源码');
+    await waitFor(() => rendered.container.querySelector('.cm-editor') !== null);
+    expect(editorView(rendered.container).state.doc.toString()).toBe(paragraphAccepted.source);
+    await unmount(rendered.root);
+  });
+
   it('reconciles rejected Rich input to the last accepted source', async () => {
     const runtime = createRuntime(textProjection('markdown', '稳定内容'));
     runtime.applyEdits.mockRejectedValueOnce(new Error('rich-write-rejected'));
@@ -792,14 +867,42 @@ function applyChanges(source: string, changes: readonly TextDocumentChange[]): s
 }
 
 async function replaceRichParagraphText(rich: HTMLElement, value: string): Promise<void> {
-  const text = rich.querySelector('p')?.firstChild;
-  if (!text) throw new Error('Rich input fixture requires a paragraph text node.');
+  await replaceRichParagraphTextAt(rich, 0, value);
+}
+
+async function replaceRichParagraphTextAt(
+  rich: HTMLElement,
+  paragraphIndex: number,
+  value: string,
+): Promise<void> {
+  const paragraph = rich.querySelectorAll('p').item(paragraphIndex);
+  if (!paragraph) throw new Error('Rich input fixture requires the requested paragraph.');
   await act(async () => {
-    text.nodeValue = value;
+    paragraph.textContent = value;
     rich.dispatchEvent(
       new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }),
     );
     await delay(20);
+  });
+}
+
+async function pressRichEnter(rich: HTMLElement): Promise<void> {
+  const text = rich.querySelector('p:last-child')?.firstChild;
+  if (!text) throw new Error('Rich paragraph-break fixture requires a paragraph text node.');
+  rich.focus();
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.setStart(text, text.textContent?.length ?? 0);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  await act(async () => {
+    document.dispatchEvent(new Event('selectionchange'));
+    await settle();
+    rich.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, code: 'Enter', key: 'Enter' }),
+    );
+    await settle();
   });
 }
 

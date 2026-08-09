@@ -58,6 +58,7 @@ export const desktopTextEditorScenario = Object.freeze({
     composeText,
     evaluate,
     prepared,
+    pressKey,
     restartApplication,
     screenshot,
     type,
@@ -108,8 +109,23 @@ export const desktopTextEditorScenario = Object.freeze({
     }
     const markdownRichInputScreenshot = await screenshot('markdown-rich-focused-input');
     checkpoint('markdown-rich-focused-input', markdownRichInput);
+    await clickTextEditorCommand(evaluate, 'save');
+    await waitForEditorClean(evaluate);
+    await pressKey('Enter');
+    await waitForEditorDirty(evaluate);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const paragraphs = document.querySelectorAll('.neko-text-editor-rich .ProseMirror > p');
+        return paragraphs.length === 2 && paragraphs.item(1)?.textContent === '';
+      })()`,
+      'One accepted Rich Enter did not preserve its trailing empty paragraph.',
+    );
+    const markdownRichParagraphBreak = await inspectTextEditor(evaluate);
+    const markdownRichParagraphBreakScreenshot = await screenshot('markdown-rich-single-enter');
+    checkpoint('markdown-rich-single-enter', markdownRichParagraphBreak);
     await selectTextEditorMode(evaluate, 'source');
-    await waitForEditorSource(evaluate, `${MARKDOWN_RICH_INPUT}\n`);
+    await waitForEditorSource(evaluate, `${MARKDOWN_RICH_INPUT}\n\n`);
     await type('.cm-content', MARKDOWN_INCOMPLETE);
     await waitForEditorSource(evaluate, MARKDOWN_INCOMPLETE);
     await selectTextEditorMode(evaluate, 'split');
@@ -430,6 +446,7 @@ export const desktopTextEditorScenario = Object.freeze({
       markdown,
       markdownDefault,
       markdownRichInput,
+      markdownRichParagraphBreak,
       markdownIncomplete,
       imeComposition,
       jsonInvalid,
@@ -445,6 +462,7 @@ export const desktopTextEditorScenario = Object.freeze({
       screenshots: [
         markdownDefaultScreenshot,
         markdownRichInputScreenshot,
+        markdownRichParagraphBreakScreenshot,
         markdownIncompleteScreenshot,
         markdownScreenshot,
         cleanSessionRecoveryScreenshot,
@@ -918,6 +936,8 @@ async function inspectTextEditor(evaluate) {
         .join('\\n'),
       previewText: root.querySelector('.neko-text-editor-preview')?.textContent ?? '',
       richText: root.querySelector('.neko-text-editor-rich .ProseMirror')?.textContent ?? '',
+      richParagraphCount: richEditor?.querySelectorAll(':scope > p').length ?? 0,
+      richLastParagraphText: richEditor?.querySelector(':scope > p:last-child')?.textContent ?? null,
       outlineText: root.querySelector('.neko-text-editor-outline')?.textContent ?? '',
       diagnosticText: root.querySelector('.neko-text-editor-diagnostics')?.textContent ?? '',
       errorText: root.querySelector('.neko-text-editor-operation-error')?.textContent ?? '',
