@@ -9,8 +9,10 @@ import type {
 } from '@neko/text-editor-domain';
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { TextEditorHostRuntime } from './host-runtime';
+import { createDefaultTextEditorPresentationSnapshot } from './presentation-snapshot';
 import { TextEditorRoot } from './root';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -76,12 +78,17 @@ describe('TextEditorRoot', () => {
     );
     expect(document.head.querySelector('style[nonce="text-editor-test-csp"]')).not.toBeNull();
 
-    await clickTitle(rendered.container, 'Undo');
+    await pressShortcut(rendered.container, { code: 'KeyZ', key: 'z', metaKey: true });
     await waitFor(() => runtime.applyEdits.mock.calls.length === 2);
     expect(runtime.applyEdits.mock.calls[1]?.[0]).toMatchObject({ expectedEditSequence: 1 });
     expect(initialView.state.doc.toString()).toBe('# Draft\n');
 
-    await clickTitle(rendered.container, 'Redo');
+    await pressShortcut(rendered.container, {
+      code: 'KeyZ',
+      key: 'z',
+      metaKey: true,
+      shiftKey: true,
+    });
     await waitFor(() => runtime.applyEdits.mock.calls.length === 3);
     expect(runtime.applyEdits.mock.calls[2]?.[0]).toMatchObject({ expectedEditSequence: 2 });
     expect(initialView.state.doc.toString()).toBe('# Saved\n');
@@ -139,12 +146,17 @@ describe('TextEditorRoot', () => {
       }),
     );
 
-    await clickTitle(rendered.container, '撤销');
+    await pressShortcut(rendered.container, { code: 'KeyZ', key: 'z', metaKey: true });
     await waitFor(() => runtime.applyEdits.mock.calls.length === 2, 100);
     expect(runtime.applyEdits.mock.calls[1]?.[0]).toMatchObject({ expectedEditSequence: 1 });
     expect(rendered.container.querySelector('.ProseMirror')?.textContent).toBe('初稿');
 
-    await clickTitle(rendered.container, '重做');
+    await pressShortcut(rendered.container, {
+      code: 'KeyZ',
+      key: 'z',
+      metaKey: true,
+      shiftKey: true,
+    });
     await waitFor(() => runtime.applyEdits.mock.calls.length === 3, 100);
     expect(runtime.applyEdits.mock.calls[2]?.[0]).toMatchObject({ expectedEditSequence: 2 });
     expect(rendered.container.querySelector('.ProseMirror')?.textContent).toBe('初稿完成');
@@ -170,6 +182,8 @@ describe('TextEditorRoot', () => {
     const runtime = createRuntime(fountainProjection(source));
     const rendered = await renderEditor(runtime, 'zh-cn');
     const view = editorView(rendered.container);
+    expect(rendered.container.querySelector('.cm-fountain-scene-heading')).not.toBeNull();
+    expect(rendered.container.querySelector('.cm-fountain-character')).not.toBeNull();
 
     const outline = requireButtonWithText(rendered.container, '内景 客厅 - 夜');
     await act(async () => outline.click());
@@ -363,6 +377,55 @@ describe('TextEditorRoot', () => {
     });
     await unmount(rendered.root);
   });
+
+  it('opens fresh Markdown as Rich with outline and contributes scoped tab-row controls', async () => {
+    const runtime = createRuntime(textProjection('markdown', '# 第一章\n\n正文'));
+    const rendered = await renderEditor(runtime, 'zh-cn', false, null);
+
+    await waitFor(() => rendered.container.querySelector('[data-rich-state="ready"]') !== null);
+    expect(rendered.container.querySelector('.neko-text-editor-toolbar')).toBeNull();
+    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toContain('第一章');
+    expect(rendered.container.querySelector('.neko-text-editor-outline')?.textContent).toContain(
+      '第一章',
+    );
+    expect(rendered.contextActionsTarget.textContent).toContain('所见即所得');
+    expect(rendered.contextActionsTarget.textContent).toContain('源码');
+
+    await pressShortcut(rendered.container, {
+      code: 'Digit2',
+      key: '2',
+      metaKey: true,
+      shiftKey: true,
+    });
+    await waitFor(() => rendered.container.querySelector('.cm-editor') !== null);
+    expect(rendered.container.querySelector('[data-presentation-mode="source"]')).not.toBeNull();
+
+    await pressShortcut(rendered.container, {
+      code: 'KeyO',
+      key: 'o',
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(rendered.container.querySelector('.neko-text-editor-outline')).toBeNull();
+    await unmount(rendered.root);
+    expect(rendered.contextActionsTarget.childElementCount).toBe(0);
+  });
+
+  it('applies declared HTML highlighting without claiming an alternate document mode', async () => {
+    const runtime = createRuntime(
+      textProjection('plain-text', '<main class="story"><h1>标题</h1></main>', 'index.html'),
+    );
+    const rendered = await renderEditor(runtime);
+    const line = rendered.container.querySelector('.cm-line');
+
+    expect(line?.textContent).toBe('<main class="story"><h1>标题</h1></main>');
+    expect(line?.querySelectorAll('span').length).toBeGreaterThan(4);
+    expect(rendered.container.querySelector('[data-document-mode="plain-text"]')).not.toBeNull();
+    expect(
+      rendered.contextActionsTarget.querySelector('[aria-label="Format document"]'),
+    ).toBeNull();
+    await unmount(rendered.root);
+  });
 });
 
 function createRuntime(initial: TextDocumentProjection) {
@@ -420,8 +483,11 @@ function createRuntime(initial: TextDocumentProjection) {
 function textProjection(
   mode: TextDocumentProjection['mode'],
   source: string,
+  explicitDocumentId?: string,
 ): TextDocumentProjection {
-  const documentId = mode === 'json' ? 'data.json' : mode === 'markdown' ? 'notes.md' : 'notes.txt';
+  const documentId =
+    explicitDocumentId ??
+    (mode === 'json' ? 'data.json' : mode === 'markdown' ? 'notes.md' : 'notes.txt');
   return {
     identity: {
       owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
@@ -495,21 +561,36 @@ async function renderEditor(
   runtime: TextEditorHostRuntime,
   locale: 'en' | 'zh-cn' = 'en',
   strict = false,
+  initialSnapshot: unknown | null = {
+    ...createDefaultTextEditorPresentationSnapshot(),
+    mode: 'source',
+  },
 ) {
   const container = document.createElement('div');
   container.style.width = '1024px';
   container.style.height = '768px';
+  const contextActionsTarget = document.createElement('div');
+  const editorMount = document.createElement('div');
+  editorMount.style.width = '100%';
+  editorMount.style.height = '100%';
+  container.append(contextActionsTarget, editorMount);
   document.body.append(container);
-  const root = createRoot(container);
+  const root = createRoot(editorMount);
   await act(async () => {
     const editor = (
-      <TextEditorRoot runtime={runtime} locale={locale} cspNonce="text-editor-test-csp" />
+      <TextEditorRoot
+        runtime={runtime}
+        locale={locale}
+        cspNonce="text-editor-test-csp"
+        renderContextActions={(actions) => createPortal(actions, contextActionsTarget)}
+        {...(initialSnapshot === null ? {} : { initialSnapshot })}
+      />
     );
     root.render(strict ? <StrictMode>{editor}</StrictMode> : editor);
     await settle();
   });
-  await waitFor(() => container.querySelector('.cm-editor') !== null);
-  return { container, root };
+  await waitFor(() => container.querySelector('.neko-text-editor-root') !== null);
+  return { container, contextActionsTarget, root };
 }
 
 function editorView(container: HTMLElement): EditorView {
@@ -521,10 +602,29 @@ function editorView(container: HTMLElement): EditorView {
 }
 
 async function clickTitle(container: HTMLElement, title: string): Promise<void> {
-  const button = container.querySelector<HTMLButtonElement>(`button[title="${title}"]`);
+  const button =
+    container.querySelector<HTMLButtonElement>(`button[aria-label="${title}"]`) ??
+    [...container.querySelectorAll<HTMLButtonElement>('button[title]')].find((candidate) =>
+      candidate.title.startsWith(`${title} (`),
+    );
   if (!button) throw new Error(`Text Editor fixture requires '${title}'.`);
   await act(async () => {
     button.click();
+    await settle();
+  });
+}
+
+async function pressShortcut(
+  container: HTMLElement,
+  init: Pick<KeyboardEventInit, 'code' | 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>,
+): Promise<void> {
+  const target =
+    container.querySelector<HTMLElement>('.cm-content') ??
+    container.querySelector<HTMLElement>('.ProseMirror') ??
+    container.querySelector<HTMLElement>('.neko-text-editor-root');
+  if (!target) throw new Error('Text Editor fixture requires a ready Root for keyboard commands.');
+  await act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { ...init, bubbles: true }));
     await settle();
   });
 }

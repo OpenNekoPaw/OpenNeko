@@ -15,7 +15,7 @@ export interface TextEditorPresentationSnapshotParseResult {
 
 export function createDefaultTextEditorPresentationSnapshot(): TextEditorPresentationSnapshot {
   return {
-    mode: 'source',
+    mode: 'rich',
     selection: { anchor: 0, head: 0 },
     scrollTop: 0,
     splitRatio: 0.5,

@@ -1,7 +1,5 @@
 import { defaultKeymap, history, historyKeymap, redo, undo } from '@codemirror/commands';
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
-import { json } from '@codemirror/lang-json';
-import { markdown } from '@codemirror/lang-markdown';
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { projectMarkdownNavigation, type MarkdownNavigationProjection } from '@neko/markdown';
@@ -16,6 +14,7 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
 } from 'react';
 import type { TextEditorHostRuntime } from './host-runtime';
@@ -32,6 +31,7 @@ import {
   type TextEditorPresentationMode,
   type TextEditorPresentationSnapshot,
 } from './presentation-snapshot';
+import { refreshSourceDecorations, sourceLanguageExtensions } from './source-language';
 import './style.css';
 
 export interface TextEditorRootProps {
@@ -40,6 +40,7 @@ export interface TextEditorRootProps {
   readonly cspNonce?: string;
   readonly initialSnapshot?: unknown;
   readonly onSnapshotChange?: (snapshot: TextEditorPresentationSnapshot) => void;
+  readonly renderContextActions?: (actions: ReactElement) => ReactElement | null;
 }
 
 type RootState =
@@ -58,6 +59,7 @@ export function TextEditorRoot({
   cspNonce,
   initialSnapshot,
   onSnapshotChange,
+  renderContextActions,
 }: TextEditorRootProps): ReactElement {
   const parsedSnapshot = useMemo(
     () =>
@@ -76,7 +78,9 @@ export function TextEditorRoot({
   const editorView = useRef<EditorView>();
   const richEditorActions = useRef<MilkdownEditorActions>();
   const pendingSourceOffset = useRef<number>();
-  const [activeEditor, setActiveEditor] = useState<'rich' | 'source'>('source');
+  const [activeEditor, setActiveEditor] = useState<'rich' | 'source'>(
+    parsedSnapshot.snapshot.mode === 'rich' ? 'rich' : 'source',
+  );
   const bindEditorView = useCallback((value: EditorView | undefined) => {
     editorView.current = value;
     const offset = pendingSourceOffset.current;
@@ -153,6 +157,17 @@ export function TextEditorRoot({
     if (mode === 'rich' || mode === 'source') setActiveEditor(mode);
     onSnapshotChange?.({ ...parsedSnapshot.snapshot, mode, outlineVisible });
   };
+  const toggleOutline = () => {
+    setOutlineVisible((current) => {
+      const next = !current;
+      onSnapshotChange?.({
+        ...parsedSnapshot.snapshot,
+        mode: effectiveMode,
+        outlineVisible: next,
+      });
+      return next;
+    });
+  };
   const run = async (operation: () => Promise<TextDocumentProjection>) => {
     try {
       updateProjection(await operation());
@@ -164,216 +179,272 @@ export function TextEditorRoot({
     operationError ??
     (projection.conflict && !conflictDismissed ? 'text-document-save-conflict' : undefined);
   const conflict = displayedError === 'text-document-save-conflict';
+  const save = () =>
+    run(() =>
+      runtime.save({
+        sessionId: projection.sessionId,
+        expectedEditSequence: projection.editSequence,
+      }),
+    );
+  const formatJson = () =>
+    run(() =>
+      runtime.formatJson({
+        sessionId: projection.sessionId,
+        requestId: nextRequestId(),
+        expectedEditSequence: projection.editSequence,
+      }),
+    );
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented) return;
+    const modifier = event.metaKey || event.ctrlKey;
+    if (modifier && !event.altKey && !event.shiftKey && event.code === 'KeyS') {
+      event.preventDefault();
+      if (projection.dirty) void save();
+      return;
+    }
+    if (modifier && !event.altKey && event.code === 'KeyZ') {
+      event.preventDefault();
+      const shouldRedo = event.shiftKey;
+      if (activeEditor === 'rich' && richEditorActions.current) {
+        if (shouldRedo) richEditorActions.current.redo();
+        else richEditorActions.current.undo();
+      } else if (editorView.current) {
+        if (shouldRedo) redo(editorView.current);
+        else undo(editorView.current);
+      }
+      return;
+    }
+    if (modifier && !event.altKey && !event.shiftKey && event.code === 'KeyY') {
+      event.preventDefault();
+      if (activeEditor === 'rich' && richEditorActions.current) richEditorActions.current.redo();
+      else if (editorView.current) redo(editorView.current);
+      return;
+    }
+    if (modifier && event.shiftKey && !event.altKey && event.code === 'KeyO') {
+      if (projection.mode !== 'markdown' && projection.mode !== 'fountain') return;
+      event.preventDefault();
+      toggleOutline();
+      return;
+    }
+    if (modifier && event.shiftKey && !event.altKey && event.code.startsWith('Digit')) {
+      const index = Number(event.code.slice('Digit'.length)) - 1;
+      const mode = availableModes[index];
+      if (!mode) return;
+      event.preventDefault();
+      updatePresentationMode(mode);
+      return;
+    }
+    if (event.altKey && event.shiftKey && !modifier && event.code === 'KeyF') {
+      if (projection.mode !== 'json') return;
+      event.preventDefault();
+      void formatJson();
+    }
+  };
+
+  const contextActions = renderContextActions?.(
+    <TextEditorContextActions
+      activeMode={effectiveMode}
+      availableModes={availableModes}
+      dirty={projection.dirty}
+      locale={locale}
+      outlineVisible={outlineVisible}
+      showFormat={projection.mode === 'json'}
+      showOutline={projection.mode === 'markdown' || projection.mode === 'fountain'}
+      onFormat={() => void formatJson()}
+      onKeyDown={handleKeyDown}
+      onModeChange={updatePresentationMode}
+      onOutlineToggle={toggleOutline}
+      onSave={() => void save()}
+    />,
+  );
 
   return (
-    <section className="neko-text-editor-root" data-document-mode={projection.mode}>
-      <header className="neko-text-editor-toolbar">
-        <div className="neko-text-editor-document-title">
-          <strong>{projection.identity.documentId.split('/').at(-1)}</strong>
-          {projection.dirty ? (
-            <span
-              className="neko-text-editor-dirty-indicator"
-              aria-label={textEditorLabel(locale, 'unsavedChanges')}
-            >
-              *
-            </span>
-          ) : null}
-        </div>
-        {availableModes.length > 1 ? (
-          <div className="neko-text-editor-segmented" role="group">
-            {availableModes.map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={effectiveMode === mode}
-                onClick={() => updatePresentationMode(mode)}
-              >
-                {textEditorLabel(locale, mode)}
-              </button>
+    <>
+      {contextActions}
+      <section
+        className="neko-text-editor-root"
+        data-document-mode={projection.mode}
+        onKeyDown={handleKeyDown}
+      >
+        {displayedError ? (
+          <div className="neko-text-editor-operation-error" role="alert">
+            <span>{presentError(locale, displayedError)}</span>
+            {conflict ? (
+              <span className="neko-text-editor-conflict-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void run(() =>
+                      runtime.reload({ sessionId: projection.sessionId, confirmDirty: true }),
+                    )
+                  }
+                >
+                  {textEditorLabel(locale, 'reload')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOperationError(undefined);
+                    setConflictDismissed(true);
+                  }}
+                >
+                  {textEditorLabel(locale, 'keepEditing')}
+                </button>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {projection.diagnostics.length > 0 ? (
+          <div className="neko-text-editor-diagnostics" role="status">
+            {projection.diagnostics.map((diagnostic, index) => (
+              <span key={`${diagnostic.code}:${index}`}>
+                {textEditorDiagnosticLabel(locale, diagnostic.code)}
+              </span>
             ))}
           </div>
         ) : null}
-        <div className="neko-text-editor-commands">
-          {projection.mode === 'fountain' || projection.mode === 'markdown' ? (
-            <button
-              type="button"
-              aria-pressed={outlineVisible}
-              title={textEditorLabel(locale, 'outline')}
-              onClick={() =>
-                setOutlineVisible((current) => {
-                  const next = !current;
-                  onSnapshotChange?.({
-                    ...parsedSnapshot.snapshot,
-                    mode: effectiveMode,
-                    outlineVisible: next,
-                  });
-                  return next;
-                })
-              }
-            >
-              <span className="codicon codicon-list-tree" aria-hidden="true" />
-            </button>
+        <div className="neko-text-editor-body" data-presentation-mode={effectiveMode}>
+          {projection.mode === 'fountain' && outlineVisible && effectiveMode !== 'preview' ? (
+            <ScreenplayOutline projection={projection} locale={locale} editorView={editorView} />
           ) : null}
-          <button
-            type="button"
-            title={textEditorLabel(locale, 'undo')}
-            onClick={() => {
-              if (activeEditor === 'rich' && richEditorActions.current) {
-                richEditorActions.current.undo();
-                return;
-              }
-              if (editorView.current) undo(editorView.current);
-            }}
-          >
-            <span className="codicon codicon-discard" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            title={textEditorLabel(locale, 'redo')}
-            onClick={() => {
-              if (activeEditor === 'rich' && richEditorActions.current) {
-                richEditorActions.current.redo();
-                return;
-              }
-              if (editorView.current) redo(editorView.current);
-            }}
-          >
-            <span className="codicon codicon-redo" aria-hidden="true" />
-          </button>
-          {projection.mode === 'json' ? (
-            <button
-              type="button"
-              title={textEditorLabel(locale, 'format')}
-              onClick={() =>
-                void run(() =>
-                  runtime.formatJson({
-                    sessionId: projection.sessionId,
-                    requestId: nextRequestId(),
-                    expectedEditSequence: projection.editSequence,
-                  }),
-                )
-              }
-            >
-              {'{ }'}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            title={textEditorLabel(locale, 'save')}
-            disabled={!projection.dirty}
-            onClick={() =>
-              void run(() =>
-                runtime.save({
-                  sessionId: projection.sessionId,
-                  expectedEditSequence: projection.editSequence,
-                }),
-              )
-            }
-          >
-            <span className="codicon codicon-save" aria-hidden="true" />
-          </button>
-        </div>
-      </header>
-      {displayedError ? (
-        <div className="neko-text-editor-operation-error" role="alert">
-          <span>{presentError(locale, displayedError)}</span>
-          {conflict ? (
-            <span className="neko-text-editor-conflict-actions">
-              <button
-                type="button"
-                onClick={() =>
-                  void run(() =>
-                    runtime.reload({ sessionId: projection.sessionId, confirmDirty: true }),
-                  )
+          {projection.mode === 'markdown' && outlineVisible && markdownNavigation ? (
+            <MarkdownOutline
+              projection={markdownNavigation}
+              locale={locale}
+              activeEditor={activeEditor}
+              richEditorActions={richEditorActions}
+              editorView={editorView}
+              onRevealSource={(offset) => {
+                const view = editorView.current;
+                if (view) {
+                  revealSourceOffset(view, offset);
+                  return;
                 }
-              >
-                {textEditorLabel(locale, 'reload')}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOperationError(undefined);
-                  setConflictDismissed(true);
-                }}
-              >
-                {textEditorLabel(locale, 'keepEditing')}
-              </button>
-            </span>
+                pendingSourceOffset.current = offset;
+                updatePresentationMode('source');
+              }}
+            />
           ) : null}
-        </div>
-      ) : null}
-      {projection.diagnostics.length > 0 ? (
-        <div className="neko-text-editor-diagnostics" role="status">
-          {projection.diagnostics.map((diagnostic, index) => (
-            <span key={`${diagnostic.code}:${index}`}>
-              {textEditorDiagnosticLabel(locale, diagnostic.code)}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <div className="neko-text-editor-body" data-presentation-mode={effectiveMode}>
-        {projection.mode === 'fountain' && outlineVisible && effectiveMode !== 'preview' ? (
-          <ScreenplayOutline projection={projection} locale={locale} editorView={editorView} />
-        ) : null}
-        {projection.mode === 'markdown' && outlineVisible && markdownNavigation ? (
-          <MarkdownOutline
-            projection={markdownNavigation}
-            locale={locale}
-            activeEditor={activeEditor}
-            richEditorActions={richEditorActions}
-            editorView={editorView}
-            onRevealSource={(offset) => {
-              const view = editorView.current;
-              if (view) {
-                revealSourceOffset(view, offset);
-                return;
+          {projection.mode === 'markdown' &&
+          (effectiveMode === 'rich' || effectiveMode === 'split') ? (
+            <Suspense
+              fallback={
+                <div className="neko-text-editor-rich-status">
+                  {textEditorLabel(locale, 'richLoading')}
+                </div>
               }
-              pendingSourceOffset.current = offset;
-              updatePresentationMode('source');
-            }}
-          />
-        ) : null}
-        {projection.mode === 'markdown' &&
-        (effectiveMode === 'rich' || effectiveMode === 'split') ? (
-          <Suspense
-            fallback={
-              <div className="neko-text-editor-rich-status">
-                {textEditorLabel(locale, 'richLoading')}
-              </div>
-            }
-          >
-            <MilkdownRichEditor
+            >
+              <MilkdownRichEditor
+                projection={projection}
+                runtime={runtime}
+                locale={locale}
+                nextRequestId={nextRequestId}
+                onProjection={updateProjection}
+                onError={setOperationError}
+                onFocus={activateRichEditor}
+                onActions={bindRichEditorActions}
+                onOpenSource={() => updatePresentationMode('source')}
+              />
+            </Suspense>
+          ) : null}
+          {effectiveMode === 'source' || effectiveMode === 'split' ? (
+            <CodeMirrorEditor
               projection={projection}
               runtime={runtime}
               locale={locale}
               nextRequestId={nextRequestId}
               onProjection={updateProjection}
               onError={setOperationError}
-              onFocus={activateRichEditor}
-              onActions={bindRichEditorActions}
-              onOpenSource={() => updatePresentationMode('source')}
+              onView={bindEditorView}
+              onFocus={activateSourceEditor}
+              cspNonce={cspNonce}
             />
-          </Suspense>
-        ) : null}
-        {effectiveMode === 'source' || effectiveMode === 'split' ? (
-          <CodeMirrorEditor
-            projection={projection}
-            runtime={runtime}
-            locale={locale}
-            nextRequestId={nextRequestId}
-            onProjection={updateProjection}
-            onError={setOperationError}
-            onView={bindEditorView}
-            onFocus={activateSourceEditor}
-            cspNonce={cspNonce}
-          />
-        ) : null}
-        {projection.mode === 'fountain' &&
-        (effectiveMode === 'preview' || effectiveMode === 'split') ? (
-          <DocumentPreview projection={projection} />
-        ) : null}
-      </div>
-    </section>
+          ) : null}
+          {projection.mode === 'fountain' &&
+          (effectiveMode === 'preview' || effectiveMode === 'split') ? (
+            <DocumentPreview projection={projection} />
+          ) : null}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function TextEditorContextActions({
+  activeMode,
+  availableModes,
+  dirty,
+  locale,
+  onFormat,
+  onKeyDown,
+  onModeChange,
+  onOutlineToggle,
+  onSave,
+  outlineVisible,
+  showFormat,
+  showOutline,
+}: {
+  readonly activeMode: TextEditorPresentationMode;
+  readonly availableModes: readonly TextEditorPresentationMode[];
+  readonly dirty: boolean;
+  readonly locale: TextEditorLocale;
+  readonly onFormat: () => void;
+  readonly onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;
+  readonly onModeChange: (mode: TextEditorPresentationMode) => void;
+  readonly onOutlineToggle: () => void;
+  readonly onSave: () => void;
+  readonly outlineVisible: boolean;
+  readonly showFormat: boolean;
+  readonly showOutline: boolean;
+}): ReactElement {
+  return (
+    <div className="neko-text-editor-context-actions" onKeyDown={onKeyDown}>
+      {availableModes.length > 1 ? (
+        <div className="neko-text-editor-segmented" role="group">
+          {availableModes.map((mode, index) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={activeMode === mode}
+              title={`${textEditorLabel(locale, mode)} (Ctrl/Cmd+Shift+${index + 1})`}
+              onClick={() => onModeChange(mode)}
+            >
+              {textEditorLabel(locale, mode)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {showOutline ? (
+        <button
+          type="button"
+          aria-label={textEditorLabel(locale, 'outline')}
+          aria-pressed={outlineVisible}
+          title={`${textEditorLabel(locale, 'outline')} (Ctrl/Cmd+Shift+O)`}
+          onClick={onOutlineToggle}
+        >
+          <span className="codicon codicon-list-tree" aria-hidden="true" />
+        </button>
+      ) : null}
+      {showFormat ? (
+        <button
+          type="button"
+          aria-label={textEditorLabel(locale, 'format')}
+          title={`${textEditorLabel(locale, 'format')} (Shift+Alt+F)`}
+          onClick={onFormat}
+        >
+          <span className="codicon codicon-json" aria-hidden="true" />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        aria-label={textEditorLabel(locale, 'save')}
+        disabled={!dirty}
+        title={`${textEditorLabel(locale, 'save')} (Ctrl/Cmd+S)`}
+        onClick={onSave}
+      >
+        <span className="codicon codicon-save" aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -415,6 +486,7 @@ function CodeMirrorEditor({
       });
       reconciling.current = false;
     }
+    if (current) refreshSourceDecorations(current, projection);
   }, [projection]);
 
   useEffect(() => {
@@ -466,8 +538,7 @@ function CodeMirrorEditor({
         enqueue(changes);
       }),
     ];
-    if (projection.mode === 'markdown') extensions.push(markdown());
-    if (projection.mode === 'json') extensions.push(json());
+    extensions.push(...sourceLanguageExtensions(accepted.current));
     if (projection.mode === 'fountain') {
       extensions.push(
         autocompletion({ override: [fountainCompletions(() => accepted.current)] }),
@@ -486,6 +557,7 @@ function CodeMirrorEditor({
       parent: mount.current,
     });
     view.current = editorView;
+    refreshSourceDecorations(editorView, accepted.current);
     onView(editorView);
     return () => {
       editorView.destroy();
@@ -528,6 +600,7 @@ function CodeMirrorEditor({
     onProjection,
     onView,
     projection.mode,
+    projection.identity.documentId,
     runtime,
   ]);
 

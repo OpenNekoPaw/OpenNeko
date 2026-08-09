@@ -1,4 +1,16 @@
 .neko-text-editor-root {
+  --neko-syntax-keyword: #9a3d70;
+  --neko-syntax-name: #155f86;
+  --neko-syntax-property: #276f75;
+  --neko-syntax-type: #7b4aa8;
+  --neko-syntax-string: #2c7548;
+  --neko-syntax-number: #ad571f;
+  --neko-syntax-regexp: #9b4b2c;
+  --neko-syntax-heading: #315f9a;
+  --neko-syntax-emphasis: #6d4f91;
+  --neko-syntax-link: #16708f;
+  --neko-syntax-comment: #727b86;
+  --neko-syntax-punctuation: #57616c;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -7,54 +19,89 @@
   min-height: 0;
   color: var(--neko-editor-foreground, #202124);
   background: var(--neko-editor-background, #fff);
-  font-family: Inter, 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(
+    --neko-font-family,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'Noto Sans SC',
+    'PingFang SC',
+    sans-serif
+  );
   letter-spacing: 0;
   container-type: inline-size;
 }
 
-.neko-text-editor-toolbar {
+:root[data-neko-theme='dark'] .neko-text-editor-root {
+  --neko-syntax-keyword: #e38bbd;
+  --neko-syntax-name: #76c7f0;
+  --neko-syntax-property: #75c9c5;
+  --neko-syntax-type: #c5a1ed;
+  --neko-syntax-string: #82cf9f;
+  --neko-syntax-number: #e6a06c;
+  --neko-syntax-regexp: #e69a7e;
+  --neko-syntax-heading: #8fb8f3;
+  --neko-syntax-emphasis: #c5a1ed;
+  --neko-syntax-link: #75cbe3;
+  --neko-syntax-comment: #9aa4af;
+  --neko-syntax-punctuation: #b4bdc7;
+}
+
+.neko-text-editor-context-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 3px;
   min-width: 0;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--neko-border, #d9dce1);
-  flex: 0 0 38px;
 }
 
-.neko-text-editor-document-title {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-  margin-right: auto;
-}
-
-.neko-text-editor-document-title strong {
-  overflow: hidden;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.neko-text-editor-segmented,
-.neko-text-editor-commands {
+.neko-text-editor-segmented {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--neko-border, #d9dce1) 80%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--neko-editor-background, #fff) 70%, transparent);
 }
 
 .neko-text-editor-segmented button,
-.neko-text-editor-commands button {
-  min-width: 30px;
-  height: 28px;
+.neko-text-editor-context-actions > button {
+  min-width: 27px;
+  height: 26px;
   border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0 7px;
   background: transparent;
   color: inherit;
+  cursor: pointer;
+  font-size: 11px;
 }
 
 .neko-text-editor-segmented button[aria-pressed='true'] {
-  border-color: var(--neko-input-border, #9aa0a6);
-  background: var(--neko-sideBar-background, #f1f3f4);
+  border-color: color-mix(in srgb, var(--neko-focusBorder, #2563eb) 25%, transparent);
+  background: var(--neko-list-activeSelectionBackground, #e6edf7);
+  color: var(--neko-editor-foreground, #202124);
+  font-weight: 600;
+}
+
+.neko-text-editor-segmented button:hover,
+.neko-text-editor-context-actions > button:hover:not(:disabled) {
+  background: var(--neko-toolbar-hoverBackground, #e7eaee);
+}
+
+.neko-text-editor-context-actions > button[aria-pressed='true'] {
+  color: var(--neko-focusBorder, #2563eb);
+  background: var(--neko-toolbar-activeBackground, #dfe6ef);
+}
+
+.neko-text-editor-context-actions button:focus-visible {
+  outline: 1px solid var(--neko-focusBorder, #2563eb);
+  outline-offset: 1px;
+}
+
+.neko-text-editor-context-actions button:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .neko-text-editor-body {
@@ -71,11 +118,11 @@
 }
 
 .neko-text-editor-body:has(.neko-text-editor-outline) {
-  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
 }
 
 .neko-text-editor-body[data-presentation-mode='split']:has(.neko-text-editor-outline) {
-  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .neko-text-editor-codemirror,
@@ -100,14 +147,63 @@
 
 .neko-text-editor-milkdown-mount .ProseMirror {
   box-sizing: border-box;
-  max-width: 54rem;
+  max-width: 64rem;
   margin: 0 auto;
-  padding: 24px clamp(16px, 4vw, 48px) 80px;
+  padding: 36px clamp(24px, 5vw, 72px) 96px;
   outline: none;
-  font-family: Inter, 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 15px;
-  line-height: 1.7;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.78;
   overflow-wrap: anywhere;
+}
+
+.neko-text-editor-milkdown-mount .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.neko-text-editor-milkdown-mount h1,
+.neko-text-editor-milkdown-mount h2,
+.neko-text-editor-milkdown-mount h3,
+.neko-text-editor-milkdown-mount h4,
+.neko-text-editor-milkdown-mount h5,
+.neko-text-editor-milkdown-mount h6 {
+  margin: 1.75em 0 0.65em;
+  color: var(--neko-editor-foreground, #202124);
+  line-height: 1.28;
+  letter-spacing: 0;
+}
+
+.neko-text-editor-milkdown-mount h1 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--neko-border, #d9dce1);
+  font-size: 1.85rem;
+}
+
+.neko-text-editor-milkdown-mount h2 {
+  font-size: 1.45rem;
+}
+
+.neko-text-editor-milkdown-mount h3 {
+  font-size: 1.2rem;
+}
+
+.neko-text-editor-milkdown-mount p,
+.neko-text-editor-milkdown-mount ul,
+.neko-text-editor-milkdown-mount ol {
+  margin: 0.8em 0;
+}
+
+.neko-text-editor-milkdown-mount a {
+  color: var(--neko-textLink-foreground, #1672a3);
+  text-underline-offset: 2px;
+}
+
+.neko-text-editor-milkdown-mount code:not(pre code) {
+  border-radius: 3px;
+  padding: 0.12em 0.32em;
+  background: color-mix(in srgb, var(--neko-sideBar-background, #f1f3f4) 82%, transparent);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.88em;
 }
 
 .neko-text-editor-milkdown-mount .ProseMirror:focus-visible {
@@ -136,7 +232,9 @@
 }
 
 .neko-text-editor-milkdown-mount pre {
-  padding: 12px;
+  border: 1px solid var(--neko-border, #d9dce1);
+  border-radius: 5px;
+  padding: 14px 16px;
   overflow: auto;
   background: var(--neko-sideBar-background, #f1f3f4);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -179,6 +277,52 @@
   height: 100%;
 }
 
+.neko-text-editor-codemirror .cm-scroller {
+  line-height: 1.62;
+}
+
+.neko-text-editor-codemirror .cm-content {
+  padding: 22px clamp(20px, 3vw, 44px) 88px;
+  font-size: 13px;
+}
+
+.neko-text-editor-codemirror .cm-gutters {
+  border-right: 1px solid color-mix(in srgb, var(--neko-border, #d9dce1) 72%, transparent);
+  background: color-mix(in srgb, var(--neko-sideBar-background, #f1f3f4) 65%, transparent);
+  color: var(--neko-descriptionForeground, #727b86);
+}
+
+.neko-text-editor-codemirror .cm-activeLine,
+.neko-text-editor-codemirror .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--neko-list-hoverBackground, #edf1f5) 62%, transparent);
+}
+
+.neko-text-editor-codemirror .cm-fountain-scene-heading,
+.neko-text-editor-codemirror .cm-fountain-transition {
+  color: var(--neko-syntax-keyword);
+  font-weight: 700;
+}
+
+.neko-text-editor-codemirror .cm-fountain-character {
+  color: var(--neko-syntax-name);
+  font-weight: 650;
+}
+
+.neko-text-editor-codemirror .cm-fountain-parenthetical {
+  color: var(--neko-syntax-comment);
+  font-style: italic;
+}
+
+.neko-text-editor-codemirror .cm-fountain-dialogue {
+  color: var(--neko-editor-foreground, #202124);
+}
+
+.neko-text-editor-codemirror .cm-fountain-section,
+.neko-text-editor-codemirror .cm-fountain-synopsis {
+  color: var(--neko-syntax-heading);
+  font-weight: 650;
+}
+
 .neko-text-editor-preview {
   padding: 24px clamp(16px, 4vw, 48px);
   border-left: 1px solid var(--neko-border, #d9dce1);
@@ -188,8 +332,9 @@
 .neko-text-editor-outline {
   display: flex;
   flex-direction: column;
-  padding: 8px 0;
+  padding: 14px 8px 28px;
   border-right: 1px solid var(--neko-border, #d9dce1);
+  background: color-mix(in srgb, var(--neko-sideBar-background, #f1f3f4) 46%, transparent);
 }
 
 .neko-text-editor-outline-section {
@@ -205,8 +350,10 @@
 
 .neko-text-editor-outline-section > strong,
 .neko-text-editor-outline-section > span {
-  padding: 5px 12px;
-  font-size: 11px;
+  padding: 5px 8px 8px;
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
   color: var(--neko-descriptionForeground, #5f6368);
 }
 
@@ -215,11 +362,19 @@
   align-items: center;
   gap: 5px;
   border: 0;
-  padding-inline: 12px 6px;
-  padding-block: 7px;
+  min-height: 30px;
+  border-radius: 4px;
+  padding-inline: 8px 6px;
+  padding-block: 6px;
   background: transparent;
   color: inherit;
   text-align: left;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.neko-text-editor-outline button:hover {
+  background: var(--neko-list-hoverBackground, #e9edf2);
 }
 
 .neko-text-editor-outline button[data-outline-depth='1'] {
@@ -299,13 +454,6 @@
 }
 
 @container (max-width: 720px) {
-  .neko-text-editor-toolbar {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: 42px;
-    padding-block: 5px;
-  }
-
   .neko-text-editor-body[data-presentation-mode='split'],
   .neko-text-editor-body[data-presentation-mode='split']:has(.neko-text-editor-outline) {
     grid-template-columns: minmax(0, 1fr);
@@ -319,5 +467,10 @@
   .neko-text-editor-preview {
     border-top: 1px solid var(--neko-border, #d9dce1);
     border-left: 0;
+  }
+
+  .neko-text-editor-milkdown-mount .ProseMirror,
+  .neko-text-editor-codemirror .cm-content {
+    padding-inline: 18px;
   }
 }
