@@ -11,6 +11,12 @@ export function projectPiConversationEntries(
 ): Message[] {
   const messages: Message[] = [];
   const toolCalls = new Map<string, { readonly block: ContentBlock; readonly call: ToolCall }>();
+  let activeAssistantMessage:
+    | {
+        readonly message: Message;
+        readonly blocks: ContentBlock[];
+      }
+    | undefined;
   let pendingUserPresentation:
     | {
         readonly entryId: string;
@@ -79,6 +85,8 @@ export function projectPiConversationEntries(
           : {}),
       });
       pendingUserPresentation = undefined;
+      activeAssistantMessage = undefined;
+      toolCalls.clear();
       continue;
     }
 
@@ -92,7 +100,40 @@ export function projectPiConversationEntries(
       throw new Error(`Pi transcript contains unsupported presentation role ${source.role}.`);
     }
 
-    const blocks: ContentBlock[] = [];
+    if (source.stopReason === 'error') {
+      const responseText = source.content
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('');
+      messages.push({
+        id: entry.id,
+        role: 'assistant',
+        content: source.errorMessage
+          ? responseText.length > 0
+            ? `${responseText}\n\n${source.errorMessage}`
+            : source.errorMessage
+          : responseText,
+        timestamp: source.timestamp,
+        isError: true,
+      });
+      activeAssistantMessage = undefined;
+      toolCalls.clear();
+      continue;
+    }
+
+    if (!activeAssistantMessage) {
+      const blocks: ContentBlock[] = [];
+      const message: Message = {
+        id: entry.id,
+        role: 'assistant',
+        content: '',
+        timestamp: source.timestamp,
+      };
+      activeAssistantMessage = { message, blocks };
+      messages.push(message);
+    }
+
+    const blocks = activeAssistantMessage.blocks;
     for (const [index, part] of source.content.entries()) {
       if (part.type === 'text') {
         blocks.push({
@@ -132,20 +173,8 @@ export function projectPiConversationEntries(
       .filter((part) => part.type === 'text')
       .map((part) => part.text)
       .join('');
-    const content =
-      source.stopReason === 'error' && source.errorMessage
-        ? responseText.length > 0
-          ? `${responseText}\n\n${source.errorMessage}`
-          : source.errorMessage
-        : responseText;
-    messages.push({
-      id: entry.id,
-      role: 'assistant',
-      content,
-      timestamp: source.timestamp,
-      ...(source.stopReason === 'error' ? { isError: true } : {}),
-      ...(blocks.length === 0 ? {} : { contentBlocks: blocks }),
-    });
+    activeAssistantMessage.message.content += responseText;
+    if (blocks.length > 0) activeAssistantMessage.message.contentBlocks = blocks;
   }
 
   if (pendingUserPresentation) {
