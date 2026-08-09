@@ -95,7 +95,7 @@ the current accepted Markdown source into one ProseMirror document and serialize
 back to Markdown changes submitted through the existing exact session and edit-sequence command.
 Milkdown/ProseMirror state is disposable presentation state, not a durable buffer.
 
-The top-level Markdown control becomes `Rich | Source | Split`. CodeMirror remains the Source editor
+The top-level Markdown control is ordered `Source | Rich | Split`. CodeMirror remains the Source editor
 and the only editor for other text modes. Milkdown's CodeMirror-backed code-block component is scoped
 to a fenced code node; it cannot edit the containing Markdown source or other file formats.
 
@@ -106,15 +106,20 @@ the browser presentation target and does not own Markdown mode or command state.
 are scoped to the focused Text Editor Root (or its contributed controls), so two visible Main groups
 cannot route an operation through active/recent document identity.
 
-In Split, Rich and Source are two synchronized projections of one accepted working source. A user
-transaction from either side submits through the same domain command, and both reconcile only from
-the accepted projection. Stale edit sequences fail visibly. Mode switching cannot copy buffers,
-replay transactions into the other engine or select a fallback authority.
+In Split, CodeMirror is the editable left pane and Milkdown is the read-only Rich preview on the
+right. Both reconcile only from the same accepted working source. This avoids ambiguous focus,
+history and mutation ownership while keeping standalone Rich mode editable. Stale edit sequences
+fail visibly. Mode switching cannot copy buffers, replay transactions into the other engine or
+select a fallback authority.
 
 Rich serialization may normalize syntactic spelling while preserving declared GFM semantics. The
-conformance corpus defines allowed normalization. A construct that cannot round-trip without semantic
-loss disables Rich mutation for the affected document/range with a diagnostic and Source action; it
-is never silently deleted, converted to HTML or rewritten on open.
+conformance corpus defines allowed normalization. CommonMark/GFM parsing is intentionally tolerant:
+an unfinished delimiter, link, fence, list or table remains visible as the current parsed text or
+node and MUST NOT replace the whole Rich surface with an error. When the current source cannot
+round-trip without semantic loss, Milkdown still presents its read-only projection while Rich
+mutation is disabled with a document-local diagnostic and Source action. The Split preview remains
+available because it never serializes back to the source. Unsupported content is never silently
+deleted, converted to HTML or rewritten on open.
 
 Outline, heading navigation and reference inventory come from `@neko/markdown` source-backed
 projections. Milkdown may highlight the selected node, but its DOM is not the Search/Agent outline

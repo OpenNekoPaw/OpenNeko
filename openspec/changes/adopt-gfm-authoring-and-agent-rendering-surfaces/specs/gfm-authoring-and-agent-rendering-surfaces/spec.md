@@ -23,9 +23,9 @@ user-visible Neko Markdown file format, and non-GFM extensions SHALL be declared
 
 ### Requirement: Workspace Markdown has one editor authority and two editing projections
 
-The Markdown Text Editor SHALL expose `Rich`, `Source` and `Split` modes. Milkdown SHALL own Rich
-editing, CodeMirror 6 SHALL own complete source editing, and both SHALL submit through the same exact
-Text Document session and accepted edit-sequence contract.
+The Markdown Text Editor SHALL expose icon controls ordered `Source`, `Rich` and `Split`. Milkdown
+SHALL own standalone Rich editing, CodeMirror 6 SHALL own complete source editing, and both SHALL use
+the same exact Text Document session and accepted edit-sequence contract.
 
 #### Scenario: User opens a Markdown document with fresh presentation state
 
@@ -41,17 +41,23 @@ Text Document session and accepted edit-sequence contract.
 
 #### Scenario: User edits in Split
 
-- **WHEN** either visible projection submits a change while both projections are mounted
-- **THEN** the command applies once to the exact observed edit sequence and both projections reconcile
-  from the accepted source
+- **WHEN** Source and Rich preview are both visible in Split
+- **THEN** CodeMirror appears on the left and is the only mutable projection while the read-only Milkdown preview appears on the right
+- **AND** a Source command applies once to the exact observed edit sequence and both projections reconcile from the accepted source
 - **AND** stale commands fail visibly without replay, merge or fallback to the other engine
+
+#### Scenario: Source temporarily contains incomplete Markdown
+
+- **WHEN** the accepted source ends inside emphasis, link, fence, list or table syntax
+- **THEN** Rich and Split keep the parseable document content visible and update from the same accepted source
+- **AND** the unfinished construct may remain literal or locally incomplete without replacing the whole Rich surface with a failure state
+- **AND** preview-only presentation never serializes normalized Markdown back to the Text Document session
 
 #### Scenario: Rich mode cannot preserve a construct
 
 - **WHEN** the current Markdown construct cannot round-trip through the declared Milkdown schema
   without semantic loss
-- **THEN** the original source remains unchanged and the affected Rich mutation is unavailable with a
-  document-local diagnostic and Source action
+- **THEN** the original source remains unchanged and Milkdown keeps a read-only projection visible while Rich mutation is unavailable with a document-local diagnostic and Source action
 - **AND** the editor does not drop, convert or normalize the unsupported content as success
 
 ### Requirement: CodeMirror remains the complete source and general text editor

@@ -45,6 +45,24 @@ Milkdown 的 CodeMirror 能力位于 code-block component/Crepe CodeMirror featu
 code block 内部内容。它不能替代完整 `.md` Source 模式，也不能承担 JSON、YAML、Fountain、TXT
 和 HTML。因此 Text Editor 仍需独立 CodeMirror 6。
 
+### Typora 与 Mark Text 的不完整输入处理
+
+Typora 是闭源产品，无法从公开资料确认内部 parser 或增量算法。其官方 Markdown Reference
+能确认的用户行为是：span syntax 在输入后立即解析，而光标进入 span 时再展开 Markdown 源码；
+标题、引用、列表、代码围栏和表格也在满足触发条件后转换为对应块。可观察语义是“输入中的局部
+构造逐步成立”，而不是先要求整份文档通过一次可逆序列化验证。
+
+Mark Text 的公开实现使用 Muya。观察 `packages/muya/src/state/markdownToState.ts`、
+`inlineRenderer/index.ts` 和 block 实现可见：Markdown 先转换为 block state，空或未识别内容有
+明确 paragraph state；inline tokenizer 针对当前 content block patch DOM，编辑操作也在块级转换。
+因此未闭合 inline 标记或尚未成形的 block 可以继续作为当前段落文本存在，不会因为一个局部输入
+清空其他 block 的展示。
+
+OpenNeko 不复制 Muya，也不推断 Typora 的闭源实现。对应产品约束是：CodeMirror 始终保存完整
+源码；Milkdown 对 CommonMark/GFM 的容错 parse 始终可以形成展示投影；Split 的右侧投影只读，
+不会把自动补齐或规范化结果写回源码。若 Milkdown 序列化不能保持扩展语义，只冻结 standalone
+Rich mutation 并显示局部 diagnostic，同时保留已解析内容和 Source 操作。
+
 ### Agent Webview
 
 | 方案                   | 流式不完整语法                                                 | GFM/插件                                      | React/安全                                        | 判断                                              |
@@ -95,7 +113,7 @@ creative table、Mermaid 和 structured artifact parity。隔离 core bundle 为
 
 ## 来源与不确定性
 
-访问日期均为 2026-08-08：
+主要来源访问日期为 2026-08-08；Typora 与 Mark Text 补充核对日期为 2026-08-09：
 
 - [GFM Spec 0.29-gfm](https://github.github.com/gfm/)，CC BY-SA 4.0。
 - [cmark-gfm](https://github.com/github/cmark-gfm)，GitHub 的 C 参考实现，BSD-2-Clause。
@@ -105,6 +123,8 @@ creative table、Mermaid 和 structured artifact parity。隔离 core bundle 为
   [Code Block component](https://milkdown.dev/api/component-code-block)。
 - [MDXEditor](https://github.com/mdx-editor/editor)，MIT。
 - [CodeMirror](https://codemirror.net/)，MIT；当前 Text Editor 已集成 CodeMirror 6 modular packages。
+- [Typora Markdown Reference](https://support.typora.io/Markdown-Reference/)；Typora 为闭源产品，本文仅记录公开可观察行为，不推断内部实现。
+- [Mark Text](https://github.com/marktext/marktext) `develop` 分支及其 `packages/muya` block-state、Markdown-to-state 与 inline renderer 实现，MIT。
 - [Streamdown](https://github.com/vercel/streamdown)，Apache-2.0；npm 观察版本 2.5.0。
 - [react-markdown](https://github.com/remarkjs/react-markdown)、
   [markdown-it](https://github.com/markdown-it/markdown-it)、

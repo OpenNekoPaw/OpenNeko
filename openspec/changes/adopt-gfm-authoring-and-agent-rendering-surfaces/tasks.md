@@ -19,6 +19,7 @@
 - [x] 2.3 Add the package-owned lazy Milkdown adapter and `Rich | Source | Split` control while retaining CodeMirror as full Source/general text editor.
 - [x] 2.4 Route Milkdown and CodeMirror changes through the same exact Text Document session/edit sequence and cover CJK composition, undo/redo, mode switching and split synchronization.
 - [x] 2.5 Keep CodeMirror as the only complete Source editor; no Milkdown CodeMirror plugin or second full-source registration is present.
+- [x] 2.6 Order icon-only Markdown controls as Source, Rich and Split; make Split an editable left Source plus read-only right Rich preview; keep incomplete CommonMark/GFM visible and restrict round-trip failures to Rich mutation instead of replacing the document presentation.
 
 ## 3. Streamdown Spike And Agent Renderer Replacement
 
