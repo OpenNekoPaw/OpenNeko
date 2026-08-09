@@ -33,6 +33,16 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     await this.execute({ route: 'plugin.install', pluginId });
   }
 
+  async enablePlugin(pluginId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'plugin.enable', pluginId });
+  }
+
+  async disablePlugin(pluginId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'plugin.disable', pluginId });
+  }
+
   async removePlugin(pluginId: string): Promise<void> {
     this.requireActive();
     await this.execute({ route: 'plugin.remove', pluginId });

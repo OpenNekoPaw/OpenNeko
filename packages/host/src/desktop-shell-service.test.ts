@@ -668,6 +668,61 @@ describe('DesktopShellService', () => {
     });
   });
 
+  it('transitions to Character Management and selects an exact detail without a business session', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+
+    const transitioned = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'character-management-1',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: activeScene(projection.window).sceneId,
+        intent: { kind: 'open-character-management' },
+      }),
+    );
+
+    expect(transitioned).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        sceneId: `scene:${windowId}:character-management`,
+        context: { kind: 'character-management' },
+        slots: { main: { kind: 'character-management' } },
+      },
+    });
+    if (transitioned.status !== 'transitioned') throw new Error('Expected management scene.');
+    const detail = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'character-detail-1',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: transitioned.scene.sceneId,
+        intent: {
+          kind: 'select-character-detail',
+          selection: { kind: 'project', characterProjectId: 'character-project:lin' },
+        },
+      }),
+    );
+    expect(detail).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'character-management',
+          detail: { kind: 'project', characterProjectId: 'character-project:lin' },
+        },
+        slots: {
+          main: { kind: 'character-management' },
+          secondaryMain: {
+            kind: 'character-detail',
+            selection: { kind: 'project', characterProjectId: 'character-project:lin' },
+          },
+        },
+      },
+    });
+  });
+
   it('allocates a fresh unbound draft for every Start Creating transition', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();

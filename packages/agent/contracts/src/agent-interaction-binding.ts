@@ -1,5 +1,6 @@
 export type AgentInteractionPhase = 'draft' | 'session';
-export type AgentBindingKind = 'unbound' | 'assistant' | 'workspace' | 'character' | 'world';
+export type AgentBindingKind =
+  'unbound' | 'assistant' | 'workspace' | 'character' | 'room' | 'world';
 
 export type AgentDomainBinding =
   | { readonly kind: 'unbound' }
@@ -18,7 +19,13 @@ export type AgentDomainBinding =
       readonly characterId: string;
       readonly characterVersionId: string;
       readonly characterRunId?: string;
-      readonly roleProfileId: string;
+      readonly roleProfileId?: string;
+      readonly dialogueRunId?: string;
+    }
+  | {
+      readonly kind: 'room';
+      readonly roomId: string;
+      readonly roomRunId: string;
     }
   | {
       readonly kind: 'world';
@@ -122,6 +129,9 @@ export function parseAgentSessionInteractionProjection(
   if (binding.kind === 'character' && binding.characterRunId === undefined) {
     throw new Error('Character Agent Session requires an exact Character Run identity.');
   }
+  if (binding.kind === 'room' && binding.roomRunId.length === 0) {
+    throw new Error('Room Agent Session requires an exact Room Run identity.');
+  }
   if (binding.kind === 'world' && binding.worldRunId === undefined) {
     throw new Error('World Agent Session requires an exact World Run identity.');
   }
@@ -180,18 +190,41 @@ export function parseAgentDomainBinding(value: unknown): AgentDomainBinding {
     case 'character':
       requireAllowedKeys(
         record,
-        ['kind', 'characterId', 'characterVersionId', 'characterRunId', 'roleProfileId'],
-        ['kind', 'characterId', 'characterVersionId', 'roleProfileId'],
+        [
+          'kind',
+          'characterId',
+          'characterVersionId',
+          'characterRunId',
+          'roleProfileId',
+          'dialogueRunId',
+        ],
+        ['kind', 'characterId', 'characterVersionId'],
         'Character Agent binding',
       );
-      return {
-        kind: 'character',
+      const character = {
+        kind: 'character' as const,
         characterId: requireIdentity(record['characterId'], 'Character'),
         characterVersionId: requireIdentity(record['characterVersionId'], 'Character Version'),
         ...(record['characterRunId'] === undefined
           ? {}
           : { characterRunId: requireIdentity(record['characterRunId'], 'Character Run') }),
-        roleProfileId: requireIdentity(record['roleProfileId'], 'Character role profile'),
+        ...(record['roleProfileId'] === undefined
+          ? {}
+          : { roleProfileId: requireIdentity(record['roleProfileId'], 'Character role profile') }),
+        ...(record['dialogueRunId'] === undefined
+          ? {}
+          : { dialogueRunId: requireIdentity(record['dialogueRunId'], 'Dialogue Run') }),
+      };
+      if (character.roleProfileId === undefined && character.dialogueRunId === undefined) {
+        throw new Error('Character Agent binding requires a role profile or Dialogue Run.');
+      }
+      return character;
+    case 'room':
+      requireExactKeys(record, ['kind', 'roomId', 'roomRunId'], 'Room Agent binding');
+      return {
+        kind: 'room',
+        roomId: requireIdentity(record['roomId'], 'Room'),
+        roomRunId: requireIdentity(record['roomRunId'], 'Room Run'),
       };
     case 'world':
       requireAllowedKeys(

@@ -397,7 +397,7 @@ function recipesEqual(left: CanvasGenerationRecipe, right: CanvasGenerationRecip
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-export function resolveGenerationInputPanelPosition(viewportSize: {
+function resolveGenerationInputPanelPosition(viewportSize: {
   readonly width: number;
   readonly height: number;
 }): {

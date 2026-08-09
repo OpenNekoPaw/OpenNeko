@@ -125,7 +125,10 @@ export async function buildAgentPluginRuntime(
       }
     }
 
-    const tools = await createAllMCPTools(mcpManager);
+    const rawExposureDeniedServerIds = snapshot.runtimeDescriptors.flatMap((descriptor) =>
+      descriptor.mcpToolExposure === 'adapter-only' ? descriptor.mcpServerIds : [],
+    );
+    const tools = await createAllMCPTools(mcpManager, { rawExposureDeniedServerIds });
     assertUniqueToolNames(tools);
     for (const state of contributionStates.values()) {
       readiness.set(state.descriptor.pluginId, projectReadiness(state));

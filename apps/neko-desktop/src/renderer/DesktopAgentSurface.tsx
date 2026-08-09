@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, RefreshIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import type { AgentInteractionProjection, AgentLaunchHostResult } from '@neko/agent-contracts';
@@ -49,6 +49,7 @@ export type DesktopAgentSurfaceProps =
       readonly tab: DesktopProjectTabProjection;
       readonly agentPresentation?: AgentInteractionProjection;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+      readonly conversationFeed?: ReactNode;
     }
   | {
       readonly binding: 'launch';
@@ -57,6 +58,7 @@ export type DesktopAgentSurfaceProps =
       readonly agentPresentation: AgentInteractionProjection;
       readonly viewId: string;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+      readonly conversationFeed?: ReactNode;
     };
 
 export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Element {
@@ -258,6 +260,14 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
               initialInput={state.initialInput}
               locale={locale}
               presentation="desktop-dock"
+              conversationFeed={
+                props.conversationFeed && state.agentPresentation?.phase === 'session'
+                  ? {
+                      conversationId: state.agentPresentation.conversationId,
+                      content: props.conversationFeed,
+                    }
+                  : undefined
+              }
             />
           </Suspense>
         </div>
@@ -335,8 +345,10 @@ function projectAgentBindingKey(binding: AgentInteractionProjection['binding']):
         binding.characterId,
         binding.characterVersionId,
         binding.characterRunId ?? 'draft',
-        binding.roleProfileId,
+        binding.roleProfileId ?? binding.dialogueRunId ?? 'unqualified',
       ];
+    case 'room':
+      return ['room', binding.roomId, binding.roomRunId];
     case 'world':
       return [
         'world',

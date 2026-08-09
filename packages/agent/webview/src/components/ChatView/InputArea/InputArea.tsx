@@ -34,6 +34,7 @@ import {
   DEFAULT_COMPOSER_MENU_STATE,
   type ComposerMenuState,
   type SelectedFileReference,
+  type SelectedCharacterLaunch,
 } from './types';
 import {
   filterSkillInvocations,
@@ -43,6 +44,7 @@ import {
 } from './slash-command-catalog';
 import { findTrailingMentionRange, projectTrailingMention } from './mention-input';
 import { AgentContextChip } from './AgentContextChip';
+import { ReferenceToken } from './ReferenceToken';
 import { SuggestionChips } from './SuggestionChips';
 import { AmbientCanvasContextBar } from './AmbientCanvasContextBar';
 import { UsageIndicator } from './UsageIndicator';
@@ -109,6 +111,9 @@ interface InputAreaProps {
   onDraftCharacterTargetSelect?: (
     binding: Extract<AgentDomainBinding, { readonly kind: 'character' }>,
   ) => Promise<void>;
+  selectedCharacterLaunches?: readonly SelectedCharacterLaunch[];
+  onAddCharacterLaunch?: (selection: SelectedCharacterLaunch) => void;
+  onRemoveCharacterLaunch?: (characterVersionId: string) => void;
   /** Session-bound @file references selected from the mention menu. */
   selectedFileReferences?: SelectedFileReference[];
   onSelectedFileReferencesChange?: (references: SelectedFileReference[]) => void;
@@ -217,6 +222,8 @@ export function InputArea({
   draftWorkspaceTarget,
   onDraftWorkspaceTargetChange,
   onDraftCharacterTargetSelect,
+  selectedCharacterLaunches = [],
+  onRemoveCharacterLaunch,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
   isComposing = false,
@@ -990,6 +997,7 @@ export function InputArea({
                 textareaRef.current?.focus();
               }
             }}
+            onSelectItem={handleMentionSelect}
             onClose={() => setShowAtMenu(false)}
           />
 
@@ -1008,6 +1016,28 @@ export function InputArea({
               ))}
             </div>
           )}
+
+          {presentation === 'entry' && selectedCharacterLaunches.length > 0 ? (
+            <div
+              className="agent-reference-row agent-reference-row-attached"
+              data-character-launch-selections="true"
+            >
+              {selectedCharacterLaunches.map((selection) => (
+                <ReferenceToken
+                  key={selection.characterVersionId}
+                  kind="character"
+                  label={selection.label}
+                  variant="attached"
+                  title={selection.characterVersionId}
+                  onRemove={
+                    onRemoveCharacterLaunch
+                      ? () => onRemoveCharacterLaunch(selection.characterVersionId)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
 
           {/* File attachment preview */}
           <AttachmentPreview attachedFiles={attachedFiles} onRemove={handleRemoveFile} />

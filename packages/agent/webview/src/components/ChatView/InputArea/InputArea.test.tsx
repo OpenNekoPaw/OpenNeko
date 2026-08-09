@@ -1301,7 +1301,7 @@ describe('InputArea composer controls', () => {
     expect(textarea.value).toBe('');
   });
 
-  it('opens the entry prompt for playable unified character entities', () => {
+  it('opens the entry prompt only for exact published Character selections', () => {
     const onSend = vi.fn();
     const onEntryPromptMenuChange = vi.fn();
     const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
@@ -1444,7 +1444,7 @@ describe('InputArea composer controls', () => {
           onEntryPromptMenuChange={vi.fn()}
           onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
           onInputChange={vi.fn()}
-          onSend={onSend}
+          onSend={vi.fn()}
         />
       </Harness>,
     );

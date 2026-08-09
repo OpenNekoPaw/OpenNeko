@@ -322,6 +322,9 @@ export function projectProjectFilesMessage(
       ...(extra.mediaType ? { mediaType: extra.mediaType } : {}),
       ...(extra.entityType ? { entityType: extra.entityType } : {}),
       ...(extra.navigationData ? { navigationData: extra.navigationData } : {}),
+      ...(extra.characterLaunchSelection
+        ? { characterLaunchSelection: extra.characterLaunchSelection }
+        : {}),
       ...(extra.thumbnailUri ? { thumbnailUri: extra.thumbnailUri } : {}),
       ...(extra.referenceReceipt ? { referenceReceipt: extra.referenceReceipt } : {}),
       searchText: [

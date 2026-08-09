@@ -570,6 +570,22 @@ export class DesktopShellService {
       const current = activeDesktopWorkbench(window).scene;
       const interaction = current.slots.interaction;
       if (
+        current.context.kind === 'character-interaction' &&
+        (input.context.kind === 'character' || input.context.kind === 'room') &&
+        current.context.scope.draftId === input.draftId &&
+        current.context.scope.conversationId === input.conversationId &&
+        isSameAgentConversationOwner(
+          current.context.owner,
+          characterConversationOwnerFromContext(input.context),
+        ) &&
+        interaction?.kind === 'agent' &&
+        interaction.phase === 'session' &&
+        interaction.scope.kind !== 'unbound' &&
+        interaction.scope.conversationId === input.conversationId
+      ) {
+        return current;
+      }
+      if (
         current.context.kind === 'agent' &&
         current.context.scope.kind !== 'unbound' &&
         current.context.scope.draftId === input.draftId &&
@@ -604,7 +620,18 @@ export class DesktopShellService {
       }
       let nextState = state;
       let scene: DesktopWorkbenchSceneProjection;
-      if (current.context.scope.kind === 'unbound' && input.context.kind === 'workspace') {
+      if (
+        current.context.scope.kind === 'unbound' &&
+        (input.context.kind === 'character' || input.context.kind === 'room')
+      ) {
+        scene = createCharacterInteractionScene({
+          current,
+          draftId: input.draftId,
+          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          conversationId: input.conversationId,
+          owner: characterConversationOwnerFromContext(input.context),
+        });
+      } else if (current.context.scope.kind === 'unbound' && input.context.kind === 'workspace') {
         const workspaceGrantAuthority = this.options.workspaceGrantAuthority;
         if (!workspaceGrantAuthority) {
           throw new DesktopSceneContractError(
@@ -710,17 +737,14 @@ export class DesktopShellService {
           homeConversation.unavailable.message,
         );
       }
-      if (context.kind === 'character' || context.kind === 'world') {
+      if (context.kind === 'world') {
         return unavailableConversationSceneTransition(
           request,
           context.kind,
           `Desktop ${context.kind} Conversation scene provider is unavailable.`,
         );
       }
-      const contextOwner =
-        context.kind === 'assistant'
-          ? { kind: 'assistant' as const, assistantSpaceId: context.assistantSpaceId }
-          : { kind: 'workspace' as const, workspaceId: context.workspaceId };
+      const contextOwner = conversationOwnerFromContext(context);
       if (!isSameAgentConversationOwner(navigation.owner, contextOwner)) {
         throw new DesktopSceneContractError(
           'desktop-scene-scope-mismatch',
@@ -734,6 +758,26 @@ export class DesktopShellService {
             readonly workbench: DesktopWorkbenchLayoutProjection;
           }
         | undefined;
+      if (context.kind === 'character' || context.kind === 'room') {
+        const scene = createCharacterInteractionScene({
+          current: activeDesktopWorkbench(window).scene,
+          draftId: `draft:${this.createIdentity()}`,
+          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          conversationId,
+          owner: characterConversationOwnerFromContext(context),
+        });
+        this.assertMutationContext(request.windowId, request.rendererSessionId);
+        const committed = await this.options.stateRepository.commit({
+          ...state,
+          windows: state.windows.map((candidate) =>
+            candidate.windowId === request.windowId
+              ? putSceneWorkbench({ window, scene })
+              : candidate,
+          ),
+        });
+        await this.emitAll(committed);
+        return { status: 'transitioned', requestId: request.requestId, scene };
+      }
       if (context.kind === 'assistant') {
         draft = createAssistantAgentScene({
           current: activeDesktopWorkbench(window).scene,
@@ -1610,7 +1654,12 @@ function reconcilePersistedAgentSurface(
   createIdentity: () => string,
 ): DesktopStoredWindow {
   const interaction = window.workbench.scene.slots.interaction;
-  if (!interaction || isPersistedAgentSurfaceQualified(interaction, agentHome)) return window;
+  if (
+    !interaction ||
+    isPersistedAgentSurfaceQualified(window.workbench.scene, interaction, agentHome)
+  ) {
+    return window;
+  }
   return replaceActiveDesktopWorkbench(window, {
     scene: createReplacementAgentDraftScene(window.workbench.scene, `draft:${createIdentity()}`),
   });
@@ -1652,10 +1701,19 @@ function discardExpiredCutDraftPresentations(window: DesktopStoredWindow): {
 }
 
 function isPersistedAgentSurfaceQualified(
+  scene: DesktopWorkbenchSceneProjection,
   interaction: DesktopAgentInteractionSurfaceRef,
   agentHome: DesktopAgentHomeProjection,
 ): boolean {
   if (interaction.phase === 'draft') return true;
+  if (scene.context.kind === 'character-interaction') {
+    const context = scene.context;
+    return agentHome.conversations.some(
+      (conversation) =>
+        conversation.navigation.conversationId === context.scope.conversationId &&
+        isSameAgentConversationOwner(conversation.navigation.owner, context.owner),
+    );
+  }
   const scope = interaction.scope;
   if (scope.kind === 'unbound' || scope.conversationId === undefined) return false;
   const owner =
@@ -1673,6 +1731,13 @@ function createReplacementAgentDraftScene(
   current: DesktopWorkbenchSceneProjection,
   draftId: string,
 ): DesktopWorkbenchSceneProjection {
+  if (current.context.kind === 'character-interaction') {
+    return createAssistantAgentScene({
+      current,
+      assistantSpaceId: current.context.scope.assistantSpaceId,
+      draftId,
+    });
+  }
   if (current.context.kind === 'agent' && current.context.scope.kind === 'assistant') {
     return createAssistantAgentScene({
       current,
@@ -2276,6 +2341,42 @@ function conversationContextMatchesSceneScope(
   return false;
 }
 
+function conversationOwnerFromContext(context: AgentBoundDomainBinding): AgentConversationOwnerRef {
+  if (context.kind === 'assistant') {
+    return { kind: 'assistant', assistantSpaceId: context.assistantSpaceId };
+  }
+  if (context.kind === 'workspace') {
+    return { kind: 'workspace', workspaceId: context.workspaceId };
+  }
+  if (context.kind === 'world') {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'World Conversation scene provider is unavailable.',
+    );
+  }
+  return characterConversationOwnerFromContext(context);
+}
+
+function characterConversationOwnerFromContext(
+  context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>,
+): Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }> {
+  if (context.kind === 'room') {
+    return { kind: 'room', roomId: context.roomId, roomRunId: context.roomRunId };
+  }
+  if (context.characterRunId === undefined || context.dialogueRunId === undefined) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'Character Conversation requires exact Character Run and Dialogue Run identities.',
+    );
+  }
+  return {
+    kind: 'character',
+    characterId: context.characterId,
+    characterRunId: context.characterRunId,
+    dialogueRunId: context.dialogueRunId,
+  };
+}
+
 function createAssistantConversationScope(
   draftId: string,
   context: AgentBoundDomainBinding,
@@ -2318,6 +2419,48 @@ function attachConversationToDraftScene(
     slots: {
       ...draft.slots,
       interaction: { ...draft.slots.interaction, phase: 'session', scope },
+    },
+  });
+}
+
+function createCharacterInteractionScene(input: {
+  readonly current: DesktopWorkbenchSceneProjection;
+  readonly draftId: string;
+  readonly assistantSpaceId: string;
+  readonly conversationId: string;
+  readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
+}): DesktopWorkbenchSceneProjection {
+  const sceneId = `scene:${input.current.windowId}:character-interaction:${input.conversationId}`;
+  const agentViewId = `agent-view:${input.current.windowId}:${input.conversationId}`;
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: input.draftId,
+    assistantSpaceId: input.assistantSpaceId,
+    conversationId: input.conversationId,
+  };
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: input.current.windowId,
+    context: {
+      kind: 'character-interaction',
+      agentViewId,
+      owner: input.owner,
+      scope,
+    },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: `agent-surface:${input.current.windowId}:${input.conversationId}`,
+        agentViewId,
+        phase: 'session',
+        scope,
+      },
+      main: { kind: 'character-avatar', owner: input.owner },
+      rightManager: { kind: 'character-runtime-manager', owner: input.owner },
+      ...(input.owner.kind === 'room'
+        ? { cutPanel: { kind: 'character-room-timeline', owner: input.owner } }
+        : {}),
+      status: { kind: 'scene-status', sceneId },
     },
   });
 }
@@ -2502,7 +2645,7 @@ function synchronizeWorkspaceSceneWithWorkbench(
         currentMain.viewId === main.viewId &&
         currentMain.viewInstanceId === main.viewInstanceId)) &&
     ((!currentCutPanel && !cutPanel) ||
-      (currentCutPanel &&
+      (currentCutPanel?.kind === 'workspace-cut' &&
         cutPanel &&
         currentCutPanel.workspaceId === cutPanel.workspaceId &&
         currentCutPanel.viewId === cutPanel.viewId &&
@@ -2602,6 +2745,35 @@ function createTransitionedScene(
       slots: {
         main: { kind: 'asset-management', assetCenterSessionId },
         status: { kind: 'scene-status', sceneId },
+      },
+    });
+  }
+  if (intent.kind === 'open-character-management') {
+    const sceneId = `scene:${windowId}:character-management`;
+    return parseDesktopWorkbenchSceneProjection({
+      sceneId,
+      windowId,
+      context: { kind: 'character-management' },
+      slots: {
+        main: { kind: 'character-management' },
+        status: { kind: 'scene-status', sceneId },
+      },
+    });
+  }
+  if (intent.kind === 'select-character-detail') {
+    if (current.context.kind !== 'character-management') {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        'Character detail selection requires the active Character Management Scene.',
+      );
+    }
+    return parseDesktopWorkbenchSceneProjection({
+      ...current,
+      context: { kind: 'character-management', detail: intent.selection },
+      slots: {
+        ...current.slots,
+        main: { kind: 'character-management' },
+        secondaryMain: { kind: 'character-detail', selection: intent.selection },
       },
     });
   }

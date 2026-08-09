@@ -1,6 +1,6 @@
 import { PackageIcon, PlusIcon, SearchIcon, TrashIcon, WarningIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { EmptyState } from '@neko/ui/primitives';
+import { EmptyState, Switch } from '@neko/ui/primitives';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AgentExtensionCatalogItem } from '@neko/agent-contracts';
 import type {
@@ -170,6 +170,16 @@ export function AgentExtensionManagementRoot({
               <span className="management-surface-copy">
                 <strong>{skill?.name ?? extension?.displayName}</strong>
                 <small>{skill?.description || extension?.description || item.id}</small>
+                {extension ? (
+                  <small>
+                    {t(`home.capabilities.agentStatus.${extension.agentStatus}`)}
+                    {extension.declaredPermissions.length > 0
+                      ? ` · ${t('home.capabilities.permissions', {
+                          permissions: extension.declaredPermissions.join(', '),
+                        })}`
+                      : ''}
+                  </small>
+                ) : null}
               </span>
               <span className="management-surface-row-actions">
                 {extension?.canInstall ? (
@@ -194,6 +204,43 @@ export function AgentExtensionManagementRoot({
                   >
                     <PlusIcon size={13} />
                   </button>
+                ) : null}
+                {extension?.installed ? (
+                  <Switch
+                    aria-label={t('home.capabilities.enablement', {
+                      name: extension.displayName,
+                    })}
+                    checked={extension.enabled}
+                    disabled={
+                      !projection ||
+                      operationKey !== undefined ||
+                      (!extension.canEnable && !extension.canDisable)
+                    }
+                    onCheckedChange={(checked) => {
+                      if (!checked) {
+                        void runMutation(`disable:${extension.id}`, () =>
+                          runtime.disablePlugin(extension.id),
+                        );
+                        return;
+                      }
+                      void Promise.resolve(
+                        confirmAction(
+                          t('home.capabilities.confirmEnablePlugin', {
+                            name: extension.displayName,
+                            permissions:
+                              extension.declaredPermissions.join(', ') ||
+                              t('home.capabilities.permissions.none'),
+                          }),
+                        ),
+                      ).then((confirmed) => {
+                        if (confirmed) {
+                          void runMutation(`enable:${extension.id}`, () =>
+                            runtime.enablePlugin(extension.id),
+                          );
+                        }
+                      });
+                    }}
+                  />
                 ) : null}
                 {skill?.canRemove || extension?.canRemove ? (
                   <button

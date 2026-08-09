@@ -1,9 +1,10 @@
 # Chara 领域
 
-Chara 是 Character 创作、发布版本、运行绑定和角色语义的 owner。当前第一阶段
-host-neutral kernel 位于 `packages/chara`，已从 Entity 和旧 Agent 宿主实现收回
-Character Dialogue、Embody、角色证据、Profile Assembly 和角色 purpose operation，但没有
-Desktop manifest consumer、Host adapter 或可用产品入口。
+Chara 是 Character 创作、发布版本、运行绑定和角色语义的 owner。host-neutral domain/application
+位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara-node`，browser-only 管理视图位于
+`packages/chara-webview`。Desktop 已组合 Character catalog + detail 管理场景、Agent Entry
+`@CharacterVersion` companion 启动和 Character/Room Workbench；Agent 仍拥有唯一 Pi AgentSession、
+turn、Tool、Approval、transcript 和 compaction。
 
 目标领域模型区分：
 
@@ -20,15 +21,15 @@ CharacterProject
 
 角色互动产品由两个正交维度组合，而不是建立四套平行会话 runtime：
 
-| 角色数量 | `dialogue`             | `play`                       |
-| -------- | ---------------------- | ---------------------------- |
-| 单角色   | 单角色对话             | 单角色代打、陪玩、观战或指导 |
-| 多角色   | 多角色聊天室或场景排演 | 多角色聊天室 + 游戏 Activity |
+| 互动拓扑   | 日常 `companion`         | 叙事 `narrative`                           |
+| ---------- | ------------------------ | ------------------------------------------ |
+| `dialogue` | 单角色对话，World 可选   | 单角色对话，必须绑定精确 World/save/branch |
+| `chatroom` | 多角色聊天室，World 可选 | 多角色聊天室，必须绑定 World 和每个 actor  |
 
 每个 agent-controlled character 拥有独立 CharacterRun 和 primary AgentSession；多人房间只
-共享 revisioned room timeline，不共享 responder、transcript、模型配置或可变记忆。产品中的
-Play 通过内部 Play-use、Game/Activity 与受控 Computer Use 实现，Chara 不拥有游戏状态、
-窗口/设备 handle 或输入注入。
+共享 revisioned room timeline，不共享 responder、transcript、模型配置或可变记忆。聊天室是由
+多角色显式选择触发的扩展能力，单角色对话不创建或强制绑定 Room。Play-use、Game/Activity 与
+Computer Use 由独立变更负责；Chara 不拥有游戏状态、窗口/设备 handle 或输入注入。
 `Embody Character` 仍是“用户扮演角色、Agent 提供只读反馈”的创作验证流程，不等同于
 Play。
 
@@ -57,10 +58,12 @@ Chara 必须保留显著性依据，但不持久化单一 `importance` 分数；
 - [`architecture.md`](architecture.md)：owner、依赖、生命周期与错误边界；
 - [`../../architecture/package-boundaries.md`](../../architecture/package-boundaries.md)：跨包约束；
 - [`../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md`](../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md)：Agent 收敛顺序；
-- [`../../../openspec/changes/define-character-chatroom-play-use/`](../../../openspec/changes/define-character-chatroom-play-use/)：尚未实施的聊天室与 Play-use 规格、设计和任务；
+- [`../../../openspec/changes/define-character-dialogue-chatroom-world-foundation/`](../../../openspec/changes/define-character-dialogue-chatroom-world-foundation/)：正在实施的角色发布、对话、聊天室、Workbench 与最小 World Foundation 规格、设计和任务；
 
-当前不支持 CharacterProject/CharacterVersion 持久格式、发布、NarrativeSave/World runtime、
-UserCharacterRelationship、持久 CharacterRun 恢复、Companion Activity 或独立 Chara
-Webview，也不支持多角色 room、Game Activity、Play-use Host port 或游戏控制。这些能力需要
-后续真实 Desktop 组合与运行态资格验证，不能由 Agent transcript、Entity、Canvas Storyline、
-Webview state、普通 Character Dialogue 或空 adapter 代替。
+当前已支持 CharacterProject/CharacterVersion 持久化与发布、UserCharacterRelationship、
+Dialogue/Room durable records、最小 World Foundation，以及 Character catalog/detail 和 Workbench
+composition；Room 消息、参与者调度、用户过滤的 Interaction/Timeline 投影也已形成 canonical path。
+尚未完成叙事模式 Agent Entry、真实 2D/3D Avatar renderer、
+角色运行管理 projection、完整 World runtime、Game Activity、Play-use Host port 或桌宠窗口。这些
+能力必须通过后续真实 owner、Desktop 组合和运行态资格验证，不能由 Agent transcript、Entity、
+Canvas Storyline、Webview state、静态占位或空 adapter 代替。

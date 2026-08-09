@@ -133,6 +133,7 @@ export default defineConfig({
       '@neko/agent-webview',
       '@neko/assets-webview',
       '@neko/canvas-webview',
+      '@neko/chara-webview',
       '@neko/cut-webview',
       '@neko/preview-webview',
       '@neko/text-editor-webview',

@@ -68,6 +68,8 @@ import {
 } from '@neko/assets-domain/resource-browser/contract';
 import { DesktopWorkbenchContractError } from '@neko/host/desktop-workbench-contract';
 import type { ResourceBrowserNodeRuntime } from '@neko/assets-node';
+import { CharacterFoundationService } from '@neko/chara/application';
+import type { RoomView } from '@neko/chara/contracts';
 
 describe('DesktopAppHost', () => {
   it('maps only Main View capacity failures to an owner-bound Resource Browser rejection', async () => {
@@ -150,6 +152,11 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      characterFoundation: createCharacterFoundationService(),
+      characterFoundationCommands: createCharacterFoundationCommands(),
+      characterConversations: createCharacterConversations(),
+      characterRoomConversations: createCharacterRoomConversations(),
+      characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings,
       openAgentAdvancedSettings,
     });
@@ -229,6 +236,11 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      characterFoundation: createCharacterFoundationService(),
+      characterFoundationCommands: createCharacterFoundationCommands(),
+      characterConversations: createCharacterConversations(),
+      characterRoomConversations: createCharacterRoomConversations(),
+      characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -291,6 +303,11 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      characterFoundation: createCharacterFoundationService(),
+      characterFoundationCommands: createCharacterFoundationCommands(),
+      characterConversations: createCharacterConversations(),
+      characterRoomConversations: createCharacterRoomConversations(),
+      characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -503,8 +520,6 @@ describe('DesktopAppHost', () => {
       (await fixture.appHost.shell.getProjection(fixture.windowId)).agentHome.conversations,
     ).toHaveLength(workspaceConversationCount);
   });
-
-
 
   it('binds Agent launch operations to the exact Assistant Scene and connection identity', async () => {
     const agentLaunch = createAgentLaunchRuntime();
@@ -1461,6 +1476,7 @@ describe('DesktopAppHost', () => {
         kind: 'character' as const,
         characterId: 'character-1',
         characterRunId: 'character-run-1',
+        dialogueRunId: 'dialogue-run-1',
       },
     };
     setAgentHomeConversation(fixture.agent, navigation);
@@ -2540,7 +2556,11 @@ describe('DesktopAppHost', () => {
           installed: true,
           enabled: true,
           canInstall: false,
-          canRemove: true,
+          canEnable: false,
+          canDisable: true,
+          canRemove: false,
+          declaredPermissions: ['accessibility', 'screen-recording'],
+          acceptedPermissions: ['accessibility', 'screen-recording'],
           agentStatus: 'ready',
           runtimeDiagnosticCode: '',
           iconDataUrl: '',
@@ -3177,6 +3197,10 @@ async function createShellAppHost(options?: {
   readonly assetCenter?: AssetCenterNodeRuntime;
   readonly resourceBrowser?: ResourceBrowserNodeRuntime;
   readonly textEditor?: DesktopAppHostOptions['textEditor'];
+  readonly characterFoundationCommands?: DesktopAppHostOptions['characterFoundationCommands'];
+  readonly characterConversations?: DesktopAppHostOptions['characterConversations'];
+  readonly characterRoomConversations?: DesktopAppHostOptions['characterRoomConversations'];
+  readonly characterRoomWorkbench?: DesktopAppHostOptions['characterRoomWorkbench'];
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -3280,6 +3304,13 @@ async function createShellAppHost(options?: {
     textEditor: options?.textEditor,
     extensionManager,
     personalSkillManager: createPersonalSkillManager(),
+    characterFoundation: createCharacterFoundationService(),
+    characterFoundationCommands:
+      options?.characterFoundationCommands ?? createCharacterFoundationCommands(),
+    characterConversations: options?.characterConversations ?? createCharacterConversations(),
+    characterRoomConversations:
+      options?.characterRoomConversations ?? createCharacterRoomConversations(),
+    characterRoomWorkbench: options?.characterRoomWorkbench ?? createCharacterRoomWorkbench(),
     settings: createSettingsService(),
     openAgentAdvancedSettings: vi.fn(async () => undefined),
   });
@@ -3303,6 +3334,65 @@ async function createShellAppHost(options?: {
       frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
     },
     projection: await appHost.shell.getProjection(windowId),
+  };
+}
+
+function createCharacterFoundationService(): CharacterFoundationService {
+  return new CharacterFoundationService({
+    characterCatalog: {
+      readCatalog: async () => ({
+        projects: [],
+        versions: [],
+        relationships: [],
+        characterRuns: [],
+        dialogueRuns: [],
+        rooms: [],
+        roomRuns: [],
+        diagnostics: [],
+      }),
+    },
+    worldCatalog: {
+      readCatalog: async () => ({
+        projects: [],
+        versions: [],
+        runtimes: [],
+        diagnostics: [],
+      }),
+    },
+  });
+}
+
+function createCharacterFoundationCommands() {
+  return { execute: vi.fn(async () => undefined) };
+}
+
+function createCharacterConversations() {
+  return {
+    launch: vi.fn(async () => {
+      throw new Error('Character conversation launch is not expected by this test.');
+    }),
+  };
+}
+
+function createCharacterRoomConversations() {
+  return {
+    submitUserMessage: vi.fn(async () => {
+      throw new Error('Character Room message submission is not expected by this test.');
+    }),
+  };
+}
+
+function createCharacterRoomWorkbench(projection?: RoomView) {
+  return {
+    materializeUserView: vi.fn(async () => {
+      if (!projection) {
+        throw new Error('Character Room Workbench projection is not expected by this test.');
+      }
+      return structuredClone(projection);
+    }),
+    subscribeUserView: vi.fn(
+      (_roomRunId: string, _userId: string, _listener: (view: RoomView) => void) => vi.fn(),
+    ),
   };
 }
 
@@ -3477,6 +3567,8 @@ function createExtensionManager(): AgentExtensionManager & {
       diagnostics: [],
     })),
     installPlugin: vi.fn(),
+    enablePlugin: vi.fn(),
+    disablePlugin: vi.fn(),
     removePlugin: vi.fn(),
     refreshMarketplaces: vi.fn(),
     setRuntimeReadiness: vi.fn(),

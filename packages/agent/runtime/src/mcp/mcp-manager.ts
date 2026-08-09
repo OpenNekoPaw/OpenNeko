@@ -5,7 +5,9 @@
 import type {
   IMCPClient,
   IMCPManager,
+  MCPRequestOptions,
   MCPServerConfig,
+  MCPToolCallResult,
   MCPToolDefinition,
 } from '@neko/agent-contracts';
 import { createMCPClient } from './mcp-client';
@@ -169,32 +171,14 @@ export class MCPManager implements IMCPManager {
     await Promise.all(disconnectPromises);
   }
 
-  /**
-   * Call a tool on a specific server.
-   * Attempts one automatic reconnect if the server is disconnected.
-   */
+  /** Call a tool on an explicitly connected server. */
   async callTool(
     serverId: string,
     toolName: string,
     args: Record<string, unknown>,
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
-    let client = this.clients.get(serverId);
-
-    // Auto-reconnect: if disconnected, try one reconnect attempt
-    if (!client?.isConnected()) {
-      try {
-        await this.connect(serverId);
-        client = this.clients.get(serverId);
-      } catch (error) {
-        return {
-          success: false,
-          error: `MCP server ${serverId} is not connected and reconnect failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        };
-      }
-    }
-
+    options: MCPRequestOptions = {},
+  ): Promise<MCPToolCallResult> {
+    const client = this.clients.get(serverId);
     if (!client?.isConnected()) {
       return {
         success: false,
@@ -203,24 +187,30 @@ export class MCPManager implements IMCPManager {
     }
 
     try {
-      const result = await client.callTool(toolName, args);
+      const result = await client.callTool(toolName, args, options);
+      const content = result.content;
+      const structuredContent = result.structuredContent;
 
       if (result.isError) {
-        const errorText = result.content
+        const errorText = content
           .filter((c) => c.type === 'text')
           .map((c) => c.text)
           .join('\n');
 
-        return { success: false, error: errorText || 'Tool call failed' };
+        return {
+          success: false,
+          content,
+          ...(structuredContent === undefined ? {} : { structuredContent }),
+          error: errorText || 'Tool call failed',
+        };
       }
 
-      // Extract text content
-      const textContent = result.content
-        .filter((c) => c.type === 'text')
-        .map((c) => c.text)
-        .join('\n');
-
-      return { success: true, data: textContent || result.content };
+      return {
+        success: true,
+        data: structuredContent ?? projectCompatibleData(content),
+        content,
+        ...(structuredContent === undefined ? {} : { structuredContent }),
+      };
     } catch (error) {
       return {
         success: false,
@@ -228,4 +218,12 @@ export class MCPManager implements IMCPManager {
       };
     }
   }
+}
+
+function projectCompatibleData(content: MCPToolCallResult['content']): unknown {
+  if (content === undefined || content.length === 0) return content ?? [];
+  if (content.every((item) => item.type === 'text')) {
+    return content.map((item) => item.text).join('\n');
+  }
+  return content;
 }

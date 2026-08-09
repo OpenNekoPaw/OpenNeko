@@ -135,8 +135,10 @@ Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draf
 资源中心与扩展中心分别把 Asset Management 和 Extension Management 放入 Main，信息充分且由 owner
 提供的 Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell；低信息量的
 Project selection 保留在 catalog，并以独立行操作显式打开 Workspace，不创建空洞的 Detail shell。
-未具备真实 owner/runtime/public Root 的 Character/Chatroom scene 必须返回 owner-qualified unavailable，
-Desktop 不得伪造占位业务 UI。
+Character Management 使用 package-owned catalog Main 与 exact detail Secondary Main；Character/Room
+Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、Avatar/Scene Main、
+Character/World Manager 与 Room 按需 Timeline。当前未接入的 Avatar renderer、World 运行管理和 Room
+提交能力必须在 owning Surface 返回 owner-qualified unavailable，Desktop 不得伪造业务事实或成功状态。
 
 Host 把完整 Project catalog、Desktop stored recent Project context 与 owner-qualified Agent conversation
 catalog 组合成一个 canonical grouped navigation projection，PrimarySidebar 只消费该投影，不在 React 中
@@ -158,14 +160,17 @@ PrimarySidebar 是 Desktop 唯一用户级 Project context 与 conversation swit
 轻量导航 projection，不表示对应 Workspace Root、媒体资源或 Agent runtime 驻留。Agent Webview 在 Desktop
 dock 中保留完整 controller/composer/runtime 能力，但隐藏 package 内部 Tab、新建和 History 导航，防止只
 切换 transcript 而不切换完整 owner-qualified Scene。Project header 不恢复 first/active/recent conversation；
-conversation restore 与 delete 都验证完整 owner identity，Character/Room runtime 未组合时返回带 exact
-owner kind 的 unavailable。
+conversation restore 与 delete 都验证完整 owner identity。Character/Room Conversation 必须恢复到 exact
+`character-interaction` scene；缺失的 Run、Avatar、World 或 Room command 只在对应 owning Surface 返回
+带 exact owner identity 的 unavailable，不得降级为 Assistant 或 Workspace。
 
 Entry Draft 的 `unbound` scope 不显示强制 owner 卡片。用户未选择 owner 而直接发送时，Host 以 exact
 draft identity 确定性绑定 Assistant 用户区，并在同一事务中创建首次 conversation/session；选择显式
-Project 或 sender/Window-bound directory grant 时绑定 Workspace；未来选择 Character/Room 时绑定对应
-owner。对话文本、模型输出和 active/first/recent Project 都不得推断或扩大 owner 权限。尚未提供真实
-Character/Room owner 的选择必须 fail-visible，不能降级为 Assistant 或 Workspace。Workspace 布局控件
+Project 或 sender/Window-bound directory grant 时绑定 Workspace；一个或多个显式
+`@CharacterVersion` 分别绑定 Character Dialogue 或 Room owner。对话文本、模型输出和
+active/first/recent Project、Character、Room、World 都不得推断或扩大 owner 权限。失效角色选择、
+不完整叙事 World binding 或 actor mapping 必须 fail-visible，不能降级为普通 prompt、Assistant、
+Workspace 或 companion。Workspace 布局控件
 属于窗口级 presentation chrome，只在 exact Workspace scene 中出现在 PrimarySidebar 顶部品牌控件组、
 紧邻 sidebar 显隐按钮；不得放入 footer、Main tab 或领域 Root。
 

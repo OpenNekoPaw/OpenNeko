@@ -517,6 +517,8 @@ function bindingOwnerId(binding: AgentDomainBinding): string {
       return binding.workspaceId;
     case 'character':
       return binding.characterRunId ?? binding.characterVersionId;
+    case 'room':
+      return binding.roomRunId;
     case 'world':
       return binding.worldRunId ?? binding.worldExperienceVersionId;
   }

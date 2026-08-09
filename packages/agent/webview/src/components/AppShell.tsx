@@ -9,7 +9,7 @@
  * Extracted from the former 589-line AIAssistant component (ADR P0.1).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Header } from './Header';
 import { OnboardingFlow } from './OnboardingFlow';
 import { useConfigState, useResourceState } from '../hooks';
@@ -21,10 +21,15 @@ export interface AppShellProps {
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
   readonly agentPresentation?: AgentInteractionProjection;
+  readonly conversationFeed?: {
+    readonly conversationId: string;
+    readonly content: ReactNode;
+  };
 }
 
 export function AppShell({
   agentPresentation,
+  conversationFeed,
   initialConversation,
   initialInput,
   presentation = 'default',
@@ -85,6 +90,7 @@ export function AppShell({
         emptyStatePresentation={presentation === 'desktop-dock' ? 'desktop-dock' : 'default'}
         initialConversation={initialConversation}
         initialInput={initialInput}
+        conversationFeed={conversationFeed}
         settings={settings}
         hasConfigSnapshot={hasConfigSnapshot}
         setSettings={setSettings}

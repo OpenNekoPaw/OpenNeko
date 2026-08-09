@@ -42,7 +42,7 @@ export function parseAgentInputInvocationIntent(value: unknown): AgentInputInvoc
 export interface AgentInputReferenceReceipt {
   readonly catalogEntryId: string;
   readonly referenceId: string;
-  readonly ownerKind: 'assistant' | 'workspace' | 'character' | 'world';
+  readonly ownerKind: 'assistant' | 'workspace' | 'character' | 'room' | 'world';
   readonly ownerId: string;
   readonly bindingReceiptId?: string;
 }
@@ -179,6 +179,7 @@ function parseReferenceOwnerKind(value: unknown): AgentInputReferenceReceipt['ow
     value !== 'assistant' &&
     value !== 'workspace' &&
     value !== 'character' &&
+    value !== 'room' &&
     value !== 'world'
   ) {
     throw new Error(`Unknown Agent reference owner '${String(value)}'.`);

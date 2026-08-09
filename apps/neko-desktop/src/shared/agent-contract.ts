@@ -66,8 +66,7 @@ export interface DesktopAgentConversationUnavailableDiagnostic {
 }
 
 export type DesktopAgentUnavailableDiagnostic =
-  | DesktopAgentRuntimeUnavailableDiagnostic
-  | DesktopAgentConversationUnavailableDiagnostic;
+  DesktopAgentRuntimeUnavailableDiagnostic | DesktopAgentConversationUnavailableDiagnostic;
 
 export interface DesktopAgentUnavailableBootstrapProjection {
   readonly requestId: string;
@@ -466,9 +465,7 @@ export function parseDesktopAgentEvent(value: unknown): DesktopAgentEvent {
   };
 }
 
-export function parseDesktopAgentConnectionIdentity(
-  value: unknown,
-): DesktopAgentConnectionIdentity {
+function parseDesktopAgentConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity {
   const record = requireRecord(value, 'Desktop Agent connection identity is required.');
   const common = {
     applicationInstanceId: requireNonEmptyString(

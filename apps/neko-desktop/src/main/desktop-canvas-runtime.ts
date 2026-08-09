@@ -607,7 +607,7 @@ export class DesktopCanvasRuntime {
         revealResource: ({ identity: requestIdentity, locator }) =>
           revealEffect(requestIdentity, locator),
         executeMaterialAction: async ({
-          canvas,
+          canvas: _canvas,
           identity: requestIdentity,
           descriptor,
           action,

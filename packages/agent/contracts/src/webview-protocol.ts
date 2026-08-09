@@ -490,6 +490,10 @@ export interface ProjectMentionExtra {
   mediaType?: ProjectMentionMediaType;
   entityType?: string;
   navigationData?: Record<string, string>;
+  characterLaunchSelection?: {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+  };
   referenceReceipt?: import('./agent-draft-submit').AgentInputReferenceReceipt;
 }
 

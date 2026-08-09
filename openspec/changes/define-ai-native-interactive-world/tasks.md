@@ -1,6 +1,6 @@
 ## 1. Ownership and topology convergence
 
-- [ ] 1.1 Reconcile `define-character-chatroom-play-use` so World core owns only participant, observation, intent, event, state, save and branch semantics, while Game/VLA/seat/Computer Use remains an independent future Activity/Host direction.
+- [ ] 1.1 Reuse `define-character-dialogue-chatroom-world-foundation` as the canonical WorldVersion/Run/Intent/Event/State/View/Save/branch authority, while Browser Use, Computer Use, Play-use, external games, VLA and seat control remain owned by independent changes.
 - [ ] 1.2 Decide the initial World workspace topology from real dependency closures, register its package role/product status in `quality/package-roles.json`, and document why a single `@neko/world` package or a domain/node/webview family is required.
 - [ ] 1.3 Define the canonical public entries, producers, consumers, runtime boundaries and error taxonomy, and add architecture tests that forbid World core/application imports of Electron, React, Renderer, game engine, VLA, Computer Use and package internals.
 - [ ] 1.4 Define the user-data inventory, canonical workspace locations and provisional file extensions for WorldProject, WorldVersion, WorldExperienceVersion and WorldSave before any writer is enabled.

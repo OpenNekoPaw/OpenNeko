@@ -46,6 +46,7 @@ import type {
   SkillSummary,
   EntryPromptMenu,
   MentionItem,
+  SelectedCharacterLaunch,
   PluginSlashCommandDef,
   GenCategory,
   GenerationParams,
@@ -128,12 +129,9 @@ interface HeaderRenderProps {
   activeView: TabType;
   historyConversations: HistoryConversationItem[];
   activeConversationId: string | null;
-  roleplayItems: readonly MentionItem[];
   onSwitchTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewChat: () => void;
-  onRequestRoleplayItems: () => void;
-  onSelectRoleplayItem: (item: MentionItem) => void;
   onOpenConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
   onClearClosedConversations: () => void;
@@ -147,6 +145,10 @@ export interface ConversationControllerProps {
   initialInput?: { readonly id: string; readonly value: string };
   emptyStatePresentation?: 'default' | 'desktop-dock';
   agentPresentation?: AgentInteractionProjection;
+  conversationFeed?: {
+    readonly conversationId: string;
+    readonly content: ReactNode;
+  };
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -194,6 +196,7 @@ function applyConversationSettingsSnapshot(
 
 export function ConversationController({
   agentPresentation,
+  conversationFeed,
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
@@ -275,6 +278,9 @@ export function ConversationController({
   const [entryAction, setEntryAction] = useState<EmptyStateEntryAction>('start-chat');
   const [entryInputValue, setEntryInputValue] = useState('');
   const [entryContextReferences, setEntryContextReferences] = useState<AgentContextPayload[]>([]);
+  const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<SelectedCharacterLaunch[]>(
+    [],
+  );
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
   const [entryExecutionMode, setEntryExecutionMode] = useState<SettingsState['executionMode']>(
@@ -315,6 +321,7 @@ export function ConversationController({
     updateEntryInputValue(normalizedInput);
   }, [initialInput, openTabs.length, updateEntryInputValue]);
   const addEntryContextReference = useCallback((payload: AgentContextPayload) => {
+    setEntryCharacterLaunches([]);
     setEntryContextReferences((current) =>
       current.some((reference) => reference.id === payload.id) ? current : [...current, payload],
     );
@@ -322,6 +329,30 @@ export function ConversationController({
   const removeEntryContextReference = useCallback((id: string) => {
     setEntryContextReferences((current) => current.filter((reference) => reference.id !== id));
   }, []);
+  const addEntryCharacterLaunch = useCallback((selection: SelectedCharacterLaunch) => {
+    setEntryWorkspaceTarget(undefined);
+    setEntryContextReferences([]);
+    setEntryCharacterLaunches((current) =>
+      current.some((candidate) => candidate.characterVersionId === selection.characterVersionId)
+        ? current
+        : [...current, selection],
+    );
+  }, []);
+  const removeEntryCharacterLaunch = useCallback((characterVersionId: string) => {
+    setEntryCharacterLaunches((current) =>
+      current.filter((selection) => selection.characterVersionId !== characterVersionId),
+    );
+  }, []);
+  const updateEntryWorkspaceTarget = useCallback(
+    (target: AgentComposerWorkspaceTarget | undefined) => {
+      if (target) {
+        setEntryCharacterLaunches([]);
+        setEntryContextReferences([]);
+      }
+      setEntryWorkspaceTarget(target);
+    },
+    [],
+  );
   const hydrateConversationSettings = useCallback(
     (conversationId: string, snapshot: ConversationSettingsSnapshot) => {
       settingsSnapshotByConversationRef.current.set(conversationId, snapshot);
@@ -417,6 +448,7 @@ export function ConversationController({
     setEntryAction('start-chat');
     updateEntryInputValue(entryDraft?.inputValue ?? '');
     setEntryContextReferences(entryDraft ? [...entryDraft.contextReferences] : []);
+    setEntryCharacterLaunches(entryDraft ? [...entryDraft.characterLaunches] : []);
     setEntryWorkspaceTarget(entryDraft?.workspaceTarget);
     const launchConfiguration =
       requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog().configuration;
@@ -458,6 +490,7 @@ export function ConversationController({
       draftId: agentPresentation.draftId,
       inputValue: entryInputValue,
       contextReferences: entryContextReferences,
+      characterLaunches: entryCharacterLaunches,
       ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
       selectedModel: entrySelectedModel,
       executionMode: entryExecutionMode,
@@ -465,6 +498,7 @@ export function ConversationController({
   }, [
     agentPresentation,
     entryContextReferences,
+    entryCharacterLaunches,
     entryExecutionMode,
     entryInputValue,
     entrySelectedModel,
@@ -1049,10 +1083,6 @@ export function ConversationController({
     agentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
   }, [agentHostMessages, setMentionItems, updateMentionSearchFilter]);
 
-  const handleSelectRoleplayItem = useCallback(() => {
-    setGlobalError('Start a Character interaction from an exact Character Version surface.');
-  }, []);
-
   const handleEntryAction = useCallback(
     (action: EmptyStateEntryAction) => {
       setEntryAction(action);
@@ -1166,6 +1196,7 @@ export function ConversationController({
             writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
             updateEntryInputValue('');
             setEntryContextReferences([]);
+            setEntryCharacterLaunches([]);
             setEntryWorkspaceTarget(undefined);
             if (projection.turnStatus === 'failed' && projection.diagnostic) {
               setGlobalError(projection.diagnostic);
@@ -1524,12 +1555,9 @@ export function ConversationController({
             activeView: activeTab,
             historyConversations,
             activeConversationId: visibleConversationId,
-            roleplayItems: mentionItems,
             onSwitchTab: handleSwitchTab,
             onCloseTab: handleCloseTab,
             onNewChat: handleNewChat,
-            onRequestRoleplayItems: handleRequestRoleplayItems,
-            onSelectRoleplayItem: handleSelectRoleplayItem,
             onOpenConversation: handleOpenTab,
             onDeleteConversation: handleDeleteConversation,
             onClearClosedConversations: handleClearClosedConversations,
@@ -1648,13 +1676,16 @@ export function ConversationController({
                           await requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).bindTarget(
                             target?.context ?? { kind: 'unbound' },
                           );
-                          setEntryWorkspaceTarget(target);
+                          updateEntryWorkspaceTarget(target);
                         } catch (error) {
                           setGlobalError(describeError(error));
                         }
                       }
                     : undefined
                 }
+                selectedCharacterLaunches={entryCharacterLaunches}
+                onAddCharacterLaunch={addEntryCharacterLaunch}
+                onRemoveCharacterLaunch={removeEntryCharacterLaunch}
                 disabled={isForegroundConversationActivationPending || !hasConfigSnapshot}
                 entryPromptMenu={entryPromptMenu}
                 onEntryPromptMenuChange={setEntryPromptMenu}
@@ -1681,6 +1712,11 @@ export function ConversationController({
             tab={tab}
             runtime={runtime}
             visible={visible}
+            conversationFeed={
+              conversationFeed?.conversationId === tab.conversationId
+                ? conversationFeed.content
+                : undefined
+            }
             composerPresentation={emptyStatePresentation === 'desktop-dock' ? 'compact' : 'default'}
             messages={[...sessionState.messages]}
             setMessages={(value) =>

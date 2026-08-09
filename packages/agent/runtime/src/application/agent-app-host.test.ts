@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   createAssistantMessageEventStream,
@@ -41,6 +43,8 @@ import { isContentFingerprint, type ContentFingerprint } from '@neko/content';
 import { createEmptyCanvasData, saveNkc } from '@neko/canvas-domain';
 import { createOtioTimeline, serializeOtio } from '@neko/cut-domain';
 import { CapturedLogTransport, ConsoleLogger, LogLevel, type ILogger } from '@neko/shared/logger';
+
+const resolveFixtureModule = createRequire(import.meta.url).resolve;
 
 const MODEL: Model<'openai-completions'> = {
   id: 'main',
@@ -1934,6 +1938,72 @@ describe('AgentAppHost', () => {
     });
   });
 
+  it('projects exact Character and Room owners from canonical Conversation context', async () => {
+    const fixture = await createFixture();
+    const records = [
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-character',
+        title: 'Character conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:02:00.000Z',
+        context: {
+          kind: 'character' as const,
+          characterId: 'character:neko',
+          characterVersionId: 'character-version:neko:1',
+          characterRunId: 'character-run:neko:1',
+          dialogueRunId: 'dialogue-run:neko:1',
+        },
+      },
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-room',
+        title: 'Room conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:01:00.000Z',
+        context: {
+          kind: 'room' as const,
+          roomId: 'room:studio',
+          roomRunId: 'room-run:studio:1',
+        },
+      },
+    ];
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-character-room-owner',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: () => ({ records, diagnostics: [] }),
+        findConversation: (conversationId) =>
+          records.find((record) => record.conversationId === conversationId),
+        dispose: () => undefined,
+      },
+    });
+    compositions.push(composition);
+
+    expect(composition.readHomeProjection().conversations).toMatchObject([
+      {
+        navigation: {
+          conversationId: 'conversation-character',
+          owner: {
+            kind: 'character',
+            characterId: 'character:neko',
+            characterRunId: 'character-run:neko:1',
+          },
+        },
+      },
+      {
+        navigation: {
+          conversationId: 'conversation-room',
+          owner: { kind: 'room', roomId: 'room:studio', roomRunId: 'room-run:studio:1' },
+        },
+      },
+    ]);
+  });
+
   it('retains a missing-context Conversation as unavailable without opening a runtime', async () => {
     const fixture = await createFixture();
     const missingContext = {
@@ -2540,16 +2610,11 @@ describe('AgentAppHost', () => {
       join(pluginRoot, 'fixture-mcp.mjs'),
       [
         '#!/usr/bin/env node',
-        "import readline from 'node:readline';",
-        'const input = readline.createInterface({ input: process.stdin });',
-        "input.on('line', (line) => {",
-        '  const request = JSON.parse(line);',
-        '  if (request.id === undefined) return;',
-        "  const result = request.method === 'tools/list'",
-        "    ? { tools: [{ name: 'echo', description: 'Echo input', inputSchema: { type: 'object', properties: {} } }] }",
-        '    : { content: [] };',
-        "  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');",
-        '});',
+        `import { McpServer } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/mcp.js')).href)};`,
+        `import { StdioServerTransport } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/stdio.js')).href)};`,
+        "const server = new McpServer({ name: 'agent-app-host-fixture', version: '1.0.0' });",
+        "server.registerTool('echo', { description: 'Echo fixture' }, async () => ({ content: [{ type: 'text', text: 'echo' }] }));",
+        'await server.connect(new StdioServerTransport());',
         '',
       ].join('\n'),
       { mode: 0o755 },

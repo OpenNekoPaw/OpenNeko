@@ -18,7 +18,9 @@ describe('Desktop extension manager', () => {
       await writePlugin(installedRoot, {
         name: 'computer-use',
         version: '1.0.2',
+        permissions: ['screen-recording', 'accessibility'],
         mcpServers: './.mcp.json',
+        mcpToolExposure: 'adapter-only',
         skills: './skills',
         interface: {
           displayName: 'Computer Use',
@@ -59,9 +61,13 @@ describe('Desktop extension manager', () => {
           id: 'computer-use@openneko',
           marketplace: 'openneko',
           installed: true,
+          enabled: false,
+          canEnable: true,
           canRemove: true,
-          agentStatus: 'error',
-          runtimeDiagnosticCode: 'runtime-not-composed',
+          agentStatus: 'disabled',
+          runtimeDiagnosticCode: '',
+          declaredPermissions: ['accessibility', 'screen-recording'],
+          acceptedPermissions: [],
           mcpServerIds: ['computer-use'],
           hasSkills: true,
         }),
@@ -73,10 +79,13 @@ describe('Desktop extension manager', () => {
           agentStatus: 'not-installed',
         }),
       ]);
-      expect(snapshot.runtimeDescriptors).toEqual([
+      expect(snapshot.runtimeDescriptors).toEqual([]);
+      const enabled = await manager.enablePlugin('computer-use@openneko');
+      expect(enabled.runtimeDescriptors).toEqual([
         expect.objectContaining({
           pluginId: 'computer-use@openneko',
           mcpServerIds: ['computer-use'],
+          mcpToolExposure: 'adapter-only',
         }),
       ]);
       const serialized = JSON.stringify(snapshot.records);
@@ -85,7 +94,7 @@ describe('Desktop extension manager', () => {
       expect(serialized).not.toContain('PRIVATE_TOKEN');
 
       manager.setRuntimeReadiness(
-        snapshot,
+        enabled,
         new Map([['computer-use@openneko', { status: 'ready', diagnosticCode: '' }]]),
       );
       await expect(manager.readCatalog()).resolves.toMatchObject({
@@ -123,9 +132,24 @@ describe('Desktop extension manager', () => {
         expect.objectContaining({
           id: 'sample@openneko',
           installed: true,
+          enabled: false,
+          canEnable: true,
           canRemove: true,
+          agentStatus: 'disabled',
         }),
       ]);
+
+      const enabled = await manager.enablePlugin('sample@openneko');
+      expect(enabled.records[0]).toMatchObject({
+        enabled: true,
+        canDisable: true,
+        canRemove: false,
+      });
+      await expect(manager.removePlugin('sample@openneko')).rejects.toThrow(
+        'does not allow this operation',
+      );
+      const disabled = await manager.disablePlugin('sample@openneko');
+      expect(disabled.records[0]).toMatchObject({ enabled: false, canRemove: true });
 
       const removed = await manager.removePlugin('sample@openneko');
       expect(removed.records).toEqual([
@@ -201,7 +225,7 @@ describe('Desktop extension manager', () => {
     });
   });
 
-  it('omits invalid manifests and returns grouped safe diagnostics', async () => {
+  it('keeps invalid installed records visible and returns grouped safe diagnostics', async () => {
     await withRepository(async (fixture) => {
       const installedRoot = join(fixture.installRoot, 'first');
       const availableRoot = join(fixture.marketplaceRoot, 'plugins', 'second');
@@ -212,13 +236,22 @@ describe('Desktop extension manager', () => {
       ]);
 
       await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
-        records: [],
+        records: [
+          expect.objectContaining({
+            id: 'first@openneko',
+            installed: true,
+            enabled: false,
+            canEnable: false,
+            agentStatus: 'error',
+            runtimeDiagnosticCode: 'manifest-invalid',
+          }),
+        ],
         diagnostics: [{ code: 'manifest_invalid', count: 2 }],
       });
     });
   });
 
-  it('projects installed App-only plugins as unsupported and never ready', async () => {
+  it('keeps installed App-only plugins disabled until explicitly enabled', async () => {
     await withRepository(async (fixture) => {
       const installedRoot = join(fixture.installRoot, 'app-only');
       await writePlugin(installedRoot, {
@@ -233,8 +266,15 @@ describe('Desktop extension manager', () => {
       );
       await writeMarketplace(fixture.marketplaceRoot, []);
 
-      const snapshot = await createManager(fixture).readCatalog();
+      const manager = createManager(fixture);
+      const snapshot = await manager.readCatalog();
       expect(snapshot.records[0]).toMatchObject({
+        agentStatus: 'disabled',
+        runtimeDiagnosticCode: '',
+        appIds: ['connector'],
+      });
+      const enabled = await manager.enablePlugin('app-only@openneko');
+      expect(enabled.records[0]).toMatchObject({
         agentStatus: 'unsupported',
         runtimeDiagnosticCode: 'app-unsupported',
         appIds: ['connector'],
@@ -302,6 +342,7 @@ function createManager(
     repository: createOpenNekoExtensionRepository({
       marketplaceRoot: fixture.marketplaceRoot,
       installRoot: fixture.installRoot,
+      stateRoot: fixture.stateRoot,
       trashItem: fixture.trashItem,
     }),
     agentSupport,
@@ -327,6 +368,7 @@ interface RepositoryFixture {
   readonly root: string;
   readonly marketplaceRoot: string;
   readonly installRoot: string;
+  readonly stateRoot: string;
   readonly trashRoot: string;
   readonly trashItem: ReturnType<typeof vi.fn<(absolutePath: string) => Promise<void>>>;
 }
@@ -335,17 +377,19 @@ async function withRepository(run: (fixture: RepositoryFixture) => Promise<void>
   const root = await mkdtemp(join(tmpdir(), 'openneko-extension-repository-'));
   const marketplaceRoot = join(root, 'marketplace');
   const installRoot = join(root, 'neko-home', 'extensions', 'plugins');
+  const stateRoot = join(root, 'neko-home', 'extensions', 'state');
   const trashRoot = join(root, 'trash');
   await Promise.all([
     mkdir(marketplaceRoot, { recursive: true }),
     mkdir(installRoot, { recursive: true }),
+    mkdir(stateRoot, { recursive: true }),
     mkdir(trashRoot, { recursive: true }),
   ]);
   const trashItem = vi.fn(async (absolutePath: string) => {
     await rename(absolutePath, join(trashRoot, `removed-${Date.now()}`));
   });
   try {
-    await run({ root, marketplaceRoot, installRoot, trashRoot, trashItem });
+    await run({ root, marketplaceRoot, installRoot, stateRoot, trashRoot, trashItem });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

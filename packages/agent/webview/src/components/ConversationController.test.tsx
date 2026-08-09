@@ -416,6 +416,11 @@ vi.mock('./ChatView/InputArea', async () => {
       disabled?: boolean;
       entryPromptMenu?: 'roleplay' | null;
       onEntryPromptMenuChange?: (menu: 'roleplay' | null) => void;
+      selectedCharacterLaunches?: readonly import('./ChatView/InputArea/types').SelectedCharacterLaunch[];
+      onAddCharacterLaunch?: (
+        selection: import('./ChatView/InputArea/types').SelectedCharacterLaunch,
+      ) => void;
+      onRemoveCharacterLaunch?: (characterVersionId: string) => void;
       onDraftWorkspaceTargetChange?: (
         target:
           | {
@@ -438,6 +443,7 @@ vi.mock('./ChatView/InputArea', async () => {
         contextChips,
         onAddContextChip,
         onRemoveContextChip,
+        mentionItems = [],
       } = useInputAreaContext();
       return (
         <div>
@@ -503,6 +509,34 @@ vi.mock('./ChatView/InputArea', async () => {
           <span data-testid="entry-context-chips">
             {contextChips.map((payload) => payload.label).join('|')}
           </span>
+          {mentionItems
+            .filter((item) => item.characterLaunchSelection)
+            .map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() =>
+                  props.onAddCharacterLaunch?.({
+                    ...item.characterLaunchSelection!,
+                    label: item.label,
+                  })
+                }
+              >
+                Select Character {item.label}
+              </button>
+            ))}
+          <span data-testid="entry-character-launches">
+            {props.selectedCharacterLaunches?.map((selection) => selection.label).join('|') ?? ''}
+          </span>
+          {props.selectedCharacterLaunches?.map((selection) => (
+            <button
+              key={selection.characterVersionId}
+              type="button"
+              onClick={() => props.onRemoveCharacterLaunch?.(selection.characterVersionId)}
+            >
+              Remove Character {selection.label}
+            </button>
+          ))}
           <span data-testid="entry-page-menu">{props.entryPromptMenu ?? 'none'}</span>
           <button type="button" onClick={() => props.onEntryPromptMenuChange?.(null)}>
             Close Entry Menu
@@ -711,6 +745,7 @@ describe('ConversationController entry state', () => {
             data: { resourceGrantId: 'grant-restored', resourceKind: 'file' },
           },
         ],
+        characterLaunches: [],
         workspaceTarget: {
           label: 'Restored Project',
           context: {
@@ -1312,67 +1347,6 @@ describe('ConversationController entry state', () => {
     });
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('roleplay');
-  });
-
-  it('rejects Character launch from the Session Header without creating another conversation', () => {
-    vi.clearAllMocks();
-    const setMentionItems = vi.fn();
-    render(
-      <ConversationController
-        {...createProps({
-          mentionItems: [
-            {
-              id: 'entity:char-xiaoju',
-              kind: 'entity',
-              label: 'Xiaoju',
-              entityType: 'character',
-            },
-          ],
-        })}
-        setMentionItems={setMentionItems}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open Role Sessions' }));
-
-    expect(setMentionItems).toHaveBeenCalledWith([]);
-    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
-      purpose: 'roleplay',
-    });
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start Role Xiaoju' }));
-
-    expect(screen.getByText(/exact Character Version surface/)).toBeTruthy();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-  });
-
-  it('does not turn an Entity candidate into a Character session from the Header', () => {
-    vi.clearAllMocks();
-    render(
-      <ConversationController
-        {...createProps({
-          mentionItems: [
-            {
-              id: 'entity:entity-projection:semantic-ling',
-              kind: 'entity',
-              label: 'Ling',
-              entityType: 'character',
-              navigationData: {
-                candidateId: 'candidate:auto:character:Ling',
-                projectSearchItemId: 'entity-projection:semantic-ling',
-              },
-            },
-          ],
-        })}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start Role Ling' }));
-
-    expect(screen.getByText(/exact Character Version surface/)).toBeTruthy();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByTestId('tab-count').textContent).toBe('0');
   });
 
   it('starts a new tab and sends entry text in chat mode', () => {
@@ -2736,14 +2710,6 @@ function createProps(
         <button type="button" onClick={props.onNewChat}>
           New
         </button>
-        <button type="button" onClick={props.onRequestRoleplayItems}>
-          Open Role Sessions
-        </button>
-        {props.roleplayItems.map((item) => (
-          <button key={item.id} type="button" onClick={() => props.onSelectRoleplayItem(item)}>
-            Start Role {item.label}
-          </button>
-        ))}
         {props.tabs.map((tab) => (
           <div key={tab.id}>
             <button type="button" onClick={() => props.onSwitchTab(tab.id)}>

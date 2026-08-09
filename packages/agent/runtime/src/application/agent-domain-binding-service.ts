@@ -65,6 +65,8 @@ export function createAgentDomainBindingApplicationService(input: {
         case 'character':
           if (!input.chara) return unavailable(binding);
           return validateResolution(binding, await input.chara.resolve(binding));
+        case 'room':
+          return { status: 'available', binding, contextPayloads: [] };
         case 'world':
           if (!input.world) return unavailable(binding);
           return validateResolution(binding, await input.world.resolve(binding));

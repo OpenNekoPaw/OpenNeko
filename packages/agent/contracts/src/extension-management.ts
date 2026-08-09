@@ -43,6 +43,8 @@ export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
   installPlugin(pluginId: string): Promise<void>;
+  enablePlugin(pluginId: string): Promise<void>;
+  disablePlugin(pluginId: string): Promise<void>;
   removePlugin(pluginId: string): Promise<void>;
   refreshMarketplaces(): Promise<void>;
   installPersonalSkill(): Promise<void>;
@@ -185,7 +187,11 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'installed',
       'enabled',
       'canInstall',
+      'canEnable',
+      'canDisable',
       'canRemove',
+      'declaredPermissions',
+      'acceptedPermissions',
       'agentStatus',
       'runtimeDiagnosticCode',
       'iconDataUrl',
@@ -226,11 +232,38 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     record['canRemove'],
     'Agent Extension Management removal flag is invalid.',
   );
-  if ((installed && canInstall) || (!installed && (enabled || canRemove))) {
+  const canEnable = requireBoolean(
+    record['canEnable'],
+    'Agent Extension Management enable flag is invalid.',
+  );
+  const canDisable = requireBoolean(
+    record['canDisable'],
+    'Agent Extension Management disable flag is invalid.',
+  );
+  const declaredPermissions = requireUniqueIdentifiers(
+    record['declaredPermissions'],
+    'Agent Extension Management declared permissions are invalid.',
+  );
+  const acceptedPermissions = requireUniqueIdentifiers(
+    record['acceptedPermissions'],
+    'Agent Extension Management accepted permissions are invalid.',
+  );
+  if (
+    canInstall !== !installed ||
+    (canEnable && (!installed || enabled)) ||
+    canDisable !== (installed && enabled) ||
+    canRemove !== (installed && !enabled) ||
+    (!installed && (enabled || acceptedPermissions.length > 0)) ||
+    (enabled && !sameStringSet(declaredPermissions, acceptedPermissions)) ||
+    (!enabled && acceptedPermissions.length > 0)
+  ) {
     throw new Error('Agent Extension Management extension flags are inconsistent.');
   }
   const agentStatus = requireExtensionStatus(record['agentStatus']);
-  if (!installed && agentStatus !== 'not-installed') {
+  if (
+    (!installed && agentStatus !== 'not-installed') ||
+    (installed && !enabled && agentStatus !== 'disabled' && agentStatus !== 'error')
+  ) {
     throw new Error('Agent Extension Management extension status is inconsistent.');
   }
   return {
@@ -244,9 +277,9 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       record['description'],
       'Agent Extension Management description must be a string.',
     ),
-    version: requireNonEmptyString(
+    version: requireString(
       record['version'],
-      'Agent Extension Management version is required.',
+      'Agent Extension Management version must be a string.',
     ),
     developer: requireString(
       record['developer'],
@@ -260,7 +293,11 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     installed,
     enabled,
     canInstall,
+    canEnable,
+    canDisable,
     canRemove,
+    declaredPermissions,
+    acceptedPermissions,
     agentStatus,
     runtimeDiagnosticCode: requireDiagnosticValue(record['runtimeDiagnosticCode']),
     iconDataUrl: requireIconDataUrl(record['iconDataUrl']),
@@ -411,6 +448,7 @@ function requireExtensionDiagnosticCode(value: unknown): AgentExtensionDiagnosti
     value !== 'repository_unavailable' &&
     value !== 'repository_failed' &&
     value !== 'repository_invalid' &&
+    value !== 'state_invalid' &&
     value !== 'manifest_invalid' &&
     value !== 'contribution_invalid' &&
     value !== 'runtime_unsupported' &&
@@ -425,6 +463,7 @@ function requireExtensionDiagnosticCode(value: unknown): AgentExtensionDiagnosti
 function requireExtensionStatus(value: unknown): AgentExtensionStatus {
   if (
     value !== 'not-installed' &&
+    value !== 'disabled' &&
     value !== 'ready' &&
     value !== 'partial' &&
     value !== 'unsupported' &&
@@ -433,6 +472,10 @@ function requireExtensionStatus(value: unknown): AgentExtensionStatus {
     throw new Error('Agent Extension Management extension status is invalid.');
   }
   return value;
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
 }
 
 function requireNonEmptyString(value: unknown, message: string): string {

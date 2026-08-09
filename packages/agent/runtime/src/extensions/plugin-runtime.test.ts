@@ -1,6 +1,8 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -13,6 +15,8 @@ import {
   createAgentExtensionSupport,
   parsePluginMcpDocument,
 } from './plugin-runtime';
+
+const resolveFixtureModule = createRequire(import.meta.url).resolve;
 
 describe('Desktop plugin runtime', () => {
   it('parses contained stdio command/cwd and only explicitly projected environment', async () => {
@@ -213,18 +217,11 @@ describe('Desktop plugin runtime', () => {
         launcher,
         [
           '#!/usr/bin/env node',
-          "import readline from 'node:readline';",
-          'const input = readline.createInterface({ input: process.stdin });',
-          "input.on('line', (line) => {",
-          '  const request = JSON.parse(line);',
-          '  if (request.id === undefined) return;',
-          "  const result = request.method === 'tools/list'",
-          "    ? { tools: [{ name: 'echo', description: 'Echo input', inputSchema: { type: 'object', properties: { value: { type: 'string' } } } }] }",
-          "    : request.method === 'tools/call'",
-          "      ? { content: [{ type: 'text', text: `echo:${request.params.arguments.value}` }] }",
-          '      : {};',
-          "  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');",
-          '});',
+          `import { McpServer } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/mcp.js')).href)};`,
+          `import { StdioServerTransport } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/stdio.js')).href)};`,
+          "const server = new McpServer({ name: 'plugin-runtime-fixture', version: '1.0.0' });",
+          "server.registerTool('echo', { description: 'Echo fixture' }, async () => ({ content: [{ type: 'text', text: 'echo:hello' }] }));",
+          'await server.connect(new StdioServerTransport());',
           '',
         ].join('\n'),
         { mode: 0o755 },
@@ -265,6 +262,29 @@ describe('Desktop plugin runtime', () => {
         diagnosticCode: '',
       });
       await pluginRuntime.dispose();
+
+      const adapterRuntime = await buildAgentPluginRuntime(
+        {
+          records: [],
+          runtimeDescriptors: [
+            { ...mcpDescriptor(pluginRoot, ['fixture']), mcpToolExposure: 'adapter-only' },
+          ],
+          diagnostics: [],
+        },
+        {
+          processEnv: {
+            HOME: process.env['HOME'],
+            PATH: process.env['PATH'],
+            TMPDIR: process.env['TMPDIR'],
+          },
+        },
+      );
+      expect(adapterRuntime.tools).toEqual([]);
+      expect(adapterRuntime.readiness.get('fixture@market')).toEqual({
+        status: 'ready',
+        diagnosticCode: '',
+      });
+      await adapterRuntime.dispose();
     });
   });
 });

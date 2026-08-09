@@ -23,6 +23,14 @@ describe('DesktopExtensionManagementRuntime', () => {
     await expect(runtime.getSnapshot()).resolves.toMatchObject({
       identity: { windowId: 'window-1' },
     });
+    await runtime.enablePlugin('computer-use@openneko');
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        route: 'plugin.enable',
+        pluginId: 'computer-use@openneko',
+        identity: { windowId: 'window-1' },
+      }),
+    );
     runtime.dispose();
     await expect(runtime.getSnapshot()).rejects.toThrow('disposed');
   });

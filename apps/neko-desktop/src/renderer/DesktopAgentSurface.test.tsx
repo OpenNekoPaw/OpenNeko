@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode } from 'react';
+import { act, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
@@ -18,6 +18,7 @@ vi.mock('@neko/agent-webview/root', async () => {
       agentPresentation,
       initialConversation,
       composerWorkspace,
+      conversationFeed,
       locale,
       presentation,
     }: {
@@ -27,6 +28,7 @@ vi.mock('@neko/agent-webview/root', async () => {
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly locale: string;
       readonly presentation: string;
+      readonly conversationFeed?: { readonly conversationId: string; readonly content: ReactNode };
     }) => {
       useEffect(
         () => () => {
@@ -59,6 +61,7 @@ vi.mock('@neko/agent-webview/root', async () => {
           }
         >
           {hostRuntimeAdapter.runtimeId}:{locale}
+          {conversationFeed?.content}
         </div>
       );
     },
@@ -387,7 +390,11 @@ describe('DesktopAgentSurface', () => {
     const firstRoot = container.querySelector('[data-testid="agent-root"]');
     await act(async () =>
       root.render(
-        <TestLaunchAgentSurface assistantSpaceId="assistant:1" conversationId="conversation:1" />,
+        <TestLaunchAgentSurface
+          assistantSpaceId="assistant:1"
+          conversationId="conversation:1"
+          conversationFeed={<div data-testid="room-authority-feed">Room authority</div>}
+        />,
       ),
     );
     await act(async () => undefined);
@@ -398,6 +405,9 @@ describe('DesktopAgentSurface', () => {
     expect(sessionRoot?.getAttribute('data-initial-conversation-id')).toBe('conversation:1');
     expect(container.textContent).toContain(
       'neko.agent.webview.electron:assistant-connection-1:en',
+    );
+    expect(container.querySelector('[data-testid="room-authority-feed"]')?.textContent).toBe(
+      'Room authority',
     );
     expect(getAssistantBootstrap).toHaveBeenCalledWith(
       'workbench-assistant-1',
@@ -527,9 +537,11 @@ function TestAgentSurface({
 function TestLaunchAgentSurface({
   assistantSpaceId,
   conversationId,
+  conversationFeed,
 }: {
   readonly assistantSpaceId: string;
   readonly conversationId?: string;
+  readonly conversationFeed?: ReactNode;
 }) {
   const i18n = createDesktopI18n('en');
   return (
@@ -539,6 +551,7 @@ function TestLaunchAgentSurface({
         workbenchInstanceId="workbench-assistant-1"
         agentSurfaceId="agent-surface-assistant-1"
         viewId="agent-view:window-1"
+        conversationFeed={conversationFeed}
         agentPresentation={
           conversationId
             ? {
@@ -619,6 +632,38 @@ function installBridge(
       workbench: { update: vi.fn() },
       applicationSidebar: { update: vi.fn() },
       scenes: { transition: vi.fn() },
+      characterFoundation: {
+        getSnapshot: vi.fn(async () => ({
+          character: {
+            projects: [],
+            versions: [],
+            relationships: [],
+            characterRuns: [],
+            dialogueRuns: [],
+            rooms: [],
+            roomRuns: [],
+          },
+          world: { projects: [], versions: [], runtimes: [] },
+          diagnostics: [],
+        })),
+        execute: vi.fn(async () => ({
+          character: {
+            projects: [],
+            versions: [],
+            relationships: [],
+            characterRuns: [],
+            dialogueRuns: [],
+            rooms: [],
+            roomRuns: [],
+          },
+          world: { projects: [], versions: [], runtimes: [] },
+          diagnostics: [],
+        })),
+      },
+      characterRoomWorkbench: {
+        getSnapshot: vi.fn(),
+        subscribe: vi.fn(() => () => undefined),
+      },
       resources: createResourceBridgeMock(),
       projectPortability: {
         inspect: vi.fn(),

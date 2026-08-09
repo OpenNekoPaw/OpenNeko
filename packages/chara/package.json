@@ -19,7 +19,8 @@
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/shared": "workspace:*",
-    "@neko/screenplay-domain": "workspace:*"
+    "@neko/screenplay-domain": "workspace:*",
+    "@neko/world": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

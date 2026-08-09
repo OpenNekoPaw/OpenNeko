@@ -205,6 +205,19 @@ import {
   parseAgentExtensionManagementHostResult,
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
+import {
+  CHARACTER_FOUNDATION_HOST_CHANNEL,
+  CHARACTER_ROOM_WORKBENCH_CHANNELS,
+  createCharacterFoundationCommandHostRequest,
+  createCharacterFoundationHostRequest,
+  createCharacterRoomWorkbenchSnapshotRequest,
+  parseCharacterFoundationHostResult,
+  parseCharacterRoomWorkbenchProjectionEvent,
+  parseCharacterRoomWorkbenchSnapshotResult,
+  type CharacterRoomWorkbenchProjectionEvent,
+  type OpenNekoDesktopCharacterBridge,
+  type OpenNekoDesktopCharacterRoomWorkbenchBridge,
+} from '@neko/chara/contracts';
 
 let requestSequence = 0;
 let latestShellProjection: DesktopShellMutationContext | undefined;
@@ -246,6 +259,17 @@ let currentSettingsProjection: DesktopApplicationSettingsProjection | undefined;
 const settingsListeners = new Set<
   Parameters<OpenNekoDesktopApplicationSettingsBridge['settings']['subscribe']>[0]
 >();
+let currentCharacterRoomRunId: string | undefined;
+let currentCharacterRoomEventSequence = 0;
+let currentCharacterRoomSnapshotRequestId: string | undefined;
+let characterRoomSnapshotPending = false;
+let pendingCharacterRoomEvents: CharacterRoomWorkbenchProjectionEvent[] = [];
+const characterRoomWorkbenchListeners = new Set<{
+  readonly roomRunId: string;
+  readonly listener: Parameters<
+    OpenNekoDesktopCharacterRoomWorkbenchBridge['characterRoomWorkbench']['subscribe']
+  >[1];
+}>();
 
 const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopShellBridge &
@@ -262,7 +286,78 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
   OpenNekoDesktopApplicationSettingsBridge &
-  OpenNekoDesktopProjectPortabilityBridge = {
+  OpenNekoDesktopProjectPortabilityBridge &
+  OpenNekoDesktopCharacterBridge &
+  OpenNekoDesktopCharacterRoomWorkbenchBridge = {
+  characterFoundation: {
+    async getSnapshot() {
+      const request = createCharacterFoundationHostRequest(nextRequestId('character-foundation'));
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_FOUNDATION_HOST_CHANNEL,
+        request,
+      );
+      return parseCharacterFoundationHostResult(response, request.requestId).snapshot;
+    },
+    async execute(command) {
+      const request = createCharacterFoundationCommandHostRequest(
+        nextRequestId('character-foundation-command'),
+        command,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_FOUNDATION_HOST_CHANNEL,
+        request,
+      );
+      return parseCharacterFoundationHostResult(response, request.requestId).snapshot;
+    },
+  },
+  characterRoomWorkbench: {
+    async getSnapshot(roomRunId) {
+      const request = createCharacterRoomWorkbenchSnapshotRequest(
+        nextRequestId('character-room-workbench'),
+        roomRunId,
+      );
+      currentCharacterRoomSnapshotRequestId = request.requestId;
+      characterRoomSnapshotPending = true;
+      currentCharacterRoomEventSequence = 0;
+      currentCharacterRoomRunId = request.roomRunId;
+      pendingCharacterRoomEvents = [];
+      try {
+        const response: unknown = await ipcRenderer.invoke(
+          CHARACTER_ROOM_WORKBENCH_CHANNELS.snapshotGet,
+          request,
+        );
+        const result = parseCharacterRoomWorkbenchSnapshotResult(response, request);
+        if (currentCharacterRoomSnapshotRequestId === request.requestId) {
+          currentCharacterRoomEventSequence = Math.max(
+            currentCharacterRoomEventSequence,
+            result.sequence,
+          );
+          characterRoomSnapshotPending = false;
+          for (const event of pendingCharacterRoomEvents) publishCharacterRoomEvent(event);
+          pendingCharacterRoomEvents = [];
+        }
+        return result.projection;
+      } catch (error) {
+        if (currentCharacterRoomSnapshotRequestId === request.requestId) {
+          currentCharacterRoomSnapshotRequestId = undefined;
+          characterRoomSnapshotPending = false;
+          currentCharacterRoomRunId = undefined;
+          currentCharacterRoomEventSequence = 0;
+          pendingCharacterRoomEvents = [];
+        }
+        throw error;
+      }
+    },
+    subscribe(roomRunId, listener) {
+      const identity = createCharacterRoomWorkbenchSnapshotRequest(
+        'character-room-workbench-subscription',
+        roomRunId,
+      ).roomRunId;
+      const subscription = { roomRunId: identity, listener };
+      characterRoomWorkbenchListeners.add(subscription);
+      return () => characterRoomWorkbenchListeners.delete(subscription);
+    },
+  },
   assistantResources: {
     async execute(value) {
       const request = parseAssistantResourceHostRequest(value);
@@ -1393,6 +1488,25 @@ ipcRenderer.on(
     }
   },
 );
+
+ipcRenderer.on(
+  CHARACTER_ROOM_WORKBENCH_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseCharacterRoomWorkbenchProjectionEvent(value);
+    if (event.requestId !== currentCharacterRoomSnapshotRequestId) return;
+    if (event.projection.roomRunId !== currentCharacterRoomRunId) return;
+    if (event.sequence !== currentCharacterRoomEventSequence + 1) return;
+    currentCharacterRoomEventSequence = event.sequence;
+    if (characterRoomSnapshotPending) pendingCharacterRoomEvents.push(event);
+    else publishCharacterRoomEvent(event);
+  },
+);
+
+function publishCharacterRoomEvent(event: CharacterRoomWorkbenchProjectionEvent): void {
+  for (const subscription of characterRoomWorkbenchListeners) {
+    if (subscription.roomRunId === event.projection.roomRunId) subscription.listener(event);
+  }
+}
 
 ipcRenderer.on(
   DESKTOP_RESOURCE_BROWSER_CHANNELS.projectionEvent,

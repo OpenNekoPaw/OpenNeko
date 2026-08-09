@@ -11,7 +11,6 @@ const agentCriticalFiles = [
   'packages/agent/webview/src/components/ChatView/InputArea/InputArea.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/ModelSelector.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/ModeSelector.tsx',
-  'packages/agent/webview/src/components/ChatView/InputArea/SessionModeSelector.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/ComposerConfigMenu.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/ModelTagList.tsx',
   'packages/agent/webview/src/components/ChatView/InputArea/EntryPromptMenu.tsx',

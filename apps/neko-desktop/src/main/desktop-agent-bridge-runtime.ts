@@ -91,6 +91,10 @@ export interface DesktopAgentBridgeRuntime {
     request: DesktopAgentMessageRequest,
     grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentMessageResult>;
+  assertConnection(
+    connection: DesktopAgentConnectionIdentity,
+    grant: DesktopAnyAgentConnectionGrant,
+  ): void;
   sendProjectionControl(
     request: DesktopAgentMessageRequest,
     grant: DesktopAgentProjectionSenderGrant,
@@ -315,15 +319,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentMessageResult> {
     this.requireActive();
-    assertConnectionIdentity(request.connection, grant);
-    const connection = this.connections.get(request.connection.connectionId);
-    if (!connection) {
-      throw new DesktopAgentContractError(
-        'desktop-agent-identity-mismatch',
-        `Unknown Desktop Agent connection '${request.connection.connectionId}'.`,
-      );
-    }
-    assertConnectionIdentity(request.connection, connection.identity);
+    const connection = this.requireConnection(request.connection, grant);
     const unavailable = createElectronAgentHostRouteUnavailableDiagnostic(request.message.type);
     if (unavailable) {
       return {
@@ -343,6 +339,14 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       requestId: request.requestId,
       status: 'accepted',
     };
+  }
+
+  assertConnection(
+    connection: DesktopAgentConnectionIdentity,
+    grant: DesktopAnyAgentConnectionGrant,
+  ): void {
+    this.requireActive();
+    this.requireConnection(connection, grant);
   }
 
   async sendProjectionControl(
@@ -517,11 +521,10 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     if (this.disposed) throw new Error('Desktop Agent bridge runtime is disposed.');
   }
 
-  private requireAutomationConnection(
+  private requireConnection(
     connectionIdentity: DesktopAgentConnectionIdentity,
     grant: DesktopAnyAgentConnectionGrant,
   ): DesktopAgentConnection {
-    this.requireActive();
     assertConnectionIdentity(connectionIdentity, grant);
     const connection = this.connections.get(connectionIdentity.connectionId);
     if (!connection) {
@@ -532,6 +535,14 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     }
     assertConnectionIdentity(connectionIdentity, connection.identity);
     return connection;
+  }
+
+  private requireAutomationConnection(
+    connectionIdentity: DesktopAgentConnectionIdentity,
+    grant: DesktopAnyAgentConnectionGrant,
+  ): DesktopAgentConnection {
+    this.requireActive();
+    return this.requireConnection(connectionIdentity, grant);
   }
 
   private disposeConnection(connectionId: string, connection: DesktopAgentConnection): void {

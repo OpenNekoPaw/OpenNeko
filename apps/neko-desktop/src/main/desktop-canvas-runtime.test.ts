@@ -1666,7 +1666,7 @@ function createGenerationPort() {
     resumeNode: vi.fn(async () => {
       throw new Error('Generation recovery is not expected by this fixture.');
     }),
-    observeNode: vi.fn(async function* () {
+    observeNode: vi.fn(() => {
       throw new Error('Generation observation is not expected by this fixture.');
     }),
     cancelNode: vi.fn(async () => {
