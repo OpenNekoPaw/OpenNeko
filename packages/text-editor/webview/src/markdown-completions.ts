@@ -84,6 +84,7 @@ function toCompletionResult(
   return {
     from: projection.context.replacementRange.startOffset,
     to: projection.context.replacementRange.endOffset,
+    filter: false,
     options: projection.items.map((item) => ({
       label: item.label,
       apply: item.insertText,

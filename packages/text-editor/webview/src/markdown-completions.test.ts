@@ -56,7 +56,7 @@ describe('Markdown CodeMirror completion source', () => {
       },
       expect.any(AbortSignal),
     );
-    expect(completion).toMatchObject({ from: 4, to: 6 });
+    expect(completion).toMatchObject({ from: 4, to: 6, filter: false });
     expect(completion?.options).toEqual([
       expect.objectContaining({ label: '@小橘', apply: '@小橘', detail: 'Character' }),
       expect.objectContaining({
@@ -94,7 +94,11 @@ describe('Markdown CodeMirror completion source', () => {
 
     const completion = await fixture.complete(fixture.projection.source.length);
 
-    expect(completion).toMatchObject({ from: 2, to: fixture.projection.source.length });
+    expect(completion).toMatchObject({
+      from: 2,
+      to: fixture.projection.source.length,
+      filter: false,
+    });
     expect(completion?.options).toEqual([
       expect.objectContaining({ label: '封面', apply: '![[assets/cover.png]]' }),
     ]);

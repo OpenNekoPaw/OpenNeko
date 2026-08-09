@@ -164,6 +164,52 @@ describe('TextEditorRoot', () => {
     await unmount(rendered.root);
   });
 
+  it('keeps explicit Workspace embed completion ahead of generic GFM snippets', async () => {
+    const runtime = createRuntime(textProjection('markdown', '![[bo'));
+    runtime.searchMarkdownReferences.mockImplementation(async (request) => ({
+      status: 'ready',
+      projection: {
+        ...referenceProjection(request),
+        candidates: [
+          {
+            kind: 'resource',
+            source: 'workspace-file',
+            ref: { kind: 'workspace-file', id: 'board.png' },
+            label: 'board.png',
+            target: 'board.png',
+            embeddable: true,
+          },
+        ],
+      },
+    }));
+    const rendered = await renderEditor(runtime, 'zh-cn');
+    await clickText(rendered.container, '源码');
+    await waitFor(() => rendered.container.querySelector('.cm-editor') !== null);
+    const view = editorView(rendered.container);
+
+    await act(async () => {
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      startCompletion(view);
+      await delay(150);
+    });
+    expect(runtime.searchMarkdownReferences).toHaveBeenCalledOnce();
+    await waitFor(() => currentCompletions(view.state).length === 1);
+    expect(currentCompletions(view.state)[0]?.label).toBe('board.png');
+
+    await act(async () => {
+      expect(acceptCompletion(view)).toBe(true);
+      await settle();
+    });
+    await waitFor(() => runtime.applyEdits.mock.calls.length === 1);
+    expect(runtime.applyEdits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedEditSequence: 0,
+        changes: [{ from: 0, to: 5, insert: '![[board.png]]' }],
+      }),
+    );
+    await unmount(rendered.root);
+  });
+
   it('does not start semantic Markdown completion while CJK IME composition owns input', async () => {
     const runtime = createRuntime(textProjection('markdown', '@小'));
     const rendered = await renderEditor(runtime, 'zh-cn');
