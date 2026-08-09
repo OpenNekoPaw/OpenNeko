@@ -34,4 +34,4 @@
 - [x] 6.1 Run visible Electron acceptance for top placement, Assistant/Workspace/Character navigation, disabled World, Project selection, keyboard access, and narrow layout; inspect current screenshots directly.
 - [x] 6.2 Run adjacent reopen, Conversation switching, background-task isolation, Workspace title controls, streaming navigation, and no-hidden-Root regression checks.
 - [x] 6.3 Perform `neko-quality-review`, resolve or record ownership, dependency, user-data, fail-local, accessibility, verification, and residual-risk findings.
-- [ ] 6.4 Commit OpenSpec, shared UI/navigation, removed Agent paths, and verification evidence in reviewable batches without unrelated worktree changes.
+- [x] 6.4 Commit OpenSpec, shared UI/navigation, removed Agent paths, and verification evidence in reviewable batches without unrelated worktree changes.
