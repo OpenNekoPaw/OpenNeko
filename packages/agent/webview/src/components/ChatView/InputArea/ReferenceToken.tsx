@@ -8,10 +8,11 @@ import {
   PlayIcon,
   ScissorsIcon,
   VolumeIcon,
+  UserIcon,
 } from '@neko/ui/icons';
 
 export type ReferenceTokenKind =
-  'file' | 'image' | 'video' | 'audio' | 'canvas' | 'clip' | 'entity';
+  'file' | 'image' | 'video' | 'audio' | 'canvas' | 'clip' | 'entity' | 'character';
 
 export type ReferenceTokenVariant = 'ambient' | 'attached' | 'inline';
 
@@ -117,6 +118,7 @@ function ReferenceTokenIcon({
       {kind === 'canvas' ? <LayersIcon {...props} /> : null}
       {kind === 'clip' ? <ScissorsIcon {...props} /> : null}
       {kind === 'entity' ? <PackageIcon {...props} /> : null}
+      {kind === 'character' ? <UserIcon {...props} /> : null}
       {kind === 'image' ? <CameraIcon {...props} /> : null}
       {kind === 'video' ? <PlayIcon {...props} /> : null}
       {kind === 'audio' ? <VolumeIcon {...props} /> : null}

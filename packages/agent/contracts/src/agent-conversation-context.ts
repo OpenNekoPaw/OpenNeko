@@ -31,6 +31,19 @@ export type AgentConversationContext =
       readonly kind: 'workspace';
       readonly workspaceId: string;
       readonly workspaceGrantId: string;
+    }
+  | {
+      readonly kind: 'character';
+      readonly characterId: string;
+      readonly characterRunId: string;
+      readonly dialogueRunId: string;
+      readonly workspaceId: string;
+    }
+  | {
+      readonly kind: 'room';
+      readonly roomId: string;
+      readonly roomRunId: string;
+      readonly workspaceId: string;
     };
 
 export class AgentConversationContextError extends Error {
@@ -122,6 +135,33 @@ export function parseAgentConversationContext(value: unknown): AgentConversation
       kind,
       workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
       workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
+    };
+  }
+  if (kind === 'character') {
+    requireExactKeys(
+      record,
+      ['kind', 'characterId', 'characterRunId', 'dialogueRunId', 'workspaceId'],
+      'Character Conversation context',
+    );
+    return {
+      kind,
+      characterId: requireIdentity(record['characterId'], 'Character'),
+      characterRunId: requireIdentity(record['characterRunId'], 'Character Run'),
+      dialogueRunId: requireIdentity(record['dialogueRunId'], 'Dialogue Run'),
+      workspaceId: requireIdentity(record['workspaceId'], 'Character runtime Workspace'),
+    };
+  }
+  if (kind === 'room') {
+    requireExactKeys(
+      record,
+      ['kind', 'roomId', 'roomRunId', 'workspaceId'],
+      'Room Conversation context',
+    );
+    return {
+      kind,
+      roomId: requireIdentity(record['roomId'], 'Room'),
+      roomRunId: requireIdentity(record['roomRunId'], 'Room Run'),
+      workspaceId: requireIdentity(record['workspaceId'], 'Room runtime Workspace'),
     };
   }
   throw invalid(`Unknown Agent Conversation context kind '${String(kind)}'.`);

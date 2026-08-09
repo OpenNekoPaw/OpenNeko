@@ -88,6 +88,24 @@ const config: KnipConfig = {
         'src/testing/index.ts',
       ],
     },
+    'packages/chara-node': {
+      entry: ['src/index.ts'],
+    },
+    'packages/chara-webview': {
+      entry: ['src/root.tsx'],
+    },
+    'packages/world': {
+      entry: [
+        'src/index.ts',
+        'src/contracts/index.ts',
+        'src/core/index.ts',
+        'src/application/index.ts',
+        'src/testing/index.ts',
+      ],
+    },
+    'packages/world-node': {
+      entry: ['src/index.ts'],
+    },
     'packages/generation': {},
     'packages/quality': {},
     'packages/entity/domain': {

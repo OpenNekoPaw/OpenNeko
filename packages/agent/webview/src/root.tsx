@@ -32,6 +32,10 @@ export interface AgentWebviewRootProps {
   readonly presentation?: 'default' | 'desktop-dock';
   readonly agentPresentation?: AgentRootPresentation;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+  readonly conversationFeed?: {
+    readonly conversationId: string;
+    readonly content: ReactNode;
+  };
 }
 
 export function AgentWebviewRoot({
@@ -39,6 +43,7 @@ export function AgentWebviewRoot({
   hostRuntimeAdapter,
   agentPresentation,
   composerWorkspace,
+  conversationFeed,
   initialConversation,
   initialInput,
   locale,
@@ -65,6 +70,7 @@ export function AgentWebviewRoot({
                 initialConversation={initialConversation}
                 initialInput={initialInput}
                 presentation={presentation}
+                conversationFeed={conversationFeed}
               />
             </ComposerWorkspaceProvider>
           </I18nProvider>

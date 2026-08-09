@@ -27,6 +27,7 @@ export type AgentConversationOwnerRef =
       readonly kind: 'character';
       readonly characterId: string;
       readonly characterRunId: string;
+      readonly dialogueRunId: string;
     }
   | {
       readonly kind: 'room';
@@ -107,13 +108,14 @@ export function parseAgentConversationOwnerRef(value: unknown): AgentConversatio
   if (kind === 'character') {
     requireExactKeys(
       record,
-      ['kind', 'characterId', 'characterRunId'],
+      ['kind', 'characterId', 'characterRunId', 'dialogueRunId'],
       'Character Conversation owner',
     );
     return Object.freeze({
       kind,
       characterId: requireIdentity(record['characterId'], 'Character'),
       characterRunId: requireIdentity(record['characterRunId'], 'Character Run'),
+      dialogueRunId: requireIdentity(record['dialogueRunId'], 'Dialogue Run'),
     });
   }
   if (kind === 'room') {
@@ -257,7 +259,8 @@ export function isSameAgentConversationOwner(
       return (
         right.kind === 'character' &&
         left.characterId === right.characterId &&
-        left.characterRunId === right.characterRunId
+        left.characterRunId === right.characterRunId &&
+        left.dialogueRunId === right.dialogueRunId
       );
     case 'room':
       return (

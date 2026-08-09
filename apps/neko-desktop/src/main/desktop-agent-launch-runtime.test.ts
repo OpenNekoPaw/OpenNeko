@@ -13,6 +13,7 @@ describe('Desktop Agent launch native adapter', () => {
         readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
       },
       config: { getAssistantConfigState: () => createConfigState() },
+      readCharacterCatalog: async () => [],
       selectResource,
       readTextResource: vi.fn(async () => 'reference contents'),
       createIdentity: () => `identity-${++identity}`,
@@ -66,6 +67,7 @@ describe('Desktop Agent launch native adapter', () => {
         readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
       },
       config: { getAssistantConfigState: () => createConfigState() },
+      readCharacterCatalog: async () => [],
       selectResource: async () => ({
         label: 'brief.txt',
         hostResource: '/Users/private/brief.txt',

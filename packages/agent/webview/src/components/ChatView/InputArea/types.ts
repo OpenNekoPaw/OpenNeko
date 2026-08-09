@@ -153,12 +153,23 @@ export interface MentionItem {
   entityType?: string;
   /** Host-side navigation metadata */
   navigationData?: Record<string, string>;
+  /** Exact owner selection used only by the unbound Agent Entry. */
+  characterLaunchSelection?: {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+  };
   /** Host-provided normalized or expanded search text */
   searchText?: string;
   /** For canvas-node / character / scene: payload for AgentContextChip */
   contextPayload?: import('@neko/agent-contracts').AgentContextPayload;
   /** Optional thumbnail for visual enrichment (webview-safe URI or base64) */
   thumbnailUri?: string;
+}
+
+export interface SelectedCharacterLaunch {
+  readonly characterProjectId: string;
+  readonly characterVersionId: string;
+  readonly label: string;
 }
 
 export interface SelectedFileReference extends AgentFileReference {

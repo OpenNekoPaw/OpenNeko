@@ -195,6 +195,7 @@ function createCatalog() {
         source: 'project' as const,
       },
     ],
+    characters: [],
     resources: [],
   };
 }

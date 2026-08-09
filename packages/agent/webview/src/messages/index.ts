@@ -254,26 +254,6 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       postWebviewMessage({ type: 'exitCharacterDialogueSession', sessionId });
     },
 
-    startCharacterDialogueFromSlash: (args?: string) => {
-      postWebviewMessage({
-        type: 'startCharacterDialogueFromSlash',
-        ...(args !== undefined ? { args } : {}),
-      });
-    },
-
-    confirmRoleplayCandidate: (input: {
-      readonly projectSearchItemId: string;
-      readonly initialUserMessage?: string;
-    }) => {
-      postWebviewMessage({
-        type: 'confirmRoleplayCandidate',
-        projectSearchItemId: input.projectSearchItemId,
-        ...(input.initialUserMessage !== undefined
-          ? { initialUserMessage: input.initialUserMessage }
-          : {}),
-      });
-    },
-
     // ==========================================================================
     // File Operations
     // ==========================================================================

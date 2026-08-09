@@ -106,6 +106,20 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
             filter: message.filter,
             ...(message.purpose === undefined ? {} : { purpose: message.purpose }),
             files: [],
+            mentionExtras: catalog.characters
+              .filter((character) =>
+                character.label.toLocaleLowerCase().includes(message.filter.toLocaleLowerCase()),
+              )
+              .map((character) => ({
+                type: 'character' as const,
+                id: character.characterVersionId,
+                label: character.label,
+                summary: character.summary,
+                characterLaunchSelection: {
+                  characterProjectId: character.characterProjectId,
+                  characterVersionId: character.characterVersionId,
+                },
+              })),
           });
           return;
         case 'webviewKeyboardFocus':
@@ -148,7 +162,8 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
                   draftInput.target.context.baseGrantIds,
                   draftInput.resourceGrantIds,
                 )
-              : connection.scope.kind === 'workspace' &&
+              : draftInput.target.context.kind === 'workspace' &&
+                connection.scope.kind === 'workspace' &&
                 draftInput.target.context.workspaceId === connection.scope.workspaceId &&
                 draftInput.target.context.workspaceGrantId === connection.scope.workspaceGrantId);
       if (!contextMatches) {

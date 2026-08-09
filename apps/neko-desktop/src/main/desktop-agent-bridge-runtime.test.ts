@@ -46,6 +46,9 @@ describe('Desktop Agent bridge runtime', () => {
             'conversation-effects': true,
           },
           createEffects: () => createEffects(),
+          resolveExternalOwnerTurnRuntime: vi.fn(async () => {
+            throw new Error('Character runtime resolution is not used by this fixture.');
+          }),
         },
         false,
       ),
@@ -76,6 +79,14 @@ describe('Desktop Agent bridge runtime', () => {
       publish: vi.fn(),
     });
     if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    expect(() => runtime.assertConnection(projection.connection, grant())).not.toThrow();
+    expect(() =>
+      runtime.assertConnection(
+        { ...projection.connection, connectionId: 'forged-connection' },
+        grant(),
+      ),
+    ).toThrow("Unknown Desktop Agent connection 'forged-connection'");
 
     await expect(
       runtime.send(
@@ -695,6 +706,9 @@ function createComposition(effects: AgentControllerEffects): AgentControllerComp
       'projection-effects': true,
     },
     createEffects: () => effects,
+    resolveExternalOwnerTurnRuntime: vi.fn(async () => {
+      throw new Error('Character runtime resolution is not used by this fixture.');
+    }),
   };
 }
 

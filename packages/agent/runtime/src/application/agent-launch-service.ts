@@ -5,6 +5,7 @@ import {
   type AgentAuthorityScopeProjection,
   type AgentLaunchCatalogProjection,
   type AgentLaunchCommandCatalogEntry,
+  type AgentLaunchCharacterCatalogEntry,
   type AgentLaunchConnectionIdentity,
   type AgentLaunchModelCatalogEntry,
   type AgentLaunchResourceCatalogEntry,
@@ -19,6 +20,7 @@ export interface AgentLaunchCatalogSource {
     readonly models: readonly AgentLaunchModelCatalogEntry[];
     readonly commands: readonly AgentLaunchCommandCatalogEntry[];
     readonly skills: readonly AgentLaunchSkillCatalogEntry[];
+    readonly characters: readonly AgentLaunchCharacterCatalogEntry[];
   }>;
 }
 
@@ -110,6 +112,7 @@ interface AgentLaunchState {
   readonly models: readonly AgentLaunchModelCatalogEntry[];
   readonly commands: readonly AgentLaunchCommandCatalogEntry[];
   readonly skills: readonly AgentLaunchSkillCatalogEntry[];
+  readonly characters: readonly AgentLaunchCharacterCatalogEntry[];
   resources: readonly AgentLaunchResourceCatalogEntry[];
 }
 
@@ -167,6 +170,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
       models: [...catalog.models],
       commands: [...catalog.commands],
       skills: [...catalog.skills],
+      characters: [...catalog.characters],
       resources: [],
     };
     this.connections.set(key, state);
@@ -279,6 +283,7 @@ function project(state: AgentLaunchState): AgentLaunchCatalogProjection {
     models: state.models,
     commands: state.commands,
     skills: state.skills,
+    characters: state.characters,
     resources: state.resources,
   });
 }

@@ -58,6 +58,49 @@ describe('Agent Conversation lifecycle service', () => {
     });
   });
 
+  it('commits first submit to an exact pre-created Character conversation', async () => {
+    const fixture = createFixture();
+    const input = {
+      requestId: 'request-character',
+      conversationId: 'conversation:character:run-a',
+      context: {
+        kind: 'character' as const,
+        characterId: 'character-project-a',
+        characterRunId: 'character-run-a',
+        dialogueRunId: 'dialogue-run-a',
+        workspaceId: 'assistant-workspace',
+      },
+      messageText: 'Stay in character.',
+      resourceGrantIds: [],
+      configuration: configuration(),
+    };
+
+    const committed = await fixture.service.firstSubmit(input);
+    const replay = await fixture.service.firstSubmit(input);
+
+    expect(committed.conversationId).toBe(input.conversationId);
+    expect(replay).toEqual(committed);
+    expect(fixture.session.materialize).toHaveBeenLastCalledWith({
+      conversationId: input.conversationId,
+      context: input.context,
+    });
+  });
+
+  it('rejects an exact Conversation that conflicts with a committed request', async () => {
+    const fixture = createFixture();
+    await fixture.service.firstSubmit({
+      ...assistantInput('request-conflict'),
+      conversationId: 'conversation:exact-a',
+    });
+
+    await expect(
+      fixture.service.firstSubmit({
+        ...assistantInput('request-conflict'),
+        conversationId: 'conversation:exact-b',
+      }),
+    ).rejects.toThrow("not 'conversation:exact-b'");
+  });
+
   it('resolves authorized Resource grants into provider context after the exactly-once claim', async () => {
     const fixture = createFixture();
     const committed = await fixture.service.firstSubmit({

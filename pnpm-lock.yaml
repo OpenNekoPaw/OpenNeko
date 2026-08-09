@@ -137,6 +137,15 @@ importers:
       '@neko/canvas-webview':
         specifier: workspace:*
         version: link:../../packages/canvas/webview
+      '@neko/chara':
+        specifier: workspace:*
+        version: link:../../packages/chara
+      '@neko/chara-node':
+        specifier: workspace:*
+        version: link:../../packages/chara-node
+      '@neko/chara-webview':
+        specifier: workspace:*
+        version: link:../../packages/chara-webview
       '@neko/content':
         specifier: workspace:*
         version: link:../../packages/content
@@ -182,6 +191,12 @@ importers:
       '@neko/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@neko/world':
+        specifier: workspace:*
+        version: link:../../packages/world
+      '@neko/world-node':
+        specifier: workspace:*
+        version: link:../../packages/world-node
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -189,6 +204,9 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
+      '@earendil-works/pi-ai':
+        specifier: ^0.80.7
+        version: 0.80.7(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
       '@electron-forge/cli':
         specifier: 7.11.2
         version: 7.11.2(encoding@0.1.13)(postcss@8.5.6)
@@ -770,10 +788,69 @@ importers:
       '@neko/shared':
         specifier: workspace:*
         version: link:../shared
+      '@neko/world':
+        specifier: workspace:*
+        version: link:../world
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/chara-node:
+    dependencies:
+      '@neko/chara':
+        specifier: workspace:*
+        version: link:../chara
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../local-metadata
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/chara-webview:
+    dependencies:
+      '@neko/chara':
+        specifier: workspace:*
+        version: link:../chara
+      '@neko/ui':
+        specifier: workspace:*
+        version: link:../ui
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      '@types/react':
+        specifier: 18.3.31
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: 18.3.7
+        version: 18.3.7(@types/react@18.3.31)
+      jsdom:
+        specifier: ^27.0.1
+        version: 27.4.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1503,6 +1580,37 @@ importers:
       vitest:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/world:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/world-node:
+    dependencies:
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../local-metadata
+      '@neko/world':
+        specifier: workspace:*
+        version: link:../world
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
 packages:
 

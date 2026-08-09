@@ -79,17 +79,35 @@ export function createDesktopAgentLaunchRuntime(input: {
   }) => Promise<DesktopAgentLaunchNativeSelection | undefined>;
   readonly createIdentity?: () => string;
   readonly readTextResource: (hostResource: string) => Promise<string>;
+  readonly readCharacterCatalog: () => Promise<
+    readonly {
+      readonly characterProjectId: string;
+      readonly characterVersionId: string;
+      readonly label: string;
+      readonly summary: string;
+    }[]
+  >;
 }): DesktopAgentLaunchRuntime {
   const createIdentity = input.createIdentity ?? randomUUID;
   const grants = new Map<string, DesktopAgentResourceGrant>();
   const service: AgentLaunchApplicationService = createAgentLaunchApplicationService({
     createIdentity,
     catalog: {
-      readCatalog: async () =>
-        projectAgentLaunchBaseCatalog({
+      readCatalog: async () => ({
+        ...projectAgentLaunchBaseCatalog({
           config: input.config.getAssistantConfigState(),
           skills: await input.agent.readGlobalSkillCatalog(),
         }),
+        characters: (await input.readCharacterCatalog()).map((character) => ({
+          kind: 'character' as const,
+          id: `character:${character.characterVersionId}`,
+          label: character.label,
+          scopeRequirement: 'any' as const,
+          characterProjectId: character.characterProjectId,
+          characterVersionId: character.characterVersionId,
+          summary: character.summary,
+        })),
+      }),
     },
     authorization: {
       authorize: async ({ connection, resourceKind }) => {
@@ -169,7 +187,8 @@ export function createDesktopAgentLaunchRuntime(input: {
           context.kind === 'assistant'
             ? grant.scope.kind === 'assistant' &&
               grant.scope.assistantSpaceId === context.assistantSpaceId
-            : grant.scope.kind === 'workspace' &&
+            : context.kind === 'workspace' &&
+              grant.scope.kind === 'workspace' &&
               grant.scope.workspaceId === context.workspaceId &&
               grant.scope.workspaceGrantId === context.workspaceGrantId;
         if (!scopeMatches) {

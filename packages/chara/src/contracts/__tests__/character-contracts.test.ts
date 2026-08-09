@@ -1,0 +1,181 @@
+import {
+  decodeCharacterRecords,
+  parseCharacterAuthoringTestSnapshot,
+  parseCharacterProject,
+  parseCharacterRun,
+  parseCharacterVersion,
+  parseUserCharacterRelationship,
+} from '../character';
+import { describe, expect, it } from 'vitest';
+
+const now = '2026-08-09T10:00:00.000Z';
+
+function definition() {
+  return {
+    summary: 'A careful archivist.',
+    canon: ['Keeps promises.'],
+    knowledgeBoundary: ['Does not know the sealed archive.'],
+    behaviorPolicy: ['Ask before changing a record.'],
+    expressionPolicy: ['Uses concise language.'],
+    representationRefs: [
+      { representationId: 'portrait-main', role: 'portrait', targetRef: 'asset:portrait-a' },
+    ],
+  };
+}
+
+describe('Character canonical contracts', () => {
+  it('parses a reviewed CharacterProject and immutable publication record', () => {
+    const project = parseCharacterProject({
+      characterProjectId: 'character-project-a',
+      displayName: 'Lin',
+      draft: definition(),
+      evidence: [
+        {
+          evidenceId: 'evidence-a',
+          sourceRef: 'document:scene-1',
+          excerpt: 'Lin returns the key.',
+          observedAt: now,
+        },
+      ],
+      candidates: [
+        {
+          candidateId: 'candidate-a',
+          field: 'canon',
+          proposedValue: 'Returns borrowed objects.',
+          evidenceIds: ['evidence-a'],
+          status: 'accepted',
+          reviewedAt: now,
+        },
+      ],
+      reviewStatus: 'ready',
+      createdAt: now,
+      updatedAt: now,
+    });
+    const published = parseCharacterVersion({
+      characterVersionId: 'character-version-a',
+      characterProjectId: project.characterProjectId,
+      label: 'First publication',
+      definition: project.draft,
+      acceptedEvidenceIds: ['evidence-a'],
+      publishedAt: now,
+    });
+
+    expect(published.characterVersionId).toBe('character-version-a');
+    expect(published.definition).not.toBe(project.draft);
+    const forbiddenField = ['schema', 'Version'].join('');
+    expect(() => parseCharacterVersion({ ...published, [forbiddenField]: 1 })).toThrow(
+      /unsupported fields/u,
+    );
+  });
+
+  it('keeps an authoring-test snapshot separate from CharacterVersion identity', () => {
+    const snapshot = parseCharacterAuthoringTestSnapshot({
+      authoringTestSnapshotId: 'authoring-test-a',
+      characterProjectId: 'character-project-a',
+      capturedAt: now,
+      definition: definition(),
+    });
+
+    expect(snapshot).not.toHaveProperty('characterVersionId');
+    expect(() => parseCharacterVersion(snapshot)).toThrow();
+  });
+
+  it('requires one primary AgentSession only for agent-controlled CharacterRun', () => {
+    const agentRun = parseCharacterRun({
+      characterRunId: 'character-run-agent',
+      characterVersionId: 'character-version-a',
+      participantId: 'participant-agent',
+      controller: { kind: 'agent', primaryAgentSessionId: 'agent-session-a' },
+      runtimeBinding: { kind: 'companion', relationshipId: 'relationship-a' },
+      createdAt: now,
+    });
+    const humanRun = parseCharacterRun({
+      characterRunId: 'character-run-human',
+      characterVersionId: 'character-version-a',
+      participantId: 'participant-human',
+      controller: { kind: 'human', userId: 'user-a' },
+      runtimeBinding: {
+        kind: 'narrative',
+        worldVersionId: 'world-version-a',
+        worldRunId: 'world-run-a',
+        worldSaveId: 'world-save-a',
+        branchId: 'branch-main',
+        actorId: 'actor-a',
+      },
+      createdAt: now,
+    });
+
+    expect(agentRun.controller).toEqual({
+      kind: 'agent',
+      primaryAgentSessionId: 'agent-session-a',
+    });
+    expect(humanRun.controller).toEqual({ kind: 'human', userId: 'user-a' });
+    expect(() =>
+      parseCharacterRun({
+        ...humanRun,
+        controller: {
+          kind: 'human',
+          userId: 'user-a',
+          primaryAgentSessionId: 'hidden-session',
+        },
+      }),
+    ).toThrow(/cannot bind an AgentSession/u);
+  });
+
+  it('parses explicit relationship memory and rejects unreviewed accepted state', () => {
+    const relationship = parseUserCharacterRelationship({
+      relationshipId: 'relationship-a',
+      userId: 'user-a',
+      characterVersionId: 'character-version-a',
+      memories: [
+        {
+          memoryId: 'memory-a',
+          content: 'The user prefers tea.',
+          sourceRef: 'room-event:message-a',
+          acceptedAt: now,
+        },
+      ],
+      candidates: [
+        {
+          candidateId: 'memory-candidate-a',
+          content: 'The user may prefer quiet rooms.',
+          sourceRef: 'agent-session:turn-a',
+          status: 'pending',
+          createdAt: now,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    expect(relationship.memories).toHaveLength(1);
+    expect(relationship.candidates[0]?.status).toBe('pending');
+  });
+
+  it('isolates one invalid CharacterVersion while retaining valid siblings', () => {
+    const valid = {
+      characterVersionId: 'character-version-valid',
+      characterProjectId: 'character-project-a',
+      label: 'Valid',
+      definition: definition(),
+      acceptedEvidenceIds: [],
+      publishedAt: now,
+    };
+    const result = decodeCharacterRecords(
+      [valid, { ...valid, characterVersionId: 'character-version-invalid', rawPath: '/private' }],
+      'character-version',
+      parseCharacterVersion,
+      'characterVersionId',
+    );
+
+    expect(result.records.map((record) => record.characterVersionId)).toEqual([
+      'character-version-valid',
+    ]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'invalid-character-record',
+        recordId: 'character-version-invalid',
+      }),
+    ]);
+  });
+});

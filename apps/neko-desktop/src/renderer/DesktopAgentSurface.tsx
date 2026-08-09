@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
 import type { AgentLaunchCatalogProjection, AgentRootPresentation } from '@neko/agent-contracts';
 import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
@@ -44,6 +44,7 @@ export type DesktopAgentSurfaceProps =
       readonly tab: DesktopProjectTabProjection;
       readonly agentPresentation?: AgentRootPresentation;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+      readonly conversationFeed?: ReactNode;
     }
   | {
       readonly binding: 'launch';
@@ -52,6 +53,7 @@ export type DesktopAgentSurfaceProps =
       readonly agentPresentation: AgentRootPresentation;
       readonly viewId: string;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+      readonly conversationFeed?: ReactNode;
     };
 
 export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Element {
@@ -219,6 +221,14 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
               initialInput={state.initialInput}
               locale={locale}
               presentation="desktop-dock"
+              conversationFeed={
+                props.conversationFeed && state.agentPresentation?.kind === 'session'
+                  ? {
+                      conversationId: state.agentPresentation.conversationId,
+                      content: props.conversationFeed,
+                    }
+                  : undefined
+              }
             />
           </Suspense>
         </div>

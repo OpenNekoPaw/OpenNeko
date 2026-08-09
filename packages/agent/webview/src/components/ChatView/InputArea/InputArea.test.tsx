@@ -24,8 +24,6 @@ import {
 
 const hostMocks = vi.hoisted(() => ({
   invokeSkill: vi.fn(),
-  confirmRoleplayCandidate: vi.fn(),
-  startCharacterDialogueFromSlash: vi.fn(),
 }));
 
 vi.mock('../../../host-runtime-context', () => ({
@@ -1373,6 +1371,56 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
+  it('projects an Entry Character mention as an owner token instead of prompt context', () => {
+    const onAddCharacterLaunch = vi.fn();
+    const onAddContextChip = vi.fn();
+    const onRemoveCharacterLaunch = vi.fn();
+    const selection = {
+      characterProjectId: 'character-project-xiaoju',
+      characterVersionId: 'character-version-xiaoju-1',
+    } as const;
+    render(
+      <Harness
+        onAddContextChip={onAddContextChip}
+        mentionItems={[
+          {
+            id: selection.characterVersionId,
+            kind: 'entity',
+            label: '小橘',
+            entityType: 'character',
+            characterLaunchSelection: selection,
+            contextPayload: {
+              type: 'entity',
+              id: 'entity:character:xiaoju',
+              label: '小橘',
+              summary: 'Entity · character',
+              data: { entityId: 'xiaoju', entityKind: 'character' },
+            },
+          },
+        ]}
+      >
+        <InputArea
+          presentation="entry"
+          inputValue="@小橘"
+          isThinking={false}
+          selectedCharacterLaunches={[{ ...selection, label: '小橘' }]}
+          onAddCharacterLaunch={onAddCharacterLaunch}
+          onRemoveCharacterLaunch={onRemoveCharacterLaunch}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /小橘/ }));
+    expect(onAddCharacterLaunch).toHaveBeenCalledWith({ ...selection, label: '小橘' });
+    expect(onAddContextChip).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-reference-kind="character"]')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 小橘' }));
+    expect(onRemoveCharacterLaunch).toHaveBeenCalledWith(selection.characterVersionId);
+  });
+
   it('opens the entry prompt above the composer for asset generation modes', () => {
     const onSessionModeChange = vi.fn();
     const onEntryPromptMenuChange = vi.fn();
@@ -1433,9 +1481,10 @@ describe('InputArea composer controls', () => {
     expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
   });
 
-  it('opens the entry prompt for playable unified character entities', () => {
+  it('opens the entry prompt only for exact published Character selections', () => {
     const onSend = vi.fn();
     const onEntryPromptMenuChange = vi.fn();
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1445,6 +1494,10 @@ describe('InputArea composer controls', () => {
             label: '小橘',
             description: '主角',
             entityType: 'character',
+            characterLaunchSelection: {
+              characterProjectId: 'character-project-xiaoju',
+              characterVersionId: 'character-version-xiaoju-1',
+            },
           },
           {
             id: 'asset:asset-xiaoju',
@@ -1474,6 +1527,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={onEntryPromptMenuChange}
+          onAddCharacterLaunch={onAddCharacterLaunch}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
@@ -1483,20 +1537,24 @@ describe('InputArea composer controls', () => {
     expect(screen.getByText('选择可用的统一实体，进入角色扮演对话。')).toBeTruthy();
     expect(getEntryPromptRowByPrimaryText('小橘')).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /小橘参考图/ })).toBeNull();
-    expect(getEntryPromptRowByPrimaryText('中文角色')).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /中文角色/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /天台/ })).toBeNull();
 
     fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
-      'entity:char-xiaoju --roleplay --skip-enrich',
-    );
+    expect(onAddCharacterLaunch).toHaveBeenCalledWith({
+      characterProjectId: 'character-project-xiaoju',
+      characterVersionId: 'character-version-xiaoju-1',
+      label: '小橘',
+    });
     expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
   });
 
-  it('uses prefilled entry text as the roleplay opening line', () => {
+  it('keeps prefilled text unchanged while selecting an exact Character owner', () => {
     const onSend = vi.fn();
+    const onInputChange = vi.fn();
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1505,6 +1563,10 @@ describe('InputArea composer controls', () => {
             kind: 'entity',
             label: '小橘',
             entityType: 'character',
+            characterLaunchSelection: {
+              characterProjectId: 'character-project-xiaoju',
+              characterVersionId: 'character-version-xiaoju-1',
+            },
           },
         ]}
       >
@@ -1513,7 +1575,8 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
-          onInputChange={vi.fn()}
+          onAddCharacterLaunch={onAddCharacterLaunch}
+          onInputChange={onInputChange}
           onSend={onSend}
         />
       </Harness>,
@@ -1522,13 +1585,15 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /小橘/ }));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
-      'entity:char-xiaoju --roleplay --skip-enrich "你还记得昨晚的雨吗？"',
-    );
+    expect(onInputChange).not.toHaveBeenCalled();
+    expect(onAddCharacterLaunch).toHaveBeenCalledWith({
+      characterProjectId: 'character-project-xiaoju',
+      characterVersionId: 'character-version-xiaoju-1',
+      label: '小橘',
+    });
   });
 
-  it('confirms a projected character Candidate before starting roleplay', () => {
-    const onSend = vi.fn();
+  it('does not expose a projected Character candidate without an exact published version', () => {
     render(
       <Harness
         mentionItems={[
@@ -1551,20 +1616,13 @@ describe('InputArea composer controls', () => {
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
           onInputChange={vi.fn()}
-          onSend={onSend}
+          onSend={vi.fn()}
         />
       </Harness>,
     );
 
-    expect(screen.getByText('确认并扮演')).toBeTruthy();
-    fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
-
-    expect(hostMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
-      projectSearchItemId: 'entity-projection:semantic-xiaoju',
-      initialUserMessage: '你好，小橘',
-    });
-    expect(hostMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
-    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menuitem', { name: /小橘/ })).toBeNull();
+    expect(screen.getByText('未找到可用于角色扮演的角色实体。')).toBeTruthy();
   });
 
   it('projects canonical canvas nodes into a lightweight reference row and JobCard action', () => {

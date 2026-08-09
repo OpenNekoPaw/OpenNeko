@@ -6,6 +6,7 @@ import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentConversationLifecycleRecord } from './agent-conversation-lifecycle-service';
 import {
+  createPersistentAgentConversationContextAuthority,
   createPersistentAgentConversationLifecycleRepository,
   initializeAgentConversationLifecycleTables,
 } from './agent-conversation-lifecycle-repository';
@@ -17,6 +18,39 @@ afterEach(async () => {
 });
 
 describe('persistent Agent conversation lifecycle repository', () => {
+  it('binds exact Character and Room contexts without a second owner store', async () => {
+    const fixture = await createFixture();
+    const character = {
+      kind: 'character' as const,
+      characterId: 'character:neko',
+      characterRunId: 'character-run:neko:1',
+      workspaceId: 'assistant-space:local-user',
+    };
+    const room = {
+      kind: 'room' as const,
+      roomId: 'room:studio',
+      roomRunId: 'room-run:studio:1',
+      workspaceId: 'assistant-space:local-user',
+    };
+
+    await fixture.contexts.bindContext('conversation:character', character);
+    await fixture.contexts.bindContext('conversation:room', room);
+    await expect(fixture.contexts.readContext('conversation:character')).resolves.toEqual(
+      character,
+    );
+    await expect(fixture.contexts.readContext('conversation:room')).resolves.toEqual(room);
+    await expect(
+      fixture.contexts.bindContext('conversation:character', {
+        ...character,
+        characterId: 'other',
+      }),
+    ).rejects.toThrow('context changed');
+    await fixture.contexts.releaseContext('conversation:character');
+    await expect(fixture.contexts.readContext('conversation:character')).resolves.toBeUndefined();
+    await expect(fixture.contexts.readContext('conversation:room')).resolves.toEqual(room);
+    await fixture.store.dispose();
+  });
+
   it('recovers the exact canonical first-submit record, context and provider claim', async () => {
     const fixture = await createFixture();
     const record = createRecord('conversation:1', 'request:1', 'turn:1');
@@ -114,6 +148,7 @@ async function createFixture() {
   return {
     store,
     repository: createPersistentAgentConversationLifecycleRepository({ metadataStore: store }),
+    contexts: createPersistentAgentConversationContextAuthority({ metadataStore: store }),
   };
 }
 

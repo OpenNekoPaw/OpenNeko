@@ -2,6 +2,10 @@ import {
   parseAgentConversationContext,
   type AgentConversationContext,
 } from './agent-conversation-context';
+import {
+  parseCharacterConversationLaunchSelection,
+  type CharacterConversationLaunchSelection,
+} from '@neko/chara/contracts';
 
 export interface AgentDraftSubmitInput {
   readonly target: AgentDraftSubmitTarget;
@@ -23,6 +27,11 @@ export type AgentDraftSubmitTarget =
       readonly kind: 'bound-context';
       readonly draftId: string;
       readonly context: AgentConversationContext;
+    }
+  | {
+      readonly kind: 'character-launch';
+      readonly draftId: string;
+      readonly selection: CharacterConversationLaunchSelection;
     };
 
 export interface AgentDraftSubmitProjection {
@@ -79,6 +88,14 @@ function parseTarget(value: unknown): AgentDraftSubmitTarget {
       kind: 'bound-context',
       draftId: requireIdentity(record['draftId'], 'Draft'),
       context: parseAgentConversationContext(record['context']),
+    };
+  }
+  if (record['kind'] === 'character-launch') {
+    requireExactKeys(record, ['kind', 'draftId', 'selection'], 'Character launch draft target');
+    return {
+      kind: 'character-launch',
+      draftId: requireIdentity(record['draftId'], 'Draft'),
+      selection: parseCharacterConversationLaunchSelection(record['selection']),
     };
   }
   throw new Error(`Unknown Agent draft submit target '${String(record['kind'])}'.`);

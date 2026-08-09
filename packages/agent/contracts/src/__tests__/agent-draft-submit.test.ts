@@ -38,6 +38,58 @@ describe('Agent draft submit contract', () => {
     });
   });
 
+  it('keeps Character owner selection separate from prompt context', () => {
+    expect(
+      parseAgentDraftSubmitInput({
+        target: {
+          kind: 'character-launch',
+          draftId: 'draft-character-1',
+          selection: {
+            runtimeKind: 'companion',
+            characters: [
+              { characterVersionId: 'character-version-a' },
+              { characterVersionId: 'character-version-b' },
+            ],
+          },
+        },
+        messageText: 'Good evening.',
+        resourceGrantIds: [],
+        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      }),
+    ).toMatchObject({
+      target: {
+        kind: 'character-launch',
+        selection: {
+          characters: [
+            { characterVersionId: 'character-version-a' },
+            { characterVersionId: 'character-version-b' },
+          ],
+        },
+      },
+    });
+  });
+
+  it('rejects duplicate Character owner selections', () => {
+    expect(() =>
+      parseAgentDraftSubmitInput({
+        target: {
+          kind: 'character-launch',
+          draftId: 'draft-character-1',
+          selection: {
+            runtimeKind: 'companion',
+            characters: [
+              { characterVersionId: 'character-version-a' },
+              { characterVersionId: 'character-version-a' },
+            ],
+          },
+        },
+        messageText: 'Good evening.',
+        resourceGrantIds: [],
+        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      }),
+    ).toThrow('contains duplicate identity');
+  });
+
   it('rejects a bound target without the exact draft identity', () => {
     expect(() =>
       parseAgentDraftSubmitInput({

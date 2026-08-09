@@ -2055,6 +2055,43 @@ function projectAgentConversationOwner(
       owner: { kind: 'workspace', workspaceId: record.context.workspaceId },
     };
   }
+  if (record.context?.kind === 'character') {
+    if (record.context.workspaceId !== record.workspaceId) {
+      return invalidAgentConversationOwner(
+        record,
+        assistantSpaceIds,
+        ['context', 'workspaceId'],
+        `Agent catalog Conversation '${record.conversationId}' Character runtime Workspace does not match its Pi runtime scope.`,
+      );
+    }
+    return {
+      kind: 'valid',
+      owner: {
+        kind: 'character',
+        characterId: record.context.characterId,
+        characterRunId: record.context.characterRunId,
+        dialogueRunId: record.context.dialogueRunId,
+      },
+    };
+  }
+  if (record.context?.kind === 'room') {
+    if (record.context.workspaceId !== record.workspaceId) {
+      return invalidAgentConversationOwner(
+        record,
+        assistantSpaceIds,
+        ['context', 'workspaceId'],
+        `Agent catalog Conversation '${record.conversationId}' Room runtime Workspace does not match its Pi runtime scope.`,
+      );
+    }
+    return {
+      kind: 'valid',
+      owner: {
+        kind: 'room',
+        roomId: record.context.roomId,
+        roomRunId: record.context.roomRunId,
+      },
+    };
+  }
   if (hasLocalConversationProjection) {
     return {
       kind: 'valid',
@@ -2084,9 +2121,22 @@ function invalidAgentConversationOwner(
         ? { kind: 'assistant', assistantSpaceId: record.context.assistantSpaceId }
         : record.context?.kind === 'workspace'
           ? { kind: 'workspace', workspaceId: record.context.workspaceId }
-          : assistantSpaceIds.includes(record.workspaceId)
-            ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
-            : { kind: 'workspace', workspaceId: record.workspaceId },
+          : record.context?.kind === 'character'
+            ? {
+                kind: 'character',
+                characterId: record.context.characterId,
+                characterRunId: record.context.characterRunId,
+                dialogueRunId: record.context.dialogueRunId,
+              }
+            : record.context?.kind === 'room'
+              ? {
+                  kind: 'room',
+                  roomId: record.context.roomId,
+                  roomRunId: record.context.roomRunId,
+                }
+              : assistantSpaceIds.includes(record.workspaceId)
+                ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
+                : { kind: 'workspace', workspaceId: record.workspaceId },
     fieldNames,
     message,
   };

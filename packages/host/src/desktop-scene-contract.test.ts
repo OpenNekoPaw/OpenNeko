@@ -204,6 +204,46 @@ describe('Desktop Scene contract', () => {
     ).toThrow("Unknown Manager Surface kind 'extension-catalog'");
   });
 
+  it('owns Character Management catalog and exact detail as one Window scene', () => {
+    const sceneId = 'scene:window-1:character-management';
+    const detail = { kind: 'project' as const, characterProjectId: 'character-project:lin' };
+    const projection = {
+      sceneId,
+      windowId: 'window-1',
+      context: { kind: 'character-management' as const, detail },
+      slots: {
+        main: { kind: 'character-management' as const },
+        secondaryMain: { kind: 'character-detail' as const, selection: detail },
+        status: { kind: 'scene-status' as const, sceneId },
+      },
+    };
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-character-management',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: { kind: 'open-character-management' },
+      }).intent,
+    ).toEqual({ kind: 'open-character-management' });
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-character-detail',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId,
+        intent: { kind: 'select-character-detail', selection: { kind: 'create' } },
+      }).intent,
+    ).toEqual({ kind: 'select-character-detail', selection: { kind: 'create' } });
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: { main: { kind: 'project-management' }, status: projection.slots.status },
+      }),
+    ).toThrow("Main Surface 'project-management' is not valid for this Scene");
+  });
+
   it('creates exact Scene identity transition requests and rejects arbitrary intent', () => {
     expect(
       createDesktopSceneTransitionRequest({

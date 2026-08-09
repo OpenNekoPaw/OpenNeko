@@ -111,6 +111,17 @@ export interface AgentControllerEffects extends AgentHostControllerEffectPorts {
   dispose(): void;
 }
 
+export interface AgentExternalOwnerTurnRuntimeSnapshot {
+  readonly modelPolicy: AgentModelPolicy;
+  readonly configuration: AgentTurnConfigurationSnapshot;
+  readonly permissionPolicy:
+    PiToolPermissionPolicy | ((events: PiProductEventSink) => PiToolPermissionPolicy);
+  readonly workspaceTrusted: boolean;
+  readonly locale: 'en' | 'zh';
+  readonly systemPrompt?: string;
+  readonly events?: PiProductEventSink;
+}
+
 export interface AgentControllerComposition {
   readonly requirements: Readonly<
     Partial<
@@ -141,6 +152,11 @@ export interface AgentControllerComposition {
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
   }) => Promise<void>;
+  resolveExternalOwnerTurnRuntime(input: {
+    readonly workspace: AgentWorkspaceRuntime;
+    readonly conversationId: string;
+    readonly locale: 'en' | 'zh';
+  }): Promise<AgentExternalOwnerTurnRuntimeSnapshot>;
   dispose?(): Promise<void>;
 }
 
@@ -440,6 +456,48 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       facts.dispose();
     }
   };
+
+  async resolveExternalOwnerTurnRuntime(input: {
+    readonly workspace: AgentWorkspaceRuntime;
+    readonly conversationId: string;
+    readonly locale: 'en' | 'zh';
+  }): Promise<AgentExternalOwnerTurnRuntimeSnapshot> {
+    const config = this.getConfig(input.workspace);
+    const settings = config.getAssistantRuntimeSettingsSnapshot();
+    const resolved = await this.resolveModelPolicy(input.workspace, config, {}, settings);
+    const promptBuilder = createSystemPromptBuilder({
+      locale: input.locale,
+      executionMode: settings.executionMode,
+    });
+    await promptBuilder.loadAgentsFile(
+      input.workspace.workspace.workspacePath,
+      join(this.options.userHome, '.neko'),
+    );
+    const systemPrompt = [
+      promptBuilder.buildForExecutionMode(settings.executionMode),
+      ...input.workspace
+        .readCapabilityPromptFragments(input.locale)
+        .map((fragment) => fragment.content.trim())
+        .filter(Boolean),
+      settings.customSystemPrompt.trim(),
+    ]
+      .filter(Boolean)
+      .join('\n\n# User Instructions\n\n');
+    return {
+      modelPolicy: resolved.policy,
+      configuration: resolved.configuration,
+      permissionPolicy: (events) =>
+        this.createPermissionPolicy(
+          input.workspace,
+          input.conversationId,
+          settings.executionMode,
+          events,
+        ),
+      workspaceTrusted: true,
+      locale: input.locale,
+      systemPrompt,
+    };
+  }
 
   async dispose(): Promise<void> {
     for (const confirmation of this.confirmations.values()) confirmation.cancelAll();

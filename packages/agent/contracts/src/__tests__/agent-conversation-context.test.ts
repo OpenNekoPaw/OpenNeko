@@ -22,6 +22,37 @@ describe('Agent Conversation context contracts', () => {
     expect(JSON.stringify([assistant, workspace])).not.toContain('/Users/fixture');
   });
 
+  it('parses exact Character and Room owner-qualified contexts', () => {
+    expect(
+      parseAgentConversationContext({
+        kind: 'character',
+        characterId: 'character:neko',
+        characterRunId: 'character-run:neko:1',
+        dialogueRunId: 'dialogue-run:neko:1',
+        workspaceId: 'assistant-space:default',
+      }),
+    ).toEqual({
+      kind: 'character',
+      characterId: 'character:neko',
+      characterRunId: 'character-run:neko:1',
+      dialogueRunId: 'dialogue-run:neko:1',
+      workspaceId: 'assistant-space:default',
+    });
+    expect(
+      parseAgentConversationContext({
+        kind: 'room',
+        roomId: 'room:studio',
+        roomRunId: 'room-run:studio:1',
+        workspaceId: 'assistant-space:default',
+      }),
+    ).toEqual({
+      kind: 'room',
+      roomId: 'room:studio',
+      roomRunId: 'room-run:studio:1',
+      workspaceId: 'assistant-space:default',
+    });
+  });
+
   it('rejects raw paths and duplicate grants', () => {
     expect(() =>
       parseAgentResourceGrant({

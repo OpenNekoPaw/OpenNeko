@@ -22,6 +22,7 @@ describe('Agent launch application service', () => {
           ],
           commands: [],
           skills: [],
+          characters: [],
         })),
       },
       authorization: {
@@ -72,7 +73,9 @@ describe('Agent launch application service', () => {
   it('preserves the connection and catalog when native authorization is cancelled', async () => {
     const service = createAgentLaunchApplicationService({
       createIdentity: () => 'launch-1',
-      catalog: { readCatalog: async () => ({ models: [], commands: [], skills: [] }) },
+      catalog: {
+        readCatalog: async () => ({ models: [], commands: [], skills: [], characters: [] }),
+      },
       authorization: {
         authorize: async () => ({ status: 'cancelled' }),
         releaseConnection: async () => undefined,
@@ -98,7 +101,9 @@ describe('Agent launch application service', () => {
     const releaseConnection = vi.fn(async () => undefined);
     const service = createAgentLaunchApplicationService({
       createIdentity: () => `launch-${++identity}`,
-      catalog: { readCatalog: async () => ({ models: [], commands: [], skills: [] }) },
+      catalog: {
+        readCatalog: async () => ({ models: [], commands: [], skills: [], characters: [] }),
+      },
       authorization: {
         authorize: async () => ({ status: 'cancelled' }),
         releaseConnection,
@@ -126,10 +131,13 @@ describe('Agent launch application service', () => {
 
   it('keeps a shared StrictMode launch connection until its final attachment detaches', async () => {
     const releaseConnection = vi.fn(async () => undefined);
-    let resolveCatalog: ((value: { models: []; commands: []; skills: [] }) => void) | undefined;
-    const catalog = new Promise<{ models: []; commands: []; skills: [] }>((resolve) => {
-      resolveCatalog = resolve;
-    });
+    let resolveCatalog:
+      ((value: { models: []; commands: []; skills: []; characters: [] }) => void) | undefined;
+    const catalog = new Promise<{ models: []; commands: []; skills: []; characters: [] }>(
+      (resolve) => {
+        resolveCatalog = resolve;
+      },
+    );
     const service = createAgentLaunchApplicationService({
       createIdentity: () => 'launch-strict',
       catalog: { readCatalog: () => catalog },
@@ -149,7 +157,7 @@ describe('Agent launch application service', () => {
 
     const firstAttach = service.attach(input);
     const secondAttach = service.attach(input);
-    resolveCatalog?.({ models: [], commands: [], skills: [] });
+    resolveCatalog?.({ models: [], commands: [], skills: [], characters: [] });
     const [first, second] = await Promise.all([firstAttach, secondAttach]);
     expect(second.connection).toEqual(first.connection);
 

@@ -14,6 +14,7 @@
 
 import {
   type MutableRefObject,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -84,6 +85,7 @@ export interface ChatWorkspaceProps {
   tabRenderStore: TabRenderStore;
   isVisible?: boolean;
   composerPresentation?: 'default' | 'compact';
+  conversationFeed?: ReactNode;
   // Conversation state
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -146,6 +148,7 @@ export function ChatWorkspace({
   tabRenderStore,
   isVisible = true,
   composerPresentation = 'default',
+  conversationFeed,
   messages,
   setMessages,
   isThinking,
@@ -818,6 +821,7 @@ export function ChatWorkspace({
       ) : null}
       <ChatView
         composerPresentation={composerPresentation}
+        conversationFeed={conversationFeed}
         composerDisabled={!isModelConfigurationReady}
         messages={visibleMessages}
         inputValue={inputValue}

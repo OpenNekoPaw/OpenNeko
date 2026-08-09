@@ -27,6 +27,9 @@
     "@neko/canvas-domain": "workspace:*",
     "@neko/canvas-node": "workspace:*",
     "@neko/canvas-webview": "workspace:*",
+    "@neko/chara": "workspace:*",
+    "@neko/chara-node": "workspace:*",
+    "@neko/chara-webview": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/cut-domain": "workspace:*",
     "@neko/cut-node": "workspace:*",
@@ -42,10 +45,13 @@
     "@neko/text-editor-domain": "workspace:*",
     "@neko/text-editor-webview": "workspace:*",
     "@neko/ui": "workspace:*",
+    "@neko/world": "workspace:*",
+    "@neko/world-node": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.7",
     "@electron-forge/cli": "7.11.2",
     "@electron-forge/maker-dmg": "7.11.2",
     "@electron-forge/plugin-fuses": "7.11.2",

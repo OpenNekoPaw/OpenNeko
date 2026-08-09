@@ -106,6 +106,20 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/chara-node",
+      "owner": "packages/chara-node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/chara-webview",
+      "owner": "packages/chara-webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/media",
       "owner": "packages/media",
       "mode": "self",
@@ -265,6 +279,20 @@
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/world",
+      "owner": "packages/world",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/world-node",
+      "owner": "packages/world-node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
     }
   ]
 }

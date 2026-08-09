@@ -355,6 +355,9 @@ export function projectProjectFilesMessage(
       ...(extra.mediaType ? { mediaType: extra.mediaType } : {}),
       ...(extra.entityType ? { entityType: extra.entityType } : {}),
       ...(extra.navigationData ? { navigationData: extra.navigationData } : {}),
+      ...(extra.characterLaunchSelection
+        ? { characterLaunchSelection: extra.characterLaunchSelection }
+        : {}),
       ...(extra.thumbnailUri ? { thumbnailUri: extra.thumbnailUri } : {}),
       searchText: [
         extra.label,
@@ -883,7 +886,19 @@ function isProjectMentionExtra(value: unknown): value is ProjectMentionExtra {
     (record.contentLocator === undefined || isContentLocator(record.contentLocator)) &&
     (record.mediaType === undefined || isProjectMentionMediaType(record.mediaType)) &&
     (record.entityType === undefined || typeof record.entityType === 'string') &&
-    (record.navigationData === undefined || isStringRecord(record.navigationData)),
+    (record.navigationData === undefined || isStringRecord(record.navigationData)) &&
+    (record.characterLaunchSelection === undefined ||
+      (record.type === 'character' && isCharacterLaunchSelection(record.characterLaunchSelection))),
+  );
+}
+
+function isCharacterLaunchSelection(value: unknown): boolean {
+  const record = asRecord(value);
+  return Boolean(
+    record &&
+    Object.keys(record).length === 2 &&
+    readString(record, 'characterProjectId') &&
+    readString(record, 'characterVersionId'),
   );
 }
 

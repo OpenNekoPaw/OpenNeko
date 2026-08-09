@@ -34,6 +34,7 @@ export interface AgentConversationLifecycleRecord {
 
 export interface AgentFirstSubmitInput {
   readonly requestId: string;
+  readonly conversationId?: string;
   readonly context: AgentConversationContext;
   readonly messageText: string;
   readonly resourceGrantIds: readonly string[];
@@ -216,7 +217,11 @@ export function createAgentConversationLifecycleService(options: {
       modelId: requireIdentity(input.configuration.modelId, 'Agent Model'),
       executionMode: requireExecutionMode(input.configuration.executionMode),
     };
-    const conversationId = `conversation:${options.createIdentity()}`;
+    const requestedConversationId =
+      input.conversationId === undefined
+        ? undefined
+        : requireIdentity(input.conversationId, 'Agent Conversation');
+    const conversationId = requestedConversationId ?? `conversation:${options.createIdentity()}`;
     const turnId = `turn:${options.createIdentity()}`;
     const record: AgentConversationLifecycleRecord = {
       conversationId,
@@ -236,6 +241,11 @@ export function createAgentConversationLifecycleService(options: {
     if (exact.pendingTurn.requestId !== requestId) {
       throw new Error(
         `Agent first-submit request '${requestId}' conflicts with committed request '${exact.pendingTurn.requestId}'.`,
+      );
+    }
+    if (requestedConversationId !== undefined && exact.conversationId !== requestedConversationId) {
+      throw new Error(
+        `Agent first-submit request '${requestId}' is already bound to Conversation '${exact.conversationId}', not '${requestedConversationId}'.`,
       );
     }
     await options.session.materialize({

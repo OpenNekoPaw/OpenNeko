@@ -391,17 +391,6 @@ export interface ExitCharacterDialogueSessionWebviewMessage {
   sessionId: string;
 }
 
-export interface StartCharacterDialogueFromSlashWebviewMessage {
-  type: 'startCharacterDialogueFromSlash';
-  args?: string;
-}
-
-export interface ConfirmRoleplayCandidateWebviewMessage {
-  type: 'confirmRoleplayCandidate';
-  projectSearchItemId: string;
-  initialUserMessage?: string;
-}
-
 export interface ExitEmbodyCharacterSessionWebviewMessage {
   type: 'exitEmbodyCharacterSession';
   sessionId: string;
@@ -468,8 +457,6 @@ export type AgentWebviewToHostMessage =
   | InvokeSlashCommandWebviewMessage
   | InvokeSkillWebviewMessage
   | InvokePluginSlashCommandWebviewMessage
-  | StartCharacterDialogueFromSlashWebviewMessage
-  | ConfirmRoleplayCandidateWebviewMessage
   | ExitCharacterDialogueSessionWebviewMessage
   | ExitEmbodyCharacterSessionWebviewMessage
   | RevealContextSourceWebviewMessage
@@ -511,6 +498,10 @@ export interface ProjectMentionExtra {
   mediaType?: ProjectMentionMediaType;
   entityType?: string;
   navigationData?: Record<string, string>;
+  characterLaunchSelection?: {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+  };
 }
 
 export interface ProjectFilesWebviewMessage {
@@ -1010,8 +1001,6 @@ export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'invokeSlashCommand',
   'invokeSkill',
   'invokePluginSlashCommand',
-  'startCharacterDialogueFromSlash',
-  'confirmRoleplayCandidate',
   'exitCharacterDialogueSession',
   'exitEmbodyCharacterSession',
   'revealContextSource',
@@ -1426,10 +1415,6 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
       return parseInvokeSkillMessage(raw);
     case 'invokePluginSlashCommand':
       return parseInvokePluginSlashCommandMessage(raw);
-    case 'startCharacterDialogueFromSlash':
-      return parseStartCharacterDialogueFromSlashMessage(raw);
-    case 'confirmRoleplayCandidate':
-      return parseConfirmRoleplayCandidateMessage(raw);
     case 'exitCharacterDialogueSession':
       return parseExitCharacterDialogueSessionMessage(raw);
     case 'exitEmbodyCharacterSession':
@@ -2684,30 +2669,6 @@ function parseInvokePluginSlashCommandMessage(
     commandId,
     conversationId,
     ...(args !== undefined ? { args } : {}),
-  };
-}
-
-function parseStartCharacterDialogueFromSlashMessage(
-  raw: Record<string, unknown>,
-): StartCharacterDialogueFromSlashWebviewMessage | null {
-  const args = optionalStringStrict(raw.args);
-  if (args === null) return null;
-  return {
-    type: 'startCharacterDialogueFromSlash',
-    ...(args !== undefined ? { args } : {}),
-  };
-}
-
-function parseConfirmRoleplayCandidateMessage(
-  raw: Record<string, unknown>,
-): ConfirmRoleplayCandidateWebviewMessage | null {
-  const projectSearchItemId = requiredString(raw.projectSearchItemId);
-  const initialUserMessage = optionalStringStrict(raw.initialUserMessage);
-  if (!projectSearchItemId || initialUserMessage === null) return null;
-  return {
-    type: 'confirmRoleplayCandidate',
-    projectSearchItemId,
-    ...(initialUserMessage !== undefined ? { initialUserMessage } : {}),
   };
 }
 

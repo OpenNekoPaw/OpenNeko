@@ -10,6 +10,14 @@ describe('Desktop renderer Vite workspace resolution', () => {
     expect(rendererConfig.optimizeDeps?.exclude).toContain('@neko/agent-contracts');
   });
 
+  it('keeps Character Foundation on one watched React workspace identity', () => {
+    expect(DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES).toContain(
+      '@neko/chara-webview/root',
+    );
+    expect(rendererConfig.resolve?.dedupe).toContain('@neko/chara-webview');
+    expect(rendererConfig.optimizeDeps?.exclude).toContain('@neko/chara-webview/root');
+  });
+
   it('keeps the lazy Text Editor and CodeMirror runtime on canonical module identities', () => {
     expect(DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES).toContain(
       '@neko/text-editor-webview/root',

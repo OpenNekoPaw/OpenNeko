@@ -48,11 +48,19 @@ export interface AgentLaunchResourceCatalogEntry extends AgentLaunchCatalogEntry
   readonly resourceKind: AgentLaunchResourceKind;
 }
 
+export interface AgentLaunchCharacterCatalogEntry extends AgentLaunchCatalogEntryBase {
+  readonly kind: 'character';
+  readonly characterProjectId: string;
+  readonly characterVersionId: string;
+  readonly summary: string;
+}
+
 export interface AgentLaunchCatalogProjection {
   readonly connection: AgentLaunchConnectionIdentity;
   readonly models: readonly AgentLaunchModelCatalogEntry[];
   readonly commands: readonly AgentLaunchCommandCatalogEntry[];
   readonly skills: readonly AgentLaunchSkillCatalogEntry[];
+  readonly characters: readonly AgentLaunchCharacterCatalogEntry[];
   readonly resources: readonly AgentLaunchResourceCatalogEntry[];
 }
 
@@ -80,12 +88,20 @@ export function parseAgentLaunchConnectionIdentity(value: unknown): AgentLaunchC
 
 export function parseAgentLaunchCatalogProjection(value: unknown): AgentLaunchCatalogProjection {
   const record = requireRecord(value, 'Agent launch catalog must be an object.');
-  requireExactKeys(record, ['connection', 'models', 'commands', 'skills', 'resources']);
+  requireExactKeys(record, [
+    'connection',
+    'models',
+    'commands',
+    'skills',
+    'characters',
+    'resources',
+  ]);
   return {
     connection: parseAgentLaunchConnectionIdentity(record['connection']),
     models: parseArray(record['models'], parseModel),
     commands: parseArray(record['commands'], parseCommand),
     skills: parseArray(record['skills'], parseSkill),
+    characters: parseArray(record['characters'], parseCharacter),
     resources: parseArray(record['resources'], parseResource),
   };
 }
@@ -199,12 +215,34 @@ function parseResource(value: unknown): AgentLaunchResourceCatalogEntry {
   };
 }
 
+function parseCharacter(value: unknown): AgentLaunchCharacterCatalogEntry {
+  const record = parseBase(value, 'character', [
+    'kind',
+    'id',
+    'label',
+    'scopeRequirement',
+    'characterProjectId',
+    'characterVersionId',
+    'summary',
+  ]);
+  return {
+    kind: 'character',
+    id: requireIdentity(record['id'], 'Character'),
+    label: requireIdentity(record['label'], 'Character label'),
+    scopeRequirement: parseScopeRequirement(record['scopeRequirement']),
+    characterProjectId: requireIdentity(record['characterProjectId'], 'Character project'),
+    characterVersionId: requireIdentity(record['characterVersionId'], 'Character version'),
+    summary: requireString(record['summary'], 'Character summary'),
+  };
+}
+
 function parseBase(
   value: unknown,
   kind:
     | AgentLaunchModelCatalogEntry['kind']
     | AgentLaunchCommandCatalogEntry['kind']
     | AgentLaunchSkillCatalogEntry['kind']
+    | AgentLaunchCharacterCatalogEntry['kind']
     | AgentLaunchResourceCatalogEntry['kind'],
   keys: readonly string[],
 ): Readonly<Record<string, unknown>> {

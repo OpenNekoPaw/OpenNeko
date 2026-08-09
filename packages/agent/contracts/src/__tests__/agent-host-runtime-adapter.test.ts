@@ -92,7 +92,7 @@ describe('Agent host runtime adapter contracts', () => {
 
     expect(supportCounts).toEqual({
       implemented: 40,
-      unsupported: 8,
+      unsupported: 6,
       'host-inapplicable': 3,
     });
     expect(ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS).toEqual({
@@ -100,8 +100,6 @@ describe('Agent host runtime adapter contracts', () => {
       invokeAgentCapabilityLifecycle: 'P1.4',
       requestCanvasAuthoringHandoff: 'P1.4',
       invokePluginSlashCommand: 'Phase 3',
-      startCharacterDialogueFromSlash: 'P1.6',
-      confirmRoleplayCandidate: 'P1.6',
       exitCharacterDialogueSession: 'P1.6',
       exitEmbodyCharacterSession: 'P1.6',
     });

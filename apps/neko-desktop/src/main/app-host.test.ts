@@ -57,8 +57,75 @@ import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { AssetCenterNodeRuntime, type AssetCenterNodeRuntimeOptions } from '@neko/assets-node';
+import { CharacterFoundationService } from '@neko/chara/application';
+import type {
+  CharacterFoundationCommandPort,
+  CharacterRoomMessageSubmissionResult,
+} from '@neko/chara/application';
+import {
+  createCharacterFoundationCommandHostRequest,
+  createCharacterFoundationHostRequest,
+  createCharacterRoomWorkbenchSnapshotRequest,
+  type CharacterConversationLaunchInput,
+  type CharacterConversationLaunchResult,
+  type RoomView,
+} from '@neko/chara/contracts';
 
 describe('DesktopAppHost', () => {
+  it('keeps the Character Foundation snapshot sender-bound', async () => {
+    const fixture = await createShellAppHost();
+    const request = createCharacterFoundationHostRequest('character-foundation-1');
+
+    await expect(
+      fixture.appHost.createCharacterFoundationSnapshot(fixture.sender, request),
+    ).resolves.toEqual({
+      requestId: request.requestId,
+      snapshot: {
+        character: {
+          projects: [],
+          versions: [],
+          relationships: [],
+          characterRuns: [],
+          dialogueRuns: [],
+          rooms: [],
+          roomRuns: [],
+        },
+        world: { projects: [], versions: [], runtimes: [] },
+        diagnostics: [],
+      },
+    });
+    await expect(
+      fixture.appHost.createCharacterFoundationSnapshot(
+        { webContentsId: 11, frameUrl: fixture.sender.frameUrl },
+        request,
+      ),
+    ).rejects.toThrow("Unknown Desktop IPC sender '11'");
+  });
+
+  it('validates the Character command sender before delegating to its package owner', async () => {
+    const commands = createCharacterFoundationCommands();
+    const fixture = await createShellAppHost({ characterFoundationCommands: commands });
+    const request = createCharacterFoundationCommandHostRequest('character-command-1', {
+      operation: 'character-project-set-review',
+      input: { characterProjectId: 'character-project-a', reviewStatus: 'ready' },
+    });
+
+    await expect(
+      fixture.appHost.executeCharacterFoundationRequest(fixture.sender, request),
+    ).resolves.toMatchObject({ requestId: request.requestId });
+    expect(commands.execute).toHaveBeenCalledWith({
+      operation: request.operation,
+      input: request.input,
+    });
+    await expect(
+      fixture.appHost.executeCharacterFoundationRequest(
+        { webContentsId: 11, frameUrl: fixture.sender.frameUrl },
+        request,
+      ),
+    ).rejects.toThrow("Unknown Desktop IPC sender '11'");
+    expect(commands.execute).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
     const logger = createLogger();
     const settings = createSettingsService();
@@ -83,6 +150,11 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      characterFoundation: createCharacterFoundationService(),
+      characterFoundationCommands: createCharacterFoundationCommands(),
+      characterConversations: createCharacterConversations(),
+      characterRoomConversations: createCharacterRoomConversations(),
+      characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings,
       openAgentAdvancedSettings,
     });
@@ -161,6 +233,11 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      characterFoundation: createCharacterFoundationService(),
+      characterFoundationCommands: createCharacterFoundationCommands(),
+      characterConversations: createCharacterConversations(),
+      characterRoomConversations: createCharacterRoomConversations(),
+      characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -222,6 +299,11 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      characterFoundation: createCharacterFoundationService(),
+      characterFoundationCommands: createCharacterFoundationCommands(),
+      characterConversations: createCharacterConversations(),
+      characterRoomConversations: createCharacterRoomConversations(),
+      characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings: createSettingsService(),
       openAgentAdvancedSettings: vi.fn(async () => undefined),
     });
@@ -753,6 +835,357 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('launches one selected Character into an exact Character Interaction Workbench', async () => {
+    const launch = vi.fn(
+      async (
+        _input: CharacterConversationLaunchInput,
+      ): Promise<CharacterConversationLaunchResult> => ({
+        topology: 'dialogue',
+        runtimeKind: 'companion',
+        characterProjectId: 'character-project-a',
+        characterVersionId: 'character-version-a',
+        characterRunId: 'character-run:launch:character-submit:1',
+        dialogueRunId: 'dialogue-run:launch:character-submit',
+        primaryAgentSessionId: 'conversation:character:character-run:launch:character-submit:1',
+      }),
+    );
+    const conversationLifecycle = createConversationLifecycle();
+    const fixture = await createShellAppHost({
+      conversationLifecycle,
+      characterConversations: { launch },
+    });
+    const scene = activeScene(fixture.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Character launch fixture requires an unbound Entry Draft.');
+    }
+    const connection = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: scene.context.agentViewId,
+      connectionId: 'launch-character-submit',
+      scope: { kind: 'unbound', draftId: scene.context.scope.draftId },
+    }).connection;
+
+    const result = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+      requestId: 'character-submit',
+      operation: 'submit-draft',
+      connection,
+      input: {
+        target: {
+          kind: 'character-launch',
+          draftId: scene.context.scope.draftId,
+          selection: {
+            runtimeKind: 'companion',
+            characters: [{ characterVersionId: 'character-version-a' }],
+          },
+        },
+        messageText: 'Good evening.',
+        resourceGrantIds: [],
+        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      },
+    });
+
+    expect(launch).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      status: 'committed',
+      projection: {
+        conversationId: 'conversation:character:character-run:launch:character-submit:1',
+      },
+    });
+    await expect(
+      conversationLifecycle.readConversation(
+        'conversation:character:character-run:launch:character-submit:1',
+      ),
+    ).resolves.toMatchObject({
+      context: {
+        kind: 'character',
+        dialogueRunId: 'dialogue-run:launch:character-submit',
+      },
+    });
+    expect(await fixture.appHost.shell.getSceneProjection(fixture.windowId)).toMatchObject({
+      context: {
+        kind: 'character-interaction',
+        owner: {
+          kind: 'character',
+          characterRunId: 'character-run:launch:character-submit:1',
+          dialogueRunId: 'dialogue-run:launch:character-submit',
+        },
+      },
+      slots: {
+        interaction: { phase: 'session' },
+        main: { kind: 'character-avatar' },
+        rightManager: { kind: 'character-runtime-manager' },
+      },
+    });
+  });
+
+  it('routes Room messages through the exact Chara owner instead of the interaction participant', async () => {
+    const launch = vi.fn(
+      async (
+        _input: CharacterConversationLaunchInput,
+      ): Promise<CharacterConversationLaunchResult> => ({
+        topology: 'chatroom',
+        runtimeKind: 'companion',
+        characterRoomId: 'character-room:launch:room-submit',
+        roomRunId: 'room-run:launch:room-submit',
+        interactionAgentSessionId: 'conversation:character:character-run:room-submit:1',
+        participants: [
+          {
+            participantId: 'participant-a',
+            characterVersionId: 'character-version-a',
+            characterRunId: 'character-run:room-submit:1',
+            primaryAgentSessionId: 'conversation:character:character-run:room-submit:1',
+          },
+          {
+            participantId: 'participant-b',
+            characterVersionId: 'character-version-b',
+            characterRunId: 'character-run:room-submit:2',
+            primaryAgentSessionId: 'conversation:character:character-run:room-submit:2',
+          },
+        ],
+      }),
+    );
+    const submitUserMessage = vi.fn(async (): Promise<CharacterRoomMessageSubmissionResult> => ({
+      run: {
+        topology: 'chatroom',
+        roomRunId: 'room-run:launch:room-submit',
+        characterRoomId: 'character-room:launch:room-submit',
+        roomRevision: 0,
+        participants: [],
+        schedulingPolicy: { kind: 'mentioned' },
+        events: [],
+        runtimeKind: 'companion',
+        relationshipIds: [],
+        createdAt: '2026-08-09T00:00:00.000Z',
+      },
+      outcomes: [],
+    }));
+    const roomWorkbenchProjection = createRoomWorkbenchProjection('room-run:launch:room-submit', 0);
+    const roomWorkbench = createCharacterRoomWorkbench(roomWorkbenchProjection);
+    const fixture = await createShellAppHost({
+      characterConversations: { launch },
+      characterRoomConversations: { submitUserMessage },
+      characterRoomWorkbench: roomWorkbench,
+    });
+    const entry = activeScene(fixture.projection);
+    if (entry.context.kind !== 'agent' || entry.context.scope.kind !== 'unbound') {
+      throw new Error('Room launch fixture requires an unbound Entry Draft.');
+    }
+    const launchConnection = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: entry.context.agentViewId,
+      connectionId: 'launch-room-submit',
+      scope: { kind: 'unbound', draftId: entry.context.scope.draftId },
+    }).connection;
+    await fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+      requestId: 'room-submit',
+      operation: 'submit-draft',
+      connection: launchConnection,
+      input: {
+        target: {
+          kind: 'character-launch',
+          draftId: entry.context.scope.draftId,
+          selection: {
+            runtimeKind: 'companion',
+            characters: [
+              { characterVersionId: 'character-version-a' },
+              { characterVersionId: 'character-version-b' },
+            ],
+          },
+        },
+        messageText: 'Initial Room message.',
+        resourceGrantIds: [],
+        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      },
+    });
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const scene = activeScene(projection);
+    if (scene.context.kind !== 'character-interaction' || scene.context.owner.kind !== 'room') {
+      throw new Error('Expected the exact Room interaction Scene.');
+    }
+    const publishedRoomEvents: unknown[] = [];
+    await expect(
+      fixture.appHost.getCharacterRoomWorkbenchSnapshot(
+        fixture.sender,
+        createCharacterRoomWorkbenchSnapshotRequest(
+          'room-workbench-snapshot',
+          scene.context.owner.roomRunId,
+        ),
+        (event) => publishedRoomEvents.push(event),
+      ),
+    ).resolves.toEqual({
+      requestId: 'room-workbench-snapshot',
+      sequence: 0,
+      projection: roomWorkbenchProjection,
+    });
+    expect(roomWorkbench.materializeUserView).toHaveBeenCalledWith({
+      roomRunId: scene.context.owner.roomRunId,
+      userId: 'user:local',
+    });
+    expect(roomWorkbench.subscribeUserView).toHaveBeenCalledWith(
+      scene.context.owner.roomRunId,
+      'user:local',
+      expect.any(Function),
+    );
+    const publishRoomProjection = roomWorkbench.subscribeUserView.mock.calls[0]?.[2];
+    if (!publishRoomProjection) throw new Error('Room Workbench subscription was not registered.');
+    const firstDispose = roomWorkbench.subscribeUserView.mock.results[0]?.value;
+    if (!firstDispose) throw new Error('Room Workbench disposer was not returned.');
+    const updatedRoomProjection = createRoomWorkbenchProjection('room-run:launch:room-submit', 1);
+    publishRoomProjection(updatedRoomProjection);
+    expect(publishedRoomEvents).toEqual([
+      {
+        requestId: 'room-workbench-snapshot',
+        sequence: 1,
+        projection: updatedRoomProjection,
+      },
+    ]);
+
+    const reattachedRoomEvents: unknown[] = [];
+    await fixture.appHost.getCharacterRoomWorkbenchSnapshot(
+      fixture.sender,
+      createCharacterRoomWorkbenchSnapshotRequest(
+        'room-workbench-snapshot-reattach',
+        scene.context.owner.roomRunId,
+      ),
+      (event) => reattachedRoomEvents.push(event),
+    );
+    expect(firstDispose).toHaveBeenCalledOnce();
+    publishRoomProjection(createRoomWorkbenchProjection('room-run:launch:room-submit', 2));
+    expect(publishedRoomEvents).toHaveLength(1);
+    const publishReattachedRoomProjection = roomWorkbench.subscribeUserView.mock.calls[1]?.[2];
+    if (!publishReattachedRoomProjection) {
+      throw new Error('Reattached Room Workbench subscription was not registered.');
+    }
+    const reattachedProjection = createRoomWorkbenchProjection('room-run:launch:room-submit', 2);
+    publishReattachedRoomProjection(reattachedProjection);
+    expect(reattachedRoomEvents).toEqual([
+      {
+        requestId: 'room-workbench-snapshot-reattach',
+        sequence: 1,
+        projection: reattachedProjection,
+      },
+    ]);
+
+    let rejectStaleSnapshot: ((reason: Error) => void) | undefined;
+    roomWorkbench.materializeUserView.mockImplementationOnce(
+      () =>
+        new Promise<RoomView>((_resolve, reject) => {
+          rejectStaleSnapshot = reject;
+        }),
+    );
+    roomWorkbench.materializeUserView.mockResolvedValueOnce(roomWorkbenchProjection);
+    const staleSnapshot = fixture.appHost.getCharacterRoomWorkbenchSnapshot(
+      fixture.sender,
+      createCharacterRoomWorkbenchSnapshotRequest(
+        'room-workbench-stale-snapshot',
+        scene.context.owner.roomRunId,
+      ),
+      vi.fn(),
+    );
+    const latestRoomEvents: unknown[] = [];
+    await fixture.appHost.getCharacterRoomWorkbenchSnapshot(
+      fixture.sender,
+      createCharacterRoomWorkbenchSnapshotRequest(
+        'room-workbench-latest-snapshot',
+        scene.context.owner.roomRunId,
+      ),
+      (event) => latestRoomEvents.push(event),
+    );
+    if (!rejectStaleSnapshot) throw new Error('Stale Room snapshot was not started.');
+    rejectStaleSnapshot(new Error('stale Room snapshot failed'));
+    await expect(staleSnapshot).rejects.toThrow('stale Room snapshot failed');
+    const latestDispose = roomWorkbench.subscribeUserView.mock.results[3]?.value;
+    if (!latestDispose) throw new Error('Latest Room Workbench disposer was not returned.');
+    expect(latestDispose).not.toHaveBeenCalled();
+    const publishLatestRoomProjection = roomWorkbench.subscribeUserView.mock.calls[3]?.[2];
+    if (!publishLatestRoomProjection) {
+      throw new Error('Latest Room Workbench subscription was not registered.');
+    }
+    publishLatestRoomProjection(reattachedProjection);
+    expect(latestRoomEvents).toEqual([
+      {
+        requestId: 'room-workbench-latest-snapshot',
+        sequence: 1,
+        projection: reattachedProjection,
+      },
+    ]);
+
+    await expect(
+      fixture.appHost.getCharacterRoomWorkbenchSnapshot(
+        fixture.sender,
+        createCharacterRoomWorkbenchSnapshotRequest('foreign-room-snapshot', 'other-room-run'),
+        vi.fn(),
+      ),
+    ).rejects.toThrow('does not match the active Room Scene');
+    const connection = {
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(projection),
+      assistantSpaceId: 'assistant-space:local-user',
+      workspaceId: 'assistant-space:local-user',
+      viewId: scene.context.agentViewId,
+      connectionId: 'room-connection-1',
+    };
+    fixture.agent.getWorkspace.mockReturnValue(
+      createAgentWorkspaceRuntime('assistant-space:local-user'),
+    );
+    vi.spyOn(fixture.appHost.agentBridge, 'assertConnection').mockImplementation(() => undefined);
+    const genericSend = vi.spyOn(fixture.appHost.agentBridge, 'send');
+
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest('room-message-1', connection, {
+          type: 'sendMessage',
+          conversationId: 'conversation:character:character-run:room-submit:1',
+          message: 'Continue the Room.',
+          sessionMode: 'agent',
+          messageTrackingId: 'room-message-tracking-1',
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    expect(submitUserMessage).toHaveBeenCalledWith({
+      submissionId: 'room-message-tracking-1',
+      roomRunId: 'room-run:launch:room-submit',
+      userId: 'user:local',
+      message: 'Continue the Room.',
+    });
+    expect(genericSend).not.toHaveBeenCalled();
+
+    await fixture.appHost.conversationLifecycle.firstSubmit({
+      requestId: 'other-room-submit',
+      conversationId: 'conversation:other-room',
+      context: {
+        kind: 'room',
+        roomId: 'other-room',
+        roomRunId: 'other-room-run',
+        workspaceId: 'assistant-space:local-user',
+      },
+      messageText: 'Other Room.',
+      resourceGrantIds: [],
+      configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+    });
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest('other-room-message', connection, {
+          type: 'sendMessage',
+          conversationId: 'conversation:other-room',
+          message: 'Cross-Room write.',
+          sessionMode: 'agent',
+        }),
+      ),
+    ).rejects.toThrow('exact active Room Conversation owner');
+    expect(submitUserMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('restores an exact Assistant Conversation from lifecycle context without Project fallback', async () => {
     let identity = 0;
     const conversationLifecycle = createAgentConversationLifecycleService({
@@ -886,6 +1319,7 @@ describe('DesktopAppHost', () => {
         kind: 'character' as const,
         characterId: 'character-1',
         characterRunId: 'character-run-1',
+        dialogueRunId: 'dialogue-run-1',
       },
     };
     setAgentHomeConversation(fixture.agent, navigation);
@@ -2498,6 +2932,19 @@ async function createShellAppHost(options?: {
   readonly conversationLifecycle?: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
   readonly assetCenter?: AssetCenterNodeRuntime;
+  readonly characterFoundationCommands?: CharacterFoundationCommandPort;
+  readonly characterConversations?: {
+    launch(input: CharacterConversationLaunchInput): Promise<CharacterConversationLaunchResult>;
+  };
+  readonly characterRoomConversations?: {
+    submitUserMessage(input: {
+      readonly submissionId: string;
+      readonly roomRunId: string;
+      readonly userId: string;
+      readonly message: string;
+    }): Promise<CharacterRoomMessageSubmissionResult>;
+  };
+  readonly characterRoomWorkbench?: ReturnType<typeof createCharacterRoomWorkbench>;
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -2522,6 +2969,13 @@ async function createShellAppHost(options?: {
     assetCenter: options?.assetCenter,
     extensionManager,
     personalSkillManager: createPersonalSkillManager(),
+    characterFoundation: createCharacterFoundationService(),
+    characterFoundationCommands:
+      options?.characterFoundationCommands ?? createCharacterFoundationCommands(),
+    characterConversations: options?.characterConversations ?? createCharacterConversations(),
+    characterRoomConversations:
+      options?.characterRoomConversations ?? createCharacterRoomConversations(),
+    characterRoomWorkbench: options?.characterRoomWorkbench ?? createCharacterRoomWorkbench(),
     settings: createSettingsService(),
     openAgentAdvancedSettings: vi.fn(async () => undefined),
   });
@@ -2545,6 +2999,91 @@ async function createShellAppHost(options?: {
       frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
     },
     projection: await appHost.shell.getProjection(windowId),
+  };
+}
+
+function createCharacterFoundationService(): CharacterFoundationService {
+  return new CharacterFoundationService({
+    characterCatalog: {
+      readCatalog: async () => ({
+        projects: [],
+        versions: [],
+        relationships: [],
+        characterRuns: [],
+        dialogueRuns: [],
+        rooms: [],
+        roomRuns: [],
+        diagnostics: [],
+      }),
+    },
+    worldCatalog: {
+      readCatalog: async () => ({
+        projects: [],
+        versions: [],
+        runtimes: [],
+        diagnostics: [],
+      }),
+    },
+  });
+}
+
+function createCharacterFoundationCommands() {
+  return { execute: vi.fn(async () => undefined) };
+}
+
+function createCharacterConversations() {
+  return {
+    launch: vi.fn(async () => {
+      throw new Error('Character conversation launch is not expected by this test.');
+    }),
+  };
+}
+
+function createCharacterRoomConversations() {
+  return {
+    submitUserMessage: vi.fn(async () => {
+      throw new Error('Character Room message submission is not expected by this test.');
+    }),
+  };
+}
+
+function createCharacterRoomWorkbench(projection?: RoomView) {
+  return {
+    materializeUserView: vi.fn(async () => {
+      if (!projection) {
+        throw new Error('Character Room Workbench projection is not expected by this test.');
+      }
+      return structuredClone(projection);
+    }),
+    subscribeUserView: vi.fn(
+      (_roomRunId: string, _userId: string, _listener: (view: RoomView) => void) => vi.fn(),
+    ),
+  };
+}
+
+function createRoomWorkbenchProjection(roomRunId: string, roomRevision: number): RoomView {
+  return {
+    roomRunId,
+    roomRevision,
+    participantId: 'participant-user',
+    participants: [
+      {
+        participantId: 'participant-user',
+        displayName: 'User',
+        controller: { kind: 'human', userId: 'user:local' },
+      },
+    ],
+    events: Array.from({ length: roomRevision }, (_, index) => ({
+      kind: 'message' as const,
+      roomEventId: `room-event-${String(index + 1)}`,
+      roomRunId,
+      sequence: index + 1,
+      createdAt: '2026-08-09T00:00:00.000Z',
+      visibility: { kind: 'public' as const },
+      authorParticipantId: 'participant-user',
+      content: 'Room message.',
+      mentionedParticipantIds: [],
+    })),
   };
 }
 
@@ -2600,6 +3139,7 @@ function createLaunchCatalog(
     models: [],
     commands: [],
     skills: [],
+    characters: [],
     resources: [],
   };
 }

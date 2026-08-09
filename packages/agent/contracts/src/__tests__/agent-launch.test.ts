@@ -45,6 +45,17 @@ describe('Agent launch contract', () => {
           source: 'project',
         },
       ],
+      characters: [
+        {
+          kind: 'character',
+          id: 'character:version-a',
+          label: 'Character A',
+          scopeRequirement: 'any',
+          characterProjectId: 'character-project-a',
+          characterVersionId: 'version-a',
+          summary: 'A published character.',
+        },
+      ],
       resources: [
         {
           kind: 'resource',
@@ -67,6 +78,10 @@ describe('Agent launch contract', () => {
     expect(isAgentLaunchEntryAvailable(projection.skills[0]!, projection.connection.scope)).toBe(
       false,
     );
+    expect(projection.characters[0]).toMatchObject({
+      characterProjectId: 'character-project-a',
+      characterVersionId: 'version-a',
+    });
   });
 
   it('rejects paths, secrets, unknown scopes and stale identity shapes', () => {
@@ -83,6 +98,7 @@ describe('Agent launch contract', () => {
       models: [],
       commands: [],
       skills: [],
+      characters: [],
       resources: [],
     };
     expect(() =>

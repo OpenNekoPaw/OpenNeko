@@ -127,6 +127,24 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/chara-node",
+      "name": "@neko/chara-node",
+      "family": "chara",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/chara-webview",
+      "name": "@neko/chara-webview",
+      "family": "chara",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/content",
       "name": "@neko/content",
       "family": "content",
@@ -339,6 +357,24 @@
       "family": "ui",
       "roles": ["infrastructure"],
       "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/world",
+      "name": "@neko/world",
+      "family": "world",
+      "roles": ["contracts", "domain", "application", "testing"],
+      "runtimes": ["host-neutral", "test"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/world-node",
+      "name": "@neko/world-node",
+      "family": "world",
+      "roles": ["node"],
+      "runtimes": ["node"],
       "productStatus": "active-product",
       "architectureState": "converged"
     }

@@ -2,10 +2,11 @@
 
 状态：Accepted
 
-更新日期：2026-08-05
+更新日期：2026-08-09
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
-`define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`
+`define-character-dialogue-chatroom-world-foundation`、`compose-desktop-workbench-scenes`、
+`integrate-open-source-browser-and-computer-use`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
@@ -232,6 +233,7 @@ Agent 能力按 owning package 职责分层：
 | `@neko/ai-sdk`          | provider/AI SDK adapter                                                                                                    |
 | `@neko/host`            | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
 | `@neko/agent-webview`   | Chat/Agent UI、消息投影和用户输入                                                                                          |
+| `@neko/chara-webview`   | Character、Dialogue、Chatroom 与 World Foundation 的 browser-only 产品视图和可丢弃展示状态                                 |
 
 Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime 与 Host 不导入 Electron、React
 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
@@ -298,8 +300,8 @@ Character IP 与 Interactive World 已确定为独立 bounded context，必须�
 
 | 包            | 状态                                   | 聚合主线                                                          | 主要职责                                                                                                                                              | 关键边界                                                                                                                   |
 | ------------- | -------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/chara` | 第一阶段 kernel 已建立、Desktop 未接入 | `CharacterProject -> CharacterVersion -> narrative/companion run` | 当前只拥有 Character Dialogue、Embody、角色证据和 Profile Assembly 内核；项目/版本/发布、剧情 save、日常 relationship 及 Desktop 产品组合仍待后续实现 | 完全复用 Agent/Pi；World/Narrative、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合 |
-| `@neko/world` | 拟议                                   | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay`    | 世界事实、规则/事件、Gameplay、运行、存档、分支和回放                                                                                                 | 只通过 CharacterVersion/WorldCharacterBinding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实         |
+| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion -> narrative/companion run` | 角色创作与发布、关系记忆、Dialogue/Chatroom 运行、持久化和 package-owned 产品视图 | 完全复用 Agent/Pi；World、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合 |
+| `@neko/world` / `@neko/world-node` | Foundation / Node adapter | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` | 世界书、事实、规则/事件、运行、存档、分支、WorldView；Node 包只拥有 durable repository adapter | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实 |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
 Agent、Renderer、Device、表现 runtime 和 host adapter。Agent package 不导入 Character/World；

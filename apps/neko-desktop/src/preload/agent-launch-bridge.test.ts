@@ -175,6 +175,7 @@ function createCatalog() {
     models: [],
     commands: [],
     skills: [],
+    characters: [],
     resources: [],
   };
 }

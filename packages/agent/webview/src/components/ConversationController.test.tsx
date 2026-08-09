@@ -37,8 +37,6 @@ const hostMocks = vi.hoisted(() => ({
   activateConversation: vi.fn(),
   deleteConversation: vi.fn(),
   searchProjectFiles: vi.fn(),
-  startCharacterDialogueFromSlash: vi.fn(),
-  confirmRoleplayCandidate: vi.fn(),
   getSettings: vi.fn(),
   getConversationSnapshot: vi.fn(),
   getContextTokenCount: vi.fn(),
@@ -395,6 +393,17 @@ vi.mock('./ChatView/InputArea', async () => {
       entryPromptMenu?: 'generate-assets' | 'roleplay' | null;
       onEntryPromptMenuChange?: (menu: 'generate-assets' | 'roleplay' | null) => void;
       onEntryGenerationModeSelect?: (mode: 'image' | 'video' | 'audio') => void;
+      selectedCharacterLaunches?: readonly {
+        characterProjectId: string;
+        characterVersionId: string;
+        label: string;
+      }[];
+      onAddCharacterLaunch?: (selection: {
+        characterProjectId: string;
+        characterVersionId: string;
+        label: string;
+      }) => void;
+      onRemoveCharacterLaunch?: (characterVersionId: string) => void;
     }) => {
       const {
         isBusy,
@@ -405,6 +414,7 @@ vi.mock('./ChatView/InputArea', async () => {
         contextChips,
         onAddContextChip,
         onRemoveContextChip,
+        mentionItems = [],
       } = useInputAreaContext();
       return (
         <div>
@@ -448,6 +458,34 @@ vi.mock('./ChatView/InputArea', async () => {
           <span data-testid="entry-context-chips">
             {contextChips.map((payload) => payload.label).join('|')}
           </span>
+          {mentionItems
+            .filter((item) => item.characterLaunchSelection)
+            .map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() =>
+                  props.onAddCharacterLaunch?.({
+                    ...item.characterLaunchSelection!,
+                    label: item.label,
+                  })
+                }
+              >
+                Select Character {item.label}
+              </button>
+            ))}
+          <span data-testid="entry-character-launches">
+            {props.selectedCharacterLaunches?.map((selection) => selection.label).join('|') ?? ''}
+          </span>
+          {props.selectedCharacterLaunches?.map((selection) => (
+            <button
+              key={selection.characterVersionId}
+              type="button"
+              onClick={() => props.onRemoveCharacterLaunch?.(selection.characterVersionId)}
+            >
+              Remove Character {selection.label}
+            </button>
+          ))}
           <span data-testid="entry-page-menu">{props.entryPromptMenu ?? 'none'}</span>
           <button type="button" onClick={() => props.onEntryPromptMenuChange?.(null)}>
             Close Entry Menu
@@ -574,6 +612,7 @@ describe('ConversationController entry state', () => {
             data: { resourceGrantId: 'grant-restored', resourceKind: 'file' },
           },
         ],
+        characterLaunches: [],
         workspaceTarget: {
           label: 'Restored Project',
           context: {
@@ -645,6 +684,57 @@ describe('ConversationController entry state', () => {
     });
     await waitFor(() => expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({ drafts: [] }));
     expect(screen.getByRole('textbox')).toHaveProperty('value', '');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('submits ordered Character selections through the Character launch target', async () => {
+    vi.clearAllMocks();
+    hostMocks.submitDraft.mockResolvedValue({
+      conversationId: 'conversation-room-1',
+      turnId: 'turn-room-1',
+      turnStatus: 'running',
+    });
+    render(
+      <ConversationController
+        {...createProps({
+          mentionItems: [
+            characterMention('Xiaoju', 'character-project-xiaoju', 'character-version-xiaoju-1'),
+            characterMention('Ling', 'character-project-ling', 'character-version-ling-2'),
+          ],
+        })}
+        agentPresentation={createAgentDraftPresentation('draft-character-room', {
+          kind: 'unbound',
+          draftId: 'draft-character-room',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character Xiaoju' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character Ling' }));
+    expect(screen.getByTestId('entry-character-launches').textContent).toBe('Xiaoju|Ling');
+    expect(screen.getByTestId('entry-context-chips').textContent).toBe('');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Meet in the observatory' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() =>
+      expect(hostMocks.submitDraft).toHaveBeenCalledWith({
+        target: {
+          kind: 'character-launch',
+          draftId: 'draft-character-room',
+          selection: {
+            runtimeKind: 'companion',
+            characters: [
+              { characterVersionId: 'character-version-xiaoju-1' },
+              { characterVersionId: 'character-version-ling-2' },
+            ],
+          },
+        },
+        messageText: 'Meet in the observatory',
+        resourceGrantIds: [],
+        configuration: { providerId: 'test', modelId: 'test-model', executionMode: 'ask' },
+      }),
+    );
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
@@ -1131,7 +1221,7 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('roleplay');
   });
 
-  it('starts a confirmed role session from the Header without creating an ordinary conversation', () => {
+  it('does not expose the legacy Header role selector', () => {
     vi.clearAllMocks();
     const setMentionItems = vi.fn();
     render(
@@ -1143,6 +1233,10 @@ describe('ConversationController entry state', () => {
               kind: 'entity',
               label: 'Xiaoju',
               entityType: 'character',
+              characterLaunchSelection: {
+                characterProjectId: 'character-project-xiaoju',
+                characterVersionId: 'character-version-xiaoju-1',
+              },
             },
           ],
         })}
@@ -1150,52 +1244,10 @@ describe('ConversationController entry state', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Role Sessions' }));
-
-    expect(setMentionItems).toHaveBeenCalledWith([]);
-    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
-      purpose: 'roleplay',
-    });
+    expect(screen.queryByRole('button', { name: 'Open Role Sessions' })).toBeNull();
+    expect(setMentionItems).not.toHaveBeenCalled();
+    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start Role Xiaoju' }));
-
-    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
-      'entity:char-xiaoju --roleplay --skip-enrich',
-    );
-    expect(hostMocks.confirmRoleplayCandidate).not.toHaveBeenCalled();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-  });
-
-  it('confirms an exact roleplay Candidate from the Header without optimistic session creation', () => {
-    vi.clearAllMocks();
-    render(
-      <ConversationController
-        {...createProps({
-          mentionItems: [
-            {
-              id: 'entity:entity-projection:semantic-ling',
-              kind: 'entity',
-              label: 'Ling',
-              entityType: 'character',
-              navigationData: {
-                candidateId: 'candidate:auto:character:Ling',
-                projectSearchItemId: 'entity-projection:semantic-ling',
-              },
-            },
-          ],
-        })}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start Role Ling' }));
-
-    expect(hostMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
-      projectSearchItemId: 'entity-projection:semantic-ling',
-    });
-    expect(hostMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(screen.getByTestId('tab-count').textContent).toBe('0');
   });
 
   it('does not create a chat tab when the asset generation picker is closed without a selection', () => {
@@ -2655,14 +2707,6 @@ function createProps(
         <button type="button" onClick={props.onNewChat}>
           New
         </button>
-        <button type="button" onClick={props.onRequestRoleplayItems}>
-          Open Role Sessions
-        </button>
-        {props.roleplayItems.map((item) => (
-          <button key={item.id} type="button" onClick={() => props.onSelectRoleplayItem(item)}>
-            Start Role {item.label}
-          </button>
-        ))}
         {props.tabs.map((tab) => (
           <div key={tab.id}>
             <button type="button" onClick={() => props.onSwitchTab(tab.id)}>
@@ -2690,6 +2734,20 @@ function createProps(
         <span data-testid="tab-count">{props.tabs.length}</span>
       </div>
     ),
+  };
+}
+
+function characterMention(
+  label: string,
+  characterProjectId: string,
+  characterVersionId: string,
+): import('./ChatView/InputArea/types').MentionItem {
+  return {
+    id: characterVersionId,
+    kind: 'entity',
+    label,
+    entityType: 'character',
+    characterLaunchSelection: { characterProjectId, characterVersionId },
   };
 }
 

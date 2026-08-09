@@ -39,6 +39,7 @@ import type {
   SkillSummary,
   EntryPromptMenu,
   MentionItem,
+  SelectedCharacterLaunch,
   PluginSlashCommandDef,
   GenCategory,
   GenerationParams,
@@ -104,7 +105,6 @@ import {
 import { useProjectionEndpoint } from '../render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
-import { submitRoleplayEntrySelection } from './ChatView/roleplay-entry-action';
 import { AgentDiagnosticToast } from './AgentDiagnosticToast';
 import {
   useComposerWorkspacePresentation,
@@ -121,12 +121,9 @@ interface HeaderRenderProps {
   activeView: TabType;
   historyConversations: HistoryConversationItem[];
   activeConversationId: string | null;
-  roleplayItems: readonly MentionItem[];
   onSwitchTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewChat: () => void;
-  onRequestRoleplayItems: () => void;
-  onSelectRoleplayItem: (item: MentionItem) => void;
   onOpenConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
   onClearClosedConversations: () => void;
@@ -140,6 +137,10 @@ export interface ConversationControllerProps {
   initialInput?: { readonly id: string; readonly value: string };
   emptyStatePresentation?: 'default' | 'desktop-dock';
   agentPresentation?: AgentRootPresentation;
+  conversationFeed?: {
+    readonly conversationId: string;
+    readonly content: ReactNode;
+  };
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -188,6 +189,7 @@ function applyConversationSettingsSnapshot(
 
 export function ConversationController({
   agentPresentation,
+  conversationFeed,
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
@@ -271,6 +273,9 @@ export function ConversationController({
   const [entryInputValue, setEntryInputValue] = useState('');
   const entryInputValueRef = useRef('');
   const [entryContextReferences, setEntryContextReferences] = useState<AgentContextPayload[]>([]);
+  const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<SelectedCharacterLaunch[]>(
+    [],
+  );
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
   const [entryExecutionMode, setEntryExecutionMode] = useState<SettingsState['executionMode']>(
@@ -312,6 +317,7 @@ export function ConversationController({
     updateEntryInputValue(normalizedInput);
   }, [initialInput, openTabs.length, updateEntryInputValue]);
   const addEntryContextReference = useCallback((payload: AgentContextPayload) => {
+    setEntryCharacterLaunches([]);
     setEntryContextReferences((current) =>
       current.some((reference) => reference.id === payload.id) ? current : [...current, payload],
     );
@@ -319,6 +325,30 @@ export function ConversationController({
   const removeEntryContextReference = useCallback((id: string) => {
     setEntryContextReferences((current) => current.filter((reference) => reference.id !== id));
   }, []);
+  const addEntryCharacterLaunch = useCallback((selection: SelectedCharacterLaunch) => {
+    setEntryWorkspaceTarget(undefined);
+    setEntryContextReferences([]);
+    setEntryCharacterLaunches((current) =>
+      current.some((candidate) => candidate.characterVersionId === selection.characterVersionId)
+        ? current
+        : [...current, selection],
+    );
+  }, []);
+  const removeEntryCharacterLaunch = useCallback((characterVersionId: string) => {
+    setEntryCharacterLaunches((current) =>
+      current.filter((selection) => selection.characterVersionId !== characterVersionId),
+    );
+  }, []);
+  const updateEntryWorkspaceTarget = useCallback(
+    (target: AgentComposerWorkspaceTarget | undefined) => {
+      if (target) {
+        setEntryCharacterLaunches([]);
+        setEntryContextReferences([]);
+      }
+      setEntryWorkspaceTarget(target);
+    },
+    [],
+  );
   const hydrateConversationSettings = useCallback(
     (conversationId: string, snapshot: ConversationSettingsSnapshot) => {
       settingsSnapshotByConversationRef.current.set(conversationId, snapshot);
@@ -415,6 +445,7 @@ export function ConversationController({
     setEntryAction('start-chat');
     updateEntryInputValue(entryDraft?.inputValue ?? '');
     setEntryContextReferences(entryDraft ? [...entryDraft.contextReferences] : []);
+    setEntryCharacterLaunches(entryDraft ? [...entryDraft.characterLaunches] : []);
     setEntryWorkspaceTarget(entryDraft?.workspaceTarget);
     setEntrySelectedModel((current) => entryDraft?.selectedModel ?? current);
     setEntryExecutionMode(entryDraft?.executionMode ?? settings.executionMode);
@@ -450,6 +481,7 @@ export function ConversationController({
       draftId: agentPresentation.draftId,
       inputValue: entryInputValue,
       contextReferences: entryContextReferences,
+      characterLaunches: entryCharacterLaunches,
       ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
       selectedModel: entrySelectedModel,
       executionMode: entryExecutionMode,
@@ -457,6 +489,7 @@ export function ConversationController({
   }, [
     agentPresentation,
     entryContextReferences,
+    entryCharacterLaunches,
     entryExecutionMode,
     entryInputValue,
     entrySelectedModel,
@@ -1001,13 +1034,6 @@ export function ConversationController({
     agentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
   }, [agentHostMessages, setMentionItems, updateMentionSearchFilter]);
 
-  const handleSelectRoleplayItem = useCallback(
-    (item: MentionItem) => {
-      submitRoleplayEntrySelection(agentHostMessages, item);
-    },
-    [agentHostMessages],
-  );
-
   const startNewForegroundConversationWithGenerationMode = useCallback(
     (mode: Extract<SessionMode, GenCategory>, messageText?: string) => {
       const sessionModeRequestId = nextInitialSessionModeRequestIdRef.current + 1;
@@ -1100,30 +1126,42 @@ export function ConversationController({
           return;
         }
         const resourceGrantIds = contextPayloads.map((payload) => payload.id);
-        const target = entryWorkspaceTarget
-          ? {
-              kind: 'bound-context' as const,
-              draftId: agentPresentation.draftId,
-              context: entryWorkspaceTarget.context,
-            }
-          : agentPresentation.scope.kind === 'unbound'
-            ? { kind: 'automatic-assistant' as const, draftId: agentPresentation.draftId }
-            : {
-                kind: 'bound-context' as const,
+        const target =
+          entryCharacterLaunches.length > 0
+            ? {
+                kind: 'character-launch' as const,
                 draftId: agentPresentation.draftId,
-                context:
-                  agentPresentation.scope.kind === 'assistant'
-                    ? {
-                        kind: 'assistant' as const,
-                        assistantSpaceId: agentPresentation.scope.assistantSpaceId,
-                        baseGrantIds: resourceGrantIds,
-                      }
-                    : {
-                        kind: 'workspace' as const,
-                        workspaceId: agentPresentation.scope.workspaceId,
-                        workspaceGrantId: agentPresentation.scope.workspaceGrantId,
-                      },
-              };
+                selection: {
+                  runtimeKind: 'companion' as const,
+                  characters: entryCharacterLaunches.map((selection) => ({
+                    characterVersionId: selection.characterVersionId,
+                  })),
+                },
+              }
+            : entryWorkspaceTarget
+              ? {
+                  kind: 'bound-context' as const,
+                  draftId: agentPresentation.draftId,
+                  context: entryWorkspaceTarget.context,
+                }
+              : agentPresentation.scope.kind === 'unbound'
+                ? { kind: 'automatic-assistant' as const, draftId: agentPresentation.draftId }
+                : {
+                    kind: 'bound-context' as const,
+                    draftId: agentPresentation.draftId,
+                    context:
+                      agentPresentation.scope.kind === 'assistant'
+                        ? {
+                            kind: 'assistant' as const,
+                            assistantSpaceId: agentPresentation.scope.assistantSpaceId,
+                            baseGrantIds: resourceGrantIds,
+                          }
+                        : {
+                            kind: 'workspace' as const,
+                            workspaceId: agentPresentation.scope.workspaceId,
+                            workspaceGrantId: agentPresentation.scope.workspaceGrantId,
+                          },
+                  };
         setIsForegroundConversationActivationPending(true);
         void draftHostRuntimeAdapter
           .submitDraft({
@@ -1141,6 +1179,7 @@ export function ConversationController({
             writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
             updateEntryInputValue('');
             setEntryContextReferences([]);
+            setEntryCharacterLaunches([]);
             setEntryWorkspaceTarget(undefined);
             if (projection.turnStatus === 'failed' && projection.diagnostic) {
               setGlobalError(projection.diagnostic);
@@ -1186,6 +1225,7 @@ export function ConversationController({
       activeSettings.chatModelOptions,
       agentPresentation,
       entryContextReferences,
+      entryCharacterLaunches,
       entryInputValue,
       entrySessionMode,
       entrySelectedModel,
@@ -1524,12 +1564,9 @@ export function ConversationController({
             activeView: activeTab,
             historyConversations,
             activeConversationId: visibleConversationId,
-            roleplayItems: mentionItems,
             onSwitchTab: handleSwitchTab,
             onCloseTab: handleCloseTab,
             onNewChat: handleNewChat,
-            onRequestRoleplayItems: handleRequestRoleplayItems,
-            onSelectRoleplayItem: handleSelectRoleplayItem,
             onOpenConversation: handleOpenTab,
             onDeleteConversation: handleDeleteConversation,
             onClearClosedConversations: handleClearClosedConversations,
@@ -1617,8 +1654,11 @@ export function ConversationController({
                 }
                 draftWorkspaceTarget={entryWorkspaceTarget}
                 onDraftWorkspaceTargetChange={
-                  composerWorkspace?.kind === 'entry' ? setEntryWorkspaceTarget : undefined
+                  composerWorkspace?.kind === 'entry' ? updateEntryWorkspaceTarget : undefined
                 }
+                selectedCharacterLaunches={entryCharacterLaunches}
+                onAddCharacterLaunch={addEntryCharacterLaunch}
+                onRemoveCharacterLaunch={removeEntryCharacterLaunch}
                 disabled={isForegroundConversationActivationPending || !hasConfigSnapshot}
                 entryPromptMenu={entryPromptMenu}
                 onEntryPromptMenuChange={setEntryPromptMenu}
@@ -1646,6 +1686,11 @@ export function ConversationController({
             tab={tab}
             runtime={runtime}
             visible={visible}
+            conversationFeed={
+              conversationFeed?.conversationId === tab.conversationId
+                ? conversationFeed.content
+                : undefined
+            }
             composerPresentation={emptyStatePresentation === 'desktop-dock' ? 'compact' : 'default'}
             messages={[...sessionState.messages]}
             setMessages={(value) =>

@@ -163,6 +163,25 @@ import {
   parseAssistantResourceHostRequest,
   type AssistantResourceHostResult,
 } from '@neko/agent-contracts/assistant-resource-host';
+import {
+  parseCharacterFoundationAnyHostRequest,
+  parseCharacterFoundationHostRequest,
+  parseCharacterRoomWorkbenchSnapshotRequest,
+  type CharacterConversationLaunchInput,
+  type CharacterConversationLaunchResult,
+  type CharacterFoundationCommand,
+  type CharacterFoundationCommandHostRequest,
+  type CharacterFoundationHostResult,
+  type CharacterRoomWorkbenchProjectionEvent,
+  type CharacterRoomWorkbenchSnapshotResult,
+  type RoomView,
+} from '@neko/chara/contracts';
+import type {
+  CharacterFoundationCommandPort,
+  CharacterFoundationService,
+  CharacterRoomMessageSubmissionResult,
+  SubmitCharacterRoomMessageInput,
+} from '@neko/chara/application';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -176,6 +195,31 @@ export interface DesktopAppHostOptions {
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
+  readonly characterFoundation: CharacterFoundationService;
+  readonly characterFoundationCommands: CharacterFoundationCommandPort;
+  readonly characterConversations: {
+    launch(
+      input: CharacterConversationLaunchInput,
+      signal?: AbortSignal,
+    ): Promise<CharacterConversationLaunchResult>;
+  };
+  readonly characterRoomConversations: {
+    submitUserMessage(
+      input: SubmitCharacterRoomMessageInput,
+      signal?: AbortSignal,
+    ): Promise<CharacterRoomMessageSubmissionResult>;
+  };
+  readonly characterRoomWorkbench: {
+    materializeUserView(
+      input: { readonly roomRunId: string; readonly userId: string },
+      signal?: AbortSignal,
+    ): Promise<RoomView>;
+    subscribeUserView(
+      roomRunId: string,
+      userId: string,
+      listener: (view: RoomView) => void,
+    ): () => void;
+  };
   readonly assistantPreviewLifecycle?: {
     detachWindow(windowId: string): void;
     dispose(): void;
@@ -209,6 +253,11 @@ export class DesktopAppHost {
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources: AssistantResourceService | undefined;
+  readonly characterFoundation: CharacterFoundationService;
+  readonly characterFoundationCommands: CharacterFoundationCommandPort;
+  readonly characterConversations: DesktopAppHostOptions['characterConversations'];
+  readonly characterRoomConversations: DesktopAppHostOptions['characterRoomConversations'];
+  readonly characterRoomWorkbench: DesktopAppHostOptions['characterRoomWorkbench'];
   readonly resourceBrowser: ResourceBrowserNodeRuntime | undefined;
   readonly assetCenter: AssetCenterNodeRuntime | undefined;
   readonly projectPortability: ProjectPortabilityRuntime | undefined;
@@ -221,6 +270,10 @@ export class DesktopAppHost {
   private readonly canvasSubscriptions = new Map<number, Map<string, () => void>>();
   private readonly cutSubscriptions = new Map<number, Map<string, () => void>>();
   private readonly textEditorSubscriptions = new Map<number, Map<string, () => void>>();
+  private readonly characterRoomWorkbenchSubscriptions = new Map<
+    number,
+    { readonly roomRunId: string; readonly dispose: () => void }
+  >();
   private disposed = false;
 
   constructor(private readonly options: DesktopAppHostOptions) {
@@ -240,6 +293,11 @@ export class DesktopAppHost {
     this.workspaceGrants = options.workspaceGrants;
     this.conversationLifecycle = options.conversationLifecycle;
     this.assistantResources = options.assistantResources;
+    this.characterFoundation = options.characterFoundation;
+    this.characterFoundationCommands = options.characterFoundationCommands;
+    this.characterConversations = options.characterConversations;
+    this.characterRoomConversations = options.characterRoomConversations;
+    this.characterRoomWorkbench = options.characterRoomWorkbench;
     this.resourceBrowser = options.resourceBrowser;
     this.assetCenter = options.assetCenter;
     this.projectPortability = options.projectPortability;
@@ -267,6 +325,92 @@ export class DesktopAppHost {
       requestId: request.requestId,
       projection: this.settings.current,
     };
+  }
+
+  async createCharacterFoundationSnapshot(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<CharacterFoundationHostResult> {
+    this.requireActive();
+    const request = parseCharacterFoundationHostRequest(payload);
+    this.windows.resolveSender(sender);
+    return {
+      requestId: request.requestId,
+      snapshot: await this.characterFoundation.getSnapshot(),
+    };
+  }
+
+  async executeCharacterFoundationRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<CharacterFoundationHostResult> {
+    this.requireActive();
+    const request = parseCharacterFoundationAnyHostRequest(payload);
+    this.windows.resolveSender(sender);
+    if (request.operation !== 'snapshot-get') {
+      await this.characterFoundationCommands.execute(stripCommandRequestId(request));
+    }
+    return {
+      requestId: request.requestId,
+      snapshot: await this.characterFoundation.getSnapshot(),
+    };
+  }
+
+  async getCharacterRoomWorkbenchSnapshot(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+    publish: (event: CharacterRoomWorkbenchProjectionEvent) => void,
+  ): Promise<CharacterRoomWorkbenchSnapshotResult> {
+    this.requireActive();
+    const request = parseCharacterRoomWorkbenchSnapshotRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const scene = await this.shell.getSceneProjection(window.windowId);
+    if (
+      scene.context.kind !== 'character-interaction' ||
+      scene.context.owner.kind !== 'room' ||
+      scene.context.owner.roomRunId !== request.roomRunId
+    ) {
+      throw new Error('Character Room Workbench request does not match the active Room Scene.');
+    }
+
+    const current = this.characterRoomWorkbenchSubscriptions.get(sender.webContentsId);
+    current?.dispose();
+    let sequence = 0;
+    let active = false;
+    const disposeUserView = this.characterRoomWorkbench.subscribeUserView(
+      request.roomRunId,
+      'user:local',
+      (projection) => {
+        if (active) publish({ requestId: request.requestId, sequence: ++sequence, projection });
+      },
+    );
+    const subscription = {
+      roomRunId: request.roomRunId,
+      dispose: () => {
+        active = false;
+        disposeUserView();
+      },
+    };
+    this.characterRoomWorkbenchSubscriptions.set(sender.webContentsId, subscription);
+    active = true;
+
+    try {
+      const projection = await this.characterRoomWorkbench.materializeUserView({
+        roomRunId: request.roomRunId,
+        userId: 'user:local',
+      });
+      return {
+        requestId: request.requestId,
+        sequence,
+        projection,
+      };
+    } catch (error) {
+      if (this.characterRoomWorkbenchSubscriptions.get(sender.webContentsId) === subscription) {
+        subscription.dispose();
+        this.characterRoomWorkbenchSubscriptions.delete(sender.webContentsId);
+      }
+      throw error;
+    }
   }
 
   async updateApplicationSettings(
@@ -382,7 +526,10 @@ export class DesktopAppHost {
         this.conversationLifecycle.readConversationContext(request.conversationId),
         this.conversationLifecycle.readFirstSubmitRecord(request.conversationId),
       ]);
-      if (context.kind !== 'assistant' || context.assistantSpaceId !== request.assistantSpaceId) {
+      const scene = resolveActiveDesktopWindowWorkbench(
+        (await this.shell.getProjection(window.windowId)).window,
+      ).scene;
+      if (!assistantSurfaceContextMatches(context, scene, request.assistantSpaceId)) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
         );
@@ -535,6 +682,7 @@ export class DesktopAppHost {
       const shellProjection = await this.shell.getProjection(window.windowId);
       const target = request.input.target;
       let context: AgentConversationContext;
+      let exactConversationId: string | undefined;
       let existingRecord:
         | Awaited<ReturnType<AgentConversationLifecycleService['readFirstSubmitByRequest']>>
         | undefined;
@@ -587,6 +735,60 @@ export class DesktopAppHost {
               'Automatic Assistant draft submit request does not match the committed session.',
             );
           }
+        }
+      } else if (target.kind === 'character-launch') {
+        if (request.input.resourceGrantIds.length > 0) {
+          throw new Error('Character launch does not accept Assistant Resource grants.');
+        }
+        existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
+          request.requestId,
+        );
+        if (existingRecord) {
+          const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
+          if (
+            (existingRecord.context.kind !== 'character' &&
+              existingRecord.context.kind !== 'room') ||
+            scene.context.kind !== 'character-interaction' ||
+            scene.context.scope.draftId !== target.draftId ||
+            scene.context.scope.conversationId !== existingRecord.conversationId ||
+            !isSameAgentConversationOwner(
+              conversationOwnerFromContext(existingRecord.context),
+              scene.context.owner,
+            )
+          ) {
+            throw new Error(
+              'Character draft submit request does not match the committed interaction Scene.',
+            );
+          }
+          context = existingRecord.context;
+          exactConversationId = existingRecord.conversationId;
+        } else {
+          const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
+          if (
+            connection.scope.kind !== 'unbound' ||
+            connection.scope.draftId !== target.draftId ||
+            scene.context.kind !== 'agent' ||
+            scene.context.scope.kind !== 'unbound' ||
+            scene.context.scope.draftId !== target.draftId ||
+            scene.context.agentViewId !== connection.viewId ||
+            scene.slots.interaction?.phase !== 'draft'
+          ) {
+            throw new Error('Character launch is not the exact active Entry Draft.');
+          }
+          const launched = await this.characterConversations.launch({
+            requestId: request.requestId,
+            userId: 'user:local',
+            userDisplayName: 'You',
+            selection: target.selection,
+          });
+          context = projectCharacterLaunchContext(
+            launched,
+            this.options.assistantWorkspace.workspaceId,
+          );
+          exactConversationId =
+            launched.topology === 'dialogue'
+              ? launched.primaryAgentSessionId
+              : launched.interactionAgentSessionId;
         }
       } else {
         const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
@@ -660,6 +862,7 @@ export class DesktopAppHost {
         existingRecord ??
         (await this.conversationLifecycle.firstSubmit({
           requestId: request.requestId,
+          ...(exactConversationId === undefined ? {} : { conversationId: exactConversationId }),
           context,
           messageText: request.input.messageText,
           resourceGrantIds: request.input.resourceGrantIds,
@@ -854,6 +1057,46 @@ export class DesktopAppHost {
       return result;
     }
     const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
+    if (request.message.type === 'sendMessage') {
+      const context = await this.conversationLifecycle.readConversationContext(
+        request.message.conversationId,
+      );
+      if (context.kind === 'room') {
+        const scene = resolveActiveDesktopWindowWorkbench(
+          (await this.shell.getProjection(window.windowId)).window,
+        ).scene;
+        if (
+          scene.context.kind !== 'character-interaction' ||
+          scene.context.owner.kind !== 'room' ||
+          scene.context.scope.conversationId !== request.message.conversationId ||
+          !isSameAgentConversationOwner(conversationOwnerFromContext(context), scene.context.owner)
+        ) {
+          throw new Error('Room message does not match the exact active Room Conversation owner.');
+        }
+        this.agentBridge.assertConnection(request.connection, grant);
+        const result = await this.characterRoomConversations.submitUserMessage({
+          submissionId: request.message.messageTrackingId ?? request.requestId,
+          roomRunId: context.roomRunId,
+          userId: 'user:local',
+          message: request.message.message,
+        });
+        const rejected = result.outcomes.filter((outcome) => outcome.status === 'rejected');
+        for (const outcome of rejected) {
+          this.reportError(
+            outcome.diagnostic.code,
+            `Room participant '${outcome.participantId}' response was rejected.`,
+            new Error(outcome.diagnostic.message),
+          );
+        }
+        if (
+          result.outcomes.length > 0 &&
+          result.outcomes.every((outcome) => outcome.status === 'rejected')
+        ) {
+          throw new Error('Every scheduled Room participant response was rejected.');
+        }
+        return { requestId: request.requestId, status: 'accepted' };
+      }
+    }
     if (request.message.type === 'newConversation') {
       const projection = await this.shell.getProjection(window.windowId);
       const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
@@ -1646,10 +1889,7 @@ export class DesktopAppHost {
         this.textEditorSubscriptions.get(sender.webContentsId) ?? new Map<string, () => void>();
       const key = textEditorSubscriptionKey(request.identity);
       if (!subscriptions.has(key)) {
-        subscriptions.set(
-          key,
-          await runtime.subscribe(window.windowId, request.identity, publish),
-        );
+        subscriptions.set(key, await runtime.subscribe(window.windowId, request.identity, publish));
         this.textEditorSubscriptions.set(sender.webContentsId, subscriptions);
       }
     }
@@ -1774,10 +2014,13 @@ export class DesktopAppHost {
       disposeSubscription();
     }
     this.cutSubscriptions.delete(webContentsId);
-    for (const disposeSubscription of this.textEditorSubscriptions.get(webContentsId)?.values() ?? []) {
+    for (const disposeSubscription of this.textEditorSubscriptions.get(webContentsId)?.values() ??
+      []) {
       disposeSubscription();
     }
     this.textEditorSubscriptions.delete(webContentsId);
+    this.characterRoomWorkbenchSubscriptions.get(webContentsId)?.dispose();
+    this.characterRoomWorkbenchSubscriptions.delete(webContentsId);
   }
 
   async dispose(): Promise<void> {
@@ -1842,6 +2085,14 @@ export class DesktopAppHost {
       }
     }
     this.textEditorSubscriptions.clear();
+    for (const subscription of this.characterRoomWorkbenchSubscriptions.values()) {
+      try {
+        subscription.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    this.characterRoomWorkbenchSubscriptions.clear();
     try {
       this.assetCenter?.dispose();
     } catch (error) {
@@ -1941,10 +2192,10 @@ export class DesktopAppHost {
       const context = await this.conversationLifecycle.readConversationContext(
         interaction.scope.conversationId,
       );
-      if (
-        context.kind !== 'assistant' ||
-        context.assistantSpaceId !== connection.assistantSpaceId
-      ) {
+      const scene = resolveActiveDesktopWindowWorkbench(
+        (await this.shell.getProjection(windowId)).window,
+      ).scene;
+      if (!assistantSurfaceContextMatches(context, scene, connection.assistantSpaceId)) {
         throw new Error(
           'Desktop Assistant Agent connection does not match its persisted Conversation context.',
         );
@@ -2136,9 +2387,63 @@ function isAgentProjectionControlMessage(type: string): boolean {
 function conversationOwnerFromContext(
   context: AgentConversationContext,
 ): AgentConversationOwnerRef {
-  return context.kind === 'assistant'
-    ? { kind: 'assistant', assistantSpaceId: context.assistantSpaceId }
-    : { kind: 'workspace', workspaceId: context.workspaceId };
+  switch (context.kind) {
+    case 'assistant':
+      return { kind: 'assistant', assistantSpaceId: context.assistantSpaceId };
+    case 'workspace':
+      return { kind: 'workspace', workspaceId: context.workspaceId };
+    case 'character':
+      return {
+        kind: 'character',
+        characterId: context.characterId,
+        characterRunId: context.characterRunId,
+        dialogueRunId: context.dialogueRunId,
+      };
+    case 'room':
+      return { kind: 'room', roomId: context.roomId, roomRunId: context.roomRunId };
+  }
+}
+
+function projectCharacterLaunchContext(
+  launch: CharacterConversationLaunchResult,
+  workspaceId: string,
+): Extract<AgentConversationContext, { readonly kind: 'character' | 'room' }> {
+  return launch.topology === 'dialogue'
+    ? {
+        kind: 'character',
+        characterId: launch.characterProjectId,
+        characterRunId: launch.characterRunId,
+        dialogueRunId: launch.dialogueRunId,
+        workspaceId,
+      }
+    : {
+        kind: 'room',
+        roomId: launch.characterRoomId,
+        roomRunId: launch.roomRunId,
+        workspaceId,
+      };
+}
+
+function assistantSurfaceContextMatches(
+  context: AgentConversationContext,
+  scene: DesktopWorkbenchSceneProjection,
+  assistantSpaceId: string,
+): boolean {
+  if (context.kind === 'assistant') {
+    return (
+      context.assistantSpaceId === assistantSpaceId &&
+      scene.context.kind === 'agent' &&
+      scene.context.scope.kind === 'assistant' &&
+      scene.context.scope.assistantSpaceId === assistantSpaceId
+    );
+  }
+  if (context.kind !== 'character' && context.kind !== 'room') return false;
+  return (
+    context.workspaceId === assistantSpaceId &&
+    scene.context.kind === 'character-interaction' &&
+    scene.context.scope.assistantSpaceId === assistantSpaceId &&
+    isSameAgentConversationOwner(conversationOwnerFromContext(context), scene.context.owner)
+  );
 }
 
 function unavailableConversationOwner(
@@ -2262,11 +2567,15 @@ function conversationContextMatchesLaunchScope(
   scope: AgentAuthorityScopeProjection,
 ): boolean {
   if (scope.kind === 'unbound') return false;
-  return context.kind === 'assistant'
-    ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
-    : scope.kind === 'workspace' &&
-        context.workspaceId === scope.workspaceId &&
-        context.workspaceGrantId === scope.workspaceGrantId;
+  if (context.kind === 'assistant') {
+    return scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId;
+  }
+  return (
+    context.kind === 'workspace' &&
+    scope.kind === 'workspace' &&
+    context.workspaceId === scope.workspaceId &&
+    context.workspaceGrantId === scope.workspaceGrantId
+  );
 }
 
 function canvasSubscriptionKey(identity: CanvasHostRuntimeIdentity): string {
@@ -2299,4 +2608,11 @@ function textEditorSubscriptionKey(identity: TextEditorRuntimeIdentity): string 
     identity.documentId,
     identity.sessionId,
   ].join(':');
+}
+
+function stripCommandRequestId(
+  request: CharacterFoundationCommandHostRequest,
+): CharacterFoundationCommand {
+  const { requestId: _requestId, ...command } = request;
+  return command;
 }

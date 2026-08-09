@@ -1,4 +1,8 @@
-import { parseAgentConversationContext, parseAgentScratchArtifactRef } from '@neko/agent-contracts';
+import {
+  parseAgentConversationContext,
+  parseAgentScratchArtifactRef,
+  type AgentConversationContext,
+} from '@neko/agent-contracts';
 import {
   LocalMetadataError,
   initializeLocalMetadataTables,
@@ -32,6 +36,69 @@ export function initializeAgentConversationLifecycleTables(
     ],
     operation: 'initialize-agent-conversation-lifecycle-tables',
   });
+}
+
+export interface AgentConversationContextAuthorityPort {
+  bindContext(conversationId: string, context: AgentConversationContext): Promise<void>;
+  releaseContext(conversationId: string): Promise<void>;
+  readContext(conversationId: string): Promise<AgentConversationContext | undefined>;
+}
+
+export function createPersistentAgentConversationContextAuthority(options: {
+  readonly metadataStore: LocalMetadataStore;
+}): AgentConversationContextAuthorityPort {
+  const authority: AgentConversationContextAuthorityPort = {
+    bindContext: (conversationId, context) =>
+      options.metadataStore.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'bind-agent-conversation-context' },
+        async ({ sql }) => {
+          await commitContext(
+            sql,
+            requireContextIdentity(conversationId),
+            parseAgentConversationContext(context),
+            'bind-agent-conversation-context',
+          );
+        },
+      ),
+    releaseContext: (conversationId) =>
+      options.metadataStore.transaction(
+        {
+          mode: 'state-write',
+          ownership: 'state',
+          operation: 'release-agent-conversation-context',
+        },
+        async ({ sql }) => {
+          const result = await sql.run(
+            `DELETE FROM agent_conversation_authority WHERE conversation_id = ?`,
+            [requireContextIdentity(conversationId)],
+          );
+          if (result.changes !== 1) {
+            throw persistenceError(
+              'release-agent-conversation-context',
+              `Agent Conversation '${conversationId}' context is not present.`,
+            );
+          }
+        },
+      ),
+    readContext: (conversationId) =>
+      options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'read-agent-conversation-context' },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT context_json FROM agent_conversation_authority WHERE conversation_id = ?`,
+            [requireContextIdentity(conversationId)],
+          );
+          if (rows.length > 1) {
+            throw persistenceError(
+              'read-agent-conversation-context',
+              `Agent Conversation '${conversationId}' resolves to multiple contexts.`,
+            );
+          }
+          return rows.length === 0 ? undefined : decodeContextRow(rows[0]!);
+        },
+      ),
+  };
+  return Object.freeze(authority);
 }
 
 export function createPersistentAgentConversationLifecycleRepository(options: {
@@ -537,4 +604,14 @@ function persistenceError(operation: string, message: string, cause?: unknown): 
     message,
     ...(cause === undefined ? {} : { cause }),
   });
+}
+
+function requireContextIdentity(value: string): string {
+  if (value.trim().length === 0) {
+    throw persistenceError(
+      'validate-agent-conversation-context-identity',
+      'Agent Conversation identity is required.',
+    );
+  }
+  return value;
 }

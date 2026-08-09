@@ -15,6 +15,7 @@ describe('Agent Home contract', () => {
           kind: 'character',
           characterId: 'character:1',
           characterRunId: 'character-run:1',
+          dialogueRunId: 'dialogue-run:1',
         }),
         summary('room-1', { kind: 'room', roomId: 'room:1', roomRunId: 'room-run:1' }),
       ],

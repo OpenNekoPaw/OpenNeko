@@ -15,6 +15,10 @@ import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/e
 import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-host';
 import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant-resource-host';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
+import {
+  CHARACTER_FOUNDATION_HOST_CHANNEL,
+  CHARACTER_ROOM_WORKBENCH_CHANNELS,
+} from '@neko/chara/contracts';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(
@@ -26,6 +30,18 @@ export function registerDesktopIpc(
     ) => Promise<{ readonly label: string; readonly hostResource: string } | undefined>;
   },
 ): () => void {
+  ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeCharacterFoundationRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    CHARACTER_ROOM_WORKBENCH_CHANNELS.snapshotGet,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.getCharacterRoomWorkbenchSnapshot(requireSender(event), payload, (roomEvent) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(CHARACTER_ROOM_WORKBENCH_CHANNELS.projectionEvent, roomEvent);
+        }
+      }),
+  );
   ipcMain.handle(
     DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
     (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -306,6 +322,7 @@ export function registerDesktopIpc(
   );
   return () => {
     for (const channel of [
+      CHARACTER_FOUNDATION_HOST_CHANNEL,
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
       DESKTOP_AGENT_CHANNELS.connectionDetach,
       AGENT_LAUNCH_HOST_CHANNEL,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode } from 'react';
+import { act, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
@@ -35,6 +35,7 @@ import {
   createDefaultAssetCenterFilter,
   type AssetCenterSessionProjection,
 } from '@neko/assets-domain/asset-center/contract';
+import type { RoomView } from '@neko/chara/contracts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -446,6 +447,127 @@ describe('DesktopApplication scene lifecycle', () => {
       { kind: 'open-agent-entry' },
       activeScene(projection).sceneId,
     );
+    await act(async () => root.unmount());
+  });
+
+  it('routes Character navigation to its singleton Management scene', async () => {
+    const projection = createProjection();
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'character-management-1',
+      scene: characterManagementScene(),
+    }));
+    installBridge({ projection, transition });
+    const { container, root } = await renderApplication();
+    const characters = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Characters',
+    );
+    if (!characters) throw new Error('Desktop fixture requires Character navigation.');
+
+    await act(async () => characters.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-character-management' },
+      activeScene(projection).sceneId,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('mounts only the current Character Management catalog and unmounts it on replacement', async () => {
+    const initial = withActiveScene(createProjection(), characterManagementScene());
+    const settings = withActiveScene(initial, settingsScene());
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    installBridge({
+      projection: initial,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await waitFor(
+      () => container.querySelector('[data-character-management-catalog="true"]') !== null,
+    );
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: settings.applicationInstanceId,
+        windowId: settings.window.windowId,
+        rendererSessionId: settings.rendererSessionId,
+        sequence: 1,
+        projection: settings,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    expect(container.querySelector('[data-character-management-catalog="true"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('composes exact Character and Room workbenches and unmounts their Roots on scene exit', async () => {
+    const character = withActiveScene(createProjection(), characterInteractionScene());
+    const room = withActiveScene(character, characterRoomInteractionScene());
+    const settings = withActiveScene(room, settingsScene());
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    installBridge({
+      projection: character,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await waitFor(() => container.querySelector('[data-character-avatar-surface="true"]') !== null);
+    expect(
+      container
+        .querySelector('[data-character-avatar-surface="true"]')
+        ?.getAttribute('data-character-owner-id'),
+    ).toBe('character-run-1');
+    expect(container.querySelector('[data-character-runtime-manager="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
+    expect(
+      container.querySelector('.desktop-scene-workbench--character-interaction'),
+    ).not.toBeNull();
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: room.applicationInstanceId,
+        windowId: room.window.windowId,
+        rendererSessionId: room.rendererSessionId,
+        sequence: 1,
+        projection: room,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-character-room-timeline="true"]') !== null);
+    expect(
+      container
+        .querySelector('[data-character-room-timeline="true"]')
+        ?.getAttribute('data-room-run-id'),
+    ).toBe('room-run-1');
+    expect(container.querySelector('[data-character-room-timeline="true"]')?.textContent).toContain(
+      'Room projection message.',
+    );
+    expect(
+      container
+        .querySelector('[data-character-avatar-surface="true"]')
+        ?.getAttribute('data-character-owner-kind'),
+    ).toBe('room');
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: settings.applicationInstanceId,
+        windowId: settings.window.windowId,
+        rendererSessionId: settings.rendererSessionId,
+        sequence: 2,
+        projection: settings,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
+    expect(container.querySelector('[data-character-runtime-manager="true"]')).toBeNull();
+    expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -1770,6 +1892,7 @@ describe('DesktopApplication scene lifecycle', () => {
             kind: 'character' as const,
             characterId: 'character-1',
             characterRunId: 'character-run-1',
+            dialogueRunId: 'dialogue-run-1',
           },
         },
         title: 'Character conversation',
@@ -1962,6 +2085,8 @@ function installBridge({
   updateWorkbench = vi.fn(),
   assetCenterExecute = vi.fn(),
   textEditorExecute = vi.fn(),
+  characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
+  characterRoomSubscribe = vi.fn(() => () => undefined),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -1974,6 +2099,8 @@ function installBridge({
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
   readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
   readonly textEditorExecute?: (request: TextEditorHostRequest) => Promise<TextEditorHostResult>;
+  readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
+  readonly characterRoomSubscribe?: typeof window.openNekoDesktop.characterRoomWorkbench.subscribe;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -1985,6 +2112,14 @@ function installBridge({
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },
+      characterFoundation: {
+        getSnapshot: vi.fn(async () => emptyCharacterFoundationSnapshot()),
+        execute: vi.fn(async () => emptyCharacterFoundationSnapshot()),
+      },
+      characterRoomWorkbench: {
+        getSnapshot: characterRoomGetSnapshot,
+        subscribe: characterRoomSubscribe,
+      },
       textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
       agentLaunch: {
         attach: vi.fn(() => new Promise(() => undefined)),
@@ -2205,6 +2340,135 @@ function settingsScene() {
       status: { kind: 'scene-status', sceneId },
     },
   });
+}
+
+function characterManagementScene() {
+  const sceneId = 'scene:window-1:character-management';
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'character-management' },
+    slots: {
+      main: { kind: 'character-management' },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function characterInteractionScene() {
+  const sceneId = 'scene:window-1:character-interaction:conversation-character-1';
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: 'draft-character-1',
+    assistantSpaceId: 'assistant-space-character-1',
+    conversationId: 'conversation-character-1',
+  };
+  const owner = {
+    kind: 'character' as const,
+    characterId: 'character-project-1',
+    characterRunId: 'character-run-1',
+    dialogueRunId: 'dialogue-run-1',
+  };
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'character-interaction', agentViewId: 'agent-view-character-1', scope, owner },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface-character-1',
+        agentViewId: 'agent-view-character-1',
+        phase: 'session',
+        scope,
+      },
+      main: { kind: 'character-avatar', owner },
+      rightManager: { kind: 'character-runtime-manager', owner },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function characterRoomInteractionScene() {
+  const sceneId = 'scene:window-1:character-interaction:conversation-room-1';
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: 'draft-room-1',
+    assistantSpaceId: 'assistant-space-room-1',
+    conversationId: 'conversation-room-1',
+  };
+  const owner = { kind: 'room' as const, roomId: 'room-1', roomRunId: 'room-run-1' };
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'character-interaction', agentViewId: 'agent-view-room-1', scope, owner },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface-room-1',
+        agentViewId: 'agent-view-room-1',
+        phase: 'session',
+        scope,
+      },
+      main: { kind: 'character-avatar', owner },
+      rightManager: { kind: 'character-runtime-manager', owner },
+      timeline: { kind: 'character-room-timeline', owner },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
+function emptyCharacterFoundationSnapshot() {
+  return {
+    character: {
+      projects: [],
+      versions: [],
+      relationships: [],
+      characterRuns: [],
+      dialogueRuns: [],
+      rooms: [],
+      roomRuns: [],
+    },
+    world: { projects: [], versions: [], runtimes: [] },
+    diagnostics: [],
+  };
+}
+
+function roomWorkbenchView(roomRunId: string): RoomView {
+  return {
+    roomRunId,
+    roomRevision: 1,
+    participantId: 'participant-user',
+    participants: [
+      {
+        participantId: 'participant-user',
+        displayName: 'User',
+        controller: { kind: 'human', userId: 'user:local' },
+      },
+      {
+        participantId: 'participant-lin',
+        displayName: 'Lin',
+        characterVersionId: 'character-version-lin',
+        controller: {
+          kind: 'agent',
+          characterRunId: 'character-run-lin',
+          primaryAgentSessionId: 'conversation:character:lin',
+        },
+      },
+    ],
+    events: [
+      {
+        kind: 'message',
+        roomEventId: 'room-event-1',
+        roomRunId,
+        sequence: 1,
+        createdAt: '2026-08-09T10:00:00.000Z',
+        visibility: { kind: 'public' },
+        authorParticipantId: 'participant-lin',
+        content: 'Room projection message.',
+        mentionedParticipantIds: [],
+      },
+    ],
+  };
 }
 
 function extensionsScene() {
