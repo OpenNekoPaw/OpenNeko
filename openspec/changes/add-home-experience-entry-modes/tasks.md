@@ -1,36 +1,37 @@
-## 1. Entry Presentation Contract
+## 1. Window Navigation Contract
 
-- [x] 1.1 Add the package-owned Assistant, Workspace, Character, and World experience-mode type and strict presenter projection without changing cross-runtime Agent contracts.
-- [x] 1.2 Extend the single Window Entry Draft snapshot with optional experience-mode presentation and canonical Assistant restoration while preserving valid unsent input.
-- [x] 1.3 Add presenter and snapshot tests for the default, strict invalid-state isolation, exact Workspace binding requirements, and owner-qualified unavailable modes.
+- [x] 1.1 Add a Desktop-owned pure projection from entry/management Scene to Assistant, Workspace, Character, or unavailable World presentation without persistent mode state.
+- [x] 1.2 Map enabled modes to the existing exact Scene intents and keep World disabled until a World-owned Scene exists.
+- [x] 1.3 Add path-level tests proving mode clicks do not bind Drafts, create business instances, infer active identities, or retain hidden Roots.
 
-## 2. Home Launch Surface
+## 2. Desktop Top Selector
 
-- [x] 2.1 Replace the old Home start-chat/roleplay actions with an accessible four-mode segmented selector that does not create a business instance.
-- [x] 2.2 Project mode-specific Home copy and unavailable diagnostics, preserving responsive Desktop and narrow layouts.
-- [x] 2.3 Expose the existing Plan, Approve, and Auto execution selector on Entry Drafts without changing execution-mode semantics.
+- [x] 2.1 Extend the shared segmented control with a backward-compatible neutral appearance and configurable width, preserving existing consumers.
+- [x] 2.2 Compose the Codex-style selector in the stable Desktop title region for Agent Entry, Project Management, and Character Management only.
+- [x] 2.3 Keep Project Workspace title controls and business Scenes unchanged; cover keyboard, disabled World description, desktop, and narrow layouts.
 
-## 3. Canonical Binding And Submit Validation
+## 3. Canonical Agent And Workspace Paths
 
-- [x] 3.1 Wire mode switching through the existing Draft `bindTarget` path, retain input text, invalidate incompatible references, and keep binding-pending state local to send availability.
-- [x] 3.2 Require exact Workspace identity, grant, current binding receipt, and effective configuration before first submit; reject stale or missing targets without active/current/recent Workspace fallback.
-- [x] 3.3 Keep Assistant submission unbound and Project-independent, and prevent Character/World modes from invoking ordinary Agent Draft submit.
-- [x] 3.4 Keep textarea, mode selection, navigation, and layout enabled while projecting one visible and accessible send-blocked reason.
+- [x] 3.1 Make unbound Agent Entry the single Assistant launch surface and preserve the canonical execution selector and first-submit transaction.
+- [x] 3.2 Route Workspace to Project Management and reuse explicit Project selection or directory authorization with the exact existing Workspace Scene intents.
+- [x] 3.3 Keep navigation and layout operable during validation and streaming; only consequential Agent actions use runtime-owned pending/cancel semantics.
 
-## 4. Deterministic Verification
+## 4. Delete Replaced Paths
 
-- [x] 4.1 Add controller and component tests for Assistant success, Workspace missing/authorized/stale targets, pending binding, Character/World unavailable, and no broad input lock.
-- [x] 4.2 Add deletion/poison assertions proving the old start-chat/roleplay entry actions and Entry execution-selector suppression are unreachable.
-- [x] 4.3 Run `pnpm --dir packages/agent/webview test`, `pnpm --dir packages/agent/webview typecheck`, and the focused Desktop producer/consumer tests for the reused Workspace chooser and binding projection.
+- [x] 4.1 Delete Agent Webview experience-mode type, presenter, selector, snapshot field, controller state, mode-switch binding, styles, copy, and tests.
+- [x] 4.2 Delete the old Home `start-chat | roleplay` action dispatch and simplify EmptyState to the canonical Draft path.
+- [x] 4.3 Delete the unused `bind-agent-assistant` Scene intent and `bind-assistant` Agent launch operation, parser/service branches, fixtures, and tests in one contract update.
+- [x] 4.4 Add deletion/poison assertions proving removed paths are unreachable and the only successful routes are typed Scene transition and canonical first submit.
 
-## 5. Agent Evaluation And UI Acceptance
+## 5. Deterministic Verification
 
-- [x] 5.1 Reuse the indexed `agent-runtime.launch-binding` Assistant and Workspace first-submit cases; record deterministic coverage and the exact real-provider lane or explicit infrastructure/cost blocker.
-- [ ] 5.2 Run visible Electron acceptance from Home for all four modes, Assistant without Project, Workspace target validation, mode switching, input editability, execution selector, narrow layout, and fail-visible Character/World states; inspect current screenshots directly.
-- [ ] 5.3 Run adjacent reopen, Conversation switching, background-task isolation, and Workspace Scene regression checks without using hidden Root or direct-runtime shortcuts as UI evidence.
+- [x] 5.1 Run focused `@neko/ui`, `@neko/host`, Agent Webview, Desktop renderer tests and typechecks.
+- [x] 5.2 Run `openspec validate add-home-experience-entry-modes --strict` and `pnpm check:openspec`.
+- [x] 5.3 Reuse the indexed `agent-runtime.launch-binding` Assistant and Workspace first-submit cases; record the exact real-provider lane or explicit infrastructure/cost blocker.
 
-## 6. Completion And Quality Gates
+## 6. UI Acceptance And Quality
 
-- [x] 6.1 Run `openspec validate add-home-experience-entry-modes --strict`, `pnpm check:openspec`, focused tests/typechecks, and record canonical-path plus no-fallback evidence.
-- [x] 6.2 Perform `neko-quality-review`, resolve or record ownership, dependency, user-data, fail-local, accessibility, and verification findings, and list all residual risks.
-- [x] 6.3 Commit the OpenSpec, presentation contract, Home UI, validation, and verification evidence in reviewable batches without including unrelated dirty-worktree changes.
+- [x] 6.1 Run visible Electron acceptance for top placement, Assistant/Workspace/Character navigation, disabled World, Project selection, keyboard access, and narrow layout; inspect current screenshots directly.
+- [x] 6.2 Run adjacent reopen, Conversation switching, background-task isolation, Workspace title controls, streaming navigation, and no-hidden-Root regression checks.
+- [x] 6.3 Perform `neko-quality-review`, resolve or record ownership, dependency, user-data, fail-local, accessibility, verification, and residual-risk findings.
+- [ ] 6.4 Commit OpenSpec, shared UI/navigation, removed Agent paths, and verification evidence in reviewable batches without unrelated worktree changes.

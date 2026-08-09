@@ -2,45 +2,74 @@
 
 ### Result
 
-- Implementation and deterministic verification: passed.
-- Visible Electron acceptance: partially passed, then infrastructure-blocked for the final fresh-window matrix.
-- Real-provider Agent Evaluation: infrastructure-blocked because no explicit provider, model, and cost authorization was supplied.
+- Implementation and deterministic contract verification: passed.
+- Visible Electron acceptance for the entry navigation change: passed.
+- Real-provider Assistant/Workspace first submit: infrastructure-blocked because no explicit
+  provider, model, and cost authorization was supplied.
 
 ### Deterministic evidence
 
-- `pnpm --filter @neko/agent-webview build`: passed.
-- `pnpm --filter @neko/agent-webview test`: 92 files and 724 tests passed.
-- Focused Desktop launch, grant, and Renderer adapter tests: 3 files and 16 tests passed.
-- `pnpm --filter @neko/app-desktop typecheck`: passed.
-- Focused ESLint: 0 errors; existing warnings in touched large components remain unchanged in severity.
-- Focused Prettier check: passed.
-- `pnpm test:agent:eval`: 44 files and 294 tests passed; all-suite dry-run covered 24 suites and 64 cases, including `agent-runtime.launch-binding`.
+- Agent Webview focused tests: 4 files, 114 tests passed.
+- Desktop Scene/navigation/Host adapter tests: 5 files, 92 tests passed.
+- Host Scene contract/service tests: 2 files, 59 tests passed.
+- Agent launch contract/adapter tests: 2 files, 14 tests passed.
+- Shared segmented-control tests: 1 file, 8 tests passed.
+- Desktop, Agent Webview, and Agent contracts `tsc --noEmit`: passed.
+- Focused ESLint for the new Desktop/shared controls: passed with no errors. Focused Agent Webview
+  lint retained only pre-existing warnings in the touched large components.
+- Focused Prettier and `git diff --check`: passed.
+- `pnpm test:agent:eval`: 44 files and 294 tests passed; all-suite dry-run covered 24 suites and
+  64 cases, including `agent-runtime.launch-binding`.
 - `openspec validate add-home-experience-entry-modes --strict`: passed.
 - `pnpm check:openspec`: 72 OpenSpec items passed.
-- `pnpm check:quality`: passed, including canonical-path, package, Agent, Webview, storage, strict-TypeScript, and test-orchestration gates.
 
-The first concurrent Agent Evaluation attempt produced one transient isolated-worktree failure while a full Webview test run was competing for the same checkout. The exact isolated test passed when rerun alone, and the complete `pnpm test:agent:eval` command subsequently passed. No product fallback or compatibility path was added.
+The full `@neko/ui` typecheck remains blocked by unrelated uncommitted errors in
+`src/workbench/editor-workbench.test.tsx` at lines 481-482. The changed SegmentedControl source and
+its eight focused tests pass; this change did not modify the blocking file.
 
 ### UI evidence
 
-Direct visual inspection confirmed the final Home selector as a top-centered, four-option segmented control with a muted rail, white selected surface, compact radius, and no overlap with the centered Home content. Earlier interaction in the same authoritative development runtime confirmed:
+The authoritative local Electron development runtime was exercised through normal visible controls
+and its current screenshots were inspected directly:
 
-- Assistant does not show the Workspace chooser.
-- Workspace shows the chooser and the visible missing-target reason.
-- The Entry execution-mode selector remains visible.
-- Blocking send does not disable text editing or the rest of the layout.
+- Assistant Entry showed the neutral four-item selector at the top, selected Assistant, and kept the
+  composer and model controls independent of navigation.
+- Workspace click opened Project Management, selected Workspace, and exposed the explicit
+  “Open directory” authorization action plus existing Projects.
+- Character click opened Character Management and selected Character.
+- World remained visibly disabled and clicking it did not change the selected Scene.
+- Left-arrow navigation moved Character to Workspace and skipped disabled World.
+- At a narrower window width the selector remained centered, readable, and unclipped without
+  overlapping Project Management controls.
+- Double-clicking an explicit Project entered its real Workspace; the entry selector unmounted and
+  the Workspace title/region controls remained in their owning title area.
+- The application was returned to Assistant Entry and its original window width after validation.
 
-The final fresh-window interaction matrix could not be completed. Several local Electron applications share `com.github.Electron`; Computer Use resolved the development application ambiguously and then targeted Electron's default application window rather than the running OpenNeko window. The development build itself launched successfully, but further clicks would not have been authoritative evidence. Character, World, final narrow-layout interaction, reopen, Conversation switching, and background-task isolation therefore remain unchecked UI acceptance items.
+A stale local Desktop settings record produced an owner-qualified, fail-local banner on initial load;
+the Shell and all navigation remained usable. This diagnostic predates and is independent of the
+entry navigation implementation.
 
 ### Quality review
 
-- Ownership: experience mode is package-owned Webview presentation state; no cross-runtime contract or durable domain record was introduced.
-- Dependency direction: the Webview uses existing host adapters and exact Draft binding projections; no Node or Electron dependency entered the Renderer package.
-- Canonical path: all target changes use the existing `bindTarget` and `submitDraft` chain. Workspace validation requires exact workspace identity, grant, and current receipt; no active/current/recent Workspace inference exists.
-- User data: invalid non-authoritative mode state is reset locally while valid unsent input remains intact.
-- Fail-local behavior: Character and World are visibly unavailable and cannot submit through the generic Agent Draft path; stale bindings block only the current send.
-- Accessibility: the selector has an accessible group label and selected state; the blocked-send reason is visible, announced as status, and reused as the send control label.
+- **Risk:** L2 because the change updates shared UI plus Renderer/preload/Main and public launch
+  contracts, while leaving provider execution and durable domain facts unchanged.
+- **Ownership:** the selector is Desktop Window Scene presentation. Agent Draft owns only input,
+  references, configuration, and canonical first submit.
+- **Canonical path:** enabled modes emit exact Scene intents; Project/directory authority is granted
+  only from Project Management; first submit remains the only Conversation-creation transaction.
+- **Deleted paths:** Webview mode snapshot/presenter/selector, mode-click Draft binding,
+  `start-chat | roleplay` Home dispatch, `bind-agent-assistant`, and `bind-assistant` cannot return
+  success. Parser rejection and source poison tests cover both removed contract paths.
+- **Fail-local/user data:** directory cancellation changes no Scene; invalid configuration blocks only
+  Send while preserving Draft text; navigation does not delete or retarget Conversations, Projects,
+  Characters, or background runtime ownership.
+- **Accessibility:** the selector has a labeled tablist, selected/disabled state, disabled World
+  description, focus styling, and arrow/Home/End keyboard navigation.
+
+No blocking code-quality findings remain for the scoped change.
 
 ### Residual risk
 
-The deterministic contract is covered, but the remaining visible Electron matrix and provider-backed Assistant/Workspace first-submit lanes must be run once a uniquely targetable OpenNeko runtime and explicit provider/model/cost authorization are available.
+Provider-backed Assistant and Workspace first-submit acceptance remains blocked until explicit
+provider/model/cost authorization is available. The full shared-UI typecheck must be rerun after the
+unrelated `editor-workbench.test.tsx` errors are resolved.

@@ -1,31 +1,35 @@
 ## Evaluation Disposition
 
-This change affects Agent launch intent, exact Workspace binding, configuration visibility, and first
-submit gating. It therefore requires Agent Evaluation coverage in addition to deterministic Webview
-tests and visible UI acceptance.
+This change separates Desktop Window Scene navigation from Agent Draft execution. The selector,
+disabled World state, responsive placement, and Project Management directory action are deterministic
+Desktop behavior and are excluded from provider-backed judging; component, Host contract, and visible
+Electron checks own that evidence.
+
+The unbound Assistant first-submit path and exact Workspace binding transaction remain Agent runtime
+behavior. Their disposition is `reuse` because the indexed `agent-runtime.launch-binding` suite already
+owns the canonical transaction and forbidden-fallback evidence.
 
 ### Reused indexed coverage
 
-- Suite: `agent-runtime.launch-binding`
-- Assistant lane: unbound Entry first submit proves no active/current/recent Workspace is consulted.
-- Workspace lane: exact target, grant, binding receipt, Conversation owner, and Scene handoff evidence.
-- Forbidden paths: stale binding, mismatched grant, unbound fallback, and active Project inference.
+- Assistant Entry: canonical unbound first submit without active/current/recent Workspace inference.
+- Workspace: exact target, grant, binding receipt, Conversation owner, and Scene handoff evidence.
+- Boundary: stale binding, mismatched grant, implicit Workspace fallback, and old parallel binding paths
+  cannot succeed.
 
-The four-mode segmented control, blocked-send copy, input editability, responsive layout, and
-Character/World unavailable presentation are deterministic UI behavior. They SHALL be asserted by
-component tests and visible Electron acceptance, not by an LLM Judge.
+The deleted `bind-agent-assistant` Scene intent and `bind-assistant` launch operation are additionally
+covered by deterministic parser rejection and source poison assertions. They do not require an LLM
+Judge because no model output can prove that a removed transport path was unreachable.
 
 ### Provider-backed evidence
 
-A real-provider visible Desktop run is required for Assistant and Workspace first submit when explicit
-model/cost authorization is available. The matching hidden full-Desktop lane may supplement the visible
-run for transcript and runtime evidence but cannot replace the user-operable Home path. If authorization
-is absent, report `infrastructure-blocked` with the exact suite/case gap; key-free or dry-run success only
-proves harness and artifact readiness.
+A real-provider visible Desktop run remains required for release acceptance of Assistant and Workspace
+first submit. It must use the user-operable composer and complete Desktop session owner. No explicit
+provider, model, or cost authorization was supplied for this work, so that lane is
+`infrastructure-blocked`; key-free success establishes suite and orchestration readiness only.
 
 ### Adjacent regression matrix
 
-- Entry Draft reopen preserves unsent input and canonical experience presentation.
-- Switching modes does not cancel or redirect an already running Conversation Turn.
-- Switching Conversations and Workspace Scenes preserves exact identity and transcript isolation.
-- Character/World selection creates no Conversation or domain Run while their providers are unavailable.
+- Entry Draft reopen preserves unsent input while the current Scene alone determines selector state.
+- Scene navigation does not cancel or redirect a running Conversation Turn.
+- Conversation and Workspace switching preserve exact identity and transcript isolation.
+- Character navigation creates no Conversation; disabled World creates no domain record or runtime.

@@ -1,143 +1,139 @@
 ## ADDED Requirements
 
-### Requirement: Home exposes explicit product experience modes
+### Requirement: Home modes are Window Scene navigation
 
-The Home launch surface SHALL expose Assistant, Workspace, Character, and World as four product
-experience modes that are distinct from Agent execution mode. Each Window SHALL retain exactly one
-Entry Draft, and changing experience mode SHALL update only that Draft's presentation and exact
-target binding without creating a Conversation or domain Run.
+Desktop SHALL expose Assistant, Workspace, Character, and World in a top-centered segmented selector
+on entry and management Scenes. The selected mode SHALL be projected only from the current
+authoritative Window Scene. The system MUST NOT persist a parallel experience mode in Agent Draft,
+presentation snapshot, global store, or durable record.
 
-#### Scenario: Fresh Home defaults to Assistant
+#### Scenario: Fresh entry selects Assistant
 
-- **WHEN** a Window opens Home without a valid saved experience mode
-- **THEN** the Entry Draft selects Assistant as the canonical fresh presentation state
-- **AND** the same Draft identity remains authoritative
+- **WHEN** a Window opens the canonical Agent Entry Scene
+- **THEN** the top selector projects Assistant as selected
+- **AND** no separate mode state is restored or created
 
-#### Scenario: Mode switch does not create a business instance
+#### Scenario: Reopening an entry derives selection from Scene
 
-- **WHEN** the user switches among Assistant, Workspace, Character, and World before first submit
-- **THEN** no Conversation, CharacterRun, RoomRun, or WorldRun is created
-- **AND** existing background tasks and previously created instances remain unchanged
+- **WHEN** the visible Scene is Project Management or Character Management
+- **THEN** the selector projects Workspace or Character respectively
+- **AND** Agent Webview snapshot state cannot override that selection
 
-#### Scenario: Experience and execution modes remain distinct
+#### Scenario: Business Scene does not masquerade as an entry tab
 
-- **WHEN** the Home Entry Draft is visible
-- **THEN** the experience selector and canonical Plan, Approve, and Auto execution selector are both available
-- **AND** changing either selector does not silently change the other
+- **WHEN** a Conversation, Project Workspace, or Character Interaction Scene is visible
+- **THEN** the entry selector is not rendered over that business Scene
+- **AND** the current business Root and runtime identity remain owned by their domain
 
-### Requirement: Assistant submission does not require Workspace authority
+### Requirement: Navigation uses one typed Scene path
 
-The Assistant experience SHALL allow first submit from an unbound or exact Assistant-compatible
-Launch Draft when the selected model configuration and input are valid. It MUST NOT require or infer
-a Project, directory, active Workspace, or recent Workspace.
+Assistant, Workspace, and Character mode clicks SHALL emit the existing exact Window Scene intents
+for Agent Entry, Project Management, and Character Management. A mode click MUST NOT bind an Agent
+Draft, create a Conversation or Run, infer an active record, or retain a hidden business Root.
 
-#### Scenario: Assistant submits without a Project
+#### Scenario: Assistant navigation
 
-- **GIVEN** the Entry Draft is in Assistant mode with valid input and effective model configuration
-- **AND** no Workspace target is selected
-- **WHEN** the user submits
-- **THEN** the canonical Agent Draft submit path materializes the configured Assistant Conversation
-- **AND** no active, current, or recent Workspace is consulted
+- **WHEN** the user selects Assistant from Project or Character Management
+- **THEN** Desktop transitions with `open-agent-entry`
+- **AND** the resulting unbound Draft remains the only Assistant launch path
 
-#### Scenario: Stale Workspace binding blocks Assistant submit
+#### Scenario: Workspace navigation
 
-- **GIVEN** the presentation selects Assistant but the authoritative Draft remains bound to Workspace
-- **WHEN** the user attempts to submit
-- **THEN** the current submit is rejected with a local binding diagnostic
-- **AND** no Conversation is created through an unbound or Assistant fallback
+- **WHEN** the user selects Workspace
+- **THEN** Desktop transitions with `open-project-management`
+- **AND** no `bindTarget`, active Project lookup, or Workspace Conversation creation occurs
 
-### Requirement: Workspace submission requires an exact authorized target
-
-The Workspace experience SHALL require an exact Project/Workspace target selected through the
-existing Project or directory authorization path. First submit MUST validate the target's
-`workspaceId`, `workspaceGrantId`, current Draft binding receipt, and effective model configuration
-before creating a Conversation.
-
-#### Scenario: Workspace has no selected Project or directory
-
-- **GIVEN** the Entry Draft is in Workspace mode
-- **AND** no exact Workspace target is selected
-- **THEN** the composer keeps the input editable
-- **AND** the send action is disabled with a diagnostic that asks the user to choose a Project or directory
-
-#### Scenario: Authorized Project or directory is ready
-
-- **GIVEN** the user selected a Project or directory through the Host-authorized chooser
-- **AND** the authoritative Draft binding and receipt exactly match its Workspace identity and grant
-- **AND** input and model configuration are valid
-- **WHEN** the user submits
-- **THEN** the canonical Workspace Draft submit path materializes the exact Workspace Conversation
-- **AND** the raw filesystem path is not stored in Renderer presentation
-
-#### Scenario: Workspace binding is stale or mismatched
-
-- **GIVEN** the selected target and authoritative Draft binding differ by identity, grant, or receipt
-- **WHEN** the user attempts to submit
-- **THEN** the submit is rejected before Conversation materialization
-- **AND** the system does not retry with an active Project, another grant, or an unbound Conversation
-
-#### Scenario: Directory authorization is denied
-
-- **WHEN** the user denies or fails the current directory authorization request
-- **THEN** only the current Workspace Draft remains blocked with a visible diagnostic
-- **AND** the Window Shell, input editor, sibling Conversations, and unrelated Workspace records remain usable
-
-### Requirement: Validation blocks only the consequential submit action
-
-Missing target, pending binding, unavailable owner, or invalid model configuration SHALL disable the
-send action while preserving input editing, mode selection, navigation, and layout interaction. The
-composer SHALL expose the same concise reason visually and through the send control's accessible
-description.
-
-#### Scenario: User edits while Workspace is incomplete
-
-- **GIVEN** Workspace mode lacks an authorized target
-- **WHEN** the user types, edits, or changes execution mode
-- **THEN** those presentation actions remain available
-- **AND** only submit is blocked
-
-#### Scenario: Binding update is pending
-
-- **WHEN** an exact Workspace binding update is in progress
-- **THEN** send remains disabled until the authoritative binding projection matches
-- **AND** the textarea and Window layout are not disabled
-
-### Requirement: Character and World remain owner-qualified unavailable
-
-Until their authoritative launch providers are composed, Character and World modes SHALL present an
-owner-qualified unavailable state and MUST NOT call ordinary Agent Draft submit, synthesize a domain
-binding, or encode the requested experience as prompt text.
-
-#### Scenario: Character mode is selected before Chara launch is available
+#### Scenario: Character navigation
 
 - **WHEN** the user selects Character
-- **THEN** the surface identifies the required Chara-owned published CharacterVersion and Dialogue or Room launch path
-- **AND** submit cannot create an Assistant or Workspace Conversation
+- **THEN** Desktop transitions with `open-character-management`
+- **AND** a Character interaction is created only after an exact Chara-owned action
 
-#### Scenario: World mode is selected before World launch is available
+#### Scenario: Existing work is unaffected by entry navigation
 
-- **WHEN** the user selects World
-- **THEN** the surface identifies the required World-owned WorldExperienceVersion and Run launch path
-- **AND** submit cannot create a generic chatroom or prompt-template fallback
+- **GIVEN** another Conversation or task continues in its owning runtime
+- **WHEN** the current Window changes entry Scene
+- **THEN** the previous visible Root is unmounted
+- **AND** the durable record and protected background task are not deleted, redirected, or cancelled
 
-### Requirement: Entry presentation restores without becoming authority
+### Requirement: Workspace requires explicit Project authority
 
-The Agent Webview SHALL persist the selected experience mode only as package-owned Entry Draft
-presentation. Invalid or missing presentation state SHALL reset locally to Assistant while preserving
-the same Draft, valid unsent input, and durable records. Workspace authority SHALL always be rebuilt
-from the canonical Draft binding and current Host grant.
+Workspace mode SHALL land on Project Management. A Workspace SHALL be opened only after the user
+explicitly selects an exact valid Project or authorizes a directory through the existing Host-owned path. The selector
+MUST NOT store or infer `workspaceId`, grant, raw path, active Project, or recent Project.
 
-#### Scenario: Existing snapshot has no experience mode
+#### Scenario: Workspace has no selected Project
 
-- **GIVEN** a valid Entry Draft snapshot contains unsent input but no experience mode
-- **WHEN** Home is restored
-- **THEN** Assistant is selected as the canonical default
-- **AND** the unsent input remains available
+- **GIVEN** Project Management is visible with no Project selected
+- **THEN** the catalog and its navigation remain usable
+- **AND** no Workspace Draft or Conversation is materialized
 
-#### Scenario: Persisted Workspace label has no valid binding
+#### Scenario: User selects a valid Project
 
-- **GIVEN** presentation remembers a Workspace label or target reference
-- **AND** the current authoritative Draft has no matching binding receipt
-- **WHEN** Home is restored
-- **THEN** Workspace submit remains blocked until the exact target is rebound
-- **AND** the remembered presentation cannot authorize content or submission
+- **WHEN** the user explicitly opens a Project from Project Management
+- **THEN** `open-project-workspace(projectId)` resolves the exact current authority and grant
+- **AND** the Workspace Scene and its Agent scope use that exact identity
+
+#### Scenario: User authorizes a directory
+
+- **WHEN** the user explicitly chooses a directory from Project Management
+- **THEN** Host returns an exact Workspace grant and Desktop transitions with `open-workspace(workspaceGrantId)`
+- **AND** raw filesystem path is not stored in selector or Agent Draft presentation
+
+#### Scenario: Project cannot be opened
+
+- **WHEN** the selected Project is invalid, missing, or cannot obtain authority
+- **THEN** the failure remains visible and local to that operation or record
+- **AND** no active/recent Project or unbound Assistant fallback is used
+
+### Requirement: Assistant preserves the canonical first-submit transaction
+
+The Agent Entry Scene SHALL expose one Assistant Draft with editable input and the canonical Plan,
+Approve, and Auto execution selector. First submit SHALL continue through validation, Conversation
+commit, exact Scene handoff, and provider execution in that order. Navigation simplification MUST NOT
+add a direct runtime call, alternate submit handler, or legacy entry action.
+
+#### Scenario: Assistant submits without Workspace
+
+- **GIVEN** the unbound Assistant Draft has valid input and effective model configuration
+- **WHEN** the user submits
+- **THEN** the canonical transaction creates and attaches the configured Assistant Conversation
+- **AND** no Project, directory, active Workspace, or recent Workspace is required
+
+#### Scenario: Submit validation fails
+
+- **WHEN** input, resource, binding, or model configuration validation fails
+- **THEN** no Conversation or Scene handoff is committed
+- **AND** the textarea, Window navigation, and layout remain operable
+
+#### Scenario: Streaming does not lock unrelated presentation
+
+- **WHEN** provider execution is streaming for an exact Conversation
+- **THEN** the current composer may expose cancel/queue semantics owned by Agent runtime
+- **AND** Window navigation and unrelated layout controls are not broadly disabled
+
+### Requirement: World remains owner-qualified unavailable
+
+Until a World-owned Scene and Run provider are composed, World SHALL remain visibly disabled with an
+owner-qualified description. Activating the disabled item MUST NOT emit a transition, ordinary Agent
+submit, generic chatroom creation, prompt encoding, or fallback handler.
+
+#### Scenario: World provider is unavailable
+
+- **WHEN** the entry selector is rendered before World composition exists
+- **THEN** World is visibly disabled and identifies the missing World-owned experience
+- **AND** Assistant, Workspace, and Character navigation remain available
+
+### Requirement: Replaced entry paths are absent
+
+Production code SHALL have no Agent Webview experience-mode snapshot/presenter/selector, no mode-click
+Draft binding, no `start-chat | roleplay` Home action path, no `bind-agent-assistant` Window intent,
+and no `bind-assistant` Agent launch operation.
+Tests SHALL assert the unique Scene navigation and canonical first-submit path rather than retaining
+compatibility fixtures for removed paths.
+
+#### Scenario: Removed mode state cannot affect rendering
+
+- **WHEN** an Agent Draft presentation snapshot is restored
+- **THEN** only supported Draft presentation fields are read
+- **AND** no experience-mode field or legacy action dispatch changes the current Window Scene
