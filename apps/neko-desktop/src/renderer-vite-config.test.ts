@@ -132,8 +132,13 @@ describe('Desktop renderer Vite workspace resolution', () => {
       expect.arrayContaining([
         '@codemirror/autocomplete',
         '@codemirror/commands',
+        '@codemirror/lang-css',
+        '@codemirror/lang-html',
+        '@codemirror/lang-javascript',
         '@codemirror/lang-json',
         '@codemirror/lang-markdown',
+        '@codemirror/lang-xml',
+        '@codemirror/lang-yaml',
         '@codemirror/language',
         '@codemirror/state',
         '@codemirror/view',
@@ -143,10 +148,14 @@ describe('Desktop renderer Vite workspace resolution', () => {
         '@milkdown/prose/history',
         '@milkdown/prose/keymap',
         '@milkdown/prose/state',
+        '@lezer/highlight',
       ]),
     );
     expect(rendererConfig.optimizeDeps?.include).toEqual(
-      expect.not.arrayContaining(['@neko/entity-domain', '@neko/preview-domain/authorized-session']),
+      expect.not.arrayContaining([
+        '@neko/entity-domain',
+        '@neko/preview-domain/authorized-session',
+      ]),
     );
   });
 });

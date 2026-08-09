@@ -7,6 +7,10 @@ const MARKDOWN_EDITED = '# 创作笔记\n\n这是通过桌面编辑器保存的�
 const JSON_INVALID = '{"title":"未完成",}';
 const JSON_FORMATTED = '{\n  "title": "已格式化",\n  "scenes": 2\n}\n';
 const IME_COMPOSITION = '中文输入法组合';
+const CAPACITY_DOCUMENTS = Array.from(
+  { length: 9 },
+  (_, index) => `capacity-${String(index + 1)}.md`,
+);
 const FOUNTAIN_SOURCE = `Title: 夜航
 
 .内景 客厅 - 夜
@@ -29,12 +33,20 @@ export const desktopTextEditorScenario = Object.freeze({
     await Promise.all([
       writeFile(join(workspacePath, 'notes.md'), MARKDOWN_SOURCE, 'utf8'),
       writeFile(join(workspacePath, 'data.json'), JSON_INVALID, 'utf8'),
+      writeFile(
+        join(workspacePath, 'index.html'),
+        '<main class="story"><h1>夜航</h1><p>准备出发。</p></main>\n',
+        'utf8',
+      ),
       writeFile(join(workspacePath, 'ime.txt'), '', 'utf8'),
       writeFile(join(workspacePath, 'story.fountain'), FOUNTAIN_SOURCE, 'utf8'),
       writeFile(join(workspacePath, 'crlf.txt'), 'first\r\nsecond\r\n', 'utf8'),
       writeFile(join(workspacePath, 'invalid-utf8.txt'), Uint8Array.from([0xc3, 0x28])),
       writeFile(join(workspacePath, 'mixed-lines.txt'), 'first\nsecond\r\n', 'utf8'),
       writeFile(join(workspacePath, 'oversized.txt'), 'x'.repeat(2 * 1024 * 1024 + 1), 'utf8'),
+      ...CAPACITY_DOCUMENTS.map((label) =>
+        writeFile(join(workspacePath, label), `# ${label}\n`, 'utf8'),
+      ),
     ]);
     return { workspacePath };
   },
@@ -44,18 +56,37 @@ export const desktopTextEditorScenario = Object.freeze({
     composeText,
     evaluate,
     prepared,
+    restartApplication,
     screenshot,
     type,
+    waitForDesktopBridge,
     waitForSelector,
   }) {
     await openFixtureWorkspace(evaluate);
     await evaluate(`window.resizeTo(1800, 1000)`);
     await waitForSelector('.desktop-scene-workbench--workspace');
-    await waitForSelector('.neko-resource-browser__facets [role="tab"]');
-    await click('.neko-resource-browser__facets [role="tab"]', 0);
+    await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
+    await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
 
     await openTextDocument(evaluate, 'notes.md', 'markdown');
+    await waitForRichReady(evaluate);
+    await waitForRichText(evaluate, '第一稿。');
+    const markdownDefault = await inspectTextEditor(evaluate);
+    if (
+      markdownDefault.presentationMode !== 'rich' ||
+      !markdownDefault.outlineText.includes('创作笔记') ||
+      markdownDefault.hasInternalToolbar ||
+      !markdownDefault.contextActionsInTabRow
+    ) {
+      throw new Error(
+        `Fresh Markdown presentation is not Rich + outline in the Workbench tab row: ${JSON.stringify(
+          markdownDefault,
+        )}`,
+      );
+    }
+    const markdownDefaultScreenshot = await screenshot('markdown-rich-outline-default');
+    await selectTextEditorMode(evaluate, 'source');
     await type('.cm-content', MARKDOWN_EDITED);
     await waitForEditorSource(evaluate, MARKDOWN_EDITED);
     await waitForEditorDirty(evaluate);
@@ -70,7 +101,7 @@ export const desktopTextEditorScenario = Object.freeze({
       );
     }
     const markdownScreenshot = await screenshot('markdown-source-rich-split');
-    await click('.neko-text-editor-commands button[title="保存"]');
+    await clickTextEditorCommand(evaluate, 'save');
     await waitForEditorClean(evaluate);
     const markdownBytes = await readFile(join(prepared.workspacePath, 'notes.md'), 'utf8');
     if (markdownBytes !== MARKDOWN_EDITED) {
@@ -78,13 +109,47 @@ export const desktopTextEditorScenario = Object.freeze({
     }
     checkpoint('markdown-save-canonical-bytes', markdown);
 
+    await restartApplication();
+    await waitForDesktopBridge(60_000);
+    await evaluate(`window.resizeTo(1800, 1000)`);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector('.neko-text-editor-root[data-document-mode="markdown"]');
+    await selectTextEditorMode(evaluate, 'source');
+    await waitForEditorSource(evaluate, MARKDOWN_EDITED);
+    await waitForEditorClean(evaluate);
+    const cleanSessionRecovery = await inspectTextEditor(evaluate);
+    const cleanSessionRecoveryError = await evaluate(`(() => {
+      const text = document.querySelector('.desktop-text-editor-surface')?.textContent ?? '';
+      return {
+        unavailable: text.includes('Desktop Text Editor session is unavailable.'),
+        alert: document.querySelector('.desktop-text-editor-surface [role="alert"]')?.textContent?.trim() ?? '',
+      };
+    })()`);
+    if (cleanSessionRecoveryError.unavailable || cleanSessionRecoveryError.alert) {
+      throw new Error(
+        `Clean Text Editor session did not recover after application restart: ${JSON.stringify(
+          cleanSessionRecoveryError,
+        )}`,
+      );
+    }
+    const cleanSessionRecoveryScreenshot = await screenshot(
+      'markdown-clean-session-application-recovery',
+    );
+    checkpoint('markdown-clean-session-application-recovery', {
+      editor: cleanSessionRecovery,
+      error: cleanSessionRecoveryError,
+    });
+    await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
+    await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
+    await waitForResourceBrowserIdle(evaluate);
+
     await openTextDocument(evaluate, 'ime.txt', 'plain-text');
     await type('.cm-content', '');
     await composeText('.cm-content', IME_COMPOSITION);
     await waitForEditorSource(evaluate, IME_COMPOSITION);
     await waitForEditorDirty(evaluate);
     const imeComposition = await inspectTextEditor(evaluate);
-    await click('.neko-text-editor-commands button[title="保存"]');
+    await clickTextEditorCommand(evaluate, 'save');
     await waitForEditorClean(evaluate);
     const imeBytes = await readFile(join(prepared.workspacePath, 'ime.txt'), 'utf8');
     if (imeBytes !== IME_COMPOSITION) {
@@ -107,7 +172,7 @@ export const desktopTextEditorScenario = Object.freeze({
       `document.querySelector('.neko-text-editor-diagnostics') === null`,
       'Text Editor did not accept the valid JSON editSequence.',
     );
-    await click('.neko-text-editor-commands button', 2);
+    await clickTextEditorCommand(evaluate, 'format');
     await waitForEditorSource(evaluate, JSON_FORMATTED);
     const jsonFormatted = await inspectTextEditor(evaluate);
     const jsonFormattedScreenshot = await screenshot('json-formatted');
@@ -116,7 +181,7 @@ export const desktopTextEditorScenario = Object.freeze({
     await openTextDocument(evaluate, 'story.fountain', 'fountain');
     await waitForSelector('.neko-text-editor-outline');
     const outlineToggle = await evaluate(`(() => {
-      const button = [...document.querySelectorAll('.neko-text-editor-root button')]
+      const button = [...document.querySelectorAll('.neko-text-editor-context-actions button')]
         .find((candidate) => /outline|大纲/iu.test(candidate.getAttribute('title') ?? ''));
       return {
         exists: document.querySelector('.neko-text-editor-outline') !== null,
@@ -148,11 +213,23 @@ export const desktopTextEditorScenario = Object.freeze({
     const fountainScreenshot = await screenshot('fountain-outline-preview-cjk');
     checkpoint('fountain-canonical-outline-preview', fountain);
 
+    await openTextDocument(evaluate, 'index.html', 'plain-text');
+    await waitForEditorSource(
+      evaluate,
+      '<main class="story"><h1>夜航</h1><p>准备出发。</p></main>\n',
+    );
+    const html = await inspectTextEditor(evaluate);
+    if (html.highlightedTokenCount < 8 || html.mode !== 'plain-text') {
+      throw new Error(`HTML source highlighting is incomplete: ${JSON.stringify(html)}`);
+    }
+    const htmlScreenshot = await screenshot('html-source-highlighting');
+    checkpoint('html-declared-source-highlighting', html);
+
     await openTextDocument(evaluate, 'data.json', 'json');
     await waitForEditorSource(evaluate, JSON_FORMATTED);
     await waitForEditorDirty(evaluate);
     await writeFile(join(prepared.workspacePath, 'data.json'), '{"external":true}\n', 'utf8');
-    await click('.neko-text-editor-commands button', 3);
+    await clickTextEditorCommand(evaluate, 'save');
     await waitForSelector('.neko-text-editor-operation-error[role="alert"]');
     const conflict = await inspectTextEditor(evaluate);
     if (
@@ -207,11 +284,8 @@ export const desktopTextEditorScenario = Object.freeze({
       'Desktop window did not restore the wide validation width.',
     );
     await waitForSelector('.desktop-scene-workbench--workspace');
-    await waitForSelector('.neko-resource-browser__facets [role="tab"]');
-    await waitForResourceBrowserIdle(evaluate);
-    await click('.neko-resource-browser__facets [role="tab"]', 0);
-    await waitForResourceBrowserIdle(evaluate);
-    await openTextDocument(evaluate, 'notes.md', 'markdown');
+    await activateMainViewTab(evaluate, 'notes.md');
+    await waitForSelector('.neko-text-editor-root[data-document-mode="markdown"]');
     await click('.neko-text-editor-segmented button', 2);
     await waitForSelector('.neko-text-editor-body[data-presentation-mode="split"]');
     await waitForRichReady(evaluate);
@@ -250,29 +324,168 @@ export const desktopTextEditorScenario = Object.freeze({
       'Desktop Theme did not complete the reversible light-theme cycle.',
     );
 
+    await evaluate(`window.resizeTo(1800, 1000)`);
+    await ensureResourceDockVisible(evaluate);
+    await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
+    await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
+    await waitForResourceBrowserIdle(evaluate);
+    let capacityDocumentIndex = 0;
+    let mainViewCount = await readMainViewCount(evaluate);
+    while (mainViewCount < 8 && capacityDocumentIndex < CAPACITY_DOCUMENTS.length) {
+      await openTextDocument(evaluate, CAPACITY_DOCUMENTS[capacityDocumentIndex], 'markdown');
+      capacityDocumentIndex += 1;
+      mainViewCount = await readMainViewCount(evaluate);
+    }
+    if (mainViewCount !== 8 || capacityDocumentIndex >= CAPACITY_DOCUMENTS.length) {
+      throw new Error(
+        `Main View capacity fixture did not reach eight distinct Views: ${JSON.stringify({
+          mainViewCount,
+          capacityDocumentIndex,
+        })}`,
+      );
+    }
+    const rejectedDocument = CAPACITY_DOCUMENTS[capacityDocumentIndex];
+    await activateResourceItem(evaluate, rejectedDocument);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('.neko-resource-browser__operation-error[role="alert"]') !== null`,
+      'The ninth Main View did not publish a local Resource Browser operation diagnostic.',
+    );
+    const capacityRejected = await inspectMainViewCapacity(evaluate, rejectedDocument);
+    if (
+      capacityRejected.mainViewCount !== 8 ||
+      !capacityRejected.resourceVisible ||
+      !capacityRejected.rejectedItemVisible ||
+      capacityRejected.resourceUnavailable ||
+      !capacityRejected.alertText.includes('8') ||
+      capacityRejected.activeDocument === rejectedDocument
+    ) {
+      throw new Error(
+        `Main View capacity rejection was not fail-local: ${JSON.stringify(capacityRejected)}`,
+      );
+    }
+    const capacityRejectedScreenshot = await screenshot('main-view-capacity-fail-local');
+    checkpoint('main-view-capacity-fail-local', capacityRejected);
+
+    await closeActiveMainView(evaluate);
+    await waitForCondition(
+      evaluate,
+      `document.querySelectorAll('.project-main-group__tabs .neko-workbench-editor-tab').length === 7`,
+      'Explicit Main View close did not release one capacity slot.',
+    );
+    await openTextDocument(evaluate, rejectedDocument, 'markdown');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('.neko-resource-browser__operation-error') === null`,
+      'Successful retry did not clear the local Resource Browser operation diagnostic.',
+    );
+    const capacityRetried = await inspectMainViewCapacity(evaluate, rejectedDocument);
+    if (
+      capacityRetried.mainViewCount !== 8 ||
+      capacityRetried.activeDocument !== rejectedDocument ||
+      !capacityRetried.resourceVisible ||
+      capacityRetried.resourceUnavailable ||
+      capacityRetried.alertText.length > 0
+    ) {
+      throw new Error(
+        `Main View capacity retry did not use the canonical open path: ${JSON.stringify(capacityRetried)}`,
+      );
+    }
+    const capacityRetriedScreenshot = await screenshot('main-view-capacity-explicit-close-retry');
+    checkpoint('main-view-capacity-explicit-close-retry', capacityRetried);
+
     return {
       markdown,
+      markdownDefault,
       imeComposition,
       jsonInvalid,
       jsonFormatted,
       fountain,
+      html,
       conflict,
       compact,
       darkCompact,
+      cleanSessionRecovery,
+      capacityRejected,
+      capacityRetried,
       screenshots: [
+        markdownDefaultScreenshot,
         markdownScreenshot,
+        cleanSessionRecoveryScreenshot,
         jsonDiagnosticScreenshot,
         jsonFormattedScreenshot,
         fountainScreenshot,
+        htmlScreenshot,
         conflictScreenshot,
         compactScreenshot,
         darkCompactScreenshot,
+        capacityRejectedScreenshot,
+        capacityRetriedScreenshot,
       ],
     };
   },
 });
 
 async function openTextDocument(evaluate, label, mode) {
+  await waitForResourceItem(evaluate, label);
+  await activateResourceItem(evaluate, label);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('.neko-text-editor-root[data-document-mode=${JSON.stringify(mode)}]') !== null`,
+    `Text Editor did not open '${label}' in ${mode} mode.`,
+  );
+  await waitForCondition(
+    evaluate,
+    `document.querySelector(
+      '.project-main-group__tabs .neko-workbench-editor-tab[data-active="true"] .neko-workbench-editor-tab__label'
+    )?.textContent?.trim() === ${JSON.stringify(label)}`,
+    `Text Editor did not activate '${label}'.`,
+  );
+}
+
+async function selectTextEditorMode(evaluate, mode) {
+  await evaluate(`(() => {
+    const button = [...document.querySelectorAll('.neko-text-editor-segmented button')]
+      .find((candidate) => {
+        const label = candidate.textContent?.trim().toLowerCase();
+        return label === ${JSON.stringify(mode)} ||
+          (${JSON.stringify(mode)} === 'rich' && label === '所见即所得') ||
+          (${JSON.stringify(mode)} === 'source' && label === '源码') ||
+          (${JSON.stringify(mode)} === 'split' && label === '分栏') ||
+          (${JSON.stringify(mode)} === 'preview' && label === '预览');
+      });
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error(${JSON.stringify(`Text Editor mode '${mode}' is unavailable.`)});
+    }
+    button.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('.neko-text-editor-body')?.getAttribute('data-presentation-mode') === ${JSON.stringify(mode)}`,
+    `Text Editor did not enter '${mode}' mode.`,
+  );
+}
+
+async function clickTextEditorCommand(evaluate, command) {
+  const labels = {
+    format: ['Format document', '格式化文档'],
+    save: ['Save', '保存'],
+  }[command];
+  if (!labels) throw new Error(`Unknown Text Editor command '${command}'.`);
+  await evaluate(`(() => {
+    const labels = ${JSON.stringify(labels)};
+    const button = [...document.querySelectorAll('.neko-text-editor-context-actions button')]
+      .find((candidate) => labels.includes(candidate.getAttribute('aria-label') ?? ''));
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error(${JSON.stringify(`Text Editor command '${command}' is unavailable.`)});
+    }
+    button.click();
+    return true;
+  })()`);
+}
+
+async function activateResourceItem(evaluate, label) {
   await waitForResourceItem(evaluate, label);
   await evaluate(`(() => {
     const item = [...document.querySelectorAll('.neko-resource-browser__item')]
@@ -281,16 +494,118 @@ async function openTextDocument(evaluate, label, mode) {
     item.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
     return true;
   })()`);
+}
+
+async function activateMainViewTab(evaluate, label) {
+  await evaluate(`(() => {
+    const tab = [...document.querySelectorAll('.project-main-group__tabs .neko-workbench-editor-tab')]
+      .find((candidate) => candidate.querySelector('.neko-workbench-editor-tab__label')?.textContent?.trim() === ${JSON.stringify(label)});
+    if (!(tab instanceof HTMLElement)) {
+      throw new Error(${JSON.stringify(`Main View tab '${label}' is unavailable.`)});
+    }
+    tab.click();
+    return true;
+  })()`);
   await waitForCondition(
     evaluate,
-    `document.querySelector('.neko-text-editor-root[data-document-mode=${JSON.stringify(mode)}]') !== null`,
-    `Text Editor did not open '${label}' in ${mode} mode.`,
+    `document.querySelector(
+      '.project-main-group__tabs .neko-workbench-editor-tab[data-active="true"] .neko-workbench-editor-tab__label'
+    )?.textContent?.trim() === ${JSON.stringify(label)}`,
+    `Main View tab '${label}' did not become active.`,
   );
+}
+
+async function ensureResourceDockVisible(evaluate) {
   await waitForCondition(
     evaluate,
-    `document.querySelector('.neko-text-editor-document-title strong')?.textContent?.trim() === ${JSON.stringify(label)}`,
-    `Text Editor did not activate '${label}'.`,
+    `document.querySelector('[data-workbench-region-control="management"]') instanceof HTMLButtonElement`,
+    'Project Resources region control is unavailable.',
   );
+  const visible = await evaluate(`(() => {
+    const dock = document.querySelector('.project-resource-dock');
+    if (!(dock instanceof HTMLElement)) return false;
+    const rect = dock.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  })()`);
+  if (visible) return;
+  const selected = await evaluate(
+    `document.querySelector('[data-workbench-region-control="management"]')?.getAttribute('aria-pressed') === 'true'`,
+  );
+  if (selected) {
+    await evaluate(`(() => {
+      const control = document.querySelector('[data-workbench-region-control="management"]');
+      if (!(control instanceof HTMLButtonElement)) {
+        throw new Error('Project Resources region control is unavailable.');
+      }
+      control.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('[data-workbench-region-control="management"]')?.getAttribute('aria-pressed') === 'false'`,
+      'Project Resources did not commit its hidden presentation.',
+    );
+  }
+  await evaluate(`(() => {
+    const control = document.querySelector('[data-workbench-region-control="management"]');
+    if (!(control instanceof HTMLButtonElement)) {
+      throw new Error('Project Resources region control is unavailable.');
+    }
+    control.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const dock = document.querySelector('.project-resource-dock');
+      if (!(dock instanceof HTMLElement)) return false;
+      const rect = dock.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    })()`,
+    'Project Resources did not become visible through its region control.',
+  );
+}
+
+async function readMainViewCount(evaluate) {
+  return evaluate(
+    `document.querySelectorAll('.project-main-group__tabs .neko-workbench-editor-tab').length`,
+  );
+}
+
+async function closeActiveMainView(evaluate) {
+  await evaluate(`(() => {
+    const close = document.querySelector(
+      '.project-main-group__tabs .neko-workbench-editor-tab[data-active="true"] .neko-workbench-editor-tab__close',
+    );
+    if (!(close instanceof HTMLButtonElement)) {
+      throw new Error('Active Main View close control is unavailable.');
+    }
+    close.click();
+    return true;
+  })()`);
+}
+
+async function inspectMainViewCapacity(evaluate, rejectedDocument) {
+  return evaluate(`(() => {
+    const browser = document.querySelector('.desktop-resource-browser-root');
+    const activeTab = document.querySelector(
+      '.project-main-group__tabs .neko-workbench-editor-tab[data-active="true"]',
+    );
+    const alert = browser?.querySelector('.neko-resource-browser__operation-error[role="alert"]');
+    return {
+      mainViewCount: document.querySelectorAll(
+        '.project-main-group__tabs .neko-workbench-editor-tab',
+      ).length,
+      activeDocument: activeTab?.querySelector('.neko-workbench-editor-tab__label')?.textContent?.trim() ?? '',
+      alertText: alert?.textContent?.trim() ?? '',
+      resourceVisible:
+        browser instanceof HTMLElement && browser.getBoundingClientRect().width > 0,
+      resourceUnavailable: (browser?.textContent ?? '').includes('资源库不可用') ||
+        (browser?.textContent ?? '').includes('Resource Browser unavailable'),
+      rejectedItemVisible: [...(browser?.querySelectorAll('.neko-resource-browser__item') ?? [])]
+        .some((item) => item.textContent?.includes(${JSON.stringify(rejectedDocument)})),
+    };
+  })()`);
 }
 
 async function waitForEditorSource(evaluate, source) {
@@ -316,7 +631,7 @@ async function waitForEditorSource(evaluate, source) {
 async function waitForEditorClean(evaluate) {
   await waitForCondition(
     evaluate,
-    `document.querySelector('.neko-text-editor-dirty-indicator') === null`,
+    `document.querySelector('.neko-text-editor-context-actions button[aria-label="Save"], .neko-text-editor-context-actions button[aria-label="保存"]')?.hasAttribute('disabled') === true`,
     'Text Editor did not become clean after save.',
   );
 }
@@ -324,7 +639,7 @@ async function waitForEditorClean(evaluate) {
 async function waitForEditorDirty(evaluate) {
   await waitForCondition(
     evaluate,
-    `document.querySelector('.neko-text-editor-dirty-indicator') !== null`,
+    `document.querySelector('.neko-text-editor-context-actions button[aria-label="Save"], .neko-text-editor-context-actions button[aria-label="保存"]')?.hasAttribute('disabled') === false`,
     'Text Editor did not publish the accepted dirty editSequence.',
   );
 }
@@ -342,21 +657,21 @@ async function waitForResourceBrowserIdle(evaluate) {
   await waitForCondition(
     evaluate,
     `(() => {
-      const tabs = [...document.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
+      const dock = [...document.querySelectorAll('.project-resource-dock')].find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      const tabs = [...(dock?.querySelectorAll('.neko-resource-browser__facets [role="tab"]') ?? [])];
       const first = tabs[0];
       if (!(first instanceof HTMLButtonElement) || tabs.length !== 4) return false;
       const rect = first.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      const hit = document.elementFromPoint(x, y);
       return tabs.every((tab) => !(tab instanceof HTMLButtonElement) || !tab.disabled) &&
         rect.width > 0 &&
         rect.height > 0 &&
-        x >= 0 &&
-        x <= document.documentElement.clientWidth &&
-        y >= 0 &&
-        y <= document.documentElement.clientHeight &&
-        (hit === first || first.contains(hit));
+        rect.left >= 0 &&
+        rect.right <= document.documentElement.clientWidth &&
+        rect.top >= 0 &&
+        rect.bottom <= document.documentElement.clientHeight;
     })()`,
     'Resource Browser did not finish its interactive facet transition.',
   );
@@ -475,22 +790,39 @@ async function waitForCondition(evaluate, expression, message, timeoutMs = 30_00
 async function inspectTextEditor(evaluate) {
   return evaluate(`(() => {
     const root = document.querySelector('.neko-text-editor-root');
-    const toolbar = document.querySelector('.neko-text-editor-toolbar');
-    if (!(root instanceof HTMLElement) || !(toolbar instanceof HTMLElement)) {
+    const contextActions = document.querySelector('.neko-text-editor-context-actions');
+    const contextTarget = contextActions?.parentElement;
+    const tabList = contextTarget?.previousElementSibling;
+    if (!(root instanceof HTMLElement) || !(contextActions instanceof HTMLElement)) {
       throw new Error('Text Editor presentation is unavailable.');
     }
     const rootStyle = getComputedStyle(root);
-    const controls = [...toolbar.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
-    const titleControls = document.querySelector('.neko-controlled-workbench-title');
-    const titleControlsRect = titleControls?.getBoundingClientRect();
-    const tabRects = [...document.querySelectorAll('.project-main-group__tabs .neko-workbench-editor-tab')]
-      .map((tab) => tab.getBoundingClientRect())
+    const controls = [...contextActions.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
+    const contextTargetRect = contextTarget?.getBoundingClientRect();
+    const tabListRect = tabList?.getBoundingClientRect();
+    const tabRects = [...(tabList?.querySelectorAll('.neko-workbench-editor-tab') ?? [])]
+      .map((tab) => {
+        const rect = tab.getBoundingClientRect();
+        return tabListRect
+          ? {
+              left: Math.max(rect.left, tabListRect.left),
+              right: Math.min(rect.right, tabListRect.right),
+              top: Math.max(rect.top, tabListRect.top),
+              bottom: Math.min(rect.bottom, tabListRect.bottom),
+              width: Math.max(0, Math.min(rect.right, tabListRect.right) - Math.max(rect.left, tabListRect.left)),
+              height: Math.max(0, Math.min(rect.bottom, tabListRect.bottom) - Math.max(rect.top, tabListRect.top)),
+            }
+          : rect;
+      })
       .filter((rect) => rect.width > 0 && rect.height > 0);
+    const saveButton = [...contextActions.querySelectorAll('button')].find((button) =>
+      ['Save', '保存'].includes(button.getAttribute('aria-label') ?? '')
+    );
     return {
       theme: document.documentElement.dataset.nekoTheme,
       mode: root.dataset.documentMode,
       presentationMode: root.querySelector('.neko-text-editor-body')?.getAttribute('data-presentation-mode'),
-      segmented: [...root.querySelectorAll('.neko-text-editor-segmented button')].map((button) => ({
+      segmented: [...contextActions.querySelectorAll('.neko-text-editor-segmented button')].map((button) => ({
         label: button.textContent?.trim() ?? '',
         pressed: button.getAttribute('aria-pressed'),
       })),
@@ -506,24 +838,29 @@ async function inspectTextEditor(evaluate) {
       outlineText: root.querySelector('.neko-text-editor-outline')?.textContent ?? '',
       diagnosticText: root.querySelector('.neko-text-editor-diagnostics')?.textContent ?? '',
       errorText: root.querySelector('.neko-text-editor-operation-error')?.textContent ?? '',
-      dirty: root.querySelector('.neko-text-editor-dirty-indicator') !== null,
+      dirty: saveButton instanceof HTMLButtonElement && !saveButton.disabled,
+      highlightedTokenCount: root.querySelectorAll('.cm-content .cm-line > span').length,
+      hasInternalToolbar: root.querySelector('.neko-text-editor-toolbar') !== null,
+      contextActionsInTabRow:
+        contextTarget?.classList.contains('neko-workbench-editor-tabs__context-actions') === true &&
+        contextTarget?.closest('.project-main-group__tabs') !== null,
       viewportWidth: document.documentElement.clientWidth,
       rootWidth: root.getBoundingClientRect().width,
       rootBackground: rootStyle.backgroundColor,
       rootColor: rootStyle.color,
-      toolbarClientWidth: toolbar.clientWidth,
-      toolbarScrollWidth: toolbar.scrollWidth,
+      toolbarClientWidth: contextTarget?.clientWidth ?? 0,
+      toolbarScrollWidth: contextTarget?.scrollWidth ?? 0,
       overlappingControls: controls.some((left, index) =>
         controls.slice(index + 1).some((right) =>
           left.left < right.right && left.right > right.left && left.top < right.bottom && left.bottom > right.top
         )
       ),
-      tabControlsOverlap: titleControlsRect
+      tabControlsOverlap: contextTargetRect
         ? tabRects.some((tab) =>
-            tab.left < titleControlsRect.right &&
-            tab.right > titleControlsRect.left &&
-            tab.top < titleControlsRect.bottom &&
-            tab.bottom > titleControlsRect.top
+            tab.left < contextTargetRect.right &&
+            tab.right > contextTargetRect.left &&
+            tab.top < contextTargetRect.bottom &&
+            tab.bottom > contextTargetRect.top
           )
         : false,
     };

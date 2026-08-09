@@ -287,6 +287,9 @@ describe('Desktop renderer styles', () => {
       /height\s*:\s*var\(--neko-desktop-workbench-panel-header-height\)/u,
     );
     expect(mainTabsRule?.groups?.body).toMatch(/padding-block\s*:\s*4px/u);
+    expect(styles).toMatch(
+      /\.project-workspace\[data-right-presentation='hidden'\] \.project-main-group__tabs,[\s\S]*?\.project-workspace\[data-right-presentation='overlay'\] \.project-main-group__tabs\s*\{[^}]*padding-right\s*:\s*132px/u,
+    );
     expect(resourceDockRule?.groups?.body).toMatch(
       /grid-template-rows\s*:\s*var\(--neko-desktop-workbench-panel-header-height\) minmax\(0, 1fr\)/u,
     );

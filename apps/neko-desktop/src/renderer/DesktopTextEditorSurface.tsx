@@ -4,7 +4,8 @@ import type {
 } from '@neko/host/desktop-shell-contract';
 import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useCallback, useMemo, type ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import { createElectronTextEditorHostRuntime } from './desktop-text-editor-host-runtime';
 
 const TextEditorRoot = lazy(async () => {
@@ -19,10 +20,12 @@ function readRendererCspNonce(): string {
 }
 
 export function DesktopTextEditorSurface({
+  contextActionsTarget,
   project,
   projection,
   view,
 }: {
+  readonly contextActionsTarget: HTMLDivElement | null;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly view: DesktopWorkbenchViewRef;
@@ -55,6 +58,11 @@ export function DesktopTextEditorSurface({
     view.viewId,
     view.viewInstanceId,
   ]);
+  const renderContextActions = useCallback(
+    (actions: ReactElement) =>
+      contextActionsTarget ? createPortal(actions, contextActionsTarget) : null,
+    [contextActionsTarget],
+  );
 
   return (
     <section
@@ -68,6 +76,7 @@ export function DesktopTextEditorSurface({
           runtime={runtime}
           locale={locale}
           cspNonce={readRendererCspNonce()}
+          renderContextActions={renderContextActions}
         />
       </Suspense>
     </section>

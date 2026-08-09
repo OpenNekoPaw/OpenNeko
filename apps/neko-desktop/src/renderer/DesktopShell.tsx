@@ -1729,6 +1729,7 @@ function MainViewGroupSurface({
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }): JSX.Element {
   const { t } = useTranslation();
+  const [contextActionsTarget, setContextActionsTarget] = useState<HTMLDivElement | null>(null);
   const views = group.viewIds.map((viewId) => {
     const view = workbench.main.views.find((candidate) => candidate.viewId === viewId);
     if (!view) {
@@ -1747,6 +1748,7 @@ function MainViewGroupSurface({
           activeId={group.activeViewId}
           emptyLabel={t('workspace.mainTabs.empty')}
           label={t('workspace.mainTabs.label')}
+          contextActionsRef={setContextActionsTarget}
           tabs={views.map((view) => ({
             id: view.viewId,
             label: view.displayLabel,
@@ -1780,6 +1782,7 @@ function MainViewGroupSurface({
             previewCapability,
             project,
             projection,
+            contextActionsTarget,
             view: activeView,
           })}
         </div>
@@ -1790,19 +1793,28 @@ function MainViewGroupSurface({
 
 function renderWorkbenchMainView({
   canvasCapability,
+  contextActionsTarget,
   previewCapability,
   project,
   projection,
   view,
 }: {
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
+  readonly contextActionsTarget: HTMLDivElement | null;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number];
 }): JSX.Element {
   if (view.kind === 'text-editor') {
-    return <DesktopTextEditorSurface project={project} projection={projection} view={view} />;
+    return (
+      <DesktopTextEditorSurface
+        contextActionsTarget={contextActionsTarget}
+        project={project}
+        projection={projection}
+        view={view}
+      />
+    );
   }
   if (view.kind === 'preview' && previewCapability?.status === 'ready') {
     return <DesktopPreviewSurface project={project} projection={projection} view={view} />;

@@ -2098,12 +2098,20 @@ code {
   background: var(--neko-desktop-chrome);
 }
 
+.project-workspace[data-right-presentation='hidden'] .project-main-group__tabs,
+.project-workspace[data-right-presentation='overlay'] .project-main-group__tabs {
+  padding-right: 132px;
+}
+
 .project-main-group__tabs .neko-workbench-editor-tabs {
   height: var(--neko-desktop-workbench-panel-header-height);
   min-height: var(--neko-desktop-workbench-panel-header-height);
   flex: 1 1 auto;
-  overflow-x: auto;
   padding-block: 4px;
+}
+
+.project-main-group__tabs .neko-workbench-editor-tabs__list {
+  padding-block: 0;
 }
 
 .project-main-group__content {
