@@ -27,6 +27,12 @@ The Markdown Text Editor SHALL expose `Rich`, `Source` and `Split` modes. Milkdo
 editing, CodeMirror 6 SHALL own complete source editing, and both SHALL submit through the same exact
 Text Document session and accepted edit-sequence contract.
 
+#### Scenario: User opens a Markdown document with fresh presentation state
+
+- **WHEN** an admitted Markdown document opens without a valid saved presentation snapshot
+- **THEN** the Text Editor starts in Rich mode with the source-backed document outline visible beside the content
+- **AND** Source and Split remain explicitly available without adding a second command row below the Workbench tabs
+
 #### Scenario: User edits in Rich and switches to Source
 
 - **WHEN** Milkdown serializes a supported Rich transaction and the Text Document session accepts it

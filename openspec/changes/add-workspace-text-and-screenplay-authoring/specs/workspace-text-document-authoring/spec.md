@@ -180,6 +180,26 @@ bundles, with domain diagnostics expressed as stable codes and parameters. IME c
 preserve the composing range and SHALL defer completion, formatting and semantic replacement until
 composition ends.
 
+The visible Text Editor SHALL use the existing Workbench editor-tab row as its only persistent
+command row. Package-owned controls SHALL mount on the right of that row and SHALL change with the
+exact active View; switching to another Text Editor format or another domain View MUST remove stale
+controls. Save, undo, redo, presentation-mode selection, outline visibility and JSON formatting
+SHALL have keyboard commands. Common editing commands SHOULD rely on those commands instead of
+duplicating permanent buttons.
+
+#### Scenario: Active Text Editor contributes contextual Workbench controls
+
+- **WHEN** a Text Editor View becomes the active View in a Main group
+- **THEN** its package-owned format and presentation controls appear at the right of that group's existing tab row
+- **AND** the document surface does not add a second toolbar or duplicate the active filename
+- **AND** switching to Canvas, Preview or another text format replaces or removes those controls with no stale command target
+
+#### Scenario: User invokes an editor keyboard command
+
+- **WHEN** focus is within the exact Text Editor and the user invokes save, undo, redo, presentation-mode, outline or format commands
+- **THEN** the command targets only that document's visible projection and canonical runtime path
+- **AND** another visible editor group, hidden View or active/recent document cannot receive the command
+
 #### Scenario: User enters Chinese with an IME
 
 - **WHEN** the user composes and commits Chinese text in CodeMirror

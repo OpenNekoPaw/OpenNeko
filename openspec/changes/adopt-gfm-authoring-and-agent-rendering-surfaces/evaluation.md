@@ -36,8 +36,8 @@ Date: 2026-08-08
 
 ## Verification
 
-- Key-free validation: run all indexed suite/schema/runner checks after OpenSpec or reused suite
-  mapping changes; this remains authoring-readiness evidence only.
+- Key-free validation: passed on 2026-08-09 with 44 files / 294 tests and all 24 indexed suites / 63
+  cases; this remains authoring-readiness evidence only.
 - Deterministic/UI validation: focused Webview tests and the authoritative visible Electron Text Editor
   scenario pass. The scenario exposed and verified fixes for StrictMode Rich initialization, Vite
   first-import dependency reload and stale toolbar-index automation.
@@ -48,10 +48,12 @@ Date: 2026-08-08
   Streamdown passes completed GFM/CJK/sanitization/stable-block checks but fails incomplete emphasis
   and lacks resource/semantic/creative/structured parity, so no production replacement occurred.
 - Visible Desktop result: `desktop-text-editor` passed through Resource Browser open, Markdown
-  Source/Split/Rich, canonical save, JSON diagnostic/format, Fountain outline/preview, dirty conflict
-  and 960 x 640 compact layout. It also passed dark-theme rendering and Chromium/Electron IME
-  composition input with the saved UTF-8 bytes verified. The reviewed report is
-  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T07-49-38.954Z-desktop-text-editor-development/report.json`.
+  Rich-by-default/Source/Split, source-backed outline, canonical save, JSON diagnostic/format,
+  declared HTML and Fountain highlighting, Fountain outline/preview, dirty conflict and 960 x 640
+  compact layout. Contextual commands remained in the active Workbench tab row without overlapping
+  Window controls. It also passed dark-theme rendering and Chromium/Electron IME composition input
+  with the saved UTF-8 bytes verified. The reviewed report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T03-57-49.277Z-desktop-text-editor-development/report.json`.
 - Blocked or unexecuted cases: native-file key-free validation passes, but provider-backed and visible
   Desktop Agent runs still require explicit provider/model/cost authorization. Visible Agent
   partial-to-final continuity was not executed in the passing UI scenario, and the native macOS IME

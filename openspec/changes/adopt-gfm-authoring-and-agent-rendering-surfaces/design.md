@@ -99,6 +99,13 @@ The top-level Markdown control becomes `Rich | Source | Split`. CodeMirror remai
 and the only editor for other text modes. Milkdown's CodeMirror-backed code-block component is scoped
 to a fenced code node; it cannot edit the containing Markdown source or other file formats.
 
+Fresh Markdown presentation starts in Rich with the source-backed outline visible. The mode selector
+and remaining document-specific commands are package-owned but render into the right side of the
+active Workbench editor-tab row; the editor body does not create another toolbar. Desktop passes only
+the browser presentation target and does not own Markdown mode or command state. Keyboard commands
+are scoped to the focused Text Editor Root (or its contributed controls), so two visible Main groups
+cannot route an operation through active/recent document identity.
+
 In Split, Rich and Source are two synchronized projections of one accepted working source. A user
 transaction from either side submits through the same domain command, and both reconcile only from
 the accepted projection. Stale edit sequences fail visibly. Mode switching cannot copy buffers,
