@@ -206,6 +206,9 @@ importers:
       '@neko/world-node':
         specifier: workspace:*
         version: link:../../packages/world-node
+      '@zip.js/zip.js':
+        specifier: ^2.8.26
+        version: 2.8.26
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -246,9 +249,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: 4.3.4
         version: 4.3.4(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
-      '@zip.js/zip.js':
-        specifier: ^2.8.26
-        version: 2.8.26
       autoprefixer:
         specifier: 10.4.27
         version: 10.4.27(postcss@8.5.6)

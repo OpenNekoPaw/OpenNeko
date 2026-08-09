@@ -15,8 +15,13 @@ interface RequestBase {
 export type AgentExtensionManagementHostRequest =
   | (RequestBase & { readonly route: 'snapshot.get' })
   | (RequestBase & {
-      readonly route: 'plugin.install' | 'plugin.enable' | 'plugin.disable' | 'plugin.remove';
+      readonly route:
+        'plugin.install' | 'plugin.update' | 'plugin.enable' | 'plugin.disable' | 'plugin.remove';
       readonly pluginId: string;
+    })
+  | (RequestBase & {
+      readonly route: 'plugin.operation.cancel';
+      readonly operationId: string;
     })
   | (RequestBase & {
       readonly route: 'marketplaces.refresh' | 'skill.install';
@@ -61,6 +66,7 @@ export function parseAgentExtensionManagementHostRequest(
       requireExactKeys(record, BASE_KEYS);
       return { ...base, route: 'snapshot.get' };
     case 'plugin.install':
+    case 'plugin.update':
     case 'plugin.enable':
     case 'plugin.disable':
     case 'plugin.remove':
@@ -69,6 +75,13 @@ export function parseAgentExtensionManagementHostRequest(
         ...base,
         route: record['route'],
         pluginId: requireId(record['pluginId'], 'plugin'),
+      };
+    case 'plugin.operation.cancel':
+      requireExactKeys(record, [...BASE_KEYS, 'operationId']);
+      return {
+        ...base,
+        route: 'plugin.operation.cancel',
+        operationId: requireId(record['operationId'], 'artifact operation'),
       };
     case 'marketplaces.refresh':
     case 'skill.install':

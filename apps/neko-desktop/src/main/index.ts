@@ -82,6 +82,7 @@ import {
 } from './desktop-functional-fixture';
 import { DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT } from '../shared/agent-automation-contract';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
+import { createAutomationApplicationService } from '@neko/automation-node';
 import {
   createAgentControllerComposition,
   isAgentLaunchConversationCreationCommand,
@@ -178,8 +179,10 @@ import {
 } from '@neko/assets-node';
 import {
   createAgentExtensionManager,
+  createAgentExtensionMutationOwnership,
   createAgentExtensionSupport,
   createOpenNekoExtensionRepository,
+  type AgentExtensionArtifactHostPort,
 } from '@neko/agent-runtime/extensions';
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
@@ -541,6 +544,43 @@ async function startDesktop(): Promise<void> {
     locator: { kind: 'relative' as const, value: 'assistant-spaces/local-user' },
   };
   const assistantAgentWorkspace = await agentComposition.attachWorkspace(assistantWorkspace);
+  const automationService = await createAutomationApplicationService({
+    profiles: [],
+    providers: [],
+    extensionRuntime: {
+      isEnabled: async () => {
+        throw new Error('Desktop Automation runtime is not composed.');
+      },
+    },
+    sessionGrants: {
+      consume: async () => {
+        throw new Error('Desktop Automation session grants are not composed.');
+      },
+    },
+    hostPermissions: {
+      query: async () => {
+        throw new Error('Desktop Automation Host permissions are not composed.');
+      },
+    },
+    transientObservations: {
+      publish: async () => {
+        throw new Error('Desktop Automation observation projection is not composed.');
+      },
+    },
+  });
+  const extensionArtifactHost: AgentExtensionArtifactHostPort = {
+    available: false,
+    platform: { os: process.platform, arch: process.arch },
+    stage: async () => {
+      throw new Error('Desktop remote extension artifact staging is not composed.');
+    },
+    commit: async () => {
+      throw new Error('Desktop remote extension artifact commit is not composed.');
+    },
+    discard: async () => {
+      throw new Error('Desktop remote extension artifact cleanup is not composed.');
+    },
+  };
   const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
       marketplaceRoot: path.join(
@@ -550,9 +590,14 @@ async function startDesktop(): Promise<void> {
       ),
       installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
       stateRoot: path.join(globalStorage.root, 'extensions', 'state'),
+      artifactHost: extensionArtifactHost,
       trashItem: (absolutePath) => shell.trashItem(absolutePath),
     }),
     agentSupport: createAgentExtensionSupport(),
+    mutationOwnership: createAgentExtensionMutationOwnership({
+      hasActiveAgentTurns: () => agentComposition.hasActiveTurns(),
+      listOwnedAutomationSessions: (pluginId) => automationService.listOwnedSessions(pluginId),
+    }),
   });
   const initialExtensionSnapshot = await extensionManager.readCatalog();
   extensionManager.setRuntimeReadiness(

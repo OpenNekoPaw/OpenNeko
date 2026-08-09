@@ -25,6 +25,10 @@ export function AgentExtensionManagementRoot({
   const [projection, setProjection] = useState<AgentExtensionManagementProjection>();
   const [error, setError] = useState<string>();
   const [operationKey, setOperationKey] = useState<string>();
+  const hasActiveArtifactOperation =
+    projection?.operations.some((operation) => operation.status === 'active') ?? false;
+  const isStartingArtifactOperation =
+    operationKey?.startsWith('install:') === true || operationKey?.startsWith('update:') === true;
 
   useEffect(() => {
     if (!interactive) return;
@@ -42,6 +46,27 @@ export function AgentExtensionManagementRoot({
       active = false;
     };
   }, [interactive, refreshRequestId, runtime]);
+
+  useEffect(() => {
+    if (!interactive || (!hasActiveArtifactOperation && !isStartingArtifactOperation)) return;
+    let active = true;
+    let timer: number | undefined;
+    const poll = async (): Promise<void> => {
+      try {
+        const next = await runtime.getSnapshot();
+        if (active) setProjection(next);
+      } catch (reason: unknown) {
+        if (active) setError(describeError(reason));
+      } finally {
+        if (active) timer = window.setTimeout(() => void poll(), 500);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 0);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [hasActiveArtifactOperation, interactive, isStartingArtifactOperation, runtime]);
 
   const skills = useMemo(
     () => searchAndOrderAgentSkills(projection?.skills ?? [], query),
@@ -73,6 +98,19 @@ export function AgentExtensionManagementRoot({
     (projection?.extensionDiscovery.diagnostics.reduce((total, item) => total + item.count, 0) ??
       0);
 
+  const cancelArtifactOperation = useCallback(
+    async (artifactOperationId: string): Promise<void> => {
+      setError(undefined);
+      try {
+        await runtime.cancelPluginOperation(artifactOperationId);
+        setProjection(await runtime.getSnapshot());
+      } catch (reason: unknown) {
+        setError(describeError(reason));
+      }
+    },
+    [runtime],
+  );
+
   return (
     <section className="agent-extension-management-root">
       <header className="management-surface-header">
@@ -84,7 +122,12 @@ export function AgentExtensionManagementRoot({
         <div className="management-surface-actions">
           <button
             type="button"
-            disabled={!interactive || !projection || operationKey !== undefined}
+            disabled={
+              !interactive ||
+              !projection ||
+              operationKey !== undefined ||
+              hasActiveArtifactOperation
+            }
             onClick={() => {
               void runMutation('refresh', () => runtime.refreshMarketplaces());
             }}
@@ -138,6 +181,36 @@ export function AgentExtensionManagementRoot({
           <span>{t('home.capabilities.discoveryIssues', { count: issueCount })}</span>
         </div>
       ) : null}
+      {projection?.operations.map((operation) => (
+        <div
+          className="management-surface-diagnostic"
+          data-extension-operation-status={operation.status}
+          key={operation.operationId}
+          role="status"
+        >
+          <span>
+            {t('home.capabilities.artifactOperation', {
+              kind: t(`home.capabilities.artifactOperationKind.${operation.kind}`),
+              status: t(`home.capabilities.artifactOperationStatus.${operation.status}`),
+              phase: t(`home.capabilities.artifactOperationPhase.${operation.phase}`),
+              progress:
+                operation.totalBytes > 0
+                  ? `${formatByteSize(operation.transferredBytes)} / ${formatByteSize(operation.totalBytes)}`
+                  : t('home.capabilities.artifactOperationPending'),
+            })}
+          </span>
+          {operation.canCancel ? (
+            <button
+              type="button"
+              onClick={() => {
+                void cancelArtifactOperation(operation.operationId);
+              }}
+            >
+              {t('home.capabilities.cancelOperation')}
+            </button>
+          ) : null}
+        </div>
+      ))}
       <div
         className="management-surface-list"
         data-empty={tab === 'skills' ? skills.length === 0 : extensions.length === 0}
@@ -189,6 +262,34 @@ export function AgentExtensionManagementRoot({
                           })}`
                         : ''}
                     </small>
+                    <small>
+                      {t(`home.capabilities.artifactStatus.${extension.artifactStatus}`)}
+                      {extension.artifactPlatform ? ` · ${extension.artifactPlatform}` : ''}
+                      {extension.downloadSizeBytes > 0
+                        ? ` · ${formatByteSize(extension.downloadSizeBytes)}`
+                        : ''}
+                      {extension.canUpdate
+                        ? ` · ${t('home.capabilities.updateAvailable', {
+                            release: extension.updatePackageRelease,
+                          })}`
+                        : ''}
+                    </small>
+                    <small>
+                      {t('home.capabilities.runtimeFacts', {
+                        dependency: t(
+                          `home.capabilities.dependencyStatus.${extension.dependencyStatus}`,
+                        ),
+                        enableGrant: t(
+                          `home.capabilities.enableGrantStatus.${extension.enableGrantStatus}`,
+                        ),
+                        hostPermission: t(
+                          `home.capabilities.hostPermissionStatus.${extension.hostPermissionStatus}`,
+                        ),
+                        qualification: t(
+                          `home.capabilities.qualificationStatus.${extension.qualificationStatus}`,
+                        ),
+                      })}
+                    </small>
                   </>
                 ) : null}
               </span>
@@ -197,7 +298,9 @@ export function AgentExtensionManagementRoot({
                   <button
                     type="button"
                     aria-label={t('home.capabilities.install')}
-                    disabled={!projection || operationKey !== undefined}
+                    disabled={
+                      !projection || operationKey !== undefined || hasActiveArtifactOperation
+                    }
                     onClick={() => {
                       void Promise.resolve(
                         confirmAction(
@@ -217,6 +320,33 @@ export function AgentExtensionManagementRoot({
                     <PlusIcon size={13} />
                   </button>
                 ) : null}
+                {extension?.canUpdate ? (
+                  <button
+                    type="button"
+                    aria-label={t('home.capabilities.update')}
+                    disabled={
+                      !projection || operationKey !== undefined || hasActiveArtifactOperation
+                    }
+                    onClick={() => {
+                      void Promise.resolve(
+                        confirmAction(
+                          t('home.capabilities.confirmUpdatePlugin', {
+                            name: extension.displayName,
+                            release: extension.updatePackageRelease,
+                          }),
+                        ),
+                      ).then((confirmed) => {
+                        if (confirmed) {
+                          void runMutation(`update:${extension.id}`, () =>
+                            runtime.updatePlugin(extension.id),
+                          );
+                        }
+                      });
+                    }}
+                  >
+                    {t('home.capabilities.update')}
+                  </button>
+                ) : null}
                 {extension?.installed ? (
                   <Switch
                     aria-label={t('home.capabilities.enablement', {
@@ -226,6 +356,7 @@ export function AgentExtensionManagementRoot({
                     disabled={
                       !projection ||
                       operationKey !== undefined ||
+                      hasActiveArtifactOperation ||
                       (!extension.canEnable && !extension.canDisable)
                     }
                     onCheckedChange={(checked) => {
@@ -257,7 +388,9 @@ export function AgentExtensionManagementRoot({
                 {skill?.canRemove || extension?.canRemove ? (
                   <button
                     type="button"
-                    disabled={!projection || operationKey !== undefined}
+                    disabled={
+                      !projection || operationKey !== undefined || hasActiveArtifactOperation
+                    }
                     onClick={() => {
                       const name = skill?.name ?? extension?.displayName ?? item.id;
                       void Promise.resolve(confirmAction(name)).then((confirmed) => {
@@ -345,4 +478,10 @@ function describeRuntimeDiagnostic(
     return t('home.capabilities.runtimeDiagnostic.artifact-unavailable');
   }
   return t('home.capabilities.runtimeDiagnostic.other', { code });
+}
+
+function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }

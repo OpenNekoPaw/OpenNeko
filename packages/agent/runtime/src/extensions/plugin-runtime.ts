@@ -381,20 +381,50 @@ function projectReadiness(state: PluginContributionState): AgentExtensionRuntime
   const mcpReady =
     state.mcpServerIds.length > 0 && state.mcpServerIds.length === state.connectedServerIds.length;
   const anyReady = state.skillReady || state.connectedServerIds.length > 0;
+  const adapterOnly = state.descriptor.mcpToolExposure === 'adapter-only';
   if (state.failures.length > 0) {
     return {
       status: anyReady ? 'partial' : 'error',
       diagnosticCode: state.failures[0] ?? 'runtime-failed',
+      dependencyStatus: 'error',
+      hostPermissionStatus: adapterOnly ? 'unknown' : 'not-applicable',
+      qualificationStatus: anyReady ? 'partial' : 'failed',
     };
   }
   if (state.unsupported.length > 0) {
     return {
       status: anyReady ? 'partial' : 'unsupported',
       diagnosticCode: state.unsupported[0] ?? 'runtime-unsupported',
+      dependencyStatus: anyReady ? 'ready' : 'error',
+      hostPermissionStatus: adapterOnly ? 'unknown' : 'not-applicable',
+      qualificationStatus: anyReady ? 'partial' : 'failed',
     };
   }
-  if (state.skillReady || mcpReady) return { status: 'ready', diagnosticCode: '' };
-  return { status: 'unsupported', diagnosticCode: 'no-agent-contribution' };
+  if (adapterOnly) {
+    return {
+      status: 'unsupported',
+      diagnosticCode: 'automation-adapter-unavailable',
+      dependencyStatus: mcpReady ? 'ready' : 'error',
+      hostPermissionStatus: 'unknown',
+      qualificationStatus: 'unqualified',
+    };
+  }
+  if (state.skillReady || mcpReady) {
+    return {
+      status: 'ready',
+      diagnosticCode: '',
+      dependencyStatus: 'ready',
+      hostPermissionStatus: 'not-applicable',
+      qualificationStatus: 'qualified',
+    };
+  }
+  return {
+    status: 'unsupported',
+    diagnosticCode: 'no-agent-contribution',
+    dependencyStatus: 'error',
+    hostPermissionStatus: 'not-applicable',
+    qualificationStatus: 'failed',
+  };
 }
 
 function assertUniqueToolNames(tools: readonly Tool[]): void {

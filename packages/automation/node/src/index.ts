@@ -168,6 +168,7 @@ export class AutomationError extends Error {
 export interface AutomationApplicationService {
   listQualificationDiagnostics(): readonly AutomationQualificationDiagnostic[];
   listAvailableOperations(profileId: string): readonly AutomationReviewedOperation[];
+  listOwnedSessions(extensionId: string): readonly AutomationSessionSnapshot[];
   openSession(input: unknown, signal?: AbortSignal): Promise<AutomationSessionSnapshot>;
   readSession(sessionId: string): AutomationSessionSnapshot | undefined;
   prepareAction(input: unknown, signal?: AbortSignal): Promise<AutomationActionApprovalProjection>;
@@ -326,6 +327,23 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
       );
     }
     return Object.freeze([...operations.values()]);
+  }
+
+  listOwnedSessions(extensionId: string): readonly AutomationSessionSnapshot[] {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/u.test(extensionId)) {
+      throw new Error('Automation extension identity is invalid.');
+    }
+    return Object.freeze(
+      [...this.sessions.values()]
+        .filter(
+          (session) =>
+            session.profile.provider.extensionId === extensionId &&
+            session.status !== 'stopped' &&
+            session.status !== 'taken-over',
+        )
+        .map(projectSession)
+        .sort((left, right) => left.sessionId.localeCompare(right.sessionId)),
+    );
   }
 
   async openSession(input: unknown, signal?: AbortSignal): Promise<AutomationSessionSnapshot> {

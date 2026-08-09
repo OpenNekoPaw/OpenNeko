@@ -1353,31 +1353,35 @@ export class DesktopAppHost {
       case 'snapshot.get':
         break;
       case 'plugin.install': {
-        this.requireAgentIdleForPluginMutation();
         const snapshot = await this.options.extensionManager.installPlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
         break;
       }
+      case 'plugin.update': {
+        const snapshot = await this.options.extensionManager.updatePlugin(request.pluginId);
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
+      case 'plugin.operation.cancel': {
+        this.options.extensionManager.cancelArtifactOperation(request.operationId);
+        break;
+      }
       case 'plugin.enable': {
-        this.requireAgentIdleForPluginMutation();
         const snapshot = await this.options.extensionManager.enablePlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
         break;
       }
       case 'plugin.disable': {
-        this.requireAgentIdleForPluginMutation();
         const snapshot = await this.options.extensionManager.disablePlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
         break;
       }
       case 'plugin.remove': {
-        this.requireAgentIdleForPluginMutation();
         const snapshot = await this.options.extensionManager.removePlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
         break;
       }
       case 'marketplaces.refresh': {
-        this.requireAgentIdleForPluginMutation();
         const snapshot = await this.options.extensionManager.refreshMarketplaces();
         await this.activatePluginSnapshot(snapshot);
         break;
@@ -1438,6 +1442,7 @@ export class DesktopAppHost {
     );
     return {
       identity,
+      operations: this.options.extensionManager.readArtifactOperations(),
       skills,
       skillDiscovery: projectSkillDiscovery(skillCatalog),
       extensions: extensionCatalog.records,
@@ -1450,12 +1455,6 @@ export class DesktopAppHost {
   ): Promise<void> {
     const readiness = await this.agent.reconcilePluginRuntime(snapshot);
     this.options.extensionManager.setRuntimeReadiness(snapshot, readiness);
-  }
-
-  private requireAgentIdleForPluginMutation(): void {
-    if (this.agent.hasActiveTurns()) {
-      throw new Error('Plugin management is unavailable while an Agent turn is active.');
-    }
   }
 
   async requestProjectProfile(

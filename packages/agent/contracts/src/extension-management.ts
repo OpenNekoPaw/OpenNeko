@@ -18,8 +18,26 @@ export interface AgentManagedSkillItem {
   readonly canRemove: boolean;
 }
 
+export type AgentExtensionArtifactOperationKind = 'install' | 'update';
+export type AgentExtensionArtifactOperationPhase =
+  'queued' | 'downloading' | 'verifying' | 'committing' | 'cancelling';
+export type AgentExtensionArtifactOperationStatus = 'active' | 'completed' | 'cancelled' | 'failed';
+
+export interface AgentExtensionArtifactOperationSnapshot {
+  readonly operationId: string;
+  readonly pluginId: string;
+  readonly kind: AgentExtensionArtifactOperationKind;
+  readonly phase: AgentExtensionArtifactOperationPhase;
+  readonly status: AgentExtensionArtifactOperationStatus;
+  readonly transferredBytes: number;
+  readonly totalBytes: number;
+  readonly canCancel: boolean;
+  readonly diagnosticCode: '' | 'cancelled' | 'operation-failed';
+}
+
 export interface AgentExtensionManagementProjection {
   readonly identity: AgentExtensionManagementSessionIdentity;
+  readonly operations: readonly AgentExtensionArtifactOperationSnapshot[];
   readonly skills: readonly AgentManagedSkillItem[];
   readonly skillDiscovery: {
     readonly diagnostics: readonly {
@@ -43,6 +61,8 @@ export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
   installPlugin(pluginId: string): Promise<void>;
+  updatePlugin(pluginId: string): Promise<void>;
+  cancelPluginOperation(operationId: string): Promise<void>;
   enablePlugin(pluginId: string): Promise<void>;
   disablePlugin(pluginId: string): Promise<void>;
   removePlugin(pluginId: string): Promise<void>;
@@ -57,18 +77,98 @@ export function parseAgentExtensionManagementProjection(
 ): AgentExtensionManagementProjection {
   const record = requireExactRecord(
     value,
-    ['identity', 'skills', 'skillDiscovery', 'extensions', 'extensionDiscovery'],
+    ['identity', 'operations', 'skills', 'skillDiscovery', 'extensions', 'extensionDiscovery'],
     'Agent Extension Management projection is invalid.',
   );
-  if (!Array.isArray(record['skills']) || !Array.isArray(record['extensions'])) {
+  if (
+    !Array.isArray(record['operations']) ||
+    !Array.isArray(record['skills']) ||
+    !Array.isArray(record['extensions'])
+  ) {
     throw new Error('Agent Extension Management catalog is invalid.');
   }
   return {
     identity: parseAgentExtensionManagementSessionIdentity(record['identity']),
+    operations: record['operations'].map(parseArtifactOperation),
     skills: record['skills'].map(parseManagedSkill),
     skillDiscovery: parseSkillDiscovery(record['skillDiscovery']),
     extensions: record['extensions'].map(parseExtension),
     extensionDiscovery: parseExtensionDiscovery(record['extensionDiscovery']),
+  };
+}
+
+function parseArtifactOperation(value: unknown): AgentExtensionArtifactOperationSnapshot {
+  const record = requireExactRecord(
+    value,
+    [
+      'operationId',
+      'pluginId',
+      'kind',
+      'phase',
+      'status',
+      'transferredBytes',
+      'totalBytes',
+      'canCancel',
+      'diagnosticCode',
+    ],
+    'Agent Extension Management artifact operation is invalid.',
+  );
+  const phase = requireOneOf(
+    record['phase'],
+    ['queued', 'downloading', 'verifying', 'committing', 'cancelling'] as const,
+    'Agent Extension Management artifact operation phase is invalid.',
+  );
+  const status = requireOneOf(
+    record['status'],
+    ['active', 'completed', 'cancelled', 'failed'] as const,
+    'Agent Extension Management artifact operation status is invalid.',
+  );
+  const transferredBytes = requireNonNegativeInteger(
+    record['transferredBytes'],
+    'Agent Extension Management artifact operation progress is invalid.',
+  );
+  const totalBytes = requireNonNegativeInteger(
+    record['totalBytes'],
+    'Agent Extension Management artifact operation total size is invalid.',
+  );
+  const canCancel = requireBoolean(
+    record['canCancel'],
+    'Agent Extension Management artifact operation cancellation is invalid.',
+  );
+  const diagnosticCode = requireOneOf(
+    record['diagnosticCode'],
+    ['', 'cancelled', 'operation-failed'] as const,
+    'Agent Extension Management artifact operation diagnostic is invalid.',
+  );
+  if (
+    transferredBytes > totalBytes ||
+    canCancel !== (status === 'active' && phase !== 'committing' && phase !== 'cancelling') ||
+    (['downloading', 'verifying', 'committing'].includes(phase) && totalBytes === 0) ||
+    (status === 'active' && diagnosticCode !== '') ||
+    (status === 'completed' &&
+      (phase !== 'committing' || diagnosticCode !== '' || transferredBytes !== totalBytes)) ||
+    (status === 'cancelled' && (phase !== 'cancelling' || diagnosticCode !== 'cancelled')) ||
+    (status === 'failed' && diagnosticCode !== 'operation-failed')
+  ) {
+    throw new Error('Agent Extension Management artifact operation state is inconsistent.');
+  }
+  return {
+    operationId: requireNonEmptyString(
+      record['operationId'],
+      'Agent Extension Management artifact operation identity is required.',
+    ),
+    pluginId: requirePluginId(record['pluginId']),
+    kind: requireOneOf(
+      record['kind'],
+      ['install', 'update'] as const,
+      'Agent Extension Management artifact operation kind is invalid.',
+    ),
+    phase,
+    status,
+    transferredBytes,
+    totalBytes,
+    canCancel,
+    diagnosticCode,
   };
 }
 
@@ -187,9 +287,18 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'installed',
       'enabled',
       'canInstall',
+      'canUpdate',
       'canEnable',
       'canDisable',
       'canRemove',
+      'updatePackageRelease',
+      'artifactPlatform',
+      'downloadSizeBytes',
+      'artifactStatus',
+      'dependencyStatus',
+      'enableGrantStatus',
+      'hostPermissionStatus',
+      'qualificationStatus',
       'declaredPermissions',
       'acceptedPermissions',
       'agentStatus',
@@ -228,6 +337,10 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     record['canInstall'],
     'Agent Extension Management install flag is invalid.',
   );
+  const canUpdate = requireBoolean(
+    record['canUpdate'],
+    'Agent Extension Management update flag is invalid.',
+  );
   const canRemove = requireBoolean(
     record['canRemove'],
     'Agent Extension Management removal flag is invalid.',
@@ -248,14 +361,60 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     record['acceptedPermissions'],
     'Agent Extension Management accepted permissions are invalid.',
   );
+  const updatePackageRelease = requireString(
+    record['updatePackageRelease'],
+    'Agent Extension Management update package release must be a string.',
+  );
+  const artifactPlatform = requireString(
+    record['artifactPlatform'],
+    'Agent Extension Management artifact platform must be a string.',
+  );
+  const downloadSizeBytes = requireNonNegativeInteger(
+    record['downloadSizeBytes'],
+    'Agent Extension Management artifact size is invalid.',
+  );
+  const artifactStatus = requireOneOf(
+    record['artifactStatus'],
+    ['unavailable', 'available', 'installed', 'invalid'] as const,
+    'Agent Extension Management artifact status is invalid.',
+  );
+  const dependencyStatus = requireOneOf(
+    record['dependencyStatus'],
+    ['unchecked', 'ready', 'error'] as const,
+    'Agent Extension Management dependency status is invalid.',
+  );
+  const enableGrantStatus = requireOneOf(
+    record['enableGrantStatus'],
+    ['not-required', 'required', 'accepted'] as const,
+    'Agent Extension Management enable grant status is invalid.',
+  );
+  const hostPermissionStatus = requireOneOf(
+    record['hostPermissionStatus'],
+    ['not-applicable', 'unknown', 'granted', 'needs-permission', 'unsupported'] as const,
+    'Agent Extension Management Host permission status is invalid.',
+  );
+  const qualificationStatus = requireOneOf(
+    record['qualificationStatus'],
+    ['unqualified', 'qualified', 'partial', 'failed'] as const,
+    'Agent Extension Management qualification status is invalid.',
+  );
   if (
     (canInstall && installed) ||
+    canUpdate !== (installed && !enabled && updatePackageRelease.length > 0) ||
+    (canUpdate && updatePackageRelease === record['version']) ||
     (canEnable && (!installed || enabled)) ||
     canDisable !== (installed && enabled) ||
     canRemove !== (installed && !enabled) ||
     (!installed && (enabled || acceptedPermissions.length > 0)) ||
     (enabled && !sameStringSet(declaredPermissions, acceptedPermissions)) ||
-    (!enabled && acceptedPermissions.length > 0)
+    (!enabled && acceptedPermissions.length > 0) ||
+    (artifactStatus === 'available') !== canInstall ||
+    (!installed && artifactStatus === 'installed') ||
+    (installed && artifactStatus === 'available') ||
+    (artifactStatus === 'unavailable' && downloadSizeBytes !== 0) ||
+    (artifactStatus === 'invalid' && dependencyStatus !== 'error') ||
+    (declaredPermissions.length === 0 && enableGrantStatus !== 'not-required') ||
+    (declaredPermissions.length > 0 && enableGrantStatus !== (enabled ? 'accepted' : 'required'))
   ) {
     throw new Error('Agent Extension Management extension flags are inconsistent.');
   }
@@ -295,9 +454,18 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     installed,
     enabled,
     canInstall,
+    canUpdate,
     canEnable,
     canDisable,
     canRemove,
+    updatePackageRelease,
+    artifactPlatform,
+    downloadSizeBytes,
+    artifactStatus,
+    dependencyStatus,
+    enableGrantStatus,
+    hostPermissionStatus,
+    qualificationStatus,
     declaredPermissions,
     acceptedPermissions,
     agentStatus,
@@ -493,6 +661,15 @@ function requireString(value: unknown, message: string): string {
 
 function requireBoolean(value: unknown, message: string): boolean {
   if (typeof value !== 'boolean') throw new Error(message);
+  return value;
+}
+
+function requireOneOf<const T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+  message: string,
+): T[number] {
+  if (typeof value !== 'string' || !allowed.includes(value)) throw new Error(message);
   return value;
 }
 
