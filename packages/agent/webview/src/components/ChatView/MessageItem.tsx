@@ -135,7 +135,7 @@ function AssistantContentBlocks({
       pluginsAvailable,
       ambientToolCalls,
     );
-    const turn = projectAssistantTurn(projections);
+    const turn = projectAssistantTurn(projections, message.turnTiming);
 
     return (
       <div className="agent-assistant-turn">

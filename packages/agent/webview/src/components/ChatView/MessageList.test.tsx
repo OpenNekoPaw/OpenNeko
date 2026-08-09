@@ -19,6 +19,9 @@ const getOffsetForIndexMock =
   vi.fn<
     (index: number, alignment: 'auto' | 'center' | 'end' | 'start') => readonly [number, string]
   >();
+const revealDocumentLocatorMock = vi.fn();
+const sendToPluginMock = vi.fn();
+const clipboardWriteTextMock = vi.fn<(value: string) => Promise<void>>();
 let virtualItems: Array<{ index: number; key: string; start: number }> = [];
 
 const testIdentities: MessageIdentityMap = {
@@ -43,9 +46,9 @@ vi.mock('../../host-runtime-context', () => ({
   useAgentHostMessages: () => ({
     openFile: vi.fn(),
     confirmTool: vi.fn(),
-    revealDocumentLocator: vi.fn(),
+    revealDocumentLocator: revealDocumentLocatorMock,
     invokeAgentCapabilityLifecycle: vi.fn(),
-    sendToPlugin: vi.fn(),
+    sendToPlugin: sendToPluginMock,
     requestCanvasAuthoringHandoff: vi.fn(),
   }),
 }));
@@ -57,6 +60,10 @@ describe('MessageList auto-scroll lifecycle', () => {
     cancelAnimationFrameMock.mockClear();
     getTotalSizeMock.mockReset();
     getOffsetForIndexMock.mockReset();
+    revealDocumentLocatorMock.mockReset();
+    sendToPluginMock.mockReset();
+    clipboardWriteTextMock.mockReset();
+    clipboardWriteTextMock.mockResolvedValue();
     getTotalSizeMock.mockReturnValue(120);
     getOffsetForIndexMock.mockImplementation((index, alignment) => [index * 100, alignment]);
     virtualItems = [];
@@ -73,6 +80,10 @@ describe('MessageList auto-scroll lifecycle', () => {
     Object.defineProperty(HTMLDivElement.prototype, 'scrollTo', {
       configurable: true,
       value: scrollToMock,
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: clipboardWriteTextMock },
     });
   });
 
@@ -333,7 +344,7 @@ describe('MessageList auto-scroll lifecycle', () => {
       </MessageActionsProvider>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Process records/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Processed/ }));
     expect(screen.getByText('ReadDocument ×3')).toBeTruthy();
     expect(screen.getByText('/books/a.epub')).toBeTruthy();
   });
@@ -394,7 +405,7 @@ describe('MessageList auto-scroll lifecycle', () => {
       </MessageActionsProvider>,
     );
 
-    const processRecordsButton = screen.getByRole('button', { name: /Process records/ });
+    const processRecordsButton = screen.getByRole('button', { name: 'Processed 2m 28s' });
     const finalContent = screen.getByText('Final storyboard summary.');
     expect(processRecordsButton.compareDocumentPosition(finalContent)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
@@ -425,19 +436,76 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(screen.getByText('Final answer with readable Markdown.')).toBeTruthy();
     expect(screen.queryByText('Response')).toBeNull();
     expect(screen.queryByText('Tool')).toBeNull();
-    const activityButton = screen.getByRole('button', { name: /Process records/ });
-    expect(screen.getAllByRole('button', { name: /Process records/ })).toHaveLength(1);
+    const activityButton = screen.getByRole('button', { name: 'Processed 2m 28s' });
+    expect(screen.getAllByRole('button', { name: /Processed/ })).toHaveLength(1);
+    expect(screen.queryByText('2 tool call(s) · 1 thinking block(s)')).toBeNull();
 
     fireEvent.click(activityButton);
 
-    const activity = screen.getByRole('region', { name: 'Process records' });
+    const activity = screen.getByRole('region', { name: 'Processing details' });
     expect(within(activity).getByText('ReadDocument')).toBeTruthy();
     expect(within(activity).getByText('ReadImage')).toBeTruthy();
     expect(within(activity).getByText('Inspect the source.')).toBeTruthy();
     expect(within(activity).getAllByRole('button')).toHaveLength(1);
+    expect(within(activity).getByText('2 tool call(s) · 1 thinking block(s)')).toBeTruthy();
+    const orderedText = activity.textContent ?? '';
+    expect(orderedText.indexOf('I will inspect the document.')).toBeLessThan(
+      orderedText.indexOf('ReadDocument'),
+    );
+    expect(orderedText.indexOf('ReadDocument')).toBeLessThan(
+      orderedText.indexOf('Inspect the source.'),
+    );
+    expect(orderedText.indexOf('Inspect the source.')).toBeLessThan(
+      orderedText.indexOf('The document contains image pages.'),
+    );
+    expect(orderedText.indexOf('The document contains image pages.')).toBeLessThan(
+      orderedText.indexOf('ReadImage'),
+    );
   });
 
-  it('does not show completed process records as running while the parent message is still streaming', () => {
+  it('keeps document pages as Tool evidence with compact open, reference, and Canvas actions', () => {
+    virtualItems = [{ index: 0, key: 'document-evidence', start: 0 }];
+
+    const { container } = renderWithI18n(
+      <MessageActionsProvider pluginsAvailable={{ canvas: true }}>
+        <MessageList
+          messages={[createDocumentEvidenceMessage()]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Processed/ }));
+    const activity = screen.getByRole('region', { name: 'Processing details' });
+    const image = within(activity).getByAltText('Page 1');
+    const openButton = image.closest('button');
+    if (!openButton) throw new Error('Expected document thumbnail open button.');
+    fireEvent.click(openButton);
+    expect(revealDocumentLocatorMock).toHaveBeenCalledWith({
+      contentLocator: {
+        kind: 'document-entry',
+        source: { kind: 'workspace-file', path: 'books/a.epub' },
+        entryPath: 'image/Page_1.jpg',
+      },
+      locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
+    });
+    expect(container.querySelector('.agent-turn-deliverables')).toBeNull();
+    const moreActions = within(activity).getByLabelText('More image actions');
+    expect(moreActions.closest('details')?.hasAttribute('open')).toBe(false);
+
+    fireEvent.click(moreActions);
+    fireEvent.click(within(activity).getByRole('button', { name: 'Copy reference' }));
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith('books/a.epub#chapter:Page_1@1');
+    fireEvent.click(within(activity).getByRole('button', { name: 'Send to Canvas' }));
+    expect(sendToPluginMock).toHaveBeenCalledWith(
+      'canvas',
+      expect.objectContaining({ kind: 'singleAsset' }),
+    );
+  });
+
+  it('keeps the Turn summary running until authoritative completion arrives', () => {
     virtualItems = [{ index: 0, key: 'assistant-turn', start: 0 }];
 
     renderWithI18n(
@@ -451,9 +519,30 @@ describe('MessageList auto-scroll lifecycle', () => {
       </MessageActionsProvider>,
     );
 
-    const processRecordsButton = screen.getByRole('button', { name: /Process records/ });
+    const processRecordsButton = screen.getByRole('button', { name: /Processing/ });
 
-    expect(processRecordsButton.querySelector('.animate-spin')).toBeNull();
+    expect(processRecordsButton.querySelector('.animate-spin')).not.toBeNull();
+  });
+
+  it('keeps failed actions visible before the collapsed processing summary', () => {
+    virtualItems = [{ index: 0, key: 'actionable-turn', start: 0 }];
+
+    renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createActionableTurn()]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    const failedTool = screen.getByText('WriteFile');
+    const summary = screen.getByRole('button', { name: /Processed/ });
+    expect(screen.getByText('Permission denied')).toBeTruthy();
+    expect(failedTool.compareDocumentPosition(summary)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.queryByText('ReadDocument')).toBeNull();
   });
 
   it('renders temporary execution activity inside the transcript and removes it at idle', () => {
@@ -616,6 +705,7 @@ function createToolMessage(): Message {
     role: 'assistant',
     content: '',
     timestamp: 1_717_200_000_000,
+    turnTiming: { startedAt: 10, completedAt: 20 },
     contentBlocks: [
       toolBlock('tool-1', 'ReadDocument', '/books/a.epub', 10),
       toolBlock('tool-2', 'ReadDocument', '/books/a.epub', 14),
@@ -694,6 +784,7 @@ function createMessageWithFinalContentAndProcessRecords(): Message {
     role: 'assistant',
     content: '',
     timestamp: 1_717_200_000_000,
+    turnTiming: { startedAt: 1, completedAt: 148_001 },
     contentBlocks: [
       {
         id: 'thinking-1',
@@ -720,6 +811,7 @@ function createStreamingMessageWithCompletedProcessRecords(): Message {
     content: '',
     timestamp: 1_717_200_000_000,
     isStreaming: true,
+    turnTiming: { startedAt: Date.now() - 28_000 },
     contentBlocks: [
       toolBlock('tool-1', 'ReadDocument', 'manifest', 10),
       {
@@ -740,6 +832,7 @@ function createDenseAssistantTurn(): Message {
     role: 'assistant',
     content: '',
     timestamp: 1_717_200_000_000,
+    turnTiming: { startedAt: 1, completedAt: 148_001 },
     contentBlocks: [
       {
         id: 'progress-1',
@@ -768,6 +861,82 @@ function createDenseAssistantTurn(): Message {
         timestamp: 30,
         content: 'Final answer with readable Markdown.',
       },
+    ],
+  };
+}
+
+function createDocumentEvidenceMessage(): Message {
+  return {
+    id: 'message-document-evidence',
+    role: 'assistant',
+    content: '',
+    timestamp: 10,
+    turnTiming: { startedAt: 10, completedAt: 20 },
+    contentBlocks: [
+      {
+        id: 'read-image-evidence',
+        type: 'tool_call',
+        timestamp: 10,
+        toolCall: {
+          id: 'read-image-evidence-call',
+          name: 'ReadImage',
+          arguments: { path: 'books/a.epub' },
+          result: {
+            success: true,
+            data: {
+              source: { filePath: 'books/a.epub', format: 'epub' },
+              mode: 'metadata',
+              images: [
+                {
+                  label: 'Page 1',
+                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
+                  width: 1494,
+                  height: 2133,
+                  byteSize: 2048,
+                  mimeType: 'image/jpeg',
+                  metadata: {
+                    documentIndex: 1,
+                    locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
+                  },
+                  contentLocator: {
+                    kind: 'document-entry',
+                    source: { kind: 'workspace-file', path: 'books/a.epub' },
+                    entryPath: 'image/Page_1.jpg',
+                  },
+                },
+              ],
+              imageCount: 1,
+            },
+            attachments: [{ type: 'image', path: 'page-1.jpg' }],
+          },
+        },
+      },
+      { id: 'answer', type: 'text', timestamp: 20, content: 'Final analysis.' },
+    ],
+  };
+}
+
+function createActionableTurn(): Message {
+  return {
+    id: 'message-actionable-turn',
+    role: 'assistant',
+    content: '',
+    timestamp: 10,
+    turnTiming: { startedAt: 10, completedAt: 20 },
+    contentBlocks: [
+      {
+        id: 'failed-tool',
+        type: 'tool_call',
+        timestamp: 10,
+        toolCall: {
+          id: 'failed-tool-call',
+          name: 'WriteFile',
+          arguments: { path: 'result.md' },
+          result: { success: false, data: null, error: 'Permission denied' },
+        },
+      },
+      toolBlock('successful-tool', 'ReadDocument', 'source.epub', 12),
+      { id: 'answer', type: 'text', timestamp: 20, content: 'Could not save the result.' },
     ],
   };
 }

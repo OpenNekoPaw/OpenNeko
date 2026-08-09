@@ -783,6 +783,13 @@ body {
   border-left: 1px solid var(--agent-divider);
 }
 
+.agent-turn-activity-meta {
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 0 0 2px 16px;
+}
+
 .agent-turn-activity-item {
   min-width: 0;
   color: var(--agent-fg-secondary);

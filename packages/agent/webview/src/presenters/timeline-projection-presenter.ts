@@ -1,15 +1,22 @@
-import type { AgentTurnTimelineItem, ContentBlock, Message } from '@neko/agent-contracts';
+import type {
+  AgentTurnTimelineCompletion,
+  AgentTurnTimelineItem,
+  ContentBlock,
+  Message,
+  MessageTurnTiming,
+} from '@neko/agent-contracts';
 
 export interface TimelineTurnRenderInput {
   readonly messageId: string;
   readonly items: readonly AgentTurnTimelineItem[];
-  readonly completed: boolean;
+  readonly completion?: AgentTurnTimelineCompletion;
 }
 
 export function projectTimelineTurnToMessage(input: TimelineTurnRenderInput): Message {
   const timelineContentBlocks = projectTimelineItemsToContentBlocks(input.items);
   const contentBlocks = timelineContentBlocks;
   const workItemIds = projectTimelineWorkItemIds(input.items);
+  const turnTiming = projectTurnTiming(input.items, input.completion);
   return {
     id: input.messageId,
     role: 'assistant',
@@ -18,9 +25,29 @@ export function projectTimelineTurnToMessage(input: TimelineTurnRenderInput): Me
       .map((block) => block.content ?? '')
       .join(''),
     timestamp: contentBlocks[0]?.timestamp ?? Date.now(),
-    isStreaming: !input.completed,
+    isStreaming: input.completion === undefined,
     contentBlocks,
+    ...(turnTiming ? { turnTiming } : {}),
     ...(workItemIds.length > 0 ? { workItemIds: [...workItemIds] } : {}),
+  };
+}
+
+function projectTurnTiming(
+  items: readonly AgentTurnTimelineItem[],
+  completion: AgentTurnTimelineCompletion | undefined,
+): MessageTurnTiming | undefined {
+  const first = items[0];
+  if (!first) return undefined;
+  const startedAt = items.reduce(
+    (earliest, item) => Math.min(earliest, item.createdAt),
+    first.createdAt,
+  );
+  if (completion && completion.completedAt < startedAt) {
+    throw new Error('Agent Turn completion precedes its earliest Timeline item.');
+  }
+  return {
+    startedAt,
+    ...(completion ? { completedAt: completion.completedAt } : {}),
   };
 }
 

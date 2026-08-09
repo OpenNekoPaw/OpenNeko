@@ -3,6 +3,7 @@ import type { ToolCall } from '@neko/agent-contracts';
 import type { ToolGroupContentBlockProjection } from '../../../presenters/content-block-presenter';
 import { ChevronIcon, SuccessIcon, ErrorIcon, ToolLoadingSpinner } from './icons';
 import { ToolCallDisplay } from './ToolCallDisplay';
+import { useTranslation } from '../../../i18n/I18nContext';
 
 interface ToolCallGroupDisplayProps {
   projection: ToolGroupContentBlockProjection;
@@ -15,6 +16,7 @@ function ToolCallGroupDisplayComponent({
   conversationId,
   workItemIds,
 }: ToolCallGroupDisplayProps) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const toggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -23,7 +25,14 @@ function ToolCallGroupDisplayComponent({
   const hasFailures = projection.failureCount > 0;
   const hasPending = projection.pendingCount > 0;
   const toneClass = hasFailures ? 'is-danger' : hasPending ? 'is-info' : 'is-success';
-  const statusLabel = formatGroupStatus(projection);
+  const statusLabel = hasFailures
+    ? t('chat.toolGroup.failed', {
+        successCount: projection.successCount,
+        failureCount: projection.failureCount,
+      })
+    : hasPending
+      ? t('chat.toolGroup.pending', { count: projection.pendingCount })
+      : t('chat.toolGroup.succeeded', { count: projection.successCount });
 
   return (
     <div className="my-1">
@@ -42,7 +51,7 @@ function ToolCallGroupDisplayComponent({
             <SuccessIcon className="h-3 w-3 shrink-0 text-[var(--agent-success)]" />
           )}
           <span className="shrink-0 font-medium text-[var(--agent-fg)]">
-            {projection.toolName} x{projection.count}
+            {projection.toolName} ×{projection.count}
           </span>
           {projection.targetLabel && (
             <span className="truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
@@ -80,16 +89,6 @@ function ToolCallGroupDisplayComponent({
       </div>
     </div>
   );
-}
-
-function formatGroupStatus(projection: ToolGroupContentBlockProjection): string {
-  if (projection.failureCount > 0) {
-    return `${projection.successCount} ok / ${projection.failureCount} failed`;
-  }
-  if (projection.pendingCount > 0) {
-    return `${projection.pendingCount} pending`;
-  }
-  return `${projection.successCount} succeeded`;
 }
 
 export const ToolCallGroupDisplay = memo(ToolCallGroupDisplayComponent);

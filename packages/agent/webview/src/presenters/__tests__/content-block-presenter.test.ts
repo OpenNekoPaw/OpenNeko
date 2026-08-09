@@ -23,18 +23,22 @@ describe('content block presenter', () => {
     });
   });
 
-  it('keeps different targets and failures as individual tool rows', () => {
+  it('keeps different targets separate and compacts completed calls for one target', () => {
     const projections = projectContentBlocksUi([
       toolBlock('tool-1', 'ReadDocument', '/books/a.epub', 10),
       toolBlock('tool-2', 'ReadDocument', '/books/b.epub', 12),
       toolBlock('tool-3', 'ReadDocument', '/books/b.epub', 14, false),
     ]);
 
-    expect(projections.map((projection) => projection.renderKind)).toEqual([
-      'tool',
-      'tool',
-      'tool',
-    ]);
+    expect(projections).toHaveLength(2);
+    expect(projections[0]).toMatchObject({ renderKind: 'tool' });
+    expect(projections[1]).toMatchObject({
+      renderKind: 'toolGroup',
+      count: 2,
+      successCount: 1,
+      failureCount: 1,
+      targetLabel: '/books/b.epub',
+    });
   });
 
   it('aggregates tools by typed target without tool-name visibility exceptions', () => {
@@ -136,12 +140,15 @@ describe('content block presenter', () => {
       },
     ]);
 
-    const turn = projectAssistantTurn(projections);
+    const turn = projectAssistantTurn(projections, { startedAt: 8, completedAt: 20 });
 
     expect(turn.activitySummary).toMatchObject({
       blockCount: 2,
       toolCallCount: 1,
       thinkingCount: 1,
+      isRunning: false,
+      startedAt: 8,
+      completedAt: 20,
     });
     expect(turn.activity.map((projection) => projection.renderKind)).toEqual(['thinking', 'tool']);
     expect(turn.answer).toEqual([
@@ -150,6 +157,25 @@ describe('content block presenter', () => {
         content: 'Summary.',
       }),
     ]);
+  });
+
+  it('keeps Turn timing independent from overlapping Tool duration totals', () => {
+    const projections = projectContentBlocksUi([
+      toolBlock('tool-1', 'ReadDocument', '/books/a.epub', 90_000),
+      toolBlock('tool-2', 'ReadImage', '/books/page.png', 90_000),
+      { id: 'answer', type: 'text', timestamp: 149_000, content: 'Done.' },
+    ]);
+
+    const turn = projectAssistantTurn(projections, {
+      startedAt: 1_000,
+      completedAt: 149_000,
+    });
+
+    expect(turn.activitySummary).toMatchObject({
+      startedAt: 1_000,
+      completedAt: 149_000,
+      toolCallCount: 2,
+    });
   });
 
   it('moves text before a later tool into activity and keeps only terminal text as answer', () => {
@@ -181,6 +207,25 @@ describe('content block presenter', () => {
     expect(turn.actionable).toEqual([expect.objectContaining({ renderKind: 'tool' })]);
     expect(turn.activity).toEqual([]);
     expect(turn.answer).toHaveLength(1);
+  });
+
+  it('compacts repeated failed calls for the same exact target into one actionable group', () => {
+    const projections = projectContentBlocksUi([
+      failedToolBlock('failed-1', 'ReadDocument', 'cursor_12b95yb', 10),
+      failedToolBlock('failed-2', 'ReadDocument', 'cursor_12b95yb', 20),
+    ]);
+
+    const turn = projectAssistantTurn(projections, { startedAt: 1, completedAt: 21 });
+
+    expect(turn.actionable).toEqual([
+      expect.objectContaining({
+        renderKind: 'toolGroup',
+        count: 2,
+        failureCount: 2,
+        targetLabel: 'cursor_12b95yb',
+      }),
+    ]);
+    expect(turn.activity).toEqual([]);
   });
 
   it('keeps generated attachments as deliverables and read evidence in activity', () => {
@@ -284,6 +329,29 @@ function toolBlock(
         success,
         data: { file_path: filePath },
         duration,
+      },
+    },
+  };
+}
+
+function failedToolBlock(
+  id: string,
+  name: string,
+  cursorRef: string,
+  timestamp: number,
+): ContentBlock {
+  return {
+    id: `block-${id}`,
+    type: 'tool_call',
+    timestamp,
+    toolCall: {
+      id,
+      name,
+      arguments: { cursor_ref: cursorRef },
+      result: {
+        success: false,
+        data: null,
+        error: 'Document content could not be read.',
       },
     },
   };

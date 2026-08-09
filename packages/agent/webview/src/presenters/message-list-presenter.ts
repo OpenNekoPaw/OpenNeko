@@ -115,6 +115,9 @@ function hasLiveCanonicalExecutionRecord(messages: readonly Message[]): boolean 
   const lastUserMessageIndex = findLastIndex(messages, (message) => message.role === 'user');
   return messages.slice(lastUserMessageIndex + 1).some(
     (message) =>
+      (message.role === 'assistant' &&
+        message.turnTiming !== undefined &&
+        message.turnTiming.completedAt === undefined) ||
       (message.isStreaming === true && message.content.trim().length > 0) ||
       message.contentBlocks?.some((block) => {
         if (block.type === 'thinking') {

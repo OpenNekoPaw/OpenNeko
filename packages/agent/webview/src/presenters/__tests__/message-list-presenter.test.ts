@@ -63,6 +63,43 @@ describe('message-list-presenter', () => {
     ).toBe(false);
   });
 
+  it('lets a canonical running Turn with failed Tools replace generic activity', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'assistant-failed-tool',
+          role: 'assistant',
+          content: '',
+          timestamp: 1_100,
+          isStreaming: true,
+          turnTiming: { startedAt: 1_000 },
+          contentBlocks: [
+            {
+              id: 'failed-tool-block',
+              type: 'tool_call',
+              timestamp: 1_100,
+              toolCall: {
+                id: 'failed-tool',
+                name: 'ReadDocument',
+                arguments: { cursor_ref: 'cursor_12b95yb' },
+                result: {
+                  success: false,
+                  data: null,
+                  error: 'Document content could not be read.',
+                },
+              },
+            },
+          ],
+        },
+      ],
+      agentState: { phase: 'acting', toolName: 'ReadDocument', startedAt: 1_000 },
+      streamingMessageId: 'assistant-failed-tool',
+    });
+
+    expect(projection.showExecutionActivity).toBe(false);
+    expect(projection.items).toHaveLength(1);
+  });
+
   it('keeps activity visible for an empty streaming message shell', () => {
     const projection = projectMessageList({
       messages: [

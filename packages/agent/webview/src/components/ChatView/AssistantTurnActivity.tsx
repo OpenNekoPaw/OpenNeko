@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ToolCall } from '@neko/agent-contracts';
 import type {
   AssistantTurnActivitySummary,
@@ -34,8 +34,7 @@ function AssistantTurnActivityComponent({
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const toggleExpanded = useCallback(() => setIsExpanded((value) => !value), []);
-
-  if (projections.length === 0) return null;
+  const now = useElapsedClock(summary.isRunning, summary.startedAt);
 
   const summaryParts = [
     summary.toolCallCount > 0
@@ -48,28 +47,64 @@ function AssistantTurnActivityComponent({
       ? t('chat.processRecords.steps', { count: summary.blockCount })
       : null,
   ].filter((part): part is string => typeof part === 'string');
+  const duration = useMemo(() => {
+    if (summary.startedAt === undefined) return null;
+    const totalSeconds = Math.floor(
+      Math.max(0, (summary.completedAt ?? now) - summary.startedAt) / 1_000,
+    );
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes > 0
+      ? t('chat.processRecords.duration.minutesSeconds', { minutes, seconds })
+      : t('chat.processRecords.duration.seconds', { seconds });
+  }, [now, summary.completedAt, summary.startedAt, t]);
+  const summaryTitle = summary.isRunning
+    ? duration
+      ? t('chat.processRecords.processing', { duration })
+      : t('chat.processRecords.processingWithoutDuration')
+    : duration
+      ? t('chat.processRecords.processed', { duration })
+      : t('chat.processRecords.processedWithoutDuration');
+  const hasDetails = projections.length > 0;
+
+  if (!hasDetails && summary.startedAt === undefined) return null;
+
+  const summaryIcon = summary.isRunning ? (
+    <ToolLoadingSpinner className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
+  ) : hasDetails ? (
+    <ChevronIcon
+      className={`h-3 w-3 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+    />
+  ) : null;
 
   return (
-    <section className="agent-turn-activity" aria-label={t('chat.processRecords.title')}>
-      <button
-        type="button"
-        className="agent-turn-activity-summary"
-        aria-expanded={isExpanded}
-        onClick={toggleExpanded}
-      >
-        {summary.isStreaming ? (
-          <ToolLoadingSpinner className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
-        ) : (
-          <ChevronIcon
-            className={`h-3 w-3 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-          />
-        )}
-        <span className="font-medium text-[var(--agent-fg)]">{t('chat.processRecords.title')}</span>
-        <span className="min-w-0 truncate">{summaryParts.join(' · ')}</span>
-      </button>
+    <section
+      className="agent-turn-activity"
+      aria-label={hasDetails ? t('chat.processRecords.details') : summaryTitle}
+    >
+      {hasDetails ? (
+        <button
+          type="button"
+          className="agent-turn-activity-summary"
+          aria-expanded={isExpanded}
+          onClick={toggleExpanded}
+        >
+          {summaryIcon}
+          <span className="font-medium text-[var(--agent-fg)]">{summaryTitle}</span>
+        </button>
+      ) : (
+        <div
+          className="agent-turn-activity-summary"
+          role={summary.isRunning ? 'status' : undefined}
+        >
+          {summaryIcon}
+          <span className="font-medium text-[var(--agent-fg)]">{summaryTitle}</span>
+        </div>
+      )}
 
-      {isExpanded && (
+      {hasDetails && isExpanded && (
         <div className="agent-turn-activity-list">
+          <div className="agent-turn-activity-meta">{summaryParts.join(' · ')}</div>
           {projections.map((projection) => (
             <ActivityProjection
               key={projection.id}
@@ -82,6 +117,17 @@ function AssistantTurnActivityComponent({
       )}
     </section>
   );
+}
+
+function useElapsedClock(isRunning: boolean, startedAt: number | undefined): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isRunning || startedAt === undefined) return undefined;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [isRunning, startedAt]);
+  return now;
 }
 
 function ActivityProjection({

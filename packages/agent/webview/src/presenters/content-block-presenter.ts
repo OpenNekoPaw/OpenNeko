@@ -4,6 +4,7 @@ import type {
   ContentBlock,
   ToolCall,
   ToolCallProgress,
+  MessageTurnTiming,
 } from '@neko/agent-contracts';
 import {
   projectCompositeBlockRichContent,
@@ -95,7 +96,9 @@ export interface AssistantTurnActivitySummary {
   readonly blockCount: number;
   readonly toolCallCount: number;
   readonly thinkingCount: number;
-  readonly isStreaming: boolean;
+  readonly isRunning: boolean;
+  readonly startedAt?: number;
+  readonly completedAt?: number;
 }
 
 export interface AssistantTurnProjection {
@@ -243,6 +246,7 @@ export function mergeToolCalls(
 
 export function projectAssistantTurn(
   projections: readonly ContentBlockUiProjection[],
+  turnTiming?: MessageTurnTiming,
 ): AssistantTurnProjection {
   const visible = projections.filter((projection) => projection.renderKind !== 'empty');
   const parentIsStreaming = visible.some((projection) => projection.parentIsStreaming);
@@ -292,7 +296,9 @@ export function projectAssistantTurn(
         0,
       ),
       thinkingCount: activity.filter((projection) => projection.renderKind === 'thinking').length,
-      isStreaming: activity.some(isStreamingProjection),
+      isRunning: parentIsStreaming,
+      ...(turnTiming ? { startedAt: turnTiming.startedAt } : {}),
+      ...(turnTiming?.completedAt === undefined ? {} : { completedAt: turnTiming.completedAt }),
     },
   };
 }
@@ -420,11 +426,6 @@ function countProjectionToolCalls(projection: ContentBlockUiProjection): number 
   return 0;
 }
 
-function isStreamingProjection(projection: ContentBlockUiProjection): boolean {
-  if (projection.isStreaming) return true;
-  return projection.renderKind === 'thinking' && projection.isThinkingComplete === false;
-}
-
 function projectToolGroup(
   projections: readonly ToolContentBlockProjection[],
 ): ToolGroupContentBlockProjection {
@@ -459,7 +460,7 @@ function isAggregatableTool(projection: ToolContentBlockProjection): boolean {
   const toolCall = projection.toolCall;
   return (
     toolCall.pendingConfirmation !== true &&
-    toolCall.result?.success === true &&
+    toolCall.result !== undefined &&
     getToolTargetLabel(toolCall) !== null
   );
 }
@@ -480,6 +481,9 @@ function readToolTargetLabel(value: unknown): string | null {
     readToolString(value, 'filePath') ??
     readToolString(value, 'path') ??
     readToolString(value, 'url') ??
+    readToolString(value, 'cursor_ref') ??
+    readToolString(value, 'input_ref') ??
+    readToolString(value, 'unit_ref') ??
     readToolString(value.source, 'file_path') ??
     readToolString(value.source, 'filePath') ??
     readToolString(value.source, 'path') ??
