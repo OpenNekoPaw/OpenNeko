@@ -5,6 +5,13 @@ uses `@neko/markdown` `MarkdownStreamingSession` plus a package-local React rend
 Mermaid, resource references, semantic spans, creative tables and composite content. Streamdown
 2.5.0 is installed only as a dev spike and has no production registration.
 
+The current Agent layout projects blocks rather than turns. Each Markdown block becomes a primary
+result, flushes an adjacent process group and receives a `Response` header. The process group then
+renders Tool and Thinking presenters that add their own headers, cards and disclosure state. A real
+Desktop run therefore exposes several process disclosures and nested controls around a single final
+answer. The new design moves grouping to a turn-level presentation projection before changing the
+Markdown engine.
+
 The implementation improves creator editing and preserves incomplete Agent output without creating another
 authoritative document, an Agent-to-editor mutation route or multiple successful render paths in one
 owning surface.
@@ -12,21 +19,26 @@ owning surface.
 ### Five-layer analysis
 
 - **Responsibility:** `@neko/markdown` owns syntax/profile semantics; Text Editor Domain owns the
-  accepted Window working source; Text Editor Webview owns Rich/Source interaction; Agent Webview
-  owns message presentation; Content owns authorized Workspace bytes.
+  accepted Window working source; Text Editor Webview owns Rich/Source interaction; Agent application
+  projection owns exact Timeline block roles; Agent Webview owns turn presentation and disclosure
+  state plus browser presentation scheduling; Desktop Shell owns command-scoped pending presentation;
+  Content owns authorized Workspace bytes.
 - **Dependencies:** Markdown core remains host-neutral. Milkdown and CodeMirror are browser-only Text
   Editor dependencies. Streamdown is a dev-only Agent Webview spike dependency. Desktop imports only
   package public Roots and typed ports.
 - **Interfaces:** one GFM profile and corpus constrain each surface. Rich and Source submit ordered
-  changes to one exact Text Document session. Agent message text consumes one Timeline content-block
-  identity; file artifacts consume Workspace-relative file identity.
+  changes to one exact Text Document session. Agent text, process evidence, deliverables, diagnostics
+  and approvals retain exact Timeline content-block identity while a disposable turn projection
+  decides visual placement. Streaming scheduling consumes the same ordered Timeline patches and
+  changes no Host contract; file artifacts consume Workspace-relative file identity.
 - **Extension:** GFM additions and Neko extensions enter through explicit profile/extension contracts
   and atomic surface registration. No first-compatible parser, renderer priority, source rewrite or
   fallback chain is allowed.
 - **Testing:** deterministic corpus and round-trip tests prove syntax behavior; Webview tests prove
-  editor and stream lifecycle; visible Electron tests prove IME, CSP, layout, external changes and
-  user workflows. Agent Evaluation is excluded for pure rendering correctness but retained for the
-  separate native file-authoring behavior.
+  editor, stream lifecycle, bounded publication and final convergence; Desktop renderer tests prove
+  pending-scope isolation; visible Electron tests prove IME, CSP, layout, external changes and user
+  workflows. Agent Evaluation is excluded for pure rendering scheduling but retained for the existing
+  Desktop event-projection and native file-authoring behavior.
 
 ## Goals / Non-Goals
 
@@ -35,6 +47,10 @@ owning surface.
 - Provide a creator-oriented WYSIWYG Markdown editor without losing source access.
 - Make one public GFM profile portable for humans and file-native Agents.
 - Render incomplete and final Agent text through one stable message surface.
+- Present one Assistant turn as a primary answer document, typed deliverables and at most one bounded
+  activity disclosure.
+- Keep ordinary progress narration, Tool execution and Thinking trace secondary without hiding errors,
+  approvals or deliverables.
 - Preserve outline, references, syntax highlighting, resource projection and fail-visible security.
 - Keep `.md` bytes and the existing Text Document session as the only file/working-source authorities.
 
@@ -46,19 +62,21 @@ owning surface.
 - Replacing CodeMirror for JSON, YAML, Fountain, TXT, HTML or complete Markdown source editing.
 - Routing Agent file changes through Milkdown/ProseMirror or CodeMirror transactions.
 - Registering the current and candidate Agent renderers in parallel or retaining either as fallback.
+- Persisting collapsed state as a business fact, reordering the authoritative Timeline or inferring a
+  deliverable from a tool name or arbitrary JSON payload.
 
 ## Decisions
 
 ### 1. Assign one owner to each presentation intent
 
-| Intent                 | Owner / engine                              | Input authority                        | Lifecycle                          |
-| ---------------------- | ------------------------------------------- | -------------------------------------- | ---------------------------------- |
-| Markdown Rich edit     | `@neko/text-editor-webview` / Milkdown      | exact Text Document session projection | mounted visible editor View        |
-| Markdown Source edit   | `@neko/text-editor-webview` / CodeMirror 6  | same exact session projection          | mounted visible editor View        |
-| Other text edit        | `@neko/text-editor-webview` / CodeMirror 6  | same session contract                  | mounted visible editor View        |
-| Agent text message     | `@neko/agent-webview` / normalized renderer | exact Timeline content block           | partial delta through final state  |
-| Tool/Approval/Artifact | owning typed React presenter                | typed Timeline/domain projection       | exact block lifecycle              |
-| Markdown semantics     | `@neko/markdown`                            | source string/revision                 | disposable host-neutral projection |
+| Intent                 | Owner / engine                                 | Input authority                        | Lifecycle                          |
+| ---------------------- | ---------------------------------------------- | -------------------------------------- | ---------------------------------- |
+| Markdown Rich edit     | `@neko/text-editor-webview` / Milkdown         | exact Text Document session projection | mounted visible editor View        |
+| Markdown Source edit   | `@neko/text-editor-webview` / CodeMirror 6     | same exact session projection          | mounted visible editor View        |
+| Other text edit        | `@neko/text-editor-webview` / CodeMirror 6     | same session contract                  | mounted visible editor View        |
+| Agent text message     | `@neko/agent-webview` / canonical text adapter | exact Timeline content block           | partial delta through final state  |
+| Tool/Approval/Artifact | owning typed React presenter                   | typed Timeline/domain projection       | exact block lifecycle              |
+| Markdown semantics     | `@neko/markdown`                               | source string/revision                 | disposable host-neutral projection |
 
 Different intents may use different engines; one intent cannot select an engine because another
 failed. Milkdown is never mounted inside Agent message content. Streamdown is never used for
@@ -143,11 +161,11 @@ Outline, heading navigation and reference inventory come from `@neko/markdown` s
 projections. Milkdown may highlight the selected node, but its DOM is not the Search/Agent outline
 authority.
 
-### 4. Streamdown does not pass the atomic replacement gate
+### 4. Narrow Agent Markdown responsibility and reopen the atomic Streamdown gate
 
 Streamdown 2.5.0 was evaluated as a sole Agent text-content renderer because it includes `remend`,
-GFM, React components, block memoization and hardening. The spike verified completed GFM, CJK, raw
-HTML/URL hardening and stable completed-block identity.
+GFM, React components, block memoization and hardening. The original spike verified completed GFM,
+CJK, raw HTML/URL hardening and stable completed-block identity.
 
 The spike covered incomplete emphasis/link/fence/table/list, CJK, stable content-block identity,
 scroll anchors, code highlighting, Mermaid, safe links/raw HTML, resource references, semantic spans,
@@ -155,17 +173,50 @@ creative tables and typed sibling blocks. Passing parity would have required Nek
 through package-owned remark plugins/custom components or typed siblings, not ad hoc source
 preprocessing or a Streamdown fork.
 
-The candidate did not preserve incomplete emphasis and has no direct owner-aware path for Workspace
+The candidate did not preserve incomplete emphasis and had no direct owner-aware path for Workspace
 resource references, semantic source spans, Canvas creative tables, current Mermaid feedback or
 structured artifacts. Its isolated core bundle was 507,659 bytes minified and 151,943 bytes gzip,
-before package adapters. Correctness failed before sustained-update and long-message performance
-acceptance, so those measurements cannot upgrade the decision.
+before package adapters. That dated no-go remains evidence against assigning those business and
+extension responsibilities to Streamdown.
 
-The current `MarkdownRenderer` and Timeline-owned `MarkdownStreamingSession` therefore remain the
-only production path. Streamdown stays dev-only as executable evidence. There is no production
-import, registration, flag, fallback or partial adoption.
+The renewed gate evaluates a smaller contract: portable GFM, bounded incomplete suffixes, CJK,
+hostile markup, stable completed blocks, safe external links, authorized image projection and
+explicit Mermaid presentation. Tool, approval, evidence, deliverable, Diff, Artifact, creative table
+and owning-domain results remain typed siblings. Streamdown default styles and permissive resource
+settings are not accepted; the package adapter supplies exact components, hardening and theme.
 
-### 5. File-native Agent output remains outside editor transactions
+The 2026-08-10 narrowed rerun passes portable GFM/CJK, incomplete-suffix visibility, stable completed
+blocks and hostile HTML/URL hardening. It still renders `[[resource]]` and `![[resource]]` as ordinary
+text and cannot consume the existing owner-aware authorized resource projection without a new
+package-owned source-range plugin. That required hard gate fails, so the current normalized presenter
+remains canonical and Streamdown stays dev-only. Evaluation creates no runtime fallback, feature flag,
+renderer priority or streaming/final switch.
+
+### 5. Project one readable Assistant turn
+
+The authoritative Timeline order and block identities remain unchanged. A disposable Webview
+projection groups them into three presentation roles:
+
+1. `answer`: the final or currently terminal answer Markdown document;
+2. `deliverable`: typed user-facing media, file, Diff, Artifact or owning-domain result;
+3. `activity`: progress narration, Thinking, Tool execution and non-deliverable evidence.
+
+The application-owned Timeline projection must expose the role when runtime semantics know it. The
+Webview may derive the terminal answer from exact block order and terminal run state only as a
+disposable read model; it cannot persist that classification or rewrite the Timeline. Tool names do
+not decide whether output is evidence or a deliverable.
+
+A completed turn renders at most one compact activity summary before the prominent final answer and
+deliverables, matching the processing-to-result reading order. Expanding it renders a flat activity
+list with no nested Thinking or Tool disclosure cards.
+Running turns expose one current activity status. Failed Tool calls and pending approvals remain
+visible and actionable even when prior completed activity is collapsed.
+
+Ordinary answer Markdown has no per-block `Response` label, file icon or repeated avatar. The turn
+owns one assistant identity gutter and one action/timestamp area. Text uses a constrained reading
+column; tables, Diff and media may enter a wider lane without expanding paragraph measure.
+
+### 6. File-native Agent output remains outside editor transactions
 
 Agent chat deltas are transient Timeline projections rendered by the package-local Agent presentation
 surface. When an Agent creates or changes `.md`, the canonical Workspace file Tool publishes through
@@ -176,7 +227,7 @@ nor Milkdown/CodeMirror view state is the successful artifact fact.
 After publication, Resource Browser/Text Editor reopens or reloads the actual file. A chat preview is
 not promoted into the editor by copying renderer DOM or a Milkdown transaction.
 
-### 6. Keep dependencies lazy and package-owned
+### 7. Keep dependencies lazy and package-owned
 
 Milkdown enters only the Text Editor Webview lazy Rich chunk. Streamdown is dev-only and enters no
 production chunk. CodeMirror remains absent from unrelated Canvas/Cut/Preview startup chunks;
@@ -192,6 +243,60 @@ Before implementation, record current and candidate chunk sizes, first-render ti
 update cost and long-message/long-document memory. Bundle cost alone cannot override correctness,
 but a candidate exceeding the accepted Desktop budget does not pass the spike.
 
+### 8. Keep active output interactive without weakening turn identity
+
+Agent run state, composer availability, Markdown presentation work and Desktop command pending state
+are separate owners:
+
+- The current Turn freezes only the model/generation configuration captured by that Turn. The composer
+  remains editable, Stop remains available and eligible Agent-mode plain text continues through the
+  existing exact queue contract. Attachments, context references and action triggers remain unavailable
+  for queueing until their runtime contract can carry an immutable queued-input snapshot.
+- The Timeline projection replica still commits every ordered patch. The Agent Markdown registry may
+  accumulate append-only source for one short browser presentation interval after an initial visible
+  snapshot, parse only the latest accumulated source for that interval, and publish one coherent
+  snapshot. It must preserve every byte, flush completion synchronously, and reject replacement,
+  finalization or identity mismatches through the existing fail-visible path.
+- While a newer append is awaiting presentation, the canonical Markdown component keeps displaying the
+  last coherent normalized snapshot. It does not render raw text, switch renderer or treat delayed
+  presentation as final. Semantic extensions consume the same displayed snapshot source.
+- Desktop Shell tracks scene, Workbench layout, PrimarySidebar/catalog and composer-target mutations by
+  owning scope. A scene transition may block controls whose identity it replaces; a layout mutation may
+  briefly block layout controls; neither an Agent run nor an unrelated sidebar/target command disables
+  the other scopes.
+
+This keeps urgent browser input and pointer tasks schedulable without changing AgentSession, queue,
+projection attachment, Markdown profile or file authority. The bounded presentation interval is a
+discardable Webview scheduling policy, not a cache, alternate data source or persisted state.
+
+### 9. Reconstruct one persisted Pi turn before Webview presentation
+
+Live Timeline projection already gives one user turn one assistant message owner. Persisted Pi history
+contains multiple assistant entries for a tool-using turn because each provider iteration is recorded
+around Tool results. `@neko/agent-runtime` history projection, not the Webview, owns the conversion of
+that provider transcript into product `Message` records.
+
+The canonical history projector segments the active Pi branch at user-message boundaries. Within one
+segment it:
+
+- creates at most one successful assistant `Message`, owned by the first assistant Pi entry;
+- appends assistant text, Thinking and Tool blocks in exact entry/content order;
+- binds each Tool result to its exact preceding Tool call without creating another assistant message;
+- retains entry-derived block identities and the first assistant timestamp; and
+- closes the segment only when the next user message begins.
+
+A terminal provider-error entry remains a separate typed error message so the existing actionable
+diagnostic is not hidden by normal turn content.
+
+An orphan Tool result, unsupported role or invalid structured user presentation remains a local
+projection error. The projector does not search another turn, merge by Tool name, use timestamps as a
+compatibility heuristic or fall back to the previous per-entry presentation. The Webview receives the
+same one-message turn shape for live and reopened conversations and applies the same
+answer/deliverable/actionable/activity presenter once.
+
+This is a canonical projection from the authoritative Pi transcript, not transcript mutation or
+migration. Raw Pi entries remain unchanged and continue to own provider continuation history.
+
 ## Canonical Paths
 
 ```text
@@ -201,8 +306,15 @@ Workspace .md -> Content read -> TextDocumentSession accepted source
 ```
 
 ```text
-Pi/AgentSession Timeline text delta -> exact content-block identity
-  -> package-local normalized Agent text surface -> final state on the same surface
+Pi/AgentSession Timeline blocks -> exact turn/block identity and terminal state
+  -> package-owned turn projection -> answer / deliverable / activity
+  -> one canonical Agent text surface for answer Markdown
+```
+
+```text
+Persisted Pi branch entries -> user-turn segmentation in Agent runtime history projector
+  -> one restored assistant Message with ordered typed blocks
+  -> the same package-owned Webview turn projection used by live output
 ```
 
 ```text
@@ -230,7 +342,8 @@ execution, fallback parsing and direct Renderer file access.
    exact `.nkc`/`.otio` denial, and Host-driven clean reload/dirty conflict for open Text Documents.
 1. Freeze the GFM profile and cross-surface corpus.
 2. Spike Milkdown round-trip/IME/bundle behavior, then register the passing production Rich path.
-3. Spike Streamdown against decisive current Agent renderer gates; record the no-go and keep the
-   current renderer canonical.
-4. Run deterministic, visible Desktop and adjacent regression validation; archive the change only
+3. Replace block-level layout with one turn projection and activity disclosure.
+4. Re-spike Streamdown against the narrowed text-only gate and either switch atomically or record the
+   renewed no-go without registration.
+5. Run deterministic, visible Desktop and adjacent regression validation; archive the change only
    after replaced paths and dependencies are absent.

@@ -49,3 +49,31 @@
 - [x] 6.2 Add OpenSpec proposal, five-layer design, requirements, tasks and Agent Evaluation disposition.
 - [x] 6.3 Update the stable Markdown ADR, architecture navigation, document navigation and package-owned Markdown contract without claiming unimplemented dependencies are present.
 - [ ] 6.4 After implementation evidence passes, archive the change and remove target/implementation-gap wording from stable documentation.
+
+## 7. Agent Turn Presentation And Narrowed Renderer Replacement
+
+- [x] 7.1 Capture the 2026-08-10 visible Desktop hierarchy defect and update proposal, five-layer design, requirements and tasks before implementation.
+- [x] 7.2 Replace block-level primary-result grouping with one turn-level presentation projection that preserves exact Timeline identity and separates answer, deliverable, actionable and activity roles without tool-name routing.
+- [x] 7.3 Render one assistant identity gutter, header-free answer Markdown and at most one flat process disclosure; remove nested Tool/Thinking disclosure chrome while keeping failures and approvals visible.
+- [x] 7.4 Add a package-owned semantic Agent Markdown theme with constrained text measure and explicit wide lanes for tables, code, Diff and authorized media in full and narrow layouts.
+- [x] 7.5 Re-run the Streamdown 2.5.0 gate against the narrowed text-only contract; the candidate passes base GFM/CJK, incomplete-suffix visibility, stable blocks and hostile input but fails owner-aware Workspace resource projection, so record the renewed no-go without production registration.
+- [x] 7.6 Add deterministic presenter, component, GFM, streaming identity, security, evidence/deliverable placement and no-old-path tests; run focused package typecheck and Webview tests.
+- [ ] 7.7 Use `neko-ui-validation` on the visible Electron Desktop for running, completed, expanded activity, actionable failure/approval, dense GFM, media evidence/deliverable, light/dark and narrow/full layouts. Two authoritative attempts are blocked by stale adjacent scenario assertions before the transcript inventory completes; deterministic DOM/layout coverage passes, but is not substituted for visible evidence.
+- [x] 7.8 Reuse and update `agent-runtime.stream-delivery` for Desktop event-projection evidence; key-free validation passes (44 files / 294 tests, 24 suites / 64 cases), while real-provider visible/hidden execution is infrastructure-blocked because provider, model and cost authorization are unset.
+- [x] 7.9 Run `neko-quality-review`, dependency/OpenSpec gates and adjacent regression checks; focused Webview, Agent Evaluation, package/application/Agent/Webview boundary, strict Agent, legacy debt, unused and OpenSpec gates pass, with UI and smoke blockers recorded fail-visible.
+
+## 8. Active Output Interaction And Scheduling
+
+- [x] 8.1 Record the active-output interaction defect and update proposal, five-layer design, requirements, Evaluation disposition and tasks before implementation.
+- [x] 8.2 Add one Agent Webview streaming-presentation scheduler that preserves every append, establishes the first visible snapshot immediately, bounds intermediate full-source parses and flushes finalization synchronously without another renderer path.
+- [x] 8.3 Keep the active-run composer editable and exact text queue/Stop behavior available while retaining current-Turn configuration locks and explicit unsupported queued-input boundaries.
+- [x] 8.4 Replace Desktop's broad Shell pending presentation with owner-scoped scene, layout, sidebar/catalog and target-selection pending state so unrelated Workbench controls remain interactive.
+- [x] 8.5 Add deterministic scheduler, final-convergence, composer-focus/queue, pending-scope and no-fallback tests; run focused package builds/typechecks and boundary gates.
+- [x] 8.6 Run `neko-ui-validation`, reuse `agent-runtime.stream-delivery` for the unchanged event-projection path, run `neko-quality-review`, and record visible Electron/performance evidence or exact blockers.
+
+## 9. Live And Reopened Turn Projection Parity
+
+- [x] 9.1 Record the reopened-conversation fragmentation defect and define Agent runtime history projection, not Webview adjacent-message grouping, as the canonical owner.
+- [x] 9.2 Segment persisted Pi entries by user turn and project all assistant iterations plus exact Tool results into one ordered assistant `Message` without changing raw transcript authority.
+- [x] 9.3 Add deterministic runtime and Webview tests proving a multi-Tool turn has one activity disclosure and identical final hierarchy before and after reopen, while orphan Tool results remain fail-visible.
+- [x] 9.4 Reuse the existing persistence/resume Agent Evaluation disposition, run focused runtime/Webview validation and `neko-ui-validation`/`neko-quality-review`, and record exact visible-runtime blockers.
