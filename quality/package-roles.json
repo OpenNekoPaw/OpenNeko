@@ -307,6 +307,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/text-editor/node",
+      "name": "@neko/text-editor-node",
+      "family": "text-editor",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/text-editor/webview",
       "name": "@neko/text-editor-webview",
       "family": "text-editor",

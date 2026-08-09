@@ -24,14 +24,14 @@
 
 ## 5. Rich And Split Presentation
 
-- [ ] 5.1 Render resolved CommonMark images and `![[...]]` image resources with bounded layout, alt text, local diagnostics and Source reveal while preserving document bytes.
-- [ ] 5.2 Add typed audio/video presenters with user-operated controls, no autoplay, canonical Range transport and exact unmount/token-removal release.
-- [ ] 5.3 Prove Milkdown source-preserving round-trip for enabled extension nodes before Rich mutation; otherwise retain the read-only Rich projection and canonical Source mutation path.
-- [ ] 5.4 Add incomplete-token, missing/ambiguous/unauthorized resource, sibling containment, stale preparation and document-switch Webview tests.
+- [x] 5.1 Render resolved CommonMark images and `![[...]]` image resources with bounded layout, alt text, local diagnostics and Source reveal while preserving document bytes.
+- [x] 5.2 Add typed audio/video presenters with user-operated controls, no autoplay, canonical Range transport and exact unmount/token-removal release.
+- [x] 5.3 Prove Milkdown source-preserving round-trip for enabled extension nodes before Rich mutation; otherwise retain the read-only Rich projection and canonical Source mutation path.
+- [x] 5.4 Add incomplete-token, missing/ambiguous/unauthorized resource, sibling containment, stale preparation and document-switch Webview tests.
 
 ## 6. Validation And Delivery
 
-- [ ] 6.1 Run focused `@neko/markdown`, Text Editor Domain/Webview, Desktop renderer/Main tests and typechecks; record exact commands, failures and residual risks.
-- [ ] 6.2 Run dependency/boundary/OpenSpec validation and poison searches proving no private Markdown profile, second catalog, raw filesystem render path or runtime URL persistence exists.
-- [ ] 6.3 Use `neko-ui-validation` on visible Electron for Source completion, Rich/Split images, missing media, audio/video controls, light/dark theme, CJK IME, keyboard and adjacent Workbench behavior.
-- [ ] 6.4 Use `neko-quality-review`, close blocking findings, update stable architecture/package documentation and commit implementation in independently reviewable batches.
+- [x] 6.1 Run focused `@neko/markdown`, Text Editor Domain/Webview, Desktop renderer/Main tests and typechecks; record exact commands, failures and residual risks.
+- [x] 6.2 Run dependency/boundary/OpenSpec validation and poison searches proving no private Markdown profile, second catalog, raw filesystem render path or runtime URL persistence exists.
+- [x] 6.3 Use `neko-ui-validation` on visible Electron for Source completion, Rich/Split images, missing media, audio/video controls, light/dark theme, CJK IME, keyboard and adjacent Workbench behavior.
+- [x] 6.4 Use `neko-quality-review`, close blocking findings, update stable architecture/package documentation and commit implementation in independently reviewable batches.

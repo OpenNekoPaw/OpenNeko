@@ -2,7 +2,7 @@
 
 状态：Accepted（实施验收由活跃 OpenSpec 跟踪）
 
-更新日期：2026-08-08
+更新日期：2026-08-09
 
 范围：Agent、Text Editor、Canvas、`@neko/markdown`、共享契约、Desktop Host、Renderer 与资源投影。
 
@@ -62,9 +62,16 @@ reload，dirty session 则保留 buffer 并显示 external-change conflict。
 
 ## 资源引用
 
-Markdown 只保存稳定 resource/entity/artifact ref 与可选 revision/digest，不保存磁盘路径、cache path、
-blob URL 或 Desktop resource URL。Desktop Host 将 stable ref 解析为受授权短生命周期 descriptor；
-未知、陈旧或无权访问的引用显示明确 diagnostic。
+Markdown 只保存可移植的 Workspace 相对 target 或声明的稳定 resource/entity/artifact ref；不保存绝对
+磁盘路径、cache path、`file:` URL、blob URL 或 Desktop resource URL。`@neko/markdown` 识别 `@`、
+`[[...]]`、`![[...]]` 和 GFM authoring context，Text Editor 通过一个精确 Workspace/document/request
+限定的 catalog 返回候选；Agent composer catalog 不参与该路径。
+
+可见 Rich/Split 媒体由 Text Editor Domain 的 document/surface-qualified prepare/release contract
+请求。Node owner 解析 Workspace 相对 locator 并分类 image/audio/video，Desktop Host 只负责
+sender/path 授权和 `openneko://resource/<opaque-token>` 投影，Webview 只消费短生命周期 descriptor。
+切换文档、移除 token 或卸载 surface 必须释放精确 lease；未知、歧义、陈旧、无权或不支持的引用显示
+局部 diagnostic，并保留 Source 入口，不得回退 raw path、cache、Agent 或其他媒体 authority。
 
 ## Canvas handoff
 
@@ -81,8 +88,10 @@ active/recent Canvas，不生成私有 Canvas DTO，也不绕过 revisioned appl
 round-trip assessment、outline 和 reference projection。Agent core writer 已使用 freshness/CAS，
 `.nkc`/`.otio` generic-file denial 和 Text Editor external-change watcher 已实施。Markdown Text
 Editor 已使用 lazy Milkdown `Rich | Source | Split`，CodeMirror 继续拥有完整 Source 和其他文本；
-Agent 继续使用 `MarkdownStreamingSession` 与 package-local React renderer。Streamdown 仅为 dev
-spike，不是生产依赖路径。
+Source 已组合 GFM snippet 与 Workspace mention/resource completion，Rich/Split 已从精确授权投影展示
+CommonMark/`![[...]]` image、audio 和 video，并在可见 surface 生命周期内释放 lease。Agent 继续使用
+`MarkdownStreamingSession` 与 package-local React renderer。Streamdown 仅为 dev spike，不是生产依赖
+路径。
 
 剩余可见 Desktop UI、Agent native-file 和 package gate 验收由
 [`../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/`](../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/)

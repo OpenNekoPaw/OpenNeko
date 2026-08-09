@@ -11,5 +11,11 @@ action instead of mounting a lossy Rich mutation path. Milkdown is loaded only w
 The Root owns focus, selection, viewport, split and outline presentation only; source, dirty state and
 save authority remain in the injected host runtime.
 
+CodeMirror adapts the canonical Markdown assistance projection for GFM snippets, mentions and
+Workspace links/embeds, then submits accepted text through the same document edit sequence. Rich and
+Split present CommonMark and `![[...]]` image/audio/video only from Host-projected opaque descriptors.
+Media failures remain token-local with a Source action; unmount, token removal and document replacement
+release the exact lease. Native audio/video controls do not autoplay.
+
 The package has no Node or Electron dependency and is intended to be lazy-loaded only for a visible
 `text-editor` Workbench View.
