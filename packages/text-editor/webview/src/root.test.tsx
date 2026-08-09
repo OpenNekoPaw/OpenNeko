@@ -163,6 +163,81 @@ describe('TextEditorRoot', () => {
     await unmount(rendered.root);
   });
 
+  it('keeps newer Rich input visible while an earlier edit is being accepted', async () => {
+    const initial = textProjection('markdown', '初稿');
+    const firstAccepted = {
+      ...initial,
+      source: '初稿一\n',
+      editSequence: 1,
+      dirty: true,
+    };
+    const secondAccepted = {
+      ...firstAccepted,
+      source: '初稿一二\n',
+      editSequence: 2,
+    };
+    const first = createDeferred<TextDocumentProjection>();
+    const second = createDeferred<TextDocumentProjection>();
+    const runtime = createRuntime(initial);
+    runtime.applyEdits
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    const rendered = await renderEditor(runtime, 'zh-cn');
+
+    await clickText(rendered.container, '所见即所得');
+    await waitFor(() => rendered.container.querySelector('[data-rich-state="ready"]') !== null);
+    const rich = rendered.container.querySelector<HTMLElement>('.ProseMirror');
+    if (!rich) throw new Error('Rich input fixture requires ProseMirror.');
+
+    await replaceRichParagraphText(rich, '初稿一');
+    await waitFor(() => runtime.applyEdits.mock.calls.length === 1);
+    await replaceRichParagraphText(rich, '初稿一二');
+    expect(runtime.applyEdits).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      first.resolve(firstAccepted);
+      await settle();
+    });
+    await waitFor(() => runtime.applyEdits.mock.calls.length === 2);
+    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toBe('初稿一二');
+    expect(runtime.applyEdits).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        expectedEditSequence: 1,
+        changes: [{ from: 0, to: firstAccepted.source.length, insert: secondAccepted.source }],
+      }),
+    );
+
+    await act(async () => {
+      second.resolve(secondAccepted);
+      await settle();
+    });
+    await clickText(rendered.container, '源码');
+    await waitFor(() => rendered.container.querySelector('.cm-editor') !== null);
+    expect(editorView(rendered.container).state.doc.toString()).toBe(secondAccepted.source);
+    await unmount(rendered.root);
+  });
+
+  it('reconciles rejected Rich input to the last accepted source', async () => {
+    const runtime = createRuntime(textProjection('markdown', '稳定内容'));
+    runtime.applyEdits.mockRejectedValueOnce(new Error('rich-write-rejected'));
+    const rendered = await renderEditor(runtime, 'zh-cn');
+
+    await clickText(rendered.container, '所见即所得');
+    await waitFor(() => rendered.container.querySelector('[data-rich-state="ready"]') !== null);
+    const rich = rendered.container.querySelector<HTMLElement>('.ProseMirror');
+    if (!rich) throw new Error('Rich rejection fixture requires ProseMirror.');
+    await replaceRichParagraphText(rich, '未确认内容');
+
+    await waitFor(
+      () =>
+        rendered.container.querySelector('.neko-text-editor-operation-error')?.textContent ===
+        'rich-write-rejected',
+    );
+    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toBe('稳定内容');
+    await unmount(rendered.root);
+  });
+
   it('initializes the Rich controller after StrictMode replays its effects', async () => {
     const runtime = createRuntime(textProjection('markdown', '# Strict Rich\n'));
     const rendered = await renderEditor(runtime, 'en', true);
@@ -714,6 +789,29 @@ function applyChanges(source: string, changes: readonly TextDocumentChange[]): s
     cursor = change.to;
   }
   return result + source.slice(cursor);
+}
+
+async function replaceRichParagraphText(rich: HTMLElement, value: string): Promise<void> {
+  const text = rich.querySelector('p')?.firstChild;
+  if (!text) throw new Error('Rich input fixture requires a paragraph text node.');
+  await act(async () => {
+    text.nodeValue = value;
+    rich.dispatchEvent(
+      new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }),
+    );
+    await delay(20);
+  });
+}
+
+function createDeferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 async function waitFor(assertion: () => boolean | undefined, attempts = 30): Promise<void> {

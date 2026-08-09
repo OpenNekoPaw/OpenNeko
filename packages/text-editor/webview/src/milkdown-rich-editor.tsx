@@ -62,6 +62,7 @@ export function MilkdownRichEditor({
   const mount = useRef<HTMLDivElement>(null);
   const controller = useRef<MilkdownController>();
   const accepted = useRef(projection);
+  const pendingSource = useRef<string>();
   const queue = useRef(Promise.resolve());
   const queueToken = useRef(Symbol('text-editor-rich-queue'));
   const attempt = useRef(0);
@@ -73,6 +74,7 @@ export function MilkdownRichEditor({
 
   const enqueue = useCallback(
     (source: string) => {
+      pendingSource.current = source;
       const token = queueToken.current;
       queue.current = queue.current.then(async () => {
         if (!Object.is(token, queueToken.current)) return;
@@ -86,9 +88,11 @@ export function MilkdownRichEditor({
             changes: [{ from: 0, to: current.source.length, insert: source }],
           });
           accepted.current = next;
+          if (pendingSource.current === source) pendingSource.current = undefined;
           onProjection(next);
         } catch (error) {
           queueToken.current = Symbol('text-editor-rich-queue');
+          pendingSource.current = undefined;
           onError(errorMessage(error));
           controller.current?.reconcile(accepted.current.source);
         }
@@ -138,6 +142,9 @@ export function MilkdownRichEditor({
       if (cancelled) return;
       const current = controller.current;
       if (current) {
+        if (pendingSource.current !== undefined && projection.source !== pendingSource.current) {
+          return;
+        }
         const nextState = current.reconcile(projection.source);
         if (!nextState) {
           void current.destroy();
@@ -162,6 +169,7 @@ export function MilkdownRichEditor({
     () => () => {
       attempt.current += 1;
       attemptedSource.current = undefined;
+      pendingSource.current = undefined;
       onActions(undefined);
       const current = controller.current;
       controller.current = undefined;
