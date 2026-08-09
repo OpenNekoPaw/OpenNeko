@@ -7,7 +7,7 @@ import {
   type CanvasViewport,
   type GenerationCanvasNode,
 } from '@neko/canvas-domain';
-import { PlayIcon, StopIcon } from '@neko/ui/icons';
+import { PlayIcon, PlusIcon, StopIcon } from '@neko/ui/icons';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
@@ -16,7 +16,6 @@ interface SelectionGenerationInputPanelProps {
   readonly nodes: readonly CanvasNode[];
   readonly connections: readonly CanvasConnection[];
   readonly selectedNodeIds: readonly string[];
-  readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
   readonly hidden?: boolean;
 }
@@ -25,7 +24,6 @@ export function SelectionGenerationInputPanel({
   nodes,
   connections,
   selectedNodeIds,
-  viewport,
   viewportSize,
   hidden = false,
 }: SelectionGenerationInputPanelProps): ReactNode {
@@ -44,7 +42,6 @@ export function SelectionGenerationInputPanel({
       node={selectedNode}
       nodes={nodes}
       connections={connections}
-      viewport={viewport}
       viewportSize={viewportSize}
     />
   );
@@ -54,13 +51,11 @@ function GenerationInputPanel({
   node,
   nodes,
   connections,
-  viewport,
   viewportSize,
 }: {
   readonly node: GenerationCanvasNode;
   readonly nodes: readonly CanvasNode[];
   readonly connections: readonly CanvasConnection[];
-  readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
 }) {
   const host = useOptionalCanvasHost();
@@ -84,7 +79,7 @@ function GenerationInputPanel({
     projection?.phase === 'binding' ||
     projection?.phase === 'pending' ||
     projection?.phase === 'running';
-  const position = resolveGenerationInputPanelPosition(node, viewport, viewportSize);
+  const position = resolveGenerationInputPanelPosition(viewportSize);
   const references = useMemo(
     () =>
       connections
@@ -158,39 +153,21 @@ function GenerationInputPanel({
       className="selection-generation-input-panel"
       data-canvas-generation-input="true"
       data-canvas-generation-input-kind={recipe.kind}
-      data-placement={position.placement}
+      data-placement="viewport-bottom"
       aria-label={t('generation.inputPanel')}
       style={{
         left: position.x,
-        top: position.y,
+        bottom: position.bottom,
         width: position.width,
+        minHeight: position.minHeight,
         maxHeight: position.maxHeight,
       }}
       onMouseDown={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="selection-generation-input-panel__header">
-        <strong>{t(`generation.kind.${recipe.kind}`)}</strong>
-        <span>
-          {projection ? t(`generation.phase.${projection.phase}`) : t('generation.phase.idle')}
-        </span>
-      </div>
-
-      <textarea
-        aria-label={t('generation.prompt')}
-        className="selection-generation-input-panel__prompt"
-        placeholder={t('generation.promptPlaceholder')}
-        value={recipe.prompt}
-        onChange={(event) => {
-          const prompt = event.currentTarget.value;
-          setRecipe((currentRecipe) => ({ ...currentRecipe, prompt }));
-        }}
-        onBlur={commitOnBlur}
-      />
-
       <div className="selection-generation-input-panel__references">
-        <span className="selection-generation-input-panel__label">
-          {t('generation.references')}
+        <span className="selection-generation-input-panel__reference-slot" aria-hidden="true">
+          <PlusIcon size={16} />
         </span>
         <div className="selection-generation-input-panel__reference-list">
           {references.length > 0 ? (
@@ -205,64 +182,72 @@ function GenerationInputPanel({
             ))
           ) : (
             <span className="selection-generation-input-panel__empty-reference">
-              {t('generation.noReferences')}
+              {t('generation.references')}
             </span>
           )}
         </div>
       </div>
 
-      <div className="selection-generation-input-panel__fields">
-        <input
-          aria-label={t('generation.provider')}
-          placeholder={t('generation.provider')}
-          value={recipe.model?.providerId ?? ''}
-          onChange={(event) => setModelField('providerId', event.currentTarget.value)}
-          onBlur={commitOnBlur}
-        />
-        <input
-          aria-label={t('generation.model')}
-          placeholder={t('generation.model')}
-          value={recipe.model?.modelId ?? ''}
-          onChange={(event) => setModelField('modelId', event.currentTarget.value)}
-          onBlur={commitOnBlur}
-        />
-      </div>
-
-      <KindParameters
-        recipe={recipe}
-        onChange={setRecipe}
-        onCommit={commitRecipe}
-        onFailure={reportFailure}
+      <textarea
+        aria-label={t('generation.prompt')}
+        className="selection-generation-input-panel__prompt"
+        placeholder={t('generation.promptPlaceholder')}
+        value={recipe.prompt}
+        onChange={(event) => {
+          const prompt = event.currentTarget.value;
+          setRecipe((currentRecipe) => ({ ...currentRecipe, prompt }));
+        }}
+        onBlur={commitOnBlur}
       />
 
       <div className="selection-generation-input-panel__footer">
-        {node.data.outputs.length > 0 ? (
-          <select
-            aria-label={t('generation.outputHistory')}
-            value={selectedOutput?.outputId ?? ''}
-            onChange={(event) => {
-              void host
-                ?.selectGenerationOutput(node.id, event.currentTarget.value)
-                .catch(reportFailure);
-            }}
-          >
-            {node.data.outputs.map((output, index) => (
-              <option key={output.outputId} value={output.outputId}>
-                {t('generation.output', { number: index + 1 })}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span />
-        )}
+        <div className="selection-generation-input-panel__controls">
+          <input
+            aria-label={t('generation.provider')}
+            placeholder={t('generation.provider')}
+            value={recipe.model?.providerId ?? ''}
+            onChange={(event) => setModelField('providerId', event.currentTarget.value)}
+            onBlur={commitOnBlur}
+          />
+          <input
+            aria-label={t('generation.model')}
+            placeholder={t('generation.model')}
+            value={recipe.model?.modelId ?? ''}
+            onChange={(event) => setModelField('modelId', event.currentTarget.value)}
+            onBlur={commitOnBlur}
+          />
+          <KindParameters
+            recipe={recipe}
+            onChange={setRecipe}
+            onCommit={commitRecipe}
+            onFailure={reportFailure}
+          />
+          {node.data.outputs.length > 0 ? (
+            <select
+              aria-label={t('generation.outputHistory')}
+              value={selectedOutput?.outputId ?? ''}
+              onChange={(event) => {
+                void host
+                  ?.selectGenerationOutput(node.id, event.currentTarget.value)
+                  .catch(reportFailure);
+              }}
+            >
+              {node.data.outputs.map((output, index) => (
+                <option key={output.outputId} value={output.outputId}>
+                  {t('generation.output', { number: index + 1 })}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
         <button
           className="selection-generation-input-panel__run"
           type="button"
+          aria-label={active ? t('generation.cancel') : t('generation.run')}
           title={active ? t('generation.cancel') : t('generation.run')}
           onClick={() => void runOrCancel().catch(reportFailure)}
         >
-          {active ? <StopIcon size={13} /> : <PlayIcon size={13} />}
-          {active ? t('generation.cancel') : t('generation.run')}
+          {active ? <StopIcon size={15} /> : <PlayIcon size={15} />}
         </button>
       </div>
 
@@ -313,7 +298,7 @@ function KindParameters({
   switch (recipe.kind) {
     case 'prompt':
       return (
-        <div className="selection-generation-input-panel__fields">
+        <>
           {numeric(t('generation.temperature'), recipe.temperature, (temperature) => ({
             ...recipe,
             temperature,
@@ -322,11 +307,11 @@ function KindParameters({
             ...recipe,
             maxOutputTokens,
           }))}
-        </div>
+        </>
       );
     case 'image':
       return (
-        <div className="selection-generation-input-panel__fields">
+        <>
           <input
             aria-label={t('generation.aspectRatio')}
             placeholder={t('generation.aspectRatio')}
@@ -337,11 +322,11 @@ function KindParameters({
             onBlur={() => void onCommit().catch(onFailure)}
           />
           {numeric(t('generation.count'), recipe.count, (count) => ({ ...recipe, count }))}
-        </div>
+        </>
       );
     case 'video':
       return (
-        <div className="selection-generation-input-panel__fields">
+        <>
           {numeric(t('generation.duration'), recipe.duration, (duration) => ({
             ...recipe,
             duration,
@@ -355,11 +340,11 @@ function KindParameters({
             }
             onBlur={() => void onCommit().catch(onFailure)}
           />
-        </div>
+        </>
       );
     case 'audio':
       return (
-        <div className="selection-generation-input-panel__fields">
+        <>
           {numeric(t('generation.duration'), recipe.duration, (duration) => ({
             ...recipe,
             duration,
@@ -376,7 +361,7 @@ function KindParameters({
             />
             {t('generation.music')}
           </label>
-        </div>
+        </>
       );
   }
 }
@@ -412,34 +397,43 @@ function recipesEqual(left: CanvasGenerationRecipe, right: CanvasGenerationRecip
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function resolveGenerationInputPanelPosition(
-  node: GenerationCanvasNode,
-  viewport: CanvasViewport,
-  viewportSize: { readonly width: number; readonly height: number },
-): {
-  readonly x: number;
-  readonly y: number;
+export function resolveGenerationInputPanelPosition(viewportSize: {
   readonly width: number;
+  readonly height: number;
+}): {
+  readonly x: number;
+  readonly bottom: number;
+  readonly width: number;
+  readonly minHeight: number;
   readonly maxHeight: number;
-  readonly placement: 'above' | 'below';
 } {
   const viewportWidth = Math.max(0, viewportSize.width);
   const viewportHeight = Math.max(0, viewportSize.height);
-  const width = Math.min(
-    Math.max(280, Math.min(560, node.size.width * viewport.zoom)),
-    Math.max(280, viewportWidth - 24),
-  );
-  const centerX = viewport.pan.x + (node.position.x + node.size.width / 2) * viewport.zoom;
-  const nodeTop = viewport.pan.y + node.position.y * viewport.zoom;
-  const nodeBottom = viewport.pan.y + (node.position.y + node.size.height) * viewport.zoom;
-  const availableBelow = viewportHeight - nodeBottom - 12;
-  const availableAbove = nodeTop - 58;
-  const placement = availableBelow >= 190 || availableBelow >= availableAbove ? 'below' : 'above';
+  const width = Math.min(760, Math.max(280, viewportWidth - 24));
   return {
-    x: Math.max(12 + width / 2, Math.min(viewportWidth - 12 - width / 2, centerX)),
-    y: placement === 'below' ? nodeBottom + 12 : nodeTop - 54,
+    x: viewportWidth / 2,
+    bottom: 16,
     width,
-    maxHeight: Math.max(160, placement === 'below' ? availableBelow : availableAbove),
-    placement,
+    minHeight: viewportWidth <= 520 ? 246 : 214,
+    maxHeight: Math.max(180, viewportHeight - 32),
   };
+}
+
+export function resolveGenerationSelectionSafePan(
+  node: GenerationCanvasNode,
+  viewport: CanvasViewport,
+  viewportSize: { readonly width: number; readonly height: number },
+): { readonly x: number; readonly y: number } | undefined {
+  if (viewportSize.width <= 0 || viewportSize.height <= 0) return undefined;
+
+  const panel = resolveGenerationInputPanelPosition(viewportSize);
+  const nodeTop = viewport.pan.y + node.position.y * viewport.zoom;
+  const nodeBottom = nodeTop + node.size.height * viewport.zoom;
+  const safeTop = 54;
+  const safeBottom = viewportSize.height - panel.bottom - panel.minHeight - 16;
+  if (nodeBottom <= safeBottom) return undefined;
+
+  const shiftY = Math.max(safeTop - nodeTop, safeBottom - nodeBottom);
+  if (shiftY >= 0) return undefined;
+  return { x: viewport.pan.x, y: viewport.pan.y + shiftY };
 }

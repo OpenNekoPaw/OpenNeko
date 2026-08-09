@@ -6,7 +6,10 @@ import {
   useReportWebviewKeyboardFocus,
 } from '@neko/ui/keyboard';
 import { CreativeWorkbenchShell } from '@neko/ui/workbench';
-import { validateCanvasBoardRef } from '@neko/canvas-domain';
+import {
+  resolveCanvasGenerationNodeDefaultSize,
+  validateCanvasBoardRef,
+} from '@neko/canvas-domain';
 import type { CanvasDroppedAsset, ProjectedCanvasStatus } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
 import type {
@@ -69,7 +72,7 @@ import { resolveCanvasRenderRefreshDecision } from './utils/renderRefreshTiering
 import { t } from './i18n';
 import { getLogger } from './utils/logger';
 import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
-import { centerNodeAt, resolveNodeMinSize } from './utils/nodeSizing';
+import { centerNodeAt } from './utils/nodeSizing';
 
 // =============================================================================
 // Constants & Host API
@@ -262,12 +265,11 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Node helpers
   // =========================================================================
 
-  const { addTableAt, addImportedMarkdownAt, addMediaAt, addFileAt, addCanvasEmbedAt } =
-    useNodeHelpers({
-      addNode,
-      nodeCount: nodes.length,
-      reportAction,
-    });
+  const { addImportedMarkdownAt, addMediaAt, addFileAt, addCanvasEmbedAt } = useNodeHelpers({
+    addNode,
+    nodeCount: nodes.length,
+    reportAction,
+  });
 
   // =========================================================================
   // Clipboard
@@ -351,7 +353,10 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
         if (!action.generationKind) {
           throw new Error(`Canvas generation action "${actionId}" has no Generation kind`);
         }
-        const nodePosition = centerNodeAt(position, resolveNodeMinSize({ type: 'generation' }));
+        const nodePosition = centerNodeAt(
+          position,
+          resolveCanvasGenerationNodeDefaultSize(action.generationKind),
+        );
         void hostPort
           .createGenerationNode(action.generationKind, nodePosition)
           .catch((error: unknown) => {
@@ -371,15 +376,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
         requestCanvasFilePickerSource(actionId, sourceMode, position);
         return;
       }
-      switch (action.id) {
-        case 'table':
-          addTableAt(position);
-          return;
-        default:
-          throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
-      }
+      throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
     },
-    [addTableAt, requestCanvasFilePickerSource, hostPort],
+    [requestCanvasFilePickerSource, hostPort],
   );
 
   const handleSelectAddAction = useCallback(

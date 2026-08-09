@@ -31,7 +31,7 @@ describe('GenerationNode', () => {
     document.body.replaceChildren();
   });
 
-  it('renders only type, phase and generated content inside the durable node', () => {
+  it('renders generated text as Text content without a Generation task-card header', () => {
     render(
       nodeWithHistory(),
       createHost({
@@ -47,12 +47,43 @@ describe('GenerationNode', () => {
     );
 
     expect(container.textContent).toContain('Previously generated scene');
-    expect(container.textContent).toContain('Failed');
+    expect(container.textContent).toContain('Text');
+    expect(container.textContent).not.toContain('Text generation');
+    expect(container.textContent).not.toContain('Failed');
+    expect(container.querySelector('[data-canvas-content-kind="text"]')).not.toBeNull();
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('select')).toBeNull();
     expect(container.querySelector('button[title="Run"]')).toBeNull();
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
+
+  it.each([
+    ['prompt', 'text', 'Text', 'codicon-file-text'],
+    ['image', 'image', 'Image', 'codicon-file-media'],
+    ['audio', 'audio', 'Audio', 'codicon-music'],
+    ['video', 'video', 'Video', 'codicon-play'],
+  ] as const)(
+    'renders the %s empty state as a %s content node',
+    (kind, contentKind, label, iconClass) => {
+      const node: GenerationCanvasNode = {
+        id: `generation-${kind}`,
+        type: 'generation',
+        position: { x: 20, y: 30 },
+        size: { width: 320, height: 240 },
+        zIndex: 1,
+        data: { recipe: { kind, prompt: '' }, outputs: [] },
+      };
+
+      render(node, createHost());
+
+      expect(container.querySelector(`[data-canvas-content-kind="${contentKind}"]`)).not.toBeNull();
+      const empty = container.querySelector('.canvas-generation-node__empty');
+      expect(empty).not.toBeNull();
+      expect(empty?.querySelector(`.${iconClass}`)).not.toBeNull();
+      expect(container.textContent).toContain(label);
+      expect(container.textContent).not.toContain('generation');
+    },
+  );
 
   function render(node: GenerationCanvasNode, host: CanvasWebviewHostPort): void {
     act(() => {

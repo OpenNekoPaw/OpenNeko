@@ -74,7 +74,10 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-action="preview:open"');
     expect(markup).not.toContain('data-selection-action="node:copy-to-media-library"');
     expect(markup).not.toContain('data-selection-action="node:open-content-overlay"');
-    expect(markup).toContain('data-selection-overflow-actions="node:duplicate delete-selection"');
+    expect(markup).toContain('data-selection-action="node:duplicate"');
+    expect(markup).toContain('data-selection-action-location="primary"');
+    expect(markup).toContain('data-selection-overflow-actions="delete-selection"');
+    expect(container.querySelector('[data-selection-kind-label]')?.textContent).toBe('Image');
     await act(async () => root.unmount());
   });
 
@@ -137,7 +140,7 @@ describe('SelectionContextToolbar', () => {
         .querySelector('[data-selection-overflow]')
         ?.getAttribute('data-selection-overflow-actions'),
     ).toBe(
-      'desktop:reveal media-library:copy-to-project media-library:copy-to-global node:duplicate delete-selection',
+      'desktop:reveal media-library:copy-to-project media-library:copy-to-global delete-selection',
     );
 
     await act(async () => {
@@ -150,7 +153,7 @@ describe('SelectionContextToolbar', () => {
     expect(mediaLibraryGroup?.textContent).toContain('Copy to project Media Library');
     expect(mediaLibraryGroup?.textContent).toContain('Copy to global Media Library');
     const nodeGroup = document.body.querySelector('[data-selection-overflow-group="node"]');
-    expect(nodeGroup?.textContent).toContain('Duplicate node');
+    expect(nodeGroup?.textContent).not.toContain('Duplicate node');
     expect(nodeGroup?.textContent).toContain('Delete');
 
     await act(async () => {
@@ -239,6 +242,29 @@ describe('SelectionContextToolbar', () => {
     );
 
     expect(markup).not.toContain('node:open-content-overlay');
+  });
+
+  it('labels a Generation Node as its base content kind', () => {
+    const node: CanvasNode = {
+      id: 'generation-image',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 320, height: 240 },
+      zIndex: 1,
+      data: { recipe: { kind: 'image', prompt: '' }, outputs: [] },
+    };
+    const markup = renderToStaticMarkup(
+      <SelectionContextToolbar
+        nodes={[node]}
+        selectedNodeIds={[node.id]}
+        viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+        viewportSize={{ width: 800, height: 600 }}
+      />,
+    );
+
+    expect(markup).toContain('data-selection-kind-label="true"');
+    expect(markup).toContain('>Image</span>');
+    expect(markup).toContain('data-selection-action="node:duplicate"');
   });
 
   it('keeps Group visible and destructive deletion in More for multi-selection', () => {

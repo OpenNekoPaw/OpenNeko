@@ -118,6 +118,7 @@ describe('CanvasToolbar', () => {
           onUndo={() => undefined}
           onRedo={() => undefined}
           onSelectAddAction={onSelectAddAction}
+          availableGenerationKinds={['prompt', 'image', 'video', 'audio']}
         />,
       );
     });
@@ -135,9 +136,9 @@ describe('CanvasToolbar', () => {
     expect(addButton?.getAttribute('aria-expanded')).toBe('true');
 
     act(() => {
-      document.body.querySelector<HTMLButtonElement>('[data-canvas-add-action="table"]')?.click();
+      document.body.querySelector<HTMLButtonElement>('[data-canvas-add-action="text"]')?.click();
     });
-    expect(onSelectAddAction).toHaveBeenCalledWith('table');
+    expect(onSelectAddAction).toHaveBeenCalledWith('text');
     expect(document.body.querySelector('[data-canvas-add-action-popover="true"]')).toBeNull();
   });
 

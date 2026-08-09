@@ -1,4 +1,5 @@
 import { selectedCanvasGenerationOutput, type GenerationCanvasNode } from '@neko/canvas-domain';
+import { toCodiconClassName, type CodiconName } from '@neko/ui/icons';
 import { useMemo } from 'react';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
@@ -14,7 +15,12 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
   const recipe = node.data.recipe;
   const projection = host?.getGenerationProjection(node.id);
   const selected = selectedCanvasGenerationOutput(node.data);
-  const title = t(`generation.kind.${recipe.kind}`);
+  const title = generationContentLabel(recipe.kind);
+  const textOutput = node.data.authoredText?.text ?? projection?.text;
+  const active =
+    projection?.phase === 'binding' ||
+    projection?.phase === 'pending' ||
+    projection?.phase === 'running';
   const previewSource = useMemo<PreviewSourceDescriptor | undefined>(() => {
     if (!selected || selected.kind === 'prompt') return undefined;
     return {
@@ -40,29 +46,25 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
       presentation="foundational"
       opaqueSurface
     >
-      <div className="flex h-full min-h-0 flex-col" data-canvas-generation-node={recipe.kind}>
-        <div
-          className="flex items-center justify-between border-b px-2 py-1.5"
-          style={{ borderColor: 'var(--node-divider)' }}
-        >
-          <strong className="truncate text-xs" style={{ color: 'var(--node-fg)' }}>
-            {title}
-          </strong>
-          <span className="text-[10px]" style={{ color: 'var(--node-fg-secondary)' }}>
-            {projection ? t(`generation.phase.${projection.phase}`) : t('generation.phase.idle')}
-          </span>
+      <div
+        className="canvas-generation-node"
+        data-canvas-generation-node={recipe.kind}
+        data-canvas-content-kind={recipe.kind === 'prompt' ? 'text' : recipe.kind}
+      >
+        <div className="canvas-generation-node__label">
+          <span
+            aria-hidden="true"
+            className={toCodiconClassName(generationContentIcon(recipe.kind))}
+          />
+          <span>{title}</span>
         </div>
-
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="canvas-generation-node__content">
           {recipe.kind === 'prompt' ? (
-            <div
-              className="h-full overflow-auto whitespace-pre-wrap p-2 text-xs leading-5"
-              style={{ color: 'var(--node-fg)' }}
-            >
-              {node.data.authoredText?.text ??
-                projection?.text ??
-                (selected ? t('generation.textUnavailable') : t('generation.empty'))}
-            </div>
+            textOutput ? (
+              <div className="canvas-generation-node__text-output">{textOutput}</div>
+            ) : (
+              <EmptyGenerationContent kind={recipe.kind} />
+            )
           ) : previewSource ? (
             <PreviewSurface
               source={previewSource}
@@ -71,15 +73,54 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
               audioLayout={recipe.kind === 'audio' ? 'node-card' : undefined}
             />
           ) : (
-            <div
-              className="flex h-full items-center justify-center px-3 text-center text-xs"
-              style={{ color: 'var(--node-fg-secondary)' }}
-            >
-              {t('generation.empty')}
-            </div>
+            <EmptyGenerationContent kind={recipe.kind} />
           )}
         </div>
+        {active && projection ? (
+          <div className="canvas-generation-node__phase" role="status">
+            {t(`generation.phase.${projection.phase}`)}
+          </div>
+        ) : null}
       </div>
     </BaseNode>
   );
+}
+
+function EmptyGenerationContent({
+  kind,
+}: {
+  readonly kind: GenerationCanvasNode['data']['recipe']['kind'];
+}) {
+  return (
+    <div className="canvas-generation-node__empty" role="status">
+      <span aria-hidden="true" className={toCodiconClassName(generationContentIcon(kind))} />
+      <span className="sr-only">{t('generation.empty')}</span>
+    </div>
+  );
+}
+
+function generationContentLabel(kind: GenerationCanvasNode['data']['recipe']['kind']): string {
+  switch (kind) {
+    case 'prompt':
+      return t('node.text');
+    case 'image':
+      return t('node.image');
+    case 'audio':
+      return t('node.audio');
+    case 'video':
+      return t('node.video');
+  }
+}
+
+function generationContentIcon(kind: GenerationCanvasNode['data']['recipe']['kind']): CodiconName {
+  switch (kind) {
+    case 'prompt':
+      return 'file-text';
+    case 'image':
+      return 'file-media';
+    case 'audio':
+      return 'music';
+    case 'video':
+      return 'play';
+  }
 }

@@ -11,6 +11,20 @@ import {
   type CanvasGenerationRecipe,
 } from './types/canvas-generation-node';
 
+const CANVAS_GENERATION_NODE_DEFAULT_SIZES = {
+  prompt: { width: 320, height: 220 },
+  image: { width: 300, height: 220 },
+  audio: { width: 300, height: 120 },
+  video: { width: 300, height: 220 },
+} satisfies Record<CanvasGenerationKind, { readonly width: number; readonly height: number }>;
+
+export function resolveCanvasGenerationNodeDefaultSize(kind: CanvasGenerationKind): {
+  readonly width: number;
+  readonly height: number;
+} {
+  return { ...CANVAS_GENERATION_NODE_DEFAULT_SIZES[kind] };
+}
+
 export function createCanvasGenerationNode(input: {
   readonly canvas: CanvasData;
   readonly nodeId: string;
@@ -24,7 +38,7 @@ export function createCanvasGenerationNode(input: {
     id: input.nodeId,
     type: 'generation',
     position: { ...input.position },
-    size: { width: 320, height: 240 },
+    size: resolveCanvasGenerationNodeDefaultSize(input.kind),
     zIndex:
       input.canvas.nodes.reduce((highest, candidate) => Math.max(highest, candidate.zIndex), -1) +
       1,

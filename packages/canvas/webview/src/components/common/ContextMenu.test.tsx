@@ -91,26 +91,11 @@ describe('Canvas ContextMenu builders', () => {
     const actions = groups.flatMap(
       (group) => group.submenu?.filter((item): item is MenuAction => !('separator' in item)) ?? [],
     );
-    expect(actions.map((action) => action.label)).toEqual([
-      'Text',
-      'Table',
-      'Image',
-      'Video',
-      'Audio',
-      '3D Director',
-    ]);
+    expect(actions.map((action) => action.label)).toEqual(['Text', 'Image', 'Video', 'Audio']);
 
     const imageAction = actions.find((action) => action.label === 'Image');
-    expect(imageAction?.submenu?.map((item) => ('separator' in item ? '' : item.label))).toEqual([
-      'Create with AI',
-      'Import file',
-      'Reference project content',
-    ]);
-    const referenceAction = imageAction?.submenu?.find(
-      (item): item is MenuAction =>
-        !('separator' in item) && item.label === 'Reference project content',
-    );
-    referenceAction?.onClick?.();
-    expect(onAddAction).toHaveBeenCalledWith('image', canvasPosition, 'reference');
+    expect(imageAction?.submenu).toBeUndefined();
+    imageAction?.onClick?.();
+    expect(onAddAction).toHaveBeenCalledWith('image', canvasPosition);
   });
 });

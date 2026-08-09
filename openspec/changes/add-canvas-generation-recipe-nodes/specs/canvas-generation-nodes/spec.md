@@ -144,7 +144,7 @@ GenerationJob execution SHALL survive Canvas renderer unmount, View closure and 
 
 Prompt/Text Generation Nodes SHALL render generated text content, and Image/Audio/Video Generation Nodes SHALL render their selected media through authorized package-owned preview paths. Editing generated text SHALL preserve the immutable generated source artifact and provenance.
 
-Canvas SHALL present selected content as separate action, node-content and Generation-input layers. The existing selection action toolbar SHALL remain independent of the node. A selected Generation Node SHALL render its Recipe editor in a separate package-owned input panel, while the durable node renders only type/status and current content or generated output. Ordinary imported or referenced nodes SHALL NOT display the Generation input panel.
+Canvas SHALL present selected content as separate action, node-content and Generation-input layers. The selection action toolbar SHALL remain independent of the node, identify the selected Text/Image/Audio/Video content kind and expose common actions directly rather than collapsing an otherwise empty toolbar to only a More control. A selected Generation Node SHALL render its Recipe editor as a wide package-owned bottom composer anchored inside the current Canvas viewport, while the durable node uses the same content-card visual grammar as an ordinary referenced node of its Recipe kind. Empty, running and completed states SHALL remain content states rather than a separate Generation task-card header. The composer SHALL NOT repeat the node type heading or phase and SHALL NOT size or position itself like a second graph node. Ordinary imported or referenced nodes SHALL NOT display the Generation input composer.
 
 #### Scenario: Prompt generation succeeds
 
@@ -161,20 +161,21 @@ Canvas SHALL present selected content as separate action, node-content and Gener
 #### Scenario: A Generation Node is selected before generation
 
 - **WHEN** one Prompt, Image, Audio or Video Generation Node is the exact selection
-- **THEN** Canvas shows the selection action toolbar, the content node and one detached Generation input panel
-- **AND** the input panel edits the same node's prompt, connected-reference summary, exact model and legal kind-specific parameters without creating another Canvas node
+- **THEN** Canvas shows a labeled selection action toolbar, the content node and one viewport-bottom Generation input composer
+- **AND** the content node is labeled and shaped as Text, Image, Audio or Video rather than as a Generation task card
+- **AND** the composer uses one shared reference, prompt, model/parameter footer and run/cancel structure to edit the same node without repeating a node heading or creating another Canvas node
 
 #### Scenario: Generation completes while the node remains selected
 
 - **WHEN** the selected Generation Node receives a successful committed output
 - **THEN** the output fills the content area of the same node
-- **AND** the detached input panel remains available for an explicit rerun without covering or resizing the node content
+- **AND** the bottom composer remains available for an explicit rerun without resizing or visually merging with the node content
 
 #### Scenario: A referenced content node is selected
 
 - **WHEN** the exact selection is an ordinary imported or referenced Media, Markdown or File node
-- **THEN** Canvas shows its selection actions and content node
-- **AND** it does not show a Generation Recipe input panel or infer generation authority from provenance
+- **THEN** Canvas shows its labeled selection actions and content node
+- **AND** it does not show a Generation Recipe composer or infer generation authority from provenance
 
 ### Requirement: Canvas mutations preserve user-observed command order
 

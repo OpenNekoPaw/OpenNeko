@@ -278,35 +278,44 @@ describe('CanvasHostRuntimeSession', () => {
     });
   });
 
-  it('creates an empty canonical Generation Node without a sibling Job or Media node', async () => {
-    const runtime = new CanvasHostRuntimeSession({
-      identity,
-      initialCanvas: createEmptyCanvasData('Initial'),
-      effects: { generation: unusedGenerationEffects() },
-    });
+  it.each([
+    ['prompt', { width: 320, height: 220 }],
+    ['image', { width: 300, height: 220 }],
+    ['audio', { width: 300, height: 120 }],
+    ['video', { width: 300, height: 220 }],
+  ] as const)(
+    'creates an empty canonical %s Generation Node with the matching content size',
+    async (kind, size) => {
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { generation: unusedGenerationEffects() },
+      });
 
-    const result = await runtime.executeIntent(
-      request('generation-create', {
-        type: 'create-generation-node',
-        kind: 'image',
-        position: { x: 240, y: 180 },
-      }),
-    );
-
-    expect(result.status).toBe('accepted');
-    if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
-    expect(result.snapshot.canvas.nodes).toEqual([
-      expect.objectContaining({
-        type: 'generation',
-        position: { x: 240, y: 180 },
-        data: expect.objectContaining({
-          recipe: expect.objectContaining({ kind: 'image', prompt: '' }),
-          outputs: [],
+      const result = await runtime.executeIntent(
+        request('generation-create', {
+          type: 'create-generation-node',
+          kind,
+          position: { x: 240, y: 180 },
         }),
-      }),
-    ]);
-    expect(result.snapshot.canvas.nodes).toHaveLength(1);
-  });
+      );
+
+      expect(result.status).toBe('accepted');
+      if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
+      expect(result.snapshot.canvas.nodes).toEqual([
+        expect.objectContaining({
+          type: 'generation',
+          position: { x: 240, y: 180 },
+          size,
+          data: expect.objectContaining({
+            recipe: expect.objectContaining({ kind, prompt: '' }),
+            outputs: [],
+          }),
+        }),
+      ]);
+      expect(result.snapshot.canvas.nodes).toHaveLength(1);
+    },
+  );
 
   it('marks the current Generation projection stale when its submitted Recipe is edited', async () => {
     const configured = updateCanvasGenerationNodeRecipe({

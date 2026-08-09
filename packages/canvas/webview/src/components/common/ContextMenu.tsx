@@ -148,7 +148,7 @@ function buildCanvasAddActionMenu(ctx: CanvasMenuContext): MenuAction {
         label: t(action.labelKey),
         icon: createCanvasAddActionIcon(action.id),
       };
-      if (action.mode === 'direct') {
+      if (action.mode !== 'source') {
         return {
           ...item,
           onClick: () => ctx.onAddAction(action.id, ctx.canvasPosition),

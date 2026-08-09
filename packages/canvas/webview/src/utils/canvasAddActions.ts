@@ -1,6 +1,6 @@
 import type { CanonicalCanvasNodeType } from '@neko/canvas-domain';
 
-export type CanvasAddActionId = 'text' | 'table' | 'image' | 'video' | 'audio' | 'director3d';
+export type CanvasAddActionId = 'text' | 'image' | 'video' | 'audio';
 
 export type CanvasAddSourceKind = 'image' | 'video' | 'audio' | 'model';
 export type CanvasAddSourceModeId = 'create' | 'import' | 'reference';
@@ -49,13 +49,6 @@ export const CANVAS_ADD_ACTIONS: readonly CanvasAddAction[] = [
     generationKind: 'prompt',
   },
   {
-    id: 'table',
-    nodeType: 'markdown',
-    labelKey: 'node.table',
-    descriptionKey: 'node.tableDescription',
-    mode: 'direct',
-  },
-  {
     id: 'image',
     nodeType: 'generation',
     labelKey: 'node.image',
@@ -75,14 +68,6 @@ export const CANVAS_ADD_ACTIONS: readonly CanvasAddAction[] = [
     labelKey: 'node.audio',
     mode: 'generation',
     generationKind: 'audio',
-  },
-  {
-    id: 'director3d',
-    nodeType: 'file',
-    labelKey: 'node.director3d',
-    badgeKey: 'badge.new',
-    mode: 'source',
-    sourceKind: 'model',
   },
 ] as const;
 

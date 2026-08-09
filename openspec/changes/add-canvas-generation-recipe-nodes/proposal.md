@@ -4,10 +4,10 @@ Canvas 当前的添加菜单直接创建 Markdown/Media/File 内容节点，而�
 
 ## What Changes
 
-- **BREAKING** 将 Canvas 的 Text、Image、Audio、Video 添加入口原子切换为一种 canonical Generation Node 的不同 `kind`；Table 与现有 3D Director 行为保持不变且不在本次扩展范围。
+- **BREAKING** Canvas 添加入口只保留 Text、Image、Audio、Video，并原子切换为一种 canonical Generation Node 的不同 `kind`；Table 与 3D Director 不再作为本次 Canvas 基础节点目录入口，历史 Markdown/File 内容保持可读。
 - Generation Node 在 `.nkc` 中持久保存严格 typed Recipe、稳定输入引用、运行关联和可选择的输出引用；Job、provider task、生成文件与资产版本仍由 `@neko/generation`/内容资产 owner 持有。
 - 选中 Generation Node 后由 Canvas package-owned 编辑器提供提示词、参考信息、purpose-qualified 模型和类型专用参数；显式运行创建一个不可变 GenerationJob request，成功结果回填原节点而不创建默认 Job/Media sibling 节点。
-- Canvas 选中态拆分为悬浮操作栏、内容节点和独立生成输入面板：普通/引用节点只显示操作栏与内容节点，Generation Node 额外显示输入面板；输入面板是可重建 presentation，不是第二个 Canvas 节点或事实来源。
+- Canvas 选中态拆分为悬浮操作栏、内容节点和独立生成输入 composer：普通/引用节点只显示带节点类型和直接操作的工具栏与内容节点，Generation Node 额外显示 viewport 底部宽幅 composer；Generation Node 按 Text/Image/Audio/Video 对应内容节点样式渲染，空态与结果态不显示“生成节点”任务卡标题，composer 不重复节点标题/状态，是可重建 presentation，不是第二个 Canvas 节点或事实来源。
 - Webview 发起的文档替换、删除后续状态提交与 Host-owned 节点创建必须经过同一串行命令队列；后续新增不得基于陈旧 Host snapshot 恢复已删除节点或连接。
 - 每次运行创建新的 Job 与输出；节点保留历史输出引用并选择当前输出，失败保留上次成功结果并显示局部 diagnostic。第一阶段每节点只允许一个 active Job，且不因上游变化自动执行下游节点。
 - 输入连接在运行时由 Canvas owner 解析为稳定文本或授权 `ContentLocator`，输出连接只暴露节点当前选择的结果；缺失、类型不匹配、过期或未授权输入仅阻塞当前运行。

@@ -174,7 +174,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const generationAuthoring = await exerciseCanvasGenerationAuthoring({
       click,
       evaluate,
-      pressKey,
       screenshot,
       viewId: 'canvas:functional:video',
       waitForSelector,
@@ -212,14 +211,13 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const selectedNodeScreenshot = await screenshot('canvas-node-selected-without-property-dock');
     const videoActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
     if (
-      videoActions.visible.join('|') !== '添加到剪辑|预览' &&
-      videoActions.visible.join('|') !== 'Add to Cut|Preview'
+      videoActions.visible.join('|') !== '添加到剪辑|预览|创建节点副本' &&
+      videoActions.visible.join('|') !== 'Add to Cut|Preview|Duplicate node'
     ) {
       throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
     }
     if (
       !videoActions.overflowActionIds.includes('desktop:reveal') ||
-      !videoActions.overflowActionIds.includes('node:duplicate') ||
       !videoActions.overflowActionIds.includes('delete-selection')
     ) {
       throw new Error(
@@ -232,7 +230,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       !videoOverflow.groups.includes('file') ||
       !videoOverflow.groups.includes('node') ||
-      !videoOverflow.nodeText.some((text) => ['创建节点副本', 'Duplicate node'].includes(text))
+      !videoOverflow.nodeText.some((text) => ['删除', 'Delete'].includes(text))
     ) {
       throw new Error(
         `Canvas video overflow grouping is invalid: ${JSON.stringify(videoOverflow)}`,
@@ -591,8 +589,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       evidence.rootCount !== 2 ||
       evidence.authoredNodeCount !== 4 ||
-      evidence.generationAuthoring.catalog.actionIds.join('|') !==
-        'text|table|image|video|audio|director3d' ||
+      evidence.generationAuthoring.catalog.actionIds.join('|') !== 'text|image|video|audio' ||
       evidence.generationAuthoring.kinds.map((item) => item.kind).join('|') !==
         'prompt|image|video|audio' ||
       evidence.generationAuthoring.kinds.some(
@@ -672,7 +669,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
 async function exerciseCanvasGenerationAuthoring({
   click,
   evaluate,
-  pressKey,
   screenshot,
   viewId,
   waitForSelector,
@@ -689,17 +685,41 @@ async function exerciseCanvasGenerationAuthoring({
       '[data-canvas-add-action-popover="true"] .canvas-add-action-popover__label',
     )].map((element) => element.childNodes[0]?.textContent?.trim() ?? ''),
   }))()`);
-  const expectedActionIds = ['text', 'table', 'image', 'video', 'audio', 'director3d'];
+  const expectedActionIds = ['text', 'image', 'video', 'audio'];
   if (catalog.actionIds.join('|') !== expectedActionIds.join('|')) {
     throw new Error(`Canvas add catalog order is invalid: ${JSON.stringify(catalog)}`);
   }
   const screenshots = [await screenshot('canvas-generation-add-menu-large')];
   const kinds = [];
   const actions = [
-    { actionId: 'text', kind: 'prompt' },
-    { actionId: 'image', kind: 'image' },
-    { actionId: 'video', kind: 'video' },
-    { actionId: 'audio', kind: 'audio' },
+    {
+      actionId: 'text',
+      kind: 'prompt',
+      contentKind: 'text',
+      label: ['Text', '文本'],
+      emptyIconClass: 'codicon-file-text',
+    },
+    {
+      actionId: 'image',
+      kind: 'image',
+      contentKind: 'image',
+      label: ['Image', '图片'],
+      emptyIconClass: 'codicon-file-media',
+    },
+    {
+      actionId: 'video',
+      kind: 'video',
+      contentKind: 'video',
+      label: ['Video', '视频'],
+      emptyIconClass: 'codicon-play',
+    },
+    {
+      actionId: 'audio',
+      kind: 'audio',
+      contentKind: 'audio',
+      label: ['Audio', '音频'],
+      emptyIconClass: 'codicon-music',
+    },
   ];
   let maximumNodeCount = 0;
 
@@ -745,11 +765,21 @@ async function exerciseCanvasGenerationAuthoring({
         kind: node.querySelector('[data-canvas-generation-node]')?.getAttribute(
           'data-canvas-generation-node',
         ),
-        title: node.querySelector('strong')?.textContent?.trim() ?? '',
-        phase: node.querySelector('strong')?.nextElementSibling?.textContent?.trim() ?? '',
+        contentKind: node.querySelector('[data-canvas-content-kind]')?.getAttribute(
+          'data-canvas-content-kind',
+        ),
+        nodeLabel: node.querySelector('.canvas-generation-node__label')?.textContent?.trim() ?? '',
+        emptyIconClass:
+          node.querySelector('.canvas-generation-node__empty .codicon')?.className ?? '',
         inputKind: input.getAttribute('data-canvas-generation-input-kind'),
+        inputPlacement: input.getAttribute('data-placement'),
+        inputHeadingCount: input.querySelectorAll(
+          '.selection-generation-input-panel__header',
+        ).length,
         inputInsideNode: node.contains(input),
         nodeControlCount: node.querySelectorAll('textarea, input, select, button').length,
+        toolbarLabel:
+          toolbar.querySelector('[data-selection-kind-label="true"]')?.textContent?.trim() ?? '',
         labels: controls.map((control) =>
           control.getAttribute('aria-label') ?? control.getAttribute('title') ?? '',
         ),
@@ -780,9 +810,15 @@ async function exerciseCanvasGenerationAuthoring({
     })()`);
     if (
       state.kind !== action.kind ||
+      state.contentKind !== action.contentKind ||
+      !action.label.includes(state.nodeLabel) ||
+      !state.emptyIconClass.includes(action.emptyIconClass) ||
       state.inputKind !== action.kind ||
+      state.inputPlacement !== 'viewport-bottom' ||
+      state.inputHeadingCount !== 0 ||
       state.inputInsideNode ||
       state.nodeControlCount !== 0 ||
+      !action.label.includes(state.toolbarLabel) ||
       state.runButtonCount !== 1 ||
       state.alertCount !== 0 ||
       state.referenceSummaryCount !== 1 ||
@@ -807,6 +843,16 @@ async function exerciseCanvasGenerationAuthoring({
 
     if (action.kind === 'prompt') {
       await resizeWindow(evaluate, 1040, 700);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const node = document.querySelector(${JSON.stringify(nodeSelector)});
+          const input = document.querySelector(${JSON.stringify(inputSelector)});
+          if (!(node instanceof HTMLElement) || !(input instanceof HTMLElement)) return false;
+          return node.getBoundingClientRect().bottom <= input.getBoundingClientRect().top;
+        })()`,
+        'Compact Generation Node remained behind the viewport-bottom input.',
+      );
       const compact = await evaluate(`(() => {
         const node = document.querySelector(${JSON.stringify(nodeSelector)});
         if (!(node instanceof HTMLElement)) throw new Error('Compact Generation Node is unavailable.');
@@ -823,6 +869,9 @@ async function exerciseCanvasGenerationAuthoring({
           inputHeight: inputBounds.height,
           inputLeft: inputBounds.left,
           inputRight: inputBounds.right,
+          nodeBottom: nodeBounds.bottom,
+          inputTop: inputBounds.top,
+          nodeInputOverlap: nodeBounds.bottom > inputBounds.top,
           bodyScrollWidth: document.body.scrollWidth,
           bodyClientWidth: document.body.clientWidth,
         };
@@ -832,6 +881,7 @@ async function exerciseCanvasGenerationAuthoring({
         compact.inputHeight <= 0 ||
         compact.inputLeft < 0 ||
         compact.inputRight > compact.width ||
+        compact.nodeInputOverlap ||
         compact.bodyScrollWidth > compact.bodyClientWidth
       ) {
         throw new Error(`Compact Generation presentation is invalid: ${JSON.stringify(compact)}`);
@@ -848,7 +898,7 @@ async function exerciseCanvasGenerationAuthoring({
     await click(
       '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
     );
-    await waitForCanvasNodeCount(evaluate, viewId, 2);
+    await waitForCanvasNodeCount(evaluate, viewId, 3);
   }
 
   return { catalog, kinds, maximumNodeCount, screenshots };
@@ -1276,7 +1326,12 @@ function inspectCanvasSelectionActions(evaluate, viewId) {
       actionIds: actions.map((action) => action.getAttribute('data-selection-action')),
       visible: actions
         .filter((action) => action.getAttribute('data-selection-action-location') === 'primary')
-        .map((action) => action.textContent?.trim() ?? ''),
+        .map((action) =>
+          action.getAttribute('aria-label') ??
+          action.getAttribute('title') ??
+          action.textContent?.trim() ??
+          ''
+        ),
       overflowActionIds: (overflow?.getAttribute('data-selection-overflow-actions') ?? '')
         .split(' ')
         .filter(Boolean),

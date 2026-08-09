@@ -65,7 +65,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'AI',
       tagLabel: 'GEN',
       tagColor: '#0f766e',
-      defaultSize: { width: 320, height: 420 },
+      defaultSize: { width: 300, height: 220 },
       presentation: 'foundational',
     },
   };

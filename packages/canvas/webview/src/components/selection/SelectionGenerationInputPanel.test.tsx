@@ -15,7 +15,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 import { setLocale } from '../../i18n';
-import { SelectionGenerationInputPanel } from './SelectionGenerationInputPanel';
+import {
+  resolveGenerationSelectionSafePan,
+  SelectionGenerationInputPanel,
+} from './SelectionGenerationInputPanel';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -54,6 +57,7 @@ describe('SelectionGenerationInputPanel', () => {
     );
 
     expect(container.querySelector('[data-canvas-generation-input="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-placement="viewport-bottom"]')).not.toBeNull();
     expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Prompt"]')?.value).toBe(
       'Write a quiet scene',
     );
@@ -63,6 +67,7 @@ describe('SelectionGenerationInputPanel', () => {
       'Provider rejected this run.',
     );
     expect(container.querySelector('[data-canvas-generation-recipe-stale="true"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Text generation');
   });
 
   it('does not render generation input for an ordinary referenced node', () => {
@@ -150,6 +155,49 @@ describe('SelectionGenerationInputPanel', () => {
     expect(
       container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style.width,
     ).toBe('296px');
+    expect(
+      container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style.bottom,
+    ).toBe('16px');
+    expect(
+      container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style
+        .minHeight,
+    ).toBe('246px');
+    expect(
+      container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style.top,
+    ).toBe('');
+  });
+
+  it('uses a wide viewport-bottom composer on desktop', () => {
+    const node = nodeWithHistory();
+    render([node], [], [node.id], createHost(), { width: 1000, height: 700 });
+
+    const panel = container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]');
+    expect(panel?.style.width).toBe('760px');
+    expect(panel?.style.left).toBe('500px');
+    expect(panel?.style.minHeight).toBe('214px');
+    expect(
+      panel?.querySelector('.selection-generation-input-panel__reference-slot'),
+    ).not.toBeNull();
+    expect(panel?.querySelector('.selection-generation-input-panel__controls')).not.toBeNull();
+  });
+
+  it('moves a selected generation node above the compact composer safe area', () => {
+    const node = generationNode({ kind: 'prompt', prompt: '' });
+
+    expect(
+      resolveGenerationSelectionSafePan(
+        node,
+        { pan: { x: 12, y: 0 }, zoom: 1 },
+        { width: 500, height: 640 },
+      ),
+    ).toEqual({ x: 12, y: -38 });
+    expect(
+      resolveGenerationSelectionSafePan(
+        node,
+        { pan: { x: 12, y: 0 }, zoom: 1 },
+        { width: 1000, height: 700 },
+      ),
+    ).toBeUndefined();
   });
 
   function render(
@@ -166,7 +214,6 @@ describe('SelectionGenerationInputPanel', () => {
             nodes={nodes}
             connections={connections}
             selectedNodeIds={selectedNodeIds}
-            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
             viewportSize={viewportSize}
           />
         </CanvasHostProvider>,

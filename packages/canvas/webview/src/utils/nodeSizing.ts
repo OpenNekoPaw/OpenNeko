@@ -23,7 +23,7 @@ const KNOWN_NODE_TYPE_MIN_SIZES = {
   markdown: { width: 180, height: 120 },
   media: { width: 200, height: 120 },
   group: { width: 260, height: 180 },
-  generation: { width: 320, height: 240 },
+  generation: { width: 200, height: 120 },
   job: { width: 240, height: 150 },
   file: { width: 180, height: 160 },
   'canvas-embed': { width: 220, height: 150 },

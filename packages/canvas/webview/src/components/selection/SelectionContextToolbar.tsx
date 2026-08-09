@@ -34,6 +34,10 @@ import {
 } from '../../stores/canvasStoreScope';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
+import { getNodeLabel } from '../nodes/nodeTypeDescriptor';
+import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
+
+const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
 
 interface SelectionContextToolbarProps {
   readonly nodes: readonly CanvasNode[];
@@ -111,6 +115,7 @@ export function SelectionContextToolbar({
   const position = resolveToolbarPosition(selectedNodes, viewport, viewportSize);
   const { primary, overflow } = partitionActions(actions);
   const overflowGroups = groupOverflowActions(overflow);
+  const selectionLabel = resolveSelectionLabel(selectedNodes);
 
   return (
     <div
@@ -122,18 +127,21 @@ export function SelectionContextToolbar({
       style={{ left: position.x, top: position.y }}
       onMouseDown={(event) => event.stopPropagation()}
     >
+      <span className="selection-context-toolbar__label" data-selection-kind-label="true">
+        {selectionLabel}
+      </span>
+      <span className="selection-context-toolbar__divider" aria-hidden="true" />
       {primary.map((action) => (
-        <Button
+        <IconButton
           key={action.key}
           data-selection-action={action.key}
           data-selection-action-location="primary"
           size="xs"
           variant={action.danger ? 'danger' : 'ghost'}
-          leadingIcon={action.icon}
+          label={action.label}
+          icon={action.icon}
           onClick={action.run}
-        >
-          {action.label}
-        </Button>
+        />
       ))}
       {overflow.length > 0 && (
         <Popover
@@ -333,9 +341,8 @@ function createDuplicateAction(
     key: 'node:duplicate',
     label: t('action.duplicateShort'),
     icon: <CopyIcon size={14} />,
-    placement: 'overflow',
-    priority: 30,
-    overflowGroup: 'node',
+    placement: 'visible',
+    priority: 90,
     run: () => {
       const canvasState = canvasStore.getState();
       const canvasData = canvasState.canvasData;
@@ -353,6 +360,37 @@ function createDuplicateAction(
       canvasState.selectNodes(result.nodes.map((node) => node.id));
     },
   };
+}
+
+function resolveSelectionLabel(selectedNodes: readonly CanvasNode[]): string {
+  if (selectedNodes.length !== 1) return t('selection.multiple');
+  const node = selectedNodes[0];
+  if (!node) return t('selection.multiple');
+  if (node.type === 'media') {
+    switch (node.data.mediaType) {
+      case 'image':
+        return t('node.image');
+      case 'audio':
+        return t('node.audio');
+      case 'video':
+        return t('node.video');
+      case undefined:
+        return t('node.media');
+    }
+  }
+  if (node.type !== 'generation') {
+    return getNodeLabel(NODE_TYPE_DESCRIPTORS, node.type, t);
+  }
+  switch (node.data.recipe.kind) {
+    case 'prompt':
+      return t('node.text');
+    case 'image':
+      return t('node.image');
+    case 'audio':
+      return t('node.audio');
+    case 'video':
+      return t('node.video');
+  }
 }
 
 function createDeleteAction(

@@ -2,27 +2,27 @@
 
 当前实现已经由 `@neko/generation` 提供 Workspace-qualified GenerationJob owner，并允许 Agent Tool 与 direct operation 共用媒体 Job；但 Canvas 尚无可持久编辑和重复运行的生成节点。现有路径存在以下 gap：
 
-| Gap | Current behavior | Required behavior |
-| --- | --- | --- |
-| Add catalog | Text/Table 直接创建 Markdown；Image/Audio/Video 创建或导入 Media | Text/Image/Audio/Video 创建 Generation Node；Table/3D 保持现状 |
-| Canvas contract | canonical node type 只有 `markdown/media/group/job/file/canvas-embed` | 增加一个严格 union 的 `generation` node type |
-| Creation | `requestDraft?` 是可选 media-only port，生产 runtime 不提交新 Job | exact Canvas authoring command 创建/编辑/运行节点 |
-| Projection | 每个 Job 创建一个 Job 节点，成功后再创建 Media/File 节点 | Job 状态和当前结果投影回发起的 Generation Node |
-| Prompt | GenerationJob request/result/committer 只支持媒体 | Prompt/Text 使用同一 Job owner 并提交 durable text artifact |
-| Agent UI | Agent composer 暴露 Image/Video/Audio direct modes 和独立状态 | composer 只保留 Agent 对话；媒体仍通过 typed Tool 生成 |
-| Recovery | JobRef 在提交后才产生，Canvas 无 durable submission correlation | 先持久化 exact run request，再幂等绑定一个 JobRef |
-| Inputs | 现有 summary 只有历史 prompt 和 Canvas node IDs | 运行时解析 typed ports 为稳定文本快照或授权 ContentLocator |
-| History | 历史由分散 Job/Media 节点表达 | 原节点保存输出关系和当前选择，Job/Asset 保持事实 owner |
+| Gap             | Current behavior                                                      | Required behavior                                                                              |
+| --------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Add catalog     | Text/Table 直接创建 Markdown；Image/Audio/Video 创建或导入 Media      | 目录只保留 Text/Image/Audio/Video，并创建对应 Generation Node；Table/3D 不再暴露为基础节点入口 |
+| Canvas contract | canonical node type 只有 `markdown/media/group/job/file/canvas-embed` | 增加一个严格 union 的 `generation` node type                                                   |
+| Creation        | `requestDraft?` 是可选 media-only port，生产 runtime 不提交新 Job     | exact Canvas authoring command 创建/编辑/运行节点                                              |
+| Projection      | 每个 Job 创建一个 Job 节点，成功后再创建 Media/File 节点              | Job 状态和当前结果投影回发起的 Generation Node                                                 |
+| Prompt          | GenerationJob request/result/committer 只支持媒体                     | Prompt/Text 使用同一 Job owner 并提交 durable text artifact                                    |
+| Agent UI        | Agent composer 暴露 Image/Video/Audio direct modes 和独立状态         | composer 只保留 Agent 对话；媒体仍通过 typed Tool 生成                                         |
+| Recovery        | JobRef 在提交后才产生，Canvas 无 durable submission correlation       | 先持久化 exact run request，再幂等绑定一个 JobRef                                              |
+| Inputs          | 现有 summary 只有历史 prompt 和 Canvas node IDs                       | 运行时解析 typed ports 为稳定文本快照或授权 ContentLocator                                     |
+| History         | 历史由分散 Job/Media 节点表达                                         | 原节点保存输出关系和当前选择，Job/Asset 保持事实 owner                                         |
 
 ### Five-layer analysis
 
-| Layer | Decision |
-| --- | --- |
-| Responsibility | Canvas owns Recipe, graph inputs, exact-node run binding and current-output selection; Generation owns execution, Job persistence and artifact commit; Agent owns Turn/Tool scheduling; Desktop owns Electron trust/config/resource adapters. |
-| Dependency | Canvas Domain remains host-neutral; Canvas Node depends on public Canvas/Generation/Content ports; Webview consumes typed Canvas host messages; Generation never imports Canvas/Agent/Electron/React. |
-| Interface | One canonical Canvas Generation application port creates, updates, runs, observes, cancels and selects output for one exact node; one Workspace GenerationJob port executes all supported kinds. |
-| Extension | New generation kinds require a real typed Recipe, purpose/model capability, executor and renderer; no wildcard kind, JSON parameter bag, default provider or dormant Agent mode is introduced. |
-| Test | Domain tests prove codecs/state transitions; delegation tests prove one Job owner; Electron tests prove sender/target/resource boundaries; Agent Evaluation proves the retained natural-language Tool path and absence of direct-mode fallback. |
+| Layer          | Decision                                                                                                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responsibility | Canvas owns Recipe, graph inputs, exact-node run binding and current-output selection; Generation owns execution, Job persistence and artifact commit; Agent owns Turn/Tool scheduling; Desktop owns Electron trust/config/resource adapters.   |
+| Dependency     | Canvas Domain remains host-neutral; Canvas Node depends on public Canvas/Generation/Content ports; Webview consumes typed Canvas host messages; Generation never imports Canvas/Agent/Electron/React.                                           |
+| Interface      | One canonical Canvas Generation application port creates, updates, runs, observes, cancels and selects output for one exact node; one Workspace GenerationJob port executes all supported kinds.                                                |
+| Extension      | New generation kinds require a real typed Recipe, purpose/model capability, executor and renderer; no wildcard kind, JSON parameter bag, default provider or dormant Agent mode is introduced.                                                  |
+| Test           | Domain tests prove codecs/state transitions; delegation tests prove one Job owner; Electron tests prove sender/target/resource boundaries; Agent Evaluation proves the retained natural-language Tool path and absence of direct-mode fallback. |
 
 ## Goals / Non-Goals
 
@@ -62,7 +62,7 @@ Alternatives considered: four node types would duplicate codec/render/authoring 
 
 ### The add menu creates the direct-generation surface
 
-The package-owned Canvas add catalog creates empty Generation Nodes for Text, Image, Audio and Video. Selection opens one Canvas-owned editor surface that exposes prompt/reference inputs, purpose-qualified model selection and only parameters legal for that kind. Table continues to create editable GFM Markdown and 3D Director remains unchanged.
+The package-owned Canvas add catalog exposes only Text, Image, Audio and Video and creates their matching empty Generation Nodes. Selection opens one Canvas-owned editor surface that exposes prompt/reference inputs, purpose-qualified model selection and only parameters legal for that kind. Table and 3D Director remain outside this basic-node catalog; existing Markdown/File records stay readable and no historical content is converted.
 
 There is no second Canvas quick-generate dialog, transient direct form or “save as Recipe” flow. A Generation Node is already both the direct control and the saved Recipe. Imported/dragged assets continue to create Media nodes and never acquire Recipe authority.
 
@@ -72,13 +72,15 @@ The renderer sends typed authoring intents through the existing browser-safe Can
 
 Canvas selection uses three presentation layers with one durable node identity:
 
-1. the existing selection context toolbar owns node actions and remains visually detached above the selected content;
-2. the Canvas node owns only type/status and current content or generated output;
-3. a package-owned Generation input panel appears only for one selected Generation Node and edits that node's Recipe, connected-reference summary, exact model, legal parameters, output selection and run/cancel state.
+1. the existing selection context toolbar owns node actions, identifies the exact selected node kind and keeps common actions directly reachable as compact icon controls above the selected content;
+2. the Canvas node owns only its Text/Image/Audio/Video content presentation and current generated output, using the same visual grammar as an ordinary referenced node of that content kind;
+3. a package-owned Generation input composer appears only for one selected Generation Node, remains anchored as a wide bottom control surface inside the current Canvas viewport, and edits that node's Recipe, connected-reference summary, exact model, legal parameters, output selection and run/cancel state.
 
-The input panel is derived from the exact selected Generation Node, current connections and Host runtime projection. It is not stored as a Canvas node, does not duplicate Recipe or Job facts in a presentation store, and unmounts when selection changes. Ordinary imported/referenced Media, Markdown and File nodes therefore render only the action toolbar and content node. A successful result changes the content rendered inside the same Generation Node while the input panel remains the editor for later explicit reruns.
+The input composer is derived from the exact selected Generation Node, current connections and Host runtime projection. It is not stored as a Canvas node, does not duplicate Recipe or Job facts in a presentation store, and unmounts when selection changes. It does not repeat a generation heading or phase. The empty node uses a kind-specific content placeholder, running state is a lightweight local overlay, and a successful result replaces that content area. Ordinary imported/referenced Media, Markdown and File nodes therefore render only the labeled action toolbar and content node.
 
-Alternatives considered: keeping the form inside the node couples node dimensions to editor state and obscures the generated result; creating a second "prompt node" duplicates Recipe authority; a global inspector would weaken the direct spatial relationship required for the current Canvas workflow.
+All four kinds share one composer skeleton: a reference strip, one large prompt area, one compact footer for exact model and legal kind-specific parameters, output history when present, and a fixed run/cancel icon control. Differences remain typed Recipe fields rather than separate cards or alternate UI flows.
+
+Alternatives considered: keeping the form inside the node couples node dimensions to editor state and obscures the generated result; attaching a same-width panel directly above or below the node makes it read as another node and competes with graph layout; creating a second "prompt node" duplicates Recipe authority; a global inspector would weaken the current Canvas-scoped workflow. The viewport-bottom composer keeps input visually independent while exact selection preserves its node relationship.
 
 ### Webview and Host mutations share one ordered command stream
 
@@ -151,15 +153,15 @@ The Generation Job never chooses a Canvas. Agent terminal collection and Canvas 
 
 ### Ownership and runtime boundaries
 
-| Owner / package role | Canonical public path | Producer -> consumer | Runtime boundary and retained responsibility | Replaced path / user-data impact |
-| --- | --- | --- | --- | --- |
-| `@neko/canvas-domain` L0 | Canvas node/types, `.nkc` codec, authoring/application contracts | Webview/Main intents -> Canvas session | Host-neutral Recipe validation, run binding, result apply and current selection | Replaces Generation Job/Media graph projection for new runs; existing documents remain readable |
-| `@neko/canvas-node` L1 | Canvas Generation application runtime | Canvas session -> `@neko/generation/job` | Resolves authorized inputs, submits/observes exact Jobs and delegates result apply | Replaces optional draft/regenerate material runtime; no config or Job store owner |
-| `@neko/canvas-webview` L2 | Canvas Root and package-owned host adapter | User controls -> typed Canvas intents | Node editor/renderer, progress and diagnostic presentation, authorized previews | Replaces direct Media creation for Text/Image/Audio/Video add actions |
-| `@neko/generation` L0/L1 | root contracts, `/job`, execution adapters | Canvas/Agent Tool -> Job owner -> artifact committer | Strict request/result, idempotent Job lifecycle, provider task and durable output | Extends media-only Job union; removes Agent-specific direct-operation consumer path |
-| Agent contracts/runtime/webview | package public entries | Composer/Turn -> Tool -> Generation | Conversation identity, Tool scheduling, transcript and purpose facts | Removes direct media composer modes without removing Tool generation or artifacts |
-| `@neko/content` / Preview / Assets | existing public locator/read/preview/index ports | Generation/Canvas -> content and preview consumers | Stable locator validation, authorized reads and media rendering | No new file/path authority; generated assets remain independently durable |
-| `apps/neko-desktop` Application root | package public composition only | preload/Main sender -> exact package ports | Electron sender/Window identity, Workspace grant, config/credential adapter, resource registry and disposal | Removes app wiring for Agent direct mode; retains only logic requiring Electron trust objects |
+| Owner / package role                 | Canonical public path                                            | Producer -> consumer                                 | Runtime boundary and retained responsibility                                                                | Replaced path / user-data impact                                                                |
+| ------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `@neko/canvas-domain` L0             | Canvas node/types, `.nkc` codec, authoring/application contracts | Webview/Main intents -> Canvas session               | Host-neutral Recipe validation, run binding, result apply and current selection                             | Replaces Generation Job/Media graph projection for new runs; existing documents remain readable |
+| `@neko/canvas-node` L1               | Canvas Generation application runtime                            | Canvas session -> `@neko/generation/job`             | Resolves authorized inputs, submits/observes exact Jobs and delegates result apply                          | Replaces optional draft/regenerate material runtime; no config or Job store owner               |
+| `@neko/canvas-webview` L2            | Canvas Root and package-owned host adapter                       | User controls -> typed Canvas intents                | Node editor/renderer, progress and diagnostic presentation, authorized previews                             | Replaces direct Media creation for Text/Image/Audio/Video add actions                           |
+| `@neko/generation` L0/L1             | root contracts, `/job`, execution adapters                       | Canvas/Agent Tool -> Job owner -> artifact committer | Strict request/result, idempotent Job lifecycle, provider task and durable output                           | Extends media-only Job union; removes Agent-specific direct-operation consumer path             |
+| Agent contracts/runtime/webview      | package public entries                                           | Composer/Turn -> Tool -> Generation                  | Conversation identity, Tool scheduling, transcript and purpose facts                                        | Removes direct media composer modes without removing Tool generation or artifacts               |
+| `@neko/content` / Preview / Assets   | existing public locator/read/preview/index ports                 | Generation/Canvas -> content and preview consumers   | Stable locator validation, authorized reads and media rendering                                             | No new file/path authority; generated assets remain independently durable                       |
+| `apps/neko-desktop` Application root | package public composition only                                  | preload/Main sender -> exact package ports           | Electron sender/Window identity, Workspace grant, config/credential adapter, resource registry and disposal | Removes app wiring for Agent direct mode; retains only logic requiring Electron trust objects   |
 
 Production logic retained in `apps/neko-desktop` requires actual `webContents` sender identity, Workspace root authorization, Electron lifecycle, native configuration/credential adapters or opaque resource registration. Recipe mapping, run idempotency, input resolution, output selection and recovery are host-neutral business behavior and therefore remain in the owning packages.
 
