@@ -85,10 +85,6 @@ export function FoundationSubmit({
   );
 }
 
-export function FoundationEmpty({ children }: { readonly children: ReactNode }): JSX.Element {
-  return <div className="character-foundation__empty">{children}</div>;
-}
-
 export function FoundationDiagnostic({
   children,
   role = 'status',

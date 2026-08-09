@@ -38,9 +38,18 @@ describe('Character Management surfaces', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('loads one catalog and exposes no Dialogue, Room or World peer tabs', async () => {
-    render(<Harness host={createHost()} />);
+    const { container } = render(<Harness host={createHost()} />);
 
     expect(await screen.findByRole('heading', { name: 'Characters' })).toBeTruthy();
+    expect(
+      screen.getByText('Manage characters used in creation, dialogue, and interaction.'),
+    ).toBeTruthy();
+    expect(container.querySelector('[data-neko-empty-state="fill"] svg')).not.toBeNull();
+    const viewSwitcher = container.querySelector('.character-management__view-switcher');
+    expect(viewSwitcher?.querySelectorAll('button')).toHaveLength(2);
+    expect(viewSwitcher?.querySelector('button:first-child')?.getAttribute('aria-label')).toBe(
+      'List view',
+    );
     expect(screen.queryByRole('navigation', { name: 'Character workspace views' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Dialogues' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rooms' })).toBeNull();

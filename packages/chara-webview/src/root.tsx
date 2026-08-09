@@ -4,6 +4,7 @@ import type {
   OpenNekoDesktopCharacterBridge,
 } from '@neko/chara/contracts';
 import {
+  EmptyState,
   GridIcon,
   LayersIcon,
   PlusIcon,
@@ -15,7 +16,7 @@ import {
 import type { SupportedLocale } from '@neko/ui/i18n';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CharacterPanel } from './character-panel';
-import { describeError, FoundationDiagnostic, FoundationEmpty } from './foundation-ui';
+import { describeError, FoundationDiagnostic } from './foundation-ui';
 import { foundationLabel } from './labels';
 
 export {
@@ -127,20 +128,18 @@ export function CharacterCatalogSurface({
       data-character-management-catalog="true"
     >
       <header className="character-management__header">
-        <div>
+        <div className="character-management__header-copy">
           <span>{foundationLabel(locale, '角色管理', 'Character management')}</span>
           <h1>{foundationLabel(locale, '角色', 'Characters')}</h1>
+          <p>
+            {foundationLabel(
+              locale,
+              '管理用于创作、对话和互动的角色。',
+              'Manage characters used in creation, dialogue, and interaction.',
+            )}
+          </p>
         </div>
         <div className="character-management__header-actions">
-          <button
-            aria-label={foundationLabel(locale, '刷新角色', 'Refresh characters')}
-            disabled={runtime.loadState.kind === 'loading'}
-            title={foundationLabel(locale, '刷新', 'Refresh')}
-            type="button"
-            onClick={() => void runtime.reload()}
-          >
-            <RefreshIcon size={16} />
-          </button>
           <button type="button" onClick={onCreate}>
             <PlusIcon size={15} />
             <span>{foundationLabel(locale, '新建角色', 'New character')}</span>
@@ -165,23 +164,34 @@ export function CharacterCatalogSurface({
           <option value="updated">{foundationLabel(locale, '最近更新', 'Recently updated')}</option>
           <option value="name">{foundationLabel(locale, '名称', 'Name')}</option>
         </select>
+        <div className="character-management__view-switcher">
+          <button
+            aria-label={foundationLabel(locale, '列表视图', 'List view')}
+            aria-pressed={view === 'list'}
+            title={foundationLabel(locale, '列表视图', 'List view')}
+            type="button"
+            onClick={() => setView('list')}
+          >
+            <LayersIcon size={15} />
+          </button>
+          <button
+            aria-label={foundationLabel(locale, '网格视图', 'Grid view')}
+            aria-pressed={view === 'grid'}
+            title={foundationLabel(locale, '网格视图', 'Grid view')}
+            type="button"
+            onClick={() => setView('grid')}
+          >
+            <GridIcon size={15} />
+          </button>
+        </div>
         <button
-          aria-label={foundationLabel(locale, '网格视图', 'Grid view')}
-          aria-pressed={view === 'grid'}
-          title={foundationLabel(locale, '网格视图', 'Grid view')}
+          aria-label={foundationLabel(locale, '刷新角色', 'Refresh characters')}
+          disabled={runtime.loadState.kind === 'loading'}
+          title={foundationLabel(locale, '刷新', 'Refresh')}
           type="button"
-          onClick={() => setView('grid')}
+          onClick={() => void runtime.reload()}
         >
-          <GridIcon size={15} />
-        </button>
-        <button
-          aria-label={foundationLabel(locale, '列表视图', 'List view')}
-          aria-pressed={view === 'list'}
-          title={foundationLabel(locale, '列表视图', 'List view')}
-          type="button"
-          onClick={() => setView('list')}
-        >
-          <LayersIcon size={15} />
+          <RefreshIcon size={16} />
         </button>
       </div>
       {runtime.loadState.kind === 'loading' || runtime.loadState.kind === 'idle' ? (
@@ -196,22 +206,28 @@ export function CharacterCatalogSurface({
           </button>
         </div>
       ) : (
-        <div className={`character-management__catalog is-${view}`}>
+        <div
+          className={`character-management__catalog is-${view}${projects.length === 0 ? ' is-empty' : ''}`}
+        >
           {snapshot?.diagnostics.map((item) => (
             <FoundationDiagnostic key={`${item.owner}:${item.recordKind}:${item.recordId}`}>
               {`${item.recordKind} / ${item.recordId}: ${item.message}`}
             </FoundationDiagnostic>
           ))}
           {projects.length === 0 ? (
-            <FoundationEmpty>
-              {query
-                ? foundationLabel(locale, '没有匹配的角色', 'No matching characters')
-                : foundationLabel(
-                    locale,
-                    '尚无角色，创建第一个角色。',
-                    'No characters yet. Create the first one.',
-                  )}
-            </FoundationEmpty>
+            <EmptyState
+              fill
+              icon={<UserIcon size={24} />}
+              title={
+                query
+                  ? foundationLabel(locale, '没有匹配的角色', 'No matching characters')
+                  : foundationLabel(
+                      locale,
+                      '尚无角色，创建第一个角色。',
+                      'No characters yet. Create the first one.',
+                    )
+              }
+            />
           ) : null}
           {projects.map((project) => {
             const publicationCount =
