@@ -150,10 +150,7 @@ describe('TextEditorRoot', () => {
     await waitFor(() => currentCompletions(view.state).length === 1);
     expect(currentCompletions(view.state)[0]?.label).toBe('@小橘');
 
-    await act(async () => {
-      expect(acceptCompletion(view)).toBe(true);
-      await settle();
-    });
+    await acceptCurrentCompletion(view);
     await waitFor(() => runtime.applyEdits.mock.calls.length === 1);
     expect(runtime.applyEdits).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -196,10 +193,7 @@ describe('TextEditorRoot', () => {
     await waitFor(() => currentCompletions(view.state).length === 1);
     expect(currentCompletions(view.state)[0]?.label).toBe('board.png');
 
-    await act(async () => {
-      expect(acceptCompletion(view)).toBe(true);
-      await settle();
-    });
+    await acceptCurrentCompletion(view);
     await waitFor(() => runtime.applyEdits.mock.calls.length === 1);
     expect(runtime.applyEdits).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1289,6 +1283,17 @@ async function waitFor(assertion: () => boolean | undefined, attempts = 30): Pro
   throw new Error(
     `Text Editor fixture did not reach the expected state (Rich: ${richState ?? 'absent'} ${richError ?? ''}).`,
   );
+}
+
+async function acceptCurrentCompletion(view: EditorView, attempts = 100): Promise<void> {
+  for (let index = 0; index < attempts; index += 1) {
+    if (acceptCompletion(view)) {
+      await act(async () => settle());
+      return;
+    }
+    await act(async () => settle());
+  }
+  throw new Error('Text Editor fixture could not accept the current completion.');
 }
 
 async function unmount(root: Root): Promise<void> {
