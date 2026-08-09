@@ -23,6 +23,7 @@ function createConnectedClient(serverId: string): IMCPClient {
     connect: vi.fn(),
     disconnect: vi.fn(),
     isConnected: () => true,
+    getConnectionInfo: () => undefined,
     listTools: vi.fn(async () => []),
     callTool: vi.fn(async () => ({ content: [] })),
     listResources: vi.fn(async () => []),

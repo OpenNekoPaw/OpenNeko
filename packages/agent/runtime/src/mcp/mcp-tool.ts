@@ -7,10 +7,16 @@ import type {
   ToolResult,
   ToolCategory,
   ToolDefinition,
+  ToolExecuteOptions,
   ToolParameters,
   ToolParameterProperty,
 } from '@neko/agent-contracts';
-import type { IMCPClient, MCPToolDefinition } from '@neko/agent-contracts';
+import type {
+  IMCPClient,
+  MCPRequestOptions,
+  MCPToolCallResult,
+  MCPToolDefinition,
+} from '@neko/agent-contracts';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger('MCPTool');
@@ -23,7 +29,8 @@ export interface MCPToolCallManager {
     serverId: string,
     toolName: string,
     args: Record<string, unknown>,
-  ): Promise<{ success: boolean; data?: unknown; error?: string }>;
+    options?: MCPRequestOptions,
+  ): Promise<MCPToolCallResult>;
 }
 
 export interface MCPToolDiscoveryManager extends MCPToolCallManager {
@@ -37,6 +44,8 @@ export interface MCPAdapterOnlyToolBinding {
 }
 
 export interface MCPToolCreationOptions {
+  /** MCP servers owned by a reviewed adapter. No raw Tool from these servers can be exposed. */
+  readonly rawExposureDeniedServerIds?: readonly string[];
   /** MCP tools reserved for adapter calls and hidden from ordinary model-visible registration. */
   readonly adapterOnlyTools?: readonly MCPAdapterOnlyToolBinding[];
   /** Explicit escape hatch for debugging/raw MCP exposure. Defaults to false. */
@@ -61,6 +70,8 @@ export class MCPTool implements Tool {
   readonly description: string;
   readonly category: ToolCategory = 'mcp';
   readonly parameters: ToolParameters;
+  readonly requiresConfirmation = true;
+  readonly isReadOnly = false;
 
   private serverId: string;
   private mcpManager: MCPToolCallManager;
@@ -78,8 +89,10 @@ export class MCPTool implements Tool {
     this.parameters = normalizeMcpInputSchema(mcpTool.inputSchema);
   }
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
-    const result = await this.mcpManager.callTool(this.serverId, this.originalName, args);
+  async execute(args: Record<string, unknown>, options?: ToolExecuteOptions): Promise<ToolResult> {
+    const result = await this.mcpManager.callTool(this.serverId, this.originalName, args, {
+      ...(options?.signal === undefined ? {} : { signal: options.signal }),
+    });
 
     return {
       success: result.success,
@@ -188,8 +201,12 @@ export async function createAllMCPTools(
     tools.push(
       new MCPTool(mcpManager, tool.serverId, {
         name: tool.name,
+        ...(tool.title === undefined ? {} : { title: tool.title }),
         description: tool.description,
         inputSchema: tool.inputSchema,
+        ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
+        ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+        ...(tool.execution === undefined ? {} : { execution: tool.execution }),
       }),
     );
   }
@@ -202,6 +219,9 @@ function shouldExposeMcpTool(
   toolName: string,
   options: MCPToolCreationOptions,
 ): boolean {
+  if (options.rawExposureDeniedServerIds?.includes(serverId)) {
+    return false;
+  }
   if (options.exposeAdapterOnlyTools === true) {
     return true;
   }

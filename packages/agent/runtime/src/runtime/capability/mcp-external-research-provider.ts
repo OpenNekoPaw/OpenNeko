@@ -43,11 +43,15 @@ export function createMcpExternalResearchProvider(
         options.config.serverId,
         options.config.searchTool.name,
         createSearchArgs(options.config, input),
+        { signal },
       );
       if (!raw.success) {
         throw new Error(raw.error ?? 'MCP external research search failed.');
       }
-      const parsed = parseStructuredMcpOutput(raw.data, EXTERNAL_RESEARCH_SEARCH_SCHEMA);
+      const parsed = parseStructuredMcpOutput(
+        raw.structuredContent ?? raw.data,
+        EXTERNAL_RESEARCH_SEARCH_SCHEMA,
+      );
       if (!isExternalResearchMcpSearchOutput(parsed)) {
         throw new Error('MCP external research search returned invalid structured output.');
       }
@@ -63,11 +67,15 @@ export function createMcpExternalResearchProvider(
         options.config.serverId,
         fetchTool.name,
         createFetchArgs(options.config, input),
+        { signal },
       );
       if (!raw.success) {
         throw new Error(raw.error ?? 'MCP external research fetch failed.');
       }
-      const parsed = parseStructuredMcpOutput(raw.data, EXTERNAL_RESEARCH_FETCH_SCHEMA);
+      const parsed = parseStructuredMcpOutput(
+        raw.structuredContent ?? raw.data,
+        EXTERNAL_RESEARCH_FETCH_SCHEMA,
+      );
       if (!isExternalResearchMcpFetchOutput(parsed)) {
         throw new Error('MCP external research fetch returned invalid structured output.');
       }

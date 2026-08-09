@@ -29,6 +29,7 @@ function createConnectedClient(tools: MCPToolDefinition[]): IMCPClient {
     connect: vi.fn(),
     disconnect: vi.fn(),
     isConnected: () => true,
+    getConnectionInfo: () => undefined,
     listTools: vi.fn(async () => tools),
     callTool: vi.fn(async () => ({ content: [] })),
     listResources: vi.fn(async () => []),
@@ -102,6 +103,39 @@ describe('MCPTool', () => {
     expect(mcpTool.description.length).toBe(2048);
     expect(mcpTool.description).toBe(exactDesc); // No truncation needed
   });
+
+  it('treats raw MCP tools as write-capable and confirmation-required', () => {
+    const mcpTool = new MCPTool(createMockManager(), 'test-server', {
+      name: 'remote_tool',
+      description: 'Unreviewed remote tool',
+      inputSchema: { type: 'object' },
+      annotations: { readOnlyHint: true },
+    });
+
+    expect(mcpTool.isReadOnly).toBe(false);
+    expect(mcpTool.requiresConfirmation).toBe(true);
+  });
+
+  it('passes the Agent cancellation signal to the MCP manager', async () => {
+    const manager = createMockManager();
+    const mcpTool = new MCPTool(manager, 'test-server', {
+      name: 'remote_tool',
+      description: 'Remote tool',
+      inputSchema: { type: 'object' },
+    });
+    const signal = new AbortController().signal;
+
+    await mcpTool.execute({ value: 1 }, { signal });
+
+    expect(manager.callTool).toHaveBeenCalledWith(
+      'test-server',
+      'remote_tool',
+      { value: 1 },
+      {
+        signal,
+      },
+    );
+  });
 });
 
 describe('MCP tool adapter-only filtering', () => {
@@ -170,5 +204,33 @@ describe('MCP tool adapter-only filtering', () => {
     });
 
     expect(created.map((tool) => tool.name)).toEqual(['mcp__research__web_search']);
+  });
+
+  it('never exposes a server reserved for a reviewed adapter, including through the raw escape hatch', async () => {
+    const manager = {
+      callTool: vi.fn(),
+      getClient: vi.fn(),
+      getAllTools: vi.fn(async () => [
+        {
+          serverId: 'browser-use',
+          name: 'browser_get_state',
+          description: 'State',
+          inputSchema: { type: 'object' },
+        },
+        {
+          serverId: 'browser-use',
+          name: 'browser_exec',
+          description: 'Execute arbitrary Python',
+          inputSchema: { type: 'object' },
+        },
+      ]),
+    };
+
+    const created = await createAllMCPTools(manager, {
+      rawExposureDeniedServerIds: ['browser-use'],
+      exposeAdapterOnlyTools: true,
+    });
+
+    expect(created).toEqual([]);
   });
 });

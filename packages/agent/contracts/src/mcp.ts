@@ -25,7 +25,7 @@ export interface MCPStdioConfig {
   args?: string[];
   /** Environment variables */
   env?: Record<string, string>;
-  /** Whether to inherit the host process environment. Defaults to true. */
+  /** Whether to inherit the complete host process environment. Defaults to a safe allowlist. */
   inheritProcessEnv?: boolean;
   /** Working directory */
   cwd?: string;
@@ -49,12 +49,24 @@ export interface MCPHttpConfig {
  * MCP tool definition (from server)
  */
 export interface MCPToolDefinition {
-  /** Tool name */
-  name: string;
-  /** Tool description */
-  description: string;
-  /** Input schema */
-  inputSchema: Record<string, unknown>;
+  readonly name: string;
+  readonly title?: string;
+  readonly description: string;
+  readonly inputSchema: Readonly<Record<string, unknown>>;
+  readonly outputSchema?: Readonly<Record<string, unknown>>;
+  readonly annotations?: MCPToolAnnotations;
+  readonly execution?: {
+    readonly taskSupport?: 'optional' | 'required' | 'forbidden';
+  };
+}
+
+/** Untrusted standard MCP Tool hints. Product policy may only make these more restrictive. */
+export interface MCPToolAnnotations {
+  readonly title?: string;
+  readonly readOnlyHint?: boolean;
+  readonly destructiveHint?: boolean;
+  readonly idempotentHint?: boolean;
+  readonly openWorldHint?: boolean;
 }
 
 /**
@@ -87,19 +99,84 @@ export interface MCPPrompt {
   }>;
 }
 
+export interface MCPContentAnnotations {
+  readonly audience?: readonly ('user' | 'assistant')[];
+  readonly priority?: number;
+  readonly lastModified?: string;
+}
+
+export interface MCPTextContent {
+  readonly type: 'text';
+  readonly text: string;
+  readonly annotations?: MCPContentAnnotations;
+}
+
+export interface MCPBinaryContent {
+  readonly type: 'image' | 'audio';
+  readonly data: string;
+  readonly mimeType: string;
+  readonly annotations?: MCPContentAnnotations;
+}
+
+export interface MCPEmbeddedResourceContent {
+  readonly type: 'resource';
+  readonly resource:
+    | {
+        readonly uri: string;
+        readonly text: string;
+        readonly mimeType?: string;
+      }
+    | {
+        readonly uri: string;
+        readonly blob: string;
+        readonly mimeType?: string;
+      };
+  readonly annotations?: MCPContentAnnotations;
+}
+
+export interface MCPResourceLinkContent {
+  readonly type: 'resource_link';
+  readonly uri: string;
+  readonly name: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly mimeType?: string;
+  readonly size?: number;
+  readonly annotations?: MCPContentAnnotations;
+}
+
+export type MCPToolResultContent =
+  MCPTextContent | MCPBinaryContent | MCPEmbeddedResourceContent | MCPResourceLinkContent;
+
 /**
  * MCP tool call result
  */
 export interface MCPToolResult {
-  /** Content array */
-  content: Array<{
-    type: 'text' | 'image' | 'resource';
-    text?: string;
-    data?: string;
-    mimeType?: string;
-  }>;
-  /** Whether call errored */
-  isError?: boolean;
+  readonly content: readonly MCPToolResultContent[];
+  readonly structuredContent?: Readonly<Record<string, unknown>>;
+  readonly isError?: boolean;
+}
+
+export interface MCPConnectionInfo {
+  readonly protocolVersion: string;
+  readonly server: {
+    readonly name: string;
+    readonly version: string;
+  };
+  readonly capabilities: Readonly<Record<string, unknown>>;
+}
+
+export interface MCPRequestOptions {
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
+}
+
+export interface MCPToolCallResult {
+  readonly success: boolean;
+  readonly data?: unknown;
+  readonly content?: readonly MCPToolResultContent[];
+  readonly structuredContent?: Readonly<Record<string, unknown>>;
+  readonly error?: string;
 }
 
 /**
@@ -110,7 +187,7 @@ export interface IMCPClient {
   readonly serverId: string;
 
   /** Connect to server */
-  connect(): Promise<void>;
+  connect(options?: MCPRequestOptions): Promise<void>;
 
   /** Disconnect from server */
   disconnect(): Promise<void>;
@@ -118,11 +195,18 @@ export interface IMCPClient {
   /** Check if connected */
   isConnected(): boolean;
 
+  /** Negotiated external protocol and server facts for diagnostics. */
+  getConnectionInfo(): MCPConnectionInfo | undefined;
+
   /** List available tools */
-  listTools(): Promise<MCPToolDefinition[]>;
+  listTools(options?: MCPRequestOptions): Promise<MCPToolDefinition[]>;
 
   /** Call a tool */
-  callTool(name: string, args: Record<string, unknown>): Promise<MCPToolResult>;
+  callTool(
+    name: string,
+    args: Record<string, unknown>,
+    options?: MCPRequestOptions,
+  ): Promise<MCPToolResult>;
 
   /** List available resources */
   listResources(): Promise<MCPResource[]>;
@@ -136,7 +220,7 @@ export interface IMCPClient {
   /** Get a prompt */
   getPrompt(
     name: string,
-    args?: Record<string, unknown>,
+    args?: Record<string, string>,
   ): Promise<{ messages: Array<{ role: string; content: string }> }>;
 }
 
