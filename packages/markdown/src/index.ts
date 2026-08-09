@@ -1,4 +1,5 @@
 export * from './annotations';
+export * from './authoring-assistance';
 export * from './diagnostics';
 export * from './document';
 export * from './extension-projection';
