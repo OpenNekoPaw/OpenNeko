@@ -323,6 +323,13 @@ function requireMessageText(value: unknown, label: string, allowEmpty = false): 
 // Message
 // ---------------------------------------------------------------------------
 
+export interface MessageTurnTiming {
+  /** Earliest visible Timeline item creation time for this Turn. */
+  readonly startedAt: number;
+  /** Authoritative terminal Timeline completion time when the Turn has settled. */
+  readonly completedAt?: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -344,6 +351,8 @@ export interface Message {
   isError?: boolean;
   /** Message was queued while agent is running */
   isQueued?: boolean;
+  /** Canonical Turn timing projected from the owning runtime, never summed from Tool durations. */
+  turnTiming?: MessageTurnTiming;
   /**
    * Sequential content blocks for chronological rendering (assistant messages only).
    * Assistant tool calls and thinking content are represented here.

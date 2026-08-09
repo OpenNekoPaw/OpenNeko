@@ -107,6 +107,11 @@ describe('PiEventProjector', () => {
       expect.objectContaining({ toolName: 'perception.image.read' }),
       expect.objectContaining({ toolName: 'perception.image.read' }),
     ]);
+    expect(projector.turnPresentationTiming).toEqual({
+      turnId: 'turn-1',
+      startedAt: 11,
+      completedAt: 19,
+    });
   });
 
   it.each([

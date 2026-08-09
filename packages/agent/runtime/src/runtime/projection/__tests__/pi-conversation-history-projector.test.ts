@@ -95,6 +95,14 @@ describe('projectPiConversationEntries', () => {
         content: 'inspect the image',
         timestamp: 10,
       }),
+      {
+        type: 'custom',
+        id: 'turn-timing',
+        parentId: 'user-entry',
+        timestamp: new Date(11).toISOString(),
+        customType: 'openneko.turn-presentation-timing',
+        data: { turnId: 'turn-1', startedAt: 20, completedAt: 60 },
+      },
       messageEntry('assistant-entry', 'user-entry', {
         role: 'assistant',
         content: [
@@ -138,6 +146,7 @@ describe('projectPiConversationEntries', () => {
         id: 'assistant-entry',
         role: 'assistant',
         content: 'Done.',
+        turnTiming: { startedAt: 20, completedAt: 60 },
         contentBlocks: expect.arrayContaining([
           expect.objectContaining({ type: 'thinking', thinking: 'need evidence' }),
           expect.objectContaining({
@@ -160,6 +169,14 @@ describe('projectPiConversationEntries', () => {
         content: 'analyze the document',
         timestamp: 10,
       }),
+      {
+        type: 'custom',
+        id: 'turn-timing',
+        parentId: 'user-entry',
+        timestamp: new Date(11).toISOString(),
+        customType: 'openneko.turn-presentation-timing',
+        data: { turnId: 'turn-1', startedAt: 20, completedAt: 60 },
+      },
       messageEntry('assistant-read-document', 'user-entry', {
         role: 'assistant',
         content: [
@@ -234,6 +251,7 @@ describe('projectPiConversationEntries', () => {
       role: 'assistant',
       content: '# Final analysis',
       timestamp: 20,
+      turnTiming: { startedAt: 20, completedAt: 60 },
       contentBlocks: [
         { id: 'assistant-read-document:thinking:0', type: 'thinking' },
         {

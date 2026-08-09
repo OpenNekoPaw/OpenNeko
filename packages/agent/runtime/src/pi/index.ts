@@ -70,6 +70,12 @@ export {
   type PiUserMessagePresentation,
 } from './user-message-presentation';
 export {
+  PI_TURN_PRESENTATION_TIMING_CUSTOM_TYPE,
+  isPiTurnPresentationTimingEntry,
+  parsePiTurnPresentationTiming,
+  type PiTurnPresentationTiming,
+} from './turn-presentation-timing';
+export {
   parsePortablePiConversationManifest,
   parsePortablePiConversationManifestJson,
   serializePortablePiConversationManifest,

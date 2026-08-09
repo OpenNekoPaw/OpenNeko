@@ -86,6 +86,7 @@ export {
 // Message protocol
 export type {
   Message,
+  MessageTurnTiming,
   MessageContextReference,
   AgentFileReference,
   AgentFileReferenceMediaType,

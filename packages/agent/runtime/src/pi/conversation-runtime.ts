@@ -413,6 +413,10 @@ export class PiConversationRuntime {
             ...(input.userMessagePresentation === undefined
               ? {}
               : { userMessagePresentation: input.userMessagePresentation }),
+            ...(input.userMessagePresentation === undefined ||
+            projector.turnPresentationTiming === undefined
+              ? {}
+              : { turnPresentationTiming: projector.turnPresentationTiming }),
             messages: projectDurableTurnMessages(
               turnMessages,
               durablePrompt,

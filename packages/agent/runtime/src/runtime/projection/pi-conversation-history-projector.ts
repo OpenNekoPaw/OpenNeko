@@ -1,8 +1,11 @@
 import type { ContentBlock, Message, ToolCall } from '@neko/agent-contracts';
 import {
   isPiUserMessagePresentationEntry,
+  isPiTurnPresentationTimingEntry,
+  parsePiTurnPresentationTiming,
   parsePiUserMessagePresentation,
   type PiConversationTranscriptEntry,
+  type PiTurnPresentationTiming,
   type PiUserMessagePresentation,
 } from '../../pi';
 
@@ -23,8 +26,29 @@ export function projectPiConversationEntries(
         readonly presentation: PiUserMessagePresentation;
       }
     | undefined;
+  let activeTurnId: string | undefined;
+  let pendingTurnTiming: PiTurnPresentationTiming | undefined;
 
   for (const entry of entries) {
+    if (isPiTurnPresentationTimingEntry(entry)) {
+      if (pendingUserPresentation) {
+        throw new Error(
+          `Pi Turn presentation timing follows unresolved user presentation ${pendingUserPresentation.entryId}.`,
+        );
+      }
+      if (activeAssistantMessage || pendingTurnTiming) {
+        throw new Error('Pi transcript contains duplicate Turn presentation timing.');
+      }
+      const timing = parsePiTurnPresentationTiming(entry.data);
+      if (activeTurnId !== undefined && timing.turnId !== activeTurnId) {
+        throw new Error(
+          `Pi Turn presentation timing ${timing.turnId} does not match user Turn ${activeTurnId}.`,
+        );
+      }
+      activeTurnId = timing.turnId;
+      pendingTurnTiming = timing;
+      continue;
+    }
     if (isPiUserMessagePresentationEntry(entry)) {
       if (pendingUserPresentation) {
         throw new Error(
@@ -65,6 +89,11 @@ export function projectPiConversationEntries(
     }
 
     if (source.role === 'user') {
+      if (pendingTurnTiming) {
+        throw new Error(
+          `Pi Turn presentation timing ${pendingTurnTiming.turnId} has no assistant message.`,
+        );
+      }
       if (pendingUserPresentation && entry.parentId !== pendingUserPresentation.entryId) {
         throw new Error(
           `Pi user message presentation ${pendingUserPresentation.entryId} does not own user message ${entry.id}.`,
@@ -86,6 +115,7 @@ export function projectPiConversationEntries(
       });
       pendingUserPresentation = undefined;
       activeAssistantMessage = undefined;
+      activeTurnId = presentation?.turnId;
       toolCalls.clear();
       continue;
     }
@@ -105,7 +135,7 @@ export function projectPiConversationEntries(
         .filter((part) => part.type === 'text')
         .map((part) => part.text)
         .join('');
-      messages.push({
+      const message: Message = {
         id: entry.id,
         role: 'assistant',
         content: source.errorMessage
@@ -115,8 +145,18 @@ export function projectPiConversationEntries(
           : responseText,
         timestamp: source.timestamp,
         isError: true,
-      });
-      activeAssistantMessage = undefined;
+        ...(pendingTurnTiming
+          ? {
+              turnTiming: {
+                startedAt: pendingTurnTiming.startedAt,
+                completedAt: pendingTurnTiming.completedAt,
+              },
+            }
+          : {}),
+      };
+      messages.push(message);
+      activeAssistantMessage = { message, blocks: [] };
+      pendingTurnTiming = undefined;
       toolCalls.clear();
       continue;
     }
@@ -128,8 +168,17 @@ export function projectPiConversationEntries(
         role: 'assistant',
         content: '',
         timestamp: source.timestamp,
+        ...(pendingTurnTiming
+          ? {
+              turnTiming: {
+                startedAt: pendingTurnTiming.startedAt,
+                completedAt: pendingTurnTiming.completedAt,
+              },
+            }
+          : {}),
       };
       activeAssistantMessage = { message, blocks };
+      pendingTurnTiming = undefined;
       messages.push(message);
     }
 
@@ -180,6 +229,11 @@ export function projectPiConversationEntries(
   if (pendingUserPresentation) {
     throw new Error(
       `Pi user message presentation ${pendingUserPresentation.entryId} has no user message.`,
+    );
+  }
+  if (pendingTurnTiming) {
+    throw new Error(
+      `Pi Turn presentation timing ${pendingTurnTiming.turnId} has no assistant message.`,
     );
   }
 
