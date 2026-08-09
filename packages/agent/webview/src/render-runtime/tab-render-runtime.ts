@@ -166,6 +166,13 @@ export function createTabRenderRuntime(binding: TabRenderBinding): TabRenderRunt
   return new DefaultTabRenderRuntime(binding);
 }
 
+const AGENT_MARKDOWN_PRESENTATION_INTERVAL_MS = 32;
+
+function scheduleAgentMarkdownStreamingUpdate(callback: () => void): () => void {
+  const timeout = globalThis.setTimeout(callback, AGENT_MARKDOWN_PRESENTATION_INTERVAL_MS);
+  return () => globalThis.clearTimeout(timeout);
+}
+
 export function createTabRenderRuntimeRegistry(): TabRenderRuntimeRegistry {
   return new DefaultTabRenderRuntimeRegistry();
 }
@@ -266,7 +273,9 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     this.tabId = binding.tabId;
     this.conversationId = binding.conversationId;
     this.projectionReplica = createConversationProjectionReplica(binding.conversationId);
-    this.markdownSessions = createAgentMarkdownSessionRegistry();
+    this.markdownSessions = createAgentMarkdownSessionRegistry({
+      scheduleStreamingUpdate: scheduleAgentMarkdownStreamingUpdate,
+    });
     this.store = new DefaultTabRenderStore({
       tabId: binding.tabId,
       conversationId: binding.conversationId,
