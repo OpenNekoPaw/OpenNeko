@@ -212,6 +212,26 @@ list with no nested Thinking or Tool disclosure cards.
 Running turns expose one current activity status. Failed Tool calls and pending approvals remain
 visible and actionable even when prior completed activity is collapsed.
 
+The activity summary title reports Turn elapsed time (`Processing …` while active and `Processed …`
+after completion), not the implementation-oriented `Process records` label. Completed duration is
+the interval from the earliest item `createdAt` owned by the Turn through the authoritative
+`completion.completedAt`. The active label uses the same earliest timestamp and a disposable Webview
+clock. Tool durations remain optional row-level diagnostics and are never summed into Turn duration,
+because Tool calls may overlap. Tool and Thinking counts remain secondary metadata visible only in
+the expanded activity detail.
+
+The expanded activity list iterates one ordered projection built directly from the surviving Timeline
+items. It does not regroup by content type or reconstruct sequence from separate Thinking, Tool,
+progress or evidence arrays. Pending approvals and failed Tool calls are projected into the always-
+visible actionable role before the activity summary, so collapse state cannot conceal them.
+
+Read-only pages returned by document/image inspection are evidence owned by their exact Tool item.
+Their thumbnail gallery is rendered beneath that Tool row inside the activity timeline. Clicking a
+thumbnail opens the authorized full projection or exact document location. A compact overflow menu
+offers copy-reference and Canvas handoff when those typed operations are available; raw JSON and a
+persistent information button are not primary user actions. Only typed generated, published or saved
+outputs enter the post-answer deliverable region.
+
 Ordinary answer Markdown has no per-block `Response` label, file icon or repeated avatar. The turn
 owns one assistant identity gutter and one action/timestamp area. Text uses a constrained reading
 column; tables, Diff and media may enter a wider lane without expanding paragraph measure.
@@ -294,8 +314,34 @@ compatibility heuristic or fall back to the previous per-entry presentation. The
 same one-message turn shape for live and reopened conversations and applies the same
 answer/deliverable/actionable/activity presenter once.
 
+History projection must also carry the same presentation timing facts as live Timeline projection.
+It derives the first item timestamp and terminal completion timestamp while segmenting the persisted
+turn, then emits the canonical `Message` projection once. The Webview must not infer a different
+reopened duration from mount time, block-type grouping or Tool durations.
+
 This is a canonical projection from the authoritative Pi transcript, not transcript mutation or
 migration. Raw Pi entries remain unchanged and continue to own provider continuation history.
+
+### 10. Evaluation disposition for Turn timing and evidence interaction
+
+The summary label, duration arithmetic, exact sequence, role placement and thumbnail control contract
+are deterministic presentation behavior. They are `excluded` from a new model Judge and are accepted
+by Timeline/history projector tests plus Agent Webview presenter/component tests. The existing
+`agent-runtime.stream-delivery` and persistence/resume dispositions are reused for the unchanged real
+Agent event path; no Prompt, Skill, Tool routing, provider or model behavior changes.
+
+Visible Desktop validation remains applicable because the hierarchy, disclosure and thumbnail actions
+are user-visible. It must inspect active/completed timing, collapsed/expanded sequence, an actionable
+failure or approval, ReadImage evidence under its Tool row, final answer placement and a true generated
+deliverable. If the configured visible Desktop/provider boundary is unavailable, record the exact
+blocker and do not substitute deterministic DOM tests for visual acceptance.
+
+The canonical Turn activity summary also replaces the older conversation-level execution status as
+soon as that Turn owns a visible timing record, including when its only visible blocks are failed Tools.
+The Webview must never show both clocks for one running Turn. Consecutive completed Tool calls with the
+same exact typed target may be compacted into one group regardless of success, but the group remains
+actionable when any call failed and preserves each call and diagnostic in its disclosure. Pending
+approval calls are never compacted.
 
 ## Canonical Paths
 
@@ -307,7 +353,8 @@ Workspace .md -> Content read -> TextDocumentSession accepted source
 
 ```text
 Pi/AgentSession Timeline blocks -> exact turn/block identity and terminal state
-  -> package-owned turn projection -> answer / deliverable / activity
+  -> package-owned turn projection + earliest item/completion timing
+  -> actionable / elapsed activity / answer / deliverable
   -> one canonical Agent text surface for answer Markdown
 ```
 

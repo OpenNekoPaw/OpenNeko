@@ -42,6 +42,11 @@ replace these boundaries.
   activity disclosure before the same terminal Markdown hierarchy used while the turn was live.
 - ReadImage evidence: document page thumbnails remain inside the process disclosure; generated or
   published media remains a typed deliverable outside it.
+- Turn elapsed summary: an active Turn shows `Processing <duration>` and a completed Turn shows
+  `Processed <duration>` before the final answer. Duration uses the earliest Timeline item through
+  authoritative completion, not summed Tool time; Tool/Thinking counts appear only in expanded detail.
+- Thumbnail interaction: clicking a document page opens its authorized source location; the collapsed
+  More control exposes copy-reference and Canvas transfer without persistent JSON/info buttons.
 
 ## Evidence
 
@@ -66,6 +71,22 @@ replace these boundaries.
 - Active-output deterministic evidence: Agent Webview passes 90 files / 704 tests, focused Desktop tests
   pass 67 assertions, both affected package typechecks pass, and the scheduling/finalization tests prove
   byte-preserving coalescing with synchronous final convergence.
+- Turn-timing deterministic evidence: Agent Runtime passes 116 files / 1113 tests, the added strict
+  timing-parser/projector focus passes 4 files / 29 tests, and Agent Webview passes 90 files / 710
+  tests. The UI test renders one exact 2m28s summary before the final answer,
+  keeps two overlapping Tool durations out of the Turn total, preserves progress/Tool/Thinking order,
+  keeps a failed Tool above the collapsed summary, nests a document page under ReadImage and exercises
+  open, copy-reference and typed Canvas transfer. Agent Contracts pass 42 files / 273 tests and the
+  affected typechecks pass.
+- The user-provided visible screenshot on 2026-08-10 showed the pre-fix defect directly: one canonical
+  Chinese `正在处理 28秒` summary and the older `正在处理 40s` execution row were simultaneously
+  visible, while two completed `ReadDocument` failures for the same `cursor_ref` occupied duplicate
+  top-level cards. Deterministic presenter coverage now proves the canonical active Turn suppresses the
+  older row and the two completed failures compact into one actionable group retaining both diagnostics.
+  A current post-fix Electron screenshot remains blocked by the active development owner.
+- Current Turn-timing/thumbnail visual result: blocked. The canonical development Desktop has an
+  active Electron owner, while real-provider authorization is unset, so no new transcript screenshot
+  was captured and deterministic tests are not substituted for pixel review.
 - Agent visible Desktop attempts:
   - `desktop-workbench-scenes` reached the real Electron Entry Draft and produced reviewed full/narrow
     screenshots, then failed in adjacent Assets navigation because the scenario expected
@@ -112,6 +133,9 @@ replace these boundaries.
   the latest authoritative attempt is blocked earlier by the development-launch argument failure.
 - The real-provider visible scenario also requires explicit provider/model/cost authorization; the
   user configuration is readable, but all three authorization environment values are unset.
-- Repository-wide quality validation reached strict TypeScript and then stopped on a concurrently
-  modified Canvas sizing switch with no exhaustive return. The Agent/Webview/OpenSpec boundary gates
-  and both affected package typechecks passed before that external change appeared.
+- Turn-timing and thumbnail visual hierarchy remains unreviewed in a current authoritative screenshot
+  because the development Desktop owner is active; no browser-only image is promoted to Desktop proof.
+- Agent/Webview/OpenSpec/application/package boundary gates, strict Agent TypeScript, Webview TypeScript
+  and legacy-debt checks pass. Repository-wide `check:unused` is currently blocked by an unrelated
+  Automation script and Canvas export in the dirty shared worktree; neither was modified or staged by
+  this change.

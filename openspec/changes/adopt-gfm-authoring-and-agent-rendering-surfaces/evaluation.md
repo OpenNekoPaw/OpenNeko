@@ -64,6 +64,24 @@ Date: 2026-08-10
   context, artifact and cross-conversation isolation remain unchanged. The existing real case proves
   owner/session restoration but does not substitute for visible one-disclosure hierarchy evidence.
 
+### Turn timing and document-evidence interaction addendum
+
+- Decision: `excluded` from a new model Judge for elapsed-time arithmetic, disclosure hierarchy,
+  exact activity order and thumbnail controls. Reuse
+  `agent-runtime.stream-delivery/tool-text-order-final-answer` for ordered live events and
+  `agent-runtime.workflow-controller/conversation-persistence-resume` for owner restart/history.
+- Canonical path: earliest visible Timeline item `createdAt` plus terminal
+  `completion.completedAt` -> `Message.turnTiming` -> one elapsed activity summary. The same exact
+  timing pair is checkpointed as a Pi custom product projection between its user and assistant
+  messages, then restored into the canonical history `Message`.
+- Forbidden fallback: summing Tool durations, deriving completion from Webview mount time, inferring a
+  restored Turn from timestamp windows, type-grouping activity, classifying ReadImage pages as generated
+  deliverables, or exposing raw reference JSON as a primary thumbnail control.
+- Coverage: deterministic Event/Timeline/history/Webview tests prove the exact timing pair, overlapping
+  Tool independence, original sequence, failure visibility, live/reopen parity, ReadImage evidence
+  nesting, open/copy-reference/Canvas actions and final-answer/deliverable placement. No Prompt, Skill,
+  provider, model or Tool-routing behavior changed.
+
 ## Cases
 
 - Excluded deterministic cases: official GFM/profile corpus; incomplete emphasis/link/fence/table/list;
@@ -81,6 +99,12 @@ Date: 2026-08-10
 
 - Key-free validation: passed on 2026-08-10 with 44 files / 294 tests and all 24 indexed suites / 64
   cases; this remains authoring-readiness evidence only.
+- Turn-timing rerun: the standard key-free command reached 42/44 files and 291/294 tests, while three
+  repository/isolated-worktree tests exceeded their fixed five-second timeout under concurrent
+  Electron/package load. The exact three tests pass 2 files / 9 tests with a 20-second test timeout,
+  and the strict all-suite dry-run passes 24 suites / 64 cases. Focused dry-runs for
+  `tool-text-order-final-answer` and `conversation-persistence-resume` each pass selection and schema
+  validation. This remains harness evidence, not real Agent behavior acceptance.
 - Deterministic/UI validation: focused Webview tests and the authoritative visible Electron Text Editor
   scenario pass. The scenario exposed and verified fixes for StrictMode Rich initialization, Vite
   first-import dependency reload and stale toolbar-index automation.
@@ -164,10 +188,18 @@ Date: 2026-08-10
   disclosure precedes the final answer and typed document thumbnails remain process evidence. The
   focused MCP client passes 4 tests; its cancellation case can exceed the fixed 2-second startup
   timeout only inside the 116-file Runtime run, where the other 1111 tests pass.
+- 2026-08-10 Turn-timing result: Agent Contracts pass 42 files / 273 tests; Agent Runtime passes 116
+  files / 1113 tests plus the added strict timing-parser/projector focus at 4 files / 29 tests; Agent
+  Webview passes 90 files / 710 tests; all three affected typechecks pass.
+  The runtime checkpoint test proves the timing custom entry is ordered after its exact user message
+  and before assistant content without entering model context. Webview coverage proves `Processed 2m
+  28s` is calculated from Turn timing even when two Tool durations overlap, secondary counts appear
+  only after expansion, activity order is unchanged and ReadImage pages remain evidence.
 - `pnpm check:agent-boundaries`, `pnpm check:application-boundaries`,
   `pnpm check:package-boundaries`, `pnpm check:webview-boundaries`, `pnpm check:strict-agent`,
-  `pnpm check:legacy-debt`, `pnpm check:unused` and `pnpm check:openspec` pass. `check:unused` retains 82
-  non-blocking repository configuration hints and reports no unused export.
+  `pnpm check:legacy-debt` and strict OpenSpec validation pass. `pnpm check:unused` is currently blocked
+  by the unrelated untracked `scripts/automation-runtime-cua-node-rebuilder.mjs` and the concurrently
+  modified Canvas export `NODE_DEFAULT_SIZES`; 82 configuration hints remain non-blocking.
 - `pnpm smoke:webview` is blocked by the existing smoke contract: it requires an Agent `dist`
   directory, while the canonical Agent Webview `build` script is `tsc --noEmit`. The direct Agent
   Webview build passes.
@@ -190,7 +222,10 @@ Date: 2026-08-10
   scheduling and DOM enabled-state tests are retained as lower-layer evidence only.
 - Reopened-turn visible parity remains unverified for the same launcher defect. The latest attempt is
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T19-50-57.369Z-desktop-conversation-navigation-development/report.json`.
-- The affected Agent/Webview/OpenSpec boundary gates pass. The repository-wide `check:quality` run is
-  blocked in strict TypeScript by the concurrently modified Canvas function
-  `canvasWorkspaceBoardProjection.ts:artifactNodeSize`, which lacks an exhaustive return; this file is
-  outside the reopened-turn change and was not modified as part of this fix.
+- Turn-timing and thumbnail visual acceptance remains blocked: the canonical development Desktop is
+  currently owned by an active Electron session, and provider/model/cost authorization remains unset.
+  Deterministic DOM checks are retained as lower-layer evidence and are not reported as visible
+  Desktop acceptance.
+- The affected Agent/Webview/OpenSpec/application/package boundary and strict TypeScript gates pass.
+  Repository-wide unused-code acceptance remains blocked only by the unrelated Automation/Canvas
+  findings recorded above; those files are outside this change and remain untouched.

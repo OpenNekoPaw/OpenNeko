@@ -77,3 +77,13 @@
 - [x] 9.2 Segment persisted Pi entries by user turn and project all assistant iterations plus exact Tool results into one ordered assistant `Message` without changing raw transcript authority.
 - [x] 9.3 Add deterministic runtime and Webview tests proving a multi-Tool turn has one activity disclosure and identical final hierarchy before and after reopen, while orphan Tool results remain fail-visible.
 - [x] 9.4 Reuse the existing persistence/resume Agent Evaluation disposition, run focused runtime/Webview validation and `neko-ui-validation`/`neko-quality-review`, and record exact visible-runtime blockers.
+
+## 10. Turn Timing, Ordered Evidence And Thumbnail Interaction
+
+- [x] 10.1 Record the duration/sequence/evidence hierarchy defect and update proposal, five-layer design, requirements, Evaluation disposition and tasks before implementation.
+- [x] 10.2 Project one canonical Turn timing interval from the earliest item `createdAt` through `completion.completedAt` for live and reopened messages; keep the active clock disposable and never sum Tool durations.
+- [x] 10.3 Replace the collapsed process-record title with active/completed elapsed time, move Tool/Thinking counts into expanded secondary metadata, and preserve exact Timeline sequence in the expanded list while keeping approvals/failures always visible.
+- [x] 10.4 Nest ReadImage/document-page evidence under its exact Tool step, keep only generated/saved typed outputs in the post-answer deliverable region, and replace persistent JSON/info thumbnail controls with open plus typed overflow actions.
+- [x] 10.5 Add deterministic runtime/presenter/component tests for timing arithmetic, overlap, original order, live/reopen parity, actionable placement, evidence nesting and thumbnail actions; run focused package validation.
+- [x] 10.6 Replace the legacy execution-status row once a canonical running Turn exists, and compact repeated completed failures for one exact target without hiding their diagnostics.
+- [x] 10.7 Run `neko-ui-validation`, reuse the existing `agent-runtime.stream-delivery` and persistence/resume Agent Evaluation dispositions, run `neko-quality-review`, and record visible-runtime evidence or exact blockers.

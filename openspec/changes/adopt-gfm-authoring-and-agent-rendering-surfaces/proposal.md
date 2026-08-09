@@ -48,6 +48,10 @@ file remains authoritative and no renderer becomes an Agent file-writing API.
   every persisted Pi assistant iteration as a separate `Message`. A tool-using turn can therefore
   reopen as several assistant rows and several activity disclosures even though it rendered as one
   turn while running.
+- The current turn presenter still labels its primary summary `Process records`, promotes Tool and
+  Thinking counts into the main hierarchy, and has no canonical Turn timing projection. Read-only
+  document page thumbnails can also be misclassified as generated deliverables and expose persistent
+  developer-oriented copy/info controls, so the processing sequence and visual evidence remain noisy.
 
 The completed Phase 0 work is owned by `add-ai-screenplay-authoring`; its deterministic gates remain
 part of acceptance for the production Milkdown path and current canonical Agent renderer.
@@ -85,6 +89,13 @@ part of acceptance for the production Milkdown path and current canonical Agent 
   assistant iterations and their exact Tool results remain ordered blocks of one restored assistant
   message until the next user message. Do not add a Webview-only adjacent-message merge or a reopen
   renderer path.
+- Present the bounded activity disclosure as elapsed Turn processing time. Derive completed duration
+  from the earliest Timeline item `createdAt` through `completion.completedAt`, and derive the running
+  label from that same start through the current presentation clock; never sum Tool durations.
+- Preserve exact Timeline sequence inside the expanded disclosure and keep approvals/failures outside
+  it. Treat document pages read by a Tool as nested evidence, not deliverables; reserve the post-answer
+  deliverable region for generated or saved outputs and simplify thumbnail actions to open plus an
+  overflow menu for copy-reference and Canvas handoff.
 
 ## Capabilities
 

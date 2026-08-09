@@ -158,15 +158,44 @@ disclosure cards.
 #### Scenario: A run is active
 
 - **WHEN** the current turn is still executing
-- **THEN** the Webview displays one current activity status rather than accumulating multiple expanded
-  process headers
+- **THEN** the Webview displays one `Processing <duration>` activity status derived from the earliest
+  Turn item timestamp rather than accumulating multiple expanded process headers
 - **AND** answer text already emitted remains readable without a `Response` header
+
+#### Scenario: A running turn contains only failed Tool results
+
+- **WHEN** the canonical assistant Turn owns an active timing record and its visible blocks are failed
+  Tool results
+- **THEN** the Turn-level `Processing <duration>` summary replaces the older conversation-level
+  execution status
+- **AND** the Webview MUST NOT render a second clock for the same Turn
+
+#### Scenario: A run completes after overlapping Tool calls
+
+- **WHEN** a Turn has an earliest item `createdAt`, an authoritative `completion.completedAt` and Tool
+  calls whose execution intervals may overlap
+- **THEN** the summary displays `Processed <duration>` using the Turn start-to-completion interval
+- **AND** it MUST NOT sum Tool durations or promote Tool/Thinking counts into the collapsed title
+- **AND** expanding the summary may show those counts as secondary metadata
+
+#### Scenario: User expands completed activity
+
+- **WHEN** Thinking, progress, Tool calls and evidence were interleaved in the authoritative Timeline
+- **THEN** the detail renders those surviving items in exact Timeline sequence without grouping by type
+- **AND** the terminal answer remains after the activity summary
 
 #### Scenario: A Tool requires action or fails
 
 - **WHEN** a Tool is awaiting approval or reports failure
 - **THEN** the affected action or diagnostic remains directly visible and keyboard accessible
 - **AND** collapsing prior successful activity cannot hide or convert the actionable state into success
+
+#### Scenario: Consecutive calls fail for the same exact target
+
+- **WHEN** two or more completed Tool calls share one exact typed target and one or more calls fail
+- **THEN** the Webview may compact them into one always-visible actionable group
+- **AND** expanding the group preserves every call and diagnostic in execution order
+- **AND** pending approval calls remain individually visible and MUST NOT be compacted
 
 ### Requirement: Evidence and deliverables retain typed placement semantics
 
@@ -178,8 +207,16 @@ inference or arbitrary JSON inspection.
 #### Scenario: A document Tool exposes page thumbnails
 
 - **WHEN** thumbnails are execution evidence rather than a requested output artifact
-- **THEN** they remain available inside the activity detail and do not interrupt the primary answer
+- **THEN** they remain nested beneath their exact Tool step inside the activity detail and do not
+  interrupt the primary answer
 - **AND** a true generated or published artifact remains visible outside the collapsed activity
+
+#### Scenario: User acts on a document evidence thumbnail
+
+- **WHEN** an authorized document page thumbnail is visible inside its Tool step
+- **THEN** clicking it opens the full projection or exact document location
+- **AND** a compact overflow menu exposes typed copy-reference and Canvas-handoff actions when available
+- **AND** persistent raw-JSON copy and information buttons do not occupy the thumbnail footer
 
 ### Requirement: Agent Markdown uses a readable semantic layout
 
@@ -282,6 +319,8 @@ Timeline output. The Webview SHALL NOT merge adjacent persisted messages as a re
   same final Markdown hierarchy as the completed live turn
 - **AND** the activity disclosure precedes the terminal answer in processing-to-result reading order
 - **AND** no per-entry assistant row, reopen-only renderer or adjacent-message grouping participates
+- **AND** its elapsed summary uses the restored Turn start/completion facts rather than mount time or
+  accumulated Tool duration
 
 #### Scenario: A persisted Tool result has no owner in its turn
 
