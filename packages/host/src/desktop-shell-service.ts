@@ -62,7 +62,6 @@ import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import { isCutDraftDocumentId, type CutHostRuntimeIdentity } from '@neko/cut-domain';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createCutHostSessionId } from '@neko/cut-domain';
-import type { DesktopStartupTargetPreference } from './application-settings-contract';
 import type {
   DesktopWorkspaceGrantAuthorityPort,
   DesktopWorkspaceGrantResolution,
@@ -87,7 +86,6 @@ export interface DesktopShellServiceOptions {
   readonly stateRepository: DesktopShellStateRepositoryPort;
   readonly workspaceRegistry: DesktopWorkspaceResolutionPort;
   readonly workspaceGrantAuthority?: DesktopWorkspaceGrantAuthorityPort;
-  readonly startupTarget: DesktopStartupTargetPreference;
   readonly startupStateDiagnostics?: readonly DesktopShellStateDiagnosticProjection[];
   readonly retainedProjects?: readonly DesktopProjectCatalogItem[];
   readonly createIdentity?: () => string;
@@ -293,7 +291,21 @@ export class DesktopShellService {
           )
         : restoredWindow;
       const cutDraftCleanup = discardExpiredCutDraftPresentations(agentQualifiedWindow);
-      const qualifiedWindow = cutDraftCleanup.window;
+      const restorableWorkbench = restoreWindowWorkbench(
+        state,
+        cutDraftCleanup.window,
+        this.createIdentity,
+      );
+      const restorableScene = synchronizeWorkspaceSceneWithWorkbench(
+        activeDesktopWorkbench(cutDraftCleanup.window).scene,
+        restorableWorkbench,
+      );
+      const qualifiedWindow = captureActiveProjectPresentation(
+        replaceActiveDesktopWorkbench(cutDraftCleanup.window, {
+          layout: restorableWorkbench,
+          scene: restorableScene,
+        }),
+      );
       if (cutDraftCleanup.removedViewIds.length > 0) {
         this.isolatedWindowDiagnostics = [
           ...this.isolatedWindowDiagnostics,
@@ -308,36 +320,23 @@ export class DesktopShellService {
           },
         ];
       }
-      const restoredWorkbench = restoreWindowWorkbench(state, qualifiedWindow, this.createIdentity);
-      const restoredScene = synchronizeWorkspaceSceneWithWorkbench(
-        activeDesktopWorkbench(qualifiedWindow).scene,
-        restoredWorkbench,
+      const entryScene = createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`);
+      const entryWindow = replaceActiveDesktopWorkbench(
+        {
+          ...qualifiedWindow,
+          activeTarget: { kind: 'home' },
+        },
+        {
+          layout: createDefaultDesktopWorkbenchLayout(windowId),
+          scene: entryScene,
+        },
       );
-      const restoredActiveTarget =
-        this.options.startupTarget === 'home' && restoredWindow.activeTarget.kind !== 'home'
-          ? ({ kind: 'home' } as const)
-          : restoredWindow.activeTarget;
-      if (
-        qualifiedWindow !== restoredWindow ||
-        restoredWorkbench !== activeDesktopWorkbench(qualifiedWindow).layout ||
-        restoredScene !== activeDesktopWorkbench(qualifiedWindow).scene ||
-        restoredActiveTarget !== restoredWindow.activeTarget
-      ) {
-        await this.options.stateRepository.commit({
-          ...state,
-          windows: state.windows.map((window) =>
-            window.windowId === windowId
-              ? replaceActiveDesktopWorkbench(
-                  {
-                    ...qualifiedWindow,
-                    activeTarget: restoredActiveTarget,
-                  },
-                  { layout: restoredWorkbench, scene: restoredScene },
-                )
-              : window,
-          ),
-        });
-      }
+      await this.options.stateRepository.commit({
+        ...state,
+        windows: state.windows.map((window) =>
+          window.windowId === windowId ? entryWindow : window,
+        ),
+      });
       this.installWindowRuntime(windowId);
       return windowId;
     });

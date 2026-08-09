@@ -47,7 +47,7 @@ describe('DesktopShellService', () => {
       rejectionId: 4,
       message: 'Stored Shell authority was rejected.',
     };
-    const fixture = createFixture(undefined, 'home', undefined, true, [diagnostic]);
+    const fixture = createFixture(undefined, undefined, true, [diagnostic]);
 
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -61,7 +61,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('starts at Home by default without deleting restored project tabs', async () => {
+  it('starts with a fresh Entry Draft without deleting restored project tabs', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
     const windowId = await first.service.claimWindowId();
@@ -74,6 +74,7 @@ describe('DesktopShellService', () => {
       projection.rendererSessionId,
     );
     expect(opened.projection.window.activeTarget.kind).toBe('project');
+    const previousScene = activeScene(opened.projection.window);
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
@@ -85,6 +86,13 @@ describe('DesktopShellService', () => {
     expect(restored.window.activeTarget).toEqual({ kind: 'home' });
     expect(restored.window.tabs).toHaveLength(1);
     expect(restored.catalog.projects).toHaveLength(1);
+    expect(activeScene(restored.window)).toMatchObject({
+      context: { kind: 'agent', scope: { kind: 'unbound' } },
+      slots: { interaction: { kind: 'agent', phase: 'draft', scope: { kind: 'unbound' } } },
+    });
+    expect(activeScene(restored.window).sceneId).not.toBe(previousScene.sceneId);
+    expect(activeWorkbench(restored.window).main.views).toEqual([]);
+    expect(second.registry.restore).not.toHaveBeenCalled();
   });
 
   it('opens and explicitly removes a Project retained by the stable Workspace authority', async () => {
@@ -96,7 +104,7 @@ describe('DesktopShellService', () => {
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-06T00:00:00.000Z',
     };
-    const fixture = createFixture(undefined, 'home', undefined, true, [], [retainedProject]);
+    const fixture = createFixture(undefined, undefined, true, [], [retainedProject]);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     let projection = await fixture.service.getProjection(windowId);
@@ -156,7 +164,7 @@ describe('DesktopShellService', () => {
     ];
     const repository = createInMemoryDesktopShellStateRepository();
     const commit = vi.spyOn(repository, 'commit');
-    const fixture = createFixture(repository, 'home', undefined, true, [], projects);
+    const fixture = createFixture(repository, undefined, true, [], projects);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const projection = await fixture.service.getProjection(windowId);
@@ -193,7 +201,7 @@ describe('DesktopShellService', () => {
         updatedAt: '2026-08-07T00:00:00.000Z',
       },
     ];
-    const fixture = createFixture(undefined, 'home', undefined, true, [], projects);
+    const fixture = createFixture(undefined, undefined, true, [], projects);
     fixture.service.setAgentHomeProjectionSource({
       readHomeProjection: () => ({
         conversations: [
@@ -266,7 +274,7 @@ describe('DesktopShellService', () => {
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-06T00:00:00.000Z',
     };
-    const fixture = createFixture(undefined, 'home', undefined, true, [], [project]);
+    const fixture = createFixture(undefined, undefined, true, [], [project]);
     fixture.service.setAgentHomeProjectionSource({
       readHomeProjection: () => ({
         conversations: [workspaceHomeConversation('conversation:first', 'workspace-1')],
@@ -341,7 +349,7 @@ describe('DesktopShellService', () => {
 
   it('rejects a persisted Agent Surface whose Conversation no longer matches its canonical owner', async () => {
     const repository = createMemoryFile();
-    const first = createFixture(repository, 'restore');
+    const first = createFixture(repository);
     const homeConversation = (conversationId: string) => ({
       navigation: {
         conversationId,
@@ -506,7 +514,7 @@ describe('DesktopShellService', () => {
       },
     } as const;
     const originalAuthorityBytes = JSON.stringify(invalidAuthorityRecord);
-    const restored = createFixture(repository, 'restore');
+    const restored = createFixture(repository);
     restored.service.setAgentHomeProjectionSource({
       readHomeProjection: () => ({
         conversations: [homeConversation('conversation:valid-sibling')],
@@ -530,8 +538,8 @@ describe('DesktopShellService', () => {
     const recoveredActive = activeInstance(recovered.window);
 
     expect(recoveredActive.scene).toMatchObject({
-      context: { kind: 'agent', scope: { kind: 'assistant' } },
-      slots: { interaction: { phase: 'draft', scope: { kind: 'assistant' } } },
+      context: { kind: 'agent', scope: { kind: 'unbound' } },
+      slots: { interaction: { phase: 'draft', scope: { kind: 'unbound' } } },
     });
     expect(recoveredActive.scene.context).not.toHaveProperty(
       'scope.conversationId',
@@ -628,7 +636,7 @@ describe('DesktopShellService', () => {
     );
   });
 
-  it('persists exact Scene transitions across renderer and application restart', async () => {
+  it('preserves the exact Scene across renderer reload but starts application reopen at Entry', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
     const windowId = await first.service.claimWindowId();
@@ -656,15 +664,20 @@ describe('DesktopShellService', () => {
         },
       },
     });
+    if (transitioned.status !== 'transitioned') {
+      throw new Error('Expected the Settings Scene transition to succeed.');
+    }
+    first.service.setRendererSessionId(windowId, 'renderer-session-2');
+    expect(await first.service.getSceneProjection(windowId)).toEqual(transitioned.scene);
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const restored = createFixture(file, 'restore');
+    const restored = createFixture(file);
     const restoredWindowId = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindowId, 'renderer-session-1');
     expect(await restored.service.getSceneProjection(restoredWindowId)).toMatchObject({
-      sceneId: `scene:${windowId}:settings`,
-      context: { kind: 'settings', settingsSectionId: 'agent' },
+      context: { kind: 'agent', scope: { kind: 'unbound' } },
+      slots: { interaction: { phase: 'draft', scope: { kind: 'unbound' } } },
     });
   });
 
@@ -831,7 +844,7 @@ describe('DesktopShellService', () => {
   });
 
   it('rejects a stale Scene identity and returns owner-qualified unavailable without mutation', async () => {
-    const fixture = createFixture(createMemoryFile(), 'home', undefined, false);
+    const fixture = createFixture(createMemoryFile(), undefined, false);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const projection = await fixture.service.getProjection(windowId);
@@ -884,14 +897,7 @@ describe('DesktopShellService', () => {
         message: 'The Project workspace is missing.',
       },
     };
-    const fixture = createFixture(
-      createMemoryFile(),
-      'home',
-      undefined,
-      true,
-      [],
-      [retainedProject],
-    );
+    const fixture = createFixture(createMemoryFile(), undefined, true, [], [retainedProject]);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const before = await fixture.service.getProjection(windowId);
@@ -943,7 +949,7 @@ describe('DesktopShellService', () => {
         message: 'Project identity is missing.',
       },
     };
-    const restored = createFixture(repository, 'restore', undefined, true, [], [retainedProject]);
+    const restored = createFixture(repository, undefined, true, [], [retainedProject]);
     const windowId = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(windowId, 'renderer-session-1');
     const before = await restored.service.getProjection(windowId);
@@ -1065,7 +1071,7 @@ describe('DesktopShellService', () => {
       resolver: { resolve: vi.fn(async () => authorityResolution) },
       createIdentity: () => 'grant-1',
     });
-    const fixture = createFixture(repository, 'home', authority);
+    const fixture = createFixture(repository, authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     let projection = await fixture.service.getProjection(windowId);
@@ -1125,7 +1131,7 @@ describe('DesktopShellService', () => {
       resolver: { resolve: vi.fn(async () => workspace) },
       createIdentity: () => 'grant-1',
     });
-    const first = createFixture(repository, 'home', authority);
+    const first = createFixture(repository, authority);
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
@@ -1205,10 +1211,18 @@ describe('DesktopShellService', () => {
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const restored = createFixture(repository, 'restore');
+    const restored = createFixture(repository);
     const restoredWindowId = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindowId, 'renderer-session-1');
-    const restoredProjection = await restored.service.getProjection(restoredWindowId);
+    const entryProjection = await restored.service.getProjection(restoredWindowId);
+    const restoredProjection = (
+      await openContent(
+        restored,
+        restoredWindowId,
+        '/workspace/demo',
+        entryProjection.rendererSessionId,
+      )
+    ).projection;
     const restoredMainView = activeWorkbench(restoredProjection.window).main.views[0]!;
     expect(restoredMainView).toMatchObject({
       kind: 'canvas',
@@ -1235,7 +1249,7 @@ describe('DesktopShellService', () => {
       resolver: { resolve: vi.fn(async () => workspace), restore },
       createIdentity: () => 'recent-project-grant',
     });
-    const fixture = createFixture(repository, 'home', authority);
+    const fixture = createFixture(repository, authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await fixture.service.getProjection(windowId);
@@ -1299,7 +1313,7 @@ describe('DesktopShellService', () => {
       resolver: { resolve },
       createIdentity: () => 'grant-1',
     });
-    const fixture = createFixture(repository, 'home', authority);
+    const fixture = createFixture(repository, authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const grant = authority.authorize({
@@ -1392,7 +1406,7 @@ describe('DesktopShellService', () => {
       resolver: { resolve },
       createIdentity: () => 'entry-workspace-grant',
     });
-    const fixture = createFixture(undefined, 'home', authority);
+    const fixture = createFixture(undefined, authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await fixture.service.getProjection(windowId);
@@ -1463,7 +1477,7 @@ describe('DesktopShellService', () => {
       resolver: { resolve: vi.fn(async () => workspace), restore },
       createIdentity: () => 'project-grant',
     });
-    const fixture = createFixture(repository, 'home', authority);
+    const fixture = createFixture(repository, authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await fixture.service.getProjection(windowId);
@@ -1531,7 +1545,7 @@ describe('DesktopShellService', () => {
       resolver: { resolve: vi.fn(async () => workspace), restore },
       createIdentity: () => 'project-grant',
     });
-    const fixture = createFixture(repository, 'home', authority);
+    const fixture = createFixture(repository, authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await fixture.service.getProjection(windowId);
@@ -1695,7 +1709,7 @@ describe('DesktopShellService', () => {
 
     first.service.releaseWindow(windowId);
     await first.service.dispose();
-    const restored = createFixture(file, 'restore');
+    const restored = createFixture(file);
     const restoredWindowId = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindowId, 'renderer-session-1');
     expect(await restored.service.getApplicationSidebarProjection(restoredWindowId)).toMatchObject({
@@ -1782,10 +1796,18 @@ describe('DesktopShellService', () => {
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const restored = createFixture(file, 'restore');
+    const restored = createFixture(file);
     const restoredWindow = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindow, 'renderer-session-1');
-    const projection = await restored.service.getProjection(restoredWindow);
+    const entryProjection = await restored.service.getProjection(restoredWindow);
+    const projection = (
+      await openContent(
+        restored,
+        restoredWindow,
+        '/workspace/demo',
+        entryProjection.rendererSessionId,
+      )
+    ).projection;
 
     expect(projection.window.activeTarget.kind).toBe('project');
     expect(activeWorkbench(projection.window).main.views).toEqual([
@@ -1812,7 +1834,7 @@ describe('DesktopShellService', () => {
       },
       createIdentity: () => 'grant-live-workspace',
     });
-    const fixture = createFixture(createMemoryFile(), 'home', authority);
+    const fixture = createFixture(createMemoryFile(), authority);
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await fixture.service.getProjection(windowId);
@@ -1882,7 +1904,7 @@ describe('DesktopShellService', () => {
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const restored = createFixture(file, 'home');
+    const restored = createFixture(file);
     restored.service.setAgentHomeProjectionSource({
       readHomeProjection: () => ({
         conversations: [
@@ -2253,10 +2275,15 @@ describe('DesktopShellService', () => {
     const restored = createFixture(file);
     const restoredWindow = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindow, 'renderer-session-1');
+    const entryProjection = await restored.service.getProjection(restoredWindow);
+    const reopened = await openContent(
+      restored,
+      restoredWindow,
+      '/workspace/demo',
+      entryProjection.rendererSessionId,
+    );
 
-    expect(
-      activeWorkbench((await restored.service.getProjection(restoredWindow)).window),
-    ).toMatchObject({
+    expect(activeWorkbench(reopened.projection.window)).toMatchObject({
       resourceDock: { presentation: 'overlay' },
     });
   });
@@ -2511,10 +2538,18 @@ describe('DesktopShellService', () => {
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const restored = createFixture(file, 'restore');
+    const restored = createFixture(file);
     const restoredWindow = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindow, 'renderer-session-1');
-    const projection = await restored.service.getProjection(restoredWindow);
+    const entryProjection = await restored.service.getProjection(restoredWindow);
+    const projection = (
+      await openContent(
+        restored,
+        restoredWindow,
+        '/workspace/demo',
+        entryProjection.rendererSessionId,
+      )
+    ).projection;
 
     expect(projection.window.activeTarget.kind).toBe('project');
     expect(activeWorkbench(projection.window)).toMatchObject({
@@ -2572,10 +2607,18 @@ describe('DesktopShellService', () => {
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
-    const restored = createFixture(file, 'restore');
+    const restored = createFixture(file);
     const restoredWindow = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindow, 'renderer-session-2');
-    const projection = await restored.service.getProjection(restoredWindow);
+    const entryProjection = await restored.service.getProjection(restoredWindow);
+    const projection = (
+      await openContent(
+        restored,
+        restoredWindow,
+        '/workspace/demo',
+        entryProjection.rendererSessionId,
+      )
+    ).projection;
 
     expect(activeWorkbench(projection.window).cutPanel).toMatchObject({
       activeViewId: realView.viewId,
@@ -2644,7 +2687,15 @@ describe('DesktopShellService', () => {
     const restored = createFixture(file);
     const restoredWindow = await restored.service.claimWindowId();
     restored.service.setRendererSessionId(restoredWindow, 'renderer-session-1');
-    const projection = await restored.service.getProjection(restoredWindow);
+    const entryProjection = await restored.service.getProjection(restoredWindow);
+    const projection = (
+      await openContent(
+        restored,
+        restoredWindow,
+        '/workspace/demo',
+        entryProjection.rendererSessionId,
+      )
+    ).projection;
 
     expect(activeWorkbench(projection.window).main.views).toEqual([
       expect.objectContaining({
@@ -2781,7 +2832,6 @@ describe('DesktopShellService', () => {
 
 function createFixture(
   repository = createInMemoryDesktopShellStateRepository(),
-  startupTarget: 'home' | 'restore' = 'home',
   workspaceGrantAuthority?: DesktopWorkspaceGrantAuthority,
   workspaceAuthorityEnabled = true,
   startupStateDiagnostics: readonly DesktopShellStateDiagnosticProjection[] = [],
@@ -2823,7 +2873,6 @@ function createFixture(
       stateRepository: repository,
       workspaceRegistry: registry,
       workspaceGrantAuthority: workspaceAuthorityEnabled ? authority : undefined,
-      startupTarget,
       startupStateDiagnostics,
       retainedProjects,
       createIdentity: () => `identity-${(identity += 1)}`,

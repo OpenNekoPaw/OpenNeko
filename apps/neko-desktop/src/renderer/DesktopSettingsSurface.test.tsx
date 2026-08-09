@@ -30,20 +30,10 @@ describe('Desktop Settings scene surfaces', () => {
     expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
     expect(container.querySelector('[data-primary-sidebar="application"]')).toBeNull();
     expect(container.querySelector('[data-primary-sidebar-frame="application"]')).toBeNull();
-    expect(container.textContent).toContain('Startup destination');
-
-    const startup = container.querySelector<HTMLSelectElement>('select');
-    if (!startup) throw new Error('Settings fixture requires the startup select.');
-    await act(async () => {
-      startup.value = 'home';
-      startup.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    expect(update).toHaveBeenCalledWith({
-      theme: 'system',
-      locale: 'system',
-      startupTarget: 'home',
-      resourceBrowserView: 'list',
-    });
+    expect(container.textContent).toContain('Application entry');
+    expect(container.textContent).toContain('always starts with a new Entry Draft');
+    expect(container.querySelector('select')).toBeNull();
+    expect(update).not.toHaveBeenCalled();
 
     await act(async () => findButton(container, 'Agent').click());
     expect(container.textContent).toContain(
@@ -78,7 +68,7 @@ describe('Desktop Settings scene surfaces', () => {
       'Appearance',
     );
     expect(container.querySelector('[data-settings-surface="main"]')?.textContent).toContain(
-      'Startup destination',
+      'Application entry',
     );
     await act(async () => root.unmount());
   });
@@ -138,7 +128,6 @@ async function renderSettings({
               preferences: {
                 theme: 'system',
                 locale: 'system',
-                startupTarget: 'restore',
                 resourceBrowserView: 'list',
               },
             },

@@ -273,7 +273,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       stateRepository: createInMemoryDesktopShellStateRepository(),
       workspaceRegistry: registry,
       workspaceGrantAuthority,
-      startupTarget: 'restore',
       createIdentity: () => 'window-1',
     });
     const windowId = await shell.claimWindowId();
@@ -873,7 +872,6 @@ function createGlobalLibraryShell(): DesktopShellService {
     applicationInstanceId: 'app-1',
     stateRepository: createInMemoryDesktopShellStateRepository(),
     workspaceRegistry: registry,
-    startupTarget: 'restore',
     createIdentity: () => 'window-1',
   });
 }

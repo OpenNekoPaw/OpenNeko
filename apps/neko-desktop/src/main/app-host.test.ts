@@ -3193,7 +3193,6 @@ function createShellFixture(applicationInstanceId: string): {
       stateRepository: repository,
       workspaceRegistry: registry,
       workspaceGrantAuthority: workspaceGrants,
-      startupTarget: 'restore',
       createIdentity: () => {
         identity += 1;
         return identity === 1 ? 'window-1' : `shell-identity-${identity}`;

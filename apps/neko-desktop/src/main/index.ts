@@ -448,7 +448,6 @@ async function startDesktop(): Promise<void> {
     stateRepository: shellStateRepository,
     workspaceRegistry: boardRestoringWorkspaceRegistry,
     workspaceGrantAuthority,
-    startupTarget: initialApplicationSettings.preferences.startupTarget,
     retainedProjects,
     startupStateDiagnostics: [
       ...stateRejections.map((rejection) => ({

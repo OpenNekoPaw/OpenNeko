@@ -60,7 +60,7 @@ describe('Desktop SQLite application state composition', () => {
       expect(await second.shell.read()).toEqual(shell);
       const restoredSettings = new DesktopApplicationSettingsService(second.settings);
       await expect(restoredSettings.initialize()).resolves.toMatchObject({
-        preferences: { theme: 'dark', locale: 'zh-cn', startupTarget: 'home' },
+        preferences: { theme: 'dark', locale: 'zh-cn' },
       });
       await restoredSettings.dispose();
     } finally {
@@ -135,7 +135,6 @@ describe('Desktop SQLite application state composition', () => {
         applicationInstanceId: 'application:test',
         stateRepository: repository,
         workspaceRegistry,
-        startupTarget: 'home',
         createIdentity: () => `identity-${(identity += 1)}`,
         now: () => '2026-08-05T00:00:00.000Z',
       });
@@ -183,7 +182,6 @@ describe('Desktop SQLite application state composition', () => {
           },
           dispose: async () => undefined,
         },
-        startupTarget: 'home',
         createIdentity: () => `reopened-${(identity += 1)}`,
       });
       const reopenedWindowId = await reopenedService.claimWindowId();
@@ -304,7 +302,6 @@ describe('Desktop SQLite application state composition', () => {
           },
           dispose: async () => undefined,
         },
-        startupTarget: 'home',
         createIdentity: () => `identity-${(identity += 1)}`,
         now: () => '2026-08-05T00:00:00.000Z',
       });
@@ -445,7 +442,7 @@ describe('Desktop SQLite application state composition', () => {
     const invalidDocument = JSON.stringify({
       preferences: {
         ...createDefaultDesktopApplicationSettingsState().preferences,
-        theme: 'unknown-theme',
+        startupTarget: 'restore',
       },
     });
     try {
@@ -469,7 +466,7 @@ describe('Desktop SQLite application state composition', () => {
       const rejection = await settings.inspectInvalidState();
       expect(rejection).toMatchObject({
         authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
-        diagnostic: expect.stringContaining('theme'),
+        diagnostic: expect.stringContaining('startupTarget'),
       });
       expect(await settings.read()).toEqual(createDefaultDesktopApplicationSettingsState());
       expect(await shell.read()).toEqual(expectedShell);

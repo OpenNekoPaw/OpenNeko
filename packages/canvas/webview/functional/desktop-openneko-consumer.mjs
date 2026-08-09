@@ -422,20 +422,30 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       await waitForReleasedUrl(evaluate, playback.videoUrl, 'video'),
       await waitForReleasedUrl(evaluate, playback.audioUrl, 'audio'),
     ];
-    const settings = await evaluate(`window.openNekoDesktop.settings.get()`);
-    await evaluate(`window.openNekoDesktop.settings.update({
-      ...${JSON.stringify(settings.preferences)},
-      startupTarget: 'restore',
-    })`);
     await restartApplication();
-    await waitForSelector('[data-owner-root="canvas"]');
-    const restoredDefault = await evaluate(`(async () => {
+    await waitForSelector('[data-agent-presentation="draft"]');
+    const freshEntry = await evaluate(`(async () => {
       const projection = await window.openNekoDesktop.shell.getSnapshot();
       const active = projection.window.activeTarget;
       const instance = projection.window.workbench;
-      const views = instance.layout.main.views;
       return {
         activeTarget: active.kind,
+        sceneKind: instance.scene.context.kind,
+        scopeKind:
+          instance.scene.context.kind === 'agent' ? instance.scene.context.scope.kind : undefined,
+        canvasRootCount: document.querySelectorAll('[data-owner-root="canvas"]').length,
+        retainedTabCount: projection.window.tabs.length,
+      };
+    })()`);
+    checkpoint('fresh-entry-after-restart', freshEntry);
+    const freshEntryScreenshot = await screenshot('fresh-entry-after-restart');
+    await openFixtureWorkspace(evaluate);
+    await waitForSelector('[data-owner-root="canvas"]');
+    const reopenedDefault = await evaluate(`(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const views = projection.window.workbench.layout.main.views;
+      return {
+        activeTarget: projection.window.activeTarget.kind,
         canvasViews: views
           .filter((view) => view.kind === 'canvas')
           .map((view) => ({ viewId: view.viewId, documentId: view.documentId })),
@@ -443,8 +453,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         placeholderVisible: document.body.innerText.includes('desktop-canvas-not-mounted'),
       };
     })()`);
-    checkpoint('default-workspace-canvas-restored', restoredDefault);
-    const restoredScreenshot = await screenshot('default-workspace-canvas-restored');
+    checkpoint('default-workspace-canvas-explicitly-reopened', reopenedDefault);
+    const restoredScreenshot = await screenshot('default-workspace-canvas-explicitly-reopened');
     const interactionResizeSelector =
       '.neko-controlled-workbench-interaction .neko-controlled-workbench-resize-handle--right';
     await waitForSelector(interactionResizeSelector);
@@ -555,7 +565,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       releasedStatuses: released,
       emptyMain,
       emptyMainScreenshot,
-      restoredDefault,
+      freshEntry,
+      freshEntryScreenshot,
+      reopenedDefault,
       restoredScreenshot,
       resizeLifecycle,
       resizedWorkbenchScreenshot,
@@ -625,13 +637,26 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       throw new Error('Desktop did not render a diagnostic-free empty Main surface.');
     }
     if (
-      evidence.restoredDefault.activeTarget !== 'project' ||
-      evidence.restoredDefault.canvasRootCount !== 1 ||
-      evidence.restoredDefault.canvasViews.length !== 1 ||
-      evidence.restoredDefault.canvasViews[0]?.documentId !== 'neko/boards/workspace.nkc' ||
-      evidence.restoredDefault.placeholderVisible
+      evidence.freshEntry.activeTarget !== 'home' ||
+      evidence.freshEntry.sceneKind !== 'agent' ||
+      evidence.freshEntry.scopeKind !== 'unbound' ||
+      evidence.freshEntry.canvasRootCount !== 0 ||
+      evidence.freshEntry.retainedTabCount !== 1
     ) {
-      throw new Error('Desktop restart did not restore the canonical Workspace Canvas Main View.');
+      throw new Error(
+        'Desktop restart did not open a fresh Entry while retaining Project navigation.',
+      );
+    }
+    if (
+      evidence.reopenedDefault.activeTarget !== 'project' ||
+      evidence.reopenedDefault.canvasRootCount !== 1 ||
+      evidence.reopenedDefault.canvasViews.length !== 1 ||
+      evidence.reopenedDefault.canvasViews[0]?.documentId !== 'neko/boards/workspace.nkc' ||
+      evidence.reopenedDefault.placeholderVisible
+    ) {
+      throw new Error(
+        'Explicit Project navigation did not reopen the canonical Workspace Canvas Main View.',
+      );
     }
     if (
       evidence.resizeLifecycle.widthAfter === evidence.resizeLifecycle.widthBefore ||

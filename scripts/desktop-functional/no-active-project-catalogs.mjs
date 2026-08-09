@@ -146,7 +146,6 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
             preferences: {
               theme: 'light',
               locale: 'en',
-              startupTarget: 'home',
               resourceBrowserView: 'list',
             },
           }),

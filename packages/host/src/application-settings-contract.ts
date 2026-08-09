@@ -7,13 +7,11 @@ export const DESKTOP_APPLICATION_SETTINGS_CHANNELS = {
 
 export type DesktopThemePreference = 'system' | 'light' | 'dark';
 export type DesktopLocalePreference = 'system' | 'en' | 'zh-cn';
-export type DesktopStartupTargetPreference = 'home' | 'restore';
 export type DesktopResourceBrowserViewPreference = 'list' | 'grid';
 
 export interface DesktopApplicationPreferences {
   readonly theme: DesktopThemePreference;
   readonly locale: DesktopLocalePreference;
-  readonly startupTarget: DesktopStartupTargetPreference;
   readonly resourceBrowserView: DesktopResourceBrowserViewPreference;
 }
 
@@ -72,7 +70,6 @@ export class DesktopApplicationSettingsContractError extends Error {
 export const DEFAULT_DESKTOP_APPLICATION_PREFERENCES: DesktopApplicationPreferences = {
   theme: 'light',
   locale: 'system',
-  startupTarget: 'home',
   resourceBrowserView: 'list',
 };
 
@@ -124,17 +121,12 @@ export function parseDesktopApplicationSettingsUpdateRequest(
 export function parseDesktopApplicationPreferences(value: unknown): DesktopApplicationPreferences {
   const record = requireExactRecord(
     value,
-    ['theme', 'locale', 'startupTarget', 'resourceBrowserView'],
+    ['theme', 'locale', 'resourceBrowserView'],
     'Desktop application preferences must be an object.',
   );
   return {
     theme: requireOneOf(record['theme'], ['system', 'light', 'dark'] as const, 'theme'),
     locale: requireOneOf(record['locale'], ['system', 'en', 'zh-cn'] as const, 'locale'),
-    startupTarget: requireOneOf(
-      record['startupTarget'],
-      ['home', 'restore'] as const,
-      'startupTarget',
-    ),
     resourceBrowserView: requireOneOf(
       record['resourceBrowserView'],
       ['list', 'grid'] as const,
