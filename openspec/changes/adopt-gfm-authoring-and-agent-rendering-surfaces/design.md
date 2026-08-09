@@ -121,6 +121,17 @@ mutation is disabled with a document-local diagnostic and Source action. The Spl
 available because it never serializes back to the source. Unsupported content is never silently
 deleted, converted to HTML or rewritten on open.
 
+Rich input can advance ahead of Host acknowledgement because each serialized transaction is submitted
+through the exact edit-sequence command queue. The Webview keeps only the latest unacknowledged Rich
+source as disposable presentation state and does not reconcile an intermediate acknowledgement over a
+newer local ProseMirror document. Commands remain serialized against the last accepted projection; the
+pending source is never exposed as file authority, persisted, or consumed by another surface. A rejected
+command clears the pending state, reports the exact error and reconciles to the last accepted projection.
+
+The Rich content surface uses the caret, selection and native node interaction as its editing focus
+feedback. It does not draw a page-sized focus frame around the full-height ProseMirror document; keyboard
+focus remains visible on discrete controls through the shared focus token.
+
 Outline, heading navigation and reference inventory come from `@neko/markdown` source-backed
 projections. Milkdown may highlight the selected node, but its DOM is not the Search/Agent outline
 authority.

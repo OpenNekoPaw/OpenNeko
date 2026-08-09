@@ -43,8 +43,11 @@ Date: 2026-08-08
   first-import dependency reload and stale toolbar-index automation.
 - Real cases and reports: reuse the provider-backed and visible Desktop cases from
   `add-ai-screenplay-authoring`; do not create a renderer-quality Judge or a second Agent suite.
-- Deterministic results: `@neko/markdown` passes 45 tests, Text Editor passes 26 tests including
+- Deterministic results: `@neko/markdown` passes 45 tests, Text Editor passes 28 tests including
   StrictMode/CJK/CSP/outline/reference/long-document coverage, and Agent Webview passes 709 tests.
+  Text Editor also proves that an intermediate Rich acknowledgement cannot replace newer local input,
+  successive commands use the accepted edit sequence, rejection reconciles to accepted source, and
+  Source receives the final accepted Rich content.
   Streamdown passes completed GFM/CJK/sanitization/stable-block checks but fails incomplete emphasis
   and lacks resource/semantic/creative/structured parity, so no production replacement occurred.
 - Visible Desktop result: `desktop-text-editor` passed through Resource Browser open, Markdown
@@ -52,10 +55,11 @@ Date: 2026-08-08
   declared HTML and Fountain highlighting, Fountain outline/preview, dirty conflict and 960 x 640
   compact layout. Source, Rich and Split remained icon-only in the active Workbench tab row; Split
   kept editable CodeMirror on the left and read-only Milkdown on the right at both wide and compact
-  widths. Incomplete Markdown remained visible in both panes without a document-level failure.
+  widths. Standalone Rich input remained focused and editable without a page-sized focus frame, then
+  projected the same accepted text into Source. Incomplete Markdown remained visible in both panes without a document-level failure.
   Contextual commands did not overlap Window controls. Dark-theme rendering and Chromium/Electron
   IME composition also passed with the saved UTF-8 bytes verified. The reviewed report is
-  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T04-35-26.700Z-desktop-text-editor-development/report.json`.
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T04-53-06.920Z-desktop-text-editor-development/report.json`.
 - Blocked or unexecuted cases: native-file key-free validation passes, but provider-backed and visible
   Desktop Agent runs still require explicit provider/model/cost authorization. Visible Agent
   partial-to-final continuity was not executed in the passing UI scenario, and the native macOS IME
@@ -81,8 +85,11 @@ Date: 2026-08-08
 - `pnpm test:agent:eval`
 - `pnpm test:local:ui --scenario desktop-text-editor`
 - `pnpm check:quality`
-- `pnpm check:unused` returns the existing repository baseline of one unused Desktop Shell export and
-  74 configuration hints; this change adds no unused entry.
+- `pnpm check:quality` currently stops at the internal-versioning audit because concurrent
+  `@neko/ai-sdk` work adds six unallowlisted version-like occurrences and leaves three stale
+  allowances. The focused Webview/application/dependency/OpenSpec/legacy-debt gates pass.
+- `pnpm check:unused` returns the current unrelated workspace baseline of three unused exports and 74
+  configuration hints; this change adds no unused entry.
 
 ## Residual Risk
 

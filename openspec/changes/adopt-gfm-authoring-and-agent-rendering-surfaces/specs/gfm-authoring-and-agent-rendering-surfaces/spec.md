@@ -39,6 +39,19 @@ the same exact Text Document session and accepted edit-sequence contract.
 - **THEN** CodeMirror reconciles from that accepted source and edit sequence
 - **AND** no Milkdown buffer, ProseMirror document or CodeMirror state becomes a second file authority
 
+#### Scenario: User continues typing while a Rich edit is awaiting acceptance
+
+- **WHEN** a newer Rich transaction is entered before an earlier exact edit-sequence command is accepted
+- **THEN** the newer ProseMirror content, caret and selection remain stable while commands are serialized against successive accepted projections
+- **AND** an intermediate acknowledgement does not replace the newer local document or replay it through another editor path
+- **AND** rejection reports a document-local error and reconciles to the last accepted projection instead of presenting pending content as saved
+
+#### Scenario: Rich editing receives focus
+
+- **WHEN** the user places the caret in the standalone Rich editor
+- **THEN** the caret, selection and editable node state communicate focus without a page-sized border around the full document surface
+- **AND** keyboard focus on discrete editor controls remains visibly indicated
+
 #### Scenario: User edits in Split
 
 - **WHEN** Source and Rich preview are both visible in Split

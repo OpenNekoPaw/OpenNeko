@@ -20,6 +20,7 @@
 - [x] 2.4 Route Milkdown and CodeMirror changes through the same exact Text Document session/edit sequence and cover CJK composition, undo/redo, mode switching and split synchronization.
 - [x] 2.5 Keep CodeMirror as the only complete Source editor; no Milkdown CodeMirror plugin or second full-source registration is present.
 - [x] 2.6 Order icon-only Markdown controls as Source, Rich and Split; make Split an editable left Source plus read-only right Rich preview; keep incomplete CommonMark/GFM visible and restrict round-trip failures to Rich mutation instead of replacing the document presentation.
+- [x] 2.7 Remove the page-sized Rich focus frame and prevent intermediate Host acknowledgements from replacing newer local Rich input; prove rapid input ordering, rejection recovery, CJK composition and Source consistency.
 
 ## 3. Streamdown Spike And Agent Renderer Replacement
 
