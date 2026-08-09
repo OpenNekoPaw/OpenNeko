@@ -27,7 +27,7 @@ const LABELS = {
     richEditor: 'Rich document editor',
     richLoading: 'Opening Rich editor',
     richUnavailable:
-      'Rich editing cannot preserve this document. Use Source to keep its syntax intact.',
+      'Preview is available, but Rich editing cannot preserve this syntax. Continue in Source.',
     richInitializationFailed: 'Rich editor could not be opened.',
     openSource: 'Open Source',
     unsavedChanges: 'Unsaved changes',
@@ -52,7 +52,7 @@ const LABELS = {
     editor: '文档编辑器',
     richEditor: '所见即所得文档编辑器',
     richLoading: '正在打开所见即所得编辑器',
-    richUnavailable: '所见即所得编辑无法保留当前文档语法，请使用源码模式。',
+    richUnavailable: '当前内容可以预览，但所见即所得编辑无法保留该语法，请继续使用源码模式。',
     richInitializationFailed: '无法打开所见即所得编辑器。',
     openSource: '打开源码',
     unsavedChanges: '未保存的更改',

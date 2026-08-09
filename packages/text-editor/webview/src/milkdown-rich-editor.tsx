@@ -1,6 +1,7 @@
 import {
   defaultValueCtx,
   editorViewCtx,
+  editorViewOptionsCtx,
   Editor,
   parserCtx,
   prosePluginsCtx,
@@ -36,12 +37,13 @@ export interface MilkdownRichEditorProps {
   readonly onFocus: () => void;
   readonly onActions: (actions: MilkdownEditorActions | undefined) => void;
   readonly onOpenSource: () => void;
+  readonly readOnly: boolean;
 }
 
 type RichState = 'loading' | 'ready' | 'unavailable' | 'error';
 
 interface MilkdownController extends MilkdownEditorActions {
-  readonly reconcile: (source: string) => boolean;
+  readonly reconcile: (source: string) => Exclude<RichState, 'loading' | 'error'> | false;
   readonly destroy: () => Promise<void>;
 }
 
@@ -55,6 +57,7 @@ export function MilkdownRichEditor({
   onFocus,
   onActions,
   onOpenSource,
+  readOnly,
 }: MilkdownRichEditorProps): ReactElement {
   const mount = useRef<HTMLDivElement>(null);
   const controller = useRef<MilkdownController>();
@@ -107,25 +110,17 @@ export function MilkdownRichEditor({
           root,
           source,
           ariaLabel: textEditorLabel(locale, 'richEditor'),
+          readOnly,
           onSourceChange: enqueue,
           onFocus,
-          onUnavailable: () => {
-            controller.current = undefined;
-            onActions(undefined);
-            setState('unavailable');
-          },
         });
         if (currentAttempt !== attempt.current) {
-          if (result.status === 'ready') await result.controller.destroy();
-          return;
-        }
-        if (result.status === 'unavailable') {
-          setState('unavailable');
+          await result.controller.destroy();
           return;
         }
         controller.current = result.controller;
-        onActions(result.controller);
-        setState('ready');
+        onActions(result.status === 'ready' && !readOnly ? result.controller : undefined);
+        setState(result.status);
       } catch (error) {
         if (currentAttempt !== attempt.current) return;
         const message = errorMessage(error);
@@ -134,7 +129,7 @@ export function MilkdownRichEditor({
         setState('error');
       }
     },
-    [enqueue, locale, onActions, onError, onFocus],
+    [enqueue, locale, onActions, onError, onFocus, readOnly],
   );
 
   useEffect(() => {
@@ -143,13 +138,17 @@ export function MilkdownRichEditor({
       if (cancelled) return;
       const current = controller.current;
       if (current) {
-        if (!current.reconcile(projection.source)) {
+        const nextState = current.reconcile(projection.source);
+        if (!nextState) {
           void current.destroy();
           controller.current = undefined;
           onActions(undefined);
-          attemptedSource.current = projection.source;
-          setState('unavailable');
+          setFailure('text-editor-rich-reconciliation-failed');
+          setState('error');
+          return;
         }
+        onActions(nextState === 'ready' && !readOnly ? current : undefined);
+        setState(nextState);
         return;
       }
       if (attemptedSource.current !== projection.source) void start(projection.source);
@@ -157,7 +156,7 @@ export function MilkdownRichEditor({
     return () => {
       cancelled = true;
     };
-  }, [onActions, projection.source, start]);
+  }, [onActions, projection.source, readOnly, start]);
 
   useEffect(
     () => () => {
@@ -197,30 +196,32 @@ async function createMilkdownController({
   root,
   source,
   ariaLabel,
+  readOnly,
   onSourceChange,
   onFocus,
-  onUnavailable,
 }: {
   readonly root: HTMLElement;
   readonly source: string;
   readonly ariaLabel: string;
+  readonly readOnly: boolean;
   readonly onSourceChange: (source: string) => void;
   readonly onFocus: () => void;
-  readonly onUnavailable: () => void;
-}): Promise<
-  | { readonly status: 'ready'; readonly controller: MilkdownController }
-  | { readonly status: 'unavailable' }
-> {
+}): Promise<{
+  readonly status: Exclude<RichState, 'loading' | 'error'>;
+  readonly controller: MilkdownController;
+}> {
   let composing = false;
   let reconciling = false;
   let destroyed = false;
   let initialized = false;
   let lastSerialized = '';
+  let mutationAvailable = false;
   const editor = await Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, source);
       ctx.set(rootAttrsCtx, { 'aria-label': ariaLabel });
+      ctx.set(editorViewOptionsCtx, { editable: () => false });
       ctx.update(prosePluginsCtx, (plugins) => [
         ...plugins,
         history(),
@@ -236,7 +237,7 @@ async function createMilkdownController({
               ) {
                 return;
               }
-              emit(ctx.get(serializerCtx)(view.state.doc));
+              if (mutationAvailable) emit(ctx.get(serializerCtx)(view.state.doc));
             },
           }),
         }),
@@ -249,11 +250,9 @@ async function createMilkdownController({
   const serialize = () =>
     editor.action((ctx) => ctx.get(serializerCtx)(ctx.get(editorViewCtx).state.doc));
   const initialSerialized = serialize();
-  if (assessOpenNekoMarkdownRichRoundTrip(source, initialSerialized).status !== 'ready') {
-    await editor.destroy();
-    root.replaceChildren();
-    return { status: 'unavailable' };
-  }
+  mutationAvailable =
+    !readOnly && assessOpenNekoMarkdownRichRoundTrip(source, initialSerialized).status === 'ready';
+  applyEditableState();
   lastSerialized = initialSerialized;
   initialized = true;
 
@@ -304,14 +303,14 @@ async function createMilkdownController({
         if (!nextDocument) return false;
         const serializer = ctx.get(serializerCtx);
         const serialized = serializer(nextDocument);
-        if (assessOpenNekoMarkdownRichRoundTrip(nextSource, serialized).status !== 'ready') {
-          onUnavailable();
-          return false;
-        }
+        mutationAvailable =
+          !readOnly &&
+          assessOpenNekoMarkdownRichRoundTrip(nextSource, serialized).status === 'ready';
         const view = ctx.get(editorViewCtx);
         if (view.state.doc.eq(nextDocument)) {
           lastSerialized = serialized;
-          return true;
+          applyEditableState();
+          return presentationState();
         }
         reconciling = true;
         view.dispatch(
@@ -321,7 +320,8 @@ async function createMilkdownController({
         );
         reconciling = false;
         lastSerialized = serialized;
-        return true;
+        applyEditableState();
+        return presentationState();
       });
     },
     async destroy() {
@@ -334,7 +334,19 @@ async function createMilkdownController({
       root.replaceChildren();
     },
   };
-  return { status: 'ready', controller };
+  return { status: presentationState(), controller };
+
+  function presentationState(): Exclude<RichState, 'loading' | 'error'> {
+    return readOnly || mutationAvailable ? 'ready' : 'unavailable';
+  }
+
+  function applyEditableState(): void {
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.setProps({ editable: () => mutationAvailable });
+      view.dom.setAttribute('aria-readonly', mutationAvailable ? 'false' : 'true');
+    });
+  }
 
   function emit(serialized: string): void {
     if (serialized === lastSerialized) return;

@@ -325,28 +325,6 @@ export function TextEditorRoot({
               }}
             />
           ) : null}
-          {projection.mode === 'markdown' &&
-          (effectiveMode === 'rich' || effectiveMode === 'split') ? (
-            <Suspense
-              fallback={
-                <div className="neko-text-editor-rich-status">
-                  {textEditorLabel(locale, 'richLoading')}
-                </div>
-              }
-            >
-              <MilkdownRichEditor
-                projection={projection}
-                runtime={runtime}
-                locale={locale}
-                nextRequestId={nextRequestId}
-                onProjection={updateProjection}
-                onError={setOperationError}
-                onFocus={activateRichEditor}
-                onActions={bindRichEditorActions}
-                onOpenSource={() => updatePresentationMode('source')}
-              />
-            </Suspense>
-          ) : null}
           {effectiveMode === 'source' || effectiveMode === 'split' ? (
             <CodeMirrorEditor
               projection={projection}
@@ -359,6 +337,30 @@ export function TextEditorRoot({
               onFocus={activateSourceEditor}
               cspNonce={cspNonce}
             />
+          ) : null}
+          {projection.mode === 'markdown' &&
+          (effectiveMode === 'rich' || effectiveMode === 'split') ? (
+            <Suspense
+              fallback={
+                <div className="neko-text-editor-rich-status">
+                  {textEditorLabel(locale, 'richLoading')}
+                </div>
+              }
+            >
+              <MilkdownRichEditor
+                key={effectiveMode}
+                projection={projection}
+                runtime={runtime}
+                locale={locale}
+                nextRequestId={nextRequestId}
+                onProjection={updateProjection}
+                onError={setOperationError}
+                onFocus={activateRichEditor}
+                onActions={bindRichEditorActions}
+                onOpenSource={() => updatePresentationMode('source')}
+                readOnly={effectiveMode === 'split'}
+              />
+            </Suspense>
           ) : null}
           {projection.mode === 'fountain' &&
           (effectiveMode === 'preview' || effectiveMode === 'split') ? (
@@ -406,10 +408,14 @@ function TextEditorContextActions({
               key={mode}
               type="button"
               aria-pressed={activeMode === mode}
+              aria-label={textEditorLabel(locale, mode)}
               title={`${textEditorLabel(locale, mode)} (Ctrl/Cmd+Shift+${index + 1})`}
               onClick={() => onModeChange(mode)}
             >
-              {textEditorLabel(locale, mode)}
+              <span
+                className={`codicon codicon-${presentationModeIcon(mode)}`}
+                aria-hidden="true"
+              />
             </button>
           ))}
         </div>
@@ -741,9 +747,22 @@ function DocumentPreview({ projection }: { projection: TextDocumentProjection })
 function presentationModesFor(
   mode: TextDocumentProjection['mode'],
 ): readonly TextEditorPresentationMode[] {
-  if (mode === 'markdown') return ['rich', 'source', 'split'];
+  if (mode === 'markdown') return ['source', 'rich', 'split'];
   if (mode === 'fountain') return ['source', 'preview', 'split'];
   return ['source'];
+}
+
+function presentationModeIcon(mode: TextEditorPresentationMode): string {
+  switch (mode) {
+    case 'source':
+      return 'code';
+    case 'rich':
+      return 'edit';
+    case 'preview':
+      return 'preview';
+    case 'split':
+      return 'split-horizontal';
+  }
 }
 
 function errorMessage(error: unknown): string {

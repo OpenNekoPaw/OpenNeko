@@ -218,13 +218,22 @@ describe('TextEditorRoot', () => {
     const rendered = await renderEditor(runtime, 'zh-cn');
 
     await clickText(rendered.container, '分栏');
-    expect(rendered.container.querySelector('[data-presentation-mode="split"]')).not.toBeNull();
+    const split = rendered.container.querySelector('[data-presentation-mode="split"]');
+    expect(split).not.toBeNull();
     await waitFor(
       () => rendered.container.querySelector('[data-rich-state="ready"]') !== null,
       200,
     );
     expect(rendered.container.querySelector('.ProseMirror')?.textContent).toContain('标题');
     expect(rendered.container.querySelector('.cm-editor')).not.toBeNull();
+    expect([...(split?.children ?? [])].map((child) => child.classList.item(0))).toEqual([
+      'neko-text-editor-outline',
+      'neko-text-editor-codemirror',
+      'neko-text-editor-rich',
+    ]);
+    expect(rendered.container.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe(
+      'true',
+    );
 
     await clickTitle(rendered.container, '保存');
     await waitFor(() => rendered.container.querySelector('[role="alert"]') !== null);
@@ -252,13 +261,45 @@ describe('TextEditorRoot', () => {
       () => rendered.container.querySelector('[data-rich-state="unavailable"]') !== null,
     );
     expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain(
-      '无法保留当前文档语法',
+      '当前内容可以预览',
     );
-    expect(rendered.container.querySelector('.ProseMirror')).toBeNull();
+    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toContain(
+      '请查看 [[cover.png]]。',
+    );
+    expect(rendered.container.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe(
+      'true',
+    );
     expect(runtime.applyEdits).not.toHaveBeenCalled();
 
     await clickText(rendered.container, '打开源码');
     expect(editorView(rendered.container).state.doc.toString()).toBe(source);
+    await unmount(rendered.root);
+  });
+
+  it('keeps incomplete Markdown visible in the read-only Split preview', async () => {
+    const source = '# 草稿\n\n完整段落。';
+    const incomplete = '# 草稿\n\n未完成 **强调\n\n[链接](';
+    const runtime = createRuntime(textProjection('markdown', source));
+    const rendered = await renderEditor(runtime, 'zh-cn');
+
+    await clickText(rendered.container, '分栏');
+    await waitFor(() => rendered.container.querySelector('[data-rich-state="ready"]') !== null);
+    const view = editorView(rendered.container);
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, to: source.length, insert: incomplete } });
+      await settle();
+    });
+
+    await waitFor(
+      () =>
+        rendered.container.querySelector('.ProseMirror')?.textContent?.includes('未完成') === true,
+    );
+    expect(rendered.container.querySelector('[data-rich-state="ready"]')).not.toBeNull();
+    expect(rendered.container.querySelector('.ProseMirror')?.textContent).toContain('[链接](');
+    expect(rendered.container.querySelector('.ProseMirror')?.getAttribute('aria-readonly')).toBe(
+      'true',
+    );
+    expect(runtime.applyEdits).toHaveBeenCalledTimes(1);
     await unmount(rendered.root);
   });
 
@@ -388,12 +429,26 @@ describe('TextEditorRoot', () => {
     expect(rendered.container.querySelector('.neko-text-editor-outline')?.textContent).toContain(
       '第一章',
     );
-    expect(rendered.contextActionsTarget.textContent).toContain('所见即所得');
-    expect(rendered.contextActionsTarget.textContent).toContain('源码');
+    const modeButtons = [
+      ...rendered.contextActionsTarget.querySelectorAll<HTMLButtonElement>(
+        '.neko-text-editor-segmented button',
+      ),
+    ];
+    expect(modeButtons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      '源码',
+      '所见即所得',
+      '分栏',
+    ]);
+    expect(modeButtons.map((button) => button.querySelector('.codicon')?.className)).toEqual([
+      expect.stringContaining('codicon-code'),
+      expect.stringContaining('codicon-edit'),
+      expect.stringContaining('codicon-split-horizontal'),
+    ]);
+    expect(modeButtons.every((button) => button.textContent?.trim() === '')).toBe(true);
 
     await pressShortcut(rendered.container, {
-      code: 'Digit2',
-      key: '2',
+      code: 'Digit1',
+      key: '1',
       metaKey: true,
       shiftKey: true,
     });
@@ -645,7 +700,8 @@ function requireButtonWithText(container: HTMLElement, text: string): HTMLButton
 
 function findButtonWithText(container: HTMLElement, text: string): HTMLButtonElement | undefined {
   const button = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-    (candidate) => candidate.textContent?.trim() === text,
+    (candidate) =>
+      candidate.textContent?.trim() === text || candidate.getAttribute('aria-label') === text,
   );
   return button;
 }
