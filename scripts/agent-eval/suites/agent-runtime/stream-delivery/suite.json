@@ -41,7 +41,7 @@
       "id": "document-image-workspace",
       "root": "shared-fixtures/document-image-workspace",
       "source": "repository",
-      "digest": "sha256:0ee348f6099989e6810699fe4c13c34c37aeed6a6b3defda8958a639c36ec325",
+      "digest": "sha256:05fb3ce37742e4103192352ace48f569adba98f4008e4c12f1ea0bddcf8fb1d2",
       "mutable": true
     }
   ],
@@ -55,6 +55,12 @@
     {
       "id": "read-document-tool-result",
       "file": "cases/read-document-tool-result.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "directory-format-routing",
+      "file": "cases/directory-format-routing.json",
       "group": "regression",
       "visibility": "public"
     },

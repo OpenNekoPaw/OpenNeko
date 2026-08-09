@@ -1,5 +1,36 @@
 ## ADDED Requirements
 
+### Requirement: Invalid persisted Conversation lifecycle fails locally during bootstrap
+
+The system SHALL retain a persisted Conversation whose lifecycle payload does not satisfy the
+single current canonical shape and SHALL return a typed unavailable bootstrap result for that exact
+Conversation Surface. The lifecycle owner MUST NOT add missing-field defaults, read an obsolete
+shape as success, rewrite or delete the record, and the Desktop bootstrap boundary MUST NOT expose
+the decode failure as a rejected IPC handler. Sender, Scene, owner and trust-boundary mismatches
+MUST continue to fail closed.
+
+#### Scenario: Historical lifecycle record does not prevent Desktop UI rendering
+
+- **GIVEN** a retained Conversation catalog record whose lifecycle payload uses `initialMessage` or omits the canonical `contextReferences`
+- **WHEN** Desktop restores the exact Conversation Agent Surface
+- **THEN** the bootstrap returns an exact Conversation-unavailable diagnostic without creating an Agent connection
+- **AND** Window Shell, Workspace Main, navigation and valid sibling Conversations remain usable
+- **AND** the stored lifecycle payload remains unchanged
+
+#### Scenario: Valid sibling Conversation still bootstraps
+
+- **GIVEN** one invalid historical lifecycle record and one valid canonical lifecycle record
+- **WHEN** each exact Conversation is opened independently
+- **THEN** only the invalid Conversation Surface is unavailable
+- **AND** the valid sibling follows the canonical ready bootstrap path
+
+#### Scenario: Trust-boundary failures are not converted to local record diagnostics
+
+- **GIVEN** a forged sender, Scene, View, Workspace or Conversation identity
+- **WHEN** Desktop validates bootstrap authority
+- **THEN** the request fails closed
+- **AND** it does not return a conversation-invalid success-shaped diagnostic
+
 ### Requirement: Launch phase and domain binding are orthogonal
 
 The Agent application SHALL model Draft or Session phase independently from unbound, Assistant, Workspace, Character, or World binding, and SHALL NOT derive either dimension from the current Scene, input text, active Project, mounted component, or execution state.
@@ -151,6 +182,92 @@ non-streaming final Assistant response.
 
 - **WHEN** the current Turn has streaming text, a pending Tool, a queued message, or no terminal Assistant response
 - **THEN** the appropriate canonical live record or generic activity remains visible until that exact work reaches its terminal projection
+
+### Requirement: Content references preserve one user-visible message and one deterministic processing route
+
+The Agent application SHALL preserve the original user text and locator-backed reference metadata as
+the durable transcript presentation while preparing a separate transient provider prompt. Textual
+formats SHALL be read directly through the bounded Agent content runtime; structured documents,
+images, audio, video and unknown binary content SHALL use exactly the capability selected for their
+content class and current Turn policy.
+
+#### Scenario: Textual creative source is referenced
+
+- **WHEN** a user references UTF-8 text, Markdown, Fountain, JSON, YAML or HTML content
+- **THEN** Agent reads the bounded text directly and injects it only into the current provider request without requiring `ReadDocument` or persisting extracted text
+
+#### Scenario: Structured or binary content is referenced
+
+- **WHEN** a user references a supported structured document, image, audio or video
+- **THEN** Agent preserves the locator and uses only the exact registered document, native multimodal or perception capability selected before execution, with no provider, reader or source fallback
+
+#### Scenario: Pi reads a semantic document range
+
+- **WHEN** Pi selects a locator from a `ReadDocument` manifest and requests range mode
+- **THEN** the model-visible Tool contract accepts only the returned `unit_ref` and optional bounded read limit
+- **AND** a ContentLocator, DocumentLocator, nested locator object or another undeclared field is rejected with an exact corrective diagnostic and is not interpreted through an alias or alternate reader
+
+#### Scenario: ReadImage returns native image content to Pi
+
+- **WHEN** `ReadImage` successfully reads one or more exact content or representation locators in a Workspace Turn
+- **THEN** the Workspace Agent runtime uses its canonical content access authority to project bounded image payloads into the same Pi Tool result and the next reasoning step
+- **AND** Desktop does not inject a private file loader and Pi does not read raw paths, cache paths or locator URIs as an alternate source
+
+#### Scenario: ReadImage result cannot be materialized
+
+- **WHEN** an attachment lacks an exact locator, content access rejects it, the bytes are not an image, or the provider transport budget is exceeded
+- **THEN** only the exact Tool/Turn fails visibly and no URI, source, provider, reader or sibling attachment is used as fallback success
+
+#### Scenario: Model calls content Tools with Conversation-scoped references
+
+- **WHEN** the model calls `ReadDocument` or `ReadImage` for authorized input or a prior document result
+- **THEN** it supplies only `input_ref`, `unit_ref`, `cursor_ref` or `image_ref` strings issued in the exact Conversation
+- **AND** Agent resolves those references to canonical locators inside the application boundary without asking the model to copy fingerprints, locator unions, entry paths or representation specs
+
+#### Scenario: Model submits a stale or cross-Conversation reference
+
+- **WHEN** a Tool call supplies an unknown, stale, cross-owner or cross-Conversation short reference
+- **THEN** only that Tool call fails with an exact reference diagnostic and the UI, sibling Tool results, Conversations and Workspaces remain available
+
+#### Scenario: Document image batch is bounded before provider delivery
+
+- **WHEN** document analysis needs image evidence from more than five pages or entries
+- **THEN** Agent requires a selected batch of at most five `image_ref` values and Host projects bounded overview or detail payloads using image normalization or contact sheets
+- **AND** it never sends more than five source images or an unbounded document payload in one provider continuation
+
+#### Scenario: Referenced content has no valid processing capability
+
+- **WHEN** an unknown binary, invalid UTF-8 source or unsupported media reference cannot use the selected Turn capability
+- **THEN** only the exact Turn fails with a visible diagnostic, its activity reaches a terminal state, and sibling Conversations and Surfaces remain available
+
+#### Scenario: Model discovers a Workspace directory before reading text
+
+- **WHEN** a Workspace Conversation calls `ListDirectory` with a Workspace-relative directory path
+- **THEN** the Core Tool returns a bounded single-level structured catalog backed by authorized `workspace-file` locators and no absolute path or shell output
+- **AND** Pi projects a text entry as `workspace_path` so the model can call the basic `Read` Tool without constructing a locator
+
+#### Scenario: Directory entry requires a content capability
+
+- **WHEN** the same directory contains a structured document, image, audio, video, protected project file or unsupported binary
+- **THEN** Pi projects only the exact `input_ref`, `image_ref`, owning-domain route or unavailable diagnostic selected for that class
+- **AND** it does not expose a basic text path for known non-text content, call `Read` as a format probe, or switch reader, Tool, provider or source after failure
+
+#### Scenario: Directory traversal crosses a symlink
+
+- **WHEN** `ListDirectory` targets a symlink or a descendant whose real path leaves an authorized root
+- **THEN** only that listing is rejected before enumeration and no physical target path or child entry is projected
+- **AND** linked Media Library discovery remains owned by its existing Assets contributor rather than an ordinary file-walker fallback
+
+#### Scenario: Basic Read receives non-text bytes
+
+- **WHEN** `Read` is called directly with a known non-text format, oversized file, invalid UTF-8 bytes or NUL-containing content
+- **THEN** that Tool Call fails with an exact text-boundary diagnostic before returning content
+- **AND** valid sibling files, Tool calls, Conversations and the Agent Surface remain available
+
+#### Scenario: Referenced message is projected or reopened
+
+- **WHEN** a Turn used transient extracted text, native image bytes or an internal locator instruction
+- **THEN** the transcript displays one user message containing the original text and structured reference token, and does not display a duplicate provider prompt or internal `Attached Context`/`ContentLocator` text
 
 ### Requirement: Conversation domain binding is immutable
 

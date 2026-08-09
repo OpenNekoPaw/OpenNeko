@@ -68,6 +68,27 @@ Primary navigation uses one 11px inherited typography contract for Project heade
 Assistant/Workspace group headers, Conversation rows and expand/collapse list controls. Section
 headings remain the distinct 10px catalog hierarchy.
 
+### Invalid persisted Conversation lifecycle is isolated at bootstrap
+
+The Agent lifecycle repository keeps one strict canonical decoder and does not synthesize newly
+required fields for records written with an obsolete shape. Desktop bootstrap catches only the
+typed lifecycle/context decode failure for the exact requested Conversation and returns a distinct
+conversation-unavailable projection. The record remains durable and visible; no migration,
+rewrite, delete, alternate lifecycle reader or empty-value compatibility path is introduced.
+
+The Renderer presents that projection inside the owning Agent Surface without mounting an Agent
+runtime connection. Window Shell, Workspace Main, navigation and valid sibling Conversations stay
+available. Trust-boundary, sender, Scene and identity mismatches continue to throw and are not
+converted into presentation diagnostics.
+
+| 层   | 失效记录恢复结论                                                                                                                    |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Agent lifecycle repository 严格判定 canonical record；Desktop 仅把精确 decode failure 投影为 Surface unavailable；Renderer 仅展示。 |
+| 依赖 | Renderer 不读取 SQLite；Desktop 不解释或重写旧 payload；Agent codec 不依赖 Electron。                                               |
+| 接口 | Bootstrap unavailable diagnostic 增加唯一 conversation-invalid discriminator，不新增内部版本或第二读取路径。                        |
+| 扩展 | 其他 bootstrap 错误仍保持原 fail-closed 语义；只有明确 lifecycle/context decode operation 可局部收敛。                              |
+| 测试 | 覆盖旧字段、缺失新字段、合法 sibling、IPC typed result、局部 UI 和无自动改写。                                                      |
+
 ### 1. Agent phase 与领域 binding 正交
 
 Agent application 投影一个 canonical Draft：
@@ -210,8 +231,10 @@ Desktop reference resolver 只验证 exact Workspace binding/grant、引用 rece
 catalog 为每个引用形成一个确定性处理计划：
 
 - 有界纯文本通过统一 content read service 读取并以严格 UTF-8 注入当前 Turn；
-- PDF、DOC/DOCX、PPT/PPTX、EPUB、CBZ/CBR、XLS/XLSX、Fountain、FDX 等由 content owner
-  声明支持的文档只在 prompt 中投影原始 `ContentLocator`，由既有 `ReadDocument` 读取；
+- `.txt`、Markdown、Fountain、JSON、YAML、HTML 等文本型格式即使也被 document reader
+  声明支持，仍由统一 content read service 直接读取；格式能力不能把可安全读取的纯文本改走 Tool；
+- PDF、DOC/DOCX、PPT/PPTX、EPUB、CBZ/CBR、XLS/XLSX、FDX 等结构化或二进制文档只在
+  provider prompt 中投影原始 `ContentLocator`，由既有 `ReadDocument` 读取；
 - 文档内部图片只能使用 `ReadDocument.imageInfo` 返回的 locator，再交给 `ReadImage`；
 - 图片在 exact selected `agent.main` 支持 image input 时可在 provider boundary 有界物化为原生输入；当
   当前模型不能直接读取像素时，只有 exact Turn policy 已绑定并实际注册的图片感知 capability 才可处理；
@@ -220,7 +243,10 @@ catalog 为每个引用形成一个确定性处理计划：
 处理计划在 provider execution 前由 exact reference media type、content owner 支持声明、模型 policy 和实际
 capability registration 唯一确定。不得先尝试原生输入再隐式切换 Tool，不得切换 provider/source，不得把
 二进制当文本，也不得回退到 raw path、旧 InputProcessor 或 Desktop 专用 reader。消息、transcript、UI
-projection 和 Desktop contract 始终只持久化 locator，不携带 raw path、base64 或抽取内容。缺少所需能力、
+projection 和 Desktop contract 始终只持久化 locator，不携带 raw path、base64 或抽取内容。Pi transcript
+使用同一 Turn 内的结构化 presentation entry 保存原始用户正文与 locator-backed reference metadata；
+provider 使用的增强 prompt 不得被再次投影为另一条用户消息，也不得把 `Attached Context`、
+`ContentLocator` 或临时抽取文本显示在用户正文中。缺少所需能力、
 读取越界、MIME 不一致、非法格式或转换失败只拒绝当前引用/Turn并返回明确 diagnostic，不能升级为全局
 应用错误或阻止 sibling Conversation、Workspace 与 Window Shell 渲染。
 
@@ -244,6 +270,109 @@ Scene、Project、Workspace 或 Draft 的 authoritative identity，也不读取 
 Renderer 在当前 Agent Surface 内显示国际化诊断和显式重试入口；未知异步 bootstrap 错误同样局部显示，
 不得泄露 raw IPC 文本、绝对路径或 opaque grant identity。没有可用 runtime adapter 时不得伪造可操作的
 Agent Root 或 no-op 成功，但 Window Shell、Workspace Main、Canvas 和 sibling Surface 必须继续渲染。
+
+### 13. Pi 文档 range 与图片结果使用 Workspace 内容 authority
+
+`ReadDocument` 的 model-visible contract 只接受 `range: { locator, endLocator?, limit? }`。Tool 顶层
+拒绝未声明字段，schema 与失败诊断都明确禁止顶层 `locator`，而不是在执行期把错误 shape 解释成另一条
+成功路径。内容 runtime 继续消费 package-owned `DocumentRange`；Pi bridge 不重写模型参数，也不增加
+旧 shape alias。
+
+`ReadImage` 成功后返回的图片 attachment 必须由同一 Workspace runtime 已持有的
+`AgentContentAccessRuntime` 物化为 provider-bound image content。Workspace runtime 在创建 Tool snapshot
+时始终组合这一 loader；Desktop 不注入文件 reader、Workspace root 或第二套图片 transport。loader 只按
+attachment 的 exact `contentLocator` 或 `representationLocator` 读取、验证和有界标准化，批量图片复用
+既有 contact-sheet transport，并保持 source index 顺序。缺失 locator、内容读取失败、MIME 非图片或预算
+越界继续让当前 Tool/Turn fail-visible，不得改读 `uri`、raw path、cache path 或另一 source。
+
+| 层   | 结论                                                                                                                                   |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Content Tool 拥有参数 schema；Agent Workspace application 拥有 Tool-result loader composition；Pi 只适配结果；Desktop 不拥有内容处理。 |
+| 依赖 | loader 依赖 host-neutral `AgentContentAccessRuntime` 与既有 provider image transport，不依赖 Electron。                                |
+| 接口 | `ReadDocument` 保持一个 strict range shape；`PerceptualAssetRef` 可携带 exact representation locator，不新增内部版本或别名。           |
+| 扩展 | 单图、批量图、Workspace/document-entry/generated-output 与 representation 共用同一 loader。                                            |
+| 测试 | 覆盖错误顶层 locator、正确 range、生产 Workspace Tool snapshot、content/representation 物化、批量顺序和无 loader fallback。            |
+
+Agent Evaluation disposition 为 `reuse`：`agent-runtime.stream-delivery/document-image-native-delivery`
+已经声明 `ReadDocument -> ReadImage -> native Pi continuation` 与禁止 raw entry/cache/source 重建；本修复更新
+确定性 application/bridge evidence，真实 visible/hidden provider 运行继续受任务 11.7 的显式成本授权约束。
+
+### 14. 模型内容协议使用短引用，locator 只属于数据面
+
+`ContentLocator` 继续是 Host 与领域之间唯一 canonical 持久内容身份，但不再作为模型需要复制和构造的
+Tool 参数。Agent application 为 exact Conversation 建立可重建的 reference binding，并在每个 Turn 开始时
+把已授权输入绑定为短 `input_ref`。`ReadDocument` 返回的语义单元、游标和图片分别绑定为
+`unit_ref`、`cursor_ref` 和 `image_ref`；模型只能把这些字符串原样传回 Tool。
+
+```text
+authorized ContentLocator / DocumentLocator / cursor / representation locator
+  -> Conversation-scoped Agent reference binding
+  -> input_ref / unit_ref / cursor_ref / image_ref
+  -> model-visible Tool call
+  -> exact Conversation/Turn binding resolution
+  -> canonical Content/Document application service
+```
+
+这不是新的通用 `ResourceRef`，也不是第二种持久内容 identity。短引用只属于 Agent 协议面；Tool result
+对模型投影短引用、label、摘要和有界正文，对 Pi 持久 details 保留 canonical locator 与引用绑定，重开时
+从 authoritative input metadata 和 Tool result details 重建。compact 只保留短引用、label、摘要和必要的
+产品引用，不保留 base64、整本文档或大块提取内容。未知、跨 Conversation、跨 owner 或已失效引用只失败
+当前 Tool Call，并给出可纠正 diagnostic；不得冒泡到 Window Shell 或其他 Conversation。
+
+模型可见接口保持小而稳定：
+
+- `ReadDocument` 使用 `input_ref` 与 `content | manifest | range | next`；range 使用 `unit_ref`，next 使用
+  `cursor_ref`，模型不传 ContentLocator、DocumentLocator、fingerprint 或 cursor object；
+- `ReadImage` 只接收 `image_refs`、固定分析意图和最多五张图片；模型不传 entryPath、MIME、尺寸、
+  ContentLocator 或 representation locator；
+- 基本 `Read`/`Write` 继续只接收 Workspace-relative path、文本和必要的简单并发引用；它们处理纯文本，
+  不承担 Office、电子书、漫画、媒体或未知二进制解析。
+
+格式路由由 exact MIME/格式、模型输入能力和冻结的 Turn capability snapshot 一次确定：
+
+| 输入                                            | canonical route                                                                                                     | 模型上下文约束                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| UTF-8 文本、Markdown、Fountain、JSON、YAML、CSV | 基本 Read/Write                                                                                                     | 有界文本，不调用文档 reader                                            |
+| 普通图片                                        | 原生视觉模型直接接收 Pi `ImageContent`；否则调用已绑定 `image.understand` Tool                                      | 无已绑定视觉能力时明确 unavailable                                     |
+| PDF、EPUB、DOCX、CBZ 等结构化文档               | `ReadDocument(input_ref)`，需要像素时使用其 `image_ref` 调 `ReadImage`                                              | Host 选择 overview/detail、缩放或 contact sheet；单次源图片不超过 5 张 |
+| 音频/视频                                       | 已注册的本地 metadata、waveform、抽帧、OCR、shot detection 或转录 Tool；需要语义感知时使用已绑定 purpose model Tool | 不把原始媒体或大量帧直接内联；不隐式切换 provider                      |
+| MIDI/MusicXML                                   | 精确乐谱 parser/capability 生成结构化、有界摘要                                                                     | capability 未注册时明确 unavailable                                    |
+| ZIP 等通用压缩包                                | 精确 archive processor 返回受限 entry catalog，再把文本/图片条目绑定为短引用                                        | 不递归解包、不尝试多个 processor、不暴露物理路径                       |
+| 可执行文件、设备文件和未知原生二进制            | 当前 unsupported                                                                                                    | 未来 Computer Use 或隔离 processor 使用独立 OpenSpec                   |
+
+文档图片不逐批询问用户“如何读取”。本地、只读、低成本且在既有授权内的筛选、压缩、overview 与
+detail 读取自动执行；只有网络处理、专用付费模型、显著 token/cost、扩大授权范围或用户代码执行才进入
+审批。该权限模型先记录到 Agent 沙箱 ADR，本变更不修改当前 permission runtime。
+
+### 15. Workspace 目录发现复用现有内容引用协议
+
+`ListDirectory` 是 Core Workspace file Tool，不是 shell `ls`、Desktop 文件浏览器或第二套内容 runtime。
+模型只传 Workspace-relative directory path；`.` 表示根目录。Tool 默认只枚举一层并返回有界、稳定排序的
+结构化条目，内部 details 为每个授权普通文件保留 `workspace-file ContentLocator`。目录、symlink、受保护
+项目文件和普通内容文件保持不同 kind，不把显示名称重新解释为 authority。
+
+Pi model protocol 复用既有 Conversation binding 投影目录结果：UTF-8 文本条目暴露
+`workspace_path` 并继续调用基本 `Read`，结构化文档暴露 `input_ref`，图片暴露 `image_ref`，音视频暴露
+带精确类别的 `input_ref` 供当前 Turn 已注册 capability 使用。`.nkc/.otio` 只投影 owning-domain route；
+乐谱、压缩包、可执行文件和未知二进制在缺少精确 processor 时投影 unavailable，不签发可误用的基础文本
+路径。`ContentLocator` 只保存在 Tool details，重开时由同一 generic Tool-result restoration 重建引用。
+
+基本 `Read` 同步收敛为严格、有界的 UTF-8 文本读取：已知文档、图片、音视频、乐谱、压缩包、受保护
+项目与可执行格式在读取 bytes 前拒绝，未知扩展只在有界读取后通过 fatal UTF-8 与 NUL 检查才成功。
+它不得把 replacement character、部分二进制或超过预算的内容伪装成文本。目录或条目失败只失败当前
+Tool Call；合法 sibling 条目仍在同一页结果中可用。
+
+| 层   | 结论                                                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 职责 | Core Tool 拥有授权枚举与严格文本 read；Agent application 拥有格式路由和模型投影；Content/Media 提供 canonical 格式与 MIME 判断；Desktop 不参与。 |
+| 依赖 | `@neko/agent-runtime` 只依赖既有 Content/Media public API 和注入的 Workspace policy，不依赖 Electron、Renderer 或 shell。                        |
+| 接口 | `ListDirectory(path)` 与 `Read(file_path)` 使用 Workspace-relative path；locator 仅存在于内部 Tool details，短引用仍限定 exact Conversation。    |
+| 扩展 | 新格式只扩展一个 canonical 分类与 exact capability route，不增加 reader priority、try-next 或 Desktop adapter。                                  |
+| 测试 | 覆盖文本、EPUB、图片、媒体、受保护项目、未知二进制、稳定边界、symlink、绝对路径不投影、reopen binding 和 sibling isolation。                     |
+
+Agent Evaluation disposition 为 `create`：现有文档附件和搜索案例没有证明模型先通过目录发现再进入唯一格式
+route；新增一个 focused complete-session case，硬断言 `ListDirectory -> Read` 文本路径和
+`ListDirectory -> ReadDocument` 结构化路径，并 poison shell、raw locator、absolute path 与 binary-as-text。
 
 ## Risks / Trade-offs
 

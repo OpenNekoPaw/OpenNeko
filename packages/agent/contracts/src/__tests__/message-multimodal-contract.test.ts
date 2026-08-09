@@ -1,12 +1,52 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  AgentArtifactTransferPayload,
-  CompositeBlockData,
-  ContentBlock,
-  ToolCall,
+import {
+  parseMessageContextReference,
+  type AgentArtifactTransferPayload,
+  type CompositeBlockData,
+  type ContentBlock,
+  type ToolCall,
 } from '../index';
 
 describe('multimodal message contracts', () => {
+  it('parses one exact locator-backed message reference', () => {
+    expect(
+      parseMessageContextReference({
+        type: 'file',
+        id: 'reference:story.fountain',
+        label: 'story.fountain',
+        mediaType: 'text',
+        contentLocator: { kind: 'workspace-file', path: 'story.fountain' },
+        navigationData: { source: 'workspace' },
+      }),
+    ).toEqual({
+      type: 'file',
+      id: 'reference:story.fountain',
+      label: 'story.fountain',
+      mediaType: 'text',
+      contentLocator: { kind: 'workspace-file', path: 'story.fountain' },
+      navigationData: { source: 'workspace' },
+    });
+  });
+
+  it('rejects only an invalid message reference shape', () => {
+    expect(() =>
+      parseMessageContextReference({
+        type: 'file',
+        id: 'reference:story.fountain',
+        label: 'story.fountain',
+        mediaType: 'binary',
+      }),
+    ).toThrow("Unknown Agent file reference media type 'binary'");
+    expect(() =>
+      parseMessageContextReference({
+        type: 'file',
+        id: 'reference:story.fountain',
+        label: 'story.fountain',
+        unexpected: true,
+      }),
+    ).toThrow('canonical shape');
+  });
+
   it('preserves backfilled tool result fields on ToolCall', () => {
     const toolCall: ToolCall = {
       id: 'call-1',

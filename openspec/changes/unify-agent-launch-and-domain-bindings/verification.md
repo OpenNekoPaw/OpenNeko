@@ -553,3 +553,138 @@ visible representative flow exercised the same boundary with a Workspace image a
 real provider-driven visible document selection plus matching hidden complete-session run remains
 unexecuted without explicit cost authorization. Audio/video success also remains capability- and
 provider-dependent; only the exact unavailable-capability rejection is qualified here.
+
+## Pi document range and image Tool-result regression
+
+The reported Pi regressions were requalified on 2026-08-09:
+
+- `ReadDocument` now exposes one strict model-visible range shape: `range.locator`. Undeclared
+  top-level fields are rejected, and a direct top-level `locator` receives an exact corrective
+  diagnostic instead of becoming a compatibility alias or a second successful input path.
+- The Workspace Agent runtime now creates one package-owned Pi Tool-result asset loader from the
+  same `AgentContentAccessRuntime` used by `ReadImage`. It materializes only exact content or
+  representation locators, reuses the bounded image normalization/contact-sheet transport and
+  supplies transient provider data URLs only after authorization. It never reads `uri`, raw paths,
+  cache paths or another reader.
+- Every Workspace Tool snapshot receives this loader unconditionally. The unused optional AppHost
+  injection surface was removed; Desktop owns no image loader or format policy.
+- Focused Agent Runtime tests passed 4 files / 92 tests, including strict range projection, invalid
+  top-level locator, single and ordered batch materialization, representation preservation,
+  production AppHost continuation, missing locator, content-authority failure and non-image byte
+  rejection. Full Agent Runtime passed 112 files / 1056 tests, Agent Contracts passed 42 files /
+  273 tests, Media passed 10 files / 142 tests and Desktop passed 78 files / 514 tests. Agent
+  Runtime, Agent Contracts, Media and Desktop typechecks passed.
+- `pnpm test:agent:eval` passed 44 files / 294 tests and strict discovery of 24 suites / 63 cases.
+  The focused `agent-runtime.stream-delivery/document-image-native-delivery` dry-run passed one
+  suite / one case. This is key-free schema, runner and selection evidence only.
+- Strict OpenSpec validation, `pnpm check:quality`, `pnpm check:legacy-debt` and `git diff --check`
+  passed. The L3 quality review found no blocking ownership, dependency-direction, canonical-path,
+  user-data, fail-local or test-evidence issue. `pnpm check:unused` still reports only the unrelated
+  existing `activateWorkbenchMainView` export in `DesktopShell.tsx`.
+- The current development Electron process was restarted completely so Main, preload and Renderer
+  used the same build. The Workspace Shell, Agent transcript, composer, Canvas loading state and
+  Resources rendered without a global startup error, clipping or overlap in the inspected current
+  screenshot. Existing `Pi image Tool result requires a Host asset loader` entries remain visible
+  because they are durable history from runs before this fix; they are not evidence from the new
+  runtime.
+
+Visible UI validation of a new EPUB `ReadDocument -> ReadImage -> native Pi continuation` remains
+`blocked`: no provider/model cost was explicitly authorized under task 11.7, so no new request was
+submitted. The same limitation blocks the matching hidden complete-session execution. Deterministic
+tests prove the production Workspace AppHost injection and exact locator materialization, but they
+do not replace that real-provider acceptance evidence.
+
+## Simple model content references and format routing
+
+The model-facing content protocol was requalified on 2026-08-09:
+
+- `PiContentToolModelProtocol` now owns one exact Conversation-scoped binding for authorized input,
+  document unit, cursor and image refs. The model-visible `ReadDocument` and `ReadImage` schemas use
+  only short strings and fixed intent fields; canonical content, document, representation and cursor
+  locators remain in application memory and persisted Pi Tool `details`.
+- Successful `ReadDocument`, `ReadImage`, `QueryProjectSearch`, Generation and other locator-bearing
+  Tool results issue deterministic short refs. Search results no longer require the model to rebuild
+  a Workspace locator from `filePath`; generated outputs can flow directly to `ReadImage` by
+  `image_ref`. Reopen restores bindings from user-message presentation metadata and the append-only
+  Tool details, including branches that contain Pi compaction entries.
+- Model-visible document text is capped at 24,000 characters, document manifests at 100 units and
+  image selection at five refs. Larger generic locator-bearing Tool results return a bounded summary
+  plus refs; image payload delivery continues through the existing normalization, source-byte,
+  total-byte and contact-sheet budgets.
+- Plain text continues through bounded basic content Read/Write behavior. Native visual input uses
+  Pi `ImageContent`; a non-native model proceeds only when the exact Turn has a registered image
+  perception Tool. Audio/video require an exact registered perception capability. MIDI/MusicXML,
+  generic archives, executables/native binaries and unknown binary bytes now fail the exact Turn
+  with class-specific unavailable diagnostics instead of being decoded as text or routed through a
+  Desktop reader.
+- The Agent sandbox ADR now permits already-authorized bounded local reads, metadata, local OCR,
+  image normalization and at-most-five-image overview/detail work without per-step confirmation.
+  Widened grants, network or paid perception, significant cost, user code, recursive/bulk unpacking
+  and consequential writes require approval. Permission runtime code was intentionally unchanged.
+
+Evaluation disposition is `update`: `agent-runtime.stream-delivery` covers attached EPUB
+`input_ref -> ReadDocument -> image_ref -> ReadImage`; `agent-runtime.media-library-content` covers
+search-result `image_ref`; `agent-runtime.workflow-controller` covers generated-output `image_ref`;
+and `agent-runtime.perception-routing` retains the DeepSeek non-native-vision boundary. Internal Tool
+assertions still require canonical locators, so the scenarios prove that short refs are a protocol
+projection rather than a second content identity or raw-path fallback.
+
+Verification performed:
+
+- `pnpm --dir packages/agent/runtime typecheck` passed after the Agent protocol implementation. A
+  final rerun was externally blocked by a concurrent Canvas change in
+  `canvas-host-runtime-contract.ts`, where a string progress stage no longer satisfies
+  `GenerationJobStage`; no Agent file appears in that diagnostic.
+- `pnpm --dir packages/agent/runtime test` passed 113 files / 1065 tests.
+- Focused protocol, AppHost, attachment and message-runtime tests passed 125 tests, followed by 80
+  tests after the unused old locator-prompt export was removed.
+- `pnpm test:agent:eval` passed 44 files / 294 tests and strict dry-run discovery of 24 suites / 63
+  cases. Focused stream-delivery and DeepSeek perception-routing dry-runs each passed one case. These
+  are key-free contract/runner results, not provider behavior acceptance.
+- `openspec validate unify-agent-launch-and-domain-bindings --strict`, `pnpm check:openspec`,
+  `pnpm check:legacy-debt`, Agent/Application/Content boundary checks and `git diff --check` passed.
+- `pnpm check:unused` reports only the unrelated existing `activateWorkbenchMainView` export.
+  `pnpm check:quality` is externally blocked by concurrent new internal-versioning findings in
+  `packages/ai/sdk` and `packages/generation`; this change did not edit or suppress them.
+
+Real visible GPT-compatible and DeepSeek-compatible Desktop calls, and the matching hidden
+complete-session runs, remain unexecuted without task 11.7 cost authorization. The non-native image
+success path also remains capability-dependent: the current AppHost correctly rejects it unless an
+actual `perception.image.understand` provider is registered; no placeholder Tool or alternate model
+fallback was added.
+
+## Structured Workspace directory discovery
+
+The Workspace directory-to-content route was qualified on 2026-08-09:
+
+- `ListDirectory` now accepts one normalized Workspace-relative directory, returns at most 80
+  immediate entries in stable order and keeps each authorized `workspace-file ContentLocator` only
+  in Tool details. Model-visible schema and results contain no absolute path, recursive switch,
+  physical locator or shell output. Continuation uses a Conversation-scoped `cursor_ref`.
+- The existing `PiContentToolModelProtocol` projects text as `workspace_path`, documents and media
+  as `input_ref`, images as `image_ref`, `.nkc/.otio` as owning-domain routes, and unsupported
+  score/archive/executable classes as explicit unavailable diagnostics. Reopen reconstructs the
+  same bindings from persisted Tool details; no Desktop runtime or generic ResourceRef was added.
+- `Read` rejects known non-text formats before reading and enforces one 4 MiB fatal UTF-8/NUL
+  boundary for textual and unknown extensions. Directory traversal through a symlink is rejected
+  before enumeration. Assets-owned linked Media Library discovery remains separate from the normal
+  Workspace walker.
+- Format classification is package-owned and shared by directory projection, turn reference
+  materialization and Workspace mention presentation. A focused regression caught and fixed the
+  `.ts` MIME ambiguity so TypeScript remains text rather than MPEG transport video.
+- Agent Runtime focused tests passed 3 files / 47 tests; its full suite passed 114 files / 1086
+  tests and typecheck passed. Key-free Agent Evaluation passed 44 files / 294 tests and strict
+  discovery of 24 suites / 64 cases, including the new indexed
+  `agent-runtime.stream-delivery/directory-format-routing` dry-run. This is harness and contract
+  evidence, not real provider behavior acceptance.
+- Strict change validation, repository-wide `check:openspec`, `check:legacy-debt`, Agent, Content
+  and Application boundary checks, and scoped `git diff --check` passed. The L3 quality review found
+  no blocking ownership, dependency, canonical-path, fail-local or user-data issue in this scope.
+  `check:unused` now reports only the two pre-existing unrelated exports in `DesktopShell.tsx` and
+  `agent-contract.ts`.
+
+Visible UI validation is not applicable because this increment changes no Renderer/Webview layout,
+interaction or presentation. Real visible and hidden complete-session provider execution remains
+under task 11.7 because no provider/model cost authorization was supplied. Repository-wide
+`check:quality` remains externally blocked at `check:no-internal-versioning` by concurrent changes in
+`packages/ai/sdk` and `packages/generation`; none of those findings is in this implementation scope.

@@ -109,6 +109,30 @@ describe('createCoreTools', () => {
     expect(JSON.stringify(result)).not.toContain(workspaceRoot);
   });
 
+  it.each([
+    ['docs/authoring.md', '# Markdown\n'],
+    ['scripts/authoring.fountain', '.INT. ROOM - DAY\n'],
+    ['notes/authoring.txt', 'Plain text\n'],
+  ])(
+    'creates %s through the same native Workspace Write contract',
+    async (relativePath, content) => {
+      const write = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Write');
+
+      const result = await write.execute({ file_path: relativePath, content });
+
+      expect(result).toMatchObject({
+        success: true,
+        data: {
+          contentLocator: { kind: 'workspace-file', path: relativePath },
+          operation: 'create',
+          byteLength: new TextEncoder().encode(content).byteLength,
+          fingerprint: expect.objectContaining({ strategy: 'mtime-size' }),
+        },
+      });
+      expect(await fs.readFile(path.join(workspaceRoot, relativePath), 'utf8')).toBe(content);
+    },
+  );
+
   it('keeps creator-review and plan documents as ordinary authorized Markdown', async () => {
     const briefPath = path.join(workspaceRoot, 'brief.md');
     const planPath = path.join(workspaceRoot, 'plan.md');
@@ -234,7 +258,7 @@ describe('createCoreTools', () => {
     });
   });
 
-  it('allows reads, listings, and searches from additional authorized read roots', async () => {
+  it('keeps additional authorized roots readable and searchable without exposing a directory namespace', async () => {
     const tools = createCoreTools({
       defaultCwd: workspaceRoot,
       authorizedReadRoots: [outsideRoot],
@@ -252,10 +276,8 @@ describe('createCoreTools', () => {
     await expect(
       getTool(tools, 'ListDirectory').execute({ path: outsideRoot }),
     ).resolves.toMatchObject({
-      success: true,
-      data: expect.objectContaining({
-        content: expect.stringContaining('secret.txt'),
-      }),
+      success: false,
+      error: expect.stringContaining('outside authorized read roots'),
     });
     await expect(
       getTool(tools, 'Grep').execute({ pattern: 'outside', path: outsideRoot }),
@@ -345,17 +367,43 @@ describe('createCoreTools', () => {
     });
   });
 
-  it('does not reveal managed cache entries through recursive workspace listing or search', async () => {
+  it('lists one structured level and does not reveal managed cache entries', async () => {
     const tools = createCoreTools({ defaultCwd: workspaceRoot });
 
-    const listing = await getTool(tools, 'ListDirectory').execute({
-      path: '.',
-      recursive: true,
+    const listing = await getTool(tools, 'ListDirectory').execute({ path: '.' });
+    expect(listing).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        directoryPath: '.',
+        entries: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'src',
+            type: 'directory',
+            contentLocator: { kind: 'workspace-file', path: 'src' },
+          }),
+        ]),
+      }),
     });
-    expect(listing.success).toBe(true);
-    expect(JSON.stringify(listing.data)).toContain('src/story.txt');
+    const nested = await getTool(tools, 'ListDirectory').execute({ path: 'src' });
+    expect(nested).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        directoryPath: 'src',
+        entries: [
+          expect.objectContaining({
+            name: 'story.txt',
+            type: 'file',
+            contentLocator: { kind: 'workspace-file', path: 'src/story.txt' },
+          }),
+        ],
+      }),
+    });
     expect(JSON.stringify(listing.data)).not.toContain('.runtime/cache');
     expect(JSON.stringify(listing.data)).not.toContain('page.txt');
+
+    await expect(
+      getTool(tools, 'ListDirectory').execute({ path: '.', recursive: true }),
+    ).resolves.toMatchObject({ success: false, error: expect.stringContaining('Invalid') });
 
     const grep = await getTool(tools, 'Grep').execute({
       pattern: 'cache',
@@ -364,6 +412,99 @@ describe('createCoreTools', () => {
     expect(grep.success).toBe(true);
     expect(JSON.stringify(grep.data)).not.toContain('.runtime/cache');
     expect(JSON.stringify(grep.data)).not.toContain('page.txt');
+  });
+
+  it('paginates a stable single-level directory without returning physical paths', async () => {
+    const directory = path.join(workspaceRoot, 'many');
+    await fs.mkdir(directory);
+    await Promise.all(
+      Array.from({ length: 82 }, (_, index) =>
+        fs.writeFile(path.join(directory, `entry-${String(index).padStart(3, '0')}.txt`), 'x\n'),
+      ),
+    );
+    const list = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'ListDirectory');
+    const first = await list.execute({ path: 'many' });
+    expect(first).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        directoryPath: 'many',
+        totalEntries: 82,
+        truncated: true,
+        nextCursor: { directoryPath: 'many', after: 'entry-079.txt' },
+      }),
+    });
+    const firstData = requireData(first);
+    expect(firstData['entries']).toHaveLength(80);
+    expect(JSON.stringify(first)).not.toContain(workspaceRoot);
+
+    await expect(list.execute({ path: 'many', after: 'entry-079.txt' })).resolves.toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        entries: [
+          expect.objectContaining({ name: 'entry-080.txt' }),
+          expect.objectContaining({ name: 'entry-081.txt' }),
+        ],
+        truncated: false,
+      }),
+    });
+  });
+
+  it('rejects directory paths that cross a symlink before enumeration', async () => {
+    await fs.symlink(outsideRoot, path.join(workspaceRoot, 'linked-outside'), 'dir');
+    const list = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'ListDirectory');
+
+    await expect(list.execute({ path: 'linked-outside' })).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('does not follow symbolic links'),
+    });
+    const root = await list.execute({ path: '.' });
+    expect(root).toMatchObject({ success: true });
+    expect(JSON.stringify(root.data)).toContain('linked-outside');
+    expect(JSON.stringify(root.data)).not.toContain('secret.txt');
+  });
+
+  it('keeps Read on bounded strict UTF-8 text and rejects known non-text classes', async () => {
+    await fs.writeFile(
+      path.join(workspaceRoot, 'book.epub'),
+      new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, 'cover.png'),
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+    );
+    await fs.writeFile(path.join(workspaceRoot, 'unknown.dat'), new Uint8Array([0xff, 0xfe]));
+    await fs.writeFile(path.join(workspaceRoot, 'nul.custom'), 'before\u0000after');
+    const read = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Read');
+
+    await expect(read.execute({ file_path: 'book.epub' })).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('document'),
+    });
+    await expect(read.execute({ file_path: 'cover.png' })).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('image'),
+    });
+    await expect(read.execute({ file_path: 'unknown.dat' })).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('not valid UTF-8'),
+    });
+    await expect(read.execute({ file_path: 'nul.custom' })).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('NUL'),
+    });
+  });
+
+  it('rejects text files beyond the Read byte budget before returning content', async () => {
+    await fs.writeFile(
+      path.join(workspaceRoot, 'large.txt'),
+      Buffer.alloc(4 * 1024 * 1024 + 1, 0x61),
+    );
+    const read = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Read');
+
+    await expect(read.execute({ file_path: 'large.txt' })).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('4 MiB'),
+    });
   });
 
   it('sends memory proposals to the owning domain without committing a fact', async () => {
@@ -435,6 +576,11 @@ function requireFingerprint(result: Awaited<ReturnType<Tool['execute']>>): unkno
   const fingerprint = result.data['fingerprint'];
   if (!isRecord(fingerprint)) throw new Error('Expected file freshness evidence.');
   return fingerprint;
+}
+
+function requireData(result: Awaited<ReturnType<Tool['execute']>>): Record<string, unknown> {
+  if (!result.success || !isRecord(result.data)) throw new Error('Expected Tool result data.');
+  return result.data;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

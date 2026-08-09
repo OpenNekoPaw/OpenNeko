@@ -103,6 +103,7 @@ export type {
   CompositeTemplate,
   MediaRef,
 } from './message';
+export { parseMessageContextReference } from './message';
 export {
   COMPOSITE_CONTENT_FENCE_LANGUAGES,
   extractCompositeContentFenceCandidates,

@@ -159,9 +159,55 @@
 ## 19. Locator-first Unified Content References
 
 - [x] 19.1 Replace the Desktop text/image/structured format policy with an authorization-only Workspace reference adapter that returns exact ContentLocators and no raw path, base64 or extracted content.
-- [x] 19.2 Route bounded text materialization and structured-document instructions through the package-owned Agent content runtime; reuse `ReadDocument` for PDF, DOCX, EPUB, CBZ, Fountain and all formats declared by the canonical document reader.
+- [x] 19.2 Route bounded text materialization and structured-document instructions through the package-owned Agent content runtime; reuse `ReadDocument` for PDF, DOCX, EPUB, CBZ and other structured or binary formats declared by the canonical document reader.
 - [x] 19.3 Preserve the canonical `ReadDocument -> ReadImage` document-image chain and deterministic native/perception capability selection without try-next provider, source, reader or Tool fallback.
 - [x] 19.4 Project reference preparation and Turn execution failures to the exact Conversation/Turn while retaining application logging and sibling UI availability; remove the global-error projection from this path.
 - [x] 19.5 Add path-level Desktop and Agent tests for bounded text, EPUB/PDF/DOCX/CBZ locator projection, native image handling, unavailable media capability, poisoned Desktop format policy and local failure isolation.
 - [x] 19.6 Update the indexed Agent Evaluation disposition, run key-free focused validation and keep real-provider visible/hidden execution under task 11.7 without cost authorization.
 - [x] 19.7 Run focused typechecks, strict OpenSpec validation, visible Desktop UI validation and Neko quality review; record current artifacts and residual runtime/provider risks.
+
+## 20. Content Classification And Transcript Presentation Regression
+
+- [x] 20.1 Classify text, Markdown, Fountain, JSON, YAML and HTML as bounded native text even when the document reader also supports the format; retain structured document, native image, exact media capability and unsupported binary routes.
+- [x] 20.2 Persist one Pi Turn presentation entry containing the original user message and locator-backed reference metadata while keeping enhanced provider content transient.
+- [x] 20.3 Project the presentation entry over its exact Pi user message so first submit, later Turns and reopen show one clean user message with reference tokens and no internal locator prompt.
+- [x] 20.4 Ensure preparation and provider failures reach the exact Conversation terminal state without leaving generic processing activity active.
+- [x] 20.5 Add content classification, Pi checkpoint/projection, first-submit handoff and failure-isolation regression tests.
+- [x] 20.6 Run focused typechecks/tests, strict OpenSpec validation, visible Desktop UI validation, Agent Evaluation disposition and Neko quality review.
+
+## 21. Persisted Conversation Bootstrap Failure Isolation
+
+- [x] 21.1 Extend the canonical Desktop Agent bootstrap unavailable contract with one exact persisted-Conversation diagnostic and update Main/preload/Renderer consumers atomically.
+- [x] 21.2 Catch only typed lifecycle/context decode failures for the requested Conversation at Desktop bootstrap; retain strict codecs and stored payloads without migration, missing-field defaults, deletion or alternate readers.
+- [x] 21.3 Render the invalid Conversation as a local internationalized Agent Surface diagnostic without mounting a connection or blocking Window Shell, Workspace Main, navigation or valid sibling Conversations.
+- [x] 21.4 Add repository, Main contract/boundary and Renderer tests for obsolete fields, missing canonical fields, unchanged storage, valid sibling readiness and forged-identity fail-closed behavior.
+- [ ] 21.5 Run focused tests/typechecks, strict OpenSpec validation, key-free Agent Evaluation disposition, visible Desktop UI validation and Neko quality review; retain task 11.7 as the only real-provider cost blocker.
+  - Automated gates and the quality review passed on 2026-08-09; visible Desktop UI validation remains blocked because the Mac is locked.
+
+## 22. Pi Document Range And Image Tool Result Regression
+
+- [x] 22.1 Make the `ReadDocument` model-visible schema reject undeclared top-level fields and return an exact corrective diagnostic for top-level `locator`, while retaining the single `range.locator` contract.
+- [x] 22.2 Add one package-owned Pi Tool-result asset loader that uses the exact Workspace `AgentContentAccessRuntime` for content and representation locators plus the existing bounded single/batch image transport.
+- [x] 22.3 Compose that loader unconditionally in every Workspace Agent Tool snapshot and remove the unused optional AppHost/Desktop injection surface without adding raw-path, URI or alternate-reader success.
+- [x] 22.4 Add schema, Pi bridge and Agent application path tests for correct range, invalid top-level locator, single and batch locator materialization, representation preservation and missing/invalid source fail-visible behavior.
+- [ ] 22.5 Reuse the indexed `agent-runtime.stream-delivery/document-image-native-delivery` Evaluation case, run focused tests/typechecks and strict OpenSpec validation, then perform visible Desktop UI validation and Neko quality review; keep real-provider cost authorization under task 11.7.
+  - Deterministic tests, typechecks, strict OpenSpec validation, key-free Evaluation and the L3 quality review passed on 2026-08-09. A complete development-process restart restored the visible Desktop Shell and the current screenshot was inspected directly. The new provider-backed EPUB Tool chain remains blocked because task 11.7 has no explicit model/cost authorization; historical Tool failures remain visible as immutable transcript history and are not new-run evidence.
+
+## 23. Simple Model Content References And Format Routing
+
+- [x] 23.1 Define one Conversation-scoped Agent reference binding for input, document unit, cursor and image references; keep ContentLocator and related locators internal and rebuild bindings from canonical input metadata plus persisted Pi Tool result details.
+- [x] 23.2 Replace Pi-visible `ReadDocument` and `ReadImage` parameters atomically with `input_ref`, `unit_ref`, `cursor_ref` and `image_refs` strings; remove complex locator parameters, aliases and prompt serialization from the successful model path.
+- [x] 23.3 Project bounded model-visible document results while retaining canonical data in internal Tool details, enforce a hard maximum of five image refs per call and reuse the existing normalization/contact-sheet transport.
+- [x] 23.4 Preserve deterministic routing for basic text Read/Write, Pi native ImageContent and exact perception Tool usage; add explicit unavailable diagnostics for unregistered audio/video/score/archive/binary processors without adding Desktop readers or try-next behavior.
+- [x] 23.5 Record the permission and approval decision in the Agent sandbox ADR without changing permission runtime behavior; require approval only for widened authority, network/costly perception, user code or consequential writes rather than ordinary bounded local reads.
+- [x] 23.6 Add contract, adapter, reopen/compact, format-routing, invalid-reference, provider-schema and image-budget tests plus Agent Evaluation disposition for GPT-compatible and DeepSeek-compatible Tool calls.
+- [ ] 23.7 Run focused tests/typechecks, strict OpenSpec validation, key-free Evaluation, visible Desktop UI validation and `neko-quality-review`; keep real-provider execution under task 11.7 unless explicit cost authorization is supplied.
+  - Deterministic Agent Runtime tests/typecheck, strict OpenSpec validation, key-free Evaluation and the L3 quality review completed on 2026-08-09. Visible GPT/DeepSeek Desktop execution remains under task 11.7 because no provider-cost authorization was supplied.
+
+## 24. Structured Workspace Directory Discovery
+
+- [x] 24.1 Replace model-visible absolute/recursive directory parameters and text listing output with one bounded single-level Workspace-relative `ListDirectory` contract whose internal details retain authorized entry locators and never expose physical paths.
+- [x] 24.2 Project directory entries through the existing Conversation-scoped Pi content protocol as text `workspace_path`, document/media `input_ref`, image `image_ref`, owning-domain route or explicit unavailable diagnostic; restore the same bindings from persisted Tool details without a new runtime or generic ResourceRef.
+- [x] 24.3 Make basic `Read` reject known non-text classes before reading and accept unknown extensions only after bounded fatal UTF-8 and NUL validation; reject symlink directory traversal before enumeration and keep linked Media Library discovery on the Assets-owned path.
+- [x] 24.4 Add Core Tool and Pi protocol tests for relative directory-to-text/document/image routing, strict text budgets, binary/protected denial, stable bounds, no absolute path/locator projection, symlink escape and sibling isolation; add the indexed Agent Evaluation case and no-fallback evidence.
+- [x] 24.5 Run focused tests/typechecks, strict OpenSpec and key-free Evaluation validation, then perform `neko-quality-review`; classify visible UI validation as not applicable unless implementation changes Renderer presentation, and keep real-provider execution under task 11.7 without explicit cost authorization.

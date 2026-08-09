@@ -14,16 +14,19 @@ import type {
   ToolExecuteOptions,
 } from '@neko/agent-contracts';
 import { BuiltinTool } from '../base';
+import { classifyAgentContentPath } from '../../input/content-path-classification';
 import { createNoWorkspaceFileAccessPolicy, type CoreFileAccessPolicy } from './file-access-policy';
 import {
   presentCoreFileAccessDenial,
   presentInvalidToolArguments,
   presentLineTruncationMarker,
   presentReadFailure,
+  presentReadTextBoundaryFailure,
 } from './core-tool-presentation';
 
 const MAX_LINE_LENGTH = 2000;
 const DEFAULT_LIMIT = 2000;
+const MAX_TEXT_FILE_BYTES = 4 * 1024 * 1024;
 
 export interface ReadToolOptions {
   readonly fileAccessPolicy?: CoreFileAccessPolicy;
@@ -42,24 +45,28 @@ export class ReadTool extends BuiltinTool {
 
   readonly name = 'Read';
   readonly description =
-    'Read a file from the filesystem. Returns contents with line numbers. Supports offset/limit for large files.';
+    'Read bounded UTF-8 text from a Workspace-relative file path. Structured documents and media use their exact content Tools.';
   readonly parameters: ToolParameters = {
     type: 'object',
     properties: {
       file_path: {
         type: 'string',
-        description: 'Absolute path to the file to read',
+        description: 'Workspace-relative UTF-8 text file path.',
       },
       offset: {
         type: 'number',
+        minimum: 1,
         description: 'Line number to start reading from (1-based). Optional.',
       },
       limit: {
         type: 'number',
+        minimum: 1,
+        maximum: DEFAULT_LIMIT,
         description: `Max number of lines to read. Default ${DEFAULT_LIMIT}.`,
       },
     },
     required: ['file_path'],
+    additionalProperties: false,
   };
   readonly category: ToolCategory = 'file';
   override readonly isConcurrencySafe = true;
@@ -67,7 +74,10 @@ export class ReadTool extends BuiltinTool {
 
   async execute(args: Record<string, unknown>, options?: ToolExecuteOptions): Promise<ToolResult> {
     const validation = this.validateArgs(args);
-    if (!validation.valid) {
+    if (
+      !validation.valid ||
+      Object.keys(args).some((key) => !['file_path', 'offset', 'limit'].includes(key))
+    ) {
       return this.error(presentInvalidToolArguments(this.name, options?.metadata?.['locale']));
     }
 
@@ -83,12 +93,39 @@ export class ReadTool extends BuiltinTool {
         );
       }
       const resolved = authorization?.path ?? path.resolve(filePath);
+      const classification = classifyAgentContentPath(
+        authorization?.allowed && authorization.contentLocator
+          ? authorization.contentLocator.path
+          : resolved,
+      );
+      if (classification.kind !== 'text' && classification.kind !== 'unknown') {
+        return this.error(
+          presentReadTextBoundaryFailure(
+            'non-text',
+            filePath,
+            options?.metadata?.['locale'],
+            classification.kind,
+          ),
+        );
+      }
       const workspacePath = authorization?.allowed ? authorization.contentLocator?.path : undefined;
-      const loaded: { readonly content: string; readonly fingerprint?: ContentFingerprint } =
+      const loaded: { readonly bytes: Uint8Array; readonly fingerprint?: ContentFingerprint } =
         workspacePath
           ? await this.readWorkspaceFile(workspacePath, options?.signal)
-          : { content: await fs.readFile(resolved, 'utf-8') };
-      const content = loaded.content;
+          : await this.readExternalFile(resolved);
+      let content: string;
+      try {
+        content = new TextDecoder('utf-8', { fatal: true }).decode(loaded.bytes);
+      } catch {
+        return this.error(
+          presentReadTextBoundaryFailure('invalid-utf8', filePath, options?.metadata?.['locale']),
+        );
+      }
+      if (content.includes('\u0000')) {
+        return this.error(
+          presentReadTextBoundaryFailure('contains-null', filePath, options?.metadata?.['locale']),
+        );
+      }
       const allLines = content.split('\n');
       const startIdx = Math.max(0, offset - 1);
       const endIdx = Math.min(allLines.length, startIdx + limit);
@@ -119,6 +156,11 @@ export class ReadTool extends BuiltinTool {
         endLine: endIdx,
       });
     } catch (err) {
+      if (err instanceof TextReadBoundaryError) {
+        return this.error(
+          presentReadTextBoundaryFailure(err.code, filePath, options?.metadata?.['locale']),
+        );
+      }
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         return this.error(presentReadFailure('not-found', filePath, options?.metadata?.['locale']));
       }
@@ -141,22 +183,43 @@ export class ReadTool extends BuiltinTool {
     workspacePath: string,
     signal: AbortSignal | undefined,
   ): Promise<{
-    readonly content: string;
+    readonly bytes: Uint8Array;
     readonly fingerprint: ContentFingerprint;
   }> {
     if (!this.workspaceReader) {
       throw new Error('Workspace Read requires the canonical Content reader.');
     }
-    const result = await this.workspaceReader.read(
-      { kind: 'workspace-file', path: workspacePath },
-      { ...(signal ? { signal } : {}) },
-    );
+    const locator = { kind: 'workspace-file' as const, path: workspacePath };
+    const stat = await this.workspaceReader.stat(locator, { ...(signal ? { signal } : {}) });
+    if (stat.status !== 'ready') throw new Error(stat.diagnostic.code);
+    if (stat.byteLength > MAX_TEXT_FILE_BYTES) throw new TextReadBoundaryError('too-large');
+    const result = await this.workspaceReader.read(locator, {
+      maxBytes: MAX_TEXT_FILE_BYTES,
+      expectedFingerprint: stat.fingerprint,
+      ...(signal ? { signal } : {}),
+    });
     if (result.status !== 'ready') {
+      if (result.diagnostic.code === 'content-too-large') {
+        throw new TextReadBoundaryError('too-large');
+      }
       throw new Error(result.diagnostic.code);
     }
     return {
-      content: new TextDecoder().decode(result.bytes),
+      bytes: result.bytes,
       fingerprint: result.fingerprint,
     };
+  }
+
+  private async readExternalFile(filePath: string): Promise<{ readonly bytes: Uint8Array }> {
+    const stat = await fs.stat(filePath);
+    if (stat.size > MAX_TEXT_FILE_BYTES) throw new TextReadBoundaryError('too-large');
+    return { bytes: await fs.readFile(filePath) };
+  }
+}
+
+class TextReadBoundaryError extends Error {
+  constructor(readonly code: 'too-large') {
+    super(code);
+    this.name = 'TextReadBoundaryError';
   }
 }

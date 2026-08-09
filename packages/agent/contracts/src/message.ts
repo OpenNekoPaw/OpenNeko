@@ -12,6 +12,7 @@ import type { StoryboardTable, StoryboardValidationDiagnostic } from '@neko/canv
 import type { StoryboardPlanOverlay } from './storyboard-plan-overlay';
 import type { ArtifactExtensionMap } from './composite-artifact';
 import type { AgentContextType } from './agent-context';
+import { isAgentContextType } from './agent-context';
 import type { AgentArtifactTransferPayload } from './artifact-transfer';
 import type { MessageAttachment } from './message-attachment';
 
@@ -158,6 +159,68 @@ export interface MessageContextReference {
   navigationData?: Record<string, string>;
 }
 
+const MESSAGE_CONTEXT_REFERENCE_FIELDS: ReadonlySet<string> = new Set([
+  'type',
+  'id',
+  'label',
+  'summary',
+  'thumbnailUri',
+  'mediaType',
+  'contentLocator',
+  'navigationData',
+]);
+
+export function parseMessageContextReference(value: unknown): MessageContextReference {
+  if (
+    !isMessageRecord(value) ||
+    !Object.keys(value).every((key) => MESSAGE_CONTEXT_REFERENCE_FIELDS.has(key))
+  ) {
+    throw new Error('Agent message context reference must use the canonical shape.');
+  }
+  if (!isAgentContextType(value['type'])) {
+    throw new Error(`Unknown Agent message context type '${String(value['type'])}'.`);
+  }
+  const locator =
+    value['contentLocator'] === undefined
+      ? undefined
+      : validateContentLocator(value['contentLocator']);
+  if (locator && !locator.ok) {
+    throw new Error('Agent message context reference ContentLocator is invalid.');
+  }
+  const navigationData = parseMessageContextNavigationData(value['navigationData']);
+  return {
+    type: value['type'],
+    id: requireMessageText(value['id'], 'id'),
+    label: requireMessageText(value['label'], 'label'),
+    ...(value['summary'] === undefined
+      ? {}
+      : { summary: requireMessageText(value['summary'], 'summary', true) }),
+    ...(value['thumbnailUri'] === undefined
+      ? {}
+      : { thumbnailUri: requireMessageText(value['thumbnailUri'], 'thumbnailUri') }),
+    ...(value['mediaType'] === undefined
+      ? {}
+      : { mediaType: parseAgentFileReferenceMediaType(value['mediaType']) }),
+    ...(locator?.ok ? { contentLocator: locator.locator } : {}),
+    ...(navigationData === undefined ? {} : { navigationData }),
+  };
+}
+
+function parseMessageContextNavigationData(value: unknown): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  if (!isMessageRecord(value)) {
+    throw new Error('Agent message context reference navigationData must contain strings.');
+  }
+  const parsed: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== 'string') {
+      throw new Error('Agent message context reference navigationData must contain strings.');
+    }
+    parsed[key] = entry;
+  }
+  return parsed;
+}
+
 // ---------------------------------------------------------------------------
 // AgentFileReference — lightweight @path selection metadata
 // ---------------------------------------------------------------------------
@@ -186,6 +249,17 @@ const AGENT_FILE_REFERENCE_MEDIA_TYPES: ReadonlySet<string> = new Set([
   'text',
   'document',
 ]);
+
+function parseAgentFileReferenceMediaType(value: unknown): AgentFileReferenceMediaType {
+  if (!isAgentFileReferenceMediaType(value)) {
+    throw new Error(`Unknown Agent file reference media type '${String(value)}'.`);
+  }
+  return value;
+}
+
+function isAgentFileReferenceMediaType(value: unknown): value is AgentFileReferenceMediaType {
+  return typeof value === 'string' && AGENT_FILE_REFERENCE_MEDIA_TYPES.has(value);
+}
 const AGENT_FILE_REFERENCE_SOURCES: ReadonlySet<string> = new Set([
   'workspace',
   'media-library',
@@ -230,6 +304,19 @@ export function isAgentAuthorizedContentReferenceContextData(
 
 function isMessageRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireMessageText(value: unknown, label: string, allowEmpty = false): string {
+  if (
+    typeof value !== 'string' ||
+    (!allowEmpty && value.length === 0) ||
+    value.includes('\u0000')
+  ) {
+    throw new Error(
+      `Agent message context reference ${label} must be ${allowEmpty ? 'valid' : 'non-empty'} text.`,
+    );
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------
