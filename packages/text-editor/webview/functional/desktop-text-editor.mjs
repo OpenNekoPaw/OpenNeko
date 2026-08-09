@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { openFixtureWorkspace } from '../../../../scripts/desktop-functional/desktop-operations.mjs';
 
 const MARKDOWN_SOURCE = '# 创作笔记\n\n第一稿。\n';
+const MARKDOWN_RICH_INPUT = '所见所得输入稳定。';
 const MARKDOWN_INCOMPLETE = '# 你好\n\n1. 目录\n2. 存在\n3. |';
 const MARKDOWN_EDITED = '# 创作笔记\n\n这是通过桌面编辑器保存的中文内容。\n';
 const JSON_INVALID = '{"title":"未完成",}';
@@ -91,7 +92,24 @@ export const desktopTextEditorScenario = Object.freeze({
       );
     }
     const markdownDefaultScreenshot = await screenshot('markdown-rich-outline-default');
+    await type('.neko-text-editor-rich .ProseMirror', MARKDOWN_RICH_INPUT);
+    await waitForRichText(evaluate, MARKDOWN_RICH_INPUT);
+    await waitForEditorDirty(evaluate);
+    const markdownRichInput = await inspectTextEditor(evaluate);
+    if (
+      markdownRichInput.richReadOnly !== 'false' ||
+      !markdownRichInput.richFocused ||
+      markdownRichInput.richFocusBoxShadow !== 'none' ||
+      markdownRichInput.richFocusOutlineStyle !== 'none'
+    ) {
+      throw new Error(
+        `Rich input focus presentation is incomplete: ${JSON.stringify(markdownRichInput)}`,
+      );
+    }
+    const markdownRichInputScreenshot = await screenshot('markdown-rich-focused-input');
+    checkpoint('markdown-rich-focused-input', markdownRichInput);
     await selectTextEditorMode(evaluate, 'source');
+    await waitForEditorSource(evaluate, `${MARKDOWN_RICH_INPUT}\n`);
     await type('.cm-content', MARKDOWN_INCOMPLETE);
     await waitForEditorSource(evaluate, MARKDOWN_INCOMPLETE);
     await selectTextEditorMode(evaluate, 'split');
@@ -411,6 +429,7 @@ export const desktopTextEditorScenario = Object.freeze({
     return {
       markdown,
       markdownDefault,
+      markdownRichInput,
       markdownIncomplete,
       imeComposition,
       jsonInvalid,
@@ -425,6 +444,7 @@ export const desktopTextEditorScenario = Object.freeze({
       capacityRetried,
       screenshots: [
         markdownDefaultScreenshot,
+        markdownRichInputScreenshot,
         markdownIncompleteScreenshot,
         markdownScreenshot,
         cleanSessionRecoveryScreenshot,
@@ -839,6 +859,8 @@ async function inspectTextEditor(evaluate) {
       throw new Error('Text Editor presentation is unavailable.');
     }
     const rootStyle = getComputedStyle(root);
+    const richEditor = root.querySelector('.neko-text-editor-rich .ProseMirror');
+    const richEditorStyle = richEditor ? getComputedStyle(richEditor) : undefined;
     const sourceRect = root.querySelector('.neko-text-editor-codemirror')?.getBoundingClientRect();
     const richRect = root.querySelector('.neko-text-editor-rich')?.getBoundingClientRect();
     const controls = [...contextActions.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
@@ -872,7 +894,10 @@ async function inspectTextEditor(evaluate) {
         icon: button.querySelector('.codicon')?.className ?? '',
       })),
       richState: root.querySelector('.neko-text-editor-rich')?.getAttribute('data-rich-state') ?? null,
-      richReadOnly: root.querySelector('.neko-text-editor-rich .ProseMirror')?.getAttribute('aria-readonly') ?? null,
+      richReadOnly: richEditor?.getAttribute('aria-readonly') ?? null,
+      richFocused: document.activeElement === richEditor,
+      richFocusBoxShadow: richEditorStyle?.boxShadow ?? null,
+      richFocusOutlineStyle: richEditorStyle?.outlineStyle ?? null,
       splitSurfaceOrder: [...(root.querySelector('.neko-text-editor-body')?.children ?? [])]
         .flatMap((child) => {
           if (!(child instanceof HTMLElement)) return [];
