@@ -38,6 +38,22 @@ canonical JSON，再计算 SHA-256。该发布没有为这些 Tool 声明 MCP an
 Desktop adapter 因此必须把 cwd 固定到新建 session directory，并在启动前写入 `llm: {}` 的精确 config；
 仅清空继承环境不足以证明没有 runtime-adjacent `.env` 或默认 LLM 配置参与。
 
+Target/domain 审计还发现两个发布阻塞：
+
+- [direct MCP dispatcher](https://github.com/browser-use/browser-use/blob/0.13.7/browser_use/mcp/server.py) 在第一次
+  `browser_*` 调用时新建隔离 `BrowserSession`，没有把 OpenNeko 授权的 exact
+  origin/tab 作为启动输入；当前 contained client factory 因而只能证明进程、环境和 profile 隔离，不能证明
+  返回内容属于授权页面。用未审核的 `browser_navigate` 在 adapter 内隐式打开 origin 会形成隐藏成功路径，禁止采用。
+- [`SecurityWatchdog`](https://github.com/browser-use/browser-use/blob/0.13.7/browser_use/browser/watchdogs/security_watchdog.py)
+  会在 `NavigateToUrlEvent` 前拒绝显式越域导航，但 redirect 只在
+  `NavigationCompleteEvent` 后检测并跳转到 `about:blank`，新 tab 也在 `TabCreatedEvent` 后关闭；这不满足
+  “越域内容进入页面前阻断”的资格要求。`browse-read` 与 `interact` 必须保持 unavailable，直到固定上游
+  release 提供可验证的 pre-commit redirect/new-tab policy；不得用事后跳空页或关闭 tab 作为通过证据。
+
+因此当前五个 observe Tool 只是精确 reviewed policy，不是可用性声明。真实 `observe` 仍需一个不调用隐藏
+navigation Tool 的 exact page/session binding，并通过 packaged local fixture 证明 state/HTML/screenshot 均来自
+授权 target。
+
 ## Cua Driver
 
 - 仓库：[`trycua/cua`](https://github.com/trycua/cua)
@@ -82,6 +98,8 @@ artifact 同样只记录供应链事实；在 packaged Windows OpenNeko、标准
 
 - Browser Use Python/Chromium 自包含 artifact、可复现 build recipe、完整 dependency lock 和 SBOM 未完成。
 - Browser Use/Cua Driver 的生产 transitive license inventory 尚未生成和审查。
-- 两个 artifact 的 OpenNeko catalog signature/provenance、archive poison tests 和 packaged qualification 未完成。
+- OpenNeko artifact Host 已实现 catalog-bound Ed25519 signature、streaming size/digest、contained provenance、
+  license inventory digest 与 tar.gz/ZIP poison validation；真实 Browser Use/Cua Driver 发布 artifact 的签名、
+  provenance/license inventory 产出和 packaged qualification 仍未完成。
 - Cua Driver macOS signing/notarization、TCC、target-only capture 实机证据未完成。
 - Windows 只记录 artifact，不声明产品支持；Browser Use 其他 OS/arch 也未资格化。

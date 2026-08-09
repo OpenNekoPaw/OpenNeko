@@ -15,3 +15,9 @@ artifacts and records packaged qualification evidence; listing never permits a
 download or install by itself. Release builds rely on this snapshot only through
 the signed application trust root. Do not mirror Codex, OpenAI, or another
 application's local marketplace into this snapshot.
+
+An installable entry may declare `updatesFrom` as the exact package releases
+that its reviewed artifact replaces. OpenNeko projects an update only when the
+currently installed package release is explicitly listed, the candidate package
+metadata is valid, and a reviewed artifact exists for the current Host platform.
+A mere release-string mismatch never authorizes an upgrade or downgrade.

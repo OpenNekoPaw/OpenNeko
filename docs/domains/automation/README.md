@@ -36,7 +36,7 @@ Agent 参数只携带 Host 签发的 opaque `targetKey`；Host 授权端解析�
 
 ## Provider 基线
 
-- Browser Use 固定 `0.13.7`，首个 `observe` profile 只允许 `browser_get_state`、`browser_get_html`、`browser_screenshot`、`browser_list_tabs`、`browser_list_sessions`。明确拒绝 `--cli-mcp`、`browser_exec`、`browser_extract_content`、nested upstream Agent、隐式 cloud、文件和未知操作。
+- Browser Use 固定 `0.13.7`，首个 `observe` reviewed profile 只允许 `browser_get_state`、`browser_get_html`、`browser_screenshot`、`browser_list_tabs`、`browser_list_sessions`。明确拒绝 `--cli-mcp`、`browser_exec`、`browser_extract_content`、nested upstream Agent、隐式 cloud、文件和未知操作。该 allowlist 不是 readiness：direct MCP 的空白 session 尚未与授权 exact origin/tab 绑定，redirect/new-tab 仍是事后处置，真实 observe、`browse-read` 与 `interact` 在资格化前保持 unavailable。
 - Computer Use 固定 Cua Driver `0.19.2`。macOS 首个 profile 只审核 exact window `verify_state` observation，Host 注入 pid/window/session，bounded policy 只允许该 Tool，且要求当前 Screen Recording permission。Interact、Windows 和 Linux 在逐项资格化前保持 unavailable。
 
 平台/制品/实机资格状态不是稳定架构事实，见 [`../../status/browser-computer-automation-2026-08-10.md`](../../status/browser-computer-automation-2026-08-10.md)。实施约束与剩余任务见 [`../../../openspec/changes/integrate-open-source-browser-and-computer-use/`](../../../openspec/changes/integrate-open-source-browser-and-computer-use/)。

@@ -4,9 +4,9 @@
       transitive license inventory, build recipes, artifact sizes and supported OS/arch without using `latest`.
 - [ ] 1.2 Build reproducible first-party platform artifacts from pinned upstream sources/dependencies; include all required
       runtime/browser/native payloads and a contained launcher, with no user-machine post-install package manager.
-- [ ] 1.3 Add checksum/signature/SBOM validation and poison tests for modified archives, path escape, symlink, duplicate
+- [x] 1.3 Add checksum/signature/SBOM validation and poison tests for modified archives, path escape, symlink, duplicate
       identity, unknown platform and unreviewed upstream Tool sets.
-- [ ] 1.4 Keep the first-delivery catalog inside the signed application as the only catalog authenticity root; constrain
+- [x] 1.4 Keep the first-delivery catalog inside the signed application as the only catalog authenticity root; constrain
       artifact HTTPS hosts/redirects and defer a remotely mutable catalog to a separate trust/key-management change.
 
 ## 2. Canonical MCP boundary
@@ -24,13 +24,13 @@
 
 ## 3. Extension artifact lifecycle
 
-- [ ] 3.1 Extend `@neko/agent-runtime/extensions` public entry with reviewed remote platform artifact download, staging,
+- [x] 3.1 Extend `@neko/agent-runtime/extensions` public entry with reviewed remote platform artifact download, staging,
       integrity/provenance/license validation and atomic install through injected Host ports.
-- [ ] 3.2 Add explicit enable, disable and update state owned by the extension application service; migrate current
+- [x] 3.2 Add explicit enable, disable and update state owned by the extension application service; migrate current
       installed-equals-enabled behavior atomically and remove the old implicit activation path.
-- [ ] 3.3 Add idle/session ownership gates for enable/disable/update/remove, exact operation identity, safe diagnostics and
+- [x] 3.3 Add idle/session ownership gates for enable/disable/update/remove, exact operation identity, safe diagnostics and
       fail-local sibling behavior.
-- [ ] 3.4 Update typed Main/preload/Renderer management contracts and Extensions UI for size, install, enable, disable,
+- [x] 3.4 Update typed Main/preload/Renderer management contracts and Extensions UI for size, install, enable, disable,
       update, dependency, permission and qualification status in English and Simplified Chinese.
 - [ ] 3.5 Add a real Electron management path proving catalog refresh does not download, install is user-triggered, enable
       performs qualification, and failed install/update does not alter the authoritative package/runtime.
@@ -42,7 +42,7 @@
       terminate candidate processes before replacement and require a new enable grant for permission expansion.
 - [ ] 3.9 Separate runtime removal from profile/download/extension-data removal and add independent confirmations, trash,
       active-owner checks and recovery tests.
-- [ ] 3.10 Own install/update progress outside the Extensions React Root with exact operation identity, explicit cancel and
+- [x] 3.10 Own install/update progress outside the Extensions React Root with exact operation identity, explicit cancel and
       restart cleanup/resume; verify scene changes do not cancel work or retain hidden UI.
 
 ## 4. Automation package ownership
@@ -123,7 +123,7 @@
 
 - [ ] 8.1 Run focused package tests, strict typecheck, MCP conformance, packaged Desktop builds, architecture/security/
       internal-version checks, `pnpm check:openspec`, `git diff --check` and applicable local gates.
-- [ ] 8.2 Run Neko quality review across responsibility, dependency, interface, extension and testing layers; verify no
+- [x] 8.2 Run Neko quality review across responsibility, dependency, interface, extension and testing layers; verify no
       handwritten automation engine, second Agent/MCP/Task path, implicit install or provider fallback remains.
-- [ ] 8.3 Record exact upstream/plugin releases, platform qualification evidence, Evaluation reports, unexecuted cases,
+- [x] 8.3 Record exact upstream/plugin releases, platform qualification evidence, Evaluation reports, unexecuted cases,
       screenshot/privacy limitations and remaining Windows/Computer-write risks before changing capability status.

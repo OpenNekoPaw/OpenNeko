@@ -18,16 +18,16 @@
 
 ## 已完成的仓库内闭环
 
-| 层         | 当前事实                                                                                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MCP        | official SDK 是唯一 protocol adapter；保留 annotations、structured content、ordered mixed text/image、`isError` 与 cancellation                                                                              |
-| Policy     | exact provider/release/profile/target/mode/budget/session owner；每次 action 重查 OS permission 与 target；single-action approval 不可重放                                                                   |
-| Provider   | provider session 冻结 exact target/mode；Cua `verify_state` 的 pid/window/session 由 Host-owned projector 注入，模型不能覆盖                                                                                 |
-| Browser    | `0.13.7` observe 五 Tool allowlist；每 session 独立 HOME/TMP/config/cache/browser data；只启动 `browser-use --mcp`，无模型凭据和 host secret                                                                 |
-| Computer   | `0.19.2` macOS observe profile 仅 `verify_state`；只启动 `cua-driver mcp --direct`，`bounded` policy 只允许 exact app window observation；disconnect 删除 session HOME/TMP/policy；其他 mode/OS fail-visible |
-| Agent      | Capability adapter 使用 opaque targetKey，Host 返回 exact target/grant；绑定 conversation/run/toolCall，执行后关闭 owned session，无 provider fallback；结果不投影 pid/window/tab                            |
-| Privacy    | screenshot bytes 复制进有 TTL、byte limit、exact session/action owner、single-consume 的 transient store；receipt 不含像素和 Host path                                                                       |
-| Extensions | bundled catalog source 列出两项，但 artifact 未满足时 `canInstall=false`、`artifact-unavailable`，刷新不会下载                                                                                               |
+| 层         | 当前事实                                                                                                                                                                                                                                                              |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP        | official SDK 是唯一 protocol adapter；保留 annotations、structured content、ordered mixed text/image、`isError` 与 cancellation                                                                                                                                       |
+| Policy     | exact provider/release/profile/target/mode/budget/session owner；每次 action 重查 OS permission 与 target；single-action approval 不可重放                                                                                                                            |
+| Provider   | provider session 冻结 exact target/mode；Cua `verify_state` 的 pid/window/session 由 Host-owned projector 注入，模型不能覆盖                                                                                                                                          |
+| Browser    | `0.13.7` observe 五 Tool reviewed allowlist；每 session 独立 HOME/TMP/config/cache/browser data；只启动 `browser-use --mcp`，无模型凭据和 host secret。direct MCP 尚未把授权 exact origin/tab 绑定到新建空白 session，因此这里只是受控启动骨架，不是可用 observe 证明 |
+| Computer   | `0.19.2` macOS observe profile 仅 `verify_state`；只启动 `cua-driver mcp --direct`，`bounded` policy 只允许 exact app window observation；disconnect 删除 session HOME/TMP/policy；其他 mode/OS fail-visible                                                          |
+| Agent      | Capability adapter 使用 opaque targetKey，Host 返回 exact target/grant；绑定 conversation/run/toolCall，执行后关闭 owned session，无 provider fallback；结果不投影 pid/window/tab                                                                                     |
+| Privacy    | screenshot bytes 复制进有 TTL、byte limit、exact session/action owner、single-consume 的 transient store；receipt 不含像素和 Host path                                                                                                                                |
+| Extensions | bundled catalog source 列出两项，但 artifact 未满足时 `canInstall=false`、`artifact-unavailable`，刷新不会下载                                                                                                                                                        |
 
 ## Extensions 展示决策
 
@@ -38,11 +38,18 @@
 
 ## 仍未完成的发布门禁
 
-1. Browser Use 缺少从固定 source/dependency/Chromium 构建并发布的 OpenNeko first-party 自包含 artifact、完整 SBOM/license inventory、签名和 poison tests。
-2. Cua Driver 虽有固定上游 macOS artifact，但尚未完成 OpenNeko packaged signing/notarization、TCC responsibility chain、target-only capture 与真实 fixture qualification。
-3. Extension remote artifact 的 streaming download、disk/archive limits、atomic update、resume/cancel、runtime/profile/data 分离删除尚未进入生产路径。
-4. Desktop 尚未组合真实 target selection/session authorization、OS permission action、Agent Tool registration 和 Timeline Pause/Stop/Take over UI。
-5. `agent-runtime.external-automation` 的 visible Desktop 与 hidden complete-session real-provider evaluation 尚未执行；Windows/Linux 保持 unavailable。
+1. Browser Use 缺少从固定 source/dependency/Chromium 构建并发布的 OpenNeko first-party 自包含 artifact、完整
+   SBOM/license inventory 和发布签名；Host 侧签名/完整性/安全展开与 poison tests 已实现，但不能替代真实发布输入。
+2. Browser Use direct MCP 首次调用创建空白 session，当前没有不借助隐藏 navigation Tool 的 exact origin/tab
+   binding；上游 redirect/new-tab 又在加载完成/创建后才处置，`observe` 真实页面与 `browse-read` / `interact`
+   domain gate 均未资格化。
+3. Cua Driver 虽有固定上游 macOS artifact，但尚未完成 OpenNeko packaged signing/notarization、TCC responsibility chain、target-only capture 与真实 fixture qualification。
+4. Extension remote artifact 的 streaming download、disk/archive limits、atomic update、Main-owned progress、exact
+   cancel 与 restart staging cleanup 已实现并通过 deterministic tests；同 artifact bounded resume、candidate process
+   qualification、runtime/profile/download/data 分离删除仍未完成，且缺少 signed release 输入时 production 保持
+   `artifact-unavailable`。
+5. Desktop 尚未组合真实 target selection/session authorization、OS permission action、Agent Tool registration 和 Timeline Pause/Stop/Take over UI。
+6. `agent-runtime.external-automation` 的 visible Desktop 与 hidden complete-session real-provider evaluation 尚未执行；Windows/Linux 保持 unavailable。
 
 本次仅完成了开发态真实 Electron Extensions 页面验收：Browser Use `0.13.7` 与 Computer Use `0.19.2` 均可见，展示审核范围、权限和“此构建尚未发布已审核的运行时制品”，且没有安装按钮。该证据只验证 fail-visible catalog/UI，不替代 packaged artifact、真实 provider、OS permission 或 Agent Evaluation。
 
