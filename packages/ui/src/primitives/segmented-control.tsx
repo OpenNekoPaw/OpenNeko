@@ -170,15 +170,15 @@ const SEGMENTED_CONTROL_THUMB_STYLE: React.CSSProperties = {
 };
 
 const SEGMENTED_CONTROL_NEUTRAL_STYLE: React.CSSProperties = {
-  border: '1px solid var(--neko-widget-border, rgba(0, 0, 0, 0.1))',
-  background: 'color-mix(in srgb, var(--neko-foreground, #242424) 7%, transparent)',
+  border: 'none',
+  background: 'color-mix(in srgb, var(--neko-foreground, #242424) 6%, transparent)',
   boxShadow: 'none',
 };
 
 const SEGMENTED_CONTROL_NEUTRAL_THUMB_STYLE: React.CSSProperties = {
-  border: '1px solid var(--neko-widget-border, rgba(0, 0, 0, 0.1))',
+  border: 'none',
   background: 'var(--neko-editor-background, #ffffff)',
-  boxShadow: '0 1px 4px rgba(0, 0, 0, 0.12)',
+  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 3px 8px rgba(0, 0, 0, 0.06)',
 };
 
 const SEGMENTED_CONTROL_ITEM_STYLE: React.CSSProperties = {

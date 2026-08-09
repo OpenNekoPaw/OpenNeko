@@ -208,6 +208,11 @@ describe('@neko/ui compound primitives', () => {
     const tabs = host.querySelectorAll<HTMLButtonElement>('[role="tab"]');
     expect(control?.dataset.appearance).toBe('neutral');
     expect(control?.style.maxWidth).toBe('544px');
+    expect(control?.style.borderStyle).toBe('none');
+    expect(control?.style.boxShadow).toBe('none');
+    expect(
+      control?.querySelector<HTMLElement>('.neko-segmented-control-thumb')?.style.borderStyle,
+    ).toBe('none');
     expect(tabs[0]?.style.height).toBe('30px');
 
     act(() => {
