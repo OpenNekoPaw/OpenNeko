@@ -33,4 +33,4 @@
 
 - [x] 6.1 Run `openspec validate add-home-experience-entry-modes --strict`, `pnpm check:openspec`, focused tests/typechecks, and record canonical-path plus no-fallback evidence.
 - [x] 6.2 Perform `neko-quality-review`, resolve or record ownership, dependency, user-data, fail-local, accessibility, and verification findings, and list all residual risks.
-- [ ] 6.3 Commit the OpenSpec, presentation contract, Home UI, validation, and verification evidence in reviewable batches without including unrelated dirty-worktree changes.
+- [x] 6.3 Commit the OpenSpec, presentation contract, Home UI, validation, and verification evidence in reviewable batches without including unrelated dirty-worktree changes.
