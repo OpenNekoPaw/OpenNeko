@@ -61,7 +61,7 @@ import {
   type PromptFragment,
 } from '@neko/agent-contracts';
 import { createNodeHostContentReadService } from '@neko/content/node';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator, ContentRepresentationLocator } from '@neko/content';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
   AgentHomeActivitySummary,
@@ -213,6 +213,13 @@ export interface AgentWorkspaceRuntime {
   readonly workspace: AssetWorkspaceResolution;
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
   readonly tools: IToolRegistry;
+  loadDisplayAsset?(input: {
+    readonly locator: ContentLocator | ContentRepresentationLocator;
+    readonly maxBytes: number;
+    readonly signal?: AbortSignal;
+  }): Promise<
+    import('../runtime/capability/agent-content-access-runtime').AgentProviderAssetResult
+  >;
   createConversation(conversationId: string): Promise<void>;
   ensureConversation(conversationId: string, title: string): Promise<void>;
   deleteConversation(conversationId: string): Promise<void>;
@@ -782,6 +789,40 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   get workspace(): AssetWorkspaceResolution {
     return this.options.workspace;
+  }
+
+  loadDisplayAsset(input: {
+    readonly locator: ContentLocator | ContentRepresentationLocator;
+    readonly maxBytes: number;
+    readonly signal?: AbortSignal;
+  }): Promise<
+    import('../runtime/capability/agent-content-access-runtime').AgentProviderAssetResult
+  > {
+    this.requireActive();
+    if (input.locator.kind === 'content-representation') {
+      const loadRepresentationAsset = this.contentAccessRuntime.loadRepresentationAsset;
+      if (!loadRepresentationAsset) {
+        return Promise.resolve({
+          status: 'failed',
+          diagnostics: [
+            {
+              code: 'agent-content-access-unavailable',
+              severity: 'error',
+              message: 'Content representation display access is unavailable.',
+            },
+          ],
+        });
+      }
+      return loadRepresentationAsset.call(this.contentAccessRuntime, {
+        locator: input.locator,
+        maxBytes: input.maxBytes,
+      });
+    }
+    return this.contentAccessRuntime.loadContentAsset({
+      locator: input.locator,
+      maxBytes: input.maxBytes,
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
   }
 
   assertWorkspace(workspace: AssetWorkspaceResolution): void {

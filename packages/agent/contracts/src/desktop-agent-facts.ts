@@ -468,7 +468,13 @@ function parseResourceDisplayProjection(input: unknown): AgentResourceDisplayPro
     status: oneOf(record['status'], ['authorized', 'denied'] as const, 'resource status'),
     locatorKind: oneOf(
       record['locatorKind'],
-      ['workspace-file', 'generated-output'] as const,
+      [
+        'workspace-file',
+        'document-entry',
+        'generated-output',
+        'package-resource',
+        'content-representation',
+      ] as const,
       'resource locator kind',
     ),
     transport: oneOf(

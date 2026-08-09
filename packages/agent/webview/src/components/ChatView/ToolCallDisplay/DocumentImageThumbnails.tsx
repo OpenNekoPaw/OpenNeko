@@ -64,7 +64,7 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                       alt={thumbnail.label}
                       loading="lazy"
                       draggable={false}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain"
                     />
                   ) : (
                     <div
@@ -83,6 +83,14 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                 <div className="space-y-0.5 px-1.5 py-1 text-[9px] leading-tight text-[var(--agent-fg-secondary)]">
                   {dimensions && <div className="truncate">{dimensions}</div>}
                   {byteSize && <div className="truncate">{byteSize}</div>}
+                </div>
+              )}
+              {thumbnail.previewDiagnostic && !thumbnail.src && (
+                <div
+                  className="border-t border-[var(--agent-input-border)] px-1.5 py-1 text-[9px] leading-tight text-[var(--agent-danger)]"
+                  title={thumbnail.previewDiagnostic}
+                >
+                  Preview unavailable
                 </div>
               )}
               <div className="flex border-t border-[var(--agent-input-border)]">

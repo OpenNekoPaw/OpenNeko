@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   openFixtureWorkspace,
@@ -10,17 +10,29 @@ import { createDesktopMediaFixtureSet } from '../../../../scripts/desktop-functi
 export const canvasOpenNekoConsumerScenario = Object.freeze({
   id: 'canvas-openneko-consumer',
   owner: '@neko/canvas-webview',
-  async prepare({ fixtureHome }) {
+  async prepare({ fixtureHome, repositoryRoot }) {
     const workspacePath = join(fixtureHome, 'workspace');
     const boardsRoot = join(workspacePath, 'boards');
     await mkdir(boardsRoot, { recursive: true });
     const media = await createDesktopMediaFixtureSet(workspacePath);
+    await copyFile(
+      join(
+        repositoryRoot,
+        'scripts',
+        'agent-eval',
+        'shared-fixtures',
+        'document-image-workspace',
+        'synthetic-document.epub',
+      ),
+      join(workspacePath, 'synthetic-document.epub'),
+    );
     await Promise.all([
       writeFile(
         join(boardsRoot, 'video.nkc'),
         `${JSON.stringify(
           canvasDocument('Video View', 'video-node', media.video, 'video', [
             cutDocumentNode('cut-document-node', 'story.otio'),
+            epubImageNode('epub-image-node'),
           ]),
           null,
           2,
@@ -109,6 +121,52 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"] img',
+    );
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const image = document.querySelector(
+          '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"] img'
+        );
+        return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0;
+      })()`,
+      'Canvas EPUB document-entry image did not decode.',
+    );
+    const epubImageProjection = await evaluate(`(() => {
+      const image = document.querySelector(
+        '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"] img'
+      );
+      if (!(image instanceof HTMLImageElement)) throw new Error('Canvas EPUB image is unavailable.');
+      return {
+        src: image.currentSrc || image.src,
+        complete: image.complete,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        objectFit: getComputedStyle(image).objectFit,
+      };
+    })()`);
+    if (
+      !epubImageProjection.src.startsWith('openneko://resource/') ||
+      !epubImageProjection.complete ||
+      epubImageProjection.naturalWidth <= 0 ||
+      epubImageProjection.naturalHeight <= 0 ||
+      epubImageProjection.objectFit !== 'contain'
+    ) {
+      throw new Error(
+        `Canvas EPUB image projection is invalid: ${JSON.stringify(epubImageProjection)}`,
+      );
+    }
+    const epubResourceStatus = await readFetchStatus(evaluate, epubImageProjection.src);
+    if (epubResourceStatus !== 200) {
+      throw new Error(`Canvas EPUB image resource returned ${String(epubResourceStatus)}.`);
+    }
+    checkpoint('canvas-epub-document-entry-image', {
+      ...epubImageProjection,
+      resourceStatus: epubResourceStatus,
+    });
+    const epubImageScreenshot = await screenshot('canvas-epub-document-entry-image');
     await waitForInteractiveSelector(
       evaluate,
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
@@ -470,6 +528,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       unifiedWorkbench,
       unifiedWorkbenchScreenshot,
       rootCount: 2,
+      epubImageProjection,
+      epubResourceStatus,
+      epubImageScreenshot,
       authoredNodeCount,
       generationAuthoring,
       selectedNodePresentation,
@@ -482,8 +543,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       otioActions,
       otioActionsScreenshot,
       otioOpenedScreenshot,
-      locatorBackedNodes: ['video', 'audio'],
-      nativeElements: ['video', 'audio'],
+      locatorBackedNodes: ['video', 'audio', 'epub-document-entry-image'],
+      nativeElements: ['video', 'audio', 'img'],
       storylineAdvancedTo: storylinePlayback.currentTime,
       videoManualStartTime: playback.videoTime,
       videoAdvancedTo: playback.videoTimeAfterPointerLeave,
@@ -509,15 +570,27 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         `Desktop did not use the canonical unified Workbench entry: ${JSON.stringify(evidence.unifiedWorkbench)}`,
       );
     }
-    if (observation.openNekoResourceRequestCount < 2) {
-      throw new Error('Canvas did not reach the OpenNeko resource handler for both Views.');
+    if (observation.openNekoResourceRequestCount < 3) {
+      throw new Error(
+        'Canvas did not reach the OpenNeko resource handler for video, audio and EPUB image content.',
+      );
+    }
+    if (
+      evidence.epubResourceStatus !== 200 ||
+      evidence.epubImageProjection.naturalWidth <= 0 ||
+      evidence.epubImageProjection.naturalHeight <= 0 ||
+      evidence.epubImageProjection.objectFit !== 'contain'
+    ) {
+      throw new Error(
+        `Canvas EPUB document-entry image evidence is invalid: ${JSON.stringify(evidence.epubImageProjection)}`,
+      );
     }
     if (observation.pcmResponseCount !== 0) {
       throw new Error('Canvas ordinary node playback unexpectedly consumed PCM.');
     }
     if (
       evidence.rootCount !== 2 ||
-      evidence.authoredNodeCount !== 3 ||
+      evidence.authoredNodeCount !== 4 ||
       evidence.generationAuthoring.catalog.actionIds.join('|') !==
         'text|table|image|video|audio|director3d' ||
       evidence.generationAuthoring.kinds.map((item) => item.kind).join('|') !==
@@ -638,7 +711,7 @@ async function exerciseCanvasGenerationAuthoring({
     await click(`[data-canvas-add-action=${JSON.stringify(action.actionId)}]`);
     maximumNodeCount = Math.max(
       maximumNodeCount,
-      await waitForCanvasNodeCount(evaluate, viewId, 3),
+      await waitForCanvasNodeCount(evaluate, viewId, 4),
     );
     const nodeSelector = `${viewSelector} [data-node-presentation]:has([data-canvas-generation-node=${JSON.stringify(action.kind)}])`;
     await waitForInteractiveSelector(evaluate, nodeSelector);
@@ -1114,7 +1187,7 @@ function cutDocumentNode(nodeId, path) {
   return {
     id: nodeId,
     type: 'file',
-    position: { x: 80, y: 360 },
+    position: { x: 360, y: 360 },
     size: { width: 260, height: 180 },
     zIndex: 2,
     data: {
@@ -1122,6 +1195,26 @@ function cutDocumentNode(nodeId, path) {
       path,
       mediaKind: 'document',
       contentLocator: { kind: 'workspace-file', path },
+    },
+  };
+}
+
+function epubImageNode(nodeId) {
+  return {
+    id: nodeId,
+    type: 'media',
+    position: { x: 80, y: 360 },
+    size: { width: 240, height: 180 },
+    zIndex: 2,
+    data: {
+      title: 'EPUB page 1',
+      assetPath: 'OEBPS/images/page-1.png',
+      contentLocator: {
+        kind: 'document-entry',
+        source: { kind: 'workspace-file', path: 'synthetic-document.epub' },
+        entryPath: 'OEBPS/images/page-1.png',
+      },
+      mediaType: 'image',
     },
   };
 }

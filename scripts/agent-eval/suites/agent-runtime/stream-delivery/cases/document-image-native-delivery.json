@@ -14,18 +14,22 @@
       "ReadImage direct document-entry content read",
       "Host labeled contact-sheet composition",
       "native multimodal Pi turn",
+      "conversation projection store",
+      "Desktop locator-backed resource display projector",
+      "Desktop OpenNeko resource registry",
+      "package-owned Agent document image card",
       "terminal answer"
     ],
     "observables": [
       {
         "ref": "document-image-facts",
         "kind": "runtime-fact",
-        "description": "Pi identity, ordered successful Tool calls, normalized matching document-entry results, and terminal native-image answer facts.",
+        "description": "Pi identity, ordered successful Tool calls, normalized matching document-entry results, authorized redacted Agent Webview resource projection, and terminal native-image answer facts.",
         "required": true
       }
     ],
-    "expectedResult": "ReadDocument returns two synthetic page contentLocators, ReadImage preserves and directly reads both identities, and the native multimodal turn identifies both contact-sheet tiles before the final marker.",
-    "expectedFailure": "Missing or conflicting entry identity, whole-archive or fabricated-ref loading, failed Tool execution, runtime diagnostics, or a missing visual answer fails visibly."
+    "expectedResult": "ReadDocument returns two synthetic page contentLocators, ReadImage preserves and directly reads both identities, Desktop authorizes document-entry image display without replacing the locator, and the native multimodal turn identifies both contact-sheet tiles before the final marker.",
+    "expectedFailure": "Missing or conflicting entry identity, whole-archive or fabricated-ref loading, denied display authorization, URL/path identity substitution, failed Tool execution, runtime diagnostics, or a missing visual answer fails visibly."
   },
   "fixtureRefs": [
     "document-image-workspace"
@@ -152,6 +156,17 @@
           "status": "success"
         }
       ],
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "display-projection",
+      "kind": "resource-display-projection",
+      "projectionKind": "tool-result",
+      "status": "authorized",
+      "locatorKind": "document-entry",
+      "transport": "openneko-resource",
+      "renderTarget": "agent-webview",
+      "diagnosticsEmpty": true,
       "evidenceRef": "document-image-facts"
     },
     {

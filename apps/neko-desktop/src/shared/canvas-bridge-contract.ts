@@ -13,6 +13,7 @@ import type {
   HtmlVideoPreparationProfile,
 } from '@neko/media';
 import { isMediaResourceUrl } from '@neko/media';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 
 export const DESKTOP_CANVAS_CHANNELS = {
   snapshotGet: 'open-neko:canvas:snapshot-get',
@@ -64,10 +65,8 @@ export interface OpenNekoDesktopCanvasBridge {
 export interface DesktopCanvasPreviewVariantRequest {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly requestId: string;
-  readonly locator: {
-    readonly kind: 'workspace-file';
-    readonly path: string;
-  };
+  readonly sourceId: string;
+  readonly locator: ContentLocator;
   readonly role: 'source' | 'thumbnail' | 'proxy' | 'fov-crop';
   readonly mediaType?: string;
 }
@@ -161,15 +160,8 @@ export function parseDesktopCanvasPreviewVariantRequest(
   if (!isRecord(value)) {
     throw new Error('Desktop Canvas preview request must be an object.');
   }
-  const locator = value['locator'];
-  if (
-    !isRecord(locator) ||
-    locator['kind'] !== 'workspace-file' ||
-    typeof locator['path'] !== 'string' ||
-    !isPortableRelativePath(locator['path'])
-  ) {
-    throw new Error('Desktop Canvas preview requires a portable workspace-file ContentLocator.');
-  }
+  const locator = validateContentLocator(value['locator']);
+  if (!locator.ok) throw new Error('Desktop Canvas preview requires a valid ContentLocator.');
   const role = value['role'];
   if (role !== 'source' && role !== 'thumbnail' && role !== 'proxy' && role !== 'fov-crop') {
     throw new Error('Desktop Canvas preview role is invalid.');
@@ -181,7 +173,8 @@ export function parseDesktopCanvasPreviewVariantRequest(
   return {
     identity: parseDesktopCanvasHostIdentity(value['identity']),
     requestId: requireIdentity(value['requestId'], 'preview request'),
-    locator: { kind: 'workspace-file', path: locator['path'] },
+    sourceId: requireIdentity(value['sourceId'], 'preview source'),
+    locator: locator.locator,
     role,
     ...(mediaType === undefined ? {} : { mediaType }),
   };
@@ -195,7 +188,7 @@ export function parseDesktopCanvasPreviewVariantResult(
     !isRecord(value) ||
     value['requestId'] !== requestId ||
     typeof value['url'] !== 'string' ||
-    !value['url'].startsWith('data:image/')
+    !value['url'].startsWith('openneko://resource/')
   ) {
     throw new Error('Desktop Canvas preview result is invalid.');
   }

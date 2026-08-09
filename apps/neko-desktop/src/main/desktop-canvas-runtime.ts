@@ -15,7 +15,7 @@ import {
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
-import { type ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content';
 import {
   loadNkc,
   saveNkc,
@@ -57,6 +57,20 @@ interface DesktopCanvasSessionEntry {
   readonly session: CanvasHostRuntimeSession;
 }
 
+export interface DesktopCanvasPreviewResourceLease {
+  readonly url: string;
+  release(): void;
+}
+
+interface DesktopCanvasPreviewLeaseEntry {
+  readonly windowId: string;
+  readonly viewId: string;
+  readonly sessionKey: string;
+  readonly locatorKey: string;
+  readonly mediaType?: string;
+  readonly lease: DesktopCanvasPreviewResourceLease;
+}
+
 export interface DesktopCanvasMediaPort {
   execute(
     request: DesktopCanvasMediaRequest,
@@ -94,6 +108,7 @@ export interface DesktopCanvasGlobalMediaLibraryCopySelection {
 
 export class DesktopCanvasRuntime {
   private readonly sessions = new Map<string, DesktopCanvasSessionEntry>();
+  private readonly previewLeases = new Map<string, DesktopCanvasPreviewLeaseEntry>();
   private readonly presentationSnapshots = createCanvasHostPresentationSnapshotStore();
   private readonly materialAuthoring: CanvasMaterialAuthoringService;
   private readonly mediaLibraryCopy: CanvasMediaLibraryCopyService;
@@ -115,10 +130,12 @@ export class DesktopCanvasRuntime {
         readonly locator: ContentLocator;
         readonly absolutePath: string;
       }) => Promise<void>;
-      readonly createPreviewVariant?: (input: {
-        readonly absolutePath: string;
+      readonly registerPreviewResource?: (input: {
+        readonly identity: CanvasHostRuntimeIdentity;
+        readonly workspace: DesktopCanvasViewGrant['workspace'];
+        readonly locator: ContentLocator;
         readonly mediaType?: string;
-      }) => Promise<string>;
+      }) => Promise<DesktopCanvasPreviewResourceLease>;
       readonly resolveCut?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly target: CanvasMaterialActionTarget;
@@ -204,17 +221,35 @@ export class DesktopCanvasRuntime {
   ): Promise<DesktopCanvasPreviewVariantResult> {
     const request = parseDesktopCanvasPreviewVariantRequest(value);
     const entry = await this.requireSession(windowId, request.identity);
-    const createPreviewVariant = this.options.createPreviewVariant;
-    if (!createPreviewVariant) {
+    const registerPreviewResource = this.options.registerPreviewResource;
+    if (!registerPreviewResource) {
       throw new Error('Canvas preview variant capability is unavailable.');
     }
-    const absolutePath = await resolveWorkspaceContentLocator(entry.workspace, request.locator);
+    const key = previewLeaseKey(request);
+    const locatorKey = contentLocatorKey(request.locator);
+    const current = this.previewLeases.get(key);
+    if (current?.locatorKey === locatorKey && current.mediaType === request.mediaType) {
+      return { requestId: request.requestId, url: current.lease.url };
+    }
+    current?.lease.release();
+    this.previewLeases.delete(key);
+    const lease = await registerPreviewResource({
+      identity: request.identity,
+      workspace: entry.workspace,
+      locator: request.locator,
+      ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
+    });
+    this.previewLeases.set(key, {
+      windowId,
+      viewId: request.identity.viewId,
+      sessionKey: sessionKey(request.identity),
+      locatorKey,
+      ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
+      lease,
+    });
     return {
       requestId: request.requestId,
-      url: await createPreviewVariant({
-        absolutePath,
-        ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
-      }),
+      url: lease.url,
     };
   }
 
@@ -243,6 +278,7 @@ export class DesktopCanvasRuntime {
       entry.session.dispose();
       this.sessions.delete(key);
     }
+    this.releasePreviewLeases((entry) => entry.windowId === windowId);
     this.presentationSnapshots.deleteWindow(windowId);
     this.options.media?.detachWindow(windowId);
     this.options.generation?.detachWindow(windowId);
@@ -270,6 +306,7 @@ export class DesktopCanvasRuntime {
       }
       entry.session.dispose();
       this.sessions.delete(key);
+      this.releasePreviewLeases((lease) => lease.sessionKey === key);
       this.options.media?.detachView(windowId, entry.identity.viewId);
     }
   }
@@ -279,10 +316,21 @@ export class DesktopCanvasRuntime {
     this.disposed = true;
     for (const entry of this.sessions.values()) entry.session.dispose();
     this.sessions.clear();
+    this.releasePreviewLeases(() => true);
     this.presentationSnapshots.clear();
     this.materialAuthoring.dispose();
     await this.options.media?.dispose();
     await this.options.generation?.dispose();
+  }
+
+  private releasePreviewLeases(
+    predicate: (entry: DesktopCanvasPreviewLeaseEntry) => boolean,
+  ): void {
+    for (const [key, entry] of this.previewLeases) {
+      if (!predicate(entry)) continue;
+      entry.lease.release();
+      this.previewLeases.delete(key);
+    }
   }
 
   private async requireSession(
@@ -723,6 +771,10 @@ function sessionKey(identity: CanvasHostRuntimeIdentity): string {
     identity.sessionId,
     identity.rendererSessionId,
   ].join(':');
+}
+
+function previewLeaseKey(request: DesktopCanvasPreviewVariantRequest): string {
+  return [sessionKey(request.identity), request.sourceId, request.role].join(':');
 }
 
 function isFileNotFound(error: unknown): boolean {

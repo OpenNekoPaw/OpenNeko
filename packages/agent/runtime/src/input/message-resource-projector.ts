@@ -1,4 +1,10 @@
-import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
+import {
+  contentLocatorKey,
+  isContentLocator,
+  isContentRepresentationLocator,
+  type ContentLocator,
+  type ContentRepresentationLocator,
+} from '@neko/content';
 import type {
   AgentTurnTimelineItem,
   AgentTurnTimelineOperation,
@@ -48,8 +54,8 @@ export interface MessageResourceProjectionContext {
 }
 
 export interface MessageResourceProjectionOptions {
-  resolveContentLocator?: (
-    locator: ContentLocator,
+  resolveDisplayLocator?: (
+    locator: ContentLocator | ContentRepresentationLocator,
     context: MessageResourceProjectionContext,
   ) => Promise<string | undefined>;
 }
@@ -226,7 +232,7 @@ async function projectResourceValueInternal(
   visited: WeakSet<object>,
 ): Promise<unknown> {
   if (value === null || value === undefined || typeof value !== 'object') return value;
-  if (isContentLocator(value)) return value;
+  if (isContentLocator(value) || isContentRepresentationLocator(value)) return value;
   if (visited.has(value)) return value;
   visited.add(value);
 
@@ -236,17 +242,25 @@ async function projectResourceValueInternal(
 
   if (!isRecord(value)) return value;
   const owner = value;
-  const locator = isContentLocator(owner['contentLocator']) ? owner['contentLocator'] : undefined;
+  const contentLocator = isContentLocator(owner['contentLocator'])
+    ? owner['contentLocator']
+    : undefined;
+  const representationLocator = isContentRepresentationLocator(owner['representationLocator'])
+    ? owner['representationLocator']
+    : undefined;
+  const displayLocator = representationLocator ?? contentLocator;
   const mediaType = typeof owner['mimeType'] === 'string' ? owner['mimeType'] : undefined;
   const projected: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(owner)) {
     if (key === 'renderUri' || key === 'previewUri') {
-      if (!locator) appendProjectionDiagnostic(projected, key, 'missing-content-locator');
+      if (!displayLocator) appendProjectionDiagnostic(projected, key, 'missing-content-locator');
       continue;
     }
     if (typeof item === 'string' && isUnsafeMediaDisplayField(key, item)) {
-      if (locator) {
-        projected[key] = portableContentPath(locator);
+      if (displayLocator) {
+        projected[key] = portableContentPath(
+          displayLocator.kind === 'content-representation' ? displayLocator.source : displayLocator,
+        );
       } else {
         appendProjectionDiagnostic(projected, key, 'missing-content-locator');
       }
@@ -267,12 +281,16 @@ async function projectResourceValueInternal(
     projected[key] = await projectResourceValueInternal(item, options, visited);
   }
 
-  if (locator) {
-    const renderUri = await resolveContentLocator(locator, mediaType, options);
+  if (displayLocator) {
+    const renderUri = await resolveDisplayLocator(displayLocator, mediaType, options);
     if (renderUri) {
       projected['renderUri'] = renderUri;
     } else {
-      appendProjectionDiagnostic(projected, 'contentLocator', 'authorization-denied');
+      appendProjectionDiagnostic(
+        projected,
+        representationLocator ? 'representationLocator' : 'contentLocator',
+        'authorization-denied',
+      );
     }
   }
   return projected;
@@ -288,13 +306,13 @@ function isUnsafeMediaDisplaySource(value: string): boolean {
   return scheme !== undefined && scheme !== 'http' && scheme !== 'https';
 }
 
-async function resolveContentLocator(
-  locator: ContentLocator,
+async function resolveDisplayLocator(
+  locator: ContentLocator | ContentRepresentationLocator,
   mediaType: string | undefined,
   options: MessageResourceProjectionOptions,
 ): Promise<string | undefined> {
   try {
-    return await options.resolveContentLocator?.(locator, {
+    return await options.resolveDisplayLocator?.(locator, {
       ...(mediaType ? { mediaType } : {}),
     });
   } catch {
@@ -344,6 +362,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function messageResourceProjectionKey(locator: ContentLocator): string {
-  return contentLocatorKey(locator);
+export function messageResourceProjectionKey(
+  locator: ContentLocator | ContentRepresentationLocator,
+): string {
+  return locator.kind === 'content-representation'
+    ? JSON.stringify(['content-representation', locator.id, locator.sourceFingerprint])
+    : contentLocatorKey(locator);
 }

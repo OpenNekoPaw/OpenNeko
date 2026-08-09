@@ -322,6 +322,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const resourceDisplay = createAgentResourceDisplayProjector({
       identity: input.identity,
       workspace: input.workspace.workspace,
+      contentAssets: input.workspace,
       resources: this.options.resources,
       recordProjection: (fact) => facts.recordResourceDisplayProjection(fact),
     });

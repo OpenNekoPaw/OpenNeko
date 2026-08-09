@@ -120,6 +120,9 @@ import {
   createNodeWorkspaceGenerationJobOwner,
 } from '@neko/generation/media';
 import { createNodeHostContentReadService } from '@neko/content/node';
+import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
+import type { ContentLocator } from '@neko/content';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
 import {
@@ -660,6 +663,7 @@ async function startDesktop(): Promise<void> {
     },
   });
   const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
+  const canvasDocumentEntryAccess = createNodeDocumentLowLevelAccess();
   const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
     generation: {
       getWorkspaceJobs: (input) => generationRuntime.getWorkspaceJobs(input),
@@ -871,8 +875,46 @@ async function startDesktop(): Promise<void> {
         target: parseDesktopCutCanvasHandoffPayload(executionPayload),
       });
     },
-    createPreviewVariant: ({ absolutePath }) =>
-      createDesktopThumbnailDataUrl(absolutePath, { width: 640, height: 400 }),
+    registerPreviewResource: async ({ identity, workspace, locator, mediaType }) => {
+      const owner = {
+        windowId: identity.windowId,
+        viewId: identity.viewId,
+        sessionId: `canvas-preview:${identity.sessionId}:${identity.viewInstanceId}`,
+        rendererSessionId: identity.rendererSessionId,
+      };
+      const contentType = requireCanvasPreviewContentType(locator, mediaType);
+      if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
+        const absolutePath = await resolveWorkspaceContentLocator(workspace, locator);
+        if (contentType.startsWith('image/')) {
+          return resourceRegistry.registerFile(owner, {
+            absolutePath,
+            mediaType: contentType,
+          });
+        }
+        const thumbnail = await createDesktopThumbnailPng(absolutePath, {
+          width: 640,
+          height: 400,
+        });
+        return registerCanvasPreviewBytes(resourceRegistry, owner, thumbnail, 'image/png');
+      }
+      const contentRead = createNodeHostContentReadService({
+        workspaceRoot: workspace.workspacePath,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+        },
+      });
+      const loaded = await contentRead.read(locator, { maxBytes: 64 * 1024 * 1024 });
+      if (loaded.status !== 'ready') {
+        throw new Error(`Canvas preview content is unavailable: ${loaded.diagnostic.code}.`);
+      }
+      return registerCanvasPreviewBytes(
+        resourceRegistry,
+        owner,
+        loaded.bytes,
+        loaded.mimeType ?? contentType,
+      );
+    },
   });
   const resourceBrowser = new ResourceBrowserNodeRuntime({
     globalAssetRoot: globalStorage.assets,
@@ -1097,6 +1139,34 @@ async function startDesktop(): Promise<void> {
             mediaType: source.mediaType,
           },
         ),
+      registerBytes: async (owner, source) => {
+        const lease = resourceRegistry.registerResourceTree(
+          {
+            windowId: owner.windowId,
+            viewId: owner.viewId,
+            sessionId: owner.sessionId,
+            rendererSessionId: owner.connectionId,
+          },
+          {
+            entries: [
+              {
+                virtualPath: 'content',
+                byteLength: source.bytes.byteLength,
+                contentType: source.mediaType,
+                read: async (signal) => {
+                  if (signal.aborted) throw signal.reason;
+                  return source.bytes;
+                },
+              },
+            ],
+            release: () => undefined,
+          },
+        );
+        return {
+          url: new URL('content', lease.url).toString(),
+          release: () => lease.release(),
+        };
+      },
     },
     contentInteraction: {
       openContent: async ({ identity, absolutePath }) => {
@@ -2067,13 +2137,96 @@ async function createDesktopThumbnailDataUrl(
   targetPath: string,
   size: { readonly width: number; readonly height: number },
 ): Promise<string> {
+  const thumbnail = await createDesktopThumbnailPng(targetPath, size);
+  return `data:image/png;base64,${Buffer.from(thumbnail).toString('base64')}`;
+}
+
+async function createDesktopThumbnailPng(
+  targetPath: string,
+  size: { readonly width: number; readonly height: number },
+): Promise<Uint8Array> {
   try {
     const thumbnail = await nativeImage.createThumbnailFromPath(targetPath, size);
-    if (!thumbnail.isEmpty()) return thumbnail.toDataURL();
+    if (!thumbnail.isEmpty()) return thumbnail.toPNG();
   } catch {
     // Native thumbnail errors may contain the private absolute source path.
   }
   throw new Error('Desktop could not project a thumbnail for this resource.');
+}
+
+function registerCanvasPreviewBytes(
+  resourceRegistry: DesktopResourceRegistry,
+  owner: {
+    readonly windowId: string;
+    readonly viewId: string;
+    readonly sessionId: string;
+    readonly rendererSessionId: string;
+  },
+  bytes: Uint8Array,
+  contentType: string,
+) {
+  const lease = resourceRegistry.registerResourceTree(owner, {
+    entries: [
+      {
+        virtualPath: 'preview',
+        byteLength: bytes.byteLength,
+        contentType,
+        read: async (signal) => {
+          if (signal.aborted) throw signal.reason;
+          return bytes;
+        },
+      },
+    ],
+    release: () => undefined,
+  });
+  return {
+    url: new URL('preview', lease.url).toString(),
+    release: () => lease.release(),
+  };
+}
+
+function requireCanvasPreviewContentType(
+  locator: ContentLocator,
+  declared: string | undefined,
+): string {
+  if (declared?.includes('/')) return declared;
+  const sourcePath =
+    locator.kind === 'document-entry'
+      ? locator.entryPath
+      : locator.kind === 'package-resource'
+        ? locator.resourcePath
+        : locator.path;
+  switch (path.posix.extname(sourcePath).toLocaleLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.bmp':
+      return 'image/bmp';
+    case '.avif':
+      return 'image/avif';
+    case '.mp4':
+      return 'video/mp4';
+    case '.webm':
+      return 'video/webm';
+    case '.mov':
+      return 'video/quicktime';
+    case '.mp3':
+      return 'audio/mpeg';
+    case '.wav':
+      return 'audio/wav';
+    case '.pdf':
+      return 'application/pdf';
+    default:
+      throw new Error('Canvas preview content type is unavailable.');
+  }
 }
 
 function createDesktopGlobalLibraryThumbnailFactory(): ResourceBrowserNodeRuntimeOptions['createGlobalLibraryThumbnail'] {

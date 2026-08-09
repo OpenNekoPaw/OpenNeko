@@ -6,7 +6,7 @@ interface PreviewMessagePort {
 }
 import type { PreviewResolveRequest, PreviewResolver, RuntimePreviewVariant } from './types';
 
-const SAFE_URL_RE = /^(data:|blob:|https?:)/;
+const SAFE_URL_RE = /^(data:|blob:|https?:|openneko:\/\/resource\/)/;
 const IMAGE_PREVIEW_SOURCE_RE = /\.(?:png|jpe?g|webp|gif|avif|bmp|svg)(?:[?#]|$)/i;
 const NON_IMAGE_MEDIA_URL_RE =
   /\.(?:mp4|m4v|mov|webm|mkv|avi|wmv|mp3|m4a|wav|flac|aac|ogg|opus)(?:[?#]|$)/i;
@@ -100,7 +100,8 @@ function selectStableVariant(request: PreviewResolveRequest): RuntimePreviewVari
   if (
     !variant.sourcePath ||
     !isSafeWebviewUrl(variant.sourcePath) ||
-    /^https?:/iu.test(variant.sourcePath)
+    /^https?:/iu.test(variant.sourcePath) ||
+    variant.sourcePath.startsWith('openneko://resource/')
   ) {
     return undefined;
   }

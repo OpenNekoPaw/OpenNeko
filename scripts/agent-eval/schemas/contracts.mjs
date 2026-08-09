@@ -585,6 +585,7 @@ const ASSERTION_SCHEMA = s.union([
       'document-entry',
       'generated-output',
       'package-resource',
+      'content-representation',
     ]),
     transport: s.enum(['openneko-resource', 'none']),
     renderTarget: s.literal('agent-webview'),

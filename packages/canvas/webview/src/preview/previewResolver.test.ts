@@ -112,7 +112,7 @@ describe('WebviewPreviewResolver content identity', () => {
           listener?.({
             type: 'preview:variantResolved',
             requestId: request.requestId,
-            url: 'data:image/png;base64,bmV3',
+            url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/preview',
           });
         });
       }),
@@ -140,7 +140,7 @@ describe('WebviewPreviewResolver content identity', () => {
       },
     });
 
-    expect(result.runtimeUrl).toBe('data:image/png;base64,bmV3');
+    expect(result.runtimeUrl).toBe('openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/preview');
     expect(host.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         contentLocator: { kind: 'workspace-file', path: 'media/current.png' },

@@ -9,13 +9,16 @@ authoritative save 与后续 delivery 的竞态。
 - **Responsibility:** Agent finalization owns typed result/provenance; the delivery coordinator owns
   ledger and target selection; Canvas owns document mutation/codec; Desktop Main owns file authority.
 - **Dependency:** Agent depends on a narrow delivery port and never imports Canvas. Renderer consumes
-  projections and sends typed save intents; it never writes workspace files or LocalMetadata.
+  projections and sends typed save intents; it never writes workspace files or LocalMetadata. Stable
+  content locators are read only by the owning content runtime and published through the Desktop exact-resource
+  registry; Webviews never receive raw paths or bytes.
 - **Interface:** every operation carries workspace, target document, delivery, exact writer claim,
   source content fingerprint, request and artifact identity. Missing or stale identity fails visibly.
 - **Extension:** explicit Canvas authoring and default Workspace Board delivery share the coordinator
   but never mirror. New artifact kinds require a stable creator-visible representation and provenance.
 - **Testing:** coordinator tests prove claim fencing, idempotence and authoritative document conflicts; Electron
-  scenarios prove actual Main writer, package-owned Canvas root and renderer diagnostics.
+  scenarios prove actual Main writer, package-owned Canvas root, locator-backed image pixels, lease release and
+  renderer diagnostics.
 
 ## Decisions
 
@@ -55,6 +58,26 @@ Canvas-owned `WorkspaceBoardDeliveryCoordinator` per exact Workspace from the us
 `LocalMetadataStore`, an exact Workspace Board mutation port, and one process holder identity. Both the
 bound Draft/session controller and background Generation terminal owner submit through this composition;
 missing Workspace authority blocks only that delivery and never selects an active or recent Workspace.
+
+### Stable locator display projection
+
+Agent Tool results and Canvas nodes retain `ContentLocator` or `ContentRepresentationLocator` as their stable
+identity. The Agent workspace content runtime is the canonical reader for Agent result projection; Canvas uses the
+same package-owned content read contract for its exact Workspace. Desktop Main only adapts already authorized bytes
+or files into the exact-resource registry and returns a sender-bound `openneko://resource` URL. It does not parse
+EPUB/CBZ/PDF/DOCX or reconstruct document-entry paths.
+
+The display URL is presentation state only. It is never written to transcript, Tool output, delivery ledger or
+`.nkc`. Agent leases are owned by the exact projection attachment and connection. Canvas preview leases are owned by
+the exact Window/View/session/renderer identity plus source and role, and are released when that Surface detaches or
+is replaced. A failed locator is projected as a local diagnostic on its own card or node while valid siblings remain
+available.
+
+`document-entry` reads preserve the archive source fingerprint and entry path. A
+`ContentRepresentationLocator` is read as the represented pixels and is never replaced by its source locator. The
+resource registry remains the single authorization and transport boundary for both direct files and in-memory
+document entries; no data URL, temporary extraction file, raw absolute path or legacy media scheme becomes a second
+successful display path.
 
 ## Acceptance
 

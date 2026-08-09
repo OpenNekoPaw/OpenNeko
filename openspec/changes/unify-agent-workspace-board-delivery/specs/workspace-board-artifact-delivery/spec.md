@@ -259,6 +259,34 @@ Board delivery status SHALL distinguish queued, claimed, projected, no-op, block
 - **WHEN** a blocked or expired-claim delivery remains valid and the owning Host explicitly resumes it
 - **THEN** the retry SHALL reuse the original delivery identity and SHALL either project once or return a current typed diagnostic without creating a parallel identity
 
+### Requirement: Stable content references have one authorized display projection
+
+Agent result cards and Canvas nodes SHALL resolve `ContentLocator` and `ContentRepresentationLocator` through the
+owning content runtime and SHALL expose the resulting bytes to the exact Renderer only through a short-lived
+`openneko://resource` URL. Transcript, Tool result authority, delivery metadata and Canvas documents SHALL retain the
+stable locator and SHALL NOT persist the URL, raw bytes, data URL, temporary extraction path or absolute source path.
+
+#### Scenario: EPUB image is displayed in Agent and Canvas
+
+- **WHEN** `ReadDocument` or `ReadImage` returns an EPUB `document-entry` image and that stable locator is also projected into a Workspace Board image node
+- **THEN** the Agent thumbnail and Canvas node SHALL each display the complete image pixels using contain semantics through an authorized `openneko://resource` URL
+- **AND** neither durable projection SHALL replace the `document-entry` locator with an extracted path or runtime URL
+
+#### Scenario: A derived document page is displayed
+
+- **WHEN** a Tool result contains a valid `ContentRepresentationLocator` for a rasterized document page
+- **THEN** display projection SHALL read that exact representation and SHALL NOT substitute its source `ContentLocator`
+
+#### Scenario: One locator in a batch cannot be projected
+
+- **WHEN** one image locator is missing, unauthorized, changed or unsupported while sibling image locators remain readable
+- **THEN** only the affected card or node SHALL show an explicit projection diagnostic and the valid siblings SHALL remain rendered and interactive
+
+#### Scenario: The owning Surface is detached
+
+- **WHEN** an Agent projection attachment, connection, Canvas View or renderer session is detached or replaced
+- **THEN** all exact-resource leases owned by that Surface SHALL be released without changing durable locator-backed content
+
 ### Requirement: Canvas renderer saves preserve authoritative Board content
 
 Desktop Main SHALL validate Canvas renderer save snapshots against the most recently loaded or Host-authored authoritative document. A candidate snapshot SHALL NOT remove an authoritative node unless the renderer reported explicit removal evidence for that node in the same save request.

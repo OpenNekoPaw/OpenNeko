@@ -158,6 +158,123 @@ describe('Desktop Agent resource display projector', () => {
     await expect(projector.project(snapshotFrame({}))).rejects.toThrow('disposed');
   });
 
+  it('publishes document-entry bytes without replacing their stable locator', async () => {
+    const root = await createTemporaryRoot();
+    const locator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/cover.png',
+    };
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    const release = vi.fn();
+    const registerBytes = vi.fn(async () => ({
+      url: 'openneko://resource/cccccccccccccccccccccccccccccccc/content',
+      release,
+    }));
+    const loadDisplayAsset = vi.fn(async () => ({
+      status: 'ready',
+      diagnostics: [],
+      bytes,
+      mimeType: 'image/png',
+      sizeBytes: bytes.byteLength,
+    }));
+    const recordProjection = vi.fn();
+    const projector = createProjector(root, { registerBytes }, 'connection-1', recordProjection, {
+      loadDisplayAsset,
+    });
+
+    const projected = await projector.project(
+      snapshotFrame({ contentLocator: locator, mimeType: 'image/png' }),
+    );
+
+    if (projected.type !== 'projectionSnapshot') {
+      throw new Error('Expected projected snapshot frame.');
+    }
+    expect(readToolResultData(projected.projection.turns[0]?.items[0])).toEqual({
+      contentLocator: locator,
+      mimeType: 'image/png',
+      renderUri: 'openneko://resource/cccccccccccccccccccccccccccccccc/content',
+    });
+    expect(loadDisplayAsset).toHaveBeenCalledWith({ locator, maxBytes: 64 * 1024 * 1024 });
+    expect(registerBytes).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'connection-1' }),
+      expect.objectContaining({ bytes, mediaType: 'image/png' }),
+    );
+    expect(recordProjection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locatorKind: 'document-entry',
+        status: 'authorized',
+        transport: 'openneko-resource',
+      }),
+    );
+    projector.dispose();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('keeps representation identity and isolates an unreadable sibling', async () => {
+    const root = await createTemporaryRoot();
+    const representationLocator = {
+      kind: 'content-representation' as const,
+      id: 'page-1',
+      representationKind: 'raster-page' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.pdf' },
+      spec: { kind: 'raster-page' as const, page: 1, format: 'png' as const },
+      generatorId: 'document-raster',
+      sourceFingerprint: 'sha256:source',
+      specFingerprint: 'sha256:spec',
+    };
+    const missingLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/missing.png',
+    };
+    const registerBytes = vi.fn(async () => ({
+      url: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
+      release: vi.fn(),
+    }));
+    const loadDisplayAsset = vi.fn(async ({ locator }) =>
+      locator.kind === 'content-representation'
+        ? {
+            status: 'ready',
+            bytes: new Uint8Array([137, 80, 78, 71]),
+            mimeType: 'image/png',
+          }
+        : { status: 'failed' },
+    );
+    const projector = createProjector(root, { registerBytes }, 'connection-1', undefined, {
+      loadDisplayAsset,
+    });
+
+    const projected = await projector.project(
+      snapshotFrame({
+        images: [
+          { representationLocator, mimeType: 'image/png' },
+          { contentLocator: missingLocator, mimeType: 'image/png' },
+        ],
+      }),
+    );
+
+    if (projected.type !== 'projectionSnapshot') {
+      throw new Error('Expected projected snapshot frame.');
+    }
+    const data = readToolResultData(projected.projection.turns[0]?.items[0]);
+    expect(data).toMatchObject({
+      images: [
+        {
+          representationLocator,
+          renderUri: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
+        },
+        {
+          contentLocator: missingLocator,
+          resourceProjectionDiagnostics: [
+            expect.objectContaining({ sourceKind: 'authorization-denied' }),
+          ],
+        },
+      ],
+    });
+    expect(registerBytes).toHaveBeenCalledOnce();
+  });
+
   it('isolates display leases across exact renderer connections', async () => {
     const fixture = await createFixture('media/clip.mp4');
     const releaseOld = vi.fn();
@@ -198,9 +315,12 @@ describe('Desktop Agent resource display projector', () => {
 
 function createProjector(
   workspacePath: string,
-  resources: AgentResourceDisplayRegistrationPort,
+  resources: Partial<AgentResourceDisplayRegistrationPort>,
   connectionId = 'connection-1',
   recordProjection?: Parameters<typeof createAgentResourceDisplayProjector>[0]['recordProjection'],
+  contentAssets: Parameters<typeof createAgentResourceDisplayProjector>[0]['contentAssets'] = {
+    loadDisplayAsset: vi.fn(async () => ({ status: 'failed' })),
+  },
 ) {
   return createAgentResourceDisplayProjector({
     identity: {
@@ -217,7 +337,16 @@ function createProjector(
       displayName: 'Fixture',
       locator: { kind: 'variable', value: '${HOME}/fixture' },
     },
-    resources,
+    contentAssets,
+    resources: {
+      registerFile: vi.fn(async () => {
+        throw new Error('Unexpected file display registration.');
+      }),
+      registerBytes: vi.fn(async () => {
+        throw new Error('Unexpected byte display registration.');
+      }),
+      ...resources,
+    },
     ...(recordProjection === undefined ? {} : { recordProjection }),
   });
 }

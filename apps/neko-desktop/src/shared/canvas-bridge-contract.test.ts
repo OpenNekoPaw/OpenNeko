@@ -23,7 +23,9 @@ const identity = {
 describe('Desktop Canvas bridge contract', () => {
   it('parses every explicit owner identity field', () => {
     expect(parseDesktopCanvasHostIdentity(identity)).toEqual(identity);
-    expect(createCanvasHostSessionId(identity.viewId, identity.viewInstanceId)).toBe(identity.sessionId);
+    expect(createCanvasHostSessionId(identity.viewId, identity.viewInstanceId)).toBe(
+      identity.sessionId,
+    );
     expect(isSameCanvasHostIdentity(identity, { ...identity })).toBe(true);
   });
 
@@ -42,10 +44,11 @@ describe('Desktop Canvas bridge contract', () => {
     ).toBe(false);
   });
 
-  it('accepts only owner-bound portable preview locators and image data results', () => {
+  it('accepts owner-bound portable preview locators and opaque resource results', () => {
     const request = {
       identity,
       requestId: 'preview-1',
+      sourceId: 'image-node-1',
       locator: { kind: 'workspace-file', path: 'media/cat.png' },
       role: 'thumbnail',
       mediaType: 'image',
@@ -53,23 +56,40 @@ describe('Desktop Canvas bridge contract', () => {
     expect(parseDesktopCanvasPreviewVariantRequest(request)).toEqual(request);
     expect(
       parseDesktopCanvasPreviewVariantResult(
-        { requestId: 'preview-1', url: 'data:image/png;base64,Y2F0' },
+        {
+          requestId: 'preview-1',
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
+        },
         'preview-1',
       ),
-    ).toEqual({ requestId: 'preview-1', url: 'data:image/png;base64,Y2F0' });
+    ).toEqual({
+      requestId: 'preview-1',
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
+    });
+
+    expect(
+      parseDesktopCanvasPreviewVariantRequest({
+        ...request,
+        locator: {
+          kind: 'document-entry',
+          source: { kind: 'workspace-file', path: 'books/story.epub' },
+          entryPath: 'OPS/images/cover.jpg',
+        },
+      }).locator.kind,
+    ).toBe('document-entry');
 
     expect(() =>
       parseDesktopCanvasPreviewVariantRequest({
         ...request,
         locator: { kind: 'workspace-file', path: '/private/cat.png' },
       }),
-    ).toThrow('portable workspace-file');
+    ).toThrow('valid ContentLocator');
     expect(() =>
       parseDesktopCanvasPreviewVariantRequest({
         ...request,
         locator: { kind: 'workspace-file', path: '../cat.png' },
       }),
-    ).toThrow('portable workspace-file');
+    ).toThrow('valid ContentLocator');
     expect(() =>
       parseDesktopCanvasPreviewVariantResult(
         { requestId: 'preview-1', url: 'file:///private/cat.png' },

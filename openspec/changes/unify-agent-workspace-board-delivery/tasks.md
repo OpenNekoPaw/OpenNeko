@@ -14,3 +14,16 @@
       and safe conflict diagnostics.
 - [ ] 2.3 Run focused Canvas Domain/renderer tests and typecheck/build, then verify authoritative save
       and subsequent Generation delivery through the same Electron fixture and renderer diagnostics.
+
+## 3. Locator-backed image display
+
+- [x] 3.1 Extend the Agent display projector to resolve `ContentLocator` and
+      `ContentRepresentationLocator` through the workspace-owned content runtime, publish exact Renderer-bound
+      `openneko://resource` leases, preserve stable identity and isolate per-resource diagnostics.
+- [x] 3.2 Extend the Canvas preview bridge and Main composition to accept canonical ContentLocators including
+      `document-entry`, publish opaque image resources, release View/session leases and render complete images.
+- [x] 3.3 Add focused Agent projector, Webview presenter, Canvas bridge/runtime and preview resolver tests covering
+      EPUB document-entry pixels, representation identity, sibling failure isolation, opaque URL acceptance and
+      lease release.
+- [x] 3.4 Update the existing Agent Evaluation cases with locator-backed display authorization evidence, run
+      key-free validation and record any real Desktop/provider execution blocker.
