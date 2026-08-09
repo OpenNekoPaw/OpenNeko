@@ -6,8 +6,8 @@
 
 ## 2. Text Editor Reference Catalog
 
-- [ ] 2.1 Define package-owned, Workspace/document/request-qualified reference search contracts and stable candidate identities in `@neko/text-editor-domain` without importing Agent or Electron contracts.
-- [ ] 2.2 Implement the owning Workspace file/entity/asset catalog composition with bounded results, exact diagnostics and per-contributor failure isolation.
+- [x] 2.1 Define package-owned, Workspace/document/request-qualified reference search contracts and stable candidate identities in `@neko/text-editor-domain` without importing Agent or Electron contracts.
+- [x] 2.2 Implement the owning Workspace file/entity/asset catalog composition with bounded results, exact diagnostics and per-contributor failure isolation.
 - [ ] 2.3 Add producer, consumer/delegation, stale-request and poison tests proving there is one catalog path and no active/recent Workspace, Agent catalog or raw-path fallback.
 
 ## 3. Markdown Source Assistance
