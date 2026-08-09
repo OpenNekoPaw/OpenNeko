@@ -643,37 +643,87 @@ async function exerciseCanvasGenerationAuthoring({
     const nodeSelector = `${viewSelector} [data-node-presentation]:has([data-canvas-generation-node=${JSON.stringify(action.kind)}])`;
     await waitForInteractiveSelector(evaluate, nodeSelector);
     await click(nodeSelector);
-    await waitForSelector(`${nodeSelector} textarea`);
+    const inputSelector = `${viewSelector} [data-canvas-generation-input="true"]`;
+    await waitForSelector(inputSelector);
     const state = await evaluate(`(() => {
       const node = document.querySelector(${JSON.stringify(nodeSelector)});
       if (!(node instanceof HTMLElement)) throw new Error('Generation Node is unavailable.');
-      const bounds = node.getBoundingClientRect();
-      const controls = [...node.querySelectorAll('textarea, input, select, button')];
+      const input = document.querySelector(${JSON.stringify(inputSelector)});
+      if (!(input instanceof HTMLElement)) throw new Error('Generation input is unavailable.');
+      const toolbar = document.querySelector(
+        ${JSON.stringify(`${viewSelector} [data-selection-context-toolbar="true"]`)},
+      );
+      if (!(toolbar instanceof HTMLElement)) throw new Error('Selection toolbar is unavailable.');
+      const nodeBounds = node.getBoundingClientRect();
+      const inputBounds = input.getBoundingClientRect();
+      const toolbarBounds = toolbar.getBoundingClientRect();
+      const controls = [...input.querySelectorAll('textarea, input, select, button')];
+      const overlaps = (left, right) => !(
+        left.right <= right.left ||
+        right.right <= left.left ||
+        left.bottom <= right.top ||
+        right.bottom <= left.top
+      );
       return {
         kind: node.querySelector('[data-canvas-generation-node]')?.getAttribute(
           'data-canvas-generation-node',
         ),
         title: node.querySelector('strong')?.textContent?.trim() ?? '',
         phase: node.querySelector('strong')?.nextElementSibling?.textContent?.trim() ?? '',
+        inputKind: input.getAttribute('data-canvas-generation-input-kind'),
+        inputInsideNode: node.contains(input),
+        nodeControlCount: node.querySelectorAll('textarea, input, select, button').length,
         labels: controls.map((control) =>
           control.getAttribute('aria-label') ?? control.getAttribute('title') ?? '',
         ),
-        runButtonCount: [...node.querySelectorAll('button')].filter((button) =>
+        runButtonCount: [...input.querySelectorAll('button')].filter((button) =>
           ['Run', '生成'].includes(button.getAttribute('title') ?? ''),
         ).length,
-        alertCount: node.querySelectorAll('[role="alert"]').length,
-        bounds: { width: bounds.width, height: bounds.height },
-        clipped: node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight,
+        alertCount: input.querySelectorAll('[role="alert"]').length,
+        referenceSummaryCount: input.querySelectorAll(
+          '.selection-generation-input-panel__references',
+        ).length,
+        bounds: {
+          node: { width: nodeBounds.width, height: nodeBounds.height },
+          input: { width: inputBounds.width, height: inputBounds.height },
+          toolbar: { width: toolbarBounds.width, height: toolbarBounds.height },
+        },
+        overlap: {
+          nodeInput: overlaps(nodeBounds, inputBounds),
+          nodeToolbar: overlaps(nodeBounds, toolbarBounds),
+          inputToolbar: overlaps(inputBounds, toolbarBounds),
+        },
+        overflow: {
+          nodeHorizontal: node.scrollWidth > node.clientWidth,
+          inputHorizontal: input.scrollWidth > input.clientWidth,
+          inputVertical: input.scrollHeight > input.clientHeight,
+          toolbarHorizontal: toolbar.scrollWidth > toolbar.clientWidth,
+        },
       };
     })()`);
     if (
       state.kind !== action.kind ||
+      state.inputKind !== action.kind ||
+      state.inputInsideNode ||
+      state.nodeControlCount !== 0 ||
       state.runButtonCount !== 1 ||
       state.alertCount !== 0 ||
-      state.bounds.width <= 0 ||
-      state.bounds.height <= 0
+      state.referenceSummaryCount !== 1 ||
+      state.bounds.node.width <= 0 ||
+      state.bounds.node.height <= 0 ||
+      state.bounds.input.width <= 0 ||
+      state.bounds.input.height <= 0 ||
+      state.bounds.toolbar.width <= 0 ||
+      state.bounds.toolbar.height <= 0 ||
+      state.overlap.nodeInput ||
+      state.overlap.nodeToolbar ||
+      state.overlap.inputToolbar ||
+      state.overflow.nodeHorizontal ||
+      state.overflow.inputHorizontal ||
+      state.overflow.inputVertical ||
+      state.overflow.toolbarHorizontal
     ) {
-      throw new Error(`Canvas Generation Node state is invalid: ${JSON.stringify(state)}`);
+      throw new Error(`Canvas Generation presentation is invalid: ${JSON.stringify(state)}`);
     }
     kinds.push(state);
     screenshots.push(await screenshot(`canvas-generation-${action.kind}-selected-large`));
@@ -683,16 +733,32 @@ async function exerciseCanvasGenerationAuthoring({
       const compact = await evaluate(`(() => {
         const node = document.querySelector(${JSON.stringify(nodeSelector)});
         if (!(node instanceof HTMLElement)) throw new Error('Compact Generation Node is unavailable.');
-        const bounds = node.getBoundingClientRect();
+        const input = document.querySelector(${JSON.stringify(inputSelector)});
+        if (!(input instanceof HTMLElement)) throw new Error('Compact Generation input is unavailable.');
+        const nodeBounds = node.getBoundingClientRect();
+        const inputBounds = input.getBoundingClientRect();
         return {
           width: window.innerWidth,
           height: window.innerHeight,
-          nodeWidth: bounds.width,
-          nodeHeight: bounds.height,
+          nodeWidth: nodeBounds.width,
+          nodeHeight: nodeBounds.height,
+          inputWidth: inputBounds.width,
+          inputHeight: inputBounds.height,
+          inputLeft: inputBounds.left,
+          inputRight: inputBounds.right,
           bodyScrollWidth: document.body.scrollWidth,
           bodyClientWidth: document.body.clientWidth,
         };
       })()`);
+      if (
+        compact.inputWidth <= 0 ||
+        compact.inputHeight <= 0 ||
+        compact.inputLeft < 0 ||
+        compact.inputRight > compact.width ||
+        compact.bodyScrollWidth > compact.bodyClientWidth
+      ) {
+        throw new Error(`Compact Generation presentation is invalid: ${JSON.stringify(compact)}`);
+      }
       kinds[kinds.length - 1] = { ...state, compact };
       screenshots.push(await screenshot('canvas-generation-prompt-selected-compact'));
       await resizeWindow(evaluate, 1200, 800);

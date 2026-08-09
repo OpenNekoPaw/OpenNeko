@@ -29,6 +29,7 @@ import {
   type CanvasInteractionPhase,
 } from '../utils/renderRefreshTiering';
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
+import { SelectionGenerationInputPanel } from './selection/SelectionGenerationInputPanel';
 import { SelectionMaterialGenerationBar } from './selection/SelectionMaterialGenerationBar';
 import { resolveCanvasDropContainer } from '../utils/containerMembership';
 import {
@@ -438,6 +439,14 @@ export function InfiniteCanvas({
 
       <SelectionContextToolbar
         nodes={nodes}
+        selectedNodeIds={selectedNodeIds}
+        viewport={viewport}
+        viewportSize={containerSize}
+        hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
+      />
+      <SelectionGenerationInputPanel
+        nodes={nodes}
+        connections={connections}
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}

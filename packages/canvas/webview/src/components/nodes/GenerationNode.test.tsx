@@ -8,7 +8,7 @@ import type {
 import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 import { setLocale } from '../../i18n';
 import { GenerationNode } from './GenerationNode';
@@ -31,7 +31,7 @@ describe('GenerationNode', () => {
     document.body.replaceChildren();
   });
 
-  it('renders selected text, history, diagnostic and stale Recipe state on one node', () => {
+  it('renders only type, phase and generated content inside the durable node', () => {
     render(
       nodeWithHistory(),
       createHost({
@@ -47,53 +47,11 @@ describe('GenerationNode', () => {
     );
 
     expect(container.textContent).toContain('Previously generated scene');
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'Provider rejected this run.',
-    );
-    expect(container.querySelector('[data-canvas-generation-recipe-stale="true"]')).not.toBeNull();
-    expect(container.querySelectorAll('select option')).toHaveLength(2);
-  });
-
-  it('persists the current Recipe before an explicit run', async () => {
-    const updateGenerationRecipe = vi.fn(async () => snapshot());
-    const runGenerationNode = vi.fn(async () => snapshot());
-    render(nodeWithHistory(), createHost(undefined, { updateGenerationRecipe, runGenerationNode }));
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[title="Run"]')?.click();
-    });
-
-    expect(updateGenerationRecipe).toHaveBeenCalledWith(
-      'generation-1',
-      expect.objectContaining({ kind: 'prompt', prompt: 'Write a quiet scene' }),
-    );
-    expect(runGenerationNode).toHaveBeenCalledWith('generation-1');
-    expect(updateGenerationRecipe.mock.invocationCallOrder[0]).toBeLessThan(
-      runGenerationNode.mock.invocationCallOrder[0]!,
-    );
-  });
-
-  it('cancels the exact node while a run is active', async () => {
-    const cancelGenerationNode = vi.fn(async () => snapshot());
-    render(
-      nodeWithHistory(),
-      createHost(
-        {
-          nodeId: 'generation-1',
-          submissionId: 'submission-2',
-          recipeInputFingerprint: 'sha256:recipe-2',
-          jobRef: { kind: 'generation', jobId: 'job-2' },
-          phase: 'running',
-        },
-        { cancelGenerationNode },
-      ),
-    );
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[title="Cancel"]')?.click();
-    });
-
-    expect(cancelGenerationNode).toHaveBeenCalledWith('generation-1');
+    expect(container.textContent).toContain('Failed');
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(container.querySelector('select')).toBeNull();
+    expect(container.querySelector('button[title="Run"]')).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   function render(node: GenerationCanvasNode, host: CanvasWebviewHostPort): void {

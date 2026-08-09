@@ -68,6 +68,26 @@ There is no second Canvas quick-generate dialog, transient direct form or “sav
 
 The renderer sends typed authoring intents through the existing browser-safe Canvas host runtime. It never reads credentials, configuration files, local paths, Job stores or provider APIs.
 
+### Selection presentation separates actions, content and generation input
+
+Canvas selection uses three presentation layers with one durable node identity:
+
+1. the existing selection context toolbar owns node actions and remains visually detached above the selected content;
+2. the Canvas node owns only type/status and current content or generated output;
+3. a package-owned Generation input panel appears only for one selected Generation Node and edits that node's Recipe, connected-reference summary, exact model, legal parameters, output selection and run/cancel state.
+
+The input panel is derived from the exact selected Generation Node, current connections and Host runtime projection. It is not stored as a Canvas node, does not duplicate Recipe or Job facts in a presentation store, and unmounts when selection changes. Ordinary imported/referenced Media, Markdown and File nodes therefore render only the action toolbar and content node. A successful result changes the content rendered inside the same Generation Node while the input panel remains the editor for later explicit reruns.
+
+Alternatives considered: keeping the form inside the node couples node dimensions to editor state and obscures the generated result; creating a second "prompt node" duplicates Recipe authority; a global inspector would weaken the direct spatial relationship required for the current Canvas workflow.
+
+### Webview and Host mutations share one ordered command stream
+
+The Webview currently projects ordinary edits as a whole-document `replace-document` intent while Host-owned Generation/source actions use narrow typed intents. These are different intent shapes but they mutate the same authoritative Canvas and therefore must enter one per-session serial queue in user-observed order.
+
+The Canvas Webview Host queues document status replacement, Generation creation/edit/run actions, material authoring and other Host effects behind the same operation tail. A narrow action never reads the Host snapshot until all earlier Webview document mutations have committed. Runtime projection events originating from the local command remain acknowledgement snapshots rather than an independent write path.
+
+This ordering ensures that deleting a node and then adding a Generation Node produces `deleted document -> document plus new node`; the add action cannot execute against the pre-delete snapshot and restore removed nodes or connections. The fix does not add revision fallback, merge heuristics, dual authority or automatic repair. External commands remain authoritative projection events and are applied only through the existing exact session identity and monotonic event sequence.
+
 ### Run submission is durable and idempotent across the Canvas/Generation boundary
 
 Running a node is a two-owner operation and cannot rely on an in-memory callback:
@@ -166,6 +186,8 @@ Because Generation persistence/projection changes, implementation acceptance aud
 - [Removing Agent direct modes increases steps for exact parameter control] -> Keep precise controls in the visible Canvas node editor while Agent remains optimized for natural-language collaboration.
 - [Adding Prompt/Text broadens Generation] -> Use one explicit union branch and narrow execution adapter; do not generalize into arbitrary workflows or a generic AI task system.
 - [Historical generated Media nodes lose regenerate action] -> Preserve their content and provenance, remove only the parallel regenerate success path, and let users explicitly use the material as input to a new Generation Node.
+- [A narrow Host action races a pending whole-document edit] -> Serialize both through one per-session Webview Host command queue and test delete-then-add ordering without snapshot merge or stale-content recovery.
+- [A detached Generation editor becomes a second node or authority] -> Derive it only from the selected durable node, connections and runtime projection; unmount it with selection and persist edits solely through the canonical Generation Recipe intent.
 
 ## Migration Plan
 

@@ -248,10 +248,11 @@ export function createCanvasWebviewHost(
         return;
       case 'canvasAction':
         if (
+          delegate &&
           (value['action'] === 'openExport' || value['action'] === 'openPackage') &&
           supportsMessage('canvasAction')
         ) {
-          delegate!.postMessage(value);
+          delegate.postMessage(value);
         }
         return;
       default:
@@ -273,10 +274,17 @@ export function createCanvasWebviewHost(
     });
   };
 
+  const queueOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = operationTail.then(operation);
+    operationTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  };
+
   const enqueue = (operation: () => Promise<void>): void => {
-    operationTail = operationTail.then(operation).catch((error: unknown) => {
-      emitLoadFailure(error);
-    });
+    void queueOperation(operation).catch(emitLoadFailure);
   };
 
   const waitForOperationQueueToSettle = async (): Promise<void> => {
@@ -321,14 +329,16 @@ export function createCanvasWebviewHost(
       return () => listeners.delete(listener);
     },
     async requestSource(sourceKind, sourceMode, position) {
-      const next = await executeIntent({
-        type: 'request-source',
-        sourceKind,
-        sourceMode,
-        ...(position ? { position } : {}),
+      return queueOperation(async () => {
+        const next = await executeIntent({
+          type: 'request-source',
+          sourceKind,
+          sourceMode,
+          ...(position ? { position } : {}),
+        });
+        publishSnapshot(next);
+        return next;
       });
-      publishSnapshot(next);
-      return next;
     },
     async resolveMaterialActions(selectedNodeIds) {
       await waitForOperationQueueToSettle();
@@ -368,64 +378,78 @@ export function createCanvasWebviewHost(
         selectedNodeIds: [...selectedNodeIds],
         payload,
       };
-      return executeIntent({ type: 'execute-material-action', action });
+      return queueOperation(() => executeIntent({ type: 'execute-material-action', action }));
     },
     async createGenerationNode(kind, position) {
-      const next = await executeIntent({
-        type: 'create-generation-node',
-        kind,
-        ...(position ? { position } : {}),
+      return queueOperation(async () => {
+        const next = await executeIntent({
+          type: 'create-generation-node',
+          kind,
+          ...(position ? { position } : {}),
+        });
+        publishSnapshot(next);
+        return next;
       });
-      publishSnapshot(next);
-      return next;
     },
     async updateGenerationRecipe(nodeId, recipe) {
-      const next = await executeIntent({ type: 'update-generation-recipe', nodeId, recipe });
-      publishSnapshot(next);
-      return next;
+      return queueOperation(async () => {
+        const next = await executeIntent({ type: 'update-generation-recipe', nodeId, recipe });
+        publishSnapshot(next);
+        return next;
+      });
     },
     async runGenerationNode(nodeId) {
-      const next = await executeIntent({ type: 'run-generation-node', nodeId });
-      publishSnapshot(next);
-      return next;
+      return queueOperation(async () => {
+        const next = await executeIntent({ type: 'run-generation-node', nodeId });
+        publishSnapshot(next);
+        return next;
+      });
     },
     async cancelGenerationNode(nodeId) {
-      const next = await executeIntent({ type: 'cancel-generation-node', nodeId });
-      publishSnapshot(next);
-      return next;
+      return queueOperation(async () => {
+        const next = await executeIntent({ type: 'cancel-generation-node', nodeId });
+        publishSnapshot(next);
+        return next;
+      });
     },
     async selectGenerationOutput(nodeId, outputId) {
-      const next = await executeIntent({ type: 'select-generation-output', nodeId, outputId });
-      publishSnapshot(next);
-      return next;
+      return queueOperation(async () => {
+        const next = await executeIntent({ type: 'select-generation-output', nodeId, outputId });
+        publishSnapshot(next);
+        return next;
+      });
     },
     async authorGenerationText(nodeId, text) {
-      const next = await executeIntent({ type: 'author-generation-text', nodeId, text });
-      publishSnapshot(next);
-      return next;
+      return queueOperation(async () => {
+        const next = await executeIntent({ type: 'author-generation-text', nodeId, text });
+        publishSnapshot(next);
+        return next;
+      });
     },
     getGenerationProjection(nodeId) {
       return snapshot?.generationNodes.find((projection) => projection.nodeId === nodeId);
     },
     async projectContent(locator, mediaKind, position, title) {
-      const current = snapshot ?? (await runtime.getSnapshot());
-      const next = await executeIntent({
-        type: 'author-material',
-        request: {
-          kind: 'direct-reference',
-          identity: {
-            projectId: current.identity.projectId,
-            canvasId: current.identity.documentId,
-            canvasSessionId: current.identity.sessionId,
+      return queueOperation(async () => {
+        const current = snapshot ?? (await runtime.getSnapshot());
+        const next = await executeIntent({
+          type: 'author-material',
+          request: {
+            kind: 'direct-reference',
+            identity: {
+              projectId: current.identity.projectId,
+              canvasId: current.identity.documentId,
+              canvasSessionId: current.identity.sessionId,
+            },
+            locator,
+            mediaKind,
+            position,
+            ...(title ? { title } : {}),
           },
-          locator,
-          mediaKind,
-          position,
-          ...(title ? { title } : {}),
-        },
+        });
+        publishSnapshot(next);
+        return next;
       });
-      publishSnapshot(next);
-      return next;
     },
     async previewResource(locator) {
       await executeIntent({ type: 'preview-resource', locator });
