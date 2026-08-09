@@ -20,7 +20,10 @@ import {
 } from '@neko/agent-runtime/pi';
 import {
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  TOOL_NAMES_CANVAS,
+  TOOL_NAMES_CUT,
   type Tool,
+  type ToolResult,
   type EffectiveAgentConfigurationProjection,
 } from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +37,9 @@ import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { GenerationJobPort } from '@neko/generation';
 import type { AgentExtensionCatalogSnapshot } from '@neko/agent-contracts';
+import { isContentFingerprint, type ContentFingerprint } from '@neko/content';
+import { createEmptyCanvasData, saveNkc } from '@neko/canvas-domain';
+import { createOtioTimeline, serializeOtio } from '@neko/cut-domain';
 import { CapturedLogTransport, ConsoleLogger, LogLevel, type ILogger } from '@neko/shared/logger';
 
 const MODEL: Model<'openai-completions'> = {
@@ -78,10 +84,14 @@ describe('AgentAppHost', () => {
 
     expect(transport.list().map((entry) => entry.message)).toEqual([
       'Provider "neko-content-read" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
+      'Provider "neko-canvas-project-authoring" registered: 7 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
+      'Provider "neko-cut-project-authoring" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
       'Workspace runtime attached.',
       'Conversation created.',
       'Conversation deleted.',
       'Provider "neko-content-read" unregistered',
+      'Provider "neko-canvas-project-authoring" unregistered',
+      'Provider "neko-cut-project-authoring" unregistered',
       'Workspace runtime disposed.',
     ]);
     expect(transport.list().every((entry) => entry.source === 'Workspace')).toBe(true);
@@ -105,6 +115,171 @@ describe('AgentAppHost', () => {
         'CancelGenerationJob',
         'RetryGenerationJob',
         'ReconcileGenerationJob',
+      ]),
+    );
+  });
+
+  it('registers one no-Renderer Canvas/Cut authoring path beside protected core file tools', async () => {
+    const fixture = await createFixture();
+    await mkdir(join(fixture.workspace.workspacePath, 'boards'), { recursive: true });
+    await mkdir(join(fixture.workspace.workspacePath, 'cuts'), { recursive: true });
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'boards', 'story.nkc'),
+      saveNkc(createEmptyCanvasData('Fixture Board')),
+      'utf8',
+    );
+    await writeFile(join(fixture.workspace.workspacePath, 'boards', 'invalid.nkc'), '{}\n', 'utf8');
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'cuts', 'story.otio'),
+      serializeOtio(
+        createOtioTimeline('Fixture Cut', {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        }),
+      ),
+      'utf8',
+    );
+    await writeFile(join(fixture.workspace.workspacePath, 'cuts', 'invalid.otio'), '{}\n', 'utf8');
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    const toolNames = workspace.tools.list().map((tool) => tool.name);
+
+    expect(toolNames).toEqual(
+      expect.arrayContaining([
+        'Read',
+        'Write',
+        'ListDirectory',
+        'Grep',
+        TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+        TOOL_NAMES_CANVAS.CANVAS_CREATE_NODE,
+        TOOL_NAMES_CUT.CUT_QUERY_TIMELINE,
+        TOOL_NAMES_CUT.CUT_APPLY_COMMANDS,
+      ]),
+    );
+    expect(toolNames).not.toContain('Bash');
+    await expect(
+      workspace.tools.execute('Read', { file_path: 'boards/story.nkc' }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.any(String),
+    });
+    await expect(
+      workspace.tools.execute('Write', {
+        file_path: 'cuts/story.otio',
+        content: 'raw overwrite',
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.any(String),
+    });
+
+    const canvasQuery = await workspace.tools.execute(TOOL_NAMES_CANVAS.CANVAS_LIST_NODES, {
+      document_path: 'boards/story.nkc',
+    });
+    const canvasFingerprint = requireToolFingerprint(canvasQuery);
+    await expect(
+      workspace.tools.execute(TOOL_NAMES_CANVAS.CANVAS_CREATE_NODE, {
+        document_path: 'boards/story.nkc',
+        expected_fingerprint: canvasFingerprint,
+        type: 'markdown',
+        position: { x: 24, y: 48 },
+        data: { title: 'Agent Note', content: 'Created without a Renderer.' },
+      }),
+    ).resolves.toMatchObject({ success: true });
+    await expect(
+      workspace.tools.execute(TOOL_NAMES_CANVAS.CANVAS_CREATE_NODE, {
+        document_path: 'boards/story.nkc',
+        expected_fingerprint: canvasFingerprint,
+        type: 'markdown',
+        data: { content: 'Stale write must fail.' },
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('content-changed'),
+    });
+    expect(
+      await readFile(join(fixture.workspace.workspacePath, 'boards', 'story.nkc'), 'utf8'),
+    ).toContain('Created without a Renderer.');
+
+    const cutQuery = await workspace.tools.execute(TOOL_NAMES_CUT.CUT_QUERY_TIMELINE, {
+      document_path: 'cuts/story.otio',
+    });
+    await expect(
+      workspace.tools.execute(TOOL_NAMES_CUT.CUT_APPLY_COMMANDS, {
+        document_path: 'cuts/story.otio',
+        expected_fingerprint: requireToolFingerprint(cutQuery),
+        commands: [{ type: 'rename-track', trackId: 'video-1', name: 'Agent Video' }],
+      }),
+    ).resolves.toMatchObject({ success: true });
+    expect(
+      JSON.parse(
+        await readFile(join(fixture.workspace.workspacePath, 'cuts', 'story.otio'), 'utf8'),
+      ),
+    ).toMatchObject({ tracks: { children: [{ name: 'Agent Video' }] } });
+    await expect(
+      workspace.tools.execute(TOOL_NAMES_CANVAS.CANVAS_LIST_NODES, {
+        document_path: 'boards/invalid.nkc',
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('validation failed'),
+    });
+    await expect(
+      workspace.tools.execute(TOOL_NAMES_CUT.CUT_QUERY_TIMELINE, {
+        document_path: 'cuts/invalid.otio',
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('validation failed'),
+    });
+
+    await expect(
+      workspace.tools.execute(TOOL_NAMES_CUT.CUT_APPLY_COMMANDS, {
+        document_path: 'cuts/story.otio',
+      }),
+    ).resolves.toMatchObject({ success: false, validationErrors: expect.any(Array) });
+    await expect(
+      workspace.tools.execute('Bash', { command: 'cat cuts/story.otio' }),
+    ).resolves.toMatchObject({ success: false, error: 'Tool not found: Bash' });
+    await expect(workspace.tools.execute('cut_unknown_operation', {})).resolves.toMatchObject({
+      success: false,
+      error: 'Tool not found: cut_unknown_operation',
+    });
+  });
+
+  it('keeps structured project authoring providers out of Assistant Space runtimes', async () => {
+    const fixture = await createFixture();
+    const assistantSpaceId = 'assistant-space:local-user';
+    const assistantSpacePath = join(fixture.root, 'assistant-space');
+    const assistantDataRoot = join(fixture.root, 'assistant-data');
+    await mkdir(assistantSpacePath, { recursive: true });
+    const composition = createAgentAppHost({
+      userDataRoot: assistantDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-assistant-tool-scope',
+      credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      catalogReader: await NodePiConversationCatalogReader.create({
+        userDataRoot: assistantDataRoot,
+      }),
+      assistantSpaceIds: [assistantSpaceId],
+    });
+    compositions.push(composition);
+    const workspace = await composition.attachWorkspace({
+      workspaceId: assistantSpaceId,
+      workspacePath: assistantSpacePath,
+      displayName: 'Assistant',
+      locator: { kind: 'variable', value: '${HOME}/assistant-space' },
+    });
+    const toolNames = workspace.tools.list().map((tool) => tool.name);
+
+    expect(toolNames).toEqual(expect.arrayContaining(['Read', 'Write', 'ListDirectory', 'Grep']));
+    expect(toolNames).not.toEqual(
+      expect.arrayContaining([
+        TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+        TOOL_NAMES_CUT.CUT_QUERY_TIMELINE,
       ]),
     );
   });
@@ -277,8 +452,9 @@ describe('AgentAppHost', () => {
       ),
       expect.stringContaining('Desktop composition Skill body'),
     ]);
-    expect(prompts[1]).toContain('ContentLocator: {"kind":"workspace-file","path":"story.epub"}');
-    expect(prompts[1]).toContain('Use ReadDocument with source=');
+    expect(prompts[1]).toMatch(/input_ref: input_[a-z0-9]+/u);
+    expect(prompts[1]).toContain('Use ReadDocument with input_ref:');
+    expect(prompts[1]).not.toContain('ContentLocator:');
     expect(observedEvents.map((event) => event.type)).toContain('turn.persistence');
     expect(JSON.stringify(first)).not.toContain(fixture.workspace.workspacePath);
     await expect(stat(join(fixture.userDataRoot, 'neko.db'))).resolves.toMatchObject({
@@ -346,6 +522,8 @@ describe('AgentAppHost', () => {
     );
     expect(persisted).toContain('workspace-file');
     expect(persisted).toContain('notes.py');
+    expect(persisted).toContain('openneko.user-message-presentation');
+    expect(persisted).toContain('Read the selected source');
     expect(persisted).not.toContain('locator text');
   });
 
@@ -390,8 +568,9 @@ describe('AgentAppHost', () => {
         locale: 'en',
       });
 
-      expect(prompts[0]).toContain(`source={"kind":"workspace-file","path":"${documentPath}"}`);
+      expect(prompts[0]).toMatch(/input_ref: input_[a-z0-9]+/u);
       expect(prompts[0]).toContain('Use ReadDocument');
+      expect(prompts[0]).not.toContain('ContentLocator:');
       expect(prompts[0]).not.toContain(fixture.workspace.workspacePath);
     },
   );
@@ -433,6 +612,108 @@ describe('AgentAppHost', () => {
         locale: 'en',
       }),
     ).rejects.toThrow('media perception capability that is not registered for this Turn');
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown binary content locally and allows the next Turn to run', async () => {
+    const fixture = await createFixture();
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'opaque.bin'),
+      Buffer.from([0xff, 0xfe, 0xfd]),
+    );
+    const provider = vi.fn(() => completedStream(assistant('recovered')));
+    const models = createFixtureModels(provider);
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-unknown-binary',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-unknown-binary',
+        prompt: 'Analyze the selected file',
+        contextPayloads: [
+          {
+            type: 'file',
+            id: 'file:opaque.bin',
+            label: 'opaque.bin',
+            summary: 'Workspace content: opaque.bin',
+            data: {
+              kind: 'authorized-content-reference',
+              locator: { kind: 'workspace-file', path: 'opaque.bin' },
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).rejects.toThrow(
+      "reference 'opaque.bin' requires an exact isolated executable/native-binary processor that is not registered for this Turn",
+    );
+    expect(provider).not.toHaveBeenCalled();
+    expect(workspace.readActiveTurn('conversation-unknown-binary')).toBeUndefined();
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-unknown-binary',
+        prompt: 'Continue without the unsupported file',
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).resolves.toMatchObject({ durability: 'durable' });
+    expect(provider).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['bundle.zip', 'bounded archive'],
+    ['score.musicxml', 'score-analysis'],
+  ])('rejects %s with an exact unregistered processor diagnostic', async (fileName, processor) => {
+    const fixture = await createFixture();
+    await writeFile(join(fixture.workspace.workspacePath, fileName), 'bounded fixture');
+    const provider = vi.fn(() => completedStream(assistant('must not run')));
+    const models = createFixtureModels(provider);
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: `conversation-${fileName}`,
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: `conversation-${fileName}`,
+        prompt: 'Analyze the selected file',
+        contextPayloads: [
+          {
+            type: 'file',
+            id: `file:${fileName}`,
+            label: fileName,
+            summary: `Workspace content: ${fileName}`,
+            data: {
+              kind: 'authorized-content-reference',
+              locator: { kind: 'workspace-file', path: fileName },
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).rejects.toThrow(`requires an exact ${processor} processor`);
     expect(provider).not.toHaveBeenCalled();
   });
 
@@ -494,9 +775,10 @@ describe('AgentAppHost', () => {
     );
     expect(JSON.stringify(contexts[0])).not.toContain(fixture.workspace.workspacePath);
     const persisted = JSON.stringify(await workspace.readConversationEntries('conversation-image'));
-    expect(persisted).toContain(
-      'ContentLocator: {\\"kind\\":\\"workspace-file\\",\\"path\\":\\"test.png\\"}',
-    );
+    expect(persisted).toContain('"contentLocator":{"kind":"workspace-file","path":"test.png"}');
+    expect(persisted).toContain('input_ref: input_');
+    expect(persisted).toContain('openneko.user-message-presentation');
+    expect(persisted).toContain('Analyze the selected image');
     expect(persisted).not.toContain('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk');
   });
 
@@ -2165,6 +2447,77 @@ describe('AgentAppHost', () => {
     });
   });
 
+  it('projects a ReadImage Tool result through the Workspace content authority into Pi', async () => {
+    const fixture = await createFixture();
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'tool-image.png'),
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const contexts: Context[] = [];
+    const models = createFixtureModels((_model, context) => {
+      contexts.push(context);
+      if (!context.messages.some((message) => message.role === 'toolResult')) {
+        const inputRef = /input_ref: (input_[a-z0-9]+)/u.exec(lastUserPrompt(context))?.[1];
+        if (!inputRef) throw new Error('Fixture did not receive an Agent input_ref.');
+        return completedStream(
+          assistantToolCall('ReadImage', {
+            image_refs: [inputRef],
+            analysis: 'describe',
+          }),
+        );
+      }
+      return completedStream(assistant('image Tool continuation completed'));
+    }, VISION_MODEL);
+    const policy = fixturePolicy(VISION_MODEL, ['llm.chat', 'tools', 'vision']);
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-read-image-tool-result',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-read-image-tool-result',
+        prompt: 'Read the image with the Tool',
+        contextPayloads: [
+          {
+            type: 'image',
+            id: 'file:tool-image.png',
+            label: 'tool-image.png',
+            summary: 'Workspace image: tool-image.png',
+            data: {
+              kind: 'authorized-content-reference',
+              locator: { kind: 'workspace-file', path: 'tool-image.png' },
+              mediaType: 'image',
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).resolves.toMatchObject({ durability: 'durable' });
+
+    expect(contexts).toHaveLength(2);
+    expect(contexts[1]?.messages).toContainEqual(
+      expect.objectContaining({
+        role: 'toolResult',
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'text' }),
+          expect.objectContaining({ type: 'image', mimeType: 'image/png' }),
+        ]),
+      }),
+    );
+    expect(JSON.stringify(contexts[1])).not.toContain(fixture.workspace.workspacePath);
+  });
+
   it('preflights every workspace before replacing any plugin Tool generation', async () => {
     const fixture = await createFixture();
     const firstWorkspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -2453,6 +2806,20 @@ function allowTools() {
   return { preflight: () => ({ allowed: true as const }) };
 }
 
+function requireToolFingerprint(result: ToolResult): ContentFingerprint {
+  if (
+    !result.success ||
+    typeof result.data !== 'object' ||
+    result.data === null ||
+    Array.isArray(result.data) ||
+    !('fingerprint' in result.data) ||
+    !isContentFingerprint(result.data.fingerprint)
+  ) {
+    throw new Error('Tool fixture did not return a ContentFingerprint.');
+  }
+  return result.data.fingerprint;
+}
+
 function fixtureTool(): Tool {
   return {
     name: 'DesktopFixtureTool',
@@ -2545,10 +2912,13 @@ function assistant(text: string): AssistantMessage {
   };
 }
 
-function assistantToolCall(name: string): AssistantMessage {
+function assistantToolCall(
+  name: string,
+  argumentsValue: Readonly<Record<string, unknown>> = {},
+): AssistantMessage {
   return {
     ...assistant(''),
-    content: [{ type: 'toolCall', id: 'fixture-tool-call', name, arguments: {} }],
+    content: [{ type: 'toolCall', id: 'fixture-tool-call', name, arguments: argumentsValue }],
     stopReason: 'toolUse',
   };
 }

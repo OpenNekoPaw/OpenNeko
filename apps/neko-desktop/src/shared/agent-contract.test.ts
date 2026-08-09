@@ -84,6 +84,49 @@ describe('Desktop Agent contract', () => {
     ).toThrowError(expect.objectContaining({ code: 'desktop-agent-request-mismatch' }));
   });
 
+  it('parses an exact persisted-Conversation unavailable bootstrap diagnostic', () => {
+    expect(
+      parseDesktopAgentBootstrapProjection(
+        {
+          requestId: 'request-1',
+          status: 'unavailable',
+          diagnostic: {
+            code: 'desktop-agent-conversation-unavailable',
+            severity: 'error',
+            conversationId: 'conversation-1',
+            fieldNames: ['lifecycle'],
+            message: 'Stored Conversation data is unavailable.',
+          },
+        },
+        'request-1',
+      ),
+    ).toEqual({
+      requestId: 'request-1',
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable',
+        severity: 'error',
+        conversationId: 'conversation-1',
+        fieldNames: ['lifecycle'],
+        message: 'Stored Conversation data is unavailable.',
+      },
+    });
+    expect(() =>
+      parseDesktopAgentBootstrapProjection({
+        requestId: 'request-1',
+        status: 'unavailable',
+        diagnostic: {
+          code: 'desktop-agent-conversation-unavailable',
+          severity: 'error',
+          conversationId: 'conversation-1',
+          fieldNames: ['lifecycle'],
+          message: 'Stored Conversation data is unavailable.',
+          fallbackRecord: {},
+        },
+      }),
+    ).toThrowError(DesktopAgentContractError);
+  });
+
   it('parses typed route-unavailable results', () => {
     expect(
       parseDesktopAgentMessageResult(

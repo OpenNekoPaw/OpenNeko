@@ -54,6 +54,8 @@ export interface ResourceBrowserLabels {
   readonly loading: string;
   readonly thumbnailUnavailable: string;
   readonly unavailable: string;
+  readonly mainViewCapacityReached: string;
+  readonly dismiss: string;
   readonly listView: string;
   readonly gridView: string;
   readonly breadcrumbs: string;
@@ -117,6 +119,9 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     loading: 'Loading resources…',
     thumbnailUnavailable: 'Thumbnail unavailable',
     unavailable: 'Resource Browser unavailable',
+    mainViewCapacityReached:
+      'Up to {maximum} Main Views can be open. Close one before opening this resource.',
+    dismiss: 'Dismiss',
     listView: 'List view',
     gridView: 'Grid view',
     breadcrumbs: 'Resource location',
@@ -177,6 +182,8 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     loading: '正在加载资源…',
     thumbnailUnavailable: '缩略图不可用',
     unavailable: '资源库不可用',
+    mainViewCapacityReached: '最多可打开 {maximum} 个主视图。请先关闭一个，再打开此资源。',
+    dismiss: '关闭提示',
     listView: '列表视图',
     gridView: '网格视图',
     breadcrumbs: '资源位置',

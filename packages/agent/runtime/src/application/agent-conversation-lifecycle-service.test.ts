@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { LocalMetadataError } from '@neko/local-metadata';
 import {
+  AgentConversationLifecycleUnavailableError,
   createAgentConversationLifecycleService,
   createInMemoryAgentConversationLifecycleRepository,
   projectAgentConversationInitialMessage,
@@ -19,6 +21,15 @@ describe('Agent Conversation lifecycle service', () => {
       },
       input: { kind: 'message' as const, text: 'Inspect this workspace' },
       references: [],
+      contextReferences: [
+        {
+          type: 'file' as const,
+          id: 'file:notes.fountain',
+          label: 'notes.fountain',
+          mediaType: 'text' as const,
+          contentLocator: { kind: 'workspace-file' as const, path: 'notes.fountain' },
+        },
+      ],
       resourceGrantIds: [],
       configuration: configuration(),
     };
@@ -39,6 +50,7 @@ describe('Agent Conversation lifecycle service', () => {
       role: 'user',
       content: 'Inspect this workspace',
       timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
+      contextReferences: input.contextReferences,
     });
     expect(fixture.session.materialize).toHaveBeenCalledTimes(2);
     expect(fixture.session.materialize).toHaveBeenLastCalledWith({
@@ -73,6 +85,7 @@ describe('Agent Conversation lifecycle service', () => {
       },
       input: { kind: 'message', text: 'Summarize the authorized file' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: ['resource-grant:1'],
       configuration: configuration(),
     });
@@ -176,9 +189,13 @@ describe('Agent Conversation lifecycle service', () => {
   it('fails only the Conversation whose canonical context is absent', async () => {
     const fixture = createFixture();
 
-    await expect(fixture.service.readConversationContext('missing-conversation')).rejects.toThrow(
-      "Agent Conversation 'missing-conversation' context is not present.",
-    );
+    await expect(
+      fixture.service.readConversationContext('missing-conversation'),
+    ).rejects.toMatchObject({
+      code: 'agent-conversation-lifecycle-unavailable',
+      conversationId: 'missing-conversation',
+      fieldNames: ['context'],
+    });
 
     const valid = await fixture.service.firstSubmit(assistantInput('request-valid-sibling'));
     await expect(fixture.service.readConversationContext(valid.conversationId)).resolves.toEqual(
@@ -198,6 +215,7 @@ describe('Agent Conversation lifecycle service', () => {
       },
       input: { kind: 'message', text: 'Summarize my note' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: ['resource-grant:1'],
       configuration: configuration(),
     });
@@ -283,6 +301,7 @@ describe('Agent Conversation lifecycle service', () => {
       },
       input: { kind: 'message', text: 'Create an image' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: [],
       configuration: configuration(),
     });
@@ -330,6 +349,7 @@ describe('Agent Conversation lifecycle service', () => {
       },
       input: { kind: 'message', text: 'Create an image' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: [],
       configuration: configuration(),
     });
@@ -428,6 +448,32 @@ describe('Agent Conversation lifecycle service', () => {
       request: { providerId: 'openai', modelId: 'gpt-5' },
     });
   });
+
+  it('translates an exact persisted lifecycle decode failure without accepting obsolete data', async () => {
+    const decodeFailure = new LocalMetadataError({
+      code: 'metadata-transaction-failed',
+      operation: 'decode-agent-conversation-lifecycle',
+      message: 'Agent initial input contains unsupported fields.',
+    });
+    const repository = {
+      ...createInMemoryAgentConversationLifecycleRepository(),
+      readConversation: vi.fn(async () => {
+        throw decodeFailure;
+      }),
+    };
+    const fixture = createFixture({ repository });
+    const error = await fixture.service
+      .readFirstSubmitRecord('conversation-invalid')
+      .catch((failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(AgentConversationLifecycleUnavailableError);
+    expect(error).toMatchObject({
+      code: 'agent-conversation-lifecycle-unavailable',
+      conversationId: 'conversation-invalid',
+      fieldNames: ['lifecycle'],
+      cause: decodeFailure,
+    });
+  });
 });
 
 function assistantInput(requestId: string) {
@@ -440,6 +486,7 @@ function assistantInput(requestId: string) {
     },
     input: { kind: 'message' as const, text: requestId },
     references: [],
+    contextReferences: [],
     resourceGrantIds: [],
     configuration: configuration(),
   };

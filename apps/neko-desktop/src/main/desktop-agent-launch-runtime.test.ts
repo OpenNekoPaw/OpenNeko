@@ -444,6 +444,7 @@ describe('Desktop Agent launch native adapter', () => {
           locator: { kind: 'workspace-file' as const, path: 'hero.md' },
           name: 'hero.md',
           type: 'file' as const,
+          mediaType: 'text' as const,
         },
       ],
       mentionExtras: [],
@@ -502,6 +503,18 @@ describe('Desktop Agent launch native adapter', () => {
     const referenceReceipt = projection.files[0]?.referenceReceipt;
     if (!referenceReceipt) throw new Error('Expected a Workspace reference receipt.');
     runtime.validateReferenceCommit(catalog.connection, undefined, [referenceReceipt]);
+    expect(
+      runtime.projectReferenceMessageContexts(catalog.connection, undefined, [referenceReceipt]),
+    ).toEqual([
+      {
+        type: 'file',
+        id: referenceReceipt.referenceId,
+        label: 'hero.md',
+        summary: 'hero.md',
+        mediaType: 'text',
+        contentLocator: { kind: 'workspace-file', path: 'hero.md' },
+      },
+    ]);
     runtime.commitReferences(catalog.connection, 'conversation:one', [referenceReceipt]);
     await expect(
       runtime.resolveReferenceContexts('conversation:one', catalog.interaction.binding, [

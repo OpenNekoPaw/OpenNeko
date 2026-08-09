@@ -43,6 +43,12 @@
       "file": "cases/reject-protected-project-raw-access.json",
       "group": "failure",
       "visibility": "public"
+    },
+    {
+      "id": "reject-structured-project-file-fallback",
+      "file": "cases/reject-structured-project-file-fallback.json",
+      "group": "failure",
+      "visibility": "public"
     }
   ],
   "rubricRefs": [],

@@ -9,6 +9,7 @@
  */
 
 import type { ProviderConfig, ResolvedProvider } from '../../types';
+import { createOpenAI } from '@ai-sdk/openai';
 import { NewAPIImageModel } from './newapi-image-model';
 import { NewAPIChatImageModel } from './newapi-chat-image-model';
 import { NewAPIVideoModel } from './newapi-video-model';
@@ -25,6 +26,10 @@ export function createNewAPIProvider(
   config: ProviderConfig,
   options?: { imageMode?: 'standard' | 'chat' },
 ): ResolvedProvider {
+  const languageProvider = createOpenAI({
+    baseURL: normalizeLanguageBaseUrl(config.apiUrl),
+    apiKey: config.apiKey,
+  });
   return {
     type: 'newapi',
     source: 'native',
@@ -32,7 +37,13 @@ export function createNewAPIProvider(
       options?.imageMode === 'chat'
         ? new NewAPIChatImageModel(modelId, config)
         : new NewAPIImageModel(modelId, config),
+    language: (modelId: string) => languageProvider(modelId),
     video: (modelId: string) => new NewAPIVideoModel(modelId, config),
     speech: (modelId: string) => new NewAPISpeechModel(modelId, config),
   };
+}
+
+function normalizeLanguageBaseUrl(value: string): string {
+  const base = value.replace(/\/+$/u, '');
+  return base.endsWith('/v1') ? base : `${base}/v1`;
 }

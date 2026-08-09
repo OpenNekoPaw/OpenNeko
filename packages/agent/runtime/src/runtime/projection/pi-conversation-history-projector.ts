@@ -1,14 +1,44 @@
 import type { ContentBlock, Message, ToolCall } from '@neko/agent-contracts';
-import type { PiConversationTranscriptEntry } from '../../pi';
+import {
+  isPiUserMessagePresentationEntry,
+  parsePiUserMessagePresentation,
+  type PiConversationTranscriptEntry,
+  type PiUserMessagePresentation,
+} from '../../pi';
 
 export function projectPiConversationEntries(
   entries: readonly PiConversationTranscriptEntry[],
 ): Message[] {
   const messages: Message[] = [];
   const toolCalls = new Map<string, { readonly block: ContentBlock; readonly call: ToolCall }>();
+  let pendingUserPresentation:
+    | {
+        readonly entryId: string;
+        readonly presentation: PiUserMessagePresentation;
+      }
+    | undefined;
 
   for (const entry of entries) {
-    if (entry.type !== 'message') continue;
+    if (isPiUserMessagePresentationEntry(entry)) {
+      if (pendingUserPresentation) {
+        throw new Error(
+          `Pi transcript contains consecutive user message presentations ${pendingUserPresentation.entryId} and ${entry.id}.`,
+        );
+      }
+      pendingUserPresentation = {
+        entryId: entry.id,
+        presentation: parsePiUserMessagePresentation(entry.data),
+      };
+      continue;
+    }
+    if (entry.type !== 'message') {
+      if (pendingUserPresentation) {
+        throw new Error(
+          `Pi user message presentation ${pendingUserPresentation.entryId} is not immediately followed by its user message.`,
+        );
+      }
+      continue;
+    }
     const source = entry.message;
     if (source.role === 'toolResult') {
       const target = toolCalls.get(source.toolCallId);
@@ -29,13 +59,33 @@ export function projectPiConversationEntries(
     }
 
     if (source.role === 'user') {
+      if (pendingUserPresentation && entry.parentId !== pendingUserPresentation.entryId) {
+        throw new Error(
+          `Pi user message presentation ${pendingUserPresentation.entryId} does not own user message ${entry.id}.`,
+        );
+      }
+      const presentation = pendingUserPresentation?.presentation;
       messages.push({
         id: entry.id,
         role: 'user',
-        content: projectUserContent(source.content),
+        content: presentation?.content ?? projectUserContent(source.content),
         timestamp: source.timestamp,
+        ...(presentation?.contextReferences
+          ? {
+              contextReferences: presentation.contextReferences.map((reference) => ({
+                ...reference,
+              })),
+            }
+          : {}),
       });
+      pendingUserPresentation = undefined;
       continue;
+    }
+
+    if (pendingUserPresentation) {
+      throw new Error(
+        `Pi user message presentation ${pendingUserPresentation.entryId} is not followed by a user message.`,
+      );
     }
 
     if (source.role !== 'assistant') {
@@ -96,6 +146,12 @@ export function projectPiConversationEntries(
       ...(source.stopReason === 'error' ? { isError: true } : {}),
       ...(blocks.length === 0 ? {} : { contentBlocks: blocks }),
     });
+  }
+
+  if (pendingUserPresentation) {
+    throw new Error(
+      `Pi user message presentation ${pendingUserPresentation.entryId} has no user message.`,
+    );
   }
 
   return messages;

@@ -9,6 +9,7 @@ import {
   parseResourceBrowserProjection,
   parseResourceBrowserProjectionEvent,
   parseResourceBrowserIntentRequest,
+  parseResourceBrowserIntentResult,
   parseResourceBrowserRecoveryPlanRequest,
   parseResourceBrowserRecoveryPlanResult,
   parseResourceBrowserQuickPreviewResult,
@@ -24,6 +25,41 @@ const identity = {
 } as const;
 
 describe('Resource Browser contract', () => {
+  it('parses owner-bound intent completion and Main View capacity rejection results', () => {
+    expect(
+      parseResourceBrowserIntentResult({
+        requestId: 'intent-completed',
+        identity,
+        status: 'completed',
+        projection: projection('files', []),
+      }),
+    ).toMatchObject({ status: 'completed', projection: { identity } });
+    expect(
+      parseResourceBrowserIntentResult({
+        requestId: 'intent-rejected',
+        identity,
+        status: 'rejected',
+        rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+      }),
+    ).toEqual({
+      requestId: 'intent-rejected',
+      identity,
+      status: 'rejected',
+      rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+    });
+    expect(() =>
+      parseResourceBrowserIntentResult({
+        requestId: 'intent-foreign-projection',
+        identity,
+        status: 'completed',
+        projection: {
+          ...projection('files', []),
+          identity: { ...identity, workspaceId: 'workspace-2' },
+        },
+      }),
+    ).toThrow('identity is stale or belongs to another owner');
+  });
+
   it('builds a versioned, owner-bound search request', () => {
     expect(
       createResourceBrowserSearchRequest({

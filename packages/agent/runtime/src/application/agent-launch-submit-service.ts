@@ -6,6 +6,7 @@ import {
   type AgentDraftSubmitInput,
   type AgentDraftSubmitProjection,
   type AgentLaunchConnectionIdentity,
+  type MessageContextReference,
 } from '@neko/agent-contracts';
 import type { AgentConversationLifecycleService } from './agent-conversation-lifecycle-service';
 import type { AgentDomainBindingApplicationService } from './agent-domain-binding-service';
@@ -17,7 +18,7 @@ export interface AgentLaunchResourceCommitPort {
     readonly conversationId?: string;
     readonly resourceGrantIds: readonly string[];
     readonly references: AgentDraftSubmitInput['references'];
-  }): void;
+  }): readonly MessageContextReference[];
   commit(input: {
     readonly connection: AgentLaunchConnectionIdentity;
     readonly conversationId: string;
@@ -85,7 +86,7 @@ export function createAgentLaunchDraftSubmissionApplicationService(options: {
       }
 
       const existing = await options.lifecycle.readFirstSubmitByRequest(requestId);
-      options.resources.validate({
+      const contextReferences = options.resources.validate({
         connection,
         ...(existing === undefined ? {} : { conversationId: existing.conversationId }),
         resourceGrantIds: draftInput.resourceGrantIds,
@@ -112,6 +113,7 @@ export function createAgentLaunchDraftSubmissionApplicationService(options: {
         context,
         input: draftInput.input,
         references: draftInput.references,
+        contextReferences,
         resourceGrantIds: draftInput.resourceGrantIds,
         configuration: {
           request: draftInput.configuration,

@@ -242,11 +242,14 @@ export function parseTextEditorHostResult(value: unknown): TextEditorHostResult 
   const status = record['status'];
   if (status === 'ready') {
     requireExactKeys(record, ['requestId', 'identity', 'status', 'projection']);
+    const identity = parseTextEditorRuntimeIdentity(record['identity']);
+    const projection = parseTextDocumentProjection(record['projection']);
+    requireProjectionOwner(identity, projection, 'Text Editor Host result');
     return {
       requestId: requireIdentity(record['requestId'], 'Text Editor request identity'),
-      identity: parseTextEditorRuntimeIdentity(record['identity']),
+      identity,
       status,
-      projection: parseTextDocumentProjection(record['projection']),
+      projection,
     };
   }
   if (status === 'closed' || status === 'cancelled') {
@@ -343,6 +346,15 @@ export function parseTextEditorProjectionEvent(value: unknown): TextEditorProjec
   const sequence = requirePositiveSequence(record['sequence']);
   const identity = parseTextEditorRuntimeIdentity(record['identity']);
   const projection = parseTextDocumentProjection(record['projection']);
+  requireProjectionOwner(identity, projection, 'Text Editor projection event');
+  return { sequence, identity, projection };
+}
+
+function requireProjectionOwner(
+  identity: TextEditorRuntimeIdentity,
+  projection: TextDocumentProjection,
+  label: string,
+): void {
   if (
     projection.sessionId !== identity.sessionId ||
     projection.identity.workspaceId !== identity.workspaceId ||
@@ -351,9 +363,8 @@ export function parseTextEditorProjectionEvent(value: unknown): TextEditorProjec
     projection.identity.owner.windowId !== identity.windowId ||
     projection.identity.owner.projectId !== identity.projectId
   ) {
-    throw invalid('Text Editor projection event owner identity does not match.');
+    throw invalid(`${label} owner identity does not match.`);
   }
-  return { sequence, identity, projection };
 }
 
 export function parseTextEditorRuntimeIdentity(value: unknown): TextEditorRuntimeIdentity {
@@ -430,6 +441,21 @@ function parseTextDocumentProjection(value: unknown): TextDocumentProjection {
       ? { screenplay: requireScreenplayProjection(record['screenplay']) }
       : {}),
   };
+}
+
+export function sameTextEditorRuntimeOwner(
+  left: TextEditorRuntimeIdentity,
+  right: TextEditorRuntimeIdentity,
+): boolean {
+  return (
+    left.projectId === right.projectId &&
+    left.workspaceId === right.workspaceId &&
+    left.windowId === right.windowId &&
+    left.viewId === right.viewId &&
+    left.viewInstanceId === right.viewInstanceId &&
+    left.documentId === right.documentId &&
+    left.rendererSessionId === right.rendererSessionId
+  );
 }
 
 function parseTextDocumentIdentity(value: unknown): TextDocumentIdentity {

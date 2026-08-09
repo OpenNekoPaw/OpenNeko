@@ -24,6 +24,7 @@ import type {
   AgentLaunchCatalogProjection,
   AgentLaunchConnectionIdentity,
   AgentLaunchResourceKind,
+  MessageContextReference,
   ProjectFileMentionInfo,
   ProjectMentionExtra,
 } from '@neko/agent-contracts';
@@ -158,6 +159,11 @@ export interface DesktopAgentLaunchRuntime {
     conversationId: string | undefined,
     references: readonly AgentInputReferenceReceipt[],
   ): void;
+  projectReferenceMessageContexts(
+    connection: AgentLaunchConnectionIdentity,
+    conversationId: string | undefined,
+    references: readonly AgentInputReferenceReceipt[],
+  ): readonly MessageContextReference[];
   commitReferences(
     connection: AgentLaunchConnectionIdentity,
     conversationId: string,
@@ -379,6 +385,14 @@ export function createDesktopAgentLaunchRuntime(input: {
         }
       }
     },
+    projectReferenceMessageContexts(connection, conversationId, receipts) {
+      this.validateReferenceCommit(connection, conversationId, receipts);
+      return receipts.map((receipt) => {
+        const granted = references.get(receipt.referenceId);
+        if (!granted) throw new Error(`Agent reference '${receipt.referenceId}' is not present.`);
+        return projectReferenceMessageContext(receipt.referenceId, granted.reference);
+      });
+    },
     commitReferences(connection, conversationId, receipts) {
       this.validateReferenceCommit(connection, conversationId, receipts);
       for (const receipt of receipts) {
@@ -453,6 +467,45 @@ export function createDesktopAgentLaunchRuntime(input: {
 }
 
 const MAX_AGENT_AUTHORIZED_TEXT_CHARS = 256 * 1024;
+
+function projectReferenceMessageContext(
+  referenceId: string,
+  reference: DesktopAgentWorkspaceReference,
+): MessageContextReference {
+  if (reference.kind === 'file') {
+    const file = reference.file;
+    return {
+      type: referenceMessageContextType(file.mediaType, file.source),
+      id: referenceId,
+      label: file.name,
+      summary: file.locator.path,
+      ...(file.mediaType === undefined ? {} : { mediaType: file.mediaType }),
+      contentLocator: file.locator,
+    };
+  }
+  const entity = reference.entity;
+  return {
+    type: entity.type,
+    id: entity.id,
+    label: entity.label,
+    summary: entity.summary,
+    ...(entity.thumbnailUri === undefined ? {} : { thumbnailUri: entity.thumbnailUri }),
+    ...(entity.mediaType === undefined ? {} : { mediaType: entity.mediaType }),
+    ...(entity.contentLocator === undefined ? {} : { contentLocator: entity.contentLocator }),
+  };
+}
+
+function referenceMessageContextType(
+  mediaType: ProjectFileMentionInfo['mediaType'],
+  source: ProjectFileMentionInfo['source'],
+): MessageContextReference['type'] {
+  if (mediaType === 'image') return 'image';
+  if (mediaType === 'audio') return 'audio-clip';
+  if (mediaType === 'video' || mediaType === 'sequence' || source === 'media-library') {
+    return 'media';
+  }
+  return 'file';
+}
 
 function bindingOwnerId(binding: AgentDomainBinding): string {
   switch (binding.kind) {

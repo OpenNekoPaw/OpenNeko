@@ -81,6 +81,7 @@ interface TextEditorBinding {
 
 export class DesktopTextEditorRuntime {
   private readonly bindings = new Map<string, TextEditorBinding>();
+  private readonly pendingCleanRestores = new Map<string, Promise<TextEditorBinding>>();
   private readonly createIdentity: () => string;
   private readonly watchFile: DesktopTextEditorWatchFile;
   private disposed = false;
@@ -125,50 +126,19 @@ export class DesktopTextEditorRuntime {
       return readyResult(`text-editor-open:${this.createIdentity()}`, existing);
     }
 
-    const workspace = await this.options.shell.resolveAgentWorkspace(input.identity.workspaceId);
     const documentId = locator.path;
-    const sessionId = `text-document:${this.createIdentity()}`;
-    const session = await TextDocumentSession.open(
-      {
-        owner: {
-          kind: 'window',
-          windowId: input.identity.windowId,
-          projectId: input.identity.projectId,
-        },
-        workspaceId: input.identity.workspaceId,
-        documentId,
-        locator,
-      },
-      {
-        reader: createNodeHostContentReadService({ workspaceRoot: workspace.workspacePath }),
-        writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspace.workspacePath }),
-        createSessionId: () => sessionId,
-      },
-    );
-    const runtimeIdentity: TextEditorRuntimeIdentity = {
+    const workspace = await this.options.shell.resolveAgentWorkspace(input.identity.workspaceId);
+    const binding = await this.createBinding({
       projectId: input.identity.projectId,
       workspaceId: input.identity.workspaceId,
       windowId: input.identity.windowId,
-      viewId: `text-editor:${this.createIdentity()}`,
       viewInstanceId: owner.viewInstanceId,
       documentId,
-      sessionId,
       rendererSessionId: shell.rendererSessionId,
-    };
-    const binding: TextEditorBinding = {
-      runtimeIdentity,
-      session,
-      listeners: new Set(),
-      externalChangeQueue: Promise.resolve(),
-      eventSequence: 0,
-      closed: false,
-    };
-    const absolutePath = path.join(workspace.workspacePath, ...locator.path.split('/'));
-    binding.watcher = this.watchFile(
-      path.dirname(absolutePath),
-      path.basename(absolutePath),
-      () => this.queueExternalChange(binding),
-    );
+      workspacePath: workspace.workspacePath,
+    });
+    const runtimeIdentity = binding.runtimeIdentity;
+    const sessionId = runtimeIdentity.sessionId;
     const view = {
       viewId: runtimeIdentity.viewId,
       viewInstanceId: runtimeIdentity.viewInstanceId,
@@ -199,7 +169,11 @@ export class DesktopTextEditorRuntime {
   async execute(windowId: string, value: unknown): Promise<TextEditorHostResult> {
     this.requireActive();
     const request = parseTextEditorHostRequest(value);
-    const binding = this.bindings.get(request.identity.sessionId);
+    let binding = this.bindings.get(request.identity.sessionId);
+    if (!binding && request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
+      binding = await this.restoreReleasedCleanSession(windowId, request.identity);
+      return readyResult(request.requestId, binding);
+    }
     if (!binding || request.identity.windowId !== windowId) {
       throw new Error('Desktop Text Editor session is unavailable.');
     }
@@ -375,6 +349,133 @@ export class DesktopTextEditorRuntime {
     this.disposed = true;
     for (const binding of this.bindings.values()) this.releaseBinding(binding);
     this.options.media.dispose();
+  }
+
+  private async restoreReleasedCleanSession(
+    windowId: string,
+    requested: TextEditorRuntimeIdentity,
+  ): Promise<TextEditorBinding> {
+    if (requested.windowId !== windowId) {
+      throw new Error('Desktop Text Editor session is unavailable.');
+    }
+    const key = JSON.stringify([
+      windowId,
+      requested.projectId,
+      requested.workspaceId,
+      requested.viewId,
+      requested.viewInstanceId,
+      requested.documentId,
+      requested.sessionId,
+      requested.rendererSessionId,
+    ]);
+    const pending = this.pendingCleanRestores.get(key);
+    if (pending) return pending;
+    const restore = this.reopenReleasedCleanSession(requested);
+    this.pendingCleanRestores.set(key, restore);
+    try {
+      return await restore;
+    } finally {
+      if (this.pendingCleanRestores.get(key) === restore) this.pendingCleanRestores.delete(key);
+    }
+  }
+
+  private async reopenReleasedCleanSession(
+    requested: TextEditorRuntimeIdentity,
+  ): Promise<TextEditorBinding> {
+    const shell = await this.options.shell.getProjection(requested.windowId);
+    if (shell.rendererSessionId !== requested.rendererSessionId) {
+      throw new Error('Desktop Text Editor runtime identity is stale.');
+    }
+    const owner = resolveDesktopWindowWorkspaceWorkbench(shell.window, requested.workspaceId);
+    const view = requireTextEditorView(owner.layout, requested.viewId);
+    if (
+      view.projectId !== requested.projectId ||
+      view.workspaceId !== requested.workspaceId ||
+      view.viewInstanceId !== requested.viewInstanceId ||
+      view.documentId !== requested.documentId ||
+      view.editorSessionId !== requested.sessionId ||
+      view.ownerId !== requested.sessionId
+    ) {
+      throw new Error('Desktop Text Editor View identity is stale.');
+    }
+    const workspace = await this.options.shell.resolveAgentWorkspace(requested.workspaceId);
+    const binding = await this.createBinding({
+      projectId: requested.projectId,
+      workspaceId: requested.workspaceId,
+      windowId: requested.windowId,
+      viewId: requested.viewId,
+      viewInstanceId: requested.viewInstanceId,
+      documentId: requested.documentId,
+      rendererSessionId: shell.rendererSessionId,
+      workspacePath: workspace.workspacePath,
+    });
+    const nextView = {
+      ...view,
+      ownerId: binding.runtimeIdentity.sessionId,
+      editorSessionId: binding.runtimeIdentity.sessionId,
+    };
+    try {
+      await this.options.shell.updateWorkbench(
+        requested.windowId,
+        shell.rendererSessionId,
+        owner.workbenchInstanceId,
+        openOrFocusMainView(owner.layout, nextView),
+      );
+    } catch (error) {
+      this.releaseBinding(binding);
+      throw error;
+    }
+    this.bindings.set(binding.runtimeIdentity.sessionId, binding);
+    return binding;
+  }
+
+  private async createBinding(input: {
+    readonly projectId: string;
+    readonly workspaceId: string;
+    readonly windowId: string;
+    readonly viewId?: string;
+    readonly viewInstanceId: string;
+    readonly documentId: string;
+    readonly rendererSessionId: string;
+    readonly workspacePath: string;
+  }): Promise<TextEditorBinding> {
+    const sessionId = `text-document:${this.createIdentity()}`;
+    const locator = { kind: 'workspace-file' as const, path: input.documentId };
+    const session = await TextDocumentSession.open(
+      {
+        owner: { kind: 'window', windowId: input.windowId, projectId: input.projectId },
+        workspaceId: input.workspaceId,
+        documentId: input.documentId,
+        locator,
+      },
+      {
+        reader: createNodeHostContentReadService({ workspaceRoot: input.workspacePath }),
+        writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: input.workspacePath }),
+        createSessionId: () => sessionId,
+      },
+    );
+    const binding: TextEditorBinding = {
+      runtimeIdentity: {
+        projectId: input.projectId,
+        workspaceId: input.workspaceId,
+        windowId: input.windowId,
+        viewId: input.viewId ?? `text-editor:${this.createIdentity()}`,
+        viewInstanceId: input.viewInstanceId,
+        documentId: input.documentId,
+        sessionId,
+        rendererSessionId: input.rendererSessionId,
+      },
+      session,
+      listeners: new Set(),
+      externalChangeQueue: Promise.resolve(),
+      eventSequence: 0,
+      closed: false,
+    };
+    const absolutePath = path.join(input.workspacePath, ...input.documentId.split('/'));
+    binding.watcher = this.watchFile(path.dirname(absolutePath), path.basename(absolutePath), () =>
+      this.queueExternalChange(binding),
+    );
+    return binding;
   }
 
   private async attachCurrentRenderer(

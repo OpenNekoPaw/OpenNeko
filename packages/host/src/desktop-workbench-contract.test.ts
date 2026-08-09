@@ -176,6 +176,44 @@ describe('Desktop Workbench contract', () => {
     expect(collapsed.main.split).toBeUndefined();
   });
 
+  it('rejects only the ninth Main View and allows the same View after an explicit close', () => {
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    for (let index = 1; index <= 8; index += 1) {
+      workbench = openOrFocusMainView(workbench, viewRef(`canvas-${String(index)}`, 'canvas'));
+    }
+    const beforeRejectedOpen = workbench;
+
+    expect(() => openOrFocusMainView(workbench, viewRef('canvas-9', 'canvas'))).toThrow(
+      expect.objectContaining<Partial<DesktopWorkbenchContractError>>({
+        code: 'desktop-workbench-main-view-capacity-reached',
+      }),
+    );
+    expect(workbench).toBe(beforeRejectedOpen);
+    expect(workbench.main.views.map((view) => view.viewId)).toEqual([
+      'canvas-1',
+      'canvas-2',
+      'canvas-3',
+      'canvas-4',
+      'canvas-5',
+      'canvas-6',
+      'canvas-7',
+      'canvas-8',
+    ]);
+
+    const closed = closeMainView(workbench, 'canvas-3');
+    const retried = openOrFocusMainView(closed, viewRef('canvas-9', 'canvas'));
+    expect(retried.main.views.map((view) => view.viewId)).toEqual([
+      'canvas-1',
+      'canvas-2',
+      'canvas-4',
+      'canvas-5',
+      'canvas-6',
+      'canvas-7',
+      'canvas-8',
+      'canvas-9',
+    ]);
+  });
+
   it('keeps stable Group ordering when moving a secondary Tab back to primary', () => {
     const first = openOrFocusMainView(
       createDefaultDesktopWorkbenchLayout('window-1'),

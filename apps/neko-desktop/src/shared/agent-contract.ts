@@ -50,12 +50,24 @@ export interface DesktopAgentReadyBootstrapProjection {
   readonly connection: DesktopAgentConnectionIdentity;
 }
 
-export interface DesktopAgentUnavailableDiagnostic {
+export interface DesktopAgentRuntimeUnavailableDiagnostic {
   readonly code: 'desktop-agent-capability-unavailable';
   readonly severity: 'error';
   readonly missingRequirements: readonly DesktopAgentRuntimeRequirement[];
   readonly message: string;
 }
+
+export interface DesktopAgentConversationUnavailableDiagnostic {
+  readonly code: 'desktop-agent-conversation-unavailable';
+  readonly severity: 'error';
+  readonly conversationId: string;
+  readonly fieldNames: readonly string[];
+  readonly message: string;
+}
+
+export type DesktopAgentUnavailableDiagnostic =
+  | DesktopAgentRuntimeUnavailableDiagnostic
+  | DesktopAgentConversationUnavailableDiagnostic;
 
 export interface DesktopAgentUnavailableBootstrapProjection {
   readonly requestId: string;
@@ -535,22 +547,61 @@ const parseConnectionIdentity = parseDesktopAgentConnectionIdentity;
 
 function parseUnavailableDiagnostic(value: unknown): DesktopAgentUnavailableDiagnostic {
   const record = requireRecord(value, 'Desktop Agent unavailable diagnostic is required.');
-  if (record['code'] !== 'desktop-agent-capability-unavailable') {
-    throw invalidPayload('Desktop Agent unavailable diagnostic code is invalid.');
+  if (record['code'] === 'desktop-agent-capability-unavailable') {
+    requireExactKeys(
+      record,
+      ['code', 'severity', 'missingRequirements', 'message'],
+      'Desktop Agent runtime unavailable diagnostic',
+    );
+    const missingRequirements = requireArray(
+      record['missingRequirements'],
+      'Desktop Agent missing requirements must be an array.',
+    ).map(requireRuntimeRequirement);
+    return {
+      code: record['code'],
+      severity: requireErrorSeverity(record['severity']),
+      missingRequirements,
+      message: requireNonEmptyString(
+        record['message'],
+        'Desktop Agent unavailable diagnostic message is required.',
+      ),
+    };
   }
-  const missingRequirements = requireArray(
-    record['missingRequirements'],
-    'Desktop Agent missing requirements must be an array.',
-  ).map(requireRuntimeRequirement);
-  return {
-    code: 'desktop-agent-capability-unavailable',
-    severity: requireErrorSeverity(record['severity']),
-    missingRequirements,
-    message: requireNonEmptyString(
-      record['message'],
-      'Desktop Agent unavailable diagnostic message is required.',
-    ),
-  };
+  if (record['code'] === 'desktop-agent-conversation-unavailable') {
+    requireExactKeys(
+      record,
+      ['code', 'severity', 'conversationId', 'fieldNames', 'message'],
+      'Desktop Agent Conversation unavailable diagnostic',
+    );
+    const fieldNames = requireArray(
+      record['fieldNames'],
+      'Desktop Agent unavailable Conversation fields must be an array.',
+    ).map((fieldName) =>
+      requireNonEmptyString(
+        fieldName,
+        'Desktop Agent unavailable Conversation field name is required.',
+      ),
+    );
+    if (fieldNames.length === 0 || new Set(fieldNames).size !== fieldNames.length) {
+      throw invalidPayload(
+        'Desktop Agent unavailable Conversation fields must be unique and non-empty.',
+      );
+    }
+    return {
+      code: record['code'],
+      severity: requireErrorSeverity(record['severity']),
+      conversationId: requireNonEmptyString(
+        record['conversationId'],
+        'Desktop Agent unavailable Conversation identity is required.',
+      ),
+      fieldNames,
+      message: requireNonEmptyString(
+        record['message'],
+        'Desktop Agent unavailable Conversation diagnostic message is required.',
+      ),
+    };
+  }
+  throw invalidPayload('Desktop Agent unavailable diagnostic code is invalid.');
 }
 
 function requireExpectedRequestId(

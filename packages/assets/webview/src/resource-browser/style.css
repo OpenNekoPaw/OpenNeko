@@ -555,6 +555,30 @@
   color: var(--neko-errorForeground, #a3404e);
 }
 
+.neko-resource-browser__operation-error {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--neko-errorForeground, #a3404e) 35%, transparent);
+  color: var(--neko-errorForeground, #a3404e);
+  background: color-mix(in srgb, var(--neko-errorForeground, #a3404e) 8%, transparent);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.neko-resource-browser__operation-error > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.neko-resource-browser__operation-error > button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
 .neko-resource-browser__diagnostics {
   display: grid;
   gap: 2px;

@@ -52,6 +52,19 @@ export const DOCUMENT_FORMATS = [
   'unknown',
 ] as const satisfies readonly DocumentFormat[];
 
+const TEXTUAL_DOCUMENT_FORMATS: ReadonlySet<DocumentFormat> = new Set([
+  'text',
+  'markdown',
+  'fountain',
+  'html',
+  'json',
+  'yaml',
+]);
+
+export function isTextualDocumentFormat(format: DocumentFormat): boolean {
+  return TEXTUAL_DOCUMENT_FORMATS.has(format);
+}
+
 export interface DocumentFileIdentity {
   readonly fileId: string;
   readonly sizeBytes?: number;

@@ -167,6 +167,7 @@ export interface AgentControllerComposition {
     readonly conversationId: string;
     readonly turnId: string;
     readonly messageText: string;
+    readonly presentationText?: string;
     readonly configuration: AgentConversationTurnConfigurationSnapshot;
     readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
@@ -483,6 +484,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly conversationId: string;
     readonly turnId: string;
     readonly messageText: string;
+    readonly presentationText?: string;
     readonly configuration: AgentConversationTurnConfigurationSnapshot;
     readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
@@ -531,6 +533,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           facts,
           configuration: input.configuration,
           conversationContext: input.context,
+          ...(input.presentationText === undefined
+            ? {}
+            : { presentationText: input.presentationText }),
           ...(input.skillName ? { skillName: input.skillName } : {}),
           ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
           ...(input.additionalInstructions
@@ -541,7 +546,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         await input.workspace.checkpointFailedInitialTurn({
           conversationId: input.conversationId,
           turnId: input.turnId,
-          messageText: input.messageText,
+          messageText: input.presentationText ?? input.messageText,
+          contextPayloads: input.contextPayloads,
         });
         throw error;
       }
@@ -1165,6 +1171,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly configuration:
       AgentConversationConfiguration | AgentConversationTurnConfigurationSnapshot;
     readonly conversationContext: AgentBoundDomainBinding;
+    readonly presentationText?: string;
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
@@ -1233,6 +1240,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const turnInput: AgentTurnInput = {
       conversationId: input.request.conversationId,
       prompt: input.request.messageText,
+      ...(input.presentationText === undefined ? {} : { presentationText: input.presentationText }),
       ...(input.request.turnId === undefined ? {} : { turnId: input.request.turnId }),
       modelPolicy: resolved.policy,
       configuration: resolved.configuration,

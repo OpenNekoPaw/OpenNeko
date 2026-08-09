@@ -105,6 +105,25 @@ describe('content access tools', () => {
     expect(JSON.stringify(result)).not.toMatch(/resourceRef|documentResourceRef/u);
   });
 
+  it('rejects a top-level ReadDocument locator instead of treating it as a range alias', async () => {
+    const runtime = createRuntime();
+    const tool = createReadDocumentTool({ contentAccessRuntime: runtime });
+
+    expect(tool.parameters.additionalProperties).toBe(false);
+    await expect(
+      tool.execute({
+        source: workspaceSource,
+        mode: 'range',
+        locator: { kind: 'chapter', chapterHref: 'page-1', spineIndex: 0 },
+      }),
+    ).resolves.toEqual({
+      success: false,
+      error:
+        'ReadDocument locator is not a top-level field. Use range: { locator: <DocumentLocator> } for mode="range".',
+    });
+    expect(runtime.resolveDocumentContent).not.toHaveBeenCalled();
+  });
+
   it('rejects an incomplete chapter locator before invoking the runtime', async () => {
     const runtime = createRuntime();
     const result = await createReadDocumentTool({ contentAccessRuntime: runtime }).execute({
@@ -186,6 +205,8 @@ describe('content access tools', () => {
     });
     expect(runtime.loadContentAsset).not.toHaveBeenCalled();
     expect(result.attachments?.[0]?.path).toMatch(/^data:image\/png;base64,/u);
+    expect(result.attachments?.[0]?.assetRef).toMatchObject({ representationLocator });
+    expect(result.attachments?.[0]?.assetRef).not.toHaveProperty('contentLocator');
   });
 
   it('selects at most five ordered images before loading content', async () => {

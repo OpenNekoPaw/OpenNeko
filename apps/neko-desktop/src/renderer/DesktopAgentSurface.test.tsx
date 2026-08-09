@@ -236,6 +236,37 @@ describe('DesktopAgentSurface', () => {
     await act(async () => root.unmount());
   });
 
+  it('renders an invalid persisted Conversation as a local non-retryable Surface diagnostic', async () => {
+    const getBootstrap = vi.fn(async () => ({
+      requestId: 'request-conversation-unavailable',
+      status: 'unavailable' as const,
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable' as const,
+        severity: 'error' as const,
+        conversationId: 'conversation-1',
+        fieldNames: ['lifecycle'],
+        message: 'Host-only stored record diagnostic.',
+      },
+    }));
+    installBridge(getBootstrap);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestAgentSurface />);
+    });
+    await act(async () => undefined);
+
+    expect(container.textContent).toContain(
+      'This conversation uses stored data that the current app cannot open.',
+    );
+    expect(container.textContent).not.toContain('Host-only stored record diagnostic.');
+    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
+    expect(container.querySelector('.desktop-agent-failure__retry')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it('renders a typed Workspace attach failure as a local translated diagnostic', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi.fn(async () => ({

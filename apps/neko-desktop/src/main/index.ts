@@ -60,6 +60,7 @@ import {
   createAssistantResourceService,
   createPersistentAgentConversationLifecycleRepository,
   initializeAgentConversationLifecycleTables,
+  projectAgentDraftInputText,
 } from '@neko/agent-runtime/application';
 import { setRootLogger as setAgentRootLogger } from '@neko/agent-runtime';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
@@ -110,10 +111,7 @@ import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
 import { WorkspaceGenerationApplicationRuntime } from '@neko/generation/job';
-import {
-  PromptGenerationService,
-  createAiSdkPromptCompletionPort,
-} from '@neko/generation/prompt';
+import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
 import {
   createContentReadMediaRequestAssetMaterializer,
   createMediaPlatform,
@@ -1482,6 +1480,7 @@ async function startDesktop(): Promise<void> {
           turnId: request.turnId,
           messageText:
             request.input.kind === 'message' ? request.input.text : (request.input.args ?? ''),
+          presentationText: projectAgentDraftInputText(request.input),
           configuration: request.configuration,
           context: request.context,
           locale: 'en',
@@ -1539,6 +1538,7 @@ async function startDesktop(): Promise<void> {
       validate: ({ connection, conversationId, resourceGrantIds, references }) => {
         agentLaunch.validateResourceGrantCommit(connection, conversationId, resourceGrantIds);
         agentLaunch.validateReferenceCommit(connection, conversationId, references);
+        return agentLaunch.projectReferenceMessageContexts(connection, conversationId, references);
       },
       commit: async ({ connection, conversationId, resourceGrantIds, references }) => {
         await agentLaunch.commitResourceGrants(connection, conversationId, resourceGrantIds);

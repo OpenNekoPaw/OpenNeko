@@ -311,6 +311,8 @@ export const zhCN = {
   'agent.loading': '正在加载 Agent 界面…',
   'agent.unavailable': 'Agent 暂不可用',
   'agent.unavailableDetail': '当前无法恢复此 Agent 面板的工作区访问权限。',
+  'agent.conversationUnavailableDetail':
+    '此会话的存储数据无法由当前应用打开。记录仍保留在历史中，请选择其他会话或从侧栏删除该记录。',
   'agent.runtimeUnavailableDetail': '此面板所需的 Agent 运行时当前不可用。',
   'agent.connectionFailureDetail': 'Agent 面板连接失败，工作区的其他功能仍可继续使用。',
   'agent.retry': '重试',

@@ -471,10 +471,30 @@
       "token": "/v1/"
     },
     {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI OpenAI-compatible language API",
+      "fieldScope": "NewAPI language adapter configured base endpoint suffix check",
+      "id": "affec987964f687dba6d",
+      "isolationRule": "The route suffix is consumed only by the explicitly selected NewAPI adapter and cannot select an OpenNeko contract, persisted schema, migration, or fallback provider.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-chat/",
+      "path": "packages/ai/sdk/src/providers/newapi/index.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI OpenAI-compatible language API",
+      "fieldScope": "NewAPI language adapter configured base endpoint suffix append",
+      "id": "0cb669bf6eda2ff5f17f",
+      "isolationRule": "The route suffix is consumed only by the explicitly selected NewAPI adapter and cannot select an OpenNeko contract, persisted schema, migration, or fallback provider.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-chat/",
+      "path": "packages/ai/sdk/src/providers/newapi/index.ts",
+      "token": "/v1"
+    },
+    {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
       "fieldScope": "Shared provider type import for ImageModelV3",
-      "id": "5ac6dd8cdc7b0ac56c7c",
+      "id": "0e6f7e251ad531201e56",
       "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
       "path": "packages/ai/sdk/src/types.ts",
@@ -484,7 +504,7 @@
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
       "fieldScope": "Shared provider type import for Experimental_VideoModelV3",
-      "id": "c76b6d886ce7983e4759",
+      "id": "af9b1d04d8fe16c9c8cb",
       "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
       "path": "packages/ai/sdk/src/types.ts",
@@ -493,8 +513,18 @@
     {
       "category": "versioned-identifier",
       "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Shared provider type import for LanguageModelV3",
+      "id": "7bbb2a835192b8c4b67d",
+      "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
+      "normativeSource": "https://ai-sdk.dev/docs/reference/ai-sdk-core/language-model-v3",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
       "fieldScope": "Shared provider type import for SpeechModelV3",
-      "id": "31d9d9eadf5c004ed946",
+      "id": "fa923706ecbf3021234c",
       "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
       "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
       "path": "packages/ai/sdk/src/types.ts",

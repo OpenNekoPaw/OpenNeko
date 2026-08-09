@@ -66,6 +66,7 @@ import { preserveDesktopBootstrapEventSequence } from './desktop-runtime-event-c
 import {
   parseResourceBrowserChildrenRequest,
   parseResourceBrowserIntentRequest,
+  parseResourceBrowserIntentResult,
   parseResourceBrowserQuickPreviewReleaseRequest,
   parseResourceBrowserQuickPreviewReleaseResult,
   parseResourceBrowserQuickPreviewRequest,
@@ -98,11 +99,13 @@ import {
 import type { PreviewRuntimeIdentity } from '@neko/preview-domain';
 import {
   TEXT_EDITOR_HOST_CHANNELS,
+  TEXT_EDITOR_HOST_ROUTES,
   parseTextEditorHostRequest,
   parseTextEditorHostResult,
   parseTextEditorProjectionEvent,
   parseTextEditorRuntimeIdentity,
   sameTextEditorRuntimeIdentity,
+  sameTextEditorRuntimeOwner,
   type OpenNekoDesktopTextEditorBridge,
   type TextEditorRuntimeIdentity,
 } from '@neko/text-editor-domain';
@@ -224,7 +227,7 @@ const currentPreviewIdentities = new Map<string, PreviewRuntimeIdentity>();
 const currentTextEditorIdentities = new Map<string, TextEditorRuntimeIdentity>();
 const currentTextEditorEventSequences = new Map<string, number>();
 const textEditorListeners = new Set<{
-  readonly identity: TextEditorRuntimeIdentity;
+  identity: TextEditorRuntimeIdentity;
   readonly listener: Parameters<OpenNekoDesktopTextEditorBridge['textEditor']['subscribe']>[1];
 }>();
 const currentCanvasIdentities = new Map<string, CanvasHostRuntimeIdentity>();
@@ -744,7 +747,14 @@ const bridge: OpenNekoDesktopBridge &
         DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
         request,
       );
-      return parseResourceBrowserProjection(response);
+      const result = parseResourceBrowserIntentResult(response);
+      if (
+        !isSameResourceBrowserIdentity(result.identity, request.identity) ||
+        result.requestId !== request.requestId
+      ) {
+        throw new Error('Desktop Resource Browser intent result identity does not match.');
+      }
+      return result;
     },
     subscribe(listener) {
       resourceListeners.add(listener);
@@ -896,16 +906,34 @@ const bridge: OpenNekoDesktopBridge &
   textEditor: {
     async execute(value) {
       const request = parseTextEditorHostRequest(value);
-      const response: unknown = await ipcRenderer.invoke(TEXT_EDITOR_HOST_CHANNELS.execute, request);
+      const response: unknown = await ipcRenderer.invoke(
+        TEXT_EDITOR_HOST_CHANNELS.execute,
+        request,
+      );
       const result = parseTextEditorHostResult(response);
+      const recoveredCleanSession =
+        result.status === 'ready' &&
+        request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet &&
+        sameTextEditorRuntimeOwner(result.identity, request.identity);
       if (
         result.requestId !== request.requestId ||
-        !sameTextEditorRuntimeIdentity(result.identity, request.identity)
+        (!sameTextEditorRuntimeIdentity(result.identity, request.identity) &&
+          !recoveredCleanSession)
       ) {
         throw new Error('Desktop Text Editor result identity does not match.');
       }
+      const previousKey = textEditorIdentityKey(request.identity);
       const key = textEditorIdentityKey(result.identity);
       if (result.status === 'ready') {
+        if (previousKey !== key) {
+          currentTextEditorIdentities.delete(previousKey);
+          currentTextEditorEventSequences.delete(previousKey);
+          for (const entry of textEditorListeners) {
+            if (sameTextEditorRuntimeIdentity(entry.identity, request.identity)) {
+              entry.identity = result.identity;
+            }
+          }
+        }
         currentTextEditorIdentities.set(key, result.identity);
       } else if (result.status === 'closed') {
         currentTextEditorIdentities.delete(key);

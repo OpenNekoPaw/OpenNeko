@@ -4,6 +4,7 @@ import {
   parseAgentConversationTurnConfigurationSnapshot,
   parseAgentDraftInputIntent,
   parseAgentInputReferenceReceipt,
+  parseMessageContextReference,
   parseAgentScratchArtifactRef,
 } from '@neko/agent-contracts';
 import {
@@ -325,7 +326,7 @@ export function parseAgentConversationLifecycleRecord(
   );
   const initialInput = exactRecord(
     record['initialInput'],
-    ['messageId', 'intent', 'references', 'resourceGrantIds'],
+    ['messageId', 'intent', 'references', 'contextReferences', 'resourceGrantIds'],
     'Agent initial input',
   );
   const configuration = parseAgentConversationConfiguration(record['configuration']);
@@ -366,6 +367,13 @@ export function parseAgentConversationLifecycleRecord(
       'Agent initial input references must be an array.',
     );
   }
+  const contextReferencesValue = initialInput['contextReferences'];
+  if (!Array.isArray(contextReferencesValue)) {
+    throw persistenceError(
+      'decode-agent-conversation-lifecycle',
+      'Agent initial input context references must be an array.',
+    );
+  }
   const scratchArtifactsValue = record['scratchArtifacts'];
   if (!Array.isArray(scratchArtifactsValue)) {
     throw persistenceError(
@@ -381,6 +389,7 @@ export function parseAgentConversationLifecycleRecord(
       messageId: identity(initialInput['messageId'], 'initial message'),
       intent: parseAgentDraftInputIntent(initialInput['intent']),
       references: referencesValue.map(parseAgentInputReferenceReceipt),
+      contextReferences: contextReferencesValue.map(parseMessageContextReference),
       resourceGrantIds,
     },
     configuration,

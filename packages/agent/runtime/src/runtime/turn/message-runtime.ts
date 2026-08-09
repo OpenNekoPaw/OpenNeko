@@ -47,12 +47,12 @@ import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   extractFileReferencePaths,
   formatReadDocumentInstruction,
-  formatReadDocumentLocatorInstruction,
   normalizeAgentRuntimePromptLocale,
   type AgentBase64ImageAttachment,
   type AgentProcessedAttachments,
   type AgentRuntimePromptLocale,
 } from '../../input/attachment-projection';
+import { createAgentInputReferenceId } from '../../input/content-reference-id';
 import { getLogger } from '../../utils/logger';
 
 function getMessageRuntimeLogger() {
@@ -174,6 +174,7 @@ export interface BuildEnhancedAgentMessageInput {
   readonly documentReferences?: readonly AgentReferencedDocument[];
   readonly attachmentText?: string;
   readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly contentReferenceIds?: ReadonlyMap<string, string>;
   readonly locale?: AgentRuntimePromptLocale | string;
 }
 
@@ -713,16 +714,31 @@ export function projectContextReferences(
   if (!payloads || payloads.length === 0) return undefined;
   return payloads.map((payload) => {
     const navigationData = extractContextNavigationData(payload);
-    const contentLocator = extractContextContentLocator(payload);
+    const authorizedContent = isAgentAuthorizedContentReferenceContextData(payload.data)
+      ? payload.data
+      : undefined;
+    const contentLocator = authorizedContent?.locator ?? extractContextContentLocator(payload);
     return {
-      type: payload.type,
+      type: authorizedContent
+        ? authorizedContentReferenceType(authorizedContent.mediaType)
+        : payload.type,
       id: payload.id,
       label: payload.label,
       ...(payload.summary ? { summary: payload.summary } : {}),
+      ...(authorizedContent?.mediaType ? { mediaType: authorizedContent.mediaType } : {}),
       ...(contentLocator ? { contentLocator } : {}),
       ...(navigationData ? { navigationData } : {}),
     };
   });
+}
+
+function authorizedContentReferenceType(
+  mediaType: import('@neko/agent-contracts').AgentFileReferenceMediaType | undefined,
+): MessageContextReference['type'] {
+  if (mediaType === 'image') return 'image';
+  if (mediaType === 'audio') return 'audio-clip';
+  if (mediaType === 'video' || mediaType === 'sequence') return 'media';
+  return 'file';
 }
 
 export interface AgentThreeReferenceImageResource {
@@ -1092,7 +1108,11 @@ export function buildEnhancedAgentMessage(input: BuildEnhancedAgentMessageInput)
   if (contextPayloads.length > 0) {
     enhancedMessage += `\n\n--- ${labels.attachedContext} ---`;
     for (const payload of contextPayloads) {
-      enhancedMessage += `\n\n${formatAgentContextPayload(payload, input.locale)}`;
+      enhancedMessage += `\n\n${formatAgentContextPayload(
+        payload,
+        input.locale,
+        input.contentReferenceIds?.get(payload.id),
+      )}`;
     }
   }
 
@@ -1120,6 +1140,7 @@ export function buildEnhancedAgentMessage(input: BuildEnhancedAgentMessageInput)
 export function formatAgentContextPayload(
   payload: AgentContextPayload,
   locale?: AgentRuntimePromptLocale | string,
+  contentReferenceId?: string,
 ): string {
   const labels = getEnhancedMessageLabels(locale);
   const documentContext =
@@ -1132,7 +1153,12 @@ export function formatAgentContextPayload(
     : undefined;
 
   if (authorizedContent) {
-    return formatAuthorizedContentReference(payload.label, authorizedContent, locale);
+    return formatAuthorizedContentReference(
+      payload.label,
+      authorizedContent,
+      locale,
+      contentReferenceId ?? createAgentInputReferenceId(payload.id, authorizedContent.locator),
+    );
   }
 
   if (payload.type === 'entity') {
@@ -1195,27 +1221,37 @@ function formatAuthorizedContentReference(
   label: string,
   data: import('@neko/agent-contracts').AgentAuthorizedContentReferenceContextData,
   locale?: AgentRuntimePromptLocale | string,
+  contentReferenceId?: string,
 ): string {
   const labels = getEnhancedMessageLabels(locale);
   if (data.text !== undefined) {
     return `[${labels.content}: ${label}]\n${data.text}`;
   }
-  const locator = JSON.stringify(data.locator);
+  if (!contentReferenceId) {
+    throw new Error(
+      `Agent authorized content reference '${label}' has no model reference binding.`,
+    );
+  }
+  const inputRef = `input_ref: ${contentReferenceId}`;
   if (data.mediaType === 'document') {
-    return `[${labels.document}: ${label}]\nContentLocator: ${locator}\n${formatReadDocumentLocatorInstruction(data.locator, locale)}`;
+    const instruction =
+      normalizeAgentRuntimePromptLocale(locale) === 'zh'
+        ? `分析该文档前，使用 ${inputRef} 调用 ReadDocument。不要构造 locator 或一次内联整本文档。`
+        : `Use ReadDocument with ${inputRef} before analysis. Do not construct locators or inline the whole document.`;
+    return `[${labels.document}: ${label}]\n${inputRef}\n${instruction}`;
   }
   if (data.mediaType === 'image' || data.mediaType === 'sequence') {
-    return `[${labels.image}: ${label}]\nContentLocator: ${locator}`;
+    return `[${labels.image}: ${label}]\n${inputRef}`;
   }
   if (data.mediaType === 'text' || data.mediaType === undefined) {
-    return `[${labels.content}: ${label}]\nContentLocator: ${locator}`;
+    return `[${labels.content}: ${label}]\n${inputRef}`;
   }
   if (data.mediaType === 'audio' || data.mediaType === 'video') {
     const instruction =
       normalizeAgentRuntimePromptLocale(locale) === 'zh'
-        ? '仅使用当前运行时实际注册的对应媒体感知工具处理该 ContentLocator；能力不可用时明确报告。'
-        : 'Use only a matching media perception tool registered in the current runtime for this ContentLocator; report when the capability is unavailable.';
-    return `[${labels.content}: ${label}]\nContentLocator: ${locator}\n${instruction}`;
+        ? '仅使用当前 Turn 实际注册的对应媒体感知工具处理该 input_ref；能力不可用时明确报告。'
+        : 'Use only a matching media perception tool registered for this Turn with this input_ref; report when the capability is unavailable.';
+    return `[${labels.content}: ${label}]\n${inputRef}\n${instruction}`;
   }
   throw new Error(`Agent authorized content reference '${label}' was not materialized as text.`);
 }
@@ -1618,7 +1654,7 @@ function appendPerceptionToolRoutingPrompt(
   }
 
   const imageRoute = modalities.includes('image')
-    ? 'For image evidence, call `perception.image.understand` with the stable ContentLocator and the relevant focus.'
+    ? 'For image evidence, call the registered `perception.image.understand` Tool with the short input_ref or image_ref shown in the current Conversation and a concise focus. Never construct a ContentLocator.'
     : '';
   const retainedDomainRoutes = modalities.filter((modality) => modality !== 'image');
   const domainRoute =

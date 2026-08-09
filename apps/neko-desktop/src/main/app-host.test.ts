@@ -29,6 +29,7 @@ import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-co
 import { createDesktopWorkspaceDirectoryTargetRequest } from '@neko/host/desktop-workspace-grant-contract';
 import { createAssetCenterHostRequest } from '@neko/assets-domain/asset-center';
 import {
+  AgentConversationLifecycleUnavailableError,
   createAgentConversationLifecycleService,
   createAgentDomainBindingApplicationService,
   createAgentLaunchDraftSubmissionApplicationService,
@@ -60,8 +61,70 @@ import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { AssetCenterNodeRuntime, type AssetCenterNodeRuntimeOptions } from '@neko/assets-node';
+import { TEXT_EDITOR_HOST_ROUTES, type TextEditorRuntimeIdentity } from '@neko/text-editor-domain';
+import {
+  RESOURCE_BROWSER_ROUTES,
+  type ResourceBrowserProjection,
+} from '@neko/assets-domain/resource-browser/contract';
+import { DesktopWorkbenchContractError } from '@neko/host/desktop-workbench-contract';
+import type { ResourceBrowserNodeRuntime } from '@neko/assets-node';
 
 describe('DesktopAppHost', () => {
+  it('maps only Main View capacity failures to an owner-bound Resource Browser rejection', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'resource-browser:project-view-1',
+      viewInstanceId: 'view-instance-1',
+      rendererSessionId: 'renderer-session-1',
+    } as const;
+    const resourceProjection: ResourceBrowserProjection = {
+      identity,
+      facet: 'files',
+      query: '',
+      items: [],
+    };
+    const execute = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new DesktopWorkbenchContractError(
+          'desktop-workbench-main-view-capacity-reached',
+          'Desktop Workbench supports at most eight open Main Views.',
+        ),
+      )
+      .mockResolvedValueOnce(resourceProjection);
+    const resourceBrowser = { execute } as unknown as ResourceBrowserNodeRuntime;
+    const fixture = await createShellAppHost({ resourceBrowser });
+    const request = {
+      requestId: 'open-ninth-view',
+      identity: { ...identity, windowId: fixture.windowId },
+      route: RESOURCE_BROWSER_ROUTES.editText,
+      resourceId: 'content:ninth',
+    } as const;
+    const before = await fixture.appHost.shell.getProjection(fixture.windowId);
+
+    await expect(fixture.appHost.executeResourceBrowser(fixture.sender, request)).resolves.toEqual({
+      requestId: request.requestId,
+      identity: request.identity,
+      status: 'rejected',
+      rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+    });
+    expect(await fixture.appHost.shell.getProjection(fixture.windowId)).toEqual(before);
+    await expect(
+      fixture.appHost.executeResourceBrowser(fixture.sender, {
+        ...request,
+        requestId: 'retry-ninth-view',
+      }),
+    ).resolves.toEqual({
+      requestId: 'retry-ninth-view',
+      identity: request.identity,
+      status: 'completed',
+      projection: resourceProjection,
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
     const logger = createLogger();
     const settings = createSettingsService();
@@ -1069,6 +1132,99 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('returns a local unavailable bootstrap for one invalid persisted Conversation', async () => {
+    const conversationLifecycle = createConversationLifecycle();
+    const fixture = await createShellAppHost({ conversationLifecycle });
+    const scene = activeScene(fixture.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Invalid lifecycle fixture requires an unbound Agent Draft.');
+    }
+    const committed = await conversationLifecycle.firstSubmit({
+      requestId: 'invalid-lifecycle-first-submit',
+      context: {
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        baseGrantIds: [],
+      },
+      input: { kind: 'message', text: 'Retained historical conversation' },
+      references: [],
+      contextReferences: [],
+      resourceGrantIds: [],
+      configuration: firstSubmitConfiguration(),
+    });
+    await fixture.appHost.shell.attachAgentConversation({
+      windowId: fixture.windowId,
+      rendererSessionId: fixture.projection.rendererSessionId,
+      agentViewId: scene.context.agentViewId,
+      draftId: scene.context.scope.draftId,
+      context: committed.context,
+      conversationId: committed.conversationId,
+    });
+    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
+      createAgentWorkspaceRuntime('assistant-space:local-user'),
+    );
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const workbenchInstanceId = activeWorkbench(projection).workbenchInstanceId;
+    const agentSurfaceId = currentAgentSurfaceId(projection);
+    const readFirstSubmitRecord = vi
+      .spyOn(conversationLifecycle, 'readFirstSubmitRecord')
+      .mockRejectedValue(
+        new AgentConversationLifecycleUnavailableError(
+          committed.conversationId,
+          ['lifecycle'],
+          new Error('Host-only decode detail.'),
+        ),
+      );
+    const createBootstrap = vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap');
+    const request = createDesktopAssistantAgentBootstrapRequest(
+      'invalid-lifecycle-bootstrap',
+      workbenchInstanceId,
+      agentSurfaceId,
+      'assistant-space:local-user',
+      committed.conversationId,
+      scene.context.agentViewId,
+    );
+
+    await expect(
+      fixture.appHost.createAgentBootstrap(fixture.sender, request, vi.fn()),
+    ).resolves.toEqual({
+      requestId: 'invalid-lifecycle-bootstrap',
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable',
+        severity: 'error',
+        conversationId: committed.conversationId,
+        fieldNames: ['lifecycle'],
+        message: 'The stored Agent Conversation cannot be opened by the current application.',
+      },
+    });
+    expect(createBootstrap).not.toHaveBeenCalled();
+
+    readFirstSubmitRecord.mockRestore();
+    createBootstrap.mockReturnValue({
+      requestId: 'valid-lifecycle-bootstrap',
+      status: 'ready',
+      connection: {
+        applicationInstanceId: 'app-1',
+        windowId: fixture.windowId,
+        workbenchInstanceId,
+        agentSurfaceId,
+        assistantSpaceId: 'assistant-space:local-user',
+        workspaceId: 'assistant-space:local-user',
+        viewId: scene.context.agentViewId,
+        connectionId: 'connection-valid-lifecycle',
+      },
+    });
+    await expect(
+      fixture.appHost.createAgentBootstrap(
+        fixture.sender,
+        { ...request, requestId: 'valid-lifecycle-bootstrap' },
+        vi.fn(),
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+    expect(createBootstrap).toHaveBeenCalledOnce();
+  });
+
   it('keeps the exact committed Scene when initial provider execution fails', async () => {
     const providerError = new Error('exact provider unavailable');
     const reportError = vi.fn();
@@ -1202,6 +1358,7 @@ describe('DesktopAppHost', () => {
       },
       input: { kind: 'message', text: 'Restore me' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: [],
       configuration: firstSubmitConfiguration(),
     });
@@ -1345,6 +1502,7 @@ describe('DesktopAppHost', () => {
       },
       input: { kind: 'message', text: 'Do not restore under another owner' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: [],
       configuration: firstSubmitConfiguration(),
     });
@@ -1385,6 +1543,7 @@ describe('DesktopAppHost', () => {
       },
       input: { kind: 'message', text: 'Create a note' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: [],
       configuration: firstSubmitConfiguration(),
     });
@@ -1544,6 +1703,7 @@ describe('DesktopAppHost', () => {
       },
       input: { kind: 'message', text: 'Restore this Workspace' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: [],
       configuration: firstSubmitConfiguration(),
     });
@@ -1783,6 +1943,7 @@ describe('DesktopAppHost', () => {
         context: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
         input: { kind: 'message', text: 'Continue this Assistant conversation' },
         references: [],
+        contextReferences: [],
         resourceGrantIds: [],
         configuration: firstSubmitConfiguration(),
       })
@@ -2809,6 +2970,100 @@ describe('DesktopAppHost', () => {
     expect(detachWindow).toHaveBeenCalledWith(fixture.windowId);
     await fixture.appHost.dispose();
   });
+
+  it('subscribes a restored Text Editor only after execute returns its canonical identity', async () => {
+    const callOrder: string[] = [];
+    let restoredIdentity: TextEditorRuntimeIdentity | undefined;
+    const textEditor = {
+      execute: vi.fn(
+        async (
+          _windowId: string,
+          request: { readonly requestId: string; readonly identity: TextEditorRuntimeIdentity },
+        ) => {
+          callOrder.push('execute');
+          restoredIdentity = { ...request.identity, sessionId: 'text-document:new' };
+          return {
+            requestId: request.requestId,
+            identity: restoredIdentity,
+            status: 'ready' as const,
+            projection: {
+              identity: {
+                owner: {
+                  kind: 'window' as const,
+                  windowId: request.identity.windowId,
+                  projectId: request.identity.projectId,
+                },
+                workspaceId: request.identity.workspaceId,
+                documentId: request.identity.documentId,
+                locator: { kind: 'workspace-file' as const, path: request.identity.documentId },
+              },
+              sessionId: restoredIdentity.sessionId,
+              editSequence: 0,
+              mode: 'markdown' as const,
+              source: '# Restored\n',
+              dirty: false,
+              conflict: false,
+              diagnostics: [],
+            },
+          };
+        },
+      ),
+      subscribe: vi.fn(async (_windowId: string, identity: TextEditorRuntimeIdentity) => {
+        callOrder.push('subscribe');
+        expect(identity).toEqual(restoredIdentity);
+        return () => undefined;
+      }),
+      dispose: vi.fn(),
+    } as unknown as NonNullable<DesktopAppHostOptions['textEditor']>;
+    const fixture = await createShellAppHost({ textEditor });
+    const originalIdentity: TextEditorRuntimeIdentity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: fixture.windowId,
+      viewId: 'text-editor-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'notes/readme.md',
+      sessionId: 'text-document:old',
+      rendererSessionId: fixture.projection.rendererSessionId,
+    };
+
+    await expect(
+      fixture.appHost.executeTextEditorRequest(
+        fixture.sender,
+        {
+          route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
+          requestId: 'projection-restore',
+          identity: originalIdentity,
+        },
+        vi.fn(),
+      ),
+    ).resolves.toMatchObject({
+      status: 'ready',
+      identity: { sessionId: 'text-document:new' },
+    });
+    expect(callOrder).toEqual(['execute', 'subscribe']);
+    expect(textEditor.subscribe).toHaveBeenCalledWith(
+      fixture.windowId,
+      expect.objectContaining({ sessionId: 'text-document:new' }),
+      expect.any(Function),
+    );
+    await expect(
+      fixture.appHost.executeTextEditorRequest(
+        {
+          webContentsId: 11,
+          frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+        },
+        {
+          route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
+          requestId: 'projection-foreign-sender',
+          identity: originalIdentity,
+        },
+        vi.fn(),
+      ),
+    ).rejects.toThrow('Unknown Desktop IPC sender');
+    expect(textEditor.execute).toHaveBeenCalledOnce();
+    await fixture.appHost.dispose();
+  });
 });
 
 function createLogger(): ILogger {
@@ -2920,6 +3175,8 @@ async function createShellAppHost(options?: {
   readonly conversationLifecycle?: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
   readonly assetCenter?: AssetCenterNodeRuntime;
+  readonly resourceBrowser?: ResourceBrowserNodeRuntime;
+  readonly textEditor?: DesktopAppHostOptions['textEditor'];
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -2956,6 +3213,7 @@ async function createShellAppHost(options?: {
       validate: ({ connection, conversationId, resourceGrantIds, references }) => {
         agentLaunch.validateResourceGrantCommit(connection, conversationId, resourceGrantIds);
         agentLaunch.validateReferenceCommit(connection, conversationId, references);
+        return agentLaunch.projectReferenceMessageContexts(connection, conversationId, references);
       },
       commit: async ({ connection, conversationId, resourceGrantIds, references }) => {
         await agentLaunch.commitResourceGrants(connection, conversationId, resourceGrantIds);
@@ -3018,6 +3276,8 @@ async function createShellAppHost(options?: {
     conversationLifecycle,
     assistantResources: options?.assistantResources,
     assetCenter: options?.assetCenter,
+    resourceBrowser: options?.resourceBrowser,
+    textEditor: options?.textEditor,
     extensionManager,
     personalSkillManager: createPersonalSkillManager(),
     settings: createSettingsService(),
@@ -3344,6 +3604,7 @@ function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {
     resolveResourceContexts: vi.fn(async () => []),
     validateResourceGrantCommit: vi.fn(),
     validateReferenceCommit: vi.fn(),
+    projectReferenceMessageContexts: vi.fn(() => []),
     commitResourceGrants: vi.fn(),
     commitReferences: vi.fn(),
     resolveReferenceContexts: vi.fn(async () => []),

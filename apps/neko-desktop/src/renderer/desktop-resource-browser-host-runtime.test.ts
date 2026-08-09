@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  ResourceBrowserOperationRejectedError,
   type ResourceBrowserIdentity,
   type ResourceBrowserProjection,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -73,7 +74,12 @@ describe('Electron Resource Browser Host runtime', () => {
           status: 'cancelled' as const,
         })),
         search: vi.fn(async () => projection),
-        execute: vi.fn(async () => projection),
+        execute: vi.fn(async (request) => ({
+          requestId: request.requestId,
+          identity: request.identity,
+          status: 'completed' as const,
+          projection,
+        })),
         subscribe: vi.fn((listener) => {
           publish = listener;
           return () => undefined;
@@ -115,5 +121,45 @@ describe('Electron Resource Browser Host runtime', () => {
       }),
     );
     expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it('converts a typed Main View capacity result without returning a fallback projection', async () => {
+    const execute = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      identity: request.identity,
+      status: 'rejected' as const,
+      rejection: { code: 'main-view-capacity-reached' as const, maximum: 8 },
+    }));
+    const bridge = {
+      resources: {
+        getSnapshot: vi.fn(async () => projection),
+        children: vi.fn(async () => projection),
+        resolveThumbnail: vi.fn(),
+        resolveQuickPreview: vi.fn(),
+        releaseQuickPreview: vi.fn(),
+        planRecovery: vi.fn(),
+        applyRecovery: vi.fn(),
+        cancelRecovery: vi.fn(),
+        search: vi.fn(async () => projection),
+        execute,
+        subscribe: vi.fn(() => () => undefined),
+      },
+    } satisfies OpenNekoDesktopResourceBrowserBridge;
+    const runtime = createElectronResourceBrowserHostRuntime({ bridge, identity });
+
+    await expect(
+      runtime.execute({
+        requestId: 'open-ninth-view',
+        identity,
+        route: 'text.edit',
+        resourceId: 'content:ninth',
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<ResourceBrowserOperationRejectedError>>({
+        code: 'main-view-capacity-reached',
+        maximum: 8,
+      }),
+    );
+    expect(execute).toHaveBeenCalledOnce();
   });
 });

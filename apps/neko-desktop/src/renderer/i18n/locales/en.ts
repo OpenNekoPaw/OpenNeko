@@ -337,6 +337,8 @@ export const en = {
   'agent.loading': 'Loading Agent interface…',
   'agent.unavailable': 'Agent unavailable',
   'agent.unavailableDetail': 'Workspace access for this Agent panel is currently unavailable.',
+  'agent.conversationUnavailableDetail':
+    'This conversation uses stored data that the current app cannot open. It remains in history; choose another conversation or delete it from the sidebar.',
   'agent.runtimeUnavailableDetail': 'The Agent runtime required by this panel is unavailable.',
   'agent.connectionFailureDetail':
     'The Agent panel could not connect. Other workspace tools remain available.',

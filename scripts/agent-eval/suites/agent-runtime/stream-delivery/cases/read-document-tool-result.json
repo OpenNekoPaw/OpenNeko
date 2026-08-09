@@ -23,11 +23,11 @@
         "required": true
       }
     ],
-    "expectedResult": "ReadDocument accepts its projected schema, reads the synthetic Fountain document once, and returns a successful Tool result before the final marker.",
+    "expectedResult": "ReadDocument accepts its short-reference schema, reads the attached synthetic EPUB once, and returns a successful Tool result before the final marker.",
     "expectedFailure": "Provider schema rejection, missing or failed ReadDocument execution, runtime diagnostics, or a missing terminal marker fails visibly."
   },
   "fixtureRefs": [
-    "creative-planning-workspace"
+    "document-image-workspace"
   ],
   "runtimeProfileId": "markdown",
   "modelProfileIds": [
@@ -37,7 +37,23 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "调用 ReadDocument 一次，以 content mode 读取 ${A}/screenplay.fountain，include_images=false、max_chars=1000；不要调用其他工具。读取成功后，简短说明场景地点并单独输出 READ_DOCUMENT_DELIVERY_OK。"
+      "prompt": "调用 ReadDocument 一次，使用附件中显示的 input_ref，mode=content、include_images=false、max_chars=1000；不要构造路径或 locator，也不要调用其他工具。读取成功后简短说明文档内容，并单独输出 READ_DOCUMENT_DELIVERY_OK。",
+      "contextPayloads": [
+        {
+          "type": "file",
+          "id": "file:synthetic-document.epub",
+          "label": "synthetic-document.epub",
+          "summary": "Synthetic EPUB document",
+          "data": {
+            "kind": "authorized-content-reference",
+            "locator": {
+              "kind": "workspace-file",
+              "path": "synthetic-document.epub"
+            },
+            "mediaType": "document"
+          }
+        }
+      ]
     },
     {
       "id": "idle",

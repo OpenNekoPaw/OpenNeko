@@ -4,6 +4,7 @@ import {
   parseTextEditorHostRequest,
   parseTextEditorHostResult,
   parseTextEditorProjectionEvent,
+  sameTextEditorRuntimeOwner,
 } from './desktop-bridge';
 
 const runtimeIdentity = {
@@ -219,6 +220,47 @@ describe('Text Editor Desktop bridge', () => {
         identity: { ...runtimeIdentity, windowId: 'wrong/window' },
       }),
     ).toThrow('Window identity is invalid');
+  });
+
+  it('admits only a session replacement under the same exact runtime owner', () => {
+    expect(
+      sameTextEditorRuntimeOwner(runtimeIdentity, {
+        ...runtimeIdentity,
+        sessionId: 'text-document-2',
+      }),
+    ).toBe(true);
+    expect(
+      sameTextEditorRuntimeOwner(runtimeIdentity, {
+        ...runtimeIdentity,
+        sessionId: 'text-document-2',
+        documentId: 'notes/other.md',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a ready result whose projection belongs to another session', () => {
+    expect(() =>
+      parseTextEditorHostResult({
+        requestId: 'request-mismatched-projection',
+        identity: runtimeIdentity,
+        status: 'ready',
+        projection: {
+          identity: {
+            owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
+            workspaceId: 'workspace-1',
+            documentId: 'notes/readme.md',
+            locator: { kind: 'workspace-file', path: 'notes/readme.md' },
+          },
+          sessionId: 'text-document-other',
+          editSequence: 0,
+          mode: 'markdown',
+          source: '# Other\n',
+          dirty: false,
+          conflict: false,
+          diagnostics: [],
+        },
+      }),
+    ).toThrow('Host result owner identity does not match');
   });
 
   it('validates canonical Fountain projections from their source', () => {

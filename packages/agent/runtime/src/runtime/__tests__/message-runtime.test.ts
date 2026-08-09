@@ -1468,6 +1468,8 @@ describe('message runtime helpers', () => {
 
     expect(plan.systemPrompt).toContain('Runtime Media Perception Routing');
     expect(plan.systemPrompt).toContain('perception.image.understand');
+    expect(plan.systemPrompt).toContain('input_ref or image_ref');
+    expect(plan.systemPrompt).toContain('Never construct a ContentLocator');
     expect(plan.systemPrompt).toContain(
       'do not stop because the chat model lacks native media input',
     );
@@ -1749,6 +1751,17 @@ describe('message runtime helpers', () => {
           summary: 'Selected text',
           data: { selectedText: 'Once upon a time' },
         },
+        {
+          type: 'file',
+          id: 'image-1',
+          label: 'reference.png',
+          summary: 'Workspace image',
+          data: {
+            kind: 'authorized-content-reference',
+            locator: { kind: 'workspace-file', path: 'reference.png' },
+            mediaType: 'image',
+          },
+        },
       ]),
     ).toEqual([
       {
@@ -1766,6 +1779,14 @@ describe('message runtime helpers', () => {
         navigationData: { nodeId: 'node-42' },
       },
       { type: 'story-selection', id: 's1', label: 'Scene 1', summary: 'Selected text' },
+      {
+        type: 'image',
+        id: 'image-1',
+        label: 'reference.png',
+        summary: 'Workspace image',
+        mediaType: 'image',
+        contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+      },
     ]);
   });
 

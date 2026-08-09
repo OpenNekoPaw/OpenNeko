@@ -316,6 +316,26 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
   readonly entityIntent?: ProjectEntityInspectorIntent;
 }
 
+export interface ResourceBrowserIntentCompletedResult {
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly status: 'completed';
+  readonly projection: ResourceBrowserProjection;
+}
+
+export interface ResourceBrowserIntentRejectedResult {
+  readonly requestId: string;
+  readonly identity: ResourceBrowserIdentity;
+  readonly status: 'rejected';
+  readonly rejection: {
+    readonly code: 'main-view-capacity-reached';
+    readonly maximum: number;
+  };
+}
+
+export type ResourceBrowserIntentResult =
+  ResourceBrowserIntentCompletedResult | ResourceBrowserIntentRejectedResult;
+
 export interface ResourceBrowserProjectionEvent {
   readonly sequence: number;
   readonly projection: ResourceBrowserProjection;
@@ -353,6 +373,18 @@ export class ResourceBrowserContractError extends Error {
     super(message, options);
     this.name = 'ResourceBrowserContractError';
     this.code = code;
+  }
+}
+
+export class ResourceBrowserOperationRejectedError extends Error {
+  readonly code: ResourceBrowserIntentRejectedResult['rejection']['code'];
+  readonly maximum: number;
+
+  constructor(rejection: ResourceBrowserIntentRejectedResult['rejection']) {
+    super(`Resource Browser operation rejected: ${rejection.code}.`);
+    this.name = 'ResourceBrowserOperationRejectedError';
+    this.code = rejection.code;
+    this.maximum = rejection.maximum;
   }
 }
 
@@ -1100,6 +1132,55 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
       ),
     },
   };
+}
+
+export function parseResourceBrowserIntentResult(value: unknown): ResourceBrowserIntentResult {
+  const record = requireRecord(value, 'Resource Browser intent result must be an object.');
+  const status = record['status'];
+  if (status === 'completed') {
+    requireOnlyKeys(record, ['requestId', 'identity', 'status', 'projection']);
+    const identity = parseResourceBrowserIdentity(record['identity']);
+    const projection = parseResourceBrowserProjection(record['projection']);
+    assertResourceBrowserIdentity(identity, projection.identity);
+    return {
+      requestId: requireNonEmptyString(
+        record['requestId'],
+        'Resource Browser request identity is required.',
+      ),
+      identity,
+      status,
+      projection,
+    };
+  }
+  if (status === 'rejected') {
+    requireOnlyKeys(record, ['requestId', 'identity', 'status', 'rejection']);
+    const rejection = requireRecord(
+      record['rejection'],
+      'Resource Browser intent rejection is required.',
+    );
+    requireOnlyKeys(rejection, ['code', 'maximum']);
+    if (rejection['code'] !== 'main-view-capacity-reached') {
+      throw invalidPayload('Resource Browser intent rejection code is invalid.');
+    }
+    return {
+      requestId: requireNonEmptyString(
+        record['requestId'],
+        'Resource Browser request identity is required.',
+      ),
+      identity: parseResourceBrowserIdentity(record['identity']),
+      status,
+      rejection: {
+        code: rejection['code'],
+        maximum: requireBoundedInteger(
+          rejection['maximum'],
+          1,
+          100,
+          'Resource Browser Main View maximum must be between 1 and 100.',
+        ),
+      },
+    };
+  }
+  throw invalidPayload('Resource Browser intent result status is invalid.');
 }
 
 function requireCreativeDocumentKind(value: unknown): 'canvas' | 'cut' {

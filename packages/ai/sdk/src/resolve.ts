@@ -33,6 +33,7 @@ export function resolveProvider(
         type: 'openai',
         source: 'native',
         image: (modelId: string) => openai.image(modelId),
+        language: (modelId: string) => openai(modelId),
         // OpenAI provider does not support video model creation
         video: () => null,
         speech: (modelId: string) => openai.speech(modelId),

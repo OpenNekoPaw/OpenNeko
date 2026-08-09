@@ -69,6 +69,9 @@ describe('Agent content controller', () => {
               { name: 'report.pdf', type: 'file' as const },
               { name: 'test.png', type: 'file' as const },
               { name: 'test.fountain', type: 'file' as const },
+              { name: 'data.json', type: 'file' as const },
+              { name: 'outline.yaml', type: 'file' as const },
+              { name: 'reference.html', type: 'file' as const },
             ]),
             readText: vi.fn(async () => Promise.reject(missingGitignore)),
           },
@@ -81,9 +84,12 @@ describe('Agent content controller', () => {
       expect(projection.files).toEqual([
         expect.objectContaining({ name: 'book.epub', mediaType: 'document' }),
         expect.objectContaining({ name: 'comic.cbz', mediaType: 'document' }),
+        expect.objectContaining({ name: 'data.json', mediaType: 'text' }),
         expect.objectContaining({ name: 'draft.docx', mediaType: 'document' }),
+        expect.objectContaining({ name: 'outline.yaml', mediaType: 'text' }),
+        expect.objectContaining({ name: 'reference.html', mediaType: 'text' }),
         expect.objectContaining({ name: 'report.pdf', mediaType: 'document' }),
-        expect.objectContaining({ name: 'test.fountain', mediaType: 'document' }),
+        expect.objectContaining({ name: 'test.fountain', mediaType: 'text' }),
         expect.objectContaining({ name: 'test.png', mediaType: 'image' }),
       ]);
     } finally {

@@ -274,6 +274,44 @@ describe('Desktop Agent launch preload bridge', () => {
       "Desktop Agent rejected message:globalError event 4 for foreign connection 'connection-1'.",
     );
   });
+
+  it('preserves an invalid persisted Conversation bootstrap as typed unavailable', async () => {
+    electron.invoke.mockImplementation(
+      async (channel: string, request: { readonly requestId: string }) => {
+        expect(channel).toBe(DESKTOP_AGENT_CHANNELS.bootstrapGet);
+        return {
+          requestId: request.requestId,
+          status: 'unavailable',
+          diagnostic: {
+            code: 'desktop-agent-conversation-unavailable',
+            severity: 'error',
+            conversationId: 'conversation-invalid',
+            fieldNames: ['lifecycle'],
+            message: 'Stored Conversation data is unavailable.',
+          },
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(
+      bridge.agent.getBootstrap(
+        'workbench-1',
+        'agent-surface-1',
+        'project-1',
+        'view-1',
+        'conversation-invalid',
+      ),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable',
+        conversationId: 'conversation-invalid',
+        fieldNames: ['lifecycle'],
+      },
+    });
+  });
 });
 
 function createCatalog() {

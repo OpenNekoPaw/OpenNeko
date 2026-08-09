@@ -17,9 +17,9 @@
 - Updated positive case: create and revise a Chinese `.fountain` file through the core Workspace file
   path, then prove durable artifact identity/bytes and canonical Fountain diagnostics without any
   screenplay capability or editor session.
-- Updated failure case: request raw inspection or mutation of an exact `.nkc`/`.otio`; prove the core
-  file boundary rejects it and an unavailable/invalid owning-domain operation cannot fall back to raw
-  bytes.
+- Updated boundary cases: request raw inspection or mutation of an exact `.nkc`/`.otio` and prove the
+  core file boundary rejects it; separately force invalid owning-domain codec queries and prove
+  `Read`, `Write` and `Bash` remain absent instead of becoming a fallback.
 - Evidence: requested/effective model, exact Tool identity, permission lifecycle, Workspace-relative
   target, pre/post file freshness, terminal Tool state, durable artifact locator, downstream parser
   diagnostic and forbidden Tool/path absence.
@@ -41,7 +41,8 @@
 
 ## Verification
 
-- Key-free validation: passed on 2026-08-08 with 285 tests and all 23 indexed suites / 54 cases.
+- Key-free validation: passed on 2026-08-09 with 44 files / 294 tests and all 24 indexed suites / 63
+  cases.
 - Focused real-provider batch: required with explicit provider/model/cost authorization.
 - Visible Desktop case: required to prove the composer path, file artifact visibility, clean editor
   refresh/dirty conflict and protected structured-project denial.
@@ -54,3 +55,19 @@
   tests prove native freshness/CAS, clean/dirty editor response and protected raw-file denial.
 - Real provider-backed complete-session and visible Desktop Agent behavior remain unverified until
   provider, model and cost authorization are explicitly supplied.
+
+## Quality Review
+
+- Risk: high, because Agent Tool routing can now mutate durable Canvas/Cut project bytes.
+- Ownership: Canvas/Cut domain services own codec, query, command planning and CAS persistence; Agent
+  Runtime owns Tool schemas and exact provider registration; Desktop remains composition only.
+- User data and concurrency: every mutation reads and writes one exact Workspace-relative target with
+  the queried fingerprint, plans entirely in memory, and performs one atomic replacement. Stale,
+  invalid or unsupported requests fail locally without changing the file.
+- Security and fallback: core file policy rejects `.nkc`/`.otio`, ordinary Agent sessions do not
+  register Bash, and the structured-failure Evaluation case requires `Read`, `Write` and `Bash` to
+  remain absent.
+- Removed path: production source contains no retired screenplay Tool name or Agent-owned Text
+  Document session registration.
+- Remaining risk: model-level Tool selection, visible partial-to-final continuity and Resource Browser
+  reopening remain unverified until the explicitly authorized real-provider/visible Desktop run.

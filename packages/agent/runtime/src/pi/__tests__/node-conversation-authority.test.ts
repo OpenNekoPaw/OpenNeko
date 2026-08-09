@@ -11,6 +11,29 @@ import {
 } from '../node-conversation-authority';
 
 describe('NodePiConversationAuthority', () => {
+  it('rejects a user presentation owned by another Turn before checkpointing', async () => {
+    const authority = await createAuthority('desktop-presentation-owner');
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+
+    await expect(
+      authority.checkpointTurn({
+        lease,
+        conversationId: 'conversation-1',
+        branchId: 'branch-main',
+        turnId: 'turn-1',
+        terminalState: 'failed',
+        userMessagePresentation: { turnId: 'turn-other', content: 'Analyze' },
+        messages: [{ role: 'user', content: 'Internal locator prompt', timestamp: 1 }],
+      }),
+    ).rejects.toThrow("presentation Turn 'turn-other' does not match checkpoint Turn 'turn-1'");
+    expect(authority.readCheckpoint('conversation-1', 'turn-1')).toBeUndefined();
+  });
+
   let root: string;
   let now: number;
   const authorities: NodePiConversationAuthority[] = [];

@@ -74,6 +74,82 @@ describe('persistent Agent conversation lifecycle repository', () => {
     await fixture.store.dispose();
   });
 
+  it('retains obsolete lifecycle payloads unchanged while a canonical sibling remains readable', async () => {
+    const fixture = await createFixture();
+    const valid = createRecord('conversation:valid', 'request:valid', 'turn:valid');
+    await fixture.repository.commitFirstSubmit(valid);
+    const missingReferenceRecord = createRecord(
+      'conversation:missing-context-references',
+      'request:missing-context-references',
+      'turn:missing-context-references',
+    );
+    const { contextReferences: _contextReferences, ...obsoleteInitialInput } =
+      missingReferenceRecord.initialInput;
+    const missingReferencePayload = JSON.stringify({
+      ...missingReferenceRecord,
+      initialInput: obsoleteInitialInput,
+    });
+    const initialMessageRecord = createRecord(
+      'conversation:initial-message',
+      'request:initial-message',
+      'turn:initial-message',
+    );
+    const { initialInput, ...obsoleteRecord } = initialMessageRecord;
+    const initialMessagePayload = JSON.stringify({
+      ...obsoleteRecord,
+      initialMessage: {
+        messageId: initialInput.messageId,
+        intent: initialInput.intent,
+        references: initialInput.references,
+        resourceGrantIds: initialInput.resourceGrantIds,
+      },
+    });
+    const obsoleteRows = [
+      {
+        record: missingReferenceRecord,
+        payload: missingReferencePayload,
+      },
+      {
+        record: initialMessageRecord,
+        payload: initialMessagePayload,
+      },
+    ];
+    await fixture.store.transaction(
+      { mode: 'state-write', ownership: 'state', operation: 'insert-obsolete-agent-lifecycle' },
+      async ({ sql }) => {
+        for (const { record, payload } of obsoleteRows) {
+          await sql.run(
+            `INSERT INTO agent_conversation_records(
+               conversation_id, request_id, turn_id, payload_json, provider_claimed
+             ) VALUES (?, ?, ?, ?, 0)`,
+            [
+              record.conversationId,
+              record.pendingTurn.requestId,
+              record.pendingTurn.turnId,
+              payload,
+            ],
+          );
+        }
+      },
+    );
+
+    for (const { record, payload } of obsoleteRows) {
+      await expect(
+        fixture.repository.readConversation(record.conversationId),
+      ).rejects.toMatchObject({ operation: 'decode-agent-conversation-lifecycle' });
+      const stored = await fixture.store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'inspect-obsolete-agent-lifecycle' },
+        async ({ sql }) =>
+          sql.all(`SELECT payload_json FROM agent_conversation_records WHERE conversation_id = ?`, [
+            record.conversationId,
+          ]),
+      );
+      expect(stored).toEqual([{ payload_json: payload }]);
+    }
+    await expect(fixture.repository.readConversation(valid.conversationId)).resolves.toEqual(valid);
+    await fixture.store.dispose();
+  });
+
   it('restores independent future-turn configuration without changing the Turn snapshot', async () => {
     const fixture = await createFixture();
     const first = createRecord('conversation:first', 'request:first', 'turn:first');
@@ -196,6 +272,7 @@ function createRecord(
       messageId: `message:${conversationId}`,
       intent: { kind: 'message', text: 'Hello' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: [],
     },
     configuration: { conversationId, request, projection },

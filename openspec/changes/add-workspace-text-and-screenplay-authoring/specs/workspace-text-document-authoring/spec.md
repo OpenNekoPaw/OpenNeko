@@ -123,6 +123,15 @@ intent for admitted editable text to that View, replacing the previous text-to-P
 - **THEN** Workbench uses the existing bounded Secondary Main group with an independent exact document session
 - **AND** it does not exceed the canonical split limit or copy source between sessions
 
+#### Scenario: Main View capacity rejects a Resource Browser open operation locally
+
+- **WHEN** an exact Resource Browser open intent would exceed the canonical Main View capacity
+- **THEN** Desktop returns an Assets-owned typed operation rejection for that request
+- **AND** Resource Browser keeps its authoritative projection visible and shows a localized dismissible diagnostic
+- **AND** all existing Main Views, sibling Workspace capabilities and the Resource Dock remain unchanged
+- **AND** Desktop does not close, replace or focus another View and does not retry through Preview or another handler
+- **AND** after the user explicitly closes a Main View, resubmitting the same exact intent can succeed through the canonical handler
+
 #### Scenario: A non-canonical editor View is restored
 
 - **WHEN** persisted Workbench state contains an unknown editor kind or mismatched editor identities
@@ -172,6 +181,12 @@ session.
 - **WHEN** a renderer reconnects with a new renderer-session identity
 - **THEN** it requests the exact editor-session projection and Desktop revokes the prior attachment
 - **AND** it does not attach to an active or recent document or accept messages from the old sender binding
+
+#### Scenario: A released clean session is restored
+
+- **WHEN** the exact Text Editor View remains present but its clean Main-owned session was released
+- **THEN** `projection.get` reopens the View's exact authorized Workspace document and returns a new session identity
+- **AND** Desktop updates only that View, rejects subsequent commands carrying the prior session identity and leaves sibling Views available
 
 ### Requirement: Editing controls are localized, accessible and IME safe
 

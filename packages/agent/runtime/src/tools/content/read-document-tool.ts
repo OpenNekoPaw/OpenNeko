@@ -212,7 +212,7 @@ export function createReadDocumentTool(deps: ReadDocumentToolDeps): Tool {
   return createTool({
     name: TOOL_NAMES_SYSTEM.READ_DOCUMENT,
     description:
-      'Read document text, manifests, ranges, and cursor batches through the unified content access runtime. The input must be a stable source ref returned by Neko content access.',
+      'Read document text, manifests, ranges, and cursor batches through the unified content access runtime. The input must be a stable source ref returned by Neko content access. For mode="range", pass range={locator,...}; locator is never a top-level field.',
     category: 'document',
     isReadOnly: true,
     isConcurrencySafe: true,
@@ -268,6 +268,7 @@ export function createReadDocumentTool(deps: ReadDocumentToolDeps): Tool {
         },
       },
       required: ['source'],
+      additionalProperties: false,
     },
     execute: async (args, options) => executeReadDocument(deps, args, options),
   });
@@ -305,6 +306,13 @@ async function executeReadDocument(
   const mode = readMode(args['mode']);
   const range = args['range'] === undefined ? undefined : readDocumentRange(args['range']);
   if (mode === 'range' && !range) {
+    if (args['range'] === undefined && args['locator'] !== undefined) {
+      return {
+        success: false,
+        error:
+          'ReadDocument locator is not a top-level field. Use range: { locator: <DocumentLocator> } for mode="range".',
+      };
+    }
     return { success: false, error: describeInvalidDocumentRange(args['range']) };
   }
   const cursor = args['cursor'] === undefined ? undefined : readDocumentCursor(args['cursor']);

@@ -8,7 +8,8 @@
     "userBehavior": "Analyze the selected fixture image through native multimodal ReadImage and inspect the automatically retained Workspace Board analysis record without separately requesting an artifact.",
     "canonicalPath": [
       "Desktop App session owner",
-      "ReadImage with explicit analysis intent",
+      "QueryProjectSearch image_ref binding",
+      "ReadImage with explicit short-reference analysis intent",
       "native multimodal turn",
       "terminal native-image-analysis finalizer",
       "Canvas-owned batch coordinator",
@@ -36,7 +37,7 @@
     {
       "id": "analyze",
       "kind": "submit",
-      "prompt": "Analyze only station-illustration.svg from the fixture workspace as a storyboard image. Call ReadImage directly with analysis=storyboard and images=[{\"alias\":\"station-frame\",\"locator\":{\"kind\":\"workspace-file\",\"path\":\"station-illustration.svg\"}}]; do not search for or pass the file through ReadDocument. Then return a concise Markdown analysis of composition, subjects, environment, action, and visual continuity. Do not explicitly create a composite artifact, and do not treat screenplay.fountain or plan.md as used material."
+      "prompt": "Analyze only station-illustration.svg from the fixture workspace as a storyboard image. First call QueryProjectSearch for that exact file, then call ReadImage with analysis=storyboard and image_refs containing only the returned image_ref; do not construct a locator or pass the file through ReadDocument. Then return a concise Markdown analysis of composition, subjects, environment, action, and visual continuity. Do not explicitly create a composite artifact, and do not treat screenplay.fountain or plan.md as used material."
     },
     {
       "id": "idle",

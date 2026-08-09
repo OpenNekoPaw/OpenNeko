@@ -32,7 +32,7 @@ type DesktopAgentSurfaceState =
   | {
       readonly kind: 'unavailable';
       readonly connectionKey: string;
-      readonly reason: 'binding' | 'runtime';
+      readonly reason: 'binding' | 'conversation' | 'runtime';
     }
   | { readonly kind: 'error'; readonly connectionKey: string };
 
@@ -143,7 +143,12 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           setState({
             kind: 'unavailable',
             connectionKey,
-            reason: 'owner' in bootstrap.diagnostic ? 'binding' : 'runtime',
+            reason:
+              'owner' in bootstrap.diagnostic
+                ? 'binding'
+                : bootstrap.diagnostic.code === 'desktop-agent-conversation-unavailable'
+                  ? 'conversation'
+                  : 'runtime',
           });
           return;
         }
@@ -211,15 +216,21 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           state.kind === 'unavailable'
             ? state.reason === 'binding'
               ? t('agent.unavailableDetail')
+              : state.reason === 'conversation'
+                ? t('agent.conversationUnavailableDetail')
               : t('agent.runtimeUnavailableDetail')
             : t('agent.connectionFailureDetail')
         }
         retryLabel={t('agent.retry')}
         title={t('agent.unavailable')}
-        onRetry={() => {
-          setState({ kind: 'loading' });
-          setRetryAttempt((attempt) => attempt + 1);
-        }}
+        {...(state.kind === 'unavailable' && state.reason === 'conversation'
+          ? {}
+          : {
+              onRetry: () => {
+                setState({ kind: 'loading' });
+                setRetryAttempt((attempt) => attempt + 1);
+              },
+            })}
       />
     );
   } else if (state.kind !== 'ready') {
@@ -365,7 +376,7 @@ function AgentSurfaceFailure({
   title,
 }: {
   readonly detail: string;
-  readonly onRetry: () => void;
+  readonly onRetry?: () => void;
   readonly retryLabel: string;
   readonly title: string;
 }): JSX.Element {
@@ -374,15 +385,17 @@ function AgentSurfaceFailure({
       <div className="desktop-agent-failure__content">
         <strong>{title}</strong>
         <p>{detail}</p>
-        <Button
-          className="desktop-agent-failure__retry"
-          leadingIcon={<RefreshIcon size={13} />}
-          onClick={onRetry}
-          size="xs"
-          variant="secondary"
-        >
-          {retryLabel}
-        </Button>
+        {onRetry ? (
+          <Button
+            className="desktop-agent-failure__retry"
+            leadingIcon={<RefreshIcon size={13} />}
+            onClick={onRetry}
+            size="xs"
+            variant="secondary"
+          >
+            {retryLabel}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

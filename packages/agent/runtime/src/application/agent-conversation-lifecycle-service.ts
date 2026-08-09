@@ -6,6 +6,7 @@ import {
   parseAgentConversationTurnConfigurationSnapshot,
   parseAgentDraftInputIntent,
   parseAgentInputReferenceReceipt,
+  parseMessageContextReference,
   parseAgentScratchArtifactRef,
   type AgentBoundDomainBinding,
   type AgentConfigurationPolicyProjection,
@@ -17,9 +18,26 @@ import {
   type AgentDraftInputIntent,
   type AgentInputReferenceReceipt,
   type Message,
+  type MessageContextReference,
 } from '@neko/agent-contracts';
+import { LocalMetadataError } from '@neko/local-metadata';
 
 export type AgentPendingTurnStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export class AgentConversationLifecycleUnavailableError extends Error {
+  readonly code = 'agent-conversation-lifecycle-unavailable';
+  override readonly cause: unknown;
+
+  constructor(
+    readonly conversationId: string,
+    readonly fieldNames: readonly string[],
+    cause: unknown,
+  ) {
+    super(`Agent Conversation '${conversationId}' stored lifecycle is unavailable.`);
+    this.name = 'AgentConversationLifecycleUnavailableError';
+    this.cause = cause;
+  }
+}
 
 export interface AgentConversationLifecycleRecord {
   readonly conversationId: string;
@@ -29,6 +47,7 @@ export interface AgentConversationLifecycleRecord {
     readonly messageId: string;
     readonly intent: AgentDraftInputIntent;
     readonly references: readonly AgentInputReferenceReceipt[];
+    readonly contextReferences: readonly MessageContextReference[];
     readonly resourceGrantIds: readonly string[];
   };
   readonly configuration: AgentConversationConfiguration;
@@ -47,6 +66,7 @@ export interface AgentFirstSubmitInput {
   readonly context: AgentBoundDomainBinding;
   readonly input: AgentDraftInputIntent;
   readonly references: readonly AgentInputReferenceReceipt[];
+  readonly contextReferences: readonly MessageContextReference[];
   readonly resourceGrantIds: readonly string[];
   readonly configuration: {
     readonly request: AgentConfigurationRequest;
@@ -66,8 +86,15 @@ export function projectAgentConversationInitialMessage(
   return {
     id: record.initialInput.messageId,
     role: 'user',
-    content: projectInitialInputText(record.initialInput.intent),
+    content: projectAgentDraftInputText(record.initialInput.intent),
     timestamp,
+    ...(record.initialInput.contextReferences.length === 0
+      ? {}
+      : {
+          contextReferences: record.initialInput.contextReferences.map((reference) => ({
+            ...reference,
+          })),
+        }),
   };
 }
 
@@ -241,6 +268,7 @@ export function createAgentConversationLifecycleService(options: {
     const context = parseAgentBoundDomainBinding(input.context);
     const inputIntent = parseAgentDraftInputIntent(input.input);
     const references = input.references.map(parseAgentInputReferenceReceipt);
+    const contextReferences = input.contextReferences.map(parseMessageContextReference);
     const resourceGrantIds = requireUniqueIdentities(
       input.resourceGrantIds,
       'Agent first-submit Resource grants',
@@ -259,6 +287,7 @@ export function createAgentConversationLifecycleService(options: {
         context,
         input: inputIntent,
         references,
+        contextReferences,
         resourceGrantIds,
         configuration: {
           conversationId: existing.conversationId,
@@ -294,6 +323,7 @@ export function createAgentConversationLifecycleService(options: {
         messageId: `message:${options.createIdentity()}`,
         intent: inputIntent,
         references,
+        contextReferences,
         resourceGrantIds,
       },
       configuration,
@@ -311,6 +341,7 @@ export function createAgentConversationLifecycleService(options: {
       context,
       input: inputIntent,
       references,
+      contextReferences,
       resourceGrantIds,
       configuration,
     });
@@ -376,9 +407,18 @@ export function createAgentConversationLifecycleService(options: {
   };
 
   const readFirstSubmitRecord = async (
-    conversationId: string,
-  ): Promise<AgentConversationLifecycleRecord | undefined> =>
-    options.repository.readConversation(requireIdentity(conversationId, 'Agent Conversation'));
+    conversationIdValue: string,
+  ): Promise<AgentConversationLifecycleRecord | undefined> => {
+    const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
+    try {
+      return await options.repository.readConversation(conversationId);
+    } catch (error) {
+      if (isLocalMetadataDecodeFailure(error, 'decode-agent-conversation-lifecycle')) {
+        throw new AgentConversationLifecycleUnavailableError(conversationId, ['lifecycle'], error);
+      }
+      throw error;
+    }
+  };
 
   const readConversation = async (
     conversationId: string,
@@ -392,9 +432,21 @@ export function createAgentConversationLifecycleService(options: {
     conversationIdValue: string,
   ): Promise<AgentBoundDomainBinding> => {
     const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
-    const stored = await options.repository.readConversationContext(conversationId);
+    let stored: AgentBoundDomainBinding | undefined;
+    try {
+      stored = await options.repository.readConversationContext(conversationId);
+    } catch (error) {
+      if (isLocalMetadataDecodeFailure(error, 'decode-agent-conversation-context')) {
+        throw new AgentConversationLifecycleUnavailableError(conversationId, ['context'], error);
+      }
+      throw error;
+    }
     if (stored) return stored;
-    throw new Error(`Agent Conversation '${conversationId}' context is not present.`);
+    throw new AgentConversationLifecycleUnavailableError(
+      conversationId,
+      ['context'],
+      new Error(`Agent Conversation '${conversationId}' context is not present.`),
+    );
   };
 
   const readConversationConfiguration = async (
@@ -512,6 +564,10 @@ export function createAgentConversationLifecycleService(options: {
       await options.repository.deleteConversation(record.conversationId);
     },
   };
+}
+
+function isLocalMetadataDecodeFailure(error: unknown, operation: string): boolean {
+  return error instanceof LocalMetadataError && error.operation === operation;
 }
 
 export function createInMemoryAgentConversationLifecycleRepository(): AgentConversationLifecycleRepositoryPort {
@@ -646,6 +702,9 @@ function cloneRecord(record: AgentConversationLifecycleRecord): AgentConversatio
       ...record.initialInput,
       intent: { ...record.initialInput.intent },
       references: record.initialInput.references.map((reference) => ({ ...reference })),
+      contextReferences: record.initialInput.contextReferences.map((reference) => ({
+        ...reference,
+      })),
       resourceGrantIds: [...record.initialInput.resourceGrantIds],
     },
     configuration: structuredClone(record.configuration),
@@ -657,7 +716,7 @@ function cloneRecord(record: AgentConversationLifecycleRecord): AgentConversatio
 const AGENT_CONVERSATION_TITLE_MAX_LENGTH = 50;
 
 export function projectAgentConversationTitle(input: AgentDraftInputIntent): string {
-  const normalized = projectInitialInputText(input).trim().replace(/\s+/g, ' ');
+  const normalized = projectAgentDraftInputText(input).trim().replace(/\s+/g, ' ');
   if (normalized.length === 0) {
     throw new Error('Agent Conversation title source must not be empty.');
   }
@@ -670,7 +729,7 @@ export function projectAgentConversationTitle(input: AgentDraftInputIntent): str
   return `${title}...`;
 }
 
-function projectInitialInputText(input: AgentDraftInputIntent): string {
+export function projectAgentDraftInputText(input: AgentDraftInputIntent): string {
   switch (input.kind) {
     case 'message':
       return input.text;
@@ -687,6 +746,7 @@ function assertSameFirstSubmit(
     readonly context: AgentBoundDomainBinding;
     readonly input: AgentDraftInputIntent;
     readonly references: readonly AgentInputReferenceReceipt[];
+    readonly contextReferences: readonly MessageContextReference[];
     readonly resourceGrantIds: readonly string[];
     readonly configuration: AgentConversationLifecycleRecord['configuration'];
   },
@@ -695,6 +755,8 @@ function assertSameFirstSubmit(
     JSON.stringify(record.context) !== JSON.stringify(input.context) ||
     JSON.stringify(record.initialInput.intent) !== JSON.stringify(input.input) ||
     JSON.stringify(record.initialInput.references) !== JSON.stringify(input.references) ||
+    JSON.stringify(record.initialInput.contextReferences) !==
+      JSON.stringify(input.contextReferences) ||
     JSON.stringify(record.initialInput.resourceGrantIds) !==
       JSON.stringify(input.resourceGrantIds) ||
     JSON.stringify(record.configuration) !== JSON.stringify(input.configuration)

@@ -237,6 +237,14 @@ submits one exact open intent. The existing default path that opens admitted tex
 deleted. Preview remains available only as a distinct explicit read-only action and as the user
 choice for unsupported/oversized text; it is not an automatic fallback after Text Editor failure.
 
+Workbench capacity remains an explicit Host-owned bound. When a Resource Browser open intent would
+exceed that bound, Desktop maps the exact Host contract error to an Assets-owned typed operation
+rejection across IPC. Resource Browser keeps its last authoritative projection and presents a
+localized, dismissible operation diagnostic; it does not replace the browser with an authority
+failure, close or replace an existing View, retry through another renderer, or infer an active View.
+After the user explicitly closes a Main View, the same exact intent may be submitted again through
+the canonical path.
+
 The active `compose-desktop-workbench-scenes` change is a prerequisite. Implementation updates its
 final canonical View union and renderer composition atomically rather than registering a second
 editor View catalog or preserving the old union behind an alias.
@@ -280,10 +288,13 @@ stale edit sequence, external fingerprint conflict, parser association failure a
 reject only the affected open/edit/save/projection. One malformed Fountain file cannot disable the
 Text Editor registry, Search for sibling sources, the Workspace or Desktop startup.
 
-Renderer restart requests one exact session projection. Missing clean sessions reopen from the same
-authorized locator; missing dirty sessions report data unavailable and never substitute the active,
-recent or first document. No catch-all handler, wildcard format registry, parser fallback, empty
-successful result or automatic file rewrite is allowed.
+Renderer restart requests one exact session projection. A surviving dirty session reattaches to the
+new renderer identity without rebuilding its buffer. When the prior clean session has already been
+released, only `projection.get` may reconstruct it from the exact View-owned Workspace locator,
+mint a new session identity and atomically replace that View's `editorSessionId` before returning the
+new canonical identity. The prior identity is stale after that response. Missing dirty sessions report
+data unavailable and never substitute the active, recent or first document. No catch-all handler,
+wildcard format registry, parser fallback, empty successful result or automatic file rewrite is allowed.
 
 ## Risks / Trade-offs
 

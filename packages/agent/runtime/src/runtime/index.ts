@@ -296,6 +296,7 @@ export {
   projectAgentFileMentions,
   projectAgentMentionExtras,
   projectAgentProjectFilesMessage,
+  projectContextReferences,
   projectThreeReferenceContextImageResources,
   mergeReferencedMediaImageAttachments,
   prepareAgentMessageDispatch,

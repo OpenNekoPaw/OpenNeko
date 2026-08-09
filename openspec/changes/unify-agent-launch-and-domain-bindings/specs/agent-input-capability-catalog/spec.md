@@ -103,7 +103,7 @@ Mention discovery and selected references SHALL be resolved through the current 
 
 #### Scenario: Supported structured document is selected
 
-- **WHEN** a Workspace-bound Draft or Session selects an authorized PDF, DOCX, EPUB, CBZ, Fountain or another format declared by the canonical document reader through its exact ContentLocator
+- **WHEN** a Workspace-bound Draft or Session selects an authorized PDF, DOCX, EPUB, CBZ or another structured or binary format declared by the canonical document reader through its exact ContentLocator
 - **THEN** Desktop preserves the locator without reading or rejecting the format and Agent instructs the exact Turn to use the existing `ReadDocument` capability
 - **AND** document images are reachable only through `ReadDocument.imageInfo` locators followed by `ReadImage`, not by reconstructing raw entry paths
 
@@ -121,6 +121,22 @@ Mention discovery and selected references SHALL be resolved through the current 
 
 - **WHEN** an authorized reference requires audio transcription, video frame extraction, structured parsing or a generic conversion capability that is not registered for the exact Turn
 - **THEN** only that reference or Turn fails with an exact unavailable-capability diagnostic and the Host does not decode it as text, submit empty context, use a Desktop-private reader, or switch to another source
+
+#### Scenario: Plain text uses basic Workspace file operations
+
+- **WHEN** an authorized UTF-8 text, Markdown, Fountain, JSON, YAML or CSV file is selected
+- **THEN** Agent uses bounded basic Read/Write operations and does not route it through `ReadDocument`, a perception model or a binary converter
+
+#### Scenario: Non-native vision model receives an image reference
+
+- **WHEN** the exact `agent.main` model cannot accept Pi `ImageContent`
+- **THEN** image analysis is available only when the immutable Turn capability snapshot includes an exact image perception Tool and purpose model
+- **AND** otherwise only the reference or Turn is unavailable without switching the main model or silently attempting native image input
+
+#### Scenario: Unsupported binary class is selected
+
+- **WHEN** a selected archive, executable, device file or unknown binary has no exact registered document, archive, media or perception capability
+- **THEN** Agent reports the precise unsupported class and does not read it as text, execute it, recursively unpack it or try multiple processors
 
 #### Scenario: One reference fails during Turn preparation
 

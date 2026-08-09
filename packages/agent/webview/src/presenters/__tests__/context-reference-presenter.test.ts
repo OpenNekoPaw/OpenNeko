@@ -60,4 +60,29 @@ describe('context-reference-presenter', () => {
       },
     ]);
   });
+
+  it('projects an authorized locator reference without exposing provider prompt text', () => {
+    const payload: AgentContextPayload = {
+      type: 'file',
+      id: 'file:test.png',
+      label: 'test.png',
+      summary: 'Workspace image',
+      data: {
+        kind: 'authorized-content-reference',
+        locator: { kind: 'workspace-file', path: 'test.png' },
+        mediaType: 'image',
+      },
+    };
+
+    expect(projectContextReferencesFromPayloads([payload])).toEqual([
+      {
+        type: 'image',
+        id: 'file:test.png',
+        label: 'test.png',
+        summary: 'Workspace image',
+        mediaType: 'image',
+        contentLocator: { kind: 'workspace-file', path: 'test.png' },
+      },
+    ]);
+  });
 });

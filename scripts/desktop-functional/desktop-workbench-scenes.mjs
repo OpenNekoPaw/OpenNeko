@@ -729,8 +729,9 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
       const workspaceMention = await exerciseWorkspaceDraftMention({
         evaluate,
         pressKey,
-        referenceLabel: 'test.png',
+        referenceLabel: 'test.fountain',
         referenceQuery: 'test',
+        expectedReferenceKind: 'file',
         screenshot,
         type,
         screenshotLabel: 'agent-entry-workspace-mention-selected',
@@ -769,6 +770,7 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
           workspaceGrantId: boundDraft.workspaceGrantId,
           submittedInput,
           expectedConversationTitle,
+          expectedReferenceLabel: 'test.fountain',
         });
       } catch (error) {
         const failureState = await evaluate(`(async () => {
@@ -794,9 +796,9 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
           `Workspace $storyboard first submit issued duplicate provider requests: ${JSON.stringify(providerEvidence)}`,
         );
       }
-      if (providerEvidence.requests[0]?.nativeImageCount !== 1) {
+      if (providerEvidence.requests[0]?.nativeImageCount !== 0) {
         throw new Error(
-          `Workspace image first submit did not send one native image part: ${JSON.stringify(providerEvidence)}`,
+          `Workspace Fountain first submit unexpectedly sent a native image part: ${JSON.stringify(providerEvidence)}`,
         );
       }
       const completedScreenshot = await captureSettledScreenshot(
@@ -928,6 +930,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         workspaceGrantId: workspaceActivation.workspaceGrantId,
         submittedInput,
         expectedConversationTitle: submittedInput,
+        expectedReferenceLabel: 'library-image.png',
       });
       const providerEvidence = providerServer.snapshot();
       assertFunctionalProviderEvidence(providerEvidence, 1);
@@ -2920,6 +2923,9 @@ async function waitForWorkspaceSession(evaluate, expected) {
       const interaction = activeWorkbench.scene.slots.interaction;
       const conversation = projection.agentHome.conversations[0];
       const transcript = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}')?.textContent ?? '';
+      const referenceTokens = [...document.querySelectorAll(
+        '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-user-prompt [data-agent-reference-token="true"]',
+      )];
       const alerts = [...document.querySelectorAll('[role="alert"]')]
         .map((element) => element.textContent?.trim() ?? '')
         .filter(Boolean);
@@ -2934,6 +2940,10 @@ async function waitForWorkspaceSession(evaluate, expected) {
       }
       return transcript.includes(${JSON.stringify(expected.submittedInput)}) &&
         transcript.includes('OPENNEKO_FUNCTIONAL_RESPONSE_1') &&
+        referenceTokens.length === 1 &&
+        referenceTokens[0]?.textContent?.includes(${JSON.stringify(expected.expectedReferenceLabel)}) &&
+        !transcript.includes('Attached Context') &&
+        !transcript.includes('ContentLocator') &&
         conversation?.title === ${JSON.stringify(expected.expectedConversationTitle)} &&
         !document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-run-status') &&
         !document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-execution-activity') &&
@@ -2957,6 +2967,9 @@ async function waitForWorkspaceSession(evaluate, expected) {
     const visibleRoots = [...document.querySelectorAll(
       '.desktop-agent-root[data-owner-root="agent"]',
     )].filter((candidate) => candidate instanceof HTMLElement && !candidate.hidden);
+    const referenceTokens = [...(activeSurface?.querySelectorAll(
+      '.agent-user-prompt [data-agent-reference-token="true"]',
+    ) ?? [])];
     const alerts = [...document.querySelectorAll('[role="alert"]')]
       .map((element) => element.textContent?.trim() ?? '')
       .filter(Boolean);
@@ -2973,6 +2986,10 @@ async function waitForWorkspaceSession(evaluate, expected) {
       !(projectLink instanceof HTMLElement) ||
       getComputedStyle(conversationLink).fontSize !== '11px' ||
       getComputedStyle(projectLink).fontSize !== '11px' ||
+      referenceTokens.length !== 1 ||
+      !referenceTokens[0]?.textContent?.includes(${JSON.stringify(expected.expectedReferenceLabel)}) ||
+      (activeSurface?.textContent ?? '').includes('Attached Context') ||
+      (activeSurface?.textContent ?? '').includes('ContentLocator') ||
       visibleRoots.length !== 1 ||
       !rootRetained ||
       Boolean(activeSurface?.querySelector('.agent-execution-activity')) ||
@@ -3001,6 +3018,14 @@ async function waitForWorkspaceSession(evaluate, expected) {
       providerResponseVisible: activeSurface?.textContent?.includes(
         'OPENNEKO_FUNCTIONAL_RESPONSE_1',
       ) === true,
+      referenceToken: {
+        count: referenceTokens.length,
+        label: referenceTokens[0]?.textContent?.trim() ?? '',
+        variant: referenceTokens[0]?.getAttribute('data-reference-variant') ?? '',
+      },
+      internalLocatorPromptVisible:
+        (activeSurface?.textContent ?? '').includes('Attached Context') ||
+        (activeSurface?.textContent ?? '').includes('ContentLocator'),
       runStatusVisible: Boolean(activeSurface?.querySelector('.agent-run-status')),
       executionActivityVisible: Boolean(
         activeSurface?.querySelector('.agent-execution-activity'),

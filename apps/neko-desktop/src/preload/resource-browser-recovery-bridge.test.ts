@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createResourceBrowserRecoveryPlanRequest,
   createResourceBrowserSnapshotRequest,
+  RESOURCE_BROWSER_ROUTES,
 } from '@neko/assets-domain/resource-browser/contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
 import {
@@ -173,6 +174,59 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
         }),
       ),
     ).rejects.toThrow('unsupported fields');
+  });
+
+  it('accepts only an owner-bound typed Main View capacity rejection', async () => {
+    electron.invoke.mockImplementation(
+      async (channel: string, request: { readonly requestId: string }) => {
+        if (channel === DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet) return projection();
+        if (channel === DESKTOP_RESOURCE_BROWSER_CHANNELS.execute) {
+          return {
+            requestId: request.requestId,
+            identity,
+            status: 'rejected',
+            rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+          };
+        }
+        throw new Error(`Unexpected Resource Browser channel '${channel}'.`);
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    await bridge.resources.getSnapshot(
+      createResourceBrowserSnapshotRequest({ requestId: 'snapshot-capacity', identity }),
+    );
+
+    await expect(
+      bridge.resources.execute({
+        requestId: 'open-ninth-view',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.editText,
+        resourceId: 'content:ninth',
+      }),
+    ).resolves.toEqual({
+      requestId: 'open-ninth-view',
+      identity,
+      status: 'rejected',
+      rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+    });
+
+    electron.invoke.mockImplementationOnce(
+      async (_channel: string, request: { readonly requestId: string }) => ({
+        requestId: request.requestId,
+        identity: { ...identity, workspaceId: 'workspace-foreign' },
+        status: 'rejected',
+        rejection: { code: 'main-view-capacity-reached', maximum: 8 },
+      }),
+    );
+    await expect(
+      bridge.resources.execute({
+        requestId: 'open-foreign-view',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.editText,
+        resourceId: 'content:ninth',
+      }),
+    ).rejects.toThrow('result identity does not match');
   });
 
   it('keeps portable snapshot destination and staging paths inside Main', async () => {

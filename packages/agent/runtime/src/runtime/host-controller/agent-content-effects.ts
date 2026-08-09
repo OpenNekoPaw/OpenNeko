@@ -16,6 +16,7 @@ import {
   type AgentProjectFileSearchPlan,
   type AgentProjectMentionCandidate,
 } from '@neko/agent-runtime/runtime/message-runtime';
+import { classifyAgentContentPath } from '../../input/content-path-classification';
 import type { ProjectFilesWebviewMessage } from '@neko/agent-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
@@ -26,8 +27,6 @@ import {
 } from '@neko/content';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { readProjectEntityResources } from '@neko/entity-node';
-import { detectMediaType, getMimeType } from '@neko/media';
-import { isSupportedDocumentPath } from '@neko/content/document';
 
 const MAX_SVG_BYTES = 10 * 1024 * 1024;
 
@@ -641,16 +640,8 @@ function workspaceFilePresentation(
     return { icon: 'TS', mediaType: 'text' };
   }
   if (extension === 'md' || extension === 'mdx') return { icon: 'MD', mediaType: 'text' };
-  const mimeType = getMimeType(relativePath);
-  if (mimeType.startsWith('image/')) {
-    const detected = detectMediaType(relativePath);
-    return { mediaType: detected === 'sequence' ? 'sequence' : 'image' };
-  }
-  if (mimeType.startsWith('video/')) return { mediaType: 'video' };
-  if (mimeType.startsWith('audio/')) return { mediaType: 'audio' };
-  if (mimeType.startsWith('text/')) return { mediaType: 'text' };
-  if (isSupportedDocumentPath(relativePath)) return { mediaType: 'document' };
-  return {};
+  const mediaType = classifyAgentContentPath(relativePath).mediaType;
+  return mediaType === undefined ? {} : { mediaType };
 }
 
 function isNodeError(error: unknown, code: string): boolean {

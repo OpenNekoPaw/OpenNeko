@@ -7,6 +7,7 @@ export function createElectronTextEditorHostRuntime(input: {
   readonly identity: TextEditorRuntimeIdentity;
 }): TextEditorHostRuntime {
   let requestSequence = 0;
+  let currentIdentity = input.identity;
   const execute = async (
     request: Parameters<OpenNekoDesktopTextEditorBridge['textEditor']['execute']>[0],
   ) => {
@@ -15,6 +16,7 @@ export function createElectronTextEditorHostRuntime(input: {
     if (result.status !== 'ready') {
       throw new Error(`Text Editor request returned '${result.status}'.`);
     }
+    currentIdentity = result.identity;
     return result.projection;
   };
   const requestId = (operation: string): string => {
@@ -26,16 +28,16 @@ export function createElectronTextEditorHostRuntime(input: {
       execute({
         route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
         requestId: requestId('projection'),
-        identity: input.identity,
+        identity: currentIdentity,
       }),
     applyEdits: (command) => {
-      if (command.sessionId !== input.identity.sessionId) {
+      if (command.sessionId !== currentIdentity.sessionId) {
         throw new Error('Text Editor command session identity is stale.');
       }
       return execute({
         route: TEXT_EDITOR_HOST_ROUTES.editsApply,
         requestId: command.requestId,
-        identity: input.identity,
+        identity: currentIdentity,
         expectedEditSequence: command.expectedEditSequence,
         changes: command.changes,
       });
@@ -44,24 +46,24 @@ export function createElectronTextEditorHostRuntime(input: {
       execute({
         route: TEXT_EDITOR_HOST_ROUTES.jsonFormat,
         requestId: request.requestId,
-        identity: input.identity,
+        identity: currentIdentity,
         expectedEditSequence: request.expectedEditSequence,
       }),
     save: (request) =>
       execute({
         route: TEXT_EDITOR_HOST_ROUTES.save,
         requestId: requestId('save'),
-        identity: input.identity,
+        identity: currentIdentity,
         expectedEditSequence: request.expectedEditSequence,
       }),
     reload: (request) => {
-      if (request.sessionId !== input.identity.sessionId) {
+      if (request.sessionId !== currentIdentity.sessionId) {
         throw new Error('Text Editor command session identity is stale.');
       }
       return execute({
         route: TEXT_EDITOR_HOST_ROUTES.reload,
         requestId: requestId('reload'),
-        identity: input.identity,
+        identity: currentIdentity,
         confirmDirty: request.confirmDirty,
       });
     },
@@ -150,7 +152,7 @@ export function createElectronTextEditorHostRuntime(input: {
       }
     },
     subscribe: (listener) =>
-      input.bridge.textEditor.subscribe(input.identity, (event) => listener(event.projection)),
+      input.bridge.textEditor.subscribe(currentIdentity, (event) => listener(event.projection)),
   };
 }
 

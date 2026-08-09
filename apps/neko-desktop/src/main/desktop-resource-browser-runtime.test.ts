@@ -773,8 +773,9 @@ function accepted(value: unknown): CanvasHostIntentResult {
       },
       authoringCapabilities: {
         sourceModes: ['import', 'reference'],
-        generationMediaKinds: [],
+        generationKinds: [],
       },
+      generationNodes: [],
     },
   };
 }

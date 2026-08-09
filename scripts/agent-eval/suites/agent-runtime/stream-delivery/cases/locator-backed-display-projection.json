@@ -5,11 +5,12 @@
   "caseGroup": "regression",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Read one committed workspace image by ContentLocator and project its successful Tool result to the Agent Webview through an authorized transient display source.",
+    "userBehavior": "Read one searched workspace image by a Conversation-scoped image_ref and project its successful Tool result to the Agent Webview through an authorized transient display source.",
     "canonicalPath": [
       "Desktop Agent input queue",
+      "QueryProjectSearch workspace result",
       "Pi Agent Tool schema",
-      "ReadImage ContentLocator validation",
+      "ReadImage short-reference resolution",
       "shared Pi Timeline projector",
       "conversation projection store",
       "Desktop message resource display projector",
@@ -39,7 +40,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "调用 ReadImage 一次，images 只包含一个 workspace-file ContentLocator：path=station-illustration.svg；analysis=describe、mode=metadata、max_images=1。必须原样保留 ContentLocator，不要传 ResourceRef、绝对路径、file URL、neko-media URL、data URL 或 display URL。读取成功后简短说明图片类型，最后单独输出 LOCATOR_DISPLAY_PROJECTION_OK。"
+      "prompt": "先调用 QueryProjectSearch 搜索 station-illustration.svg，再调用 ReadImage 一次，image_refs 只包含搜索结果返回的一个 image_ref，analysis=describe。不要构造 locator，不要传 ResourceRef、绝对路径、file URL、neko-media URL、data URL 或 display URL。读取成功后简短说明图片类型，最后单独输出 LOCATOR_DISPLAY_PROJECTION_OK。"
     },
     {
       "id": "idle",

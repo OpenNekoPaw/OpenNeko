@@ -5,6 +5,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content';
 import {
+  ResourceBrowserOperationRejectedError,
   type ResourceBrowserHostRuntime,
   type ResourceBrowserProjectionEvent,
   type ResourceBrowserProjection,
@@ -95,6 +96,49 @@ describe('ResourceBrowserRoot', () => {
     expect(await screen.findByText('Resource Browser unavailable')).toBeTruthy();
     expect(screen.getByText('Resource snapshot is invalid.')).toBeTruthy();
     expect(screen.getByText('Canvas remains available')).toBeTruthy();
+  });
+
+  it('keeps resources visible when Main View capacity rejects an open and clears the alert after retry', async () => {
+    const filesProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'files',
+      items: [
+        {
+          resourceId: 'content:ninth',
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'file',
+          label: 'ninth.md',
+          locator: { kind: 'workspace-file', path: 'ninth.md' },
+          capabilities: ['edit-text'],
+        },
+      ],
+    };
+    const runtime = createRuntime(filesProjection);
+    runtime.execute
+      .mockRejectedValueOnce(
+        new ResourceBrowserOperationRejectedError({
+          code: 'main-view-capacity-reached',
+          maximum: 8,
+        }),
+      )
+      .mockResolvedValueOnce(filesProjection);
+    render(<ResourceBrowserRoot runtime={runtime} locale="zh-cn" />);
+
+    fireEvent.click(await screen.findByText('ninth.md'));
+    expect(
+      await screen.findByText('最多可打开 8 个主视图。请先关闭一个，再打开此资源。'),
+    ).toBeTruthy();
+    expect(screen.getByText('ninth.md')).toBeTruthy();
+    expect(screen.queryByText('资源库不可用')).toBeNull();
+
+    fireEvent.click(screen.getByText('ninth.md'));
+    await waitFor(() =>
+      expect(screen.queryByText('最多可打开 8 个主视图。请先关闭一个，再打开此资源。')).toBeNull(),
+    );
+    expect(screen.getByText('ninth.md')).toBeTruthy();
+    expect(runtime.execute).toHaveBeenCalledTimes(2);
   });
 
   it('shows an Entity record diagnostic without hiding valid siblings', async () => {

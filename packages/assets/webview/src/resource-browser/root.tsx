@@ -13,6 +13,7 @@ import {
   PackageIcon,
   PlayIcon,
   PlusIcon,
+  CloseIcon,
   RefreshIcon,
   SearchIcon,
   SuccessIcon,
@@ -36,6 +37,7 @@ import React, {
 } from 'react';
 import {
   RESOURCE_BROWSER_ROUTES,
+  ResourceBrowserOperationRejectedError,
   createResourceBrowserChildrenRequest,
   createResourceBrowserEntityIntentRequest,
   createResourceBrowserQuickPreviewReleaseRequest,
@@ -160,6 +162,7 @@ export function ResourceBrowserRoot({
   >();
   const [entryName, setEntryName] = useState('');
   const [createEntryError, setCreateEntryError] = useState<string>();
+  const [operationError, setOperationError] = useState<string>();
   const [quickPreview, setQuickPreview] = useState<{
     readonly resourceId: string;
     readonly result: ResourceBrowserQuickPreviewResult;
@@ -274,6 +277,7 @@ export function ResourceBrowserRoot({
         reconcileRetainedContainer(event.projection, setActiveContainerByFacet);
       }
       setState({ kind: 'ready', projection: event.projection });
+      setOperationError(undefined);
     });
     void runtime
       .getSnapshot()
@@ -301,6 +305,7 @@ export function ResourceBrowserRoot({
           reconcileRetainedContainer(projection, setActiveContainerByFacet);
           reconcilePresentationState(projection, setSelectedIdByFacet, setActiveContainerByFacet);
           setState({ kind: 'ready', projection });
+          setOperationError(undefined);
         }
       })
       .catch((error: unknown) => {
@@ -402,6 +407,7 @@ export function ResourceBrowserRoot({
             : { ...current, [facet]: undefined };
         });
         setState({ kind: 'ready', projection });
+        setOperationError(undefined);
       }
     } catch (error: unknown) {
       if (requestNumber === requestSequence.current) {
@@ -446,8 +452,9 @@ export function ResourceBrowserRoot({
       reconcileRetainedContainer(resultProjection, setActiveContainerByFacet);
       reconcileRetainedSelection(resultProjection, setSelectedIdByFacet);
       setState({ kind: 'ready', projection: resultProjection });
+      setOperationError(undefined);
     } catch (error: unknown) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeOperationError(error, labels));
     } finally {
       setPending(false);
     }
@@ -919,6 +926,21 @@ export function ResourceBrowserRoot({
           </button>
         ))}
       </div>
+      {operationError ? (
+        <div className="neko-resource-browser__operation-error" role="alert">
+          <WarningIcon size={14} aria-hidden="true" />
+          <span>{operationError}</span>
+          <button
+            type="button"
+            className="neko-resource-browser__icon-button"
+            aria-label={labels.dismiss}
+            title={labels.dismiss}
+            onClick={() => setOperationError(undefined)}
+          >
+            <CloseIcon size={13} />
+          </button>
+        </div>
+      ) : null}
       <>
         {navigableFacet && projection.query.length === 0 && viewMode === 'grid' ? (
           <nav className="neko-resource-browser__breadcrumbs" aria-label={labels.breadcrumbs}>
@@ -1317,6 +1339,19 @@ export function ResourceBrowserRoot({
       ) : null}
     </section>
   );
+}
+
+function describeOperationError(
+  error: unknown,
+  labels: ReturnType<typeof getResourceBrowserLabels>,
+): string {
+  if (
+    error instanceof ResourceBrowserOperationRejectedError &&
+    error.code === 'main-view-capacity-reached'
+  ) {
+    return labels.mainViewCapacityReached.replace('{maximum}', String(error.maximum));
+  }
+  return describeError(error);
 }
 
 type ResourceBrowserContextAction =

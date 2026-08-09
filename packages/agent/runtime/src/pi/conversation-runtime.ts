@@ -41,6 +41,7 @@ import type {
   SkillLocator,
   SkillResourceLocator,
 } from './skill-host';
+import type { PiUserMessagePresentation } from './user-message-presentation';
 
 export interface OpenPiConversationRuntimeOptions {
   readonly authority: NodePiConversationAuthority;
@@ -69,6 +70,7 @@ export interface ExecutePiConversationTurnInput {
   readonly runId: string;
   readonly prompt: string;
   readonly durablePrompt?: string;
+  readonly userMessagePresentation?: PiUserMessagePresentation;
   readonly images?: readonly ImageContent[];
   readonly modelPolicy: AgentModelPolicy;
   readonly skillSnapshot: PiSkillHostSnapshot;
@@ -408,6 +410,9 @@ export class PiConversationRuntime {
             branchId: this.options.branchId,
             turnId: input.turnId,
             terminalState: terminalState(event),
+            ...(input.userMessagePresentation === undefined
+              ? {}
+              : { userMessagePresentation: input.userMessagePresentation }),
             messages: projectDurableTurnMessages(
               turnMessages,
               durablePrompt,

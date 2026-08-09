@@ -56,6 +56,7 @@ import { DESKTOP_DEFAULT_ASSISTANT_SPACE_ID } from '@neko/host/desktop-shell-sta
 import type {
   ResourceBrowserChildrenRequest,
   ResourceBrowserIntentRequest,
+  ResourceBrowserIntentResult,
   ResourceBrowserProjection,
   ResourceBrowserProjectionEvent,
   ResourceBrowserQuickPreviewReleaseRequest,
@@ -72,6 +73,11 @@ import type {
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
 } from '@neko/assets-domain/resource-browser/contract';
+import { parseResourceBrowserIntentRequest } from '@neko/assets-domain/resource-browser/contract';
+import {
+  DESKTOP_WORKBENCH_LIMITS,
+  DesktopWorkbenchContractError,
+} from '@neko/host/desktop-workbench-contract';
 import type { AssetCenterNodeRuntime, ResourceBrowserNodeRuntime } from '@neko/assets-node';
 import {
   parseAssetCenterHostRequest,
@@ -155,6 +161,7 @@ import {
 } from '@neko/host/desktop-workspace-grant-contract';
 import type { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import {
+  AgentConversationLifecycleUnavailableError,
   projectAgentConversationInitialMessage,
   type AgentConversationLifecycleService,
 } from '@neko/agent-runtime/application';
@@ -387,10 +394,18 @@ export class DesktopAppHost {
           'Desktop Assistant Agent bootstrap does not match its exact Agent Surface.',
         );
       }
-      const [context, firstSubmitRecord] = await Promise.all([
-        this.conversationLifecycle.readConversationContext(request.conversationId),
-        this.conversationLifecycle.readFirstSubmitRecord(request.conversationId),
-      ]);
+      const restored = await readAgentConversationBootstrap(
+        this.conversationLifecycle,
+        request.conversationId,
+      );
+      if (restored.status === 'unavailable') {
+        return {
+          requestId: request.requestId,
+          status: 'unavailable',
+          diagnostic: restored.diagnostic,
+        };
+      }
+      const { context, firstSubmitRecord } = restored;
       if (context.kind !== 'assistant' || context.assistantSpaceId !== request.assistantSpaceId) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
@@ -471,18 +486,22 @@ export class DesktopAppHost {
     const initialConversation =
       initialConversationId === undefined
         ? undefined
-        : await Promise.all([
-            this.conversationLifecycle.readConversationContext(initialConversationId),
-            this.conversationLifecycle.readFirstSubmitRecord(initialConversationId),
-          ]);
+        : await readAgentConversationBootstrap(this.conversationLifecycle, initialConversationId);
+    if (initialConversation?.status === 'unavailable') {
+      return {
+        requestId: request.requestId,
+        status: 'unavailable',
+        diagnostic: initialConversation.diagnostic,
+      };
+    }
     if (
       initialConversation &&
-      (initialConversation[0].kind !== 'workspace' ||
-        initialConversation[0].workspaceId !== grant.workspaceId)
+      (initialConversation.context.kind !== 'workspace' ||
+        initialConversation.context.workspaceId !== grant.workspaceId)
     ) {
       throw new Error('Desktop Workspace Agent bootstrap context belongs to another Workspace.');
     }
-    const initialConversationRecord = initialConversation?.[1];
+    const initialConversationRecord = initialConversation?.firstSubmitRecord;
     return this.agentBridge.createBootstrap({
       requestId: request.requestId,
       grant,
@@ -1543,10 +1562,35 @@ export class DesktopAppHost {
   async executeResourceBrowser(
     sender: DesktopSenderIdentity,
     payload: ResourceBrowserIntentRequest | unknown,
-  ): Promise<ResourceBrowserProjection> {
+  ): Promise<ResourceBrowserIntentResult> {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
-    return this.requireResourceBrowser().execute(window.windowId, payload);
+    const request = parseResourceBrowserIntentRequest(payload);
+    try {
+      const projection = await this.requireResourceBrowser().execute(window.windowId, request);
+      return {
+        requestId: request.requestId,
+        identity: request.identity,
+        status: 'completed',
+        projection,
+      };
+    } catch (error) {
+      if (
+        error instanceof DesktopWorkbenchContractError &&
+        error.code === 'desktop-workbench-main-view-capacity-reached'
+      ) {
+        return {
+          requestId: request.requestId,
+          identity: request.identity,
+          status: 'rejected',
+          rejection: {
+            code: 'main-view-capacity-reached',
+            maximum: DESKTOP_WORKBENCH_LIMITS.mainViewCount.max,
+          },
+        };
+      }
+      throw error;
+    }
   }
 
   async getPreviewSnapshot(
@@ -1579,19 +1623,22 @@ export class DesktopAppHost {
     const runtime = this.textEditor;
     if (!runtime) throw new Error('Desktop Text Editor runtime is unavailable.');
     const request = parseTextEditorHostRequest(payload);
-    if (request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
+    const result = await runtime.execute(window.windowId, request);
+    if (request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet && result.status === 'ready') {
       const subscriptions =
         this.textEditorSubscriptions.get(sender.webContentsId) ?? new Map<string, () => void>();
-      const key = textEditorSubscriptionKey(request.identity);
+      const previousKey = textEditorSubscriptionKey(request.identity);
+      const key = textEditorSubscriptionKey(result.identity);
+      if (previousKey !== key) {
+        subscriptions.get(previousKey)?.();
+        subscriptions.delete(previousKey);
+      }
       if (!subscriptions.has(key)) {
-        subscriptions.set(
-          key,
-          await runtime.subscribe(window.windowId, request.identity, publish),
-        );
+        subscriptions.set(key, await runtime.subscribe(window.windowId, result.identity, publish));
         this.textEditorSubscriptions.set(sender.webContentsId, subscriptions);
       }
     }
-    return runtime.execute(window.windowId, request);
+    return result;
   }
 
   async getCanvasSnapshot(
@@ -1740,7 +1787,8 @@ export class DesktopAppHost {
       disposeSubscription();
     }
     this.cutSubscriptions.delete(webContentsId);
-    for (const disposeSubscription of this.textEditorSubscriptions.get(webContentsId)?.values() ?? []) {
+    for (const disposeSubscription of this.textEditorSubscriptions.get(webContentsId)?.values() ??
+      []) {
       disposeSubscription();
     }
     this.textEditorSubscriptions.delete(webContentsId);
@@ -2145,6 +2193,36 @@ function unavailableConversationOwner(
       },
     },
   };
+}
+
+async function readAgentConversationBootstrap(
+  lifecycle: AgentConversationLifecycleService,
+  conversationId: string,
+) {
+  try {
+    const [context, firstSubmitRecord] = await Promise.all([
+      lifecycle.readConversationContext(conversationId),
+      lifecycle.readFirstSubmitRecord(conversationId),
+    ]);
+    return { status: 'ready' as const, context, firstSubmitRecord };
+  } catch (error) {
+    if (
+      !(error instanceof AgentConversationLifecycleUnavailableError) ||
+      error.conversationId !== conversationId
+    ) {
+      throw error;
+    }
+    return {
+      status: 'unavailable' as const,
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable' as const,
+        severity: 'error' as const,
+        conversationId,
+        fieldNames: [...error.fieldNames],
+        message: 'The stored Agent Conversation cannot be opened by the current application.',
+      },
+    };
+  }
 }
 
 export async function deliverCutAgentContext(

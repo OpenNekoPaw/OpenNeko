@@ -99,10 +99,19 @@ describe('Agent launch Draft submission application service', () => {
 
   it('commits, materializes, hands off and starts the exact pending Turn in order', async () => {
     const fixture = createFixture();
+    const contextReferences = [
+      {
+        type: 'file' as const,
+        id: 'reference:notes.fountain',
+        label: 'notes.fountain',
+        mediaType: 'text' as const,
+        contentLocator: { kind: 'workspace-file' as const, path: 'notes.fountain' },
+      },
+    ];
+    fixture.resources.validate.mockReturnValueOnce(contextReferences);
 
-    await expect(
-      fixture.service.submit({ requestId: 'request:one', connection, draftInput }),
-    ).resolves.toMatchObject({
+    const submitted = fixture.service.submit({ requestId: 'request:one', connection, draftInput });
+    await expect(submitted).resolves.toMatchObject({
       session: { phase: 'session', binding },
       turnStatus: 'running',
     });
@@ -111,6 +120,14 @@ describe('Agent launch Draft submission application service', () => {
     expect(fixture.bindings.resolve).toHaveBeenCalledWith(binding);
     expect(fixture.events).toEqual(['materialize', 'resource-commit', 'scene-handoff', 'execute']);
     await fixture.lifecycle.waitForProviderIdle();
+    const result = await submitted;
+    await expect(
+      fixture.lifecycle.readConversation(result.session.conversationId),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        initialInput: expect.objectContaining({ contextReferences }),
+      }),
+    );
   });
 
   it('replays one request without resolving another owner or starting another provider call', async () => {
@@ -293,7 +310,7 @@ function createFixture() {
     now: () => '2026-08-08T00:00:00.000Z',
   });
   const resources = {
-    validate: vi.fn(),
+    validate: vi.fn(() => []),
     commit: vi.fn(async () => {
       events.push('resource-commit');
     }),

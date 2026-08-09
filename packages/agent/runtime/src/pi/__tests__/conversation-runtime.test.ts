@@ -24,6 +24,7 @@ import { projectOpenNekoTool } from '../openneko-tool';
 import { PiSkillHost, buildSkillActivationId } from '../skill-host';
 import type { PiProductAgentEvent } from '../event-projector';
 import { createReadDocumentTool } from '../../tools';
+import { projectPiConversationEntries } from '../../runtime/projection/pi-conversation-history-projector';
 
 const MODEL: Model<'openai-completions'> = {
   id: 'main',
@@ -628,6 +629,19 @@ describe('PiConversationRuntime', () => {
       runId: 'run-transient-context',
       prompt: 'Analyze\n\nTRANSIENT_REFERENCE_CONTENT',
       durablePrompt: 'Analyze\n\nContentLocator: {"kind":"workspace-file","path":"notes.txt"}',
+      userMessagePresentation: {
+        turnId: 'turn-transient-context',
+        content: 'Analyze',
+        contextReferences: [
+          {
+            type: 'file',
+            id: 'file:notes.txt',
+            label: 'notes.txt',
+            mediaType: 'text',
+            contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
+          },
+        ],
+      },
       modelPolicy,
       skillSnapshot: await emptySkills(),
       capabilityTools: [],
@@ -643,6 +657,23 @@ describe('PiConversationRuntime', () => {
     expect(persisted).toContain('ContentLocator');
     expect(persisted).not.toContain('TRANSIENT_REFERENCE_CONTENT');
     expect(JSON.stringify(runtime.messages)).not.toContain('TRANSIENT_REFERENCE_CONTENT');
+    expect(
+      projectPiConversationEntries(
+        await authority.readBranchEntries('conversation-1', 'branch-main'),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: 'Analyze',
+        contextReferences: [
+          expect.objectContaining({
+            label: 'notes.txt',
+            contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
+          }),
+        ],
+      }),
+      expect.objectContaining({ role: 'assistant', content: 'context read' }),
+    ]);
     runtime.dispose();
   });
 

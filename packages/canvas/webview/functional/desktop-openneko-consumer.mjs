@@ -450,7 +450,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(interactionResizeSelector);
     await waitForInteractiveSelector(evaluate, interactionResizeSelector);
     const interactionWidthBeforeResize = await readInteractionWidth(evaluate);
-    await drag(interactionResizeSelector, '.neko-controlled-workbench-main', {
+    const interactionResizeTarget =
+      interactionWidthBeforeResize >= 300
+        ? '.neko-controlled-workbench-interaction'
+        : '.neko-controlled-workbench-main';
+    await drag(interactionResizeSelector, interactionResizeTarget, {
       targetPosition: { xRatio: 0.5, yRatio: 0.5 },
     });
     const resizeLifecycle = await waitForResizeLifecycleCompletion(

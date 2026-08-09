@@ -1,5 +1,6 @@
 import {
   createResourceBrowserSnapshotRequest,
+  ResourceBrowserOperationRejectedError,
   type ResourceBrowserHostRuntime,
   type ResourceBrowserIdentity,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -50,8 +51,12 @@ export function createElectronResourceBrowserHostRuntime(input: {
     search(request) {
       return input.bridge.resources.search(request);
     },
-    execute(request) {
-      return input.bridge.resources.execute(request);
+    async execute(request) {
+      const result = await input.bridge.resources.execute(request);
+      if (result.status === 'rejected') {
+        throw new ResourceBrowserOperationRejectedError(result.rejection);
+      }
+      return result.projection;
     },
   };
 }

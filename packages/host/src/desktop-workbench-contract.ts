@@ -75,7 +75,10 @@ export interface DesktopOpenMainViewOptions {
 }
 
 export class DesktopWorkbenchContractError extends Error {
-  readonly code: 'invalid-desktop-workbench-payload' | 'desktop-workbench-stale-identity';
+  readonly code:
+    | 'invalid-desktop-workbench-payload'
+    | 'desktop-workbench-stale-identity'
+    | 'desktop-workbench-main-view-capacity-reached';
 
   constructor(code: DesktopWorkbenchContractError['code'], message: string) {
     super(message);
@@ -140,7 +143,7 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
     throw invalidPayload('Desktop Workbench Main accepts Canvas and Preview Views, not Cut Views.');
   }
   if (views.length > DESKTOP_WORKBENCH_LIMITS.mainViewCount.max) {
-    throw invalidPayload('Desktop Workbench supports at most eight open Main Views.');
+    throw mainViewCapacityReached();
   }
   const viewIds = new Set(views.map((view) => view.viewId));
   if (viewIds.size !== views.length) {
@@ -994,4 +997,11 @@ function invalidPayload(message: string): DesktopWorkbenchContractError {
 
 function staleIdentity(message: string): DesktopWorkbenchContractError {
   return new DesktopWorkbenchContractError('desktop-workbench-stale-identity', message);
+}
+
+function mainViewCapacityReached(): DesktopWorkbenchContractError {
+  return new DesktopWorkbenchContractError(
+    'desktop-workbench-main-view-capacity-reached',
+    'Desktop Workbench supports at most eight open Main Views.',
+  );
 }

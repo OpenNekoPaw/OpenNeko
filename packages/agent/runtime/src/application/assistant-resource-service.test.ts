@@ -75,6 +75,7 @@ function conversationRecord() {
       messageId: 'message:1',
       intent: { kind: 'message', text: 'Create' },
       references: [],
+      contextReferences: [],
       resourceGrantIds: ['grant:1'],
     },
     configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' as const },

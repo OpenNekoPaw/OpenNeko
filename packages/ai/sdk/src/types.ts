@@ -4,7 +4,12 @@
  * Shared types for the AI SDK integration layer.
  */
 
-import type { ImageModelV3, Experimental_VideoModelV3, SpeechModelV3 } from '@ai-sdk/provider';
+import type {
+  ImageModelV3,
+  Experimental_VideoModelV3,
+  LanguageModelV3,
+  SpeechModelV3,
+} from '@ai-sdk/provider';
 
 /**
  * Configuration for creating an AI SDK provider instance
@@ -31,6 +36,8 @@ export interface ResolvedProvider {
   source: ResolvedProviderSource;
   /** Create an image model by model ID, or null if not supported */
   image(modelId: string): ImageModelV3 | null;
+  /** Create an OpenAI-compatible language model by model ID, or null if not supported. */
+  language(modelId: string): LanguageModelV3 | null;
   /** Create a video model by model ID, or null if not supported */
   video(modelId: string): Experimental_VideoModelV3 | null;
   /** Create a speech model by model ID, or null if not supported */
