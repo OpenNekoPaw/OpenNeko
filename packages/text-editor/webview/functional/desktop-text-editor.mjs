@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { openFixtureWorkspace } from '../../../../scripts/desktop-functional/desktop-operations.mjs';
 
 const MARKDOWN_SOURCE = '# 创作笔记\n\n第一稿。\n';
+const MARKDOWN_INCOMPLETE = '# 你好\n\n1. 目录\n2. 存在\n3. |';
 const MARKDOWN_EDITED = '# 创作笔记\n\n这是通过桌面编辑器保存的中文内容。\n';
 const JSON_INVALID = '{"title":"未完成",}';
 const JSON_FORMATTED = '{\n  "title": "已格式化",\n  "scenes": 2\n}\n';
@@ -63,7 +64,7 @@ export const desktopTextEditorScenario = Object.freeze({
     waitForSelector,
   }) {
     await openFixtureWorkspace(evaluate);
-    await evaluate(`window.resizeTo(1800, 1000)`);
+    await resizeDesktopWindow(evaluate, 1800, 1000);
     await waitForSelector('.desktop-scene-workbench--workspace');
     await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
     await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
@@ -77,7 +78,11 @@ export const desktopTextEditorScenario = Object.freeze({
       markdownDefault.presentationMode !== 'rich' ||
       !markdownDefault.outlineText.includes('创作笔记') ||
       markdownDefault.hasInternalToolbar ||
-      !markdownDefault.contextActionsInTabRow
+      !markdownDefault.contextActionsInTabRow ||
+      markdownDefault.segmented.map((item) => item.label).join(',') !== '源码,所见即所得,分栏' ||
+      !markdownDefault.segmented[0]?.icon.includes('codicon-code') ||
+      !markdownDefault.segmented[1]?.icon.includes('codicon-edit') ||
+      !markdownDefault.segmented[2]?.icon.includes('codicon-split-horizontal')
     ) {
       throw new Error(
         `Fresh Markdown presentation is not Rich + outline in the Workbench tab row: ${JSON.stringify(
@@ -86,6 +91,30 @@ export const desktopTextEditorScenario = Object.freeze({
       );
     }
     const markdownDefaultScreenshot = await screenshot('markdown-rich-outline-default');
+    await selectTextEditorMode(evaluate, 'source');
+    await type('.cm-content', MARKDOWN_INCOMPLETE);
+    await waitForEditorSource(evaluate, MARKDOWN_INCOMPLETE);
+    await selectTextEditorMode(evaluate, 'split');
+    await waitForRichReady(evaluate);
+    await waitForRichText(evaluate, '目录');
+    const markdownIncomplete = await inspectTextEditor(evaluate);
+    if (
+      markdownIncomplete.richState !== 'ready' ||
+      !markdownIncomplete.richText.includes('存在') ||
+      markdownIncomplete.richReadOnly !== 'true' ||
+      markdownIncomplete.splitSurfaceOrder.join(',') !== 'source,preview' ||
+      !markdownIncomplete.splitHorizontal
+    ) {
+      throw new Error(
+        `Incomplete Markdown did not remain visible in left-Source/right-preview Split: ${JSON.stringify(
+          markdownIncomplete,
+        )}`,
+      );
+    }
+    const markdownIncompleteScreenshot = await screenshot(
+      'markdown-incomplete-source-preview-split',
+    );
+    checkpoint('markdown-incomplete-source-preview-split', markdownIncomplete);
     await selectTextEditorMode(evaluate, 'source');
     await type('.cm-content', MARKDOWN_EDITED);
     await waitForEditorSource(evaluate, MARKDOWN_EDITED);
@@ -111,7 +140,7 @@ export const desktopTextEditorScenario = Object.freeze({
 
     await restartApplication();
     await waitForDesktopBridge(60_000);
-    await evaluate(`window.resizeTo(1800, 1000)`);
+    await resizeDesktopWindow(evaluate, 1800, 1000);
     await waitForSelector('.desktop-scene-workbench--workspace');
     await waitForSelector('.neko-text-editor-root[data-document-mode="markdown"]');
     await selectTextEditorMode(evaluate, 'source');
@@ -254,12 +283,7 @@ export const desktopTextEditorScenario = Object.freeze({
     }
     checkpoint('save-conflict-fail-visible-local', conflict);
 
-    await evaluate(`window.resizeTo(960, 640)`);
-    await waitForCondition(
-      evaluate,
-      `document.documentElement.clientWidth <= 960`,
-      'Desktop window did not enter the compact validation width.',
-    );
+    await resizeDesktopWindow(evaluate, 960, 640);
     const compact = await inspectTextEditor(evaluate);
     if (
       compact.rootWidth > compact.viewportWidth ||
@@ -277,12 +301,6 @@ export const desktopTextEditorScenario = Object.freeze({
     const activeProjectGroupId = await readActiveProjectGroupId(evaluate);
     await setDesktopThemeFromSettings(evaluate, 'dark');
     await returnToProject(evaluate, activeProjectGroupId);
-    await evaluate(`window.resizeTo(1800, 1000)`);
-    await waitForCondition(
-      evaluate,
-      `document.documentElement.clientWidth >= 1700`,
-      'Desktop window did not restore the wide validation width.',
-    );
     await waitForSelector('.desktop-scene-workbench--workspace');
     await activateMainViewTab(evaluate, 'notes.md');
     await waitForSelector('.neko-text-editor-root[data-document-mode="markdown"]');
@@ -290,12 +308,7 @@ export const desktopTextEditorScenario = Object.freeze({
     await waitForSelector('.neko-text-editor-body[data-presentation-mode="split"]');
     await waitForRichReady(evaluate);
     await waitForRichText(evaluate, '这是通过桌面编辑器保存的中文内容。');
-    await evaluate(`window.resizeTo(960, 640)`);
-    await waitForCondition(
-      evaluate,
-      `document.documentElement.clientWidth <= 960`,
-      'Desktop window did not enter the dark compact validation width.',
-    );
+    await resizeDesktopWindow(evaluate, 960, 640);
     const darkCompact = await inspectTextEditor(evaluate);
     if (
       darkCompact.theme !== 'dark' ||
@@ -303,6 +316,7 @@ export const desktopTextEditorScenario = Object.freeze({
       darkCompact.toolbarScrollWidth > darkCompact.toolbarClientWidth + 1 ||
       darkCompact.overlappingControls ||
       darkCompact.tabControlsOverlap ||
+      !darkCompact.splitHorizontal ||
       darkCompact.rootBackground === 'rgba(0, 0, 0, 0)' ||
       darkCompact.rootBackground === 'rgb(255, 255, 255)' ||
       darkCompact.rootColor === 'rgb(32, 33, 36)' ||
@@ -324,7 +338,7 @@ export const desktopTextEditorScenario = Object.freeze({
       'Desktop Theme did not complete the reversible light-theme cycle.',
     );
 
-    await evaluate(`window.resizeTo(1800, 1000)`);
+    await resizeDesktopWindow(evaluate, 1800, 1000);
     await ensureResourceDockVisible(evaluate);
     await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
     await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
@@ -397,6 +411,7 @@ export const desktopTextEditorScenario = Object.freeze({
     return {
       markdown,
       markdownDefault,
+      markdownIncomplete,
       imeComposition,
       jsonInvalid,
       jsonFormatted,
@@ -410,6 +425,7 @@ export const desktopTextEditorScenario = Object.freeze({
       capacityRetried,
       screenshots: [
         markdownDefaultScreenshot,
+        markdownIncompleteScreenshot,
         markdownScreenshot,
         cleanSessionRecoveryScreenshot,
         jsonDiagnosticScreenshot,
@@ -445,15 +461,14 @@ async function openTextDocument(evaluate, label, mode) {
 
 async function selectTextEditorMode(evaluate, mode) {
   await evaluate(`(() => {
+    const labels = {
+      rich: ['Rich', '所见即所得'],
+      source: ['Source', '源码'],
+      split: ['Split', '分栏'],
+      preview: ['Preview', '预览'],
+    }[${JSON.stringify(mode)}];
     const button = [...document.querySelectorAll('.neko-text-editor-segmented button')]
-      .find((candidate) => {
-        const label = candidate.textContent?.trim().toLowerCase();
-        return label === ${JSON.stringify(mode)} ||
-          (${JSON.stringify(mode)} === 'rich' && label === '所见即所得') ||
-          (${JSON.stringify(mode)} === 'source' && label === '源码') ||
-          (${JSON.stringify(mode)} === 'split' && label === '分栏') ||
-          (${JSON.stringify(mode)} === 'preview' && label === '预览');
-      });
+      .find((candidate) => labels.includes(candidate.getAttribute('aria-label') ?? ''));
     if (!(button instanceof HTMLButtonElement)) {
       throw new Error(${JSON.stringify(`Text Editor mode '${mode}' is unavailable.`)});
     }
@@ -787,6 +802,33 @@ async function waitForCondition(evaluate, expression, message, timeoutMs = 30_00
   throw new Error(message);
 }
 
+async function resizeDesktopWindow(evaluate, width, height) {
+  let actualSize = await readDesktopViewport(evaluate);
+  if (hasReachedDesktopWidth(actualSize.width, width)) return;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await evaluate(`window.resizeTo(${String(width)}, ${String(height)})`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    actualSize = await readDesktopViewport(evaluate);
+    if (hasReachedDesktopWidth(actualSize.width, width)) return;
+  }
+  throw new Error(
+    `Desktop window did not enter the requested ${String(width)}x${String(height)} validation size: ${JSON.stringify(actualSize)}`,
+  );
+}
+
+async function readDesktopViewport(evaluate) {
+  return evaluate(`(() => ({
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  }))()`);
+}
+
+function hasReachedDesktopWidth(actualWidth, requestedWidth) {
+  return requestedWidth <= 1000
+    ? actualWidth <= requestedWidth
+    : actualWidth >= requestedWidth - 100;
+}
+
 async function inspectTextEditor(evaluate) {
   return evaluate(`(() => {
     const root = document.querySelector('.neko-text-editor-root');
@@ -797,6 +839,8 @@ async function inspectTextEditor(evaluate) {
       throw new Error('Text Editor presentation is unavailable.');
     }
     const rootStyle = getComputedStyle(root);
+    const sourceRect = root.querySelector('.neko-text-editor-codemirror')?.getBoundingClientRect();
+    const richRect = root.querySelector('.neko-text-editor-rich')?.getBoundingClientRect();
     const controls = [...contextActions.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
     const contextTargetRect = contextTarget?.getBoundingClientRect();
     const tabListRect = tabList?.getBoundingClientRect();
@@ -823,10 +867,24 @@ async function inspectTextEditor(evaluate) {
       mode: root.dataset.documentMode,
       presentationMode: root.querySelector('.neko-text-editor-body')?.getAttribute('data-presentation-mode'),
       segmented: [...contextActions.querySelectorAll('.neko-text-editor-segmented button')].map((button) => ({
-        label: button.textContent?.trim() ?? '',
+        label: button.getAttribute('aria-label') ?? '',
         pressed: button.getAttribute('aria-pressed'),
+        icon: button.querySelector('.codicon')?.className ?? '',
       })),
       richState: root.querySelector('.neko-text-editor-rich')?.getAttribute('data-rich-state') ?? null,
+      richReadOnly: root.querySelector('.neko-text-editor-rich .ProseMirror')?.getAttribute('aria-readonly') ?? null,
+      splitSurfaceOrder: [...(root.querySelector('.neko-text-editor-body')?.children ?? [])]
+        .flatMap((child) => {
+          if (!(child instanceof HTMLElement)) return [];
+          if (child.classList.contains('neko-text-editor-codemirror')) return ['source'];
+          if (child.classList.contains('neko-text-editor-rich')) return ['preview'];
+          return [];
+        }),
+      splitHorizontal:
+        sourceRect !== undefined &&
+        richRect !== undefined &&
+        Math.abs(sourceRect.top - richRect.top) <= 1 &&
+        sourceRect.right <= richRect.left + 1,
       bodyChildren: [...root.querySelector('.neko-text-editor-body')?.children ?? []].map((child) =>
         child instanceof HTMLElement ? { className: child.className, text: child.textContent ?? '' } : null
       ),
