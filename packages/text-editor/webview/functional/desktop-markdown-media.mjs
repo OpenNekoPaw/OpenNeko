@@ -1,10 +1,18 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { openFixtureWorkspace } from '../../../../scripts/desktop-functional/desktop-operations.mjs';
 
 const execFileAsync = promisify(execFile);
+
+const WORKSPACE_ID = '4c58697b-af37-4e30-8863-502ed5927a6e';
+const ENTITY_LABEL = '小橘_主角设定';
+const WORKSPACE_REFERENCE_FILE =
+  'reference-production-notes-with-a-deliberately-long-portable-filename.md';
+const LINKED_MEDIA_FILE = 'reference-library-board-with-a-deliberately-long-portable-filename.png';
+const INPUT_SOURCE = '# 输入验证\n';
+const DARK_INPUT_SOURCE = '# Dark completion validation\n';
 
 const MARKDOWN_MEDIA = `# 媒体投影
 
@@ -45,14 +53,61 @@ const MARKDOWN_LISTS = `# 日常
 export const desktopMarkdownMediaScenario = Object.freeze({
   id: 'desktop-markdown-media',
   owner: '@neko/text-editor-webview',
-  async prepare({ fixtureHome }) {
+  async prepare({ fixtureHome, repositoryRoot }) {
     const workspacePath = join(fixtureHome, 'workspace');
-    await mkdir(workspacePath, { recursive: true });
+    const linkedMediaTarget = join(fixtureHome, 'linked-markdown-media');
+    const projectRoot = join(workspacePath, 'neko');
+    const linkedMediaDirectory = join(projectRoot, 'assets');
+    await Promise.all([
+      mkdir(workspacePath, { recursive: true }),
+      mkdir(linkedMediaTarget, { recursive: true }),
+      mkdir(linkedMediaDirectory, { recursive: true }),
+    ]);
+    const timestamp = '2026-08-09T00:00:00.000Z';
     await Promise.all([
       writeFile(join(workspacePath, 'media.md'), MARKDOWN_MEDIA, 'utf8'),
       writeFile(join(workspacePath, 'lists.md'), MARKDOWN_LISTS, 'utf8'),
-      writeFile(join(workspacePath, 'input.md'), '# 输入验证\n', 'utf8'),
+      writeFile(join(workspacePath, 'input.md'), INPUT_SOURCE, 'utf8'),
+      writeFile(join(workspacePath, 'dark-input.md'), DARK_INPUT_SOURCE, 'utf8'),
+      writeFile(join(workspacePath, WORKSPACE_REFERENCE_FILE), '# Reference notes\n', 'utf8'),
+      writeFile(
+        join(projectRoot, 'project.json'),
+        `${JSON.stringify({ workspaceId: WORKSPACE_ID }, null, 2)}\n`,
+        'utf8',
+      ),
+      writeFile(
+        join(projectRoot, 'entities.json'),
+        `${JSON.stringify(
+          {
+            projectId: WORKSPACE_ID,
+            entities: [
+              {
+                entityId: 'character-orange',
+                kind: 'character',
+                names: { canonical: ENTITY_LABEL, aliases: ['Orange'] },
+                facts: {},
+                representations: [],
+                lifecycle: { state: 'active' },
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              },
+            ],
+          },
+          null,
+          2,
+        )}\n`,
+        'utf8',
+      ),
+      copyFile(
+        join(repositoryRoot, 'docs', 'assets', 'openneko-desktop.png'),
+        join(linkedMediaTarget, LINKED_MEDIA_FILE),
+      ),
     ]);
+    await symlink(
+      linkedMediaTarget,
+      join(linkedMediaDirectory, 'Reference'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
     const ffmpeg = process.env['NEKO_FFMPEG_PATH']?.trim() || 'ffmpeg';
     await Promise.all([
       execFileAsync(ffmpeg, [
@@ -197,7 +252,60 @@ export const desktopMarkdownMediaScenario = Object.freeze({
     }
     checkpoint('markdown-media-document-switch-release', { releasedStatuses });
 
-    await type('.cm-content', MARKDOWN_COMPLETION_PREFIX);
+    await replaceMarkdownEditorSource({ evaluate, pressKey, type }, '@');
+    await pressKey('i', ['Alt']);
+    await waitForSelector('.cm-tooltip-autocomplete');
+    const mentionMenu = await readMarkdownCompletionMenu(evaluate);
+    assertMentionCompletionMenu(mentionMenu, 'light');
+    const mentionCompletionScreenshot = await screenshot(
+      'markdown-entity-mention-completion-light',
+    );
+    checkpoint('markdown-entity-mention-completion-light', mentionMenu);
+    await pressKey('Escape');
+
+    await replaceMarkdownEditorSource({ evaluate, pressKey, type }, '[[reference');
+    await pressKey('i', ['Alt']);
+    await waitForSelector('.cm-tooltip-autocomplete');
+    const linkMenuLight = await readMarkdownCompletionMenu(evaluate);
+    assertLinkCompletionMenu(linkMenuLight, 'light');
+    const linkCompletionScreenshot = await screenshot('markdown-reference-groups-light');
+    checkpoint('markdown-reference-groups-light', linkMenuLight);
+    await pressKey('Escape');
+
+    await replaceMarkdownEditorSource({ evaluate, pressKey, type }, '![[reference');
+    await pressKey('i', ['Alt']);
+    await waitForSelector('.cm-tooltip-autocomplete');
+    const embedMenu = await readMarkdownCompletionMenu(evaluate);
+    assertEmbedCompletionMenu(embedMenu);
+    const embedCompletionScreenshot = await screenshot('markdown-media-embed-completion-light');
+    checkpoint('markdown-media-embed-completion-light', embedMenu);
+    await pressKey('Escape');
+
+    await replaceMarkdownEditorSource({ evaluate, pressKey, type }, '![[[');
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 250))');
+    await pressKey('Escape');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('.cm-tooltip-autocomplete') === null`,
+      'Previous Markdown completion did not close before malformed-source validation.',
+    );
+    await pressKey('i', ['Alt']);
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 250))');
+    const malformedCompletion = await evaluate(`({
+      source: [...document.querySelectorAll('.neko-text-editor-codemirror .cm-content .cm-line')]
+        .map((line) => line.textContent ?? '')
+        .join('\\n'),
+      menuCount: document.querySelectorAll('.cm-tooltip-autocomplete').length,
+      menuText: document.querySelector('.cm-tooltip-autocomplete')?.textContent?.trim() ?? '',
+    })`);
+    if (malformedCompletion.source !== '![[[' || malformedCompletion.menuCount !== 0) {
+      throw new Error(
+        `Malformed Markdown embed source opened another catalog: ${JSON.stringify(malformedCompletion)}`,
+      );
+    }
+    checkpoint('markdown-malformed-embed-completion', malformedCompletion);
+
+    await replaceMarkdownEditorSource({ evaluate, pressKey, type }, MARKDOWN_COMPLETION_PREFIX);
     await waitForEditorSource(evaluate, MARKDOWN_COMPLETION_PREFIX);
     await pressKey('End');
     await pressKey('i', ['Alt']);
@@ -232,9 +340,21 @@ export const desktopMarkdownMediaScenario = Object.freeze({
     await returnToProject(evaluate, projectGroupId);
     await waitForSelector('.desktop-scene-workbench--workspace');
     await ensureResourceDockVisible(evaluate);
+    await openTextDocument(evaluate, 'dark-input.md');
+    await selectTextEditorMode(evaluate, 'source');
+    await waitForEditorSource(evaluate, DARK_INPUT_SOURCE);
+    await resizeDesktopWindow(evaluate, 960, 640);
+    await replaceMarkdownEditorSource({ evaluate, pressKey, type }, '[[reference');
+    await pressKey('i', ['Alt']);
+    await waitForSelector('.cm-tooltip-autocomplete');
+    const linkMenuDark = await readMarkdownCompletionMenu(evaluate);
+    assertLinkCompletionMenu(linkMenuDark, 'dark');
+    const darkCompletionScreenshot = await screenshot('markdown-reference-groups-dark-compact');
+    checkpoint('markdown-reference-groups-dark-compact', linkMenuDark);
+    await pressKey('Escape');
+
     await openTextDocument(evaluate, 'media.md');
     await selectTextEditorMode(evaluate, 'split');
-    await resizeDesktopWindow(evaluate, 960, 640);
     await waitForMarkdownMedia(evaluate);
     const mediaDark = await inspectMarkdownMedia(evaluate);
     assertMarkdownMediaProjection(mediaDark, 'dark compact Split');
@@ -252,6 +372,25 @@ export const desktopMarkdownMediaScenario = Object.freeze({
     const listsDarkScreenshot = await screenshot('markdown-lists-split-dark-compact');
     checkpoint('markdown-lists-split-dark-compact', listsDark);
 
+    const inputBytesAfterCompletion = await readFile(
+      join(prepared.workspacePath, 'input.md'),
+      'utf8',
+    );
+    if (inputBytesAfterCompletion !== INPUT_SOURCE) {
+      throw new Error(
+        `Markdown completion presentation changed authoritative bytes: ${JSON.stringify(inputBytesAfterCompletion)}`,
+      );
+    }
+    const darkInputBytesAfterCompletion = await readFile(
+      join(prepared.workspacePath, 'dark-input.md'),
+      'utf8',
+    );
+    if (darkInputBytesAfterCompletion !== DARK_INPUT_SOURCE) {
+      throw new Error(
+        `Dark Markdown completion changed authoritative bytes: ${JSON.stringify(darkInputBytesAfterCompletion)}`,
+      );
+    }
+
     return {
       mediaRich,
       mediaSplit,
@@ -259,14 +398,22 @@ export const desktopMarkdownMediaScenario = Object.freeze({
       listsLight,
       listsDark,
       completionSource,
+      mentionMenu,
+      linkMenuLight,
+      embedMenu,
+      linkMenuDark,
       releasedStatuses,
       screenshots: [
         mediaRichScreenshot,
         mediaSplitScreenshot,
         listsLightScreenshot,
+        mentionCompletionScreenshot,
+        linkCompletionScreenshot,
+        embedCompletionScreenshot,
         completionScreenshot,
         mediaDarkScreenshot,
         listsDarkScreenshot,
+        darkCompletionScreenshot,
       ],
     };
   },
@@ -291,7 +438,10 @@ async function openTextDocument(evaluate, label) {
   await waitForResourceItem(evaluate, label);
   await evaluate(`(() => {
     const item = [...document.querySelectorAll('.neko-resource-browser__item')]
-      .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}));
+      .find((candidate) =>
+        candidate.querySelector('.neko-resource-browser__item-copy > strong')?.textContent?.trim() ===
+          ${JSON.stringify(label)}
+      );
     if (!(item instanceof HTMLButtonElement)) throw new Error('Resource item is unavailable.');
     item.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
     return true;
@@ -551,20 +701,131 @@ function assertMarkdownMediaProjection(media, label) {
 
 async function readMarkdownCompletionMenu(evaluate) {
   return evaluate(`(() => {
+    const tooltip = document.querySelector('.cm-tooltip-autocomplete');
+    if (!(tooltip instanceof HTMLElement)) throw new Error('Markdown completion menu is unavailable.');
     const options = [...document.querySelectorAll('.cm-tooltip-autocomplete [role="option"]')];
+    const rect = tooltip.getBoundingClientRect();
     return {
+      theme: document.documentElement.dataset.nekoTheme,
+      sections: [...tooltip.querySelectorAll('completion-section')]
+        .map((section) => section.textContent?.trim() ?? '')
+        .filter(Boolean),
       options: options.map((option) => option.textContent?.trim() ?? ''),
+      entries: options.map((option) => {
+        const label = option.querySelector('.cm-completionLabel');
+        const detail = option.querySelector('.cm-completionDetail');
+        const icon = option.querySelector('.cm-completionIcon');
+        const iconStyle = icon ? getComputedStyle(icon, '::after') : null;
+        return {
+          label: label?.textContent?.trim() ?? '',
+          detail: detail?.textContent?.trim() ?? '',
+          typeClass: [...(icon?.classList ?? [])].find((name) =>
+            name.startsWith('cm-completionIcon-neko-'),
+          ) ?? '',
+          iconHasGlyph: Boolean(iconStyle && !['none', 'normal', ''].includes(iconStyle.content)),
+          labelTruncated:
+            label instanceof HTMLElement && label.scrollWidth > label.clientWidth + 1,
+          detailTruncated:
+            detail instanceof HTMLElement && detail.scrollWidth > detail.clientWidth + 1,
+          rowDisplay: getComputedStyle(option).display,
+          rowHeight: option.getBoundingClientRect().height,
+        };
+      }),
       selectedIndex: Math.max(
         0,
         options.findIndex((option) => option.getAttribute('aria-selected') === 'true'),
       ),
+      width: rect.width,
+      fitsViewport:
+        rect.left >= -1 &&
+        rect.top >= -1 &&
+        rect.right <= window.innerWidth + 1 &&
+        rect.bottom <= window.innerHeight + 1,
+      backgroundColor: getComputedStyle(tooltip).backgroundColor,
     };
   })()`);
+}
+
+function assertMentionCompletionMenu(menu, theme) {
+  assertCompletionMenuPresentation(menu, theme);
+  if (
+    !hasLocalizedSections(menu, [['实体'], ['Entity']]) ||
+    menu.entries.length !== 1 ||
+    menu.entries[0]?.label !== `@${ENTITY_LABEL}` ||
+    menu.entries[0]?.typeClass !== 'cm-completionIcon-neko-entity' ||
+    menu.options.some((option) => /\.(?:md|png|wav|webm|nkc|otio)\b/iu.test(option))
+  ) {
+    throw new Error(`Markdown @ completion escaped entity scope: ${JSON.stringify(menu)}`);
+  }
+}
+
+function assertLinkCompletionMenu(menu, theme) {
+  assertCompletionMenuPresentation(menu, theme);
+  const workspaceEntry = menu.entries.find((entry) => entry.label === WORKSPACE_REFERENCE_FILE);
+  const mediaEntry = menu.entries.find((entry) => entry.label === LINKED_MEDIA_FILE);
+  if (
+    !hasLocalizedSections(menu, [
+      ['文件', '媒体库'],
+      ['File', 'Media library'],
+    ]) ||
+    workspaceEntry?.typeClass !== 'cm-completionIcon-neko-workspace-file' ||
+    mediaEntry?.typeClass !== 'cm-completionIcon-neko-media-library' ||
+    ![workspaceEntry, mediaEntry].some(
+      (entry) => entry?.labelTruncated || entry?.detailTruncated,
+    ) ||
+    menu.options.some((option) => option.includes(ENTITY_LABEL))
+  ) {
+    throw new Error(`Markdown [[ completion groups are incomplete: ${JSON.stringify(menu)}`);
+  }
+}
+
+function assertEmbedCompletionMenu(menu) {
+  assertCompletionMenuPresentation(menu, 'light');
+  if (
+    !hasLocalizedSections(menu, [['媒体库'], ['Media library']]) ||
+    menu.entries.length !== 1 ||
+    menu.entries[0]?.label !== LINKED_MEDIA_FILE ||
+    menu.entries[0]?.typeClass !== 'cm-completionIcon-neko-media-library' ||
+    menu.options.some((option) => option.includes(WORKSPACE_REFERENCE_FILE))
+  ) {
+    throw new Error(
+      `Markdown ![[ completion included a non-embeddable item: ${JSON.stringify(menu)}`,
+    );
+  }
+}
+
+function assertCompletionMenuPresentation(menu, theme) {
+  if (
+    menu.theme !== theme ||
+    menu.entries.length === 0 ||
+    !menu.fitsViewport ||
+    menu.width < 400 ||
+    !menu.backgroundColor ||
+    menu.entries.some(
+      (entry) => !entry.iconHasGlyph || entry.rowDisplay !== 'grid' || entry.rowHeight < 30,
+    )
+  ) {
+    throw new Error(`Markdown completion menu presentation is incomplete: ${JSON.stringify(menu)}`);
+  }
+}
+
+function hasLocalizedSections(menu, expectedSets) {
+  return expectedSets.some(
+    (expected) =>
+      expected.length === menu.sections.length &&
+      expected.every((section) => menu.sections.includes(section)),
+  );
 }
 
 async function selectCompletionOption(pressKey, selectedIndex, targetIndex) {
   for (let index = selectedIndex; index < targetIndex; index += 1) await pressKey('ArrowDown');
   for (let index = selectedIndex; index > targetIndex; index -= 1) await pressKey('ArrowUp');
+}
+
+async function replaceMarkdownEditorSource({ evaluate, pressKey, type }, source) {
+  await type('.neko-text-editor-codemirror .cm-content', source);
+  await waitForEditorSource(evaluate, source);
+  await pressKey('Escape');
 }
 
 async function waitForEditorSource(evaluate, source) {
@@ -587,7 +848,10 @@ async function waitForResourceItem(evaluate, label) {
   await waitForCondition(
     evaluate,
     `(() => [...document.querySelectorAll('.neko-resource-browser__item')]
-      .some((item) => item.textContent?.includes(${JSON.stringify(label)})))()`,
+      .some((item) =>
+        item.querySelector('.neko-resource-browser__item-copy > strong')?.textContent?.trim() ===
+          ${JSON.stringify(label)}
+      ))()`,
     `Resource Browser did not project '${label}'.`,
   );
 }

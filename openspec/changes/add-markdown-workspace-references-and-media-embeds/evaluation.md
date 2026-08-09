@@ -6,10 +6,10 @@ Date: 2026-08-09
 
 | Boundary                       | Command                                                                                                                                                                                                                 | Result                                       |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Markdown parser and round-trip | `pnpm --filter @neko/markdown test`                                                                                                                                                                                     | Passed, 73 tests                             |
+| Markdown parser and round-trip | `pnpm --filter @neko/markdown test`                                                                                                                                                                                     | Passed, 74 tests                             |
 | Text Editor Domain             | `pnpm --filter @neko/text-editor-domain test`                                                                                                                                                                           | Passed, 55 tests                             |
 | Text Editor Node               | `pnpm --filter @neko/text-editor-node test`                                                                                                                                                                             | Passed, 10 tests                             |
-| Text Editor Webview            | `pnpm --filter @neko/text-editor-webview test`                                                                                                                                                                          | Passed, 46 tests                             |
+| Text Editor Webview            | `pnpm --filter @neko/text-editor-webview test`                                                                                                                                                                          | Passed, 47 tests                             |
 | Desktop delegation             | `pnpm --dir apps/neko-desktop exec vitest run src/main/desktop-text-editor-runtime.test.ts src/renderer/desktop-text-editor-media-host-runtime.test.ts src/renderer/desktop-text-editor-reference-host-runtime.test.ts` | Passed, 12 tests                             |
 | Package typechecks             | `pnpm exec tsc -p packages/markdown/tsconfig.json --noEmit && pnpm exec tsc -p packages/text-editor/domain/tsconfig.json --noEmit && pnpm exec tsc -p packages/text-editor/node/tsconfig.json --noEmit`                 | Passed                                       |
 | Webview typecheck              | `pnpm --filter @neko/text-editor-webview build`                                                                                                                                                                         | Passed                                       |
@@ -80,6 +80,25 @@ and zero console errors or exceptions. Direct pixel inspection of
 `03-markdown-lists-split-light.png` and `06-markdown-lists-split-dark-compact.png` confirmed readable
 markers and checkboxes without clipping or overlap in both themes. The regression result is passed.
 
+### Reference-completion refinement
+
+The final visible Electron rerun is recorded at
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T10-43-12.819Z-desktop-markdown-media-development/report.json`.
+One scenario proved the three distinct source semantics: `@` returned only the active Project entity;
+`[[` grouped one Workspace file and one Project-linked Media Library item; `![[` retained only the
+embeddable linked image; and malformed `![[[` left source unchanged with no completion catalog. The
+same run accepted a portable Workspace image entirely by keyboard, preserved both completion fixture
+files byte-for-byte, rejected released media leases, and recorded zero poisoned requests, console
+errors, warnings or exceptions.
+
+Direct inspection of `04-markdown-entity-mention-completion-light.png`,
+`05-markdown-reference-groups-light.png`, `06-markdown-media-embed-completion-light.png` and
+`08-markdown-reference-groups-dark-compact.png` confirmed localized source headings, distinct entity,
+file and media icons, selected-row contrast, portable locator details and independent ellipsis for
+long labels/details. The menu remained inside the viewport at 1800 x 1000 and 960 x 640 without
+overlap. Global Asset Library and unlinked Media Library records remain outside the Markdown catalog;
+only an explicit Project link creates the portable `neko/assets/<library>/...` target consumed here.
+
 ## Quality review
 
 - **Risk:** L3. The implementation crosses public Domain contracts, Node Workspace/resource access,
@@ -101,5 +120,5 @@ markers and checkboxes without clipping or overlap in both themes. The regressio
   `parseDesktopAgentConnectionIdentity` in `agent-contract.ts`. Native media-control visuals are
   Chromium/macOS-specific, and the focused scenario does not perform playback seeking.
 
-All 21 implementation and validation tasks are complete. The change is ready for archival after the
+All implementation and validation tasks are complete. The change is ready for archival after the
 independently reviewable delivery commits are retained.

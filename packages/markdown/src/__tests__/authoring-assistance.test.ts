@@ -124,6 +124,12 @@ describe('Markdown authoring assistance', () => {
     });
   });
 
+  it('keeps an extra resource opening bracket as malformed source instead of another trigger', () => {
+    expect(
+      projectMarkdownAuthoringAssistance({ source: '![[[', caretOffset: 4, candidates }),
+    ).toBeUndefined();
+  });
+
   it('offers bounded GFM snippets only at an eligible line prefix', () => {
     const source = '# Title\n\n';
     const projection = projectMarkdownAuthoringAssistance({

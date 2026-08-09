@@ -104,6 +104,7 @@ export function projectMarkdownAuthoringAssistance(
     const raw = resourceMatch[0];
     const embed = resourceMatch[1] === '!';
     const query = resourceMatch[2] ?? '';
+    if (query.includes('[')) return undefined;
     const startOffset = caretOffset - raw.length;
     const probe = `${embed ? '!' : ''}[[${query || AUTHORING_PROBE}]]`;
     if (!probeProducesNode(source, startOffset, caretOffset, probe, 'nekoResourceReference')) {

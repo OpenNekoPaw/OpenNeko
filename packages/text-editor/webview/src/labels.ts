@@ -34,6 +34,10 @@ const LABELS = {
     revealMediaSource: 'Show in Source',
     mediaLoading: 'Loading media',
     unsavedChanges: 'Unsaved changes',
+    completionSyntax: 'Markdown syntax',
+    completionEntity: 'Entity',
+    completionFile: 'File',
+    completionMediaLibrary: 'Media library',
   },
   'zh-cn': {
     save: '保存',
@@ -61,6 +65,10 @@ const LABELS = {
     revealMediaSource: '在源码中显示',
     mediaLoading: '正在加载媒体',
     unsavedChanges: '未保存的更改',
+    completionSyntax: 'Markdown 语法',
+    completionEntity: '实体',
+    completionFile: '文件',
+    completionMediaLibrary: '媒体库',
   },
 } as const;
 

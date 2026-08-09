@@ -56,6 +56,13 @@ CodeMirror adapts this projection to its completion API and suppresses semantic 
 composition is active. Accepted completion produces one ordinary Text Document edit. Results from a
 superseded query, document, Workspace or unmounted Root are discarded by exact request identity.
 
+Trigger semantics remain distinct: `@` searches only active Project entities, `[[` searches portable
+Workspace files and content from media libraries already linked into the Project, and `![[` narrows
+that same portable catalog to embeddable image/audio/video content. An extra `[` after `![[` is
+malformed input, not another trigger. Global Asset Library and unlinked Media Library records are not
+offered because their host-owned identity is not a portable Project locator; users must explicitly
+link or add them to the Project before Markdown can persist a reference.
+
 **Alternative:** implement regex completion directly in the Webview. Rejected because parser context,
 source ranges and extension syntax would diverge from the canonical Markdown contract.
 
@@ -70,6 +77,10 @@ owner ref; raw filesystem paths are forbidden.
 Duplicate labels remain separate candidates. Parsing an existing source token uses the same catalog
 and returns `resolved`, `ambiguous`, `unresolved` or `unauthorized`; it never selects by display order,
 active Workspace, recent file or a second Agent mention service.
+
+The Webview groups the disposable completion projection by its declared catalog source and presents
+localized source labels plus the portable target as secondary text. It does not infer source kind
+from filename extensions or duplicate the owning catalog.
 
 **Alternative:** reuse the Agent composer catalog. Rejected because Agent Draft/Conversation binding,
 receipts and context attachment are different business semantics and lifecycles.

@@ -558,8 +558,11 @@ function CodeMirrorEditor({
     if (projection.mode === 'markdown') {
       extensions.push(
         autocompletion({
+          maxRenderedOptions: 30,
+          tooltipClass: () => 'neko-markdown-completion',
           override: [
             createMarkdownCompletionSource({
+              locale,
               readProjection: () => accepted.current,
               nextRequestId,
               isComposing: () => composing.current,

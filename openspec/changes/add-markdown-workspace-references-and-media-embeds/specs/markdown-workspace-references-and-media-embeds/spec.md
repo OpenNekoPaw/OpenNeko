@@ -37,6 +37,29 @@ and SHALL NOT fall back to active/recent resources or the Agent composer catalog
   owner reference only in the disposable resolution projection
 - **AND** the operation does not attach Agent context or mutate another document
 
+#### Scenario: Trigger selects its owning catalog subset
+
+- **WHEN** the user types `@`, `[[` or `![[` in an eligible source position
+- **THEN** `@` offers active Project entities, `[[` offers portable Workspace files and linked Project
+  Media Library content, and `![[` offers only embeddable image/audio/video content
+- **AND** candidates are grouped and labeled by their declared source without inferring identity from
+  a filename or exposing a host path
+
+#### Scenario: Global library content is not Project-portable
+
+- **WHEN** a Global Asset Library item or unlinked Media Library record has no Project-owned portable
+  locator
+- **THEN** it is not offered as a successful Markdown reference or embed
+- **AND** the user must explicitly link or add it to the Project before the canonical catalog can
+  return it
+
+#### Scenario: Resource trigger contains an extra opening bracket
+
+- **WHEN** source contains `![[[` at the caret
+- **THEN** the editor treats the extra bracket as malformed editable input rather than a fourth
+  reference syntax
+- **AND** it does not search a fallback catalog or rewrite the source
+
 #### Scenario: Multiple resources have the same label
 
 - **WHEN** an existing token or completion query matches multiple exact candidates

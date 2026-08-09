@@ -63,13 +63,11 @@ describe('Node Text Editor Markdown reference catalog', () => {
     expect(mentionResult).toMatchObject({
       status: 'ready',
       projection: {
-        candidates: [
-          { source: 'workspace-file', label: 'story.md' },
-          { source: 'entity', ref: { id: 'character-1' }, label: '小橘' },
-          { source: 'asset', label: 'cover.png' },
-        ],
+        candidates: [{ source: 'entity', ref: { id: 'character-1' }, label: '小橘' }],
       },
     });
+    expect(owners.workspaceFiles).not.toHaveBeenCalled();
+    expect(owners.linkedMedia).not.toHaveBeenCalled();
     const embedResult = await catalog.search(request('resource-embed', 'cover'), active());
     expect(embedResult).toMatchObject({
       status: 'ready',
@@ -78,6 +76,7 @@ describe('Node Text Editor Markdown reference catalog', () => {
           {
             source: 'asset',
             target: 'neko/assets/Reference/cover.png',
+            detail: 'neko/assets/Reference/cover.png',
             embeddable: true,
           },
         ],
@@ -90,7 +89,7 @@ describe('Node Text Editor Markdown reference catalog', () => {
     expect(JSON.stringify([mentionResult, embedResult])).not.toContain('/private/workspace');
   });
 
-  it('contains one poisoned owner while preserving valid sibling candidates', async () => {
+  it('contains a poisoned entity owner without falling back to files or linked media', async () => {
     owners.entities.mockRejectedValue(new Error('entity-store-unavailable'));
     const catalog = createNodeTextEditorMarkdownReferenceCatalog({
       files: {} as NekoHostPorts['files'],
@@ -101,10 +100,7 @@ describe('Node Text Editor Markdown reference catalog', () => {
     expect(result).toMatchObject({
       status: 'ready',
       projection: {
-        candidates: [
-          { source: 'workspace-file', label: 'story.md' },
-          { source: 'asset', label: 'cover.png' },
-        ],
+        candidates: [],
         diagnostics: [
           {
             code: 'text-editor-markdown-reference-contributor-failed',
@@ -113,6 +109,8 @@ describe('Node Text Editor Markdown reference catalog', () => {
         ],
       },
     });
+    expect(owners.workspaceFiles).not.toHaveBeenCalled();
+    expect(owners.linkedMedia).not.toHaveBeenCalled();
   });
 });
 
@@ -136,7 +134,7 @@ function contentEntry(path: string, label: string, mediaType: string = 'file') {
   return {
     locator: { kind: 'workspace-file' as const, path },
     label,
-    description: path,
+    description: 'Owning catalog description',
     availability: 'available' as const,
     capabilities: ['read' as const],
     metadata: { mediaType },

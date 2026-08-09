@@ -471,6 +471,108 @@
   background: color-mix(in srgb, var(--neko-list-hoverBackground, #edf1f5) 62%, transparent);
 }
 
+.neko-text-editor-codemirror .cm-tooltip.neko-markdown-completion {
+  min-width: min(440px, calc(100vw - 24px));
+  max-width: min(680px, calc(100vw - 24px));
+  overflow: hidden;
+  border: 1px solid var(--neko-widget-border, var(--neko-border, #c8ccd2));
+  border-radius: 6px;
+  background: var(--neko-editorWidget-background, var(--neko-editor-background, #fff));
+  color: var(--neko-editorWidget-foreground, var(--neko-editor-foreground, #202124));
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent);
+  font-family: inherit;
+}
+
+.neko-text-editor-codemirror .cm-tooltip.neko-markdown-completion > ul {
+  min-width: 0;
+  max-width: none;
+  max-height: min(320px, 46vh);
+  padding: 4px;
+  font-family: inherit;
+}
+
+.neko-text-editor-codemirror .cm-tooltip.neko-markdown-completion > ul > completion-section {
+  margin: 2px 4px 0;
+  padding: 7px 6px 5px;
+  border: 0;
+  color: var(--neko-descriptionForeground, #646d77);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+.neko-text-editor-codemirror .cm-tooltip.neko-markdown-completion > ul > li {
+  display: grid;
+  grid-template-columns: 22px minmax(8rem, 1fr) minmax(7rem, 42%);
+  align-items: center;
+  min-height: 32px;
+  border-radius: 4px;
+  padding: 5px 8px;
+  line-height: 1.35;
+}
+
+.neko-text-editor-codemirror
+  .cm-tooltip.neko-markdown-completion
+  > ul
+  > li[aria-selected] {
+  background: var(--neko-list-activeSelectionBackground, #e6edf7);
+  color: var(--neko-list-activeSelectionForeground, var(--neko-editor-foreground, #202124));
+}
+
+.neko-text-editor-codemirror .neko-markdown-completion .cm-completionLabel,
+.neko-text-editor-codemirror .neko-markdown-completion .cm-completionDetail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.neko-text-editor-codemirror .neko-markdown-completion .cm-completionLabel {
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.neko-text-editor-codemirror .neko-markdown-completion .cm-completionMatchedText {
+  color: var(--neko-textLink-foreground, #1672a3);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.neko-text-editor-codemirror .neko-markdown-completion .cm-completionDetail {
+  margin-left: 10px;
+  color: var(--neko-descriptionForeground, #646d77);
+  font-size: 10px;
+  font-style: normal;
+  text-align: right;
+}
+
+.neko-text-editor-codemirror
+  .neko-markdown-completion
+  .cm-completionIcon[class*='cm-completionIcon-neko-'] {
+  width: 16px;
+  padding-right: 6px;
+  color: var(--neko-descriptionForeground, #646d77);
+  font-family: 'openneko-codicon';
+  font-size: 14px;
+  opacity: 1;
+}
+
+.neko-text-editor-codemirror .cm-completionIcon-neko-markdown-syntax::after {
+  content: '\eb1d';
+}
+
+.neko-text-editor-codemirror .cm-completionIcon-neko-entity::after {
+  content: '\eb5b';
+}
+
+.neko-text-editor-codemirror .cm-completionIcon-neko-workspace-file::after {
+  content: '\ec5e';
+}
+
+.neko-text-editor-codemirror .cm-completionIcon-neko-media-library::after {
+  content: '\eaea';
+}
+
 .neko-text-editor-codemirror .cm-fountain-scene-heading,
 .neko-text-editor-codemirror .cm-fountain-transition {
   color: var(--neko-syntax-keyword);

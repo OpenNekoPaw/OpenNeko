@@ -1,4 +1,8 @@
-import type { CompletionContext, CompletionResult } from '@codemirror/autocomplete';
+import type {
+  CompletionContext,
+  CompletionResult,
+  CompletionSection,
+} from '@codemirror/autocomplete';
 import {
   projectMarkdownAuthoringAssistance,
   type MarkdownAuthoringCandidate,
@@ -8,12 +12,15 @@ import type {
   TextDocumentIdentity,
   TextDocumentProjection,
   TextEditorMarkdownReferenceDiagnostic,
+  TextEditorMarkdownReferenceSource,
   TextEditorMarkdownReferenceSearchProjection,
   TextEditorMarkdownReferenceSearchRequest,
   TextEditorMarkdownReferenceSearchResult,
 } from '@neko/text-editor-domain';
+import { textEditorLabel, type TextEditorLocale } from './labels';
 
 export interface MarkdownCompletionSourceOptions {
+  readonly locale: TextEditorLocale;
   readonly readProjection: () => TextDocumentProjection;
   readonly nextRequestId: () => string;
   readonly isComposing: () => boolean;
@@ -43,7 +50,7 @@ export function createMarkdownCompletionSource(options: MarkdownCompletionSource
     if (!initial) return null;
     if (initial.context.kind === 'gfm-snippet') {
       options.reportDiagnostics({ catalog: [], markdown: initial.diagnostics });
-      return toCompletionResult(initial);
+      return toCompletionResult(initial, options.locale);
     }
 
     const request: TextEditorMarkdownReferenceSearchRequest = {
@@ -74,24 +81,74 @@ export function createMarkdownCompletionSource(options: MarkdownCompletionSource
       catalog: result.projection.diagnostics,
       markdown: completed.diagnostics,
     });
-    return toCompletionResult(completed);
+    return toCompletionResult(completed, options.locale, result.projection.candidates);
   };
 }
 
 function toCompletionResult(
   projection: NonNullable<ReturnType<typeof projectMarkdownAuthoringAssistance>>,
+  locale: TextEditorLocale,
+  candidates: readonly TextEditorMarkdownReferenceSearchProjection['candidates'][number][] = [],
 ): CompletionResult {
+  const sourceByRef = new Map(
+    candidates.map((candidate) => [referenceKey(candidate.ref), candidate.source] as const),
+  );
   return {
     from: projection.context.replacementRange.startOffset,
     to: projection.context.replacementRange.endOffset,
     filter: false,
-    options: projection.items.map((item) => ({
-      label: item.label,
-      apply: item.insertText,
-      type: item.kind === 'mention' ? 'variable' : item.kind === 'gfm-snippet' ? 'keyword' : 'file',
-      ...(item.detail ? { detail: item.detail } : {}),
-    })),
+    options: projection.items.map((item) => {
+      const source = item.ref ? sourceByRef.get(referenceKey(item.ref)) : undefined;
+      const sourceLabel = completionSourceLabel(locale, source, item.kind === 'gfm-snippet');
+      return {
+        label: item.label,
+        apply: item.insertText,
+        type: completionType(source, item.kind === 'gfm-snippet'),
+        detail: item.detail ? `${sourceLabel} · ${item.detail}` : sourceLabel,
+        section: completionSection(locale, source, item.kind === 'gfm-snippet'),
+      };
+    }),
   };
+}
+
+function completionType(
+  source: TextEditorMarkdownReferenceSource | undefined,
+  syntax: boolean,
+): string {
+  if (syntax) return 'neko-markdown-syntax';
+  if (source === 'entity') return 'neko-entity';
+  if (source === 'asset') return 'neko-media-library';
+  return 'neko-workspace-file';
+}
+
+function completionSection(
+  locale: TextEditorLocale,
+  source: TextEditorMarkdownReferenceSource | undefined,
+  syntax: boolean,
+): CompletionSection {
+  return {
+    name: completionSourceLabel(locale, source, syntax),
+    rank: syntax ? 0 : source === 'entity' ? 1 : source === 'workspace-file' ? 2 : 3,
+  };
+}
+
+function completionSourceLabel(
+  locale: TextEditorLocale,
+  source: TextEditorMarkdownReferenceSource | undefined,
+  syntax: boolean,
+): string {
+  if (syntax) return textEditorLabel(locale, 'completionSyntax');
+  if (source === 'entity') return textEditorLabel(locale, 'completionEntity');
+  if (source === 'asset') return textEditorLabel(locale, 'completionMediaLibrary');
+  return textEditorLabel(locale, 'completionFile');
+}
+
+function referenceKey(ref: {
+  readonly kind: string;
+  readonly id: string;
+  readonly namespace?: string;
+}) {
+  return `${ref.namespace ?? ''}:${ref.kind}:${ref.id}`;
 }
 
 function toMarkdownCandidate(

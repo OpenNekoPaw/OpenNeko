@@ -18,6 +18,15 @@ describe('Markdown CodeMirror completion source', () => {
     const completion = await fixture.complete(fixture.projection.source.length, true);
 
     expect(completion?.options.map((item) => item.label)).toEqual(['#', '- [ ]', '| |', '```']);
+    expect(completion?.options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'neko-markdown-syntax',
+          detail: 'Markdown 语法',
+          section: { name: 'Markdown 语法', rank: 0 },
+        }),
+      ]),
+    );
     expect(fixture.searchReferences).not.toHaveBeenCalled();
   });
 
@@ -34,10 +43,10 @@ describe('Markdown CodeMirror completion source', () => {
         },
         {
           kind: 'mention',
-          source: 'workspace-file',
-          ref: { kind: 'workspace-file', id: 'characters/小橘.md' },
+          source: 'entity',
+          ref: { kind: 'canvas-node', id: 'node-2', namespace: 'canvas-1' },
           label: '小橘',
-          detail: 'characters/小橘.md',
+          detail: 'Canvas node',
         },
       ]),
     );
@@ -58,11 +67,19 @@ describe('Markdown CodeMirror completion source', () => {
     );
     expect(completion).toMatchObject({ from: 4, to: 6, filter: false });
     expect(completion?.options).toEqual([
-      expect.objectContaining({ label: '@小橘', apply: '@小橘', detail: 'Character' }),
       expect.objectContaining({
         label: '@小橘',
         apply: '@小橘',
-        detail: 'characters/小橘.md',
+        type: 'neko-entity',
+        detail: '实体 · Character',
+        section: { name: '实体', rank: 1 },
+      }),
+      expect.objectContaining({
+        label: '@小橘',
+        apply: '@小橘',
+        type: 'neko-entity',
+        detail: '实体 · Canvas node',
+        section: { name: '实体', rank: 1 },
       }),
     ]);
   });
@@ -100,7 +117,13 @@ describe('Markdown CodeMirror completion source', () => {
       filter: false,
     });
     expect(completion?.options).toEqual([
-      expect.objectContaining({ label: '封面', apply: '![[assets/cover.png]]' }),
+      expect.objectContaining({
+        label: '封面',
+        apply: '![[assets/cover.png]]',
+        type: 'neko-media-library',
+        detail: '媒体库 · assets/cover.png',
+        section: { name: '媒体库', rank: 3 },
+      }),
     ]);
     expect(fixture.reportDiagnostics).toHaveBeenCalledWith({
       catalog: [
@@ -111,6 +134,49 @@ describe('Markdown CodeMirror completion source', () => {
       ],
       markdown: [],
     });
+  });
+
+  it('groups portable links by declared Workspace file and linked media source', async () => {
+    const fixture = createFixture('[[');
+    fixture.searchReferences.mockImplementation(async (request) =>
+      ready(request, [
+        {
+          kind: 'resource',
+          source: 'workspace-file',
+          ref: { kind: 'workspace-file', id: 'notes/story.md' },
+          label: 'story.md',
+          detail: 'notes/story.md',
+          target: 'notes/story.md',
+          embeddable: false,
+        },
+        {
+          kind: 'resource',
+          source: 'asset',
+          ref: { kind: 'workspace-media-library', id: 'neko/assets/Reference/shot.mp4' },
+          label: 'shot.mp4',
+          detail: 'neko/assets/Reference/shot.mp4',
+          target: 'neko/assets/Reference/shot.mp4',
+          embeddable: true,
+        },
+      ]),
+    );
+
+    const completion = await fixture.complete(2);
+
+    expect(completion?.options).toEqual([
+      expect.objectContaining({
+        label: 'story.md',
+        type: 'neko-workspace-file',
+        detail: '文件 · notes/story.md',
+        section: { name: '文件', rank: 2 },
+      }),
+      expect.objectContaining({
+        label: 'shot.mp4',
+        type: 'neko-media-library',
+        detail: '媒体库 · neko/assets/Reference/shot.mp4',
+        section: { name: '媒体库', rank: 3 },
+      }),
+    ]);
   });
 
   it('suppresses completion during IME and before accepted source catches up', async () => {
@@ -242,6 +308,7 @@ function createFixture(source: string, documentId = 'notes/draft.md') {
     complete: async () => null,
   };
   const sourceFunction = createMarkdownCompletionSource({
+    locale: 'zh-cn',
     readProjection: () => fixture.projection,
     nextRequestId: () => `completion-request-${++fixture.requestSequence}`,
     isComposing: () => fixture.composing,

@@ -36,3 +36,4 @@
 - [x] 6.3 Use `neko-ui-validation` on visible Electron for Source completion, Rich/Split images, missing media, audio/video controls, light/dark theme, CJK IME, keyboard and adjacent Workbench behavior.
 - [x] 6.4 Use `neko-quality-review`, close blocking findings, update stable architecture/package documentation and commit implementation in independently reviewable batches.
 - [x] 6.5 Restore CommonMark list markers and canonical GFM task checkboxes in Rich/Split presentation; prove valid and malformed source remain distinct, document bytes stay authoritative, and the visible Electron result is correct in light and dark themes.
+- [x] 6.6 Restrict `@` to entity mentions, group `[[` / `![[` candidates by declared file or linked-media source, refine the CodeMirror completion presentation, and validate malformed `![[[` plus portable-library boundaries in visible Desktop.

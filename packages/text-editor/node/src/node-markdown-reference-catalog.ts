@@ -73,6 +73,7 @@ function contentContributor(
   return {
     source,
     search: async (request, signal) => {
+      if (request.kind === 'mention') return [];
       if (signal.aborted) return [];
       const entries = await search(request);
       if (signal.aborted) return [];
@@ -97,10 +98,8 @@ function projectContentEntry(
     kind: source === 'asset' ? 'workspace-media-library' : 'workspace-file',
     id: entry.locator.path,
   };
-  const detail = entry.description ?? entry.locator.path;
-  if (kind === 'mention') {
-    return [{ kind: 'mention', source, ref, label: entry.label, detail }];
-  }
+  const detail = entry.locator.path;
+  if (kind === 'mention') return [];
   const mediaType = entry.metadata?.mediaType;
   const embeddable = mediaType === 'image' || mediaType === 'audio' || mediaType === 'video';
   if (kind === 'resource-embed' && !embeddable) return [];
