@@ -20,6 +20,19 @@ function createRequest() {
 function createProjection() {
   return {
     identity,
+    operations: [
+      {
+        operationId: 'artifact-operation-1',
+        pluginId: 'computer-use@openneko',
+        kind: 'update',
+        phase: 'downloading',
+        status: 'active',
+        transferredBytes: 1024,
+        totalBytes: 2048,
+        canCancel: true,
+        diagnosticCode: '',
+      },
+    ],
     skills: [
       {
         id: 'personal:personal:story-planner',
@@ -48,9 +61,18 @@ function createProjection() {
         installed: true,
         enabled: true,
         canInstall: false,
+        canUpdate: false,
         canEnable: false,
         canDisable: true,
         canRemove: false,
+        updatePackageRelease: '',
+        artifactPlatform: 'darwin-arm64',
+        downloadSizeBytes: 64_208_172,
+        artifactStatus: 'installed',
+        dependencyStatus: 'ready',
+        enableGrantStatus: 'accepted',
+        hostPermissionStatus: 'granted',
+        qualificationStatus: 'qualified',
         declaredPermissions: ['accessibility', 'screen-recording'],
         acceptedPermissions: ['accessibility', 'screen-recording'],
         agentStatus: 'ready',
@@ -69,6 +91,25 @@ describe('Agent Extension Management Host contract', () => {
   it('parses exact owner-qualified requests and projections', () => {
     const request = createRequest();
     expect(parseAgentExtensionManagementHostRequest(request)).toEqual(request);
+    expect(
+      createAgentExtensionManagementHostRequest({
+        route: 'plugin.update',
+        requestId: 'extensions-update-1',
+        identity,
+        pluginId: 'computer-use@openneko',
+      }),
+    ).toMatchObject({ route: 'plugin.update', pluginId: 'computer-use@openneko' });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        route: 'plugin.operation.cancel',
+        requestId: 'extensions-cancel-1',
+        identity,
+        operationId: 'artifact-operation-1',
+      }),
+    ).toMatchObject({
+      route: 'plugin.operation.cancel',
+      operationId: 'artifact-operation-1',
+    });
     expect(
       parseAgentExtensionManagementHostResult(
         {
@@ -148,5 +189,35 @@ describe('Agent Extension Management Host contract', () => {
         request,
       ),
     ).toThrow('diagnostic code is invalid');
+    expect(() =>
+      parseAgentExtensionManagementHostResult(
+        {
+          ...result,
+          projection: {
+            ...result.projection,
+            extensions: [{ ...result.projection.extensions[0], canUpdate: true }],
+          },
+        },
+        request,
+      ),
+    ).toThrow('extension flags are inconsistent');
+    expect(() =>
+      parseAgentExtensionManagementHostResult(
+        {
+          ...result,
+          projection: {
+            ...result.projection,
+            operations: [
+              {
+                ...result.projection.operations[0],
+                status: 'completed',
+                canCancel: false,
+              },
+            ],
+          },
+        },
+        request,
+      ),
+    ).toThrow('artifact operation state is inconsistent');
   });
 });

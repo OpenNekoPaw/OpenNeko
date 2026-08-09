@@ -2556,9 +2556,18 @@ describe('DesktopAppHost', () => {
           installed: true,
           enabled: true,
           canInstall: false,
+          canUpdate: false,
           canEnable: false,
           canDisable: true,
           canRemove: false,
+          updatePackageRelease: '',
+          artifactPlatform: 'darwin-arm64',
+          downloadSizeBytes: 64_208_172,
+          artifactStatus: 'installed',
+          dependencyStatus: 'ready',
+          enableGrantStatus: 'accepted',
+          hostPermissionStatus: 'granted',
+          qualificationStatus: 'qualified',
           declaredPermissions: ['accessibility', 'screen-recording'],
           acceptedPermissions: ['accessibility', 'screen-recording'],
           agentStatus: 'ready',
@@ -2673,10 +2682,12 @@ describe('DesktopAppHost', () => {
     ).rejects.toThrow('does not match the active Scene');
   });
 
-  it('rejects plugin mutation while an Agent turn is active before changing the repository', async () => {
+  it('delegates plugin mutation ownership to the extension application service', async () => {
     const fixture = await createShellAppHost();
     const extensions = await openExtensionsScene(fixture);
-    vi.mocked(fixture.agent.hasActiveTurns).mockReturnValue(true);
+    vi.mocked(fixture.extensionManager.removePlugin).mockRejectedValue(
+      new Error("OpenNeko extension 'computer-use@openneko' runtime is owned."),
+    );
 
     await expect(
       fixture.appHost.executeExtensionManagement(
@@ -2688,8 +2699,58 @@ describe('DesktopAppHost', () => {
           pluginId: 'computer-use@openneko',
         }),
       ),
-    ).rejects.toThrow('Agent turn is active');
-    expect(fixture.extensionManager.removePlugin).not.toHaveBeenCalled();
+    ).rejects.toThrow('runtime is owned');
+    expect(fixture.extensionManager.removePlugin).toHaveBeenCalledWith('computer-use@openneko');
+    expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
+
+    vi.mocked(fixture.extensionManager.updatePlugin).mockRejectedValue(
+      new Error("OpenNeko extension 'computer-use@openneko' update is owned."),
+    );
+    await expect(
+      fixture.appHost.executeExtensionManagement(
+        fixture.sender,
+        createAgentExtensionManagementHostRequest({
+          route: 'plugin.update',
+          requestId: 'plugin-update-1',
+          identity: extensions.identity,
+          pluginId: 'computer-use@openneko',
+        }),
+      ),
+    ).rejects.toThrow('update is owned');
+    expect(fixture.extensionManager.updatePlugin).toHaveBeenCalledWith('computer-use@openneko');
+    expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
+
+    vi.mocked(fixture.extensionManager.readArtifactOperations).mockReturnValue([
+      {
+        operationId: 'artifact-operation-1',
+        pluginId: 'computer-use@openneko',
+        kind: 'update',
+        phase: 'downloading',
+        status: 'active',
+        transferredBytes: 32,
+        totalBytes: 64,
+        canCancel: true,
+        diagnosticCode: '',
+      },
+    ]);
+    await expect(
+      fixture.appHost.executeExtensionManagement(
+        fixture.sender,
+        createAgentExtensionManagementHostRequest({
+          route: 'plugin.operation.cancel',
+          requestId: 'plugin-operation-cancel-1',
+          identity: extensions.identity,
+          operationId: 'artifact-operation-1',
+        }),
+      ),
+    ).resolves.toMatchObject({
+      projection: {
+        operations: [expect.objectContaining({ operationId: 'artifact-operation-1' })],
+      },
+    });
+    expect(fixture.extensionManager.cancelArtifactOperation).toHaveBeenCalledWith(
+      'artifact-operation-1',
+    );
   });
 
   it('cleans up an Asset Center Preview after leaving its Scene without projecting into the new Scene', async () => {
@@ -3566,7 +3627,10 @@ function createExtensionManager(): AgentExtensionManager & {
       runtimeDescriptors: [],
       diagnostics: [],
     })),
+    readArtifactOperations: vi.fn(() => []),
+    cancelArtifactOperation: vi.fn(),
     installPlugin: vi.fn(),
+    updatePlugin: vi.fn(),
     enablePlugin: vi.fn(),
     disablePlugin: vi.fn(),
     removePlugin: vi.fn(),

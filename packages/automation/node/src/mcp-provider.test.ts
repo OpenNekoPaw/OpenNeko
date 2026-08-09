@@ -33,6 +33,21 @@ describe('reviewed MCP Automation provider', () => {
       'browser_list_sessions',
     ]);
     expect(
+      BROWSER_USE_OBSERVE_PROFILE.operations.every(
+        (operation) => operation.modes.length === 1 && operation.modes[0] === 'observe',
+      ),
+    ).toBe(true);
+    expect(BROWSER_USE_OBSERVE_TOOL_NAMES).not.toEqual(
+      expect.arrayContaining([
+        'browser_navigate',
+        'browser_go_back',
+        'browser_scroll',
+        'browser_switch_tab',
+        'browser_click',
+        'browser_type',
+      ]),
+    );
+    expect(
       digestAutomationInputSchema({
         type: 'object',
         properties: {

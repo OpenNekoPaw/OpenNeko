@@ -248,6 +248,25 @@ describe('AutomationApplicationService', () => {
     expect(fixture.service.readSession('session-first')).toMatchObject({ status: 'paused' });
     expect(fixture.service.readSession('session-sibling')).toMatchObject({ status: 'active' });
   });
+
+  it('projects exact extension-owned sessions for lifecycle mutation gates', async () => {
+    const fixture = await createFixture();
+    await fixture.service.openSession(sessionRequest('session-owned'));
+
+    expect(fixture.service.listOwnedSessions('browser-use@openneko')).toEqual([
+      expect.objectContaining({
+        sessionId: 'session-owned',
+        profileId: 'browser.default',
+        status: 'active',
+      }),
+    ]);
+    expect(fixture.service.listOwnedSessions('computer-use@openneko')).toEqual([]);
+    await fixture.service.stopSession('session-owned');
+    expect(fixture.service.listOwnedSessions('browser-use@openneko')).toEqual([]);
+    expect(() => fixture.service.listOwnedSessions('../browser-use')).toThrow(
+      'extension identity is invalid',
+    );
+  });
 });
 
 async function createFixture(

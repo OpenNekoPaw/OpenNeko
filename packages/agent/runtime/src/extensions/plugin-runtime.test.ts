@@ -205,6 +205,9 @@ describe('Desktop plugin runtime', () => {
       expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
+        dependencyStatus: 'ready',
+        hostPermissionStatus: 'not-applicable',
+        qualificationStatus: 'qualified',
       });
       await pluginRuntime.dispose();
     });
@@ -260,6 +263,9 @@ describe('Desktop plugin runtime', () => {
       expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
+        dependencyStatus: 'ready',
+        hostPermissionStatus: 'not-applicable',
+        qualificationStatus: 'qualified',
       });
       await pluginRuntime.dispose();
 
@@ -281,8 +287,11 @@ describe('Desktop plugin runtime', () => {
       );
       expect(adapterRuntime.tools).toEqual([]);
       expect(adapterRuntime.readiness.get('fixture@market')).toEqual({
-        status: 'ready',
-        diagnosticCode: '',
+        status: 'unsupported',
+        diagnosticCode: 'automation-adapter-unavailable',
+        dependencyStatus: 'ready',
+        hostPermissionStatus: 'unknown',
+        qualificationStatus: 'unqualified',
       });
       await adapterRuntime.dispose();
     });

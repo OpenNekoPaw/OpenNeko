@@ -73,6 +73,7 @@ describe('Desktop Extension Management preload bridge', () => {
         route: request.route,
         projection: {
           identity,
+          operations: [],
           skills: [],
           skillDiscovery: { diagnostics: [], duplicateCount: 0 },
           extensions: [],
@@ -102,6 +103,7 @@ describe('Desktop Extension Management preload bridge', () => {
       route: request.route,
       projection: {
         identity,
+        operations: [],
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [],

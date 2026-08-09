@@ -8,6 +8,7 @@ describe('DesktopExtensionManagementRuntime', () => {
       route: request.route,
       projection: {
         identity: request.identity,
+        operations: [],
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [],
@@ -28,6 +29,22 @@ describe('DesktopExtensionManagementRuntime', () => {
       expect.objectContaining({
         route: 'plugin.enable',
         pluginId: 'computer-use@openneko',
+        identity: { windowId: 'window-1' },
+      }),
+    );
+    await runtime.updatePlugin('computer-use@openneko');
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        route: 'plugin.update',
+        pluginId: 'computer-use@openneko',
+        identity: { windowId: 'window-1' },
+      }),
+    );
+    await runtime.cancelPluginOperation('artifact-operation-1');
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        route: 'plugin.operation.cancel',
+        operationId: 'artifact-operation-1',
         identity: { windowId: 'window-1' },
       }),
     );

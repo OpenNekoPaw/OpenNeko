@@ -140,6 +140,7 @@ function createService() {
   return {
     listQualificationDiagnostics: vi.fn(() => []),
     listAvailableOperations: vi.fn(() => BROWSER_USE_OBSERVE_PROFILE.operations),
+    listOwnedSessions: vi.fn(() => []),
     openSession: vi.fn(async (input) => ({
       sessionId: input.sessionId,
       profileId: input.profileId,
