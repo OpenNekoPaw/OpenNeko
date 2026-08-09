@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 
-import { currentCompletions, startCompletion } from '@codemirror/autocomplete';
+import { acceptCompletion, currentCompletions, startCompletion } from '@codemirror/autocomplete';
 import { EditorView } from '@codemirror/view';
 import type {
   ApplyTextDocumentEditsCommand,
   TextDocumentChange,
   TextDocumentProjection,
+  TextEditorMarkdownReferenceSearchRequest,
+  TextEditorMarkdownReferenceSearchResult,
 } from '@neko/text-editor-domain';
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -115,6 +117,67 @@ describe('TextEditorRoot', () => {
       }),
     );
     expect(view.contentDOM.getAttribute('aria-label')).toBe('文档编辑器');
+    await unmount(rendered.root);
+  });
+
+  it('accepts Markdown reference completion through the canonical revisioned edit path', async () => {
+    const runtime = createRuntime(textProjection('markdown', '@小'));
+    runtime.searchMarkdownReferences.mockImplementation(async (request) => ({
+      status: 'ready',
+      projection: {
+        ...referenceProjection(request),
+        candidates: [
+          {
+            kind: 'mention',
+            source: 'entity',
+            ref: { kind: 'character', id: 'character-1' },
+            label: '小橘',
+          },
+        ],
+      },
+    }));
+    const rendered = await renderEditor(runtime, 'zh-cn');
+    const view = editorView(rendered.container);
+
+    await act(async () => {
+      view.dispatch({ selection: { anchor: 2 } });
+      startCompletion(view);
+      await delay(150);
+    });
+    await waitFor(() => currentCompletions(view.state).length === 1);
+    expect(currentCompletions(view.state)[0]?.label).toBe('@小橘');
+
+    await act(async () => {
+      expect(acceptCompletion(view)).toBe(true);
+      await settle();
+    });
+    await waitFor(() => runtime.applyEdits.mock.calls.length === 1);
+    expect(runtime.applyEdits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedEditSequence: 0,
+        changes: [{ from: 0, to: 2, insert: '@小橘' }],
+      }),
+    );
+    await unmount(rendered.root);
+  });
+
+  it('does not start semantic Markdown completion while CJK IME composition owns input', async () => {
+    const runtime = createRuntime(textProjection('markdown', '@小'));
+    const rendered = await renderEditor(runtime, 'zh-cn');
+    const view = editorView(rendered.container);
+
+    await act(async () => {
+      view.contentDOM.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      view.dispatch({ selection: { anchor: 2 } });
+      startCompletion(view);
+      await delay(150);
+    });
+    expect(runtime.searchMarkdownReferences).not.toHaveBeenCalled();
+    expect(currentCompletions(view.state)).toEqual([]);
+    await act(async () => {
+      view.contentDOM.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      await settle();
+    });
     await unmount(rendered.root);
   });
 
@@ -662,12 +725,21 @@ function createRuntime(initial: TextDocumentProjection) {
     current = { ...initial, editSequence: current.editSequence + 1 };
     return current;
   });
+  const searchMarkdownReferences = vi.fn(
+    async (
+      request: TextEditorMarkdownReferenceSearchRequest,
+    ): Promise<TextEditorMarkdownReferenceSearchResult> => ({
+      status: 'ready' as const,
+      projection: referenceProjection(request),
+    }),
+  );
   return {
     project: vi.fn(async () => current),
     applyEdits,
     formatJson,
     save,
     reload,
+    searchMarkdownReferences,
     subscribe: (listener: (projection: TextDocumentProjection) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -681,7 +753,21 @@ function createRuntime(initial: TextDocumentProjection) {
     formatJson: typeof formatJson;
     save: typeof save;
     reload: typeof reload;
+    searchMarkdownReferences: typeof searchMarkdownReferences;
     emit(projection: TextDocumentProjection): void;
+  };
+}
+
+function referenceProjection(request: TextEditorMarkdownReferenceSearchRequest) {
+  return {
+    requestId: request.requestId,
+    identity: request.identity,
+    sessionId: request.sessionId,
+    editSequence: request.editSequence,
+    kind: request.kind,
+    query: request.query,
+    candidates: [],
+    diagnostics: [],
   };
 }
 

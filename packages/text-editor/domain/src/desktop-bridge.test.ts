@@ -30,6 +30,84 @@ describe('Text Editor Desktop bridge', () => {
     ).toMatchObject({ expectedEditSequence: 2, changes: [{ from: 0, to: 1, insert: 'A' }] });
   });
 
+  it('decodes one exact Workspace-qualified reference search route and projection', () => {
+    const search = markdownReferenceSearch();
+    expect(
+      parseTextEditorHostRequest({
+        route: TEXT_EDITOR_HOST_ROUTES.referencesSearch,
+        requestId: search.requestId,
+        identity: runtimeIdentity,
+        search,
+      }),
+    ).toEqual({
+      route: TEXT_EDITOR_HOST_ROUTES.referencesSearch,
+      requestId: search.requestId,
+      identity: runtimeIdentity,
+      search,
+    });
+    expect(
+      parseTextEditorHostResult({
+        requestId: search.requestId,
+        identity: runtimeIdentity,
+        status: 'references-ready',
+        projection: {
+          ...markdownReferenceProjection(search),
+          candidates: [
+            {
+              kind: 'resource',
+              source: 'workspace-file',
+              ref: { kind: 'workspace-file', id: 'assets/cover.png' },
+              label: 'cover.png',
+              target: 'assets/cover.png',
+              embeddable: true,
+            },
+          ],
+          diagnostics: [],
+        },
+      }),
+    ).toMatchObject({ status: 'references-ready', projection: { requestId: search.requestId } });
+  });
+
+  it('poisons reference searches that cross document ownership or expose raw paths', () => {
+    const search = markdownReferenceSearch();
+    expect(() =>
+      parseTextEditorHostRequest({
+        route: TEXT_EDITOR_HOST_ROUTES.referencesSearch,
+        requestId: search.requestId,
+        identity: runtimeIdentity,
+        search: {
+          ...search,
+          identity: {
+            ...search.identity,
+            documentId: 'notes/other.md',
+            locator: { kind: 'workspace-file', path: 'notes/other.md' },
+          },
+        },
+      }),
+    ).toThrow('owner identity does not match');
+    expect(() =>
+      parseTextEditorHostResult({
+        requestId: search.requestId,
+        identity: runtimeIdentity,
+        status: 'references-ready',
+        projection: {
+          ...markdownReferenceProjection(search),
+          candidates: [
+            {
+              kind: 'resource',
+              source: 'asset',
+              ref: { kind: 'asset', id: 'asset-1' },
+              label: 'Private',
+              target: 'file:///Users/private/cover.png',
+              embeddable: true,
+            },
+          ],
+          diagnostics: [],
+        },
+      }),
+    ).toThrow('candidate is invalid');
+  });
+
   it('decodes typed fail-local operation diagnostics', () => {
     expect(
       parseTextEditorHostResult({
@@ -149,3 +227,31 @@ describe('Text Editor Desktop bridge', () => {
     ).toThrow('owner identity does not match');
   });
 });
+
+function markdownReferenceSearch() {
+  return {
+    requestId: 'reference-request-1',
+    identity: {
+      owner: { kind: 'window' as const, windowId: 'window-1', projectId: 'project-1' },
+      workspaceId: 'workspace-1',
+      documentId: 'notes/readme.md',
+      locator: { kind: 'workspace-file' as const, path: 'notes/readme.md' },
+    },
+    sessionId: 'text-document-1',
+    editSequence: 2,
+    kind: 'resource-embed' as const,
+    query: 'cover',
+    limit: 30,
+  };
+}
+
+function markdownReferenceProjection(search: ReturnType<typeof markdownReferenceSearch>) {
+  return {
+    requestId: search.requestId,
+    identity: search.identity,
+    sessionId: search.sessionId,
+    editSequence: search.editSequence,
+    kind: search.kind,
+    query: search.query,
+  };
+}

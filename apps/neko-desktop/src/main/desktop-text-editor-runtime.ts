@@ -16,6 +16,7 @@ import {
   TextDocumentSession,
   parseTextEditorHostRequest,
   sameTextEditorRuntimeIdentity,
+  type TextEditorMarkdownReferenceCatalog,
   type TextEditorHostResult,
   type TextEditorProjectionEvent,
   type TextEditorRuntimeIdentity,
@@ -48,6 +49,7 @@ export interface DesktopTextEditorShellPort {
 
 export interface DesktopTextEditorRuntimeOptions {
   readonly shell: DesktopTextEditorShellPort;
+  readonly referenceCatalog: Pick<TextEditorMarkdownReferenceCatalog, 'search'>;
   readonly createIdentity?: () => string;
   readonly watchFile?: DesktopTextEditorWatchFile;
 }
@@ -220,6 +222,25 @@ export class DesktopTextEditorRuntime {
         case TEXT_EDITOR_HOST_ROUTES.reload:
           await session.reload(request.confirmDirty);
           return readyResult(request.requestId, binding);
+        case TEXT_EDITOR_HOST_ROUTES.referencesSearch: {
+          const result = await this.options.referenceCatalog.search(request.search, {
+            signal: new AbortController().signal,
+            isCurrent: () => referenceSearchOwnsBinding(request.search, binding),
+          });
+          return result.status === 'ready'
+            ? {
+                requestId: request.requestId,
+                identity: binding.runtimeIdentity,
+                status: 'references-ready',
+                projection: result.projection,
+              }
+            : {
+                requestId: request.requestId,
+                identity: binding.runtimeIdentity,
+                status: 'references-discarded',
+                reason: result.reason,
+              };
+        }
         case TEXT_EDITOR_HOST_ROUTES.close: {
           const status = await session.close(request.decision);
           if (status === 'closed') await this.closeBinding(binding);
@@ -386,6 +407,24 @@ export class DesktopTextEditorRuntime {
   private requireActive(): void {
     if (this.disposed) throw new Error('Desktop Text Editor runtime is disposed.');
   }
+}
+
+function referenceSearchOwnsBinding(
+  search: import('@neko/text-editor-domain').TextEditorMarkdownReferenceSearchRequest,
+  binding: TextEditorBinding,
+): boolean {
+  const projection = binding.session.project();
+  return (
+    !binding.closed &&
+    projection.sessionId === search.sessionId &&
+    projection.editSequence === search.editSequence &&
+    projection.identity.workspaceId === search.identity.workspaceId &&
+    projection.identity.documentId === search.identity.documentId &&
+    projection.identity.owner.kind === 'window' &&
+    search.identity.owner.kind === 'window' &&
+    projection.identity.owner.windowId === search.identity.owner.windowId &&
+    projection.identity.owner.projectId === search.identity.owner.projectId
+  );
 }
 
 function watchWorkspaceFile(

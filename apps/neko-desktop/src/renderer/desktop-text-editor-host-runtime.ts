@@ -65,6 +65,31 @@ export function createElectronTextEditorHostRuntime(input: {
         confirmDirty: request.confirmDirty,
       });
     },
+    searchMarkdownReferences: async (request, signal) => {
+      if (signal.aborted) return { status: 'discarded', reason: 'cancelled' };
+      const result = await input.bridge.textEditor.execute({
+        route: TEXT_EDITOR_HOST_ROUTES.referencesSearch,
+        requestId: request.requestId,
+        identity: {
+          ...input.identity,
+          projectId: request.identity.owner.projectId,
+          workspaceId: request.identity.workspaceId,
+          windowId: request.identity.owner.windowId,
+          documentId: request.identity.documentId,
+          sessionId: request.sessionId,
+        },
+        search: request,
+      });
+      if (signal.aborted) return { status: 'discarded', reason: 'cancelled' };
+      if (result.status === 'references-ready') {
+        return { status: 'ready', projection: result.projection };
+      }
+      if (result.status === 'references-discarded') {
+        return { status: 'discarded', reason: result.reason };
+      }
+      if (result.status === 'rejected') throw new Error(result.diagnostic.code);
+      throw new Error(`Text Editor reference search returned '${result.status}'.`);
+    },
     subscribe: (listener) =>
       input.bridge.textEditor.subscribe(input.identity, (event) => listener(event.projection)),
   };

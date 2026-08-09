@@ -1,6 +1,12 @@
 import { validateContentLocator } from '@neko/content';
 import { parseFountainDocument } from '@neko/screenplay-domain';
 import { isTextDocumentDiagnosticCode } from './contracts';
+import {
+  assertTextEditorMarkdownReferenceSearchProjection,
+  assertTextEditorMarkdownReferenceSearchRequest,
+  type TextEditorMarkdownReferenceSearchProjection,
+  type TextEditorMarkdownReferenceSearchRequest,
+} from './markdown-reference-catalog-contract';
 import type {
   ApplyTextDocumentEditsCommand,
   TextDocumentCloseDecision,
@@ -15,6 +21,7 @@ export const TEXT_EDITOR_HOST_ROUTES = {
   jsonFormat: 'json.format',
   save: 'save',
   reload: 'reload',
+  referencesSearch: 'references.search',
   close: 'close',
 } as const;
 
@@ -75,6 +82,10 @@ export type TextEditorHostRequest =
       readonly confirmDirty: boolean;
     })
   | (TextEditorHostRequestBase & {
+      readonly route: typeof TEXT_EDITOR_HOST_ROUTES.referencesSearch;
+      readonly search: TextEditorMarkdownReferenceSearchRequest;
+    })
+  | (TextEditorHostRequestBase & {
       readonly route: typeof TEXT_EDITOR_HOST_ROUTES.close;
       readonly decision: TextDocumentCloseDecision;
     });
@@ -90,6 +101,18 @@ export type TextEditorHostResult =
       readonly requestId: string;
       readonly identity: TextEditorRuntimeIdentity;
       readonly status: 'closed' | 'cancelled';
+    }
+  | {
+      readonly requestId: string;
+      readonly identity: TextEditorRuntimeIdentity;
+      readonly status: 'references-ready';
+      readonly projection: TextEditorMarkdownReferenceSearchProjection;
+    }
+  | {
+      readonly requestId: string;
+      readonly identity: TextEditorRuntimeIdentity;
+      readonly status: 'references-discarded';
+      readonly reason: 'cancelled' | 'stale';
     }
   | {
       readonly requestId: string;
@@ -151,6 +174,13 @@ export function parseTextEditorHostRequest(value: unknown): TextEditorHostReques
       if (typeof record['confirmDirty'] !== 'boolean')
         throw invalid('Reload confirmation is invalid.');
       return { ...base, route, confirmDirty: record['confirmDirty'] };
+    case TEXT_EDITOR_HOST_ROUTES.referencesSearch: {
+      requireExactKeys(record, ['route', 'requestId', 'identity', 'search']);
+      const search = record['search'] as TextEditorMarkdownReferenceSearchRequest;
+      assertTextEditorMarkdownReferenceSearchRequest(search);
+      requireReferenceSearchOwner(base.requestId, base.identity, search);
+      return { ...base, route, search };
+    }
     case TEXT_EDITOR_HOST_ROUTES.close: {
       requireExactKeys(record, ['route', 'requestId', 'identity', 'decision']);
       const decision = record['decision'];
@@ -180,6 +210,31 @@ export function parseTextEditorHostResult(value: unknown): TextEditorHostResult 
       requestId: requireIdentity(record['requestId'], 'Text Editor request identity'),
       identity: parseTextEditorRuntimeIdentity(record['identity']),
       status,
+    };
+  }
+  if (status === 'references-ready') {
+    requireExactKeys(record, ['requestId', 'identity', 'status', 'projection']);
+    const identity = parseTextEditorRuntimeIdentity(record['identity']);
+    const projection = record['projection'];
+    assertTextEditorMarkdownReferenceSearchProjection(projection);
+    requireReferenceProjectionOwner(identity, projection);
+    return {
+      requestId: requireIdentity(record['requestId'], 'Text Editor request identity'),
+      identity,
+      status,
+      projection,
+    };
+  }
+  if (status === 'references-discarded') {
+    requireExactKeys(record, ['requestId', 'identity', 'status', 'reason']);
+    if (record['reason'] !== 'cancelled' && record['reason'] !== 'stale') {
+      throw invalid('Text Editor Markdown reference discard reason is invalid.');
+    }
+    return {
+      requestId: requireIdentity(record['requestId'], 'Text Editor request identity'),
+      identity: parseTextEditorRuntimeIdentity(record['identity']),
+      status,
+      reason: record['reason'],
     };
   }
   if (status === 'rejected') {
@@ -371,10 +426,44 @@ function requireRoute(value: unknown): TextEditorHostRoute {
     case TEXT_EDITOR_HOST_ROUTES.jsonFormat:
     case TEXT_EDITOR_HOST_ROUTES.save:
     case TEXT_EDITOR_HOST_ROUTES.reload:
+    case TEXT_EDITOR_HOST_ROUTES.referencesSearch:
     case TEXT_EDITOR_HOST_ROUTES.close:
       return value;
   }
   throw invalid('Text Editor Host route is invalid.');
+}
+
+function requireReferenceSearchOwner(
+  requestId: string,
+  identity: TextEditorRuntimeIdentity,
+  search: TextEditorMarkdownReferenceSearchRequest,
+): void {
+  if (
+    search.requestId !== requestId ||
+    search.sessionId !== identity.sessionId ||
+    search.identity.workspaceId !== identity.workspaceId ||
+    search.identity.documentId !== identity.documentId ||
+    search.identity.owner.kind !== 'window' ||
+    search.identity.owner.windowId !== identity.windowId ||
+    search.identity.owner.projectId !== identity.projectId
+  ) {
+    throw invalid('Text Editor Markdown reference search owner identity does not match.');
+  }
+}
+
+function requireReferenceProjectionOwner(
+  identity: TextEditorRuntimeIdentity,
+  projection: TextEditorMarkdownReferenceSearchProjection,
+): void {
+  requireReferenceSearchOwner(projection.requestId, identity, {
+    requestId: projection.requestId,
+    identity: projection.identity,
+    sessionId: projection.sessionId,
+    editSequence: projection.editSequence,
+    kind: projection.kind,
+    query: projection.query,
+    limit: Math.max(1, Math.min(50, projection.candidates.length || 1)),
+  });
 }
 
 function requireEditSequence(value: unknown): number {

@@ -8,13 +8,13 @@
 
 - [x] 2.1 Define package-owned, Workspace/document/request-qualified reference search contracts and stable candidate identities in `@neko/text-editor-domain` without importing Agent or Electron contracts.
 - [x] 2.2 Implement the owning Workspace file/entity/asset catalog composition with bounded results, exact diagnostics and per-contributor failure isolation.
-- [ ] 2.3 Add producer, consumer/delegation, stale-request and poison tests proving there is one catalog path and no active/recent Workspace, Agent catalog or raw-path fallback.
+- [x] 2.3 Add producer, consumer/delegation, stale-request and poison tests proving there is one catalog path and no active/recent Workspace, Agent catalog or raw-path fallback.
 
 ## 3. Markdown Source Assistance
 
-- [ ] 3.1 Adapt the canonical Markdown authoring projection to CodeMirror completion for GFM, `@`, `[[` and `![[` triggers while preserving the existing Fountain provider.
-- [ ] 3.2 Route accepted completion through the exact Text Document edit sequence and suppress semantic completion during IME composition.
-- [ ] 3.3 Add Webview interaction tests for insertion ranges, keyboard use, empty/ambiguous results, CJK IME, stale results, document switching and two visible editor Roots.
+- [x] 3.1 Adapt the canonical Markdown authoring projection to CodeMirror completion for GFM, `@`, `[[` and `![[` triggers while preserving the existing Fountain provider.
+- [x] 3.2 Route accepted completion through the exact Text Document edit sequence and suppress semantic completion during IME composition.
+- [x] 3.3 Add Webview interaction tests for insertion ranges, keyboard use, empty/ambiguous results, CJK IME, stale results, document switching and two visible editor Roots.
 
 ## 4. Authorized Media Projection
 

@@ -176,6 +176,9 @@ importers:
       '@neko/text-editor-domain':
         specifier: workspace:*
         version: link:../../packages/text-editor/domain
+      '@neko/text-editor-node':
+        specifier: workspace:*
+        version: link:../../packages/text-editor/node
       '@neko/text-editor-webview':
         specifier: workspace:*
         version: link:../../packages/text-editor/webview

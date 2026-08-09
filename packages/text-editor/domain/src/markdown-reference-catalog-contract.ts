@@ -98,6 +98,68 @@ export function assertTextEditorMarkdownReferenceSearchRequest(
   assertTextDocumentIdentity(request.identity);
 }
 
+export function assertTextEditorMarkdownReferenceSearchProjection(
+  value: unknown,
+): asserts value is TextEditorMarkdownReferenceSearchProjection {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      'requestId',
+      'identity',
+      'sessionId',
+      'editSequence',
+      'kind',
+      'query',
+      'candidates',
+      'diagnostics',
+    ]) ||
+    !Array.isArray(value['candidates']) ||
+    value['candidates'].length > 50
+  ) {
+    throw new TextEditorMarkdownReferenceContractError(
+      'Text Editor Markdown reference projection is invalid.',
+    );
+  }
+  const projection = value as unknown as TextEditorMarkdownReferenceSearchProjection;
+  assertTextEditorMarkdownReferenceSearchRequest({
+    requestId: projection.requestId,
+    identity: projection.identity,
+    sessionId: projection.sessionId,
+    editSequence: projection.editSequence,
+    kind: projection.kind,
+    query: projection.query,
+    limit: Math.max(1, projection.candidates.length),
+  });
+  for (const candidate of projection.candidates) {
+    if (!isTextEditorMarkdownReferenceCandidate(candidate)) {
+      throw new TextEditorMarkdownReferenceContractError(
+        'Text Editor Markdown reference candidate is invalid.',
+      );
+    }
+    if (
+      (projection.kind === 'mention' && candidate.kind !== 'mention') ||
+      (projection.kind !== 'mention' && candidate.kind !== 'resource') ||
+      (projection.kind === 'resource-embed' &&
+        candidate.kind === 'resource' &&
+        !candidate.embeddable)
+    ) {
+      throw new TextEditorMarkdownReferenceContractError(
+        'Text Editor Markdown reference candidate does not match the query kind.',
+      );
+    }
+  }
+  if (
+    !Array.isArray(projection.diagnostics) ||
+    projection.diagnostics.some(
+      (diagnostic) => !isTextEditorMarkdownReferenceDiagnostic(diagnostic),
+    )
+  ) {
+    throw new TextEditorMarkdownReferenceContractError(
+      'Text Editor Markdown reference diagnostics are invalid.',
+    );
+  }
+}
+
 export function isTextEditorMarkdownReferenceCandidate(
   value: unknown,
 ): value is TextEditorMarkdownReferenceCandidate {
@@ -120,6 +182,21 @@ export function isTextEditorMarkdownReferenceCandidate(
   if (!path) return false;
   const locator = validateContentLocator({ kind: 'workspace-file', path });
   return locator.ok && locator.locator.kind === 'workspace-file';
+}
+
+export function isTextEditorMarkdownReferenceDiagnostic(
+  value: unknown,
+): value is TextEditorMarkdownReferenceDiagnostic {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['code', 'source', 'candidateRef'])) return false;
+  if (!isReferenceSource(value['source'])) return false;
+  if (
+    value['code'] !== 'text-editor-markdown-reference-contributor-failed' &&
+    value['code'] !== 'text-editor-markdown-reference-invalid-candidate' &&
+    value['code'] !== 'text-editor-markdown-reference-duplicate-candidate'
+  ) {
+    return false;
+  }
+  return value['candidateRef'] === undefined || isReferenceIdentity(value['candidateRef']);
 }
 
 export function textEditorMarkdownReferenceIdentityKey(

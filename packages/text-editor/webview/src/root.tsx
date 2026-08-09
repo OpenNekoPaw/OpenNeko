@@ -31,6 +31,7 @@ import {
   type TextEditorPresentationMode,
   type TextEditorPresentationSnapshot,
 } from './presentation-snapshot';
+import { createMarkdownCompletionSource } from './markdown-completions';
 import { refreshSourceDecorations, sourceLanguageExtensions } from './source-language';
 import './style.css';
 
@@ -545,7 +546,22 @@ function CodeMirrorEditor({
       }),
     ];
     extensions.push(...sourceLanguageExtensions(accepted.current));
-    if (projection.mode === 'fountain') {
+    if (projection.mode === 'markdown') {
+      extensions.push(
+        autocompletion({
+          override: [
+            createMarkdownCompletionSource({
+              readProjection: () => accepted.current,
+              nextRequestId,
+              isComposing: () => composing.current,
+              searchReferences: (request, signal) =>
+                runtime.searchMarkdownReferences(request, signal),
+              reportDiagnostics: () => undefined,
+            }),
+          ],
+        }),
+      );
+    } else if (projection.mode === 'fountain') {
       extensions.push(
         autocompletion({ override: [fountainCompletions(() => accepted.current)] }),
         Prec.high(

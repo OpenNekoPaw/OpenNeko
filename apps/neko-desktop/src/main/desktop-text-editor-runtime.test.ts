@@ -26,6 +26,28 @@ const resourceIdentity: ResourceBrowserIdentity = {
   rendererSessionId: 'renderer-1',
 };
 
+function emptyReferenceCatalog() {
+  return {
+    search: vi.fn(
+      async (
+        request: import('@neko/text-editor-domain').TextEditorMarkdownReferenceSearchRequest,
+      ) => ({
+        status: 'ready' as const,
+        projection: {
+          requestId: request.requestId,
+          identity: request.identity,
+          sessionId: request.sessionId,
+          editSequence: request.editSequence,
+          kind: request.kind,
+          query: request.query,
+          candidates: [],
+          diagnostics: [],
+        },
+      }),
+    ),
+  };
+}
+
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
@@ -44,6 +66,7 @@ describe('DesktopTextEditorRuntime', () => {
     const identities = ['session', 'view', 'open'];
     const runtime = new DesktopTextEditorRuntime({
       shell,
+      referenceCatalog: emptyReferenceCatalog(),
       createIdentity: () => identities.shift() ?? 'next',
     });
 
@@ -80,6 +103,89 @@ describe('DesktopTextEditorRuntime', () => {
     expect(await readFile(path.join(root, 'notes/readme.md'), 'utf8')).toBe('# Saved\n');
   });
 
+  it('delegates reference search to one exact catalog and discards a stale edit sequence', async () => {
+    const root = await createWorkspace('notes/readme.md', '@小');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell = createShell(root, () => workbench, (next) => {
+      workbench = next;
+    });
+    const entitySearch = vi.fn(async () => [
+      {
+        kind: 'mention' as const,
+        source: 'entity' as const,
+        ref: { kind: 'character', id: 'character-1' },
+        label: '小橘',
+      },
+    ]);
+    const referenceCatalog = {
+      search: vi.fn(async (request, options) =>
+        options.isCurrent?.(request) === false
+          ? ({ status: 'discarded' as const, reason: 'stale' as const })
+          : {
+              status: 'ready' as const,
+              projection: {
+                requestId: request.requestId,
+                identity: request.identity,
+                sessionId: request.sessionId,
+                editSequence: request.editSequence,
+                kind: request.kind,
+                query: request.query,
+                candidates: await entitySearch(),
+                diagnostics: [],
+              },
+            },
+      ),
+    } satisfies Pick<
+      import('@neko/text-editor-domain').TextEditorMarkdownReferenceCatalog,
+      'search'
+    >;
+    const runtime = new DesktopTextEditorRuntime({ shell, referenceCatalog });
+    const opened = await runtime.open({
+      identity: resourceIdentity,
+      item: textItem('notes/readme.md'),
+    });
+    if (opened.status !== 'ready') throw new Error('Expected a ready Text Editor.');
+    const search = {
+      requestId: 'references-1',
+      identity: opened.projection.identity,
+      sessionId: opened.projection.sessionId,
+      editSequence: opened.projection.editSequence,
+      kind: 'mention' as const,
+      query: '小',
+      limit: 30,
+    };
+
+    await expect(
+      runtime.execute('window-1', {
+        route: TEXT_EDITOR_HOST_ROUTES.referencesSearch,
+        requestId: search.requestId,
+        identity: opened.identity,
+        search,
+      }),
+    ).resolves.toMatchObject({
+      status: 'references-ready',
+      projection: { candidates: [{ source: 'entity', label: '小橘' }] },
+    });
+    expect(entitySearch).toHaveBeenCalledOnce();
+
+    await runtime.execute('window-1', {
+      route: TEXT_EDITOR_HOST_ROUTES.editsApply,
+      requestId: 'edit-after-search',
+      identity: opened.identity,
+      expectedEditSequence: 0,
+      changes: [{ from: 2, to: 2, insert: '橘' }],
+    });
+    await expect(
+      runtime.execute('window-1', {
+        route: TEXT_EDITOR_HOST_ROUTES.referencesSearch,
+        requestId: search.requestId,
+        identity: opened.identity,
+        search,
+      }),
+    ).resolves.toMatchObject({ status: 'references-discarded', reason: 'stale' });
+    expect(entitySearch).toHaveBeenCalledOnce();
+  });
+
   it('preserves dirty source on external conflict and accepts only the current renderer', async () => {
     const root = await createWorkspace('story/main.fountain', '.内景 房间 - 夜\n');
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');
@@ -95,6 +201,7 @@ describe('DesktopTextEditorRuntime', () => {
     const identities = ['session', 'view', 'open'];
     const runtime = new DesktopTextEditorRuntime({
       shell,
+      referenceCatalog: emptyReferenceCatalog(),
       createIdentity: () => identities.shift() ?? 'next',
     });
     const opened = await runtime.open({
@@ -164,6 +271,7 @@ describe('DesktopTextEditorRuntime', () => {
     const identities = ['session', 'view', 'open'];
     const runtime = new DesktopTextEditorRuntime({
       shell,
+      referenceCatalog: emptyReferenceCatalog(),
       watchFile,
       createIdentity: () => identities.shift() ?? 'next',
     });
@@ -217,6 +325,7 @@ describe('DesktopTextEditorRuntime', () => {
     const identities = ['session', 'view', 'open'];
     const runtime = new DesktopTextEditorRuntime({
       shell,
+      referenceCatalog: emptyReferenceCatalog(),
       createIdentity: () => identities.shift() ?? 'next',
     });
     const opened = await runtime.open({

@@ -136,9 +136,80 @@ describe('Markdown CodeMirror completion source', () => {
     fixture.searchReferences.mockResolvedValue({ status: 'discarded', reason: 'cancelled' });
     await expect(fixture.complete(2)).resolves.toBeNull();
   });
+
+  it('keeps empty catalog results empty without inventing a fallback candidate', async () => {
+    const fixture = createFixture('[[missing');
+    const completion = await fixture.complete(fixture.projection.source.length);
+    expect(completion?.options).toEqual([]);
+    expect(fixture.searchReferences).toHaveBeenCalledOnce();
+  });
+
+  it('discards a late result after the visible document switches', async () => {
+    const fixture = createFixture('@小');
+    let resolveSearch: ((result: TextEditorMarkdownReferenceSearchResult) => void) | undefined;
+    fixture.searchReferences.mockImplementation(
+      (request) =>
+        new Promise((resolve) => {
+          resolveSearch = (result) => resolve(result);
+          expect(request.identity.documentId).toBe('notes/draft.md');
+        }),
+    );
+    const pending = fixture.complete(2);
+    fixture.projection = markdownProjection('@小', 'notes/other.md');
+    if (!resolveSearch) throw new Error('Expected a pending reference search.');
+    resolveSearch(
+      ready(
+        {
+          requestId: 'completion-request-1',
+          identity: markdownProjection('@小').identity,
+          sessionId: 'session-1',
+          editSequence: 2,
+          kind: 'mention',
+          query: '小',
+          limit: 30,
+        },
+        [],
+      ),
+    );
+    await expect(pending).resolves.toBeNull();
+  });
+
+  it('isolates completion candidates between two visible editor Roots', async () => {
+    const left = createFixture('@', 'notes/left.md');
+    const right = createFixture('@', 'notes/right.md');
+    left.searchReferences.mockImplementation(async (request) =>
+      ready(request, [
+        {
+          kind: 'mention',
+          source: 'entity',
+          ref: { kind: 'character', id: 'left-character' },
+          label: '左侧角色',
+        },
+      ]),
+    );
+    right.searchReferences.mockImplementation(async (request) =>
+      ready(request, [
+        {
+          kind: 'mention',
+          source: 'entity',
+          ref: { kind: 'character', id: 'right-character' },
+          label: '右侧角色',
+        },
+      ]),
+    );
+
+    const [leftCompletion, rightCompletion] = await Promise.all([
+      left.complete(1),
+      right.complete(1),
+    ]);
+    expect(leftCompletion?.options.map((item) => item.label)).toEqual(['@左侧角色']);
+    expect(rightCompletion?.options.map((item) => item.label)).toEqual(['@右侧角色']);
+    expect(left.searchReferences.mock.calls[0]?.[0].identity.documentId).toBe('notes/left.md');
+    expect(right.searchReferences.mock.calls[0]?.[0].identity.documentId).toBe('notes/right.md');
+  });
 });
 
-function createFixture(source: string) {
+function createFixture(source: string, documentId = 'notes/draft.md') {
   const fixture: {
     projection: TextDocumentProjection;
     composing: boolean;
@@ -159,7 +230,7 @@ function createFixture(source: string) {
       explicit?: boolean,
     ): Promise<Awaited<ReturnType<ReturnType<typeof createMarkdownCompletionSource>>>>;
   } = {
-    projection: markdownProjection(source),
+    projection: markdownProjection(source, documentId),
     composing: false,
     requestSequence: 0,
     searchReferences: vi.fn(async (request) => ready(request, [])),
@@ -178,13 +249,13 @@ function createFixture(source: string) {
   return fixture;
 }
 
-function markdownProjection(source: string): TextDocumentProjection {
+function markdownProjection(source: string, documentId = 'notes/draft.md'): TextDocumentProjection {
   return {
     identity: {
       owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
       workspaceId: 'workspace-1',
-      documentId: 'notes/draft.md',
-      locator: { kind: 'workspace-file', path: 'notes/draft.md' },
+      documentId,
+      locator: { kind: 'workspace-file', path: documentId },
     },
     sessionId: 'session-1',
     editSequence: 2,

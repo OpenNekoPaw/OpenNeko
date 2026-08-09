@@ -1,6 +1,8 @@
 import type {
   ApplyTextDocumentEditsCommand,
   TextDocumentProjection,
+  TextEditorMarkdownReferenceSearchRequest,
+  TextEditorMarkdownReferenceSearchResult,
 } from '@neko/text-editor-domain';
 
 export interface TextEditorHostRuntime {
@@ -19,5 +21,9 @@ export interface TextEditorHostRuntime {
     readonly sessionId: string;
     readonly confirmDirty: boolean;
   }): Promise<TextDocumentProjection>;
+  searchMarkdownReferences(
+    request: TextEditorMarkdownReferenceSearchRequest,
+    signal: AbortSignal,
+  ): Promise<TextEditorMarkdownReferenceSearchResult>;
   subscribe(listener: (projection: TextDocumentProjection) => void): () => void;
 }
