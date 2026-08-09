@@ -29,6 +29,18 @@ Workspace 图片：
 ![[missing.png]]
 `;
 const MARKDOWN_COMPLETION_PREFIX = '# 引用补全\n\n![[bo';
+const MARKDOWN_LISTS = `# 日常
+
+- [ ] 测试
+- [x] 客
+- 普通项目
+
+1. 日白
+2. 猫猫
+
+[-] 非法任务标记
+[x] 不是列表项
+`;
 
 export const desktopMarkdownMediaScenario = Object.freeze({
   id: 'desktop-markdown-media',
@@ -38,6 +50,7 @@ export const desktopMarkdownMediaScenario = Object.freeze({
     await mkdir(workspacePath, { recursive: true });
     await Promise.all([
       writeFile(join(workspacePath, 'media.md'), MARKDOWN_MEDIA, 'utf8'),
+      writeFile(join(workspacePath, 'lists.md'), MARKDOWN_LISTS, 'utf8'),
       writeFile(join(workspacePath, 'input.md'), '# 输入验证\n', 'utf8'),
     ]);
     const ffmpeg = process.env['NEKO_FFMPEG_PATH']?.trim() || 'ffmpeg';
@@ -146,6 +159,25 @@ export const desktopMarkdownMediaScenario = Object.freeze({
       );
     }
 
+    await openTextDocument(evaluate, 'lists.md');
+    await selectTextEditorMode(evaluate, 'split');
+    await waitForMarkdownLists(evaluate);
+    const listsLight = await inspectMarkdownLists(evaluate);
+    assertMarkdownLists(listsLight, 'light Split');
+    const listsLightScreenshot = await screenshot('markdown-lists-split-light');
+    checkpoint('markdown-lists-split-light', listsLight);
+    const listBytesAfterPresentation = await readFile(
+      join(prepared.workspacePath, 'lists.md'),
+      'utf8',
+    );
+    if (listBytesAfterPresentation !== MARKDOWN_LISTS) {
+      throw new Error(
+        `Markdown list presentation changed authoritative bytes: ${JSON.stringify(
+          listBytesAfterPresentation,
+        )}`,
+      );
+    }
+
     await openTextDocument(evaluate, 'input.md');
     await selectTextEditorMode(evaluate, 'source');
     const releasedStatuses = await evaluate(`Promise.all(${JSON.stringify(mediaUris)}.map(
@@ -212,17 +244,29 @@ export const desktopMarkdownMediaScenario = Object.freeze({
     const mediaDarkScreenshot = await screenshot('markdown-media-split-dark-compact');
     checkpoint('markdown-media-split-dark-compact', mediaDark);
 
+    await openTextDocument(evaluate, 'lists.md');
+    await selectTextEditorMode(evaluate, 'split');
+    await waitForMarkdownLists(evaluate);
+    const listsDark = await inspectMarkdownLists(evaluate);
+    assertMarkdownLists(listsDark, 'dark compact Split');
+    const listsDarkScreenshot = await screenshot('markdown-lists-split-dark-compact');
+    checkpoint('markdown-lists-split-dark-compact', listsDark);
+
     return {
       mediaRich,
       mediaSplit,
       mediaDark,
+      listsLight,
+      listsDark,
       completionSource,
       releasedStatuses,
       screenshots: [
         mediaRichScreenshot,
         mediaSplitScreenshot,
+        listsLightScreenshot,
         completionScreenshot,
         mediaDarkScreenshot,
+        listsDarkScreenshot,
       ],
     };
   },
@@ -292,6 +336,90 @@ async function waitForMarkdownMedia(evaluate) {
       document.querySelector('.neko-markdown-media[data-media-state="unavailable"]') !== null`,
     'Markdown media did not settle.',
   );
+}
+
+async function waitForMarkdownLists(evaluate) {
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll('.neko-text-editor-rich li[data-item-type="task"]').length === 2 &&
+      document.querySelectorAll('.neko-text-editor-rich ol > li').length === 2`,
+    'Markdown lists did not settle.',
+  );
+}
+
+async function inspectMarkdownLists(evaluate) {
+  return evaluate(`(() => {
+    const root = document.querySelector('.neko-text-editor-root');
+    const rich = root?.querySelector('.neko-text-editor-rich');
+    const source = root?.querySelector('.neko-text-editor-codemirror');
+    const unordered = rich?.querySelector('ul');
+    const ordered = rich?.querySelector('ol');
+    const tasks = [...(rich?.querySelectorAll('li[data-item-type="task"]') ?? [])];
+    const ordinaryBullet = [...(unordered?.children ?? [])].find(
+      (item) => item.getAttribute('data-item-type') !== 'task',
+    );
+    if (
+      !(root instanceof HTMLElement) ||
+      !(rich instanceof HTMLElement) ||
+      !(source instanceof HTMLElement) ||
+      !(unordered instanceof HTMLElement) ||
+      !(ordered instanceof HTMLElement) ||
+      !(ordinaryBullet instanceof HTMLElement)
+    ) {
+      throw new Error('Markdown list surface is unavailable.');
+    }
+    const checkedTask = tasks.find((task) => task.getAttribute('data-checked') === 'true');
+    if (!(checkedTask instanceof HTMLElement)) {
+      throw new Error('Checked Markdown task is unavailable.');
+    }
+    const uncheckedTask = tasks.find((task) => task.getAttribute('data-checked') === 'false');
+    if (!(uncheckedTask instanceof HTMLElement)) {
+      throw new Error('Unchecked Markdown task is unavailable.');
+    }
+    const checkboxStyle = getComputedStyle(uncheckedTask, '::before');
+    const checkmarkStyle = getComputedStyle(checkedTask, '::after');
+    return {
+      theme: document.documentElement.dataset.nekoTheme,
+      presentationMode: root.querySelector('.neko-text-editor-body')?.getAttribute('data-presentation-mode'),
+      source: [...source.querySelectorAll('.cm-content .cm-line')]
+        .map((line) => line.textContent ?? '')
+        .join('\\n'),
+      richText: rich.textContent ?? '',
+      richReadOnly: rich.querySelector('.ProseMirror')?.getAttribute('aria-readonly') ?? null,
+      taskStates: tasks.map((task) => task.getAttribute('data-checked')),
+      unorderedListStyle: getComputedStyle(unordered).listStyleType,
+      orderedListStyle: getComputedStyle(ordered).listStyleType,
+      ordinaryBulletStyle: getComputedStyle(ordinaryBullet).listStyleType,
+      taskListStyle: getComputedStyle(uncheckedTask).listStyleType,
+      checkboxBorderStyle: checkboxStyle.borderStyle,
+      checkboxWidth: checkboxStyle.width,
+      checkmarkBorderRightStyle: checkmarkStyle.borderRightStyle,
+      fitsSurface:
+        root.scrollWidth <= root.clientWidth + 1 && rich.scrollWidth <= rich.clientWidth + 1,
+    };
+  })()`);
+}
+
+function assertMarkdownLists(lists, label) {
+  if (
+    lists.presentationMode !== 'split' ||
+    lists.richReadOnly !== 'true' ||
+    lists.source.trimEnd() !== MARKDOWN_LISTS.trimEnd() ||
+    lists.taskStates.join(',') !== 'false,true' ||
+    lists.unorderedListStyle !== 'disc' ||
+    lists.orderedListStyle !== 'decimal' ||
+    lists.ordinaryBulletStyle !== 'disc' ||
+    lists.taskListStyle !== 'none' ||
+    lists.checkboxBorderStyle !== 'solid' ||
+    Number.parseFloat(lists.checkboxWidth) <= 0 ||
+    lists.checkmarkBorderRightStyle !== 'solid' ||
+    !lists.richText.includes('[-] 非法任务标记') ||
+    !lists.richText.includes('[x] 不是列表项') ||
+    !lists.fitsSurface ||
+    (label.startsWith('light') ? lists.theme !== 'light' : lists.theme !== 'dark')
+  ) {
+    throw new Error(`Markdown lists ${label} are incomplete: ${JSON.stringify(lists)}`);
+  }
 }
 
 async function inspectMarkdownMedia(evaluate) {

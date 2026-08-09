@@ -198,6 +198,61 @@
   margin: 0.8em 0;
 }
 
+.neko-text-editor-milkdown-mount ul,
+.neko-text-editor-milkdown-mount ol {
+  padding-inline-start: 1.75em;
+}
+
+.neko-text-editor-milkdown-mount ul {
+  list-style: disc;
+}
+
+.neko-text-editor-milkdown-mount ul ul {
+  list-style: circle;
+}
+
+.neko-text-editor-milkdown-mount ol {
+  list-style: decimal;
+}
+
+.neko-text-editor-milkdown-mount li {
+  padding-inline-start: 0.2em;
+}
+
+.neko-text-editor-milkdown-mount li[data-item-type='task'] {
+  position: relative;
+  list-style: none;
+}
+
+.neko-text-editor-milkdown-mount li[data-item-type='task']::before {
+  position: absolute;
+  top: 1.16em;
+  left: -1.4em;
+  width: 0.9em;
+  height: 0.9em;
+  border: 1.5px solid var(--neko-input-border, #7a838d);
+  border-radius: 3px;
+  background: var(--neko-editor-background, #fff);
+  content: '';
+}
+
+.neko-text-editor-milkdown-mount li[data-item-type='task'][data-checked='true']::before {
+  border-color: var(--neko-focusBorder, #2563eb);
+  background: var(--neko-focusBorder, #2563eb);
+}
+
+.neko-text-editor-milkdown-mount li[data-item-type='task'][data-checked='true']::after {
+  position: absolute;
+  top: 1.3em;
+  left: -1.08em;
+  width: 0.24em;
+  height: 0.48em;
+  border: solid var(--neko-editor-background, #fff);
+  border-width: 0 1.5px 1.5px 0;
+  content: '';
+  transform: rotate(45deg);
+}
+
 .neko-text-editor-milkdown-mount a {
   color: var(--neko-textLink-foreground, #1672a3);
   text-underline-offset: 2px;

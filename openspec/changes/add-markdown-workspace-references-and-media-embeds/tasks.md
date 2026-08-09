@@ -35,3 +35,4 @@
 - [x] 6.2 Run dependency/boundary/OpenSpec validation and poison searches proving no private Markdown profile, second catalog, raw filesystem render path or runtime URL persistence exists.
 - [x] 6.3 Use `neko-ui-validation` on visible Electron for Source completion, Rich/Split images, missing media, audio/video controls, light/dark theme, CJK IME, keyboard and adjacent Workbench behavior.
 - [x] 6.4 Use `neko-quality-review`, close blocking findings, update stable architecture/package documentation and commit implementation in independently reviewable batches.
+- [x] 6.5 Restore CommonMark list markers and canonical GFM task checkboxes in Rich/Split presentation; prove valid and malformed source remain distinct, document bytes stay authoritative, and the visible Electron result is correct in light and dark themes.

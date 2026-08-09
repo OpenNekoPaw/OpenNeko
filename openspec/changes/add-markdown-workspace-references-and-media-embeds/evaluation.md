@@ -9,7 +9,7 @@ Date: 2026-08-09
 | Markdown parser and round-trip | `pnpm --filter @neko/markdown test`                                                                                                                                                                                     | Passed, 73 tests                             |
 | Text Editor Domain             | `pnpm --filter @neko/text-editor-domain test`                                                                                                                                                                           | Passed, 55 tests                             |
 | Text Editor Node               | `pnpm --filter @neko/text-editor-node test`                                                                                                                                                                             | Passed, 10 tests                             |
-| Text Editor Webview            | `pnpm --filter @neko/text-editor-webview test`                                                                                                                                                                          | Passed, 45 tests                             |
+| Text Editor Webview            | `pnpm --filter @neko/text-editor-webview test`                                                                                                                                                                          | Passed, 46 tests                             |
 | Desktop delegation             | `pnpm --dir apps/neko-desktop exec vitest run src/main/desktop-text-editor-runtime.test.ts src/renderer/desktop-text-editor-media-host-runtime.test.ts src/renderer/desktop-text-editor-reference-host-runtime.test.ts` | Passed, 12 tests                             |
 | Package typechecks             | `pnpm exec tsc -p packages/markdown/tsconfig.json --noEmit && pnpm exec tsc -p packages/text-editor/domain/tsconfig.json --noEmit && pnpm exec tsc -p packages/text-editor/node/tsconfig.json --noEmit`                 | Passed                                       |
 | Webview typecheck              | `pnpm --filter @neko/text-editor-webview build`                                                                                                                                                                         | Passed                                       |
@@ -68,6 +68,18 @@ projection and does not define a private Markdown profile or alternate resource 
 - **Residual risk:** native control appearance is Chromium/macOS-specific, and this focused scenario
   does not exercise long candidate labels in every locale or real playback/seek interaction.
 
+### List-presentation regression
+
+The 2026-08-09 rerun extended the visible `desktop-markdown-media` scenario with canonical GFM task
+items, a plain unordered item, an ordered list and malformed `[-]` / standalone `[x]` text. The
+development Electron report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T09-50-47.829Z-desktop-markdown-media-development/report.json`.
+It proves `disc` and `decimal` marker restoration after the Desktop Tailwind reset, distinct checked
+and unchecked task presentation, unchanged malformed text, exact source bytes, bounded Split layout
+and zero console errors or exceptions. Direct pixel inspection of
+`03-markdown-lists-split-light.png` and `06-markdown-lists-split-dark-compact.png` confirmed readable
+markers and checkboxes without clipping or overlap in both themes. The regression result is passed.
+
 ## Quality review
 
 - **Risk:** L3. The implementation crosses public Domain contracts, Node Workspace/resource access,
@@ -89,5 +101,5 @@ projection and does not define a private Markdown profile or alternate resource 
   `parseDesktopAgentConnectionIdentity` in `agent-contract.ts`. Native media-control visuals are
   Chromium/macOS-specific, and the focused scenario does not perform playback seeking.
 
-All 20 implementation and validation tasks are complete. The change is ready for archival after the
+All 21 implementation and validation tasks are complete. The change is ready for archival after the
 independently reviewable delivery commits are retained.
