@@ -74,6 +74,8 @@ const config: KnipConfig = {
       ],
     },
     'packages/ai/contracts': {},
+    'packages/automation/contracts': {},
+    'packages/automation/node': {},
     'packages/content': {
       entry: ['src/index.ts', 'src/document/index.ts'],
     },

@@ -19,6 +19,8 @@
     "@neko/agent-contracts": "workspace:*",
     "@neko/agent-runtime": "workspace:*",
     "@neko/agent-webview": "workspace:*",
+    "@neko/automation-contracts": "workspace:*",
+    "@neko/automation-node": "workspace:*",
     "@neko/assets-domain": "workspace:*",
     "@neko/assets-node": "workspace:*",
     "@neko/assets-webview": "workspace:*",

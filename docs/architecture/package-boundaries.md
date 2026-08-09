@@ -226,6 +226,8 @@ Agent 能力按 owning package 职责分层：
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `@neko/agent-contracts` | Agent/Main/preload/renderer contract、effective configuration、facts 和状态投影                                            |
 | `@neko/agent-runtime`   | Pi product runtime、conversation identity、permission、Skill Host、Capability Tool bridge、facts projector 与 host effects |
+| `@neko/automation-contracts` | Browser/Computer provider、profile、exact target/session grant、action、evidence 与 diagnostic 的 L0 contract              |
+| `@neko/automation-node` | 自动化 session/target/mode/budget/approval policy、reviewed MCP provider wrapper 与 transient observation 编排             |
 | `@neko/ai-contracts`    | provider/model configuration contracts                                                                                     |
 | `@neko/ai-sdk`          | provider/AI SDK adapter                                                                                                    |
 | `@neko/host`            | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
@@ -235,6 +237,16 @@ Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime �
 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
 capability/tool schema 和宿主副作用按各自边界维护。Pi 只接收已经解析好的
 model/prompt/tool snapshot，不接收 `ConfigManager`、领域 service 或 Host process adapter。
+
+Browser Use 与 Computer Use 的控制实现由审核固定的开源 upstream MCP runtime 持有；OpenNeko 不实现
+第二套浏览器、截图、键鼠输入、VLA 或 GUI Agent loop。`@neko/automation-contracts` 是 L0 canonical
+shape owner，`@neko/automation-node` 是 L1 session 与 policy owner。Agent 只通过 canonical Capability、
+Tool Registry 和 Pi Tool Call 消费 package-owned wrapper；automation MCP server 必须禁止 generic raw MCP
+Tool exposure。Desktop Main 只提供一次性用户 grant authority、当前 OS permission 查询、每 session 独占
+的受限进程/MCP connection、精确 app/process/window revalidation 与短生命周期 observation projection。
+自动化 grant 必须绑定 exact provider/upstream release、browser profile 和 domains 或 computer target、
+mode、timeout、step budget 与 conversation/run/toolCall owner；上游进程启动失败后也不得重放。Renderer
+不得接收截图原始持久字节、真实 HOME/path、secret、process/window handle 或 MCP connection。
 
 Entry Draft first-submit 的 context、initial message、pending intent、provider claim 和 session
 materialization 顺序由 `@neko/agent-runtime` application service 拥有。Desktop 只注入精确
@@ -268,6 +280,7 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 | 包                  | 主要职责                                                                                               | 关键边界                                                                                                                                                                                                                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@neko/agent-*`     | Agent session、provider、Skill、capability 与 Chat UI                                                  | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                                                                                                                                                                                                |
+| `@neko/automation-*` | Browser/Computer 自动化 contract、session policy 与 reviewed upstream adapter                         | 不实现控制引擎；每 session 独占 upstream MCP process；Agent 只走 canonical Tool Call，Desktop 只实现 OS/process/resource trust adapter                                                                                                                                                                                  |
 | `@neko/generation`  | 生成请求/结果契约、execution port 与 recoverable Job                                                   | 只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                                                                                                                                                                                                                      |
 | `@neko/chara`       | Character 创作语义、Dialogue/Embody、证据、剧情/日常运行编排与日常关系记忆                             | 当前仅保留未接入的 core/application kernel；具体 adapter 由 Desktop 注入；运行只消费唯一 AgentSession contract，不拥有第二套 Agent loop                                                                                                                                                                                |
 | `@neko/quality`     | canonical Quality Gate、evaluator port 与模型证据适配                                                  | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                                                                                                                                                                                                  |

@@ -28,6 +28,24 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/automation/contracts",
+      "name": "@neko/automation-contracts",
+      "family": "automation",
+      "roles": ["contracts"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/automation/node",
+      "name": "@neko/automation-node",
+      "family": "automation",
+      "roles": ["application", "node"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "retained-kernel",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/ai/contracts",
       "name": "@neko/ai-contracts",
       "family": "ai",

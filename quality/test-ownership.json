@@ -43,6 +43,20 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/automation/contracts",
+      "owner": "packages/automation/contracts",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/automation/node",
+      "owner": "packages/automation/node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
       "path": "packages/assets/domain",
       "owner": "packages/assets/domain",
       "mode": "self",
