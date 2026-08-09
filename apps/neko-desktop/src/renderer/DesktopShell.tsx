@@ -127,6 +127,55 @@ export const MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO = 0.5;
 export const MANAGEMENT_MAIN_SPLIT_MIN_RATIO = 0.5;
 const SHELL_DIAGNOSTIC_DURATION_MS = 6_000;
 
+type DesktopShellPendingScope =
+  'scene' | 'workbench' | 'navigation' | 'sidebar' | 'target-selection';
+
+export interface DesktopShellPendingProjection {
+  readonly scene: boolean;
+  readonly workbench: boolean;
+  readonly navigation: boolean;
+  readonly sidebar: boolean;
+  readonly targetSelection: boolean;
+}
+
+export interface DesktopShellInteractionLocks {
+  readonly workbench: boolean;
+  readonly navigation: boolean;
+  readonly sidebar: boolean;
+  readonly targetSelection: boolean;
+}
+
+const EMPTY_DESKTOP_SHELL_PENDING: DesktopShellPendingProjection = {
+  scene: false,
+  workbench: false,
+  navigation: false,
+  sidebar: false,
+  targetSelection: false,
+};
+
+function projectDesktopShellPending(
+  counts: ReadonlyMap<DesktopShellPendingScope, number>,
+): DesktopShellPendingProjection {
+  return {
+    scene: counts.has('scene'),
+    workbench: counts.has('workbench'),
+    navigation: counts.has('navigation'),
+    sidebar: counts.has('sidebar'),
+    targetSelection: counts.has('target-selection'),
+  };
+}
+
+export function projectDesktopShellInteractionLocks(
+  pending: DesktopShellPendingProjection,
+): DesktopShellInteractionLocks {
+  return {
+    workbench: pending.scene || pending.workbench,
+    navigation: pending.scene || pending.navigation,
+    sidebar: pending.scene || pending.sidebar,
+    targetSelection: pending.scene || pending.targetSelection,
+  };
+}
+
 interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
@@ -159,7 +208,10 @@ interface ShellActions {
 export function DesktopApplication(): JSX.Element {
   const { t } = useTranslation();
   const [state, setState] = useState<ShellState>({ kind: 'loading' });
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<DesktopShellPendingProjection>(
+    EMPTY_DESKTOP_SHELL_PENDING,
+  );
+  const pendingScopeCounts = useRef(new Map<DesktopShellPendingScope, number>());
   const [diagnostic, setDiagnostic] = useState<string>();
   const [startupMetadataDiagnostic, setStartupMetadataDiagnostic] =
     useState<RetainedMetadataDiagnostic>();
@@ -239,6 +291,24 @@ export function DesktopApplication(): JSX.Element {
   );
   const persistedDiagnosticKey = persistedDiagnostic?.key;
 
+  const beginPending = useCallback((scope: DesktopShellPendingScope): (() => void) => {
+    const counts = pendingScopeCounts.current;
+    counts.set(scope, (counts.get(scope) ?? 0) + 1);
+    setPending(projectDesktopShellPending(counts));
+    let finished = false;
+    return () => {
+      if (finished) return;
+      finished = true;
+      const count = counts.get(scope);
+      if (count === undefined) {
+        throw new Error(`Desktop Shell pending scope '${scope}' is not active.`);
+      }
+      if (count === 1) counts.delete(scope);
+      else counts.set(scope, count - 1);
+      setPending(projectDesktopShellPending(counts));
+    };
+  }, []);
+
   useEffect(() => {
     if (!startupMetadataDiagnostic) return;
     const timeout = window.setTimeout(
@@ -265,8 +335,11 @@ export function DesktopApplication(): JSX.Element {
   }, [dismissedPersistedDiagnosticKey, persistedDiagnosticKey]);
 
   const runMutation = useCallback(
-    async (operation: () => Promise<DesktopShellProjection>): Promise<void> => {
-      setPending(true);
+    async (
+      scope: DesktopShellPendingScope,
+      operation: () => Promise<DesktopShellProjection>,
+    ): Promise<void> => {
+      const finishPending = beginPending(scope);
       setDiagnostic(undefined);
       try {
         const request = {};
@@ -283,10 +356,10 @@ export function DesktopApplication(): JSX.Element {
         setDiagnostic(describeError(error));
         await refresh();
       } finally {
-        setPending(false);
+        finishPending();
       }
     },
-    [refresh, t],
+    [beginPending, refresh, t],
   );
 
   if (state.kind === 'loading') {
@@ -311,7 +384,7 @@ export function DesktopApplication(): JSX.Element {
     diagnostic ?? visiblePersistedDiagnostic?.message ?? startupMetadataMessage;
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
   const transitionScene = (intent: DesktopSceneTransitionIntent): void => {
-    setPending(true);
+    const finishPending = beginPending('scene');
     setDiagnostic(undefined);
     void window.openNekoDesktop.scenes
       .transition(projection.window.windowId, intent, activeWorkbench.scene.sceneId)
@@ -324,7 +397,7 @@ export function DesktopApplication(): JSX.Element {
         setDiagnostic(describeError(error));
         await refresh();
       })
-      .finally(() => setPending(false));
+      .finally(finishPending);
   };
   const actions: ShellActions = {
     onSelectProject: (projectId) => transitionScene({ kind: 'open-project-workspace', projectId }),
@@ -344,7 +417,7 @@ export function DesktopApplication(): JSX.Element {
       if (!globalThis.confirm(confirmation)) {
         return;
       }
-      void runMutation(() =>
+      void runMutation('navigation', () =>
         window.openNekoDesktop.conversations.delete(
           conversations.map((conversation) => conversation.navigation),
         ),
@@ -361,7 +434,7 @@ export function DesktopApplication(): JSX.Element {
       if (!globalThis.confirm(confirmation)) {
         return;
       }
-      void runMutation(() =>
+      void runMutation('navigation', () =>
         window.openNekoDesktop.projects.remove(projects.map((project) => project.projectId)),
       );
     },
@@ -393,7 +466,7 @@ export function DesktopApplication(): JSX.Element {
               conversationCount,
             });
       if (!globalThis.confirm(confirmation)) return;
-      void runMutation(() =>
+      void runMutation('navigation', () =>
         window.openNekoDesktop.projects.deleteConversations(
           projects.map((project) => project.projectId),
         ),
@@ -403,12 +476,12 @@ export function DesktopApplication(): JSX.Element {
       if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
         throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
       }
-      void runMutation(() =>
+      void runMutation('workbench', () =>
         window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
       );
     },
     onCreateCutDraft: (workbenchInstanceId) => {
-      void runMutation(async () => {
+      void runMutation('workbench', async () => {
         const result = await window.openNekoDesktop.cut.createDraft({
           requestId: `cut-draft-create:${globalThis.crypto.randomUUID()}`,
           windowId: projection.window.windowId,
@@ -421,7 +494,7 @@ export function DesktopApplication(): JSX.Element {
     onCloseCutView: (workbenchInstanceId, view) => {
       if (!view.documentId) throw new Error('Desktop Cut close requires a document identity.');
       const documentId = view.documentId;
-      void runMutation(async () => {
+      void runMutation('workbench', async () => {
         const result = await window.openNekoDesktop.cut.closeView({
           requestId: `cut-view-close:${globalThis.crypto.randomUUID()}`,
           windowId: projection.window.windowId,
@@ -446,7 +519,7 @@ export function DesktopApplication(): JSX.Element {
         if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
           throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
         }
-        void runMutation(() =>
+        void runMutation('workbench', () =>
           window.openNekoDesktop.workbench.update(
             workbenchInstanceId,
             closeMainView(workbench, view.viewId),
@@ -473,7 +546,7 @@ export function DesktopApplication(): JSX.Element {
         rendererSessionId: projection.rendererSessionId,
       };
       const requestPrefix = `desktop-text-editor:close:${textEditorCloseRequestOrdinal.current}`;
-      setPending(true);
+      const finishPending = beginPending('workbench');
       setDiagnostic(undefined);
       void window.openNekoDesktop.textEditor
         .execute({
@@ -511,10 +584,10 @@ export function DesktopApplication(): JSX.Element {
           setDiagnostic(describeError(error));
           await refresh();
         })
-        .finally(() => setPending(false));
+        .finally(finishPending);
     },
     onUpdateApplicationSidebar: (sidebar) =>
-      void runMutation(() =>
+      void runMutation('sidebar', () =>
         window.openNekoDesktop.applicationSidebar.update(
           sidebar.windowId,
           sidebar.visible,
@@ -523,7 +596,7 @@ export function DesktopApplication(): JSX.Element {
       ),
     onTransitionScene: transitionScene,
     onChooseWorkspaceTarget: async () => {
-      setPending(true);
+      const finishPending = beginPending('target-selection');
       setDiagnostic(undefined);
       try {
         const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
@@ -543,11 +616,11 @@ export function DesktopApplication(): JSX.Element {
         await refresh();
         return undefined;
       } finally {
-        setPending(false);
+        finishPending();
       }
     },
     onSelectWorkspaceProjectTarget: async (projectId) => {
-      setPending(true);
+      const finishPending = beginPending('target-selection');
       setDiagnostic(undefined);
       try {
         const result = await window.openNekoDesktop.workspaceGrants.selectProject(
@@ -568,7 +641,7 @@ export function DesktopApplication(): JSX.Element {
         await refresh();
         return undefined;
       } finally {
-        setPending(false);
+        finishPending();
       }
     },
   };
@@ -639,7 +712,7 @@ export function DesktopShellView({
   return (
     <DesktopSceneWorkbench
       actions={actions}
-      pending={false}
+      pending={EMPTY_DESKTOP_SHELL_PENDING}
       projection={projection}
       interactive={false}
     />
@@ -655,13 +728,14 @@ function DesktopSceneWorkbench({
 }: {
   readonly actions: ShellActions;
   readonly interactive?: boolean;
-  readonly pending: boolean;
+  readonly pending: DesktopShellPendingProjection;
   readonly projection: DesktopShellProjection;
   readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
 }): JSX.Element {
   const { locale, t } = useTranslation();
   const settings = useDesktopApplicationSettings();
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
+  const interactionLocks = projectDesktopShellInteractionLocks(pending);
   const scene = activeWorkbench.scene;
   const [managementSplitRatios, setManagementSplitRatios] = useState<ReadonlyMap<string, number>>(
     () => new Map(),
@@ -763,7 +837,7 @@ function DesktopSceneWorkbench({
         interaction: scene.slots.interaction,
         onChooseWorkspaceTarget: actions.onChooseWorkspaceTarget,
         onSelectWorkspaceProjectTarget: actions.onSelectWorkspaceProjectTarget,
-        workspaceSelectionDisabled: pending || !interactive,
+        workspaceSelectionDisabled: interactionLocks.targetSelection || !interactive,
       })
     : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
@@ -858,7 +932,7 @@ function DesktopSceneWorkbench({
     characterInteractionScene && scene.slots.cutPanel?.kind === 'character-room-timeline';
   const bottomPanelVisible = cutPanelVisible || roomTimelineVisible;
   const interactionResize =
-    workspaceScene && interactionPresentation === 'docked' && !pending
+    workspaceScene && interactionPresentation === 'docked' && !interactionLocks.workbench
       ? createProjectDockResizeBinding({
           actions,
           dock: {
@@ -873,7 +947,7 @@ function DesktopSceneWorkbench({
         })
       : undefined;
   const resourceDockResize =
-    resourceDockVisible && !pending
+    resourceDockVisible && !interactionLocks.workbench
       ? createProjectDockResizeBinding({
           actions,
           dock: {
@@ -888,7 +962,7 @@ function DesktopSceneWorkbench({
         })
       : undefined;
   const cutPanelResize =
-    cutPanelVisible && !pending
+    cutPanelVisible && !interactionLocks.workbench
       ? {
           label: t('workspace.resizeCutPanel'),
           minSize: DESKTOP_WORKBENCH_LIMITS.cutPanelHeight.min,
@@ -922,7 +996,7 @@ function DesktopSceneWorkbench({
           workspaceProject ? (
             <WorkspaceRegionControls
               actions={actions}
-              disabled={pending}
+              disabled={interactionLocks.workbench}
               regionState={{
                 agent: {
                   available: workspaceAgentSurface !== undefined,
@@ -955,7 +1029,7 @@ function DesktopSceneWorkbench({
           <ApplicationPrimarySidebar
             activeSection={activeSection}
             compact={compact}
-            disabled={pending}
+            disabled={interactionLocks.navigation || interactionLocks.sidebar}
             activeProjectId={workspaceProject?.projectId}
             onDeleteConversations={actions.onDeleteConversations}
             onDeleteProjectConversations={(project) =>
@@ -976,7 +1050,7 @@ function DesktopSceneWorkbench({
         primarySidebarWidth={compact ? 64 : sidebar.width}
         primarySidebarResize={createApplicationPrimarySidebarResizeBinding({
           actions,
-          disabled: pending || compact,
+          disabled: interactionLocks.sidebar || compact,
           t,
           sidebar,
         })}

@@ -12,6 +12,7 @@ import {
   DesktopShellView,
   MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO,
   MANAGEMENT_MAIN_SPLIT_MIN_RATIO,
+  projectDesktopShellInteractionLocks,
   resizeApplicationSidebar,
   resizeProjectDockWorkbench,
   resolveAssetCenterPreviewSession,
@@ -43,6 +44,41 @@ import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?ra
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 describe('Desktop scene Workbench', () => {
+  it('locks only controls owned by the pending Shell mutation scope', () => {
+    const base = {
+      scene: false,
+      workbench: false,
+      navigation: false,
+      sidebar: false,
+      targetSelection: false,
+    };
+
+    expect(projectDesktopShellInteractionLocks({ ...base, workbench: true })).toEqual({
+      workbench: true,
+      navigation: false,
+      sidebar: false,
+      targetSelection: false,
+    });
+    expect(projectDesktopShellInteractionLocks({ ...base, sidebar: true })).toEqual({
+      workbench: false,
+      navigation: false,
+      sidebar: true,
+      targetSelection: false,
+    });
+    expect(projectDesktopShellInteractionLocks({ ...base, targetSelection: true })).toEqual({
+      workbench: false,
+      navigation: false,
+      sidebar: false,
+      targetSelection: true,
+    });
+    expect(projectDesktopShellInteractionLocks({ ...base, scene: true })).toEqual({
+      workbench: true,
+      navigation: true,
+      sidebar: true,
+      targetSelection: true,
+    });
+  });
+
   it('keeps catalog parsing and deterministic ordering fail-visible', () => {
     expect(parseProjectManagementSort('updated-ascending')).toBe('updated-ascending');
     expect(() => parseProjectManagementSort('recent')).toThrow(

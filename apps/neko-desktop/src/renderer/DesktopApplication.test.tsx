@@ -144,6 +144,50 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(activeSubscriptions).toBe(0);
   });
 
+  it('keeps Workspace layout controls interactive while a Sidebar mutation is pending', async () => {
+    const projection = createTextEditorShellProjection();
+    const update = deferred<DesktopShellProjection>();
+    const updateApplicationSidebar = vi.fn(() => update.promise);
+    installBridge({ projection, updateApplicationSidebar });
+    const { container, root } = await renderApplication();
+
+    const collapse = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse sidebar"]',
+    );
+    if (!collapse) throw new Error('Desktop fixture requires the Sidebar toggle.');
+    const layoutControlStateBefore = new Map(
+      [...container.querySelectorAll<HTMLButtonElement>('[data-workbench-region-control]')]
+        .filter((control) => control.dataset['workbenchRegionControl'] !== 'primary-sidebar')
+        .map((control) => [control.dataset['workbenchRegionControl'], control.disabled]),
+    );
+    await act(async () => collapse.click());
+    await waitFor(() => updateApplicationSidebar.mock.calls.length === 1);
+
+    const layoutControls = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-workbench-region-control]'),
+    ].filter((control) => control.dataset['workbenchRegionControl'] !== 'primary-sidebar');
+    expect(layoutControls.length).toBeGreaterThan(0);
+    expect(
+      new Map(
+        layoutControls.map((control) => [
+          control.dataset['workbenchRegionControl'],
+          control.disabled,
+        ]),
+      ),
+    ).toEqual(layoutControlStateBefore);
+
+    await act(async () =>
+      update.resolve({
+        ...projection,
+        window: {
+          ...projection.window,
+          applicationSidebar: { ...projection.window.applicationSidebar, visible: false },
+        },
+      }),
+    );
+    await act(async () => root.unmount());
+  });
+
   it.each([
     { label: 'clean', dirty: false, confirmations: [] as boolean[], decision: 'discard' as const },
     { label: 'dirty save', dirty: true, confirmations: [true], decision: 'save' as const },
@@ -2273,6 +2317,17 @@ async function renderApplication(strict = false) {
   await act(async () => root.render(strict ? <StrictMode>{application}</StrictMode> : application));
   await waitFor(() => container.querySelector('[data-neko-controlled-workbench="true"]') !== null);
   return { container, root };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }
 
 function createProjection(): DesktopShellProjection {
