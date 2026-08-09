@@ -21,7 +21,7 @@ const identity: TextDocumentIdentity = {
 
 describe('TextEditorMarkdownReferenceCatalog', () => {
   it('composes exact contributors while preserving duplicate display labels', async () => {
-    const catalog = new TextEditorMarkdownReferenceCatalog([
+    const catalog = createCatalog([
       contributor('workspace-file', [mention('workspace-file', 'file-1', '小橘')]),
       contributor('entity', [mention('entity', 'entity-1', '小橘')]),
       contributor('asset', [mention('asset', 'asset-1', '封面')]),
@@ -53,7 +53,7 @@ describe('TextEditorMarkdownReferenceCatalog', () => {
     failed.search = vi.fn(async () => {
       throw new Error('entity-index-unavailable');
     });
-    const catalog = new TextEditorMarkdownReferenceCatalog([
+    const catalog = createCatalog([
       contributor('workspace-file', [resource('workspace-file', 'file-1', true)]),
       failed,
       contributor('asset', [resource('asset', 'asset-1', true)]),
@@ -77,7 +77,7 @@ describe('TextEditorMarkdownReferenceCatalog', () => {
 
   it('rejects every duplicate stable identity instead of selecting by contributor order', async () => {
     const duplicate = resource('asset', 'asset-1', true);
-    const catalog = new TextEditorMarkdownReferenceCatalog([
+    const catalog = createCatalog([
       contributor('asset', [duplicate, { ...duplicate, label: '另一个标签' }]),
     ]);
 
@@ -102,7 +102,7 @@ describe('TextEditorMarkdownReferenceCatalog', () => {
     };
     const wrongSource = mention('entity', 'wrong-source', '角色');
     const valid = resource('workspace-file', 'valid', true);
-    const catalog = new TextEditorMarkdownReferenceCatalog([
+    const catalog = createCatalog([
       contributor('workspace-file', [
         invalidTarget as TextEditorMarkdownReferenceCandidate,
         wrongSource,
@@ -125,7 +125,7 @@ describe('TextEditorMarkdownReferenceCatalog', () => {
     const controller = new AbortController();
     controller.abort();
     const search = vi.fn(async () => [mention('entity', 'entity-1', '小橘')]);
-    const catalog = new TextEditorMarkdownReferenceCatalog([{ source: 'entity', search }]);
+    const catalog = createCatalog([{ source: 'entity', search }]);
 
     await expect(
       catalog.search(request('mention', ''), { signal: controller.signal }),
@@ -150,7 +150,11 @@ describe('TextEditorMarkdownReferenceCatalog', () => {
         ]),
     ).toThrow("Duplicate Text Editor Markdown reference contributor 'asset'.");
 
-    const catalog = new TextEditorMarkdownReferenceCatalog([]);
+    expect(() => new TextEditorMarkdownReferenceCatalog([])).toThrow(
+      'is missing contributor(s): workspace-file, entity, asset.',
+    );
+
+    const catalog = createCatalog([]);
     await expect(
       catalog.search(
         {
@@ -200,6 +204,18 @@ function contributor(
   candidates: readonly TextEditorMarkdownReferenceCandidate[],
 ): TextEditorMarkdownReferenceContributor {
   return { source, search: vi.fn(async () => candidates) };
+}
+
+function createCatalog(
+  contributors: readonly TextEditorMarkdownReferenceContributor[],
+): TextEditorMarkdownReferenceCatalog {
+  const registered = new Set(contributors.map((item) => item.source));
+  return new TextEditorMarkdownReferenceCatalog([
+    ...contributors,
+    ...(['workspace-file', 'entity', 'asset'] as const)
+      .filter((source) => !registered.has(source))
+      .map((source) => contributor(source, [])),
+  ]);
 }
 
 function mention(

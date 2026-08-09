@@ -46,6 +46,12 @@ export class TextEditorMarkdownReferenceCatalog {
       }
       sources.add(contributor.source);
     }
+    const missingSources = REFERENCE_SOURCES.filter((source) => !sources.has(source));
+    if (missingSources.length > 0) {
+      throw new TextEditorMarkdownReferenceContractError(
+        `Text Editor Markdown reference catalog is missing contributor(s): ${missingSources.join(', ')}.`,
+      );
+    }
     this.contributors = Object.freeze([...contributors]);
   }
 
@@ -135,6 +141,12 @@ export class TextEditorMarkdownReferenceCatalog {
     };
   }
 }
+
+const REFERENCE_SOURCES: readonly TextEditorMarkdownReferenceSource[] = [
+  'workspace-file',
+  'entity',
+  'asset',
+];
 
 function candidateMatchesQueryKind(
   candidate: TextEditorMarkdownReferenceCandidate,
