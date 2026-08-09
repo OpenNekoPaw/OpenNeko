@@ -1,5 +1,6 @@
 import { useTranslation } from '../../i18n/I18nContext';
 import type { SkillSummary } from './InputArea/types';
+import type { HomeExperienceEntryProjection } from '../../presenters/home-experience-entry-presenter';
 
 export type EmptyStateEntryAction = 'start-chat' | 'roleplay';
 
@@ -11,6 +12,7 @@ interface EmptyStateProps {
   draftScope?: 'unbound' | 'assistant' | 'workspace' | 'character' | 'room' | 'world';
   skills?: readonly SkillSummary[];
   onSkillSelect?: (skill: SkillSummary) => void;
+  experienceProjection?: HomeExperienceEntryProjection;
 }
 
 const EMPTY_STATE_ENTRIES: readonly {
@@ -38,11 +40,14 @@ export function EmptyState({
   draftScope,
   skills = [],
   onSkillSelect,
+  experienceProjection,
 }: EmptyStateProps) {
   const { t } = useTranslation();
   const entries = EMPTY_STATE_ENTRIES;
   const selectedEntry = entries.find((entry) => entry.action === selectedAction);
-  const suggestedSkills = skills.filter((skill) => skill.enabled).slice(0, 4);
+  const suggestedSkills = skills
+    .filter((skill) => skill.enabled)
+    .slice(0, experienceProjection?.showSkillSuggestions === false ? 0 : 4);
   const draftPresentation = draftScope !== undefined;
 
   if (presentation === 'desktop-dock') {
@@ -57,18 +62,20 @@ export function EmptyState({
             className="agent-empty-title text-[15px] font-semibold leading-6 text-[var(--agent-fg)]"
           >
             {t(
-              draftScope === 'assistant'
-                ? 'chat.emptyState.scope.assistantActiveTitle'
-                : draftScope === 'workspace'
-                  ? 'chat.emptyState.scope.workspaceActiveTitle'
-                  : 'chat.emptyState.desktopDockTitle',
+              experienceProjection?.titleKey ??
+                (draftScope === 'assistant'
+                  ? 'chat.emptyState.scope.assistantActiveTitle'
+                  : draftScope === 'workspace'
+                    ? 'chat.emptyState.scope.workspaceActiveTitle'
+                    : 'chat.emptyState.desktopDockTitle'),
             )}
           </h2>
           <p className="mt-1 text-[12px] leading-5 text-[var(--agent-empty-muted)]">
             {t(
-              draftPresentation
-                ? 'chat.emptyState.scope.activeDescription'
-                : 'chat.emptyState.desktopDockDescription',
+              experienceProjection?.descriptionKey ??
+                (draftPresentation
+                  ? 'chat.emptyState.scope.activeDescription'
+                  : 'chat.emptyState.desktopDockDescription'),
             )}
           </p>
           {draftPresentation ? null : (
@@ -126,10 +133,10 @@ export function EmptyState({
             id="neko-agent-empty-title"
             className="agent-empty-title text-[13px] font-semibold leading-5 text-[var(--agent-fg)]"
           >
-            {t('chat.emptyState.title')}
+            {t(experienceProjection?.titleKey ?? 'chat.emptyState.title')}
           </h2>
           <p className="agent-empty-copy mt-1 max-w-full text-[12px] leading-5 text-[var(--agent-empty-copy)]">
-            {t('chat.emptyState.description')}
+            {t(experienceProjection?.descriptionKey ?? 'chat.emptyState.description')}
           </p>
         </div>
 
@@ -154,9 +161,11 @@ export function EmptyState({
           </div>
         )}
 
-        <p className="agent-empty-mode-hint mt-3 text-[10px] leading-4 text-[var(--agent-empty-muted)]">
-          {selectedEntry ? t(selectedEntry.helperKey) : null}
-        </p>
+        {experienceProjection ? null : (
+          <p className="agent-empty-mode-hint mt-3 text-[10px] leading-4 text-[var(--agent-empty-muted)]">
+            {selectedEntry ? t(selectedEntry.helperKey) : null}
+          </p>
+        )}
 
         <p className="agent-empty-disclaimer mt-4 text-[10px] leading-4 text-[var(--agent-empty-muted)]">
           {t('chat.emptyState.disclaimer')}

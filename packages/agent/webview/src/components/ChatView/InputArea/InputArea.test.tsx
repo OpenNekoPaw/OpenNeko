@@ -746,12 +746,34 @@ describe('InputArea composer controls', () => {
     const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
     expect(within(modeGroup).getByRole('button', { name: '配置模型' })).toBeTruthy();
     expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '审批' })).toBeNull();
+    expect(screen.getByRole('button', { name: '审批' })).toBeTruthy();
     expect(screen.queryByTitle('命令')).toBeNull();
     expect(screen.queryByTitle('技能')).toBeNull();
     expect(screen.queryByTitle('chat.usage.clickToCompress')).toBeNull();
     expect(document.querySelector('.agent-composer-shell')).toBeTruthy();
     expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('描述你想要完成的内容...');
+  });
+
+  it('keeps the Entry textarea editable while a prerequisite blocks only send', () => {
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue="keep editing"
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          submissionBlockedReason="请选择项目或已授权目录。"
+        />
+      </Harness>,
+    );
+
+    expect(screen.getByRole('textbox')).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: '请选择项目或已授权目录。' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('status').textContent).toBe('请选择项目或已授权目录。');
   });
 
   it('keeps Entry Workspace target selection in the package-owned composer', async () => {

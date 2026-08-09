@@ -75,6 +75,33 @@ export const chat = {
   'chat.emptyState.entry.startChatHelper': '直接和 Agent 发展故事、角色、世界观或创作方向。',
   'chat.emptyState.entry.generateAssetsHelper': '提交后选择图片、视频或声音生成模式。',
   'chat.emptyState.entry.roleplayHelper': '提交后选择角色，并把输入作为开场对白。',
+  'chat.entryExperience.label': '选择体验模式',
+  'chat.entryExperience.mode.assistant': '助手',
+  'chat.entryExperience.mode.workspace': '工作区',
+  'chat.entryExperience.mode.character': '角色',
+  'chat.entryExperience.mode.world': '世界',
+  'chat.entryExperience.assistant.title': '想聊些什么？',
+  'chat.entryExperience.assistant.description': '无需选择项目或目录，直接开始助手会话。',
+  'chat.entryExperience.workspace.title': '我们该处理什么工作？',
+  'chat.entryExperience.workspace.description': '先选择已授权的项目或目录，再描述要完成的工作。',
+  'chat.entryExperience.character.title': '进入角色对话',
+  'chat.entryExperience.character.description':
+    '角色模式需要已发布的角色版本，以及由角色领域提供的对话或聊天室入口。',
+  'chat.entryExperience.world.title': '进入互动世界',
+  'chat.entryExperience.world.description':
+    '世界模式需要世界体验版本，以及由世界领域提供的运行入口。',
+  'chat.entryExperience.validation.bindingPending': '正在更新体验目标…',
+  'chat.entryExperience.validation.configurationRequired': '发送前请选择已配置的服务商和模型。',
+  'chat.entryExperience.validation.assistantBindingMismatch':
+    '正在解除当前工作区绑定，请稍后再发送。',
+  'chat.entryExperience.validation.workspaceChooserUnavailable': '当前窗口无法选择项目或目录。',
+  'chat.entryExperience.validation.workspaceRequired': '发送前请选择项目或已授权目录。',
+  'chat.entryExperience.validation.workspaceBindingMismatch':
+    '所选工作区未授权给当前草稿，请重新选择。',
+  'chat.entryExperience.validation.characterUnavailable':
+    '角色模式尚不可用。请先发布角色，并接入角色领域的对话或聊天室入口。',
+  'chat.entryExperience.validation.worldUnavailable':
+    '世界模式尚不可用。请先创建世界体验，并接入世界领域的运行入口。',
   'chat.skill.active': '活跃 Skill 生命周期记录',
   'chat.skill.toolLimit': '工具限制：{count}',
   'chat.skill.clear': '清除记录',

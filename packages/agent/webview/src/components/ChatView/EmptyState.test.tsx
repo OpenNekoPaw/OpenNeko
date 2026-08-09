@@ -27,6 +27,13 @@ const translations: Record<string, string> = {
   'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
   'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
   'chat.emptyState.scope.activeDescription': 'Start a conversation.',
+  'chat.entryExperience.label': 'Choose an experience',
+  'chat.entryExperience.mode.assistant': 'Assistant',
+  'chat.entryExperience.mode.workspace': 'Workspace',
+  'chat.entryExperience.mode.character': 'Character',
+  'chat.entryExperience.mode.world': 'World',
+  'chat.entryExperience.assistant.title': 'What would you like to explore?',
+  'chat.entryExperience.assistant.description': 'Start without a project.',
 };
 
 vi.mock('../../i18n/I18nContext', () => ({
@@ -36,6 +43,31 @@ vi.mock('../../i18n/I18nContext', () => ({
 }));
 
 describe('EmptyState', () => {
+  it('renders experience-specific copy without restoring legacy entry actions', () => {
+    render(
+      <EmptyState
+        presentation="desktop-dock"
+        draftScope="unbound"
+        experienceProjection={{
+          mode: 'assistant',
+          options: [
+            { mode: 'assistant', labelKey: 'chat.entryExperience.mode.assistant' },
+            { mode: 'workspace', labelKey: 'chat.entryExperience.mode.workspace' },
+            { mode: 'character', labelKey: 'chat.entryExperience.mode.character' },
+            { mode: 'world', labelKey: 'chat.entryExperience.mode.world' },
+          ],
+          titleKey: 'chat.entryExperience.assistant.title',
+          descriptionKey: 'chat.entryExperience.assistant.description',
+          showWorkspaceControl: false,
+          showSkillSuggestions: true,
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Start Chat/ })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'What would you like to explore?' })).toBeTruthy();
+  });
+
   it('renders the compact assistant entry points', () => {
     render(<EmptyState />);
 

@@ -3,6 +3,29 @@ import type { AgentConfigurationPolicyProjection } from '@neko/agent-contracts';
 import { projectAmbientCanvasContext, projectInputAreaUi } from '../input-area-presenter';
 
 describe('input area presenter', () => {
+  it('shows execution mode on Entry while a local prerequisite blocks only send', () => {
+    expect(
+      projectInputAreaUi({
+        presentation: 'entry',
+        inputValue: 'keep editing',
+        attachedFileCount: 0,
+        contextChipCount: 0,
+        ambientNodeCount: 0,
+        mediaModelCallCount: 0,
+        isThinking: false,
+        disabled: false,
+        submissionBlocked: true,
+        sessionMode: 'agent',
+        conversationKind: 'chat',
+        currentSessionMediaModelCount: 0,
+      }),
+    ).toMatchObject({
+      hasText: true,
+      canSend: false,
+      showExecutionModeSelector: true,
+    });
+  });
+
   it('uses projected Character policy to hide unavailable configuration controls', () => {
     expect(
       projectInputAreaUi({

@@ -101,6 +101,9 @@ interface InputAreaProps {
   composerMenuState?: ComposerMenuState;
   onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   disabled?: boolean;
+  submissionBlockedReason?: string;
+  showDraftWorkspaceControl?: boolean;
+  draftTargetSelectionPending?: boolean;
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
@@ -216,6 +219,9 @@ export function InputArea({
   composerMenuState: controlledComposerMenuState,
   onComposerMenuStateChange,
   disabled = false,
+  submissionBlockedReason,
+  showDraftWorkspaceControl = true,
+  draftTargetSelectionPending = false,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
@@ -933,6 +939,7 @@ export function InputArea({
     configurationPolicy,
     currentSessionMediaModelCount,
     compactControls: composerPresentation === 'compact',
+    submissionBlocked: submissionBlockedReason !== undefined,
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
   const attachmentInputDisabled = disabled || isRunActive;
@@ -1068,6 +1075,12 @@ export function InputArea({
             />
           </div>
 
+          {submissionBlockedReason ? (
+            <p className="agent-composer-validation" role="status">
+              {submissionBlockedReason}
+            </p>
+          ) : null}
+
           {/* ── Bottom bar: utilities + execution mode + send ── */}
           <div className="agent-composer-toolbar">
             {/* Attachment button */}
@@ -1101,6 +1114,7 @@ export function InputArea({
             />
 
             {composerWorkspace &&
+            (composerWorkspace.kind === 'workspace' || showDraftWorkspaceControl) &&
             (presentation === 'entry' || composerPresentation === 'default') ? (
               <div
                 className="agent-composer-workspace"
@@ -1116,7 +1130,7 @@ export function InputArea({
                     <button
                       type="button"
                       className="agent-composer-workspace-button"
-                      disabled={composerWorkspace.disabled}
+                      disabled={composerWorkspace.disabled || draftTargetSelectionPending}
                       onClick={() => setWorkspaceMenuOpen((open) => !open)}
                       aria-expanded={workspaceMenuOpen}
                     >
@@ -1127,6 +1141,7 @@ export function InputArea({
                         type="button"
                         className="agent-composer-workspace-clear"
                         title={t('chat.input.workspace.clear')}
+                        disabled={draftTargetSelectionPending}
                         onClick={() => onDraftWorkspaceTargetChange?.(undefined)}
                       >
                         <CloseIcon size={12} />
@@ -1139,7 +1154,7 @@ export function InputArea({
                             key={project.projectId}
                             type="button"
                             role="menuitem"
-                            disabled={project.disabled}
+                            disabled={project.disabled || draftTargetSelectionPending}
                             onClick={() => {
                               void composerWorkspace
                                 .onSelectProject(project.projectId)
@@ -1155,6 +1170,7 @@ export function InputArea({
                         <button
                           type="button"
                           role="menuitem"
+                          disabled={draftTargetSelectionPending}
                           onClick={() => {
                             void composerWorkspace.onChooseDirectory().then((target) => {
                               if (target) onDraftWorkspaceTargetChange?.(target);
@@ -1258,8 +1274,8 @@ export function InputArea({
                       ? 'agent-composer-send'
                       : 'bg-[var(--agent-control-muted-bg)] text-[var(--neko-descriptionForeground)]'
                 }`}
-                title={t(inputAreaProjection.sendTitleKey)}
-                aria-label={t(inputAreaProjection.sendTitleKey)}
+                title={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
+                aria-label={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
               >
                 <SendIcon className="w-3.5 h-3.5" />
               </button>
