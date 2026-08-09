@@ -43,11 +43,12 @@ Date: 2026-08-08
   first-import dependency reload and stale toolbar-index automation.
 - Real cases and reports: reuse the provider-backed and visible Desktop cases from
   `add-ai-screenplay-authoring`; do not create a renderer-quality Judge or a second Agent suite.
-- Deterministic results: `@neko/markdown` passes 45 tests, Text Editor passes 28 tests including
+- Deterministic results: `@neko/markdown` passes 45 tests, Text Editor passes 29 tests including
   StrictMode/CJK/CSP/outline/reference/long-document coverage, and Agent Webview passes 709 tests.
   Text Editor also proves that an intermediate Rich acknowledgement cannot replace newer local input,
-  successive commands use the accepted edit sequence, rejection reconciles to accepted source, and
-  Source receives the final accepted Rich content.
+  one accepted trailing paragraph break remains visible after a single Enter, successive commands use
+  the accepted edit sequence, rejection reconciles to accepted source, and Source receives the final
+  accepted Rich content.
   Streamdown passes completed GFM/CJK/sanitization/stable-block checks but fails incomplete emphasis
   and lacks resource/semantic/creative/structured parity, so no production replacement occurred.
 - Visible Desktop result: `desktop-text-editor` passed through Resource Browser open, Markdown
@@ -60,6 +61,13 @@ Date: 2026-08-08
   Contextual commands did not overlap Window controls. Dark-theme rendering and Chromium/Electron
   IME composition also passed with the saved UTF-8 bytes verified. The reviewed report is
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T04-53-06.920Z-desktop-text-editor-development/report.json`.
+- Focused single-Enter evidence: a later visible Electron run used one native Enter key event after a
+  clean Rich save, observed the next accepted dirty state, retained two ProseMirror paragraphs with an
+  empty trailing paragraph and visible caret, and projected the accepted `\n\n` bytes into Source. The
+  `markdown-rich-single-enter` checkpoint and screenshot are in
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T05-13-20.913Z-desktop-text-editor-development/report.json`. That full run remains failed because the
+  later adjacent Project Resources region-control recovery did not become visible; two retries were
+  additionally blocked before React Root mount while reusing the already-running canonical Vite server.
 - Blocked or unexecuted cases: native-file key-free validation passes, but provider-backed and visible
   Desktop Agent runs still require explicit provider/model/cost authorization. Visible Agent
   partial-to-final continuity was not executed in the passing UI scenario, and the native macOS IME

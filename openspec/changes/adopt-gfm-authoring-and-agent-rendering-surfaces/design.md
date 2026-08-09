@@ -128,6 +128,13 @@ newer local ProseMirror document. Commands remain serialized against the last ac
 pending source is never exposed as file authority, persisted, or consumed by another surface. A rejected
 command clears the pending state, reports the exact error and reconciles to the last accepted projection.
 
+A paragraph break at the end of a Rich document can serialize to accepted trailing Markdown whitespace
+that parses back without the empty ProseMirror paragraph. When an acknowledgement exactly matches both
+the latest Rich serialization and the current local document serialization, reconciliation retains that
+disposable local structure and its selection until later input makes the paragraph content explicit. A
+different authoritative source or a rejected command still replaces it through the canonical reconcile
+path; the empty paragraph never becomes file authority by itself.
+
 The Rich content surface uses the caret, selection and native node interaction as its editing focus
 feedback. It does not draw a page-sized focus frame around the full-height ProseMirror document; keyboard
 focus remains visible on discrete controls through the shared focus token.

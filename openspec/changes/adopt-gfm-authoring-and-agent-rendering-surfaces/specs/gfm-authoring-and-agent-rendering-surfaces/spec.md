@@ -46,6 +46,13 @@ the same exact Text Document session and accepted edit-sequence contract.
 - **AND** an intermediate acknowledgement does not replace the newer local document or replay it through another editor path
 - **AND** rejection reports a document-local error and reconciles to the last accepted projection instead of presenting pending content as saved
 
+#### Scenario: User enters one paragraph break at the end of Rich content
+
+- **WHEN** one Enter transaction serializes trailing Markdown whitespace that parses without the empty trailing ProseMirror paragraph
+- **THEN** acceptance of those exact bytes preserves the visible paragraph break, caret and selection without requiring another Enter
+- **AND** subsequent paragraph text is submitted once against the accepted edit sequence and appears identically in Source
+- **AND** a rejected command or different authoritative source still reconciles the local document instead of preserving stale presentation state
+
 #### Scenario: Rich editing receives focus
 
 - **WHEN** the user places the caret in the standalone Rich editor
