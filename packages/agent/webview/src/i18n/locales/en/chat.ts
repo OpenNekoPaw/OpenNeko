@@ -253,6 +253,7 @@ export const chat = {
   'chat.input.queue': 'Queue message (Enter)',
   'chat.input.cancel': 'Cancel (Esc)',
   'chat.input.attach': 'Attach file',
+  'chat.input.attachUnavailableWhileRunning': 'Attach files after the current response finishes',
   'chat.input.attachFile': 'Attach file',
   'chat.input.workspace.label': 'Working directory',
   'chat.input.workspace.openProject': 'Open project',
@@ -344,6 +345,7 @@ export const chat = {
   'chat.processRecords.steps': '{count} step(s)',
   'chat.processRecords.tools': '{count} tool call(s)',
   'chat.processRecords.thinking': '{count} thinking block(s)',
+  'chat.processRecords.thinkingLabel': 'Thinking',
 
   'chat.diff.accept': 'Accept',
   'chat.diff.reject': 'Reject',

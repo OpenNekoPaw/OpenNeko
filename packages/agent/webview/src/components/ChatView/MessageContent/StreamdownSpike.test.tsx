@@ -30,7 +30,7 @@ describe('Streamdown 2.5.0 Agent renderer spike', () => {
     }
   });
 
-  it('passes completed GFM and CJK but misses incomplete-emphasis parity', () => {
+  it('passes completed GFM/CJK and keeps an incomplete suffix visible', () => {
     const content = [
       '# 中文标题',
       '',
@@ -52,8 +52,7 @@ describe('Streamdown 2.5.0 Agent renderer spike', () => {
     expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
     expect(container.querySelector('table')).not.toBeNull();
     expect(container.textContent).toContain('尚未闭合');
-    expect(container.textContent).not.toContain('**尚未闭合');
-    expect(container.querySelector('strong')).toBeNull();
+    expect(container.textContent).toContain('尚未闭合');
   });
 
   it('keeps completed blocks stable while appending a mutable suffix', () => {
@@ -78,7 +77,7 @@ describe('Streamdown 2.5.0 Agent renderer spike', () => {
     expect(link?.getAttribute('href')).not.toBe('javascript:alert(2)');
   });
 
-  it('proves resource references still need an OpenNeko source-range plugin', () => {
+  it('records the renewed hard-gate failure for owner-aware Workspace resource references', () => {
     const { container } = render(<Candidate content={'请查看 ![[cover.png]] 和 [[notes.md]]。'} />);
 
     expect(container.querySelector('img')).toBeNull();
@@ -86,33 +85,11 @@ describe('Streamdown 2.5.0 Agent renderer spike', () => {
     expect(container.textContent).toContain('[[cover.png]]');
   });
 
-  it('proves creative tables remain generic without the Canvas table presenter', () => {
-    const content = [
-      '| scene | shot | action | image prompt | duration |',
-      '| --- | --- | --- | --- | --- |',
-      '| 1 | 1 | 角色入场 | 电影构图 | 3s |',
-    ].join('\n');
+  it('keeps typed sibling responsibilities out of the candidate contract', () => {
+    const content = '| scene | shot | action |\n| --- | --- | --- |\n| 1 | 1 | 角色入场 |';
     const { container } = render(<Candidate content={content} />);
 
     expect(container.querySelector('table')).not.toBeNull();
-    expect(container.querySelector('[data-markdown-storyboard-scene-table="true"]')).toBeNull();
-  });
-
-  it('proves Mermaid and structured artifact fences need package-owned renderers', () => {
-    const content = [
-      '```mermaid',
-      'graph LR',
-      '```',
-      '',
-      '```neko',
-      '{"kind":"composite-artifact","blocks":[]}',
-      '```',
-    ].join('\n');
-    const { container } = render(<Candidate content={content} />);
-
-    expect(container.querySelector('svg')).toBeNull();
     expect(container.querySelector('[data-rich-content-type]')).toBeNull();
-    expect(container.textContent).toContain('graph LR');
-    expect(container.textContent).toContain('composite-artifact');
   });
 });

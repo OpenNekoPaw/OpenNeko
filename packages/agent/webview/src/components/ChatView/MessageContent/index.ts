@@ -3,4 +3,3 @@
  */
 
 export { MarkdownRenderer } from './MarkdownRenderer';
-export { ThinkingBlock } from './ThinkingBlock';

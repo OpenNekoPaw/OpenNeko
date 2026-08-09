@@ -233,6 +233,7 @@ export const chat = {
   'chat.input.queue': '加入队列 (Enter)',
   'chat.input.cancel': '取消 (Esc)',
   'chat.input.attach': '添加附件',
+  'chat.input.attachUnavailableWhileRunning': '当前回复结束后可添加附件',
   'chat.input.attachFile': '添加附件',
   'chat.input.workspace.label': '工作目录',
   'chat.input.workspace.openProject': '打开项目',
@@ -322,6 +323,7 @@ export const chat = {
   'chat.processRecords.steps': '{count} 步',
   'chat.processRecords.tools': '{count} 次工具调用',
   'chat.processRecords.thinking': '{count} 段思考',
+  'chat.processRecords.thinkingLabel': '思考',
 
   'chat.diff.accept': '接受',
   'chat.diff.reject': '拒绝',

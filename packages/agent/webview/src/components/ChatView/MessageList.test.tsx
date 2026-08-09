@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@neko/agent-contracts';
@@ -167,7 +167,7 @@ describe('MessageList auto-scroll lifecycle', () => {
 
   it('captures detached intent relative to the first projected item of a message', () => {
     const onViewportChange = vi.fn();
-    virtualItems = [{ index: 1, key: 'final-content', start: 80 }];
+    virtualItems = [{ index: 0, key: 'assistant-turn', start: 20 }];
     getOffsetForIndexMock.mockImplementation((index, alignment) => [
       index === 0 ? 20 : 80,
       alignment,
@@ -319,7 +319,7 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(requestAnimationFrameMock).toHaveBeenCalledTimes(2);
   });
 
-  it('renders repeated tool blocks as a collapsed group in the virtualized list', () => {
+  it('renders repeated tool blocks inside one turn activity disclosure', () => {
     virtualItems = [{ index: 0, key: 'tool-group', start: 0 }];
 
     renderWithI18n(
@@ -333,7 +333,8 @@ describe('MessageList auto-scroll lifecycle', () => {
       </MessageActionsProvider>,
     );
 
-    expect(screen.getByRole('button', { name: /ReadDocument x3/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Process records/ }));
+    expect(screen.getByText('ReadDocument ×3')).toBeTruthy();
     expect(screen.getByText('/books/a.epub')).toBeTruthy();
   });
 
@@ -379,11 +380,8 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(screen.queryByText('P1')).toBeNull();
   });
 
-  it('renders collapsed process records before final content when they happened first', () => {
-    virtualItems = [
-      { index: 0, key: 'process-records', start: 0 },
-      { index: 1, key: 'final-content', start: 80 },
-    ];
+  it('renders one collapsed process disclosure before the final answer', () => {
+    virtualItems = [{ index: 0, key: 'assistant-turn', start: 0 }];
 
     renderWithI18n(
       <MessageActionsProvider>
@@ -410,11 +408,37 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(screen.getByText('ReadDocument')).toBeTruthy();
   });
 
+  it('keeps a multi-step run in one flat disclosure without Response or Tool headers', () => {
+    virtualItems = [{ index: 0, key: 'assistant-turn', start: 0 }];
+
+    renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createDenseAssistantTurn()]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.getByText('Final answer with readable Markdown.')).toBeTruthy();
+    expect(screen.queryByText('Response')).toBeNull();
+    expect(screen.queryByText('Tool')).toBeNull();
+    const activityButton = screen.getByRole('button', { name: /Process records/ });
+    expect(screen.getAllByRole('button', { name: /Process records/ })).toHaveLength(1);
+
+    fireEvent.click(activityButton);
+
+    const activity = screen.getByRole('region', { name: 'Process records' });
+    expect(within(activity).getByText('ReadDocument')).toBeTruthy();
+    expect(within(activity).getByText('ReadImage')).toBeTruthy();
+    expect(within(activity).getByText('Inspect the source.')).toBeTruthy();
+    expect(within(activity).getAllByRole('button')).toHaveLength(1);
+  });
+
   it('does not show completed process records as running while the parent message is still streaming', () => {
-    virtualItems = [
-      { index: 0, key: 'process-records', start: 0 },
-      { index: 1, key: 'streaming-content', start: 80 },
-    ];
+    virtualItems = [{ index: 0, key: 'assistant-turn', start: 0 }];
 
     renderWithI18n(
       <MessageActionsProvider>
@@ -705,6 +729,44 @@ function createStreamingMessageWithCompletedProcessRecords(): Message {
         content:
           '清单显示这本 EPUB 是按单页章节组织的，接下来我用 manifest cursor 顺序读取前 10 个页面批次。',
         isStreaming: false,
+      },
+    ],
+  };
+}
+
+function createDenseAssistantTurn(): Message {
+  return {
+    id: 'message-dense-turn',
+    role: 'assistant',
+    content: '',
+    timestamp: 1_717_200_000_000,
+    contentBlocks: [
+      {
+        id: 'progress-1',
+        type: 'text',
+        timestamp: 1,
+        content: 'I will inspect the document.',
+      },
+      toolBlock('tool-dense-1', 'ReadDocument', '/books/a.epub', 10),
+      {
+        id: 'thinking-dense',
+        type: 'thinking',
+        timestamp: 12,
+        thinking: 'Inspect the source.',
+        isThinkingComplete: true,
+      },
+      {
+        id: 'progress-2',
+        type: 'text',
+        timestamp: 14,
+        content: 'The document contains image pages.',
+      },
+      toolBlock('tool-dense-2', 'ReadImage', '/books/page-1.png', 20),
+      {
+        id: 'answer-dense',
+        type: 'text',
+        timestamp: 30,
+        content: 'Final answer with readable Markdown.',
       },
     ],
   };

@@ -1,22 +1,15 @@
-/**
- * ContentBlockItem - Individual content block renderer
- *
- * Renders a single content block (thinking, text, tool_call, code_diff, composite)
- * as an independent visual unit in the message list.
- */
+/** Renders one typed block body inside the owning Assistant turn. */
 
 import { memo } from 'react';
 import {
   extractCompositeContentFenceCandidates,
   parseCompositeContentJson,
   type ContentBlock,
-  type ToolCall,
 } from '@neko/agent-contracts';
 import { ToolCallDisplay, ToolCallGroupDisplay } from './ToolCallDisplay';
 import { DiffBlock } from './DiffBlock';
 import { RichContentRenderer } from './RichContent';
-import { MarkdownRenderer, ThinkingBlock } from './MessageContent';
-import { MessageAvatar } from './MessageAvatar';
+import { MarkdownRenderer } from './MessageContent';
 import { useMessageActions } from './MessageActionsContext';
 import { SendToMenu } from './SendToMenu';
 import { useTranslation } from '../../i18n/I18nContext';
@@ -31,13 +24,7 @@ import {
   formatCanvasLifecycleStatus,
   type ChatTranslation,
 } from '../../presenters/canvas-lifecycle-localization-presenter';
-import { EditIcon, FileIcon, InfoIcon, PackageIcon, SettingsIcon } from '@neko/ui/icons';
-import {
-  projectContentBlockUi,
-  type ContentBlockHeaderIconKind,
-  type ContentBlockHeaderTone,
-  type ContentBlockUiProjection,
-} from '../../presenters/content-block-presenter';
+import type { ContentBlockUiProjection } from '../../presenters/content-block-presenter';
 import {
   isCanvasMarkdownCapabilityInput,
   isCanvasMarkdownCapabilityResult,
@@ -49,152 +36,39 @@ import {
   type AgentCapabilityInvocationResult,
 } from '@neko/agent-contracts';
 import { normalizeCanonicalStoryboardTable } from '@neko/canvas-domain';
-import type { MessageSpeakerIdentity } from './message-identity';
 import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 
 interface ContentBlockItemProps {
-  /** The content block to render */
-  block?: ContentBlock;
-  /** Projected content block display model, used by message-level aggregation. */
-  projection?: ContentBlockUiProjection;
-  /** Whether this is the first block in the message */
-  isFirst: boolean;
-  /** Whether this is the last block in the message */
-  isLast: boolean;
-  /** Whether the parent message is streaming */
-  isStreaming: boolean;
+  projection: ContentBlockUiProjection;
   /** Current conversation for scoped UI actions */
   conversationId: string | null;
   /** Stable owner message identity for Markdown session reuse. */
-  messageId?: string;
+  messageId: string;
   /** Work items linked to the parent message */
   workItemIds?: string[];
-  /** Sibling blocks from the owner message, used for composite media resolution */
-  siblingBlocks?: ContentBlock[];
-  /** Tool calls collected from prior assistant messages in the same conversation. */
-  ambientToolCalls?: readonly ToolCall[];
-  /** Speaker identity for assistant-owned content blocks. */
-  assistantIdentity?: MessageSpeakerIdentity;
 }
 
-const blockHeaderIconByKind: Record<ContentBlockHeaderIconKind, string> = {
-  thinking: 'thinking',
-  response: 'response',
-  tool: 'tool',
-  edit: 'edit',
-  composite: '[]',
-};
-
-const blockHeaderToneClassByTone: Record<ContentBlockHeaderTone, string> = {
-  purple: 'text-[var(--neko-charts-purple)]',
-  green: 'text-[var(--neko-charts-green)]',
-  blue: 'text-[var(--neko-charts-blue)]',
-  orange: 'text-[var(--neko-charts-orange)]',
-  yellow: 'text-[var(--neko-charts-yellow)]',
-};
-
 export const ContentBlockItem = memo(function ContentBlockItem({
-  block,
-  projection: projectedBlock,
-  isFirst,
-  isStreaming,
+  projection,
   conversationId,
   messageId,
   workItemIds,
-  siblingBlocks,
-  ambientToolCalls,
-  assistantIdentity,
 }: ContentBlockItemProps) {
   const { t } = useTranslation();
   const actions = useMessageActions();
-  const projection =
-    projectedBlock ??
-    (block
-      ? projectContentBlockUi({
-          block,
-          siblingBlocks,
-          ambientToolCalls,
-          parentIsStreaming: isStreaming,
-        })
-      : null);
-
-  if (!projection) return null;
 
   return (
-    <div className="agent-message-row agent-assistant-document-row group">
-      <div className="agent-assistant-document-layout flex gap-2 px-3 py-1">
-        {/* Avatar - only show on first block */}
-        <div className="flex-shrink-0 w-5 pt-0.5">
-          {isFirst ? (
-            <MessageAvatar
-              role="assistant"
-              label={assistantIdentity?.avatarLabel}
-              imageUri={assistantIdentity?.avatarUri}
-              title={assistantIdentity?.title}
-            />
-          ) : (
-            <div className="w-5" />
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="min-w-0 flex-1">
-          {/* Header: Block type + timestamp */}
-          <div className="flex items-center gap-2 mb-0.5">
-            <span
-              className={`inline-flex items-center gap-1 text-[11px] font-medium ${blockHeaderToneClassByTone[projection.header.tone]}`}
-            >
-              <ContentBlockHeaderIcon
-                kind={projection.header.iconKind}
-                className="h-3 w-3 flex-shrink-0"
-              />
-              {projection.header.label}
-            </span>
-            <span className="text-[10px] text-[var(--neko-descriptionForeground)] opacity-0 group-hover:opacity-100 transition-opacity">
-              {projection.header.timestampLabel}
-            </span>
-            {projection.header.showStreamingBadge && (
-              <span className="text-[10px] text-[var(--neko-charts-green)] animate-pulse">
-                {projection.header.streamingLabel}
-              </span>
-            )}
-          </div>
-
-          {/* Block content */}
-          {renderBlockContent(
-            projection,
-            conversationId,
-            messageId ?? projection.id,
-            actions,
-            t,
-            workItemIds,
-          )}
-        </div>
-      </div>
+    <div
+      className={
+        projection.renderKind === 'markdown'
+          ? 'agent-turn-text-lane min-w-0'
+          : 'agent-turn-wide-lane min-w-0'
+      }
+    >
+      {renderBlockContent(projection, conversationId, messageId, actions, t, workItemIds)}
     </div>
   );
 });
-
-function ContentBlockHeaderIcon({
-  kind,
-  className,
-}: {
-  kind: ContentBlockHeaderIconKind;
-  className?: string;
-}) {
-  switch (blockHeaderIconByKind[kind]) {
-    case 'thinking':
-      return <InfoIcon className={className} />;
-    case 'response':
-      return <FileIcon className={className} />;
-    case 'tool':
-      return <SettingsIcon className={className} />;
-    case 'edit':
-      return <EditIcon className={className} />;
-    case '[]':
-      return <PackageIcon className={className} />;
-  }
-}
 
 /**
  * Render the content of a block based on its type
@@ -212,17 +86,7 @@ function renderBlockContent(
 ) {
   switch (projection.renderKind) {
     case 'thinking':
-      return (
-        <ThinkingBlock
-          content={projection.thinking}
-          isComplete={projection.isThinkingComplete}
-          sessionKey={createAgentMarkdownSessionKey({
-            conversationId,
-            messageId,
-            itemId: projection.id,
-          })}
-        />
-      );
+      throw new Error('Thinking projections must render through AssistantTurnActivity.');
 
     case 'markdown': {
       const markdownResources = !projection.renderStreaming

@@ -85,7 +85,7 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false }: 
       </div>
 
       {/* Code content with syntax highlighting */}
-      <Highlight theme={highlightTheme} code={code.trim()} language={normalizedLanguage}>
+      <Highlight theme={highlightTheme} code={code} language={normalizedLanguage}>
         {({ className, style, tokens, getLineProps, getTokenProps }) => (
           <pre
             className={`${className} ${

@@ -252,7 +252,7 @@ describe('dropdown overlay presentation contract', () => {
     expect(shellRule).toContain('max-width: 820px');
     expect(shellRule).toContain('margin-inline: auto');
     expect(transcriptRailRule).toContain('width: calc(100% - 24px)');
-    expect(transcriptRailRule).toContain('max-width: 820px');
+    expect(transcriptRailRule).toContain('max-width: 960px');
     expect(transcriptRailRule).toContain('margin-inline: auto');
     expect(railRule).toContain('padding:');
     expect(narrowRule).toContain('.agent-composer-toolbar');

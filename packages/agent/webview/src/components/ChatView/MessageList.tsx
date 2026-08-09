@@ -2,7 +2,7 @@
  * MessageList - 消息列表组件
  * P2: 使用虚拟滚动优化长对话性能
  * Optimized: Message grouping for consecutive same-role messages
- * Enhanced: Flattened content blocks for chronological rendering
+ * Projects one virtual row per durable message plus the bounded execution status row.
  */
 
 import { useRef, useEffect, useCallback, useMemo, type UIEvent } from 'react';
@@ -10,8 +10,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AgentState, Message } from '@neko/agent-contracts';
 import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
 import { MessageItem } from './MessageItem';
-import { ContentBlockItem } from './ContentBlockItem';
-import { ProcessRecordsGroup } from './ProcessRecordsGroup';
 import { AgentExecutionActivity } from './AgentExecutionActivity';
 import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
 import type { MessageIdentityMap } from './message-identity';
@@ -262,37 +260,13 @@ export function MessageList({
                 <div className="agent-transcript-rail">
                   {item.kind === 'execution_activity' ? (
                     <AgentExecutionActivity agentState={item.agentState} />
-                  ) : item.kind === 'content_block' ? (
-                    <ContentBlockItem
-                      projection={item.projection}
-                      isFirst={item.isFirst}
-                      isLast={item.isLast}
-                      isStreaming={item.isStreaming}
-                      conversationId={activeConversationId}
-                      messageId={item.messageId}
-                      workItemIds={item.workItemIds}
-                      siblingBlocks={item.siblingBlocks}
-                      ambientToolCalls={item.ambientToolCalls}
-                      assistantIdentity={identities.assistant}
-                    />
-                  ) : item.kind === 'process_group' ? (
-                    <ProcessRecordsGroup
-                      processGroup={item.processGroup}
-                      isFirst={item.isFirst}
-                      isStreaming={item.isStreaming}
-                      conversationId={activeConversationId}
-                      messageId={item.messageId}
-                      workItemIds={item.workItemIds}
-                      siblingBlocks={item.siblingBlocks}
-                      ambientToolCalls={item.ambientToolCalls}
-                      assistantIdentity={identities.assistant}
-                    />
                   ) : (
                     <MessageItem
                       message={item.message}
                       isGrouped={item.isGrouped}
                       conversationId={activeConversationId}
                       identities={identities}
+                      ambientToolCalls={item.ambientToolCalls}
                     />
                   )}
                 </div>
