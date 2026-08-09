@@ -1873,7 +1873,7 @@ async function startDesktop(): Promise<void> {
         title: 'OpenNeko',
         ...(process.platform === 'darwin'
           ? {
-              hasShadow: false,
+              hasShadow: true,
               titleBarStyle: 'hiddenInset' as const,
               trafficLightPosition: { x: 18, y: 16 },
             }
