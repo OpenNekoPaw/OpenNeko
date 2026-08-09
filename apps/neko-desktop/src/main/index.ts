@@ -14,7 +14,10 @@ import {
 } from 'electron';
 import { ConsoleLogger, ConsoleTransport, LogLevel, type ILogger } from '@neko/shared/logger';
 import { ManagedFileLogTransport } from '@neko/shared/logger/node';
-import { createNodeTextEditorMarkdownReferenceCatalog } from '@neko/text-editor-node';
+import {
+  createNodeTextEditorMarkdownReferenceCatalog,
+  NodeTextEditorMarkdownMediaService,
+} from '@neko/text-editor-node';
 import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import {
@@ -563,6 +566,10 @@ async function startDesktop(): Promise<void> {
     referenceCatalog: createNodeTextEditorMarkdownReferenceCatalog({
       files: host.files,
       resolveWorkspace: (workspaceId) => shellService.resolveAgentWorkspace(workspaceId),
+    }),
+    media: new NodeTextEditorMarkdownMediaService({
+      resolveWorkspace: (workspaceId) => shellService.resolveAgentWorkspace(workspaceId),
+      resources: resourceRegistry,
     }),
   });
   const cutRuntime = new DesktopCutRuntime({

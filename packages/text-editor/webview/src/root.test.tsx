@@ -4,6 +4,8 @@ import { acceptCompletion, currentCompletions, startCompletion } from '@codemirr
 import { EditorView } from '@codemirror/view';
 import type {
   ApplyTextDocumentEditsCommand,
+  PrepareTextEditorMarkdownMediaRequest,
+  ReleaseTextEditorMarkdownMediaRequest,
   TextDocumentChange,
   TextDocumentProjection,
   TextEditorMarkdownReferenceSearchRequest,
@@ -733,6 +735,12 @@ function createRuntime(initial: TextDocumentProjection) {
       projection: referenceProjection(request),
     }),
   );
+  const prepareMarkdownMedia = vi.fn(async (request: PrepareTextEditorMarkdownMediaRequest) => ({
+    ...request,
+    status: 'unavailable' as const,
+    diagnostic: { code: 'text-editor-markdown-media-missing' as const },
+  }));
+  const releaseMarkdownMedia = vi.fn(async (_request: ReleaseTextEditorMarkdownMediaRequest) => {});
   return {
     project: vi.fn(async () => current),
     applyEdits,
@@ -740,6 +748,8 @@ function createRuntime(initial: TextDocumentProjection) {
     save,
     reload,
     searchMarkdownReferences,
+    prepareMarkdownMedia,
+    releaseMarkdownMedia,
     subscribe: (listener: (projection: TextDocumentProjection) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -754,6 +764,8 @@ function createRuntime(initial: TextDocumentProjection) {
     save: typeof save;
     reload: typeof reload;
     searchMarkdownReferences: typeof searchMarkdownReferences;
+    prepareMarkdownMedia: typeof prepareMarkdownMedia;
+    releaseMarkdownMedia: typeof releaseMarkdownMedia;
     emit(projection: TextDocumentProjection): void;
   };
 }

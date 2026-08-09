@@ -10,6 +10,7 @@ import {
   NodeAuthorizedWorkspaceWriter,
 } from '@neko/content/node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import type { NodeTextEditorMarkdownMediaService } from '@neko/text-editor-node';
 import {
   TEXT_EDITOR_HOST_ROUTES,
   TextDocumentError,
@@ -50,6 +51,10 @@ export interface DesktopTextEditorShellPort {
 export interface DesktopTextEditorRuntimeOptions {
   readonly shell: DesktopTextEditorShellPort;
   readonly referenceCatalog: Pick<TextEditorMarkdownReferenceCatalog, 'search'>;
+  readonly media: Pick<
+    NodeTextEditorMarkdownMediaService,
+    'prepare' | 'release' | 'releaseSession' | 'releaseWindow' | 'dispose'
+  >;
   readonly createIdentity?: () => string;
   readonly watchFile?: DesktopTextEditorWatchFile;
 }
@@ -241,6 +246,35 @@ export class DesktopTextEditorRuntime {
                 reason: result.reason,
               };
         }
+        case TEXT_EDITOR_HOST_ROUTES.mediaPrepare: {
+          const projection = session.project();
+          const mediaProjection = await this.options.media.prepare({
+            request: request.media,
+            source: projection.source,
+            resourceOwner: {
+              windowId: binding.runtimeIdentity.windowId,
+              viewId: binding.runtimeIdentity.viewId,
+              sessionId: binding.runtimeIdentity.sessionId,
+              rendererSessionId: binding.runtimeIdentity.rendererSessionId,
+            },
+            isCurrent: () => mediaRequestOwnsBinding(request.media, binding),
+          });
+          return {
+            requestId: request.requestId,
+            identity: binding.runtimeIdentity,
+            status: 'media-ready',
+            projection: mediaProjection,
+          };
+        }
+        case TEXT_EDITOR_HOST_ROUTES.mediaRelease:
+          this.options.media.release(request.media);
+          return {
+            requestId: request.requestId,
+            identity: binding.runtimeIdentity,
+            status: 'media-released',
+            surfaceId: request.media.surfaceId,
+            leaseId: request.media.leaseId,
+          };
         case TEXT_EDITOR_HOST_ROUTES.close: {
           const status = await session.close(request.decision);
           if (status === 'closed') await this.closeBinding(binding);
@@ -278,6 +312,7 @@ export class DesktopTextEditorRuntime {
   }
 
   detachWindow(windowId: string): void {
+    this.options.media.releaseWindow(windowId);
     for (const binding of this.bindings.values()) {
       if (binding.runtimeIdentity.windowId !== windowId) continue;
       binding.runtimeIdentity = { ...binding.runtimeIdentity, rendererSessionId: 'detached' };
@@ -339,6 +374,7 @@ export class DesktopTextEditorRuntime {
   dispose(): void {
     this.disposed = true;
     for (const binding of this.bindings.values()) this.releaseBinding(binding);
+    this.options.media.dispose();
   }
 
   private async attachCurrentRenderer(
@@ -401,6 +437,7 @@ export class DesktopTextEditorRuntime {
     binding.closed = true;
     binding.watcher?.close();
     binding.listeners.clear();
+    this.options.media.releaseSession(binding.runtimeIdentity.sessionId);
     this.bindings.delete(binding.runtimeIdentity.sessionId);
   }
 
@@ -424,6 +461,25 @@ function referenceSearchOwnsBinding(
     search.identity.owner.kind === 'window' &&
     projection.identity.owner.windowId === search.identity.owner.windowId &&
     projection.identity.owner.projectId === search.identity.owner.projectId
+  );
+}
+
+function mediaRequestOwnsBinding(
+  request: import('@neko/text-editor-domain').PrepareTextEditorMarkdownMediaRequest,
+  binding: TextEditorBinding,
+): boolean {
+  const projection = binding.session.project();
+  return (
+    projection.mode === 'markdown' &&
+    !binding.closed &&
+    projection.sessionId === request.sessionId &&
+    projection.editSequence === request.editSequence &&
+    projection.identity.workspaceId === request.identity.workspaceId &&
+    projection.identity.documentId === request.identity.documentId &&
+    projection.identity.owner.kind === 'window' &&
+    request.identity.owner.kind === 'window' &&
+    projection.identity.owner.windowId === request.identity.owner.windowId &&
+    projection.identity.owner.projectId === request.identity.owner.projectId
   );
 }
 

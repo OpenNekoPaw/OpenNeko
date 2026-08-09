@@ -48,6 +48,16 @@ function emptyReferenceCatalog() {
   };
 }
 
+function emptyMediaService() {
+  return {
+    prepare: vi.fn(),
+    release: vi.fn(),
+    releaseSession: vi.fn(),
+    releaseWindow: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
+
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
@@ -67,6 +77,7 @@ describe('DesktopTextEditorRuntime', () => {
     const runtime = new DesktopTextEditorRuntime({
       shell,
       referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
       createIdentity: () => identities.shift() ?? 'next',
     });
 
@@ -139,7 +150,11 @@ describe('DesktopTextEditorRuntime', () => {
       import('@neko/text-editor-domain').TextEditorMarkdownReferenceCatalog,
       'search'
     >;
-    const runtime = new DesktopTextEditorRuntime({ shell, referenceCatalog });
+    const runtime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog,
+      media: emptyMediaService(),
+    });
     const opened = await runtime.open({
       identity: resourceIdentity,
       item: textItem('notes/readme.md'),
@@ -186,6 +201,99 @@ describe('DesktopTextEditorRuntime', () => {
     expect(entitySearch).toHaveBeenCalledOnce();
   });
 
+  it('delegates Markdown media through the exact session source and releases its lease', async () => {
+    const source = '![[assets/cover.png]]';
+    const root = await createWorkspace('notes/readme.md', source);
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell = createShell(root, () => workbench, (next) => {
+      workbench = next;
+    });
+    const media = emptyMediaService();
+    media.prepare.mockImplementation(async (input) => ({
+      ...input.request,
+      status: 'ready',
+      descriptor: {
+        leaseId: 'lease-1',
+        kind: 'image',
+        renderUri: `openneko://resource/${'a'.repeat(32)}`,
+        contentType: 'image/png',
+        displayName: 'cover.png',
+      },
+    }));
+    const runtime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media,
+    });
+    const opened = await runtime.open({
+      identity: resourceIdentity,
+      item: textItem('notes/readme.md'),
+    });
+    if (opened.status !== 'ready') throw new Error('Expected a ready Text Editor.');
+    const request = {
+      requestId: 'media-1',
+      identity: opened.projection.identity,
+      sessionId: opened.projection.sessionId,
+      editSequence: opened.projection.editSequence,
+      surfaceId: 'surface-1',
+      token: {
+        kind: 'resource-embed' as const,
+        from: 0,
+        to: source.length,
+        target: 'assets/cover.png',
+      },
+    };
+
+    await expect(
+      runtime.execute('window-1', {
+        route: TEXT_EDITOR_HOST_ROUTES.mediaPrepare,
+        requestId: request.requestId,
+        identity: opened.identity,
+        media: request,
+      }),
+    ).resolves.toMatchObject({
+      status: 'media-ready',
+      projection: { status: 'ready', descriptor: { leaseId: 'lease-1' } },
+    });
+    expect(media.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request,
+        source,
+        resourceOwner: expect.objectContaining({
+          windowId: opened.identity.windowId,
+          viewId: opened.identity.viewId,
+          sessionId: opened.identity.sessionId,
+          rendererSessionId: opened.identity.rendererSessionId,
+        }),
+      }),
+    );
+    expect(media.prepare.mock.calls[0]?.[0].isCurrent()).toBe(true);
+
+    const release = {
+      requestId: 'media-release-1',
+      identity: request.identity,
+      sessionId: request.sessionId,
+      surfaceId: request.surfaceId,
+      leaseId: 'lease-1',
+    };
+    await expect(
+      runtime.execute('window-1', {
+        route: TEXT_EDITOR_HOST_ROUTES.mediaRelease,
+        requestId: release.requestId,
+        identity: opened.identity,
+        media: release,
+      }),
+    ).resolves.toMatchObject({
+      status: 'media-released',
+      surfaceId: 'surface-1',
+      leaseId: 'lease-1',
+    });
+    expect(media.release).toHaveBeenCalledWith(release);
+    runtime.dispose();
+    expect(media.releaseSession).toHaveBeenCalledWith(opened.identity.sessionId);
+    expect(media.dispose).toHaveBeenCalledOnce();
+  });
+
   it('preserves dirty source on external conflict and accepts only the current renderer', async () => {
     const root = await createWorkspace('story/main.fountain', '.内景 房间 - 夜\n');
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');
@@ -202,6 +310,7 @@ describe('DesktopTextEditorRuntime', () => {
     const runtime = new DesktopTextEditorRuntime({
       shell,
       referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
       createIdentity: () => identities.shift() ?? 'next',
     });
     const opened = await runtime.open({
@@ -272,6 +381,7 @@ describe('DesktopTextEditorRuntime', () => {
     const runtime = new DesktopTextEditorRuntime({
       shell,
       referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
       watchFile,
       createIdentity: () => identities.shift() ?? 'next',
     });
@@ -326,6 +436,7 @@ describe('DesktopTextEditorRuntime', () => {
     const runtime = new DesktopTextEditorRuntime({
       shell,
       referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
       createIdentity: () => identities.shift() ?? 'next',
     });
     const opened = await runtime.open({

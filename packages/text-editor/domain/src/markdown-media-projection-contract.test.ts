@@ -107,6 +107,25 @@ describe('Text Editor Markdown media projection contract', () => {
     ).toThrow('token range is invalid');
   });
 
+  it.each([
+    '/Users/neko/cover.png',
+    'C:/Users/neko/cover.png',
+    '../outside.png',
+    'assets/../outside.png',
+    'file:///tmp/cover.png',
+    'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+    'http://127.0.0.1:43821/cover.png',
+    'data:image/png;base64,AAAA',
+    '.cache/cover.png',
+  ])('rejects a forbidden persisted target before Host resolution: %s', (target) => {
+    expect(() =>
+      assertPrepareTextEditorMarkdownMediaRequest({
+        ...request,
+        token: { ...request.token, target },
+      }),
+    ).toThrow('must be normalized and Workspace-relative');
+  });
+
   it('validates exact release ownership independently from preparation', () => {
     expect(() =>
       assertReleaseTextEditorMarkdownMediaRequest({

@@ -14,6 +14,8 @@
     "@neko/assets-node": "workspace:*",
     "@neko/entity-node": "workspace:*",
     "@neko/host": "workspace:*",
+    "@neko/markdown": "workspace:*",
+    "@neko/preview-domain": "workspace:*",
     "@neko/text-editor-domain": "workspace:*"
   },
   "devDependencies": {

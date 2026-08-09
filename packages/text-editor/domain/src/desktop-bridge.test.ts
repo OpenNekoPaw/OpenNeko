@@ -108,6 +108,79 @@ describe('Text Editor Desktop bridge', () => {
     ).toThrow('candidate is invalid');
   });
 
+  it('decodes exact Markdown media preparation and opaque projection results', () => {
+    const media = markdownMediaRequest();
+    expect(
+      parseTextEditorHostRequest({
+        route: TEXT_EDITOR_HOST_ROUTES.mediaPrepare,
+        requestId: media.requestId,
+        identity: runtimeIdentity,
+        media,
+      }),
+    ).toEqual({
+      route: TEXT_EDITOR_HOST_ROUTES.mediaPrepare,
+      requestId: media.requestId,
+      identity: runtimeIdentity,
+      media,
+    });
+    expect(
+      parseTextEditorHostResult({
+        requestId: media.requestId,
+        identity: runtimeIdentity,
+        status: 'media-ready',
+        projection: {
+          ...media,
+          status: 'ready',
+          descriptor: {
+            leaseId: 'lease-1',
+            kind: 'image',
+            renderUri: `openneko://resource/${'a'.repeat(32)}`,
+            contentType: 'image/png',
+            displayName: 'cover.png',
+          },
+        },
+      }),
+    ).toMatchObject({ status: 'media-ready', projection: { requestId: media.requestId } });
+  });
+
+  it('poisons forbidden media targets and cross-document release requests', () => {
+    const media = markdownMediaRequest();
+    expect(() =>
+      parseTextEditorHostRequest({
+        route: TEXT_EDITOR_HOST_ROUTES.mediaPrepare,
+        requestId: media.requestId,
+        identity: runtimeIdentity,
+        media: { ...media, token: { ...media.token, target: 'file:///tmp/cover.png' } },
+      }),
+    ).toThrow('must be normalized and Workspace-relative');
+    expect(() =>
+      parseTextEditorHostRequest({
+        route: TEXT_EDITOR_HOST_ROUTES.mediaRelease,
+        requestId: 'release-1',
+        identity: runtimeIdentity,
+        media: {
+          requestId: 'release-1',
+          identity: {
+            ...media.identity,
+            documentId: 'notes/other.md',
+            locator: { kind: 'workspace-file', path: 'notes/other.md' },
+          },
+          sessionId: media.sessionId,
+          surfaceId: media.surfaceId,
+          leaseId: 'lease-1',
+        },
+      }),
+    ).toThrow('owner identity does not match');
+    expect(() =>
+      parseTextEditorHostRequest({
+        route: TEXT_EDITOR_HOST_ROUTES.mediaPrepare,
+        requestId: media.requestId,
+        identity: runtimeIdentity,
+        media: null,
+      }),
+    ).toThrow('preparation request is invalid');
+  });
+
   it('decodes typed fail-local operation diagnostics', () => {
     expect(
       parseTextEditorHostResult({
@@ -253,5 +326,27 @@ function markdownReferenceProjection(search: ReturnType<typeof markdownReference
     editSequence: search.editSequence,
     kind: search.kind,
     query: search.query,
+  };
+}
+
+function markdownMediaRequest() {
+  return {
+    requestId: 'media-request-1',
+    identity: {
+      owner: { kind: 'window' as const, windowId: 'window-1', projectId: 'project-1' },
+      workspaceId: 'workspace-1',
+      documentId: 'notes/readme.md',
+      locator: { kind: 'workspace-file' as const, path: 'notes/readme.md' },
+    },
+    sessionId: 'text-document-1',
+    editSequence: 2,
+    surfaceId: 'surface-1',
+    token: {
+      kind: 'resource-embed' as const,
+      from: 0,
+      to: 21,
+      target: 'assets/cover.png',
+      altText: '封面',
+    },
   };
 }

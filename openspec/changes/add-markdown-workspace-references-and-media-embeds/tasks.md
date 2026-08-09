@@ -19,8 +19,8 @@
 ## 4. Authorized Media Projection
 
 - [x] 4.1 Define Text Editor media prepare/release contracts bound to exact Workspace, document, surface and source token identities using existing Content/Media descriptors.
-- [ ] 4.2 Wire Desktop sender/path authorization to the canonical opaque resource transport and reject absolute paths, `file:` URLs, runtime URLs, unsupported kinds and stale surface identities.
-- [ ] 4.3 Add package producer and Desktop delegation tests proving authorized image/audio/video projection, exact lease release and no raw/cache/Agent fallback.
+- [x] 4.2 Wire Desktop sender/path authorization to the canonical opaque resource transport and reject absolute paths, `file:` URLs, runtime URLs, unsupported kinds and stale surface identities.
+- [x] 4.3 Add package producer and Desktop delegation tests proving authorized image/audio/video projection, exact lease release and no raw/cache/Agent fallback.
 
 ## 5. Rich And Split Presentation
 

@@ -1,4 +1,8 @@
-import { isHostProjectedRuntimeValue, validateContentLocator } from '@neko/content';
+import {
+  isHostProjectedRuntimeValue,
+  normalizeWorkspaceContentPath,
+  validateContentLocator,
+} from '@neko/content';
 import type { TextDocumentIdentity } from './contracts';
 
 export type TextEditorMarkdownMediaKind = 'image' | 'audio' | 'video';
@@ -75,73 +79,143 @@ export class TextEditorMarkdownMediaContractError extends Error {
 }
 
 export function assertPrepareTextEditorMarkdownMediaRequest(
-  request: PrepareTextEditorMarkdownMediaRequest,
-): void {
-  requireIdentity(request.requestId, 'request');
-  assertDocumentAssociation(request.identity, request.sessionId);
-  requireIdentity(request.surfaceId, 'surface');
-  requireEditSequence(request.editSequence);
-  assertToken(request.token);
+  request: unknown,
+): asserts request is PrepareTextEditorMarkdownMediaRequest {
+  if (
+    !isRecord(request) ||
+    !hasExactKeys(request, [
+      'requestId',
+      'identity',
+      'sessionId',
+      'editSequence',
+      'surfaceId',
+      'token',
+    ])
+  ) {
+    throw new TextEditorMarkdownMediaContractError(
+      'Text Editor Markdown media preparation request is invalid.',
+    );
+  }
+  validatePrepareFields(request as unknown as PrepareTextEditorMarkdownMediaRequest);
 }
 
 export function assertReleaseTextEditorMarkdownMediaRequest(
-  request: ReleaseTextEditorMarkdownMediaRequest,
-): void {
-  requireIdentity(request.requestId, 'request');
-  assertDocumentAssociation(request.identity, request.sessionId);
-  requireIdentity(request.surfaceId, 'surface');
-  requireIdentity(request.leaseId, 'lease');
+  request: unknown,
+): asserts request is ReleaseTextEditorMarkdownMediaRequest {
+  if (
+    !isRecord(request) ||
+    !hasExactKeys(request, ['requestId', 'identity', 'sessionId', 'surfaceId', 'leaseId'])
+  ) {
+    throw new TextEditorMarkdownMediaContractError(
+      'Text Editor Markdown media release request is invalid.',
+    );
+  }
+  validateReleaseFields(request as unknown as ReleaseTextEditorMarkdownMediaRequest);
 }
 
 export function assertTextEditorMarkdownMediaProjection(
   request: PrepareTextEditorMarkdownMediaRequest,
-  projection: TextEditorMarkdownMediaProjection,
-): void {
+  projection: unknown,
+): asserts projection is TextEditorMarkdownMediaProjection {
   assertPrepareTextEditorMarkdownMediaRequest(request);
+  if (!isRecord(projection)) {
+    throw new TextEditorMarkdownMediaContractError(
+      'Text Editor Markdown media projection is invalid.',
+    );
+  }
+  const status = projection['status'];
+  const expectedKeys =
+    status === 'ready'
+      ? [
+          'requestId',
+          'identity',
+          'sessionId',
+          'editSequence',
+          'surfaceId',
+          'token',
+          'status',
+          'descriptor',
+        ]
+      : [
+          'requestId',
+          'identity',
+          'sessionId',
+          'editSequence',
+          'surfaceId',
+          'token',
+          'status',
+          'diagnostic',
+        ];
+  if ((status !== 'ready' && status !== 'unavailable') || !hasExactKeys(projection, expectedKeys)) {
+    throw new TextEditorMarkdownMediaContractError(
+      'Text Editor Markdown media projection is invalid.',
+    );
+  }
+  const value = projection as unknown as TextEditorMarkdownMediaProjection;
+  validatePrepareFields(value);
   if (
-    projection.requestId !== request.requestId ||
-    projection.sessionId !== request.sessionId ||
-    projection.editSequence !== request.editSequence ||
-    projection.surfaceId !== request.surfaceId ||
-    !sameDocumentIdentity(projection.identity, request.identity) ||
-    !sameToken(projection.token, request.token)
+    value.requestId !== request.requestId ||
+    value.sessionId !== request.sessionId ||
+    value.editSequence !== request.editSequence ||
+    value.surfaceId !== request.surfaceId ||
+    !sameDocumentIdentity(value.identity, request.identity) ||
+    !sameToken(value.token, request.token)
   ) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media projection does not match its request.',
     );
   }
-  if (projection.status === 'unavailable') {
-    if (!isDiagnosticCode(projection.diagnostic.code)) {
+  if (value.status === 'unavailable') {
+    if (
+      !isRecord(value.diagnostic) ||
+      !hasExactKeys(value.diagnostic, ['code']) ||
+      !isDiagnosticCode(value.diagnostic.code)
+    ) {
       throw new TextEditorMarkdownMediaContractError(
         'Text Editor Markdown media diagnostic code is invalid.',
       );
     }
     return;
   }
-  assertDescriptor(projection.descriptor);
+  assertDescriptor(value.descriptor);
 }
 
-function assertDescriptor(descriptor: TextEditorMarkdownMediaDescriptor): void {
-  requireIdentity(descriptor.leaseId, 'lease');
-  if (descriptor.kind !== 'image' && descriptor.kind !== 'audio' && descriptor.kind !== 'video') {
+function assertDescriptor(
+  descriptor: unknown,
+): asserts descriptor is TextEditorMarkdownMediaDescriptor {
+  if (
+    !isRecord(descriptor) ||
+    !hasExactKeys(descriptor, [
+      'leaseId',
+      'kind',
+      'renderUri',
+      'contentType',
+      'displayName',
+      'byteLength',
+    ])
+  ) {
+    throw new TextEditorMarkdownMediaContractError(
+      'Text Editor Markdown media descriptor is invalid.',
+    );
+  }
+  const value = descriptor as unknown as TextEditorMarkdownMediaDescriptor;
+  requireIdentity(value.leaseId, 'lease');
+  if (value.kind !== 'image' && value.kind !== 'audio' && value.kind !== 'video') {
     throw new TextEditorMarkdownMediaContractError('Text Editor Markdown media kind is invalid.');
   }
-  if (
-    !isHostProjectedRuntimeValue(descriptor.renderUri) ||
-    descriptor.renderUri.startsWith('data:')
-  ) {
+  if (!isHostProjectedRuntimeValue(value.renderUri) || value.renderUri.startsWith('data:')) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media requires a Host-projected runtime URI.',
     );
   }
-  if (!isNonEmptyString(descriptor.contentType) || !isNonEmptyString(descriptor.displayName)) {
+  if (!isNonEmptyString(value.contentType) || !isNonEmptyString(value.displayName)) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media presentation metadata is invalid.',
     );
   }
   if (
-    descriptor.byteLength !== undefined &&
-    (!Number.isSafeInteger(descriptor.byteLength) || descriptor.byteLength < 0)
+    value.byteLength !== undefined &&
+    (!Number.isSafeInteger(value.byteLength) || value.byteLength < 0)
   ) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media byte length is invalid.',
@@ -149,36 +223,65 @@ function assertDescriptor(descriptor: TextEditorMarkdownMediaDescriptor): void {
   }
 }
 
-function assertToken(token: TextEditorMarkdownMediaToken): void {
-  if (token.kind !== 'commonmark-image' && token.kind !== 'resource-embed') {
+function assertToken(token: unknown): asserts token is TextEditorMarkdownMediaToken {
+  if (!isRecord(token) || !hasExactKeys(token, ['kind', 'from', 'to', 'target', 'altText'])) {
+    throw new TextEditorMarkdownMediaContractError('Text Editor Markdown media token is invalid.');
+  }
+  const value = token as unknown as TextEditorMarkdownMediaToken;
+  if (value.kind !== 'commonmark-image' && value.kind !== 'resource-embed') {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media token kind is invalid.',
     );
   }
   if (
-    !Number.isSafeInteger(token.from) ||
-    !Number.isSafeInteger(token.to) ||
-    token.from < 0 ||
-    token.to <= token.from
+    !Number.isSafeInteger(value.from) ||
+    !Number.isSafeInteger(value.to) ||
+    value.from < 0 ||
+    value.to <= value.from
   ) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media token range is invalid.',
     );
   }
-  if (!isNonEmptyString(token.target)) {
+  if (!isNonEmptyString(value.target)) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media target is required.',
     );
   }
-  if (token.altText !== undefined && typeof token.altText !== 'string') {
+  if (normalizeWorkspaceContentPath(value.target) !== value.target) {
+    throw new TextEditorMarkdownMediaContractError(
+      'Text Editor Markdown media target must be normalized and Workspace-relative.',
+    );
+  }
+  if (value.altText !== undefined && typeof value.altText !== 'string') {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media alt text is invalid.',
     );
   }
 }
 
-function assertDocumentAssociation(identity: TextDocumentIdentity, sessionId: string): void {
+function validatePrepareFields(request: PrepareTextEditorMarkdownMediaRequest): void {
+  requireIdentity(request.requestId, 'request');
+  assertDocumentAssociation(request.identity, request.sessionId);
+  requireIdentity(request.surfaceId, 'surface');
+  requireEditSequence(request.editSequence);
+  assertToken(request.token);
+}
+
+function validateReleaseFields(request: ReleaseTextEditorMarkdownMediaRequest): void {
+  requireIdentity(request.requestId, 'request');
+  assertDocumentAssociation(request.identity, request.sessionId);
+  requireIdentity(request.surfaceId, 'surface');
+  requireIdentity(request.leaseId, 'lease');
+}
+
+function assertDocumentAssociation(identity: unknown, sessionId: unknown): void {
   requireIdentity(sessionId, 'session');
+  if (!isRecord(identity) || !isRecord(identity.owner)) {
+    throw new TextEditorMarkdownMediaContractError(
+      'Text Editor Markdown media document identity is invalid.',
+    );
+  }
   requireIdentity(identity.workspaceId, 'Workspace');
   requireIdentity(identity.documentId, 'document');
   if (identity.owner.kind !== 'window') {
@@ -252,4 +355,14 @@ function requireIdentity(value: unknown, label: string): asserts value is string
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(record: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean {
+  const actual = Object.keys(record);
+  const allowed = keys.filter((key) => record[key] !== undefined);
+  return actual.length === allowed.length && actual.every((key) => allowed.includes(key));
 }

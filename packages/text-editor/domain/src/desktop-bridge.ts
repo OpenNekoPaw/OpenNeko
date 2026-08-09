@@ -7,6 +7,14 @@ import {
   type TextEditorMarkdownReferenceSearchProjection,
   type TextEditorMarkdownReferenceSearchRequest,
 } from './markdown-reference-catalog-contract';
+import {
+  assertPrepareTextEditorMarkdownMediaRequest,
+  assertReleaseTextEditorMarkdownMediaRequest,
+  assertTextEditorMarkdownMediaProjection,
+  type PrepareTextEditorMarkdownMediaRequest,
+  type ReleaseTextEditorMarkdownMediaRequest,
+  type TextEditorMarkdownMediaProjection,
+} from './markdown-media-projection-contract';
 import type {
   ApplyTextDocumentEditsCommand,
   TextDocumentCloseDecision,
@@ -22,6 +30,8 @@ export const TEXT_EDITOR_HOST_ROUTES = {
   save: 'save',
   reload: 'reload',
   referencesSearch: 'references.search',
+  mediaPrepare: 'media.prepare',
+  mediaRelease: 'media.release',
   close: 'close',
 } as const;
 
@@ -86,6 +96,14 @@ export type TextEditorHostRequest =
       readonly search: TextEditorMarkdownReferenceSearchRequest;
     })
   | (TextEditorHostRequestBase & {
+      readonly route: typeof TEXT_EDITOR_HOST_ROUTES.mediaPrepare;
+      readonly media: PrepareTextEditorMarkdownMediaRequest;
+    })
+  | (TextEditorHostRequestBase & {
+      readonly route: typeof TEXT_EDITOR_HOST_ROUTES.mediaRelease;
+      readonly media: ReleaseTextEditorMarkdownMediaRequest;
+    })
+  | (TextEditorHostRequestBase & {
       readonly route: typeof TEXT_EDITOR_HOST_ROUTES.close;
       readonly decision: TextDocumentCloseDecision;
     });
@@ -113,6 +131,19 @@ export type TextEditorHostResult =
       readonly identity: TextEditorRuntimeIdentity;
       readonly status: 'references-discarded';
       readonly reason: 'cancelled' | 'stale';
+    }
+  | {
+      readonly requestId: string;
+      readonly identity: TextEditorRuntimeIdentity;
+      readonly status: 'media-ready';
+      readonly projection: TextEditorMarkdownMediaProjection;
+    }
+  | {
+      readonly requestId: string;
+      readonly identity: TextEditorRuntimeIdentity;
+      readonly status: 'media-released';
+      readonly surfaceId: string;
+      readonly leaseId: string;
     }
   | {
       readonly requestId: string;
@@ -181,6 +212,20 @@ export function parseTextEditorHostRequest(value: unknown): TextEditorHostReques
       requireReferenceSearchOwner(base.requestId, base.identity, search);
       return { ...base, route, search };
     }
+    case TEXT_EDITOR_HOST_ROUTES.mediaPrepare: {
+      requireExactKeys(record, ['route', 'requestId', 'identity', 'media']);
+      const media = record['media'] as PrepareTextEditorMarkdownMediaRequest;
+      assertPrepareTextEditorMarkdownMediaRequest(media);
+      requireMediaOwner(base.requestId, base.identity, media);
+      return { ...base, route, media };
+    }
+    case TEXT_EDITOR_HOST_ROUTES.mediaRelease: {
+      requireExactKeys(record, ['route', 'requestId', 'identity', 'media']);
+      const media = record['media'] as ReleaseTextEditorMarkdownMediaRequest;
+      assertReleaseTextEditorMarkdownMediaRequest(media);
+      requireMediaOwner(base.requestId, base.identity, media);
+      return { ...base, route, media };
+    }
     case TEXT_EDITOR_HOST_ROUTES.close: {
       requireExactKeys(record, ['route', 'requestId', 'identity', 'decision']);
       const decision = record['decision'];
@@ -235,6 +280,46 @@ export function parseTextEditorHostResult(value: unknown): TextEditorHostResult 
       identity: parseTextEditorRuntimeIdentity(record['identity']),
       status,
       reason: record['reason'],
+    };
+  }
+  if (status === 'media-ready') {
+    requireExactKeys(record, ['requestId', 'identity', 'status', 'projection']);
+    const requestId = requireIdentity(record['requestId'], 'Text Editor request identity');
+    const identity = parseTextEditorRuntimeIdentity(record['identity']);
+    const projectionRecord = requireRecord(
+      record['projection'],
+      'Text Editor Markdown media projection must be an object.',
+    );
+    const projectionRequest = {
+      requestId: projectionRecord['requestId'],
+      identity: projectionRecord['identity'],
+      sessionId: projectionRecord['sessionId'],
+      editSequence: projectionRecord['editSequence'],
+      surfaceId: projectionRecord['surfaceId'],
+      token: projectionRecord['token'],
+    };
+    assertPrepareTextEditorMarkdownMediaRequest(projectionRequest);
+    assertTextEditorMarkdownMediaProjection(projectionRequest, projectionRecord);
+    const projection: TextEditorMarkdownMediaProjection = projectionRecord;
+    if (projection.requestId !== requestId) {
+      throw invalid('Text Editor Markdown media result request identity does not match.');
+    }
+    requireMediaOwner(projection.requestId, identity, projection);
+    return {
+      requestId,
+      identity,
+      status,
+      projection,
+    };
+  }
+  if (status === 'media-released') {
+    requireExactKeys(record, ['requestId', 'identity', 'status', 'surfaceId', 'leaseId']);
+    return {
+      requestId: requireIdentity(record['requestId'], 'Text Editor request identity'),
+      identity: parseTextEditorRuntimeIdentity(record['identity']),
+      status,
+      surfaceId: requireIdentity(record['surfaceId'], 'Text Editor media surface identity'),
+      leaseId: requireIdentity(record['leaseId'], 'Text Editor media lease identity'),
     };
   }
   if (status === 'rejected') {
@@ -427,10 +512,30 @@ function requireRoute(value: unknown): TextEditorHostRoute {
     case TEXT_EDITOR_HOST_ROUTES.save:
     case TEXT_EDITOR_HOST_ROUTES.reload:
     case TEXT_EDITOR_HOST_ROUTES.referencesSearch:
+    case TEXT_EDITOR_HOST_ROUTES.mediaPrepare:
+    case TEXT_EDITOR_HOST_ROUTES.mediaRelease:
     case TEXT_EDITOR_HOST_ROUTES.close:
       return value;
   }
   throw invalid('Text Editor Host route is invalid.');
+}
+
+function requireMediaOwner(
+  requestId: string,
+  identity: TextEditorRuntimeIdentity,
+  media: PrepareTextEditorMarkdownMediaRequest | ReleaseTextEditorMarkdownMediaRequest,
+): void {
+  if (
+    media.requestId !== requestId ||
+    media.sessionId !== identity.sessionId ||
+    media.identity.workspaceId !== identity.workspaceId ||
+    media.identity.documentId !== identity.documentId ||
+    media.identity.owner.kind !== 'window' ||
+    media.identity.owner.windowId !== identity.windowId ||
+    media.identity.owner.projectId !== identity.projectId
+  ) {
+    throw invalid('Text Editor Markdown media owner identity does not match.');
+  }
 }
 
 function requireReferenceSearchOwner(

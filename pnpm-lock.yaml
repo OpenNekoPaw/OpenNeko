@@ -1368,6 +1368,12 @@ importers:
       '@neko/host':
         specifier: workspace:*
         version: link:../../host
+      '@neko/markdown':
+        specifier: workspace:*
+        version: link:../../markdown
+      '@neko/preview-domain':
+        specifier: workspace:*
+        version: link:../../preview/domain
       '@neko/text-editor-domain':
         specifier: workspace:*
         version: link:../domain
