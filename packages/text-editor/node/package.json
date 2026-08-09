@@ -1,0 +1,25 @@
+{
+  "name": "@neko/text-editor-node",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/assets-domain": "workspace:*",
+    "@neko/assets-node": "workspace:*",
+    "@neko/entity-node": "workspace:*",
+    "@neko/host": "workspace:*",
+    "@neko/text-editor-domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

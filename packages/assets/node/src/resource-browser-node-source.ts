@@ -332,22 +332,61 @@ export async function searchWorkspaceLinkedMediaLibraryContentLocators(input: {
   readonly query: string;
   readonly limit: number;
 }): Promise<readonly WorkspaceFileContentLocator[]> {
+  return (await searchWorkspaceLinkedMediaLibraryContentEntries(input)).map((entry) => {
+    if (entry.locator.kind !== 'workspace-file') {
+      throw new Error('Workspace Media Library search returned a non-Workspace locator.');
+    }
+    return entry.locator;
+  });
+}
+
+export async function searchWorkspaceContentEntries(input: {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly files: NekoHostPorts['files'];
+  readonly query: string;
+  readonly limit: number;
+}): Promise<readonly ResourceBrowserContentEntry[]> {
+  if (!Number.isInteger(input.limit) || input.limit < 1) {
+    throw new Error('Workspace content search limit must be a positive integer.');
+  }
+  const readInput = {
+    absoluteRoot: input.workspace.workspacePath,
+    locatorPrefix: '',
+    limit: Math.min(input.limit, FILE_SCAN_LIMIT),
+    rootDepth: -1,
+    excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+    files: input.files,
+    joinAbsolutePath: path.join,
+    relativePath: path.relative,
+    classify: (locatorPath: string) => classifyContent(locatorPath, false),
+  };
+  return input.query.trim()
+    ? searchResourceBrowserContentTree({ ...readInput, query: input.query })
+    : readResourceBrowserContentChildren(readInput);
+}
+
+export async function searchWorkspaceLinkedMediaLibraryContentEntries(input: {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly files: NekoHostPorts['files'];
+  readonly query: string;
+  readonly limit: number;
+}): Promise<readonly ResourceBrowserContentEntry[]> {
   if (!Number.isInteger(input.limit) || input.limit < 1) {
     throw new Error('Workspace Media Library mention limit must be a positive integer.');
   }
-  const locators: WorkspaceFileContentLocator[] = [];
+  const entries: ResourceBrowserContentEntry[] = [];
   const libraries = await listWorkspaceLinkedMediaLibraries(input.workspace.workspacePath);
   for (const library of libraries) {
-    if (library.availability !== 'available' || locators.length >= input.limit) continue;
+    if (library.availability !== 'available' || entries.length >= input.limit) continue;
     const absoluteRoot = path.join(
       input.workspace.workspacePath,
       ...library.workspacePath.split('/'),
     );
-    const entries = await searchResourceBrowserContentTree({
+    const found = await searchResourceBrowserContentTree({
       absoluteRoot,
       locatorPrefix: library.workspacePath,
       query: input.query,
-      limit: Math.min(input.limit - locators.length, FILE_SCAN_LIMIT),
+      limit: Math.min(input.limit - entries.length, FILE_SCAN_LIMIT),
       rootDepth: 0,
       libraryName: library.name,
       excludedDirectoryNames: EXCLUDED_DIRECTORIES,
@@ -356,17 +395,17 @@ export async function searchWorkspaceLinkedMediaLibraryContentLocators(input: {
       relativePath: path.relative,
       classify: (locatorPath) => classifyContent(locatorPath, true),
     });
-    for (const entry of entries) {
+    for (const entry of found) {
       if (
         entry.role === 'content' &&
         entry.availability === 'available' &&
         entry.locator.kind === 'workspace-file'
       ) {
-        locators.push(entry.locator);
+        entries.push(entry);
       }
     }
   }
-  return locators;
+  return entries;
 }
 
 const REFERENCE_REWRITE_BLOCKERS = [
