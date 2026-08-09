@@ -45,12 +45,6 @@ describe('Text Document admission', () => {
       code: 'text-document-unsupported-extension',
     },
     {
-      label: 'oversized source',
-      path: 'notes/large.txt',
-      bytes: new Uint8Array(TEXT_DOCUMENT_MAX_BYTES + 1),
-      code: 'text-document-too-large',
-    },
-    {
       label: 'invalid UTF-8',
       path: 'notes/invalid.txt',
       bytes: new Uint8Array([0xc3, 0x28]),
@@ -75,5 +69,27 @@ describe('Text Document admission', () => {
       expect.objectContaining({ diagnostic: { code: fixture.code, severity: 'error' } }),
     );
     expect(fixture.bytes).toEqual(before);
+  });
+
+  it('rejects a source above the production byte limit', () => {
+    const bytes = new Uint8Array(TEXT_DOCUMENT_MAX_BYTES + 1);
+
+    expect(() => admitTextDocument('notes/large.txt', bytes, fingerprint)).toThrowError(
+      expect.objectContaining({
+        diagnostic: { code: 'text-document-too-large', severity: 'error' },
+      }),
+    );
+  });
+
+  it('rejects an oversized source without rewriting bytes', () => {
+    const bytes = new Uint8Array([0x61, 0x62]);
+    const before = bytes.slice();
+
+    expect(() => admitTextDocument('notes/large.txt', bytes, fingerprint, 1)).toThrowError(
+      expect.objectContaining({
+        diagnostic: { code: 'text-document-too-large', severity: 'error' },
+      }),
+    );
+    expect(bytes).toEqual(before);
   });
 });
