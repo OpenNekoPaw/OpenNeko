@@ -25,8 +25,8 @@
 - [x] 4.2 Add one Generation Node renderer and selected-node Recipe editor with localized prompt/reference, purpose-qualified model, legal kind-specific parameter, run/cancel, progress, diagnostic, output-history and selection controls using the existing compact Canvas design tokens.
 - [x] 4.3 Render Prompt/Text output and authorized Image/Audio/Video previews inside the original node; cover empty, configuring, running-with-prior-output, success, stale-Recipe, failure, cancellation, invalid binding and unavailable-input states without layout overlap or renderer fallback.
 - [x] 4.4 Add Webview contract and interaction tests proving typed intents only, exact node updates, explicit-run-only behavior, no credentials/provider/file access in Renderer and no duplicate quick-generate dialog or app-owned menu/editor.
-- [ ] 4.5 Serialize whole-document Webview commits and narrow Host authoring intents through one per-session command queue; add a regression test proving delete-then-add keeps the deletion in returned and projected snapshots.
-- [ ] 4.6 Separate Generation presentation into the existing action toolbar, content-only node renderer and one selected-node input panel; cover ordinary referenced nodes, all Generation kinds, references, parameters, run/cancel, history and result fill without creating a second Canvas node.
+- [x] 4.5 Serialize whole-document Webview commits and narrow Host authoring intents through one per-session command queue; add a regression test proving delete-then-add keeps the deletion in returned and projected snapshots.
+- [x] 4.6 Separate Generation presentation into the existing action toolbar, content-only node renderer and one selected-node input panel; cover ordinary referenced nodes, all Generation kinds, references, parameters, run/cancel, history and result fill without creating a second Canvas node.
 
 ## 5. Agent Direct-Mode Removal
 

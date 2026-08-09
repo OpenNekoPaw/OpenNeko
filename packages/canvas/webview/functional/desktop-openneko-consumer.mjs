@@ -721,6 +721,10 @@ async function exerciseCanvasGenerationAuthoring({
     const state = await evaluate(`(() => {
       const node = document.querySelector(${JSON.stringify(nodeSelector)});
       if (!(node instanceof HTMLElement)) throw new Error('Generation Node is unavailable.');
+      const nodeContent = node.querySelector(':scope > .node-card');
+      if (!(nodeContent instanceof HTMLElement)) {
+        throw new Error('Generation Node content is unavailable.');
+      }
       const input = document.querySelector(${JSON.stringify(inputSelector)});
       if (!(input instanceof HTMLElement)) throw new Error('Generation input is unavailable.');
       const toolbar = document.querySelector(
@@ -767,7 +771,7 @@ async function exerciseCanvasGenerationAuthoring({
           inputToolbar: overlaps(inputBounds, toolbarBounds),
         },
         overflow: {
-          nodeHorizontal: node.scrollWidth > node.clientWidth,
+          nodeHorizontal: nodeContent.scrollWidth > nodeContent.clientWidth,
           inputHorizontal: input.scrollWidth > input.clientWidth,
           inputVertical: input.scrollHeight > input.clientHeight,
           toolbarHorizontal: toolbar.scrollWidth > toolbar.clientWidth,
@@ -837,7 +841,13 @@ async function exerciseCanvasGenerationAuthoring({
       await resizeWindow(evaluate, 1200, 800);
     }
 
-    await pressKey('Backspace');
+    await click(`${viewSelector} [data-selection-overflow="true"]`);
+    await waitForSelector(
+      '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
+    );
+    await click(
+      '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
+    );
     await waitForCanvasNodeCount(evaluate, viewId, 2);
   }
 

@@ -45,6 +45,14 @@
 - The selected Generation Node intentionally overlays older Canvas content at its new top z-index in this dense fixture. Its creation position is now centered by node dimensions, so it remains within the owning Canvas pane rather than placing its top-left corner at the viewport center.
 - Result: `blocked` overall because provider-backed running/history/stale states are unexecuted. The idle authoring, compact layout, imported Media and composer-removal inventory items passed.
 
+### Follow-up: Ordered Mutations And Three-layer Selection
+
+- Deterministic acceptance passed: one per-session Webview Host command queue commits a queued deletion before Generation Node creation, publishes the same ordered snapshot and remains usable after one narrow command fails locally.
+- Focused acceptance passed: all four Generation kinds use the detached input panel; ordinary referenced nodes do not render it; prompt, references, provider/model, legal parameters, run/cancel, output history, diagnostics and result content remain bound to the same durable node.
+- Visible Electron evidence captured the add menu plus Prompt desktop and `1040x700` compact states in `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T10-53-35.978Z-canvas-openneko-consumer-development/`. Direct image review confirmed the action toolbar, content node and input panel are distinct, readable, within the viewport and non-overlapping. The compact state moves the input panel above the node without clipping.
+- The functional assertion now measures the content card rather than intentional connection ports outside the interaction container, and deletion uses the visible selection overflow action before the next add operation.
+- Follow-up result: `blocked`. A separate Desktop development process occupied the canonical Vite port; isolated reruns were redirected and exceeded the 120-second scenario budget before producing current Image/Video/Audio screenshots. Those states retain deterministic component coverage and the earlier full visible evidence, but task `7.8` remains open because the current graphical rerun is incomplete.
+
 ## Foundational Matrix
 
 - Covered deterministically: basic and multi-turn Conversation behavior, queue/terminal convergence, Canvas run-intent persistence, uncertain submission recovery, exact Job reattachment, result apply after Recipe edits, renderer unmount/reopen, output preservation and Conversation/Workspace isolation through Agent Runtime, Canvas Domain/Node and Desktop headless tests.
