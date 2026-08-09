@@ -935,6 +935,7 @@ export function InputArea({
     compactControls: composerPresentation === 'compact',
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
+  const attachmentInputDisabled = disabled || isRunActive;
   return (
     <div className="flex-shrink-0">
       {/* ── Suggestion chips — float above border-t, at bottom of message list ── */}
@@ -1081,8 +1082,11 @@ export function InputArea({
                 }
                 fileInputRef.current?.click();
               }}
+              disabled={attachmentInputDisabled}
               className="agent-composer-tool-button"
-              title={t('chat.input.attach')}
+              title={
+                isRunActive ? t('chat.input.attachUnavailableWhileRunning') : t('chat.input.attach')
+              }
             >
               <PlusIcon className="w-4 h-4" />
             </button>
@@ -1093,7 +1097,7 @@ export function InputArea({
               accept="image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml"
               className="hidden"
               onChange={handleFileSelect}
-              disabled={onAuthorizeResource !== undefined}
+              disabled={attachmentInputDisabled || onAuthorizeResource !== undefined}
             />
 
             {composerWorkspace &&

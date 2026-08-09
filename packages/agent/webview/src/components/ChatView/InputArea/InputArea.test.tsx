@@ -31,6 +31,7 @@ const translations: Record<string, string> = {
   'chat.input.entryPlaceholder': '描述你想要完成的内容...',
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
   'chat.input.attach': '添加附件',
+  'chat.input.attachUnavailableWhileRunning': '当前回复结束后可添加附件',
   'chat.input.attachFile': '添加附件',
   'chat.input.workspace.label': '工作目录',
   'chat.input.workspace.openProject': '打开项目',
@@ -1803,6 +1804,12 @@ describe('InputArea composer controls', () => {
 
     const textarea = screen.getByPlaceholderText('正在回答... 2 条排队消息待处理');
     expect(textarea).toBeTruthy();
+    expect((textarea as HTMLTextAreaElement).disabled).toBe(false);
+    (textarea as HTMLTextAreaElement).focus();
+    expect(document.activeElement).toBe(textarea);
+    expect((screen.getByTitle('当前回复结束后可添加附件') as HTMLButtonElement).disabled).toBe(
+      true,
+    );
     expect(screen.getByTitle('取消 (Esc)').className).toContain('agent-composer-stop');
     expect(document.querySelector('.agent-composer-queue-count')).toBeNull();
     const queuePanel = document.querySelector('.agent-composer-queue-panel');
