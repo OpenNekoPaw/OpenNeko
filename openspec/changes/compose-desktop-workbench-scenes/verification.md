@@ -1,5 +1,36 @@
 # Verification
 
+## Renderer Reload Surface Identity Handoff
+
+Date: 2026-08-10
+
+The renderer now treats `renderer-loading` as an identity fence. It invalidates pending Shell
+projection work and unmounts the current Scene before package-owned Roots can issue requests with the
+retired renderer identity. A matching same-document `renderer-ready` performs one canonical Shell
+snapshot refresh; a new renderer document continues to use its normal initial snapshot. Resource
+Browser owner validation remains strict and does not retry, rebase to an active Workspace or accept a
+retired identity.
+
+Deterministic verification passed:
+
+- focused Desktop renderer and Resource Browser owner-identity suite: `2 files / 50 tests`;
+- focused ESLint for the implementation and regressions;
+- application boundaries: `1572` files, no findings;
+- strict OpenSpec validation and `git diff --check`.
+
+The Desktop package TypeScript check is currently blocked by unrelated in-progress Automation bridge
+edits: `src/main/index.ts` imports the missing
+`createDesktopAutomationHostPermissionPort`, while
+`src/renderer/DesktopExtensionManagementSurface.tsx` installs a bridge without the newly required
+`automationPermissions` member. This check is not counted as passed and task 14.3 remains open.
+
+The isolated visible development Electron `canvas-openneko-consumer` run reached the canonical Canvas
+and completed its EPUB, rich-text and connection checkpoints with zero console errors, warnings or
+exceptions. It then failed on the existing Canvas-control hit-test assertion before Resource Browser,
+Cut and renderer-reload checkpoints. The report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-10T00-07-11.438Z-canvas-openneko-consumer-development/report.json`; task 14.4 therefore remains open rather
+than treating partial UI evidence as acceptance.
+
 Date: 2026-08-04
 
 ## Deterministic Evidence
@@ -1246,3 +1277,30 @@ development launcher rejected the forwarded `--openneko-functional-fixture` opti
 report is
 `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T18-46-13.957Z-canvas-openneko-consumer-development/report.json`.
 No scenario assertions ran, so it is not counted as acceptance and no fallback target was used.
+
+## Canvas Generation Job Persistence Recovery
+
+Date: 2026-08-10
+
+The Canvas submit path was traced through the single Canvas Node runtime, Workspace Generation owner,
+Generation Job coordinator and persistent store. The local `generation_jobs` table was empty but still
+required retired internal `revision` and `snapshot_version` columns, so the canonical INSERT failed
+before provider invocation. Generation now validates its package-owned table columns, atomically
+replaces only a zero-row non-canonical table, and preserves plus rejects any non-canonical table that
+contains records. Canvas includes owner initialization in the same outcome-unknown diagnostic boundary
+as Job submission, so a persistence rejection remains node-local and actionable.
+
+Verification passed:
+
+- `pnpm --filter @neko/generation test -- src/job/__tests__/persistent-store.test.ts` — 29 files / 178 tests;
+- `pnpm --filter @neko/canvas-node test -- src/canvas-generation-node-runtime.test.ts` — 3 files / 19 tests;
+- focused Desktop Canvas runtime — 1 file / 20 tests;
+- `@neko/generation` and `@neko/canvas-node` typechecks;
+- no-internal-versioning, application boundaries, package boundaries, local-metadata runtime matrix,
+  storage authority and strict OpenSpec gates;
+- exact local database postcondition: canonical six-column table, zero rows.
+
+Visible Electron submission remains unclaimed. The development renderer restarted into an empty
+document during the attempt and stayed empty after one `Cmd+R`; no fallback IPC, direct Job insert or
+provider call was used to disguise that failure. This leaves the final user-click/provider-invocation
+checkpoint open without risking a duplicated or charged generation request.

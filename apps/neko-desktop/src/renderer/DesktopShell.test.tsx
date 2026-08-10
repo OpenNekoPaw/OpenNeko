@@ -490,7 +490,7 @@ describe('Desktop scene Workbench', () => {
     expect(markup).not.toContain('project-main-group__tabs');
   });
 
-  it('defaults Asset management and Preview to an equal split', () => {
+  it('composes management Main and detail surfaces edge-to-edge at an equal split', () => {
     const scene = assetCenterScene();
     const markup = renderShell(
       <DesktopShellView
@@ -511,8 +511,10 @@ describe('Desktop scene Workbench', () => {
     );
 
     expect(markup).toContain('data-main-split="columns"');
+    expect(markup).toContain('data-main-composition="continuous"');
     expect(markup).toContain('--neko-controlled-main-split-ratio:50%');
     expect(markup).toContain('aria-label="Resize Main split"');
+    expect(markup).not.toContain('data-workbench-main-gutter="true"');
   });
 
   it('mounts Asset Preview only from the same Scene and AssetCenterSession ref', () => {

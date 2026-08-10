@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-07
+更新日期：2026-08-10
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`compose-desktop-workbench-scenes`、
 `bound-desktop-ui-residency`
@@ -185,11 +185,12 @@ mismatch 继续 fail-visible。
 
 Workspace Main 的真实多 View group 是唯一拥有 Workbench tab strip 的区域。所有 Workbench 内 Preview
 内容都通过 canonical `@neko/preview-webview` content-only presentation 渲染，不再添加 descriptor
-header，并以透明内容背景继承所在 shell 主题。Management 和合格的可选 Preview/Detail 分别占据两个
-兄弟 panel shell，通过同一 resize primitive 和可见 gutter 连接；没有合格 Detail 时不得保留 secondary
-column 或 gutter。两个 shell 各自拥有边框、圆角、背景、阴影、裁切和 overflow 边界，不能共享一块
-连续 Main 底板，也不制造单项 tab strip。Workspace Resources 复用 package-owned Root，并隐藏与 Host
-自动 projection 重复的顶部全局刷新；relink、recovery 等领域操作仍由该 Root 保留。
+header，并以透明内容背景继承所在 shell 主题。Management 和合格的可选 Preview/Detail 分别占据连续 Main
+底板中的两个兄弟 panel，通过同一 resize primitive 和单一可见分隔线连接；场景层不得在 sibling panel
+之间增加 margin、空白 gutter、重复边框、圆角或阴影。没有合格 Detail 时不得保留 secondary column 或
+分隔线。各 package-owned Root 继续拥有自身内容区的 padding、toolbar gap、表单间距、裁切和 overflow
+边界，也不制造单项 tab strip。Workspace Resources 复用 package-owned Root，并隐藏与 Host 自动
+projection 重复的顶部全局刷新；relink、recovery 等领域操作仍由该 Root 保留。
 
 ## 数据与资源
 

@@ -221,6 +221,7 @@ export function DesktopApplication(): JSX.Element {
   const lastSequence = useRef<number | null>(null);
   const textEditorCloseRequestOrdinal = useRef(0);
   const rendererSessionId = useRef<string>();
+  const loadingRendererSessionId = useRef<string>();
   const pendingProjectionRequest = useRef<object>();
   const startupProjectionCaptured = useRef(false);
 
@@ -236,6 +237,7 @@ export function DesktopApplication(): JSX.Element {
   }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
+    if (loadingRendererSessionId.current) return;
     const request = {};
     pendingProjectionRequest.current = request;
     const projection = await window.openNekoDesktop.shell.getSnapshot();
@@ -252,6 +254,7 @@ export function DesktopApplication(): JSX.Element {
     const unsubscribe = window.openNekoDesktop.shell.subscribe((event) => {
       if (!active) return;
       pendingProjectionRequest.current = undefined;
+      if (loadingRendererSessionId.current) return;
       if (
         rendererSessionId.current &&
         event.projection.rendererSessionId !== rendererSessionId.current
@@ -283,6 +286,35 @@ export function DesktopApplication(): JSX.Element {
       unsubscribe();
     };
   }, [captureStartupMetadataDiagnostic, refresh, t]);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = window.openNekoDesktop.lifecycle.subscribe((event) => {
+      if (!active) return;
+      if (event.type === 'renderer-loading') {
+        loadingRendererSessionId.current = event.rendererSessionId;
+        rendererSessionId.current = event.rendererSessionId;
+        pendingProjectionRequest.current = undefined;
+        lastSequence.current = null;
+        setState({ kind: 'loading' });
+        return;
+      }
+      if (
+        event.type !== 'renderer-ready' ||
+        loadingRendererSessionId.current !== event.rendererSessionId
+      ) {
+        return;
+      }
+      loadingRendererSessionId.current = undefined;
+      void refresh().catch((error: unknown) => {
+        if (active) setState({ kind: 'error', message: describeError(error) });
+      });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [refresh]);
 
   const persistedDiagnostic = useMemo(
     () =>
@@ -1087,9 +1119,7 @@ function DesktopSceneWorkbench({
         main={portalDeck('main')}
         secondaryMain={portalDeck('secondaryMain', secondaryMainVisible)}
         secondaryMainVisible={secondaryMainVisible}
-        mainComposition={
-          assetPreviewVisible || characterDetailVisible ? 'independent-shells' : 'continuous'
-        }
+        mainComposition="continuous"
         mainSplit={mainSplit}
         mainSplitRatio={
           assetPreviewVisible || characterDetailVisible

@@ -42,6 +42,7 @@ import type {
   OpenNekoDesktopProjectPortabilityBridge,
 } from '@neko/assets-domain/contracts';
 import type { RoomView } from '@neko/chara/contracts';
+import type { DesktopLifecycleEvent } from '../shared/bridge-contract';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -514,6 +515,55 @@ describe('DesktopApplication scene lifecycle', () => {
 
     expect(getSnapshot).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[data-extension-management-root="agent"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('unmounts the outgoing Scene while renderer identity is replaced and restores on ready', async () => {
+    const initial = withActiveScene(createProjection(), settingsScene());
+    const replacement: DesktopShellProjection = {
+      ...initial,
+      rendererSessionId: 'app-1:window-1:2',
+    };
+    let lifecycleListener: ((event: DesktopLifecycleEvent) => void) | undefined;
+    const getSnapshot = vi
+      .fn<() => Promise<DesktopShellProjection>>()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(replacement);
+    installBridge({
+      projection: initial,
+      getSnapshot,
+      lifecycleSubscribe: vi.fn((listener) => {
+        lifecycleListener = listener;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await act(async () => {
+      lifecycleListener?.({
+        applicationInstanceId: initial.applicationInstanceId,
+        windowId: initial.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
+        sequence: 1,
+        type: 'renderer-loading',
+      });
+    });
+
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBeNull();
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      lifecycleListener?.({
+        applicationInstanceId: initial.applicationInstanceId,
+        windowId: initial.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
+        sequence: 2,
+        type: 'renderer-ready',
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
   });
 
@@ -2370,6 +2420,7 @@ function installBridge({
   textEditorExecute = vi.fn(),
   characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
   characterRoomSubscribe = vi.fn(() => () => undefined),
+  lifecycleSubscribe = vi.fn(() => () => undefined),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -2385,11 +2436,13 @@ function installBridge({
   readonly textEditorExecute?: (request: TextEditorHostRequest) => Promise<TextEditorHostResult>;
   readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
   readonly characterRoomSubscribe?: typeof window.openNekoDesktop.characterRoomWorkbench.subscribe;
+  readonly lifecycleSubscribe?: (listener: (event: DesktopLifecycleEvent) => void) => () => void;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
     value: {
       shell: { getSnapshot, subscribe },
+      lifecycle: { subscribe: lifecycleSubscribe },
       scenes: { transition },
       conversations: { delete: deleteConversation },
       projects: { remove: removeProjects, deleteConversations: deleteProjectConversations },
@@ -2856,7 +2909,7 @@ function expectManagementSplit(
 ): void {
   const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
   expect(shell?.dataset.mainSplit).toBe('columns');
-  expect(shell?.dataset.mainComposition).toBe('independent-shells');
+  expect(shell?.dataset.mainComposition).toBe('continuous');
   expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('50%');
   expect(
     container.querySelector(
@@ -2866,7 +2919,7 @@ function expectManagementSplit(
   expect(container.querySelector(`[data-workbench-main-panel="${detailPanelId}"]`)).not.toBeNull();
   expect(container.querySelector('[data-workbench-main-shell="primary"]')).not.toBeNull();
   expect(container.querySelector('[data-workbench-main-shell="secondary"]')).not.toBeNull();
-  expect(container.querySelector('[data-workbench-main-gutter="true"]')).not.toBeNull();
+  expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
   expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
 }
 

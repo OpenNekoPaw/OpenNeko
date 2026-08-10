@@ -35,6 +35,14 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Renderer effect 只拥有自身 subscription；后台 task/runtime 由 package application owner 管理，不依赖
   React Root 是否挂载。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实
   Electron exception/DOM 证据验收。
+- Renderer 开始 reload 时，Window lifecycle 必须先使旧 renderer 的当前 Scene projection 失效并卸载
+  Canvas、Cut、Resource Browser 等 view-scoped Roots；新的 renderer 只从同一 Window authority 获取带
+  当前 `rendererSessionId` 的精确 projection 后重建 Roots。旧 Surface 请求仍保持 stale 拒绝，但不得继续
+  占据可见 slot、重复请求或让兄弟面板长期停留在 package lazy-loading fallback。
+- Canvas 生成节点启动任务前必须验证 package-owned `generation_jobs` 表是当前唯一 canonical shape；同名
+  空表若仍包含已删除的内部版本列，只重置该空表并创建 canonical 表。非 canonical 表只要含有记录就必须
+  保留原记录并返回明确的 Generation persistence diagnostic，不得迁移、补写旧字段、清空或阻止其他
+  Workspace/Canvas 使用自己的有效 authority。
 - Window 只保留唯一 `ControlledWorkbenchShell`、当前 Scene/Workspace identity 和必要布局；Create 与
   Assets/Extensions/Projects/Settings 是当前导航场景，不创建长期 open Workbench instance。只有用户显式
   分屏时才允许第二个同时可见的业务 Surface。
@@ -83,6 +91,8 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
   不修改 Shell、Project、Conversation、Assets 或用户文件。
 - `@neko/host` 拥有 Window 当前 Scene/Workspace/View identity 与布局，不拥有 Renderer residency policy；
   package runtime 继续拥有业务状态与后台任务，Desktop renderer 只挂载当前和显式分屏 Roots。
+- `@neko/generation` 拥有 Generation Job 表的 canonical schema、空的 non-canonical runtime table reset 与
+  含记录 schema rejection；Desktop/Canvas 只投影明确 diagnostic，不拥有 SQLite shape 或恢复规则。
 - 用户数据不删除、不复制，产品运行时不迁移、不兼容读取也不自动修复。持久记录必须长期保持单一稳定 shape；无法满足 canonical shape 的记录在其最小实例边界返回明确 diagnostic，其他 Window、Workbench、conversation 和 Project 继续可用。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。
 
 本变更依赖 `remove-internal-versioning-and-product-migrations` 的 Host/Desktop contract、Agent connection 与 runtime ordering 切片。两项变更必须一次性更新本次边界内全部 producer、consumer、fixture 和测试，不建立版本判别、产品迁移、兼容 reader、双路径或内部代际别名。

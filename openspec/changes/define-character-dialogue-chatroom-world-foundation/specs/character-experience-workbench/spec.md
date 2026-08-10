@@ -8,6 +8,7 @@ The system SHALL expose Character Management as one Window navigation scene whos
 
 - **WHEN** the user selects a valid CharacterProject in the catalog
 - **THEN** the exact project detail shows its draft, published versions, representations and run summaries
+- **AND** the catalog and detail surfaces meet edge-to-edge with one Workbench-owned separator and no scene gutter or outer margin
 - **AND** no Dialogue, Room or World runtime is created merely by selection
 
 #### Scenario: One Character record is invalid
@@ -46,6 +47,7 @@ A character- or room-owned Conversation SHALL open a Character Interaction Workb
 
 - **WHEN** a valid character-owned Conversation is created or restored
 - **THEN** Agent Interaction binds its exact Conversation, Main binds its exact CharacterVersion representation and Manager binds its exact CharacterRun and optional World authority
+- **AND** adjacent Workbench surfaces compose edge-to-edge without Character-scene margins or gutters
 - **AND** unrelated Character, Room or World Roots are not mounted
 
 #### Scenario: User leaves an active Character Workbench

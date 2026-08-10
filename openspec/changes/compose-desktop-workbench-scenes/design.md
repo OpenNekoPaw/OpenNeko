@@ -416,6 +416,38 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 | Preview                    | `@neko/preview-domain` + `@neko/preview-webview/root`                | Preview session owner         | Workbench Main             | 只消费 authorized descriptor，不保存 raw path                          |
 | Electron composition       | `apps/neko-desktop`                                                  | Window/sender/native adapters | Product window             | 只保留 slot mapping、typed IPC 和 lifecycle                            |
 
+### 14. Renderer loading fences the outgoing Scene before identity replacement
+
+`renderer-loading` 是 Window lifecycle authority 发出的精确 renderer replacement 边界。Desktop
+renderer 必须在收到该事件时使尚未完成的 Shell snapshot 无效、清空 projection sequence，并把当前
+Scene presentation 切换为 Window-level loading state，使 Canvas、Cut、Resource Browser 和其他
+view-scoped Roots 在旧 `rendererSessionId` 下停止挂载。它不能等待某个 package snapshot 报错后再推断
+reload，也不能把 stale package 请求重试到当前 Session。
+
+若同一个 document 继续存活到 `renderer-ready`，它从 Shell authority 获取一次新 snapshot；正常完整
+reload 中，新 document 仍通过相同的首次 snapshot 路径启动。两种情况都只使用 Shell 返回的当前
+`rendererSessionId` 重建 Roots。旧请求如果已经越过 IPC 边界，Main/Node runtime 继续严格拒绝；该拒绝
+只属于旧 Surface，不改变 Shell、Workspace facts 或兄弟 package runtime。preload 不缓存或重写新的
+Resource Browser identity，也不从 active/recent Workspace 派生替代 identity。
+
+### 15. Generation Job schema recovery is isolated to an empty package-owned table
+
+Canvas 生成按钮通过唯一链路 `Canvas Webview intent -> Canvas Node runtime -> Workspace Generation owner ->
+GenerationJobCoordinator -> persistent GenerationJobStore` 启动任务。provider 调用必须发生在 initial Job
+snapshot 成功写入之后；因此 `generation_jobs` schema 不兼容属于 Generation owner 初始化失败，不能由
+Canvas 重试、改写请求或切换到内存 store 掩盖。
+
+`@neko/generation` 在初始化自己的表前读取 `pragma_table_info('generation_jobs')`，并与当前 canonical 列集
+精确比较。表不存在或列集一致时继续 additive initialization。若同名表包含已删除的内部版本列但行数为
+零，owner 在一个 system-write transaction 内删除该空表及其索引，然后立即创建唯一 canonical 表；这个
+操作不转换任何记录，也不保留旧 schema 成功路径。若表中存在一条或多条记录，owner 拒绝初始化并报告
+`generation-job-persistence-invalid`，原表和全部记录保持不变。用户生成资产由独立 Asset/Workspace 文件
+authority 持有，不参与此空 runtime table reset。
+
+该策略只服务真实的 package-owned runtime boundary，不扩展成通用 schema migrator、版本 registry 或
+自动 repair framework。SQLite adapter 仍保留原始 cause；Generation UI 投影 owner-qualified diagnostic，
+不得只显示无法定位约束的通用 `operation failed: run`。
+
 ## Risks / Trade-offs
 
 - [Shell 抽取造成 workspace 回归] -> 先建立 normal workspace baseline tests，再只移动 Shell owner；props、View identity、layout helpers 与 Workspace CSS scope保持不变。
@@ -434,6 +466,7 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 - [已写入的 non-canonical scene 无法启动] -> 保留原字节并只拒绝精确 Scene/Workbench instance；有效 sibling instance 与 Shell 继续可用，不执行 shape migration。
 - [新 draft 显示旧 session] -> Host 分配 exact `draftId`，Agent package 在 identity transition 时清除 instance state，并删除通过 stable Scene/View 猜测 draft 的路径。
 - [StrictMode cleanup 使 Desktop 白屏] -> subscription cleanup 与 runtime final disposal 分离；保留 disposed fail-visible，并以 StrictMode + development/packaged Electron exception 证据验证。
+- [旧空 Generation 表阻止新任务] -> Generation owner 精确校验 canonical 列集；只重置零行 non-canonical 表，含记录表保持原样并 fail-visible。
 
 ## Replacement Plan
 

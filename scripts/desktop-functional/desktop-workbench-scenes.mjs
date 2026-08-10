@@ -4871,6 +4871,9 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       secondaryMainBorderWidth: secondaryMainStyle
         ? parseFloat(secondaryMainStyle.borderTopWidth)
         : 0,
+      secondaryMainSeparatorWidth: secondaryMainStyle
+        ? parseFloat(secondaryMainStyle.borderLeftWidth)
+        : 0,
       secondaryMainBorderRadius: secondaryMainStyle?.borderRadius,
       secondaryMainOverflow: secondaryMainStyle?.overflow,
       secondaryMainShadow: secondaryMainStyle?.boxShadow,
@@ -5022,20 +5025,21 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.panelTabHeaderIds.includes(detailPanelId) ||
     !detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'columns' ||
-    detail.mainComposition !== 'independent-shells' ||
+    detail.mainComposition !== 'continuous' ||
     Math.abs(detail.mainSplitRatio - 0.5) > 0.025 ||
     !detail.hasMainSplitResize ||
     detail.primaryMainShell !== 'primary' ||
     detail.secondaryMainShell !== 'secondary' ||
-    !detail.hasMainGutter ||
-    Math.abs(detail.mainGutterWidth - 10) > 1 ||
-    Math.abs(detail.mainShellGap - 10) > 1 ||
-    detail.enclosingMainBorderWidth !== 0 ||
+    detail.hasMainGutter ||
+    detail.mainGutterWidth !== 0 ||
+    Math.abs(detail.mainShellGap) > 1 ||
+    detail.enclosingMainBorderWidth <= 0 ||
     detail.enclosingMainBorderRadius !== '0px' ||
-    detail.enclosingMainOverflow !== 'visible' ||
+    detail.enclosingMainOverflow !== 'hidden' ||
     detail.enclosingMainShadow !== 'none' ||
-    detail.primaryMainBorderWidth <= 0 ||
-    detail.secondaryMainBorderWidth <= 0 ||
+    detail.primaryMainBorderWidth !== 0 ||
+    detail.secondaryMainBorderWidth !== 0 ||
+    detail.secondaryMainSeparatorWidth <= 0 ||
     detail.primaryMainBorderRadius !== '0px' ||
     detail.secondaryMainBorderRadius !== '0px' ||
     detail.primaryMainOverflow !== 'hidden' ||
@@ -5047,7 +5051,7 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.primaryMainWidth < detail.secondaryMainWidth
   ) {
     throw new Error(
-      `Management + Detail did not preserve the shared compact Workbench composition: ${JSON.stringify(detail)}`,
+      `Management + Detail did not preserve the edge-to-edge Workbench composition: ${JSON.stringify(detail)}`,
     );
   }
 }
@@ -5060,13 +5064,15 @@ function assertResponsiveManagementDetailSplit(detail, managementPanelId, detail
     !detail.mainPanelIds.includes(detailPanelId) ||
     !detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'columns' ||
-    detail.mainComposition !== 'independent-shells' ||
+    detail.mainComposition !== 'continuous' ||
     !detail.hasMainSplitResize ||
     detail.primaryMainShell !== 'primary' ||
     detail.secondaryMainShell !== 'secondary' ||
-    !detail.hasMainGutter ||
-    Math.abs(detail.mainGutterWidth - 10) > 1 ||
-    Math.abs(detail.mainShellGap - 10) > 1 ||
+    detail.hasMainGutter ||
+    detail.mainGutterWidth !== 0 ||
+    Math.abs(detail.mainShellGap) > 1 ||
+    detail.enclosingMainBorderWidth <= 0 ||
+    detail.secondaryMainSeparatorWidth <= 0 ||
     detail.mainPanelsOverlap ||
     detail.primaryMainWidth <= 0 ||
     detail.secondaryMainWidth <= 0

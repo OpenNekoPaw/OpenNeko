@@ -559,6 +559,20 @@ Every Agent connection, Workspace View, management session, Preview resource and
 - **THEN** the renderer mounts a non-empty Workbench without uncaught runtime-disposed exceptions
 - **AND** reload restores the exact scene/session and does not leak duplicate subscriptions or Preview handles
 
+#### Scenario: Renderer loading replaces a visible Workspace session
+
+- **WHEN** Window lifecycle announces `renderer-loading` while Canvas, Cut and Workspace Resources are visible
+- **THEN** the outgoing renderer invalidates every pending Shell snapshot and unmounts the current Scene Roots before requesting package snapshots with the retired renderer identity
+- **AND** the replacement renderer obtains one authoritative Shell projection carrying the current `rendererSessionId` before rebuilding those Roots
+- **AND** an already-dispatched stale package request remains rejected at its exact owner boundary without retrying against active or recent Workspace state
+- **AND** Canvas, Cut and Resource Browser failures remain isolated from each other and cannot leave all Workbench slots indefinitely showing lazy-loading fallbacks
+
+#### Scenario: Renderer ready is observed without document replacement
+
+- **WHEN** the same renderer document receives `renderer-ready` after it already handled `renderer-loading`
+- **THEN** it fetches one authoritative Shell snapshot and reconstructs the exact current Scene
+- **AND** it does not reuse the retired projection, create a new Entry Draft or retain old Surface subscriptions
+
 ### Requirement: Recent navigation distinguishes sessions from containers
 
 PrimarySidebar SHALL keep owner-qualified recent session and recent container projections. Selecting a recent session SHALL restore its exact interactive session. Selecting a Project or future Character/Room container SHALL open that owner and create a new bound draft, not restore an unrelated prior conversation or expose an internal role AgentSession.
@@ -794,3 +808,27 @@ in-flight keys without accepting stale-document or removed-Clip results.
 - **THEN** every still-relevant result is merged by its exact representation key
 - **AND** a later batch does not invalidate an earlier successful batch
 - **AND** failed keys can be requested again without an unbounded retry loop
+
+### Requirement: Canvas Generation starts only after canonical Job persistence is available
+
+The Generation package SHALL own the single canonical `generation_jobs` table shape used by Canvas and Agent
+generation. Workspace Generation owner initialization MUST validate that exact shape before accepting a submission.
+It MUST NOT write retired internal version fields, switch to an in-memory store, or invoke a provider before the
+initial Job snapshot is durably created.
+
+#### Scenario: A retired Generation Job table is empty
+
+- **WHEN** the package finds a zero-row `generation_jobs` table whose columns are not the canonical column set
+- **THEN** it atomically removes only that empty package-owned table and its index
+- **AND** creates the canonical table before accepting the new Canvas submission
+- **AND** the initial Job snapshot is persisted and the selected provider execution starts through the one canonical path
+- **AND** no old column, compatibility writer, migration registry or fallback store remains reachable
+
+#### Scenario: A non-canonical Generation Job table contains records
+
+- **WHEN** the package finds one or more records in a `generation_jobs` table whose columns are not canonical
+- **THEN** it rejects only that Generation owner with `generation-job-persistence-invalid`
+- **AND** preserves the table and every record byte-for-byte
+- **AND** does not call the provider or report the submission as started
+- **AND** other valid Workspace, Canvas, Asset and application authorities remain available
+- **AND** the Canvas diagnostic identifies Generation Job persistence rather than exposing only a generic SQLite run failure

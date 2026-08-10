@@ -155,3 +155,16 @@ preserve or a legacy path to keep after the replacement is complete.
 - [x] 13.1 Update proposal/design/spec so Window claim always creates a fresh unbound Entry while renderer reload preserves the current Scene; remove restore-last as a supported startup path and record Application Settings local reset semantics.
 - [x] 13.2 Add red Host/SQLite/Settings/renderer tests, implement fresh Entry Window claim, and remove `startupTarget` from the canonical settings contract, Desktop wiring, settings UI and fixtures in one pass.
 - [x] 13.3 Run focused Host/Desktop tests, typecheck, strict OpenSpec and quality gates, then validate persisted Workspace cold startup and same-process renderer reload in real Electron with direct visual evidence.
+
+## 14. Renderer Reload Surface Identity Handoff
+
+- [x] 14.1 Add the renderer-loading identity handoff constraints to proposal/design/spec and a failing Desktop regression proving the outgoing Workspace Roots unmount before stale package snapshots are requested.
+- [x] 14.2 Implement one lifecycle-driven Shell presentation fence: invalidate pending snapshot/sequence state on `renderer-loading`, restore from one authoritative snapshot on same-document `renderer-ready`, and retain strict stale rejection without retry or active-Workspace fallback.
+- [ ] 14.3 Run focused renderer, Resource Browser owner-identity and Desktop lifecycle tests plus typecheck, application boundaries, diff checks and strict OpenSpec validation.
+- [ ] 14.4 Use the authoritative development Electron runtime to reload a Workspace containing Canvas, Resource Browser and Cut; verify the new exact identities load, sibling failures remain local and no stale Resource Browser handler error persists as a stuck panel, then apply UI and quality review evidence.
+
+## 15. Canvas Generation Job Persistence Recovery
+
+- [x] 15.1 Trace the exact Canvas submit path and record the failure boundary: the local database contains an empty retired `generation_jobs` shape with required `revision` and `snapshot_version` columns, while the canonical writer correctly omits internal version fields.
+- [x] 15.2 Add persistence regressions for empty non-canonical table reset and populated non-canonical table preservation; implement package-owned canonical schema validation/reset without migration, compatibility writer or fallback store, and project an actionable Generation persistence diagnostic.
+- [ ] 15.3 Run focused Generation/Canvas/Desktop tests, typecheck, application boundaries, diff checks and strict OpenSpec validation; then trigger one real Canvas image submission far enough to prove durable Job creation and provider invocation, without automatically retrying or duplicating a charged request.
