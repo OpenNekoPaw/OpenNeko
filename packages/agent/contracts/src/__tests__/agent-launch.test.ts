@@ -42,6 +42,7 @@ describe('Agent launch contract', () => {
           availability: { status: 'available' },
         },
       ],
+      defaultMediaModels: { image: 'openai:gpt-image-1' },
       configuration: configuration({
         modelCatalogEntryId: 'openai:gpt-5',
         providerId: 'openai',
@@ -72,6 +73,7 @@ describe('Agent launch contract', () => {
     });
 
     expect(projection.interaction.binding).toEqual(binding);
+    expect(projection.defaultMediaModels).toEqual({ image: 'openai:gpt-image-1' });
     expect(projection.inputs[0]?.source).toMatchObject({ kind: 'project' });
   });
 
@@ -106,6 +108,7 @@ describe('Agent launch contract', () => {
         },
       },
       models: [],
+      defaultMediaModels: {},
       configuration: configuration(null),
       inputs: [],
     };

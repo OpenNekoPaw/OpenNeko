@@ -38,6 +38,42 @@ const noWorkspaceMentions = {
 };
 
 describe('Agent launch application service', () => {
+  it('projects configured media model defaults with the Draft launch catalog', () => {
+    const config = createAssistantConfigState();
+    const projection = projectAgentLaunchBaseCatalog({
+      config: {
+        ...config,
+        chatModelOptions: [
+          ...config.chatModelOptions,
+          {
+            id: 'openai:gpt-image-1',
+            label: 'GPT Image 1',
+            providerId: 'openai',
+            modelId: 'gpt-image-1',
+            category: 'image',
+            capabilities: ['image.generate'],
+          },
+        ],
+        defaultMediaModels: { image: 'openai:gpt-image-1' },
+      },
+      thinkingBudget: 128,
+      skills: { records: [], diagnostics: [] },
+      interaction: assistantDraft(),
+      personalSkillOwnerId: 'assistant:default',
+      launchCommandHandlerIds: new Set(),
+    });
+
+    expect(projection.defaultMediaModels).toEqual({ image: 'openai:gpt-image-1' });
+    expect(projection.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'openai:gpt-image-1',
+          modelType: 'image',
+        }),
+      ]),
+    );
+  });
+
   it('projects Character capability restrictions through canonical catalog and config policies', () => {
     const projection = projectAgentLaunchBaseCatalog({
       config: createAssistantConfigState(),

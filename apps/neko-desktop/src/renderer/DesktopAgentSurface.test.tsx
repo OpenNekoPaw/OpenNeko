@@ -735,6 +735,7 @@ function launchCatalog(assistantSpaceId: string, connectionId: string) {
       },
     },
     models: [],
+    defaultMediaModels: {},
     configuration: projectAgentConfigurationPolicy({
       models: [],
       request: null,

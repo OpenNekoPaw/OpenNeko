@@ -133,6 +133,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
                 modelId: entry.modelId,
                 category: entry.modelType,
               })),
+              defaultMediaModels: { ...catalog.defaultMediaModels },
               selectedProviderId: selected?.providerId ?? null,
               selectedModelId: selected?.modelId ?? null,
               temperature: catalog.configuration.fields.temperature.effectiveValue ?? undefined,

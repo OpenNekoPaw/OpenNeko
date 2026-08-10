@@ -24,6 +24,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       config: {
         selectedProviderId: 'openai',
         selectedModelId: 'gpt-5',
+        defaultMediaModels: { image: 'openai:gpt-image-1' },
       },
     });
     expect(JSON.stringify(messages[0])).not.toContain('apiKey');
@@ -330,6 +331,17 @@ function createCatalog(
       purposeCapabilities: ['agent.main'],
       availability: { status: 'available' as const },
     },
+    {
+      id: 'openai:gpt-image-1',
+      label: 'GPT Image 1',
+      providerId: 'openai',
+      modelId: 'gpt-image-1',
+      modelType: 'image' as const,
+      contextWindow: null,
+      maximumOutputTokens: null,
+      purposeCapabilities: ['image.generate'],
+      availability: { status: 'available' as const },
+    },
   ];
   const request = {
     modelCatalogEntryId: 'openai:gpt-5',
@@ -362,6 +374,7 @@ function createCatalog(
       },
     },
     models,
+    defaultMediaModels: { image: 'openai:gpt-image-1' },
     configuration: projectAgentConfigurationPolicy({
       models,
       request,

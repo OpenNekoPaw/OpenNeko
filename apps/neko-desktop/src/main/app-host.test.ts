@@ -3404,6 +3404,7 @@ function createLaunchCatalog(input: {
             },
     },
     models: [],
+    defaultMediaModels: {},
     configuration: projectAgentConfigurationPolicy({
       models: [],
       request: null,

@@ -36,6 +36,7 @@ import { buildSkillActivationId } from '../pi/skill-host';
 export interface AgentLaunchCatalogSource {
   readCatalog(interaction: AgentDraftInteractionProjection): Promise<{
     readonly models: readonly AgentModelCatalogEntry[];
+    readonly defaultMediaModels: AgentLaunchCatalogProjection['defaultMediaModels'];
     readonly configuration: AgentConfigurationPolicyProjection;
     readonly inputs: readonly AgentInputCatalogEntry[];
   }>;
@@ -130,6 +131,7 @@ export function projectAgentLaunchBaseCatalog(input: {
   readonly domainPolicy?: AgentLaunchDomainCapabilityPolicy;
 }): {
   readonly models: readonly AgentModelCatalogEntry[];
+  readonly defaultMediaModels: AgentLaunchCatalogProjection['defaultMediaModels'];
   readonly configuration: AgentConfigurationPolicyProjection;
   readonly inputs: readonly AgentInputCatalogEntry[];
 } {
@@ -158,6 +160,7 @@ export function projectAgentLaunchBaseCatalog(input: {
       : null;
   return {
     models,
+    defaultMediaModels: { ...input.config.defaultMediaModels },
     configuration: projectAgentConfigurationPolicy({
       models,
       request,
@@ -423,6 +426,7 @@ interface AgentLaunchState {
   interaction: AgentDraftInteractionProjection;
   attachmentCount: number;
   models: readonly AgentModelCatalogEntry[];
+  defaultMediaModels: AgentLaunchCatalogProjection['defaultMediaModels'];
   configuration: AgentConfigurationPolicyProjection;
   inputs: readonly AgentInputCatalogEntry[];
   workspaceMentionInputIds: Set<string>;
@@ -504,6 +508,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
       interaction,
       attachmentCount: 1,
       models: [...catalog.models],
+      defaultMediaModels: { ...catalog.defaultMediaModels },
       configuration: catalog.configuration,
       inputs: [...catalog.inputs],
       workspaceMentionInputIds: new Set(),
@@ -553,6 +558,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
       throw new Error('Agent Draft target was replaced while its catalog was loading.');
     }
     state.models = [...catalog.models];
+    state.defaultMediaModels = { ...catalog.defaultMediaModels };
     state.configuration = rebaseDraftConfiguration(
       previousConfiguration,
       catalog.configuration,
@@ -825,6 +831,7 @@ function project(state: AgentLaunchState): AgentLaunchCatalogProjection {
     connection: state.connection,
     interaction: state.interaction,
     models: state.models,
+    defaultMediaModels: state.defaultMediaModels,
     configuration: state.configuration,
     inputs: state.inputs,
   });

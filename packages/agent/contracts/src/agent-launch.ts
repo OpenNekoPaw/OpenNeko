@@ -8,6 +8,7 @@ import {
   parseAgentModelCatalogEntry,
   type AgentConfigurationPolicyProjection,
   type AgentModelCatalogEntry,
+  type AgentModelType,
 } from './agent-model-catalog';
 
 export type AgentLaunchResourceKind = 'file' | 'directory' | 'microphone';
@@ -26,6 +27,7 @@ export interface AgentLaunchCatalogProjection {
   readonly connection: AgentLaunchConnectionIdentity;
   readonly interaction: AgentDraftInteractionProjection;
   readonly models: readonly AgentModelCatalogEntry[];
+  readonly defaultMediaModels: Readonly<Partial<Record<Exclude<AgentModelType, 'llm'>, string>>>;
   readonly configuration: AgentConfigurationPolicyProjection;
   readonly inputs: readonly AgentInputCatalogEntry[];
 }
@@ -54,7 +56,14 @@ export function parseAgentLaunchConnectionIdentity(value: unknown): AgentLaunchC
 
 export function parseAgentLaunchCatalogProjection(value: unknown): AgentLaunchCatalogProjection {
   const record = requireRecord(value, 'Agent launch catalog must be an object.');
-  requireExactKeys(record, ['connection', 'interaction', 'models', 'configuration', 'inputs']);
+  requireExactKeys(record, [
+    'connection',
+    'interaction',
+    'models',
+    'defaultMediaModels',
+    'configuration',
+    'inputs',
+  ]);
   const connection = parseAgentLaunchConnectionIdentity(record['connection']);
   const interaction = parseAgentDraftInteractionProjection(record['interaction']);
   if (interaction.draftId !== connection.draftId) {
@@ -70,9 +79,26 @@ export function parseAgentLaunchCatalogProjection(value: unknown): AgentLaunchCa
     connection,
     interaction,
     models: parseArray(record['models'], parseAgentModelCatalogEntry),
+    defaultMediaModels: parseDefaultMediaModels(record['defaultMediaModels']),
     configuration: parseAgentConfigurationPolicyProjection(record['configuration']),
     inputs: parseAgentInputCatalog(record['inputs']),
   };
+}
+
+function parseDefaultMediaModels(
+  value: unknown,
+): AgentLaunchCatalogProjection['defaultMediaModels'] {
+  const record = requireRecord(value, 'Agent launch media model defaults must be an object.');
+  const supported = new Set(['image', 'video', 'audio']);
+  if (Object.keys(record).some((key) => !supported.has(key))) {
+    throw new Error('Agent launch media model defaults contain unsupported fields.');
+  }
+  return Object.fromEntries(
+    Object.entries(record).map(([category, modelCatalogEntryId]) => [
+      category,
+      requireIdentity(modelCatalogEntryId, `${category} model catalog entry`),
+    ]),
+  );
 }
 
 function parseArray<T>(value: unknown, parse: (entry: unknown) => T): readonly T[] {
