@@ -1,5 +1,27 @@
 ## ADDED Requirements
 
+### Requirement: Character product surfaces remain unavailable before roadmap promotion
+
+The production Desktop SHALL keep Character Studio, Character Runtime and Agent Entry Roleplay explicitly unavailable until a later promotion change records the required real-user, repeated-behavior and end-to-end-loop evidence. Package-owned records, services, scene contracts and UI roots MAY remain available to isolated prototype fixtures, but their existence MUST NOT make a production route successful.
+
+#### Scenario: User opens Character navigation before promotion
+
+- **WHEN** a user invokes Character navigation from a production Desktop Window
+- **THEN** Host returns an owner-qualified unavailable diagnostic and preserves the current scene
+- **AND** no Character Root is mounted and no durable Character or Room record is changed
+
+#### Scenario: User invokes Roleplay before promotion
+
+- **WHEN** a user selects Roleplay from Agent Entry
+- **THEN** the Webview shows an explicit unavailable diagnostic before any Character search or launch request
+- **AND** no CharacterRun, Room, AgentSession or first turn is created
+
+#### Scenario: Desktop restores an old experimental Character scene
+
+- **WHEN** a Window contains a persisted Character Management or Character Interaction presentation
+- **THEN** Host replaces only that presentation with a fresh canonical Agent Entry scene and reports a presentation-reset diagnostic
+- **AND** Character records, conversations, transcripts and protected background runtime remain owned and unchanged
+
 ### Requirement: Character management uses catalog and detail surfaces
 
 The system SHALL expose Character Studio as one Window navigation scene whose approximately 30% Main surface owns a searchable, filterable and collapsible Character catalog and whose approximately 70% Secondary Main surface shows the selected Character detail. Detail navigation SHALL cover overview, background story, origin setting, cognition/behavior, Character storyline, Character/relationship memory, presentation resources, voice, runtime summaries and published versions. It SHALL NOT expose external authoring/runtime domains as peer Chara tabs, retain their hidden Roots or embed writable external editors.

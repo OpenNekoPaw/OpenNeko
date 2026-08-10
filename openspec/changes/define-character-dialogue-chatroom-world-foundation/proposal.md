@@ -2,6 +2,8 @@
 
 `@neko/chara` 已具备 Character Dialogue、Embody、角色证据、Profile Assembly 和部分 Character/Room 运行基础，但角色定义仍只有 summary、canon、知识边界和行为策略，无法明确表达角色背景故事、角色原生背景设定、角色个人故事线和独立角色记忆。现有 Character Foundation Host 还暴露 WorldProject、WorldRun 和 WorldSave 操作与完整 catalog，错误地把外部 World authoring/runtime 包装成 Character 能力。
 
+本变更实现的是隔离的实验原型，不构成路线图晋级证据。当前没有真实用户、重复行为和端到端使用闭环证明 Character/Room 应进入默认产品范围；因此 package、durable records 和测试继续保留，但生产 Desktop 的 Character Studio、Character Runtime 与 Agent Entry Roleplay 成功路径必须在晋级前保持 fail-visible unavailable。
+
 当前变更只交付 Chara bounded context。角色背景故事和角色原生背景设定是 CharacterVersion 的角色事实，不是可创作、可运行或可存档的 World；CharacterStoryline、CharacterMemory、CharacterRun 与外部 WorldStory、WorldRun、WorldSave 保持独立。内容创作时的 Character/CharacterStoryline + World/WorldStory 组合由 `define-ai-native-interactive-world` 的 WorldExperienceProject/Version 通过精确引用完成，运行时参与由 WorldExperienceRun 绑定独立 CharacterStorylineRun 与 WorldStoryRun；本变更不定义或实现 World 领域。
 
 ## What Changes
@@ -18,6 +20,8 @@
 - 建立 Chara-owned CharacterRoom、RoomRun、participant/controller、调度和有序 Room timeline；human-controlled character 不创建隐藏 AgentSession。
 - 从 Character Foundation public contract、snapshot、command service 和 UI 中删除 WorldProject/Version/Run/Save/storyline CRUD 与完整 World catalog。现有外部绑定只保留为待 Composition owner 接管的精确 opaque ref，不得由 Chara 解释、创建、修改或回退。
 - 当前变更不修改 `packages/world`、World OpenSpec、World Studio/Runtime、外部世界故事线、WorldSave/branch、Activity/Game、Browser Use、Computer Use、Play-use 或 VLA。
+- 将已完成的 Character Studio、Character Runtime 和 Roleplay 组合标记为隔离实验原型；生产 Host 拒绝对应 scene intent，Agent Entry 不搜索或启动 Character/Room，旧持久化实验 scene 仅重置为 canonical Agent Entry presentation。
+- 保留现有 Character 用户记录、版本、故事线、记忆、Room 和 transcript；入口封闭不得删除或改写 durable data，也不得取消仍受保护的后台 Agent runtime。
 
 ## Capabilities
 
@@ -39,4 +43,5 @@
 - Agent responsibility：`@neko/agent-runtime` 继续拥有唯一 Pi AgentSession、conversation/turn、Tool Call、Approval、模型 binding、streaming、取消、transcript 和 compaction。
 - Asset/Voice responsibility：图片、模型和音频 bytes 继续由 Assets/Content/Media/Voice owner 管理；Chara 只保存稳定引用、角色语义和默认偏好。
 - Desktop responsibility：`@neko/host` 拥有 Character Studio 与 Character Runtime scene/slot contract；`apps/neko-desktop` 只组合 Chara、Agent、Avatar、Voice public ports和外部 Composition link adapter，不保留 Character-owned World CRUD。
+- Product qualification responsibility：路线图晋级前，`@neko/host` 产品组合边界返回 owner-qualified unavailable，Agent Webview 将 Roleplay 操作明确拒绝；scene contract 与 Chara public services 仅供隔离原型和测试使用，不代表生产可达。
 - Data：新增用户管理的 CharacterStorylineVersion 和 canonical Character memory/storyline records；不增加内部 contract/schema/format version，不复制外部存档或故事线数据。

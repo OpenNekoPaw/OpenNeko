@@ -1,5 +1,21 @@
 ## ADDED Requirements
 
+### Requirement: Experimental World surfaces do not bypass roadmap promotion
+
+The production Desktop SHALL keep World navigation and management unavailable until a later promotion change records real-user, repeated-behavior and end-to-end-loop evidence. Foundation packages, durable records, scene contracts and isolated UI fixtures MAY remain available for experimentation, but MUST NOT make the production World route successful.
+
+#### Scenario: User opens World navigation before promotion
+
+- **WHEN** a user invokes World navigation from a production Desktop Window
+- **THEN** Host returns an owner-qualified unavailable diagnostic and preserves the current scene
+- **AND** no World Root is mounted and no World durable record is changed
+
+#### Scenario: Desktop restores an old experimental World scene
+
+- **WHEN** a Window contains a persisted World Management presentation
+- **THEN** Host replaces only that presentation with a fresh canonical Agent Entry scene and reports a presentation-reset diagnostic
+- **AND** World projects, versions, runs, saves, branches and protected background runtime remain unchanged
+
 ### Requirement: Desktop presents a World Library rather than a Game Hub
 
 Desktop SHALL project installed and authored WorldExperienceVersions, recent Runs, Saves, branches, capability status and attention through a lightweight World Library integrated with the product shell; it SHALL NOT introduce game lobby, matchmaking, achievements or engine settings as core World concepts.

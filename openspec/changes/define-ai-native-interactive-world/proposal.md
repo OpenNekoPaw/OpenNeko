@@ -2,6 +2,8 @@
 
 OpenNeko 已有 `@neko/world` / `@neko/world-node` Foundation，能够表达 `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` 的最小事实链，但尚未把用户的创作意图以及剧本、角色、场景、素材和玩法说明编译成可审核、可发布、可运行并可在运行中继续改造的互动世界。现有设计还没有把 Content-to-Experience 编译、能力缺口诊断、持续世界改造与 World Story、World Gameplay、Experience composition 的独立生命周期讲清楚，容易继续要求作者围绕代码或某个引擎实现具体体验，或让 Agent、Renderer、游戏引擎和世界模型成为第二事实来源。
 
+路线图仍将 Interactive World 定义为实验方向，并要求真实用户、重复行为和真实闭环证据后才能晋级。当前 Foundation/transformation 实现只有 package 与隔离 UI 证据，不满足晋级条件；它必须保留为实验原型，生产 Desktop World 入口则恢复为 fail-visible unavailable。
+
 ## What Changes
 
 ### 当前交付切片：World Foundation
@@ -9,6 +11,8 @@ OpenNeko 已有 `@neko/world` / `@neko/world-node` Foundation，能够表达 `Wo
 本轮只启用现有 World Foundation 的完整用户路径：用户可以创建和编辑 `WorldProject`，审核并发布不可变 `WorldVersion`，从精确版本创建确定性预览 `WorldRun` / `WorldSave`，提交 Foundation 事实事件，并检查、分支、切换和回放已提交历史。该表面必须明确标记为“基础预览”，只用于验证世界定义、状态、事件、存档和分支，不得命名或投影为完整 `WorldExperience`。
 
 本轮不创建 `WorldStoryProject`、`WorldGameplayDefinition`、`WorldExperienceProject` 或任何消费期 AI 路径；不接入 Character Runtime、Agent Play、游戏引擎、World Model、实时图像/视频或其他表现 profile。完整 World Experience 继续保持 owner-qualified unavailable，直到本变更后续任务中的独立 Story、Experience、实时 AI 资格和表现 producer/consumer 全部完成。
+
+本变更不再承担完整 World 产品的长期实施。Foundation/transformation 之后的工作拆分到五个独立 follow-up changes；每个 change 在自身边界内设计、实现和验收，且任何工程切片完成都不能替代路线图晋级证据。
 
 - 将 `neko-world` 定位为顶层产品能力族，内部包含 World Definition、World Story、World Gameplay、World Experience、World Runtime 与 World Presentation；这些能力通过精确 contract 组合，但不得压进一个万能聚合、服务或 UI store。
 - 将 Content-to-Experience 设为 World 创作主路径：用户创作意图和 Text/Screenplay、Character、Canvas、Cut、Assets、Generation 等 owner 的 durable 内容先产生 owner-qualified World、Story、Character binding、Scene、Quest、Gameplay、Interaction 与 Presentation 候选，再经过能力解析、语义 diff、作者接受和发布形成可运行 Experience；原始工具产物和检索摘要不得直接成为 World 事实。
@@ -54,6 +58,8 @@ OpenNeko 已有 `@neko/world` / `@neko/world-node` Foundation，能够表达 `Wo
 - Owning responsibility：World 是产品能力族而不是单一 aggregate。World Definition/Runtime 拥有世界事实、事件、Save、Branch 和 WorldView；World Story 拥有世界级剧情定义与进度；World Gameplay 拥有作品内玩法定义、Session、规则与结果；World Experience 只拥有创作组合、发布产物和运行绑定。`@neko/chara` 独立拥有 CharacterProject/Version、Character Story、角色策略与 CharacterRun；Agent 拥有 Play 规划/控制和唯一 AgentSession；外部 Activity/Game、Entity、Assets、Content 与表现 runtime 继续拥有各自身份、资源与执行。
 - Package roles：在现有 host-neutral `@neko/world` contracts/application/testing 与 `@neko/world-node` repository adapter 上扩展；World Story、World Gameplay 与 World Experience 先以独立 public subpath/aggregate 保持边界，只有出现真实独立依赖闭包时才按 package taxonomy 拆包，不得为能力清单预建空包。
 - Desktop：`apps/neko-desktop` 只负责相互独立的 World Studio/Runtime scene、World public port wiring、sender-bound IPC、窗口/View 生命周期、Host 授权、World Library composition 和真实 Electron 验收，不拥有 World 规则、状态机、存档事务、Character authoring 或 AI 编排。
+- Product qualification：生产 Host 在晋级前拒绝 `open-world-management`，旧持久化 World presentation 仅局部重置为 Agent Entry；World package、Foundation records 和 isolated fixtures 继续保留。
+- Follow-up ownership：后续工作分别由 `define-world-topology-and-data-contracts`、`build-deterministic-world-experience-runtime`、`add-world-interaction-surface-and-desktop-loop`、`qualify-world-agent-and-realtime-capabilities`、`add-world-gameplay-and-agent-play-composition` 约束。
 - Data：新增 revision-controlled WorldProject/WorldStoryProject/WorldExperienceProject、用户可管理的不可变 WorldVersion/WorldStoryVersion/WorldExperienceVersion，以及独立 WorldSave、WorldStoryRun 和 WorldGameSession canonical records；项目事实进入 workspace `neko/` 下 owning-domain 文件，用户级 SQLite 只保存 catalog、恢复索引和可重建 projection，不增加内部 schema/format generation。
 - AI：复用现有 Pi/AgentSession、Tool Call、purpose-model binding、流式 event、Approval、打断和取消；不建立 World-specific Agent runtime。作品按能力逐项声明 required/optional AI contract，Host 只为 required AI 能力解析并验证精确 binding；没有消费期 AI requirement 的 Experience 仍可通过确定性或其他已满足的 Interaction/Execution capability 启动。
 - Presentation：复用 ContentLocator、Entity/Asset representation、共享 UI、Preview/Media 与实时表现 public contracts；Renderer/Webview 只消费 WorldView 和短生命周期表现 descriptor。普通 GenerationJob 只服务 World authoring 和传统作品输出，不进入实时 World Run 的成功路径。

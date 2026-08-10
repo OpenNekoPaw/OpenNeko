@@ -4,6 +4,8 @@
 
 本设计只收敛 Chara。`packages/world`、World OpenSpec、WorldStory、WorldRun/Save 和 Character + World Composition 由 `define-ai-native-interactive-world` 处理。Chara 只提供精确角色、角色故事线、角色记忆和运行引用，并在外部 Composition producer 存在后消费其只读关联投影；缺失时保持 unavailable，不建立本地替代 shape。
 
+路线图仍把 Chara/Interactive World 定义为实验方向，并要求真实用户、重复行为和真实闭环证据后才能晋级。当前实现只有工程与隔离 UI 证据，没有满足该门禁；因此本变更的生产结论是“保留原型、封闭入口”，而不是修改路线图把已有代码追认为已晋级产品。
+
 ### 五层分析
 
 | 层   | 结论                                                                                                                                                                                                       |
@@ -182,6 +184,22 @@ CharacterRun；未选择故事线时仍创建独立 MemoryScope，但不伪造 S
 Chara launch commit 之前的失败不得留下部分 CharacterRun/Room/AgentSession；已成功启动后的单个
 provider turn 失败只标记当前交互失败，不删除已创建的 durable Conversation owner。
 
+### 13. 产品晋级门禁位于最小组合边界
+
+在路线图晋级前，`@neko/host` 对 `open-character-management` 返回
+`desktop-scene-owner-unavailable`，保持当前 scene 与 durable catalog 不变；Agent Entry 的 Roleplay
+动作在 Webview 交互 owner 中返回明确 diagnostic，不发起 Character 搜索，也不调用
+`CharacterConversationLaunchService`。这不是 feature flag 或替代实现，而是当前唯一生产语义。
+
+包内 Chara services、scene contract、Webview Root 和 deterministic tests 继续作为隔离实验原型存在，
+但不得作为生产可达证据。旧进程持久化的 `character-management` 或
+`character-interaction` presentation 在 Window claim 时局部重置为 fresh Agent Entry scene，并产生
+`desktop-presentation-reset` diagnostic；该恢复只替换 Window presentation，不删除 CharacterProject、
+CharacterVersion、Conversation、Room、transcript 或受保护后台 task/runtime。
+
+未来只有新的晋级 OpenSpec 记录真实证据、生产 owner、用户数据影响与验收矩阵后，才能原子移除
+这些拒绝点并重新接通已有 canonical producer/consumer；不得以开关、dual path 或兼容分支提前暴露。
+
 ## Risks / Trade-offs
 
 - [“背景世界”被误解为 World] → canonical 名称固定为 `CharacterOriginSetting`，文档和 UI 明示不可运行、不可存档。
@@ -190,6 +208,8 @@ provider turn 失败只标记当前交互失败，不删除已创建的 durable 
 - [Composition 缺失时 Chara 自建临时绑定] → 保持 unavailable，等待 owning contract，不使用字符串 bag、active identity 或 Chara-local external shape。
 - [拆除 Character Foundation World path 影响现有 fixture] → 原子更新 Character producer/consumer/tests；World producer/consumer 由其他会话接管，不在本变更修补。
 - [角色 lore 过度结构化] → 首版只结构化稳定、可验证且有真实 UI/Agent consumer 的字段，长文本通过 durable content ref 扩展。
+- [原型完成被误认为产品晋级] → Host scene 与 Agent Entry 同时 fail-visible；测试必须 poison Character 搜索/启动端口并证明没有 durable mutation。
+- [封闭入口误伤用户数据或后台任务] → 只重置 Window presentation；Chara/Agent authoritative records 与 task/runtime owner 不参与清理。
 
 ## Migration Plan
 
@@ -200,6 +220,7 @@ provider turn 失败只标记当前交互失败，不删除已创建的 durable 
 5. 更新 Character Studio/Runtime surfaces 和 deterministic producer/consumer/path tests。
 6. 在外部 Composition owner 提供 public contract 后，仅通过 concrete adapter 接入 exact refs 和 read-only projection。
 7. 完成真实 Character Electron UI 与 provider-backed Agent 验收；不把 World 实现或运行证据计入本变更。
+8. 在路线图晋级证据成立前封闭生产 Character/Room 入口；旧实验 scene 局部恢复到 Agent Entry，保留所有 durable records 和后台 runtime。
 
 现有 Character 用户记录不得因新增 lore/storyline/memory 能力被静默覆盖。缺失新字段的旧 CharacterProject/Version 在其 owning record 显示明确 diagnostic 和修复入口；有效 sibling 继续可用。现有 World records 不由本变更读取、迁移、删除或重写。
 
