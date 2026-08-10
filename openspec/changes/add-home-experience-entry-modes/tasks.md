@@ -35,3 +35,13 @@
 - [x] 6.2 Run adjacent reopen, Conversation switching, background-task isolation, Workspace title controls, streaming navigation, and no-hidden-Root regression checks.
 - [x] 6.3 Perform `neko-quality-review`, resolve or record ownership, dependency, user-data, fail-local, accessibility, verification, and residual-risk findings.
 - [x] 6.4 Commit OpenSpec, shared UI/navigation, removed Agent paths, and verification evidence in reviewable batches without unrelated worktree changes.
+
+## 7. Correct Entry Configuration Semantics
+
+- [x] 7.1 Replace the management Scene navigation design/spec with Agent Entry Draft configuration, exact binding ownership, and local validation requirements.
+- [x] 7.2 Remove the Desktop Scene-to-mode presenter and management title-region selector while preserving the shared borderless segmented pill.
+- [x] 7.3 Restore an Agent Webview entry-mode presenter and selector whose enabled changes stay in the same Draft and preserve unsent text.
+- [x] 7.4 Restore Workspace Project/directory chooser wiring, canonical `bindTarget`, exact binding receipt validation, and authority-isolated reference cleanup.
+- [x] 7.5 Keep Character selected-but-unavailable and World disabled until owner-qualified target providers are composed; add poison assertions against management navigation.
+- [x] 7.6 Run focused UI, Agent Webview, Desktop renderer, typecheck, OpenSpec validation, and adjacent regression checks.
+- [x] 7.7 Run visible Electron acceptance for Assistant/Workspace/Character/World entry states, submit validation, no management navigation, and responsive layout; commit in reviewable batches.
