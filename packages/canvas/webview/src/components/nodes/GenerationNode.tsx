@@ -45,19 +45,22 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      className="canvas-generation-node-frame"
+      nodeLabel={{
+        icon: (
+          <span
+            aria-hidden="true"
+            className={toCodiconClassName(generationContentIcon(recipe.kind))}
+          />
+        ),
+        text: title,
+      }}
     >
       <div
         className="canvas-generation-node"
         data-canvas-generation-node={recipe.kind}
         data-canvas-content-kind={recipe.kind === 'prompt' ? 'text' : recipe.kind}
       >
-        <div className="canvas-generation-node__label">
-          <span
-            aria-hidden="true"
-            className={toCodiconClassName(generationContentIcon(recipe.kind))}
-          />
-          <span>{title}</span>
-        </div>
         <div className="canvas-generation-node__content">
           {recipe.kind === 'prompt' ? (
             textOutput ? (

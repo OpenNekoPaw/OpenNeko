@@ -11,9 +11,7 @@ import {
 
 type AgentExtensionManagementRequestInput<
   Request extends AgentExtensionManagementHostRequest = AgentExtensionManagementHostRequest,
-> = Request extends unknown
-  ? Omit<Request, 'requestId' | 'identity'>
-  : never;
+> = Request extends unknown ? Omit<Request, 'requestId' | 'identity'> : never;
 
 export class DesktopExtensionManagementRuntime implements AgentExtensionManagementRuntime {
   private disposed = false;
@@ -31,6 +29,16 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
   async installPlugin(pluginId: string): Promise<void> {
     this.requireActive();
     await this.execute({ route: 'plugin.install', pluginId });
+  }
+
+  async updatePlugin(pluginId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'plugin.update', pluginId });
+  }
+
+  async cancelPluginOperation(operationId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'plugin.operation.cancel', operationId });
   }
 
   async enablePlugin(pluginId: string): Promise<void> {

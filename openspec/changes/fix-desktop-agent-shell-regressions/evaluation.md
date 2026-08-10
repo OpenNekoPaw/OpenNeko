@@ -79,8 +79,9 @@ Date: 2026-08-03
   isolated Electron/SQLite fixture. The scenario closed every Main View, verified both Canvas media
   resources were released, and observed the Chinese empty surface “没有打开的创作文档” with guidance
   text but no `<code>` diagnostic or `desktop-canvas-not-mounted`. It then set
-  `startupTarget=restore`, restarted the same packaged application, and observed one package-owned
-  Canvas Root for the sole `neko/boards/workspace.nkc` View. No console error or renderer exception
+  the then-supported restore preference, restarted the same packaged application, and observed one package-owned
+  Canvas Root for the sole `neko/boards/workspace.nkc` View. That historical startup behavior is superseded by
+  `compose-desktop-workbench-scenes` canonical fresh Entry startup. No console error or renderer exception
   was observed. The gitignored report is
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T03-17-20.412Z-canvas-openneko-consumer-packaged/report.json`; its screenshot artifacts are
   `screenshots/01-empty-main-after-last-tab-closed.png` and

@@ -21,6 +21,11 @@ export interface MediaGenerationConfigPort {
   getDefaultModelRef(type: MediaModelType): ModelRefConfig | undefined;
 }
 
+/** Resolves one exact provider with its current execution credential. */
+export interface MediaExecutionProviderResolver {
+  resolveProvider(providerId: string): Promise<MediaProvider | undefined>;
+}
+
 export interface MediaRoutingResult {
   readonly providerId: string;
   readonly modelId: string;

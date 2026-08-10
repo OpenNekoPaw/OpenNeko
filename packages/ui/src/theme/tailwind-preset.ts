@@ -153,10 +153,8 @@ export const nekoTailwindPreset = {
           flex: '0 0 auto',
           padding: '2px',
           'border-radius': '999px',
-          background:
-            'color-mix(in srgb, var(--neko-toolbar-foreground-secondary) 10%, var(--neko-toolbar-background))',
-          'box-shadow':
-            'inset 0 0 0 1px color-mix(in srgb, var(--neko-toolbar-foreground-secondary) 18%, transparent)',
+          background: 'transparent',
+          'box-shadow': 'none',
         },
         '.neko-floating-toolbar[data-orientation="vertical"] .neko-toolbar-mode-group': {
           'flex-direction': 'column',
@@ -186,11 +184,10 @@ export const nekoTailwindPreset = {
             position: 'absolute',
             inset: '3px',
             'z-index': '0',
-            border: '1px solid color-mix(in srgb, var(--neko-toolbar-accent) 55%, transparent)',
+            border: '1px solid var(--neko-toolbar-border)',
             'border-radius': '999px',
-            background:
-              'color-mix(in srgb, var(--neko-toolbar-accent) 18%, var(--neko-toolbar-background))',
-            'box-shadow': '0 1px 5px var(--neko-toolbar-accent-glow)',
+            background: 'var(--neko-toolbar-hover)',
+            'box-shadow': 'none',
             'pointer-events': 'none',
           },
         '.neko-floating-toolbar[data-density="compact"] .neko-toolbar-btn.active::after, .neko-floating-toolbar[data-density="compact"] .neko-toolbar-btn[aria-pressed="true"]::after':

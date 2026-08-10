@@ -11,6 +11,10 @@ import type { OpenNekoDesktopApplicationSettingsBridge } from '@neko/host/applic
 import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domain/contracts';
 import type { OpenNekoAssetCenterBridge } from '@neko/assets-domain/asset-center/host-contract';
 import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contracts/extension-management-host';
+import type { OpenNekoAutomationEndpointManagementBridge } from '@neko/automation-contracts/endpoint-management';
+import type { OpenNekoAutomationPermissionManagementBridge } from '@neko/automation-contracts/permission-management';
+import type { OpenNekoDesktopAutomationTargetSelectionBridge } from './automation-target-selection-contract';
+import type { OpenNekoDesktopAutomationSessionControlBridge } from './automation-session-control-contract';
 import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
 import type { OpenNekoAssistantResourceBridge } from '@neko/agent-contracts/assistant-resource-host';
 import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-workspace-grant-contract';
@@ -35,6 +39,10 @@ declare global {
       OpenNekoAssistantResourceBridge &
       OpenNekoDesktopWorkspaceGrantBridge &
       OpenNekoAgentExtensionManagementBridge &
+      OpenNekoAutomationEndpointManagementBridge &
+      OpenNekoAutomationPermissionManagementBridge &
+      OpenNekoDesktopAutomationTargetSelectionBridge &
+      OpenNekoDesktopAutomationSessionControlBridge &
       OpenNekoDesktopApplicationSettingsBridge &
       OpenNekoDesktopProjectPortabilityBridge &
       OpenNekoDesktopCharacterBridge &

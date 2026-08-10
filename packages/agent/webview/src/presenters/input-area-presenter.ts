@@ -20,6 +20,7 @@ export interface InputAreaUiProjectionInput {
   configurationPolicy?: AgentConfigurationPolicyProjection;
   currentSessionMediaModelCount: number;
   compactControls?: boolean;
+  submissionBlocked?: boolean;
 }
 
 export interface InputAreaUiProjection {
@@ -103,6 +104,7 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     hasAmbientNodes,
     canSend:
       !input.disabled &&
+      !input.submissionBlocked &&
       ((!input.isThinking && (hasText || hasAttachments || hasContextChips)) || canQueue),
     canQueue,
     canCancel: input.isThinking && !input.disabled,
@@ -112,7 +114,7 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     showContextChips: hasContextChips,
     showAmbientNodes: hasAmbientNodes,
     showMediaCallCount: !isCharacterRoleSession && input.mediaModelCallCount > 0,
-    showExecutionModeSelector: !isEntry && executionModePolicy !== 'unavailable' && isAgentMode,
+    showExecutionModeSelector: executionModePolicy !== 'unavailable' && isAgentMode,
     showModelConfig: modelPolicy !== 'unavailable' && (isAgentMode || hasCurrentSessionMediaModels),
     inputPlaceholderKey: isEntry
       ? 'chat.input.entryPlaceholder'

@@ -39,10 +39,18 @@ describe('Desktop build platform contract', () => {
     for (const command of ['build', 'dev', 'make', 'package']) {
       assert.match(
         scripts[command] ?? '',
-        /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && electron-forge /u,
+        /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
         `${command} must reject unsupported hosts before Forge`,
       );
     }
+
+    for (const command of ['build', 'make', 'package']) {
+      assert.match(scripts[command] ?? '', /&& electron-forge /u);
+    }
+    assert.equal(
+      scripts.dev,
+      'node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop-functional/run-development.mjs',
+    );
 
     for (const command of ['build', 'make', 'package']) {
       assert.match(

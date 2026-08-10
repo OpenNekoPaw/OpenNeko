@@ -18,6 +18,7 @@ import {
   CANVAS_ADD_TO_CUT_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
+  CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
 } from '@neko/canvas-domain';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import type { DesktopCanvasViewGrant } from '@neko/host/desktop-shell-service';
@@ -517,6 +518,7 @@ describe('DesktopCanvasRuntime', () => {
     } as const;
     const resolveAddToCut = vi.fn(async () => executionPayload);
     const addToCut = vi.fn(async () => undefined);
+    const separateAudioInCut = vi.fn(async () => undefined);
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -538,6 +540,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       resolveAddToCut,
       addToCut,
+      separateAudioInCut,
     });
     await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
@@ -569,6 +572,11 @@ describe('DesktopCanvasRuntime', () => {
     expect(resolution.descriptors).toEqual([
       expect.objectContaining({
         id: CANVAS_ADD_TO_CUT_ACTION_ID,
+        ownerId: 'cut',
+        executionPayload,
+      }),
+      expect.objectContaining({
+        id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
         ownerId: 'cut',
         executionPayload,
       }),
@@ -604,6 +612,136 @@ describe('DesktopCanvasRuntime', () => {
         locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
       }),
       executionPayload,
+    });
+
+    const separate = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'request-separate-video-audio',
+        commandId: 'command-separate-video-audio',
+        identity,
+        intent: {
+          type: 'execute-material-action',
+          action: {
+            identity: materialIdentity(identity),
+            actionId: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+            selectedNodeIds: [node.id],
+            payload: executionPayload,
+          },
+        },
+      }),
+    );
+
+    expect(separate.status).toBe('accepted');
+    expect(separateAudioInCut).toHaveBeenCalledWith({
+      identity,
+      target: expect.objectContaining({
+        nodeId: node.id,
+        mediaKind: 'video',
+        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      }),
+      executionPayload,
+    });
+    await runtime.dispose();
+  });
+
+  it('projects Cut actions for the exact selected output of a Video Generation node', async () => {
+    const workspacePath = await mkdtemp(
+      path.join(tmpdir(), 'openneko-canvas-generated-video-actions-'),
+    );
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const documentPath = path.join(workspacePath, identity.documentId);
+    await mkdir(path.dirname(documentPath), { recursive: true });
+    await writeFile(
+      documentPath,
+      JSON.stringify({
+        name: 'Generated video actions',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'video-generation-1',
+            type: 'generation',
+            position: { x: 40, y: 60 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: {
+              recipe: { kind: 'video', prompt: '' },
+              outputs: [
+                {
+                  outputId: 'video-output-1',
+                  jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+                  locator: {
+                    kind: 'generated-output',
+                    outputId: 'video-output-1',
+                    digest: 'sha256:video-output-1',
+                    path: 'neko/generated/video-output-1.mp4',
+                  },
+                  kind: 'video',
+                  recipeInputFingerprint: 'recipe-fingerprint-1',
+                },
+              ],
+              selectedOutputId: 'video-output-1',
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const executionPayload = {
+      target: {
+        kind: 'new-cut-draft',
+        workbenchInstanceId: 'workbench-1',
+      },
+    } as const;
+    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasGeneratedVideoActionsTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      resolveAddToCut,
+      addToCut: vi.fn(async () => undefined),
+      separateAudioInCut: vi.fn(async () => undefined),
+    });
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-generated-video-actions',
+      identity,
+      selectedNodeIds: ['video-generation-1'],
+    });
+
+    expect(resolution.descriptors).toEqual([
+      expect.objectContaining({ id: CANVAS_ADD_TO_CUT_ACTION_ID, ownerId: 'cut' }),
+      expect.objectContaining({ id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID, ownerId: 'cut' }),
+    ]);
+    expect(resolveAddToCut).toHaveBeenCalledWith({
+      identity,
+      target: {
+        nodeId: 'video-generation-1',
+        mediaKind: 'video',
+        origin: 'generated',
+        locator: {
+          kind: 'generated-output',
+          outputId: 'video-output-1',
+          digest: 'sha256:video-output-1',
+          path: 'neko/generated/video-output-1.mp4',
+        },
+      },
     });
     await runtime.dispose();
   });
@@ -804,7 +942,15 @@ describe('DesktopCanvasRuntime', () => {
         type: 'generation',
         position: { x: 64, y: 96 },
         data: expect.objectContaining({
-          recipe: { kind: 'image', prompt: '' },
+          recipe: {
+            kind: 'image',
+            prompt: '',
+            aspectRatio: '1:1',
+            width: 1024,
+            height: 1024,
+            count: 1,
+            quality: 'standard',
+          },
           outputs: [],
         }),
       }),
@@ -1580,6 +1726,176 @@ describe('DesktopCanvasRuntime', () => {
 
     runtime.detachWindow('window-1');
     expect((await runtime.getSnapshot('window-1', first)).canvas.name).toBe('First');
+  });
+
+  it('projects committed Workspace Board mutations into the clean open session and blocks dirty sessions', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-live-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const documentPath = path.join(workspacePath, identity.documentId);
+    await mkdir(path.dirname(documentPath), { recursive: true });
+    await writeFile(
+      documentPath,
+      JSON.stringify({
+        name: 'Before delivery',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+    const initial = await runtime.getSnapshot('window-1', identity);
+    const secondIdentity = {
+      ...identity,
+      viewId: 'canvas:view-2',
+      viewInstanceId: 'view-instance-2',
+      sessionId: 'canvas-session:canvas:view-2:view-instance-2',
+    };
+    await runtime.getSnapshot('window-1', secondIdentity);
+    const projectionEvents: CanvasHostSnapshot[] = [];
+    const secondProjectionEvents: CanvasHostSnapshot[] = [];
+    await runtime.subscribe('window-1', identity, (event) => {
+      projectionEvents.push(event.snapshot);
+    });
+    await runtime.subscribe('window-1', secondIdentity, (event) => {
+      secondProjectionEvents.push(event.snapshot);
+    });
+    await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'saved-edit-before-delivery',
+        commandId: 'saved-edit-before-delivery',
+        identity,
+        intent: {
+          type: 'replace-document',
+          canvas: { ...initial.canvas, name: 'Saved user edit' },
+        },
+      }),
+    );
+    await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'save-edit-before-delivery',
+        commandId: 'save-edit-before-delivery',
+        identity,
+        intent: { type: 'save' },
+      }),
+    );
+
+    await runtime.coordinateWorkspaceBoardMutation('workspace-1', async () => {
+      await writeFile(
+        documentPath,
+        JSON.stringify({
+          name: 'Agent delivery',
+          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+          nodes: [
+            {
+              id: 'agent-output',
+              type: 'media',
+              position: { x: 40, y: 60 },
+              size: { width: 240, height: 160 },
+              zIndex: 1,
+              data: { assetPath: 'output.png', mediaType: 'image' },
+            },
+          ],
+          connections: [],
+        }),
+      );
+      return undefined;
+    });
+
+    expect((await runtime.getSnapshot('window-1', identity)).canvas.name).toBe('Agent delivery');
+    expect((await runtime.getSnapshot('window-1', secondIdentity)).canvas.name).toBe(
+      'Agent delivery',
+    );
+    expect(projectionEvents.at(-1)?.canvas.name).toBe('Agent delivery');
+    expect(secondProjectionEvents.at(-1)?.canvas.name).toBe('Agent delivery');
+    const undo = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'undo-after-delivery',
+        commandId: 'undo-after-delivery',
+        identity,
+        intent: { type: 'undo' },
+      }),
+    );
+    expect(undo.status).toBe('accepted');
+    if (undo.status !== 'accepted') throw new Error(undo.diagnostic.message);
+    expect(undo.snapshot.canvas.name).toBe('Agent delivery');
+    expect(undo.snapshot.canvas.nodes.map((node) => node.id)).toEqual(['agent-output']);
+    await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'save-live-board',
+        commandId: 'save-live-board',
+        identity,
+        intent: { type: 'save' },
+      }),
+    );
+    expect(JSON.parse(await readFile(documentPath, 'utf8'))).toMatchObject({
+      name: 'Agent delivery',
+    });
+    runtime.detachWindow('window-1');
+    const reopened = await runtime.getSnapshot('window-1', identity);
+    expect(reopened.canvas.name).toBe('Agent delivery');
+    expect(reopened.canvas.nodes.map((node) => node.id)).toEqual(['agent-output']);
+
+    const snapshot = reopened;
+    await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'dirty-live-board',
+        commandId: 'dirty-live-board',
+        identity,
+        intent: {
+          type: 'replace-document',
+          canvas: { ...snapshot.canvas, name: 'Unsaved user edit' },
+        },
+      }),
+    );
+    const mutation = vi.fn(async () => undefined);
+    await expect(runtime.coordinateWorkspaceBoardMutation('workspace-1', mutation)).rejects.toThrow(
+      'workspace-board-open-session-dirty',
+    );
+    expect(mutation).not.toHaveBeenCalled();
+    expect(JSON.parse(await readFile(documentPath, 'utf8'))).toMatchObject({
+      name: 'Agent delivery',
+    });
+    await runtime.dispose();
+  });
+
+  it('resolves a Workspace grant before entering the Board mutation queue', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-open-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const resolveCanvasViewGrant = vi.fn(async (): Promise<DesktopCanvasViewGrant> => {
+      await runtime.coordinateWorkspaceBoardMutation(identity.workspaceId, async () => undefined);
+      return {
+        identity,
+        workspace: {
+          workspaceId: identity.workspaceId,
+          workspacePath,
+          displayName: 'Fixture',
+          locator: { kind: 'relative', value: '.' },
+        },
+      };
+    });
+    const runtime = new DesktopCanvasRuntime({
+      shell: { resolveCanvasViewGrant },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasBoardOpenTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+    });
+
+    const snapshot = await runtime.getSnapshot('window-1', identity);
+
+    expect(snapshot.canvas.name).toBe('Fixture Canvas');
+    expect(resolveCanvasViewGrant).toHaveBeenCalledOnce();
+    await runtime.dispose();
   });
 });
 

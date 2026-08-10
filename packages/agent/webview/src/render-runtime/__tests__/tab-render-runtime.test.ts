@@ -294,7 +294,7 @@ describe('TabRenderRuntimeRegistry', () => {
     ).toThrow(/cannot rebind/);
   });
 
-  it('owns an independent projection replica and attachment client per Tab runtime', () => {
+  it('owns an independent projection replica and attachment client per Tab runtime', async () => {
     const registry = createTabRenderRuntimeRegistry();
     registry.reconcile(
       [
@@ -363,6 +363,7 @@ describe('TabRenderRuntimeRegistry', () => {
       messageId: 'message-1',
       itemId: 'text-1',
     });
+    await waitForMarkdownPresentation();
     expect(runtimeA.projectionReplica).not.toBe(runtimeB.projectionReplica);
     expect(runtimeA.markdownSessions).not.toBe(runtimeB.markdownSessions);
     expect(runtimeA.projectionReplica.getSnapshot().projection?.turns).toHaveLength(1);
@@ -373,7 +374,7 @@ describe('TabRenderRuntimeRegistry', () => {
     expect(messagesB).toHaveLength(1);
   });
 
-  it('keeps projection and Markdown identities isolated during rapid visibility switching', () => {
+  it('keeps projection and Markdown identities isolated during rapid visibility switching', async () => {
     const registry = createTabRenderRuntimeRegistry();
     const bindings = [
       { tabId: 'tab-a', conversationId: 'conversation-shared' },
@@ -472,6 +473,7 @@ describe('TabRenderRuntimeRegistry', () => {
       messageId: 'message-1',
       itemId: 'text-1',
     });
+    await waitForMarkdownPresentation();
     expect(registry.require('tab-a')).toBe(runtimeA);
     expect(registry.require('tab-b')).toBe(runtimeB);
     expect(runtimeA.projectionReplica).toBe(replicaA);
@@ -586,6 +588,10 @@ describe('TabRenderRuntimeRegistry', () => {
     expect(runtimeB.projectionReplica.getSnapshot().projection).toBeNull();
   });
 });
+
+async function waitForMarkdownPresentation(): Promise<void> {
+  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 40));
+}
 
 function projectionTextItem(content: string, updatedAt: number) {
   return {

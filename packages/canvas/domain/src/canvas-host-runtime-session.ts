@@ -9,6 +9,7 @@ import {
   assertCanvasHostRuntimeIdentity,
   type CanvasHostIntentRequest,
   type CanvasHostIntentResult,
+  type CanvasGenerationModelOption,
   type CanvasHostPresentationState,
   type CanvasHostProjectionEvent,
   type CanvasHostRuntime,
@@ -17,6 +18,7 @@ import {
   type CanvasMaterialActionResolution,
   type CanvasMaterialActionResolutionRequest,
 } from './canvas-host-runtime-contract';
+import { purposeForCanvasGenerationKind } from './types/canvas-generation-node';
 import {
   projectCanvasMaterialActionCatalog,
   resolveCanvasMaterialActionTargets,
@@ -24,6 +26,7 @@ import {
 } from './canvas-material-action-catalog';
 import {
   applyCanvasGenerationNodeOutputs,
+  attachCanvasGenerationReference,
   authorCanvasGenerationNodeText,
   createCanvasGenerationNode,
   requireCanvasGenerationNode,
@@ -117,6 +120,7 @@ export interface CanvasHostRuntimeSessionOptions {
   readonly initialCanvas: CanvasData;
   readonly initialDirty?: boolean;
   readonly presentationSnapshots?: CanvasHostPresentationSnapshotStore;
+  readonly resolveGenerationModels?: () => readonly CanvasGenerationModelOption[];
   readonly effects: CanvasHostRuntimeSessionEffects;
   readonly commandHistoryLimit?: number;
   readonly documentHistoryLimit?: number;
@@ -178,6 +182,29 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return this.enqueueOperation(() => {
       this.assertActive();
       return this.createSnapshot();
+    });
+  }
+
+  async coordinateAuthoritativeDocumentChange<TResult>(
+    operation: () => Promise<{ readonly value: TResult; readonly canvas: CanvasData }>,
+  ): Promise<{ readonly value: TResult; readonly canvas: CanvasData }> {
+    return this.enqueueOperation(async () => {
+      this.assertActive();
+      if (this.dirty) {
+        throw new CanvasHostVisibleEffectError(
+          'workspace-board-open-session-dirty: Save or discard the open Workspace Board changes before delivering Agent artifacts.',
+        );
+      }
+      const result = await operation();
+      this.canvas = cloneCanvas(result.canvas);
+      this.dirty = false;
+      this.undoStack.length = 0;
+      this.redoStack.length = 0;
+      this.commitProjectionChange();
+      return {
+        value: result.value,
+        canvas: cloneCanvas(result.canvas),
+      };
     });
   }
 
@@ -360,12 +387,47 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     }
     if (intent.type === 'create-generation-node') {
       if (!this.options.effects.generation) return unsupported(request, intent.type);
+      const purpose = purposeForCanvasGenerationKind(intent.kind);
+      const defaultModel = this.options
+        .resolveGenerationModels?.()
+        .find((option) => option.isDefault && option.binding.purpose === purpose)?.binding;
       const next = createCanvasGenerationNode({
         canvas: this.canvas,
         nodeId: nextGenerationNodeId(this.canvas),
         kind: intent.kind,
         position: intent.position ?? { x: 100, y: 100 },
+        ...(defaultModel ? { defaultModel } : {}),
       });
+      this.commitCanvas(next, request.commandId);
+      return this.accepted(request);
+    }
+    if (intent.type === 'attach-generation-reference') {
+      const target = requireCanvasGenerationNode(this.canvas, intent.nodeId);
+      const requestSource = this.options.effects.requestSource;
+      if (!requestSource) return unsupported(request, intent.type);
+      const materialRequest = await requestSource({
+        identity: { ...this.identity },
+        sourceKind: intent.sourceKind,
+        sourceMode: intent.sourceMode,
+      });
+      if (!materialRequest) return this.accepted(request);
+      const positionedRequest = applyRequestedPosition(materialRequest, {
+        x: target.position.x - 360,
+        y: target.position.y,
+      });
+      const next = await this.authorGenerationReference(intent.nodeId, positionedRequest, request);
+      if (isIntentResult(next)) return next;
+      this.commitCanvas(next, request.commandId);
+      return this.accepted(request);
+    }
+    if (intent.type === 'attach-generation-reference-material') {
+      const target = requireCanvasGenerationNode(this.canvas, intent.nodeId);
+      const positionedRequest = applyRequestedPosition(intent.request, {
+        x: target.position.x - 360,
+        y: target.position.y,
+      });
+      const next = await this.authorGenerationReference(intent.nodeId, positionedRequest, request);
+      if (isIntentResult(next)) return next;
       this.commitCanvas(next, request.commandId);
       return this.accepted(request);
     }
@@ -529,6 +591,31 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.commitStateChange(dirty, originCommandId);
   }
 
+  private async authorGenerationReference(
+    nodeId: string,
+    materialRequest: CanvasMaterialAuthoringRequest,
+    request: CanvasHostIntentRequest,
+  ): Promise<CanvasData | CanvasHostIntentResult> {
+    const existingNodeIds = new Set(this.canvas.nodes.map((node) => node.id));
+    const authored = await this.authorMaterial(materialRequest, request);
+    if (isIntentResult(authored)) return authored;
+    const addedNodes = authored.nodes.filter((node) => !existingNodeIds.has(node.id));
+    if (addedNodes.length !== 1) {
+      throw new Error(
+        `Canvas Generation reference authoring must create exactly one source node; received ${addedNodes.length}.`,
+      );
+    }
+    const sourceNode = addedNodes[0];
+    if (!sourceNode) {
+      throw new Error('Canvas Generation reference source node is unavailable after authoring.');
+    }
+    return attachCanvasGenerationReference({
+      canvas: authored,
+      nodeId,
+      sourceNodeId: sourceNode.id,
+    });
+  }
+
   private pushHistory(history: CanvasData[], canvas: CanvasData): void {
     history.push(cloneCanvas(canvas));
     if (history.length > this.documentHistoryLimit) history.shift();
@@ -565,6 +652,9 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       authoringCapabilities: {
         sourceModes: sourceAvailable ? ['import', 'reference'] : [],
         generationKinds: generationAvailable ? ['prompt', 'image', 'audio', 'video'] : [],
+        generationModels: generationAvailable
+          ? structuredClone(this.options.resolveGenerationModels?.() ?? [])
+          : [],
       },
       generationNodes: [...this.generationNodes.values()].map((projection) =>
         structuredClone(projection),

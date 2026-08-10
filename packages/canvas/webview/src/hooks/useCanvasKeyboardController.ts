@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useKeyboardDispatcher, type ShortcutBinding } from '@neko/ui/keyboard';
 
 export interface CanvasKeyboardState extends Record<string, unknown> {
+  readonly canGroupSelection: boolean;
+  readonly canUngroupSelection: boolean;
   readonly canDeleteSelection: boolean;
   readonly hasNodes: boolean;
   readonly isKeyboardFocused: boolean;
@@ -20,9 +22,14 @@ export interface UseCanvasKeyboardControllerOptions {
   readonly onPaste: () => void;
   readonly onPasteInPlace: () => void;
   readonly onDuplicate: () => void;
+  readonly onGroup: () => void;
+  readonly onSelectMode: () => void;
   readonly onSpacePanEnd: () => void;
   readonly onSpacePanStart: () => void;
   readonly onTogglePanMode: () => void;
+  readonly onUngroup: () => void;
+  readonly onZoomIn: () => void;
+  readonly onZoomOut: () => void;
   readonly target?: EventTarget | null;
 }
 
@@ -34,16 +41,21 @@ export function useCanvasKeyboardController({
   onCut,
   onDeleteSelected,
   onDuplicate,
+  onGroup,
   onEscape,
   onPaste,
   onPasteInPlace,
   onRedo,
   onSave,
+  onSelectMode,
   onSelectAll,
   onSpacePanEnd,
   onSpacePanStart,
   onTogglePanMode,
+  onUngroup,
   onUndo,
+  onZoomIn,
+  onZoomOut,
   state,
   target,
 }: UseCanvasKeyboardControllerOptions): void {
@@ -84,7 +96,21 @@ export function useCanvasKeyboardController({
       createEditorBinding('duplicate', { key: 'KeyD', primary: true }, onDuplicate, {
         when: (current) => current.canDeleteSelection,
       }),
+      createEditorBinding('group', { key: 'KeyG', primary: true }, onGroup, {
+        when: (current) => current.canGroupSelection,
+      }),
+      createEditorBinding('ungroup', { key: 'KeyG', primary: true, shift: true }, onUngroup, {
+        when: (current) => current.canUngroupSelection,
+      }),
+      createViewportBinding('select-mode', 'KeyV', onSelectMode),
       createViewportBinding('toggle-pan-mode', 'KeyH', onTogglePanMode),
+      createViewportBinding('zoom-out', { key: 'Minus', primary: true }, onZoomOut),
+      createViewportBinding('zoom-in', { key: 'Equal', primary: true }, onZoomIn),
+      createViewportBinding(
+        'zoom-in-shift',
+        { key: 'Equal', primary: true, shift: true },
+        onZoomIn,
+      ),
       createViewportBinding('space-pan-start', 'Space', onSpacePanStart, {
         when: (current) => current.isKeyboardFocused,
       }),
@@ -94,15 +120,20 @@ export function useCanvasKeyboardController({
       onCut,
       onDeleteSelected,
       onDuplicate,
+      onGroup,
       onEscape,
       onPaste,
       onPasteInPlace,
       onRedo,
       onSave,
+      onSelectMode,
       onSelectAll,
       onSpacePanStart,
       onTogglePanMode,
+      onUngroup,
       onUndo,
+      onZoomIn,
+      onZoomOut,
     ],
   );
 

@@ -35,8 +35,11 @@ import {
 } from './desktop-workspace-registry';
 import { DesktopWorkspaceBoardDelivery } from './desktop-workspace-board-delivery';
 import { createElectronNekoHostPorts } from './electron-host-ports';
+import { createDesktopAutomationEndpointHost } from './desktop-automation-endpoint-host';
+import { createDesktopAutomationHostPermission } from './desktop-automation-host-permission';
 import { registerDesktopIpc } from './ipc';
 import { DesktopRendererRecovery } from './renderer-recovery';
+import { projectDesktopCanvasGenerationModels } from './desktop-canvas-generation-model-catalog';
 import {
   configureDesktopWindowSecurity,
   desktopRendererContentSecurityPolicyOptions,
@@ -82,6 +85,13 @@ import {
 } from './desktop-functional-fixture';
 import { DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT } from '../shared/agent-automation-contract';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
+import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
+import {
+  createAutomationApplicationService,
+  createAutomationTargetSelectionCoordinator,
+} from '@neko/automation-node';
+import { DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS } from '../shared/automation-target-selection-contract';
+import { DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS } from '../shared/automation-session-control-contract';
 import {
   createAgentControllerComposition,
   isAgentLaunchConversationCreationCommand,
@@ -132,12 +142,12 @@ import {
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
-import { WorkspaceGenerationApplicationRuntime } from '@neko/generation/job';
+import { GenerationApplicationRuntime } from '@neko/generation/job';
 import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
 import {
   createContentReadMediaRequestAssetMaterializer,
   createMediaPlatform,
-  createNodeWorkspaceGenerationJobOwner,
+  createNodeGenerationJobOwner,
 } from '@neko/generation/media';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
@@ -177,9 +187,12 @@ import {
   resolveGlobalMediaLibraryTarget,
 } from '@neko/assets-node';
 import {
+  createAgentExtensionCandidateQualification,
   createAgentExtensionManager,
+  createAgentExtensionMutationOwnership,
   createAgentExtensionSupport,
   createOpenNekoExtensionRepository,
+  type AgentExtensionArtifactHostPort,
 } from '@neko/agent-runtime/extensions';
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
@@ -350,6 +363,14 @@ async function startDesktop(): Promise<void> {
       decrypt: (value) => safeStorage.decryptString(Buffer.from(value)),
     },
   });
+  const automationEndpointHost = createDesktopAutomationEndpointHost({ secrets });
+  const automationEndpoints = automationEndpointHost.management;
+  const automationHostPermission = createDesktopAutomationHostPermission({
+    platform: process.platform,
+    getScreenRecordingStatus: () => systemPreferences.getMediaAccessStatus('screen'),
+    isAccessibilityTrusted: (prompt) => systemPreferences.isTrustedAccessibilityClient(prompt),
+    openExternal: async (uri) => shell.openExternal(uri),
+  });
   const host = createElectronNekoHostPorts({
     homedir,
     nekoHome: globalStorage.root,
@@ -415,11 +436,23 @@ async function startDesktop(): Promise<void> {
     }),
   });
   const retainedProjects = await workspaceRegistry.listProjects([assistantSpaceId]);
+  const workspaceBoardMutationCoordinator: {
+    coordinate?: <TResult>(
+      workspaceId: string,
+      operation: () => Promise<TResult>,
+    ) => Promise<TResult>;
+  } = {};
   const workspaceBoardDelivery = new DesktopWorkspaceBoardDelivery({
     applicationInstanceId,
     metadataStore: localMetadataStore,
     workspaceRegistry,
     host,
+    coordinateCanvasMutation: (workspaceId, operation) => {
+      if (!workspaceBoardMutationCoordinator.coordinate) {
+        throw new Error('Canvas Workspace Board mutation coordinator is not initialized.');
+      }
+      return workspaceBoardMutationCoordinator.coordinate(workspaceId, operation);
+    },
     createIdentity: randomUUID,
   });
   const boardRestoringWorkspaceRegistry: DesktopWorkspaceRegistry = {
@@ -445,7 +478,6 @@ async function startDesktop(): Promise<void> {
     stateRepository: shellStateRepository,
     workspaceRegistry: boardRestoringWorkspaceRegistry,
     workspaceGrantAuthority,
-    startupTarget: initialApplicationSettings.preferences.startupTarget,
     retainedProjects,
     startupStateDiagnostics: [
       ...stateRejections.map((rejection) => ({
@@ -468,22 +500,29 @@ async function startDesktop(): Promise<void> {
         : []),
     ],
   });
-  const generationRuntime = new WorkspaceGenerationApplicationRuntime({
-    createOwner: async ({ workspaceId, workspaceRoot }) => {
-      const configManager = workspaceConfigAuthority.getWorkspaceConfig({
-        workspaceId,
-        workspacePath: workspaceRoot,
-      });
+  const generationRuntime = new GenerationApplicationRuntime({
+    createOwner: async ({ owner, root }) => {
+      const configManager =
+        owner.kind === 'workspace'
+          ? workspaceConfigAuthority.getWorkspaceConfig({
+              workspaceId: owner.workspaceId,
+              workspacePath: root,
+            })
+          : workspaceConfigAuthority.getApplicationConfig();
       const media = createMediaPlatform({
         configManager,
+        providerResolver: createDesktopMediaExecutionProviderResolver({
+          config: configManager,
+          credentials: credentialRuntime.credentials,
+        }),
         requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
-          contentRead: createNodeHostContentReadService({ workspaceRoot }),
+          contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
           encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
         }),
       });
-      return createNodeWorkspaceGenerationJobOwner({
-        workspaceId,
-        workspaceRoot,
+      return createNodeGenerationJobOwner({
+        owner,
+        root,
         homedir,
         mediaExecution: media.service,
         promptExecution: new PromptGenerationService(
@@ -502,11 +541,7 @@ async function startDesktop(): Promise<void> {
     hostId: `electron:${applicationInstanceId}`,
     credentialRuntime,
     catalogReader: agentCatalogReader,
-    resolveWorkspaceGenerationJobs: (workspace) =>
-      generationRuntime.getWorkspaceJobs({
-        workspaceId: workspace.workspaceId,
-        workspaceRoot: workspace.workspacePath,
-      }),
+    resolveGenerationJobs: (binding) => generationRuntime.getJobs(binding),
     assistantSpaceIds: [assistantSpaceId],
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     createWorkspaceLogger: (workspace) => {
@@ -541,6 +576,40 @@ async function startDesktop(): Promise<void> {
     locator: { kind: 'relative' as const, value: 'assistant-spaces/local-user' },
   };
   const assistantAgentWorkspace = await agentComposition.attachWorkspace(assistantWorkspace);
+  const automationService = await createAutomationApplicationService({
+    profiles: [],
+    providers: [],
+    extensionRuntime: {
+      isEnabled: async () => {
+        throw new Error('Desktop Automation runtime is not composed.');
+      },
+    },
+    sessionGrants: {
+      consume: async () => {
+        throw new Error('Desktop Automation session grants are not composed.');
+      },
+    },
+    hostPermissions: automationHostPermission.runtime,
+    transientObservations: {
+      publish: async () => {
+        throw new Error('Desktop Automation observation projection is not composed.');
+      },
+    },
+  });
+  const automationTargetSelections = createAutomationTargetSelectionCoordinator();
+  const extensionArtifactHost: AgentExtensionArtifactHostPort = {
+    available: false,
+    platform: { os: process.platform, arch: process.arch },
+    stage: async () => {
+      throw new Error('Desktop remote extension artifact staging is not composed.');
+    },
+    commit: async () => {
+      throw new Error('Desktop remote extension artifact commit is not composed.');
+    },
+    discard: async () => {
+      throw new Error('Desktop remote extension artifact cleanup is not composed.');
+    },
+  };
   const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
       marketplaceRoot: path.join(
@@ -550,9 +619,15 @@ async function startDesktop(): Promise<void> {
       ),
       installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
       stateRoot: path.join(globalStorage.root, 'extensions', 'state'),
+      artifactHost: extensionArtifactHost,
+      candidateQualification: createAgentExtensionCandidateQualification(),
       trashItem: (absolutePath) => shell.trashItem(absolutePath),
     }),
     agentSupport: createAgentExtensionSupport(),
+    mutationOwnership: createAgentExtensionMutationOwnership({
+      listOwnedAgentTurns: (pluginId) => agentComposition.listActivePluginTurns(pluginId),
+      listOwnedAutomationSessions: (pluginId) => automationService.listOwnedSessions(pluginId),
+    }),
   });
   const initialExtensionSnapshot = await extensionManager.readCatalog();
   extensionManager.setRuntimeReadiness(
@@ -560,6 +635,24 @@ async function startDesktop(): Promise<void> {
     await agentComposition.reconcilePluginRuntime(initialExtensionSnapshot),
   );
   const windowsById = new Map<string, BrowserWindow>();
+  const disposeAutomationTargetSelectionEvents = automationTargetSelections.subscribe(() => {
+    for (const window of windowsById.values()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.changed, {
+          kind: 'changed',
+        });
+      }
+    }
+  });
+  const disposeAutomationSessionControlEvents = automationService.subscribeSessionControls(() => {
+    for (const window of windowsById.values()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.changed, {
+          kind: 'changed',
+        });
+      }
+    }
+  });
   const nativeThemeController = createDesktopNativeThemeController({
     nativeTheme,
     listWindows: () => windowsById.values(),
@@ -698,7 +791,11 @@ async function startDesktop(): Promise<void> {
   const canvasDocumentEntryAccess = createNodeDocumentLowLevelAccess();
   const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
     generation: {
-      getWorkspaceJobs: (input) => generationRuntime.getWorkspaceJobs(input),
+      getWorkspaceJobs: (input) =>
+        generationRuntime.getJobs({
+          owner: { kind: 'workspace', workspaceId: input.workspaceId },
+          root: input.workspaceRoot,
+        }),
       validateBinding: ({ workspace, binding }) => {
         const config = workspaceConfigAuthority.getWorkspaceConfig({
           workspaceId: workspace.workspaceId,
@@ -727,19 +824,25 @@ async function startDesktop(): Promise<void> {
     host,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
     materialActionLabels: {
-      preview: canvasUsesChineseLabels ? '预览' : 'Preview',
+      preview: canvasUsesChineseLabels ? '全屏预览' : 'Full-screen preview',
       reveal: canvasUsesChineseLabels ? '在访达中显示' : 'Reveal in Finder',
       openInCut: canvasUsesChineseLabels ? '打开剪辑' : 'Open Cut',
-      addToCut: canvasUsesChineseLabels ? '添加到剪辑' : 'Add to Cut',
-      copyToProjectMediaLibrary: canvasUsesChineseLabels
-        ? '复制到项目媒体库'
-        : 'Copy to project Media Library',
+      addToCut: canvasUsesChineseLabels ? '剪辑' : 'Edit',
+      separateAudio: canvasUsesChineseLabels ? '音频分离' : 'Separate audio',
+      copyToProjectMediaLibrary: canvasUsesChineseLabels ? '存为素材' : 'Save material',
       copyToGlobalMediaLibrary: canvasUsesChineseLabels
         ? '复制到全局媒体库'
         : 'Copy to global Media Library',
       regenerate: canvasUsesChineseLabels ? '重新生成' : 'Regenerate',
     },
     generation: canvasGenerationRuntime,
+    resolveGenerationModels: ({ workspace }) => {
+      const config = workspaceConfigAuthority.getWorkspaceConfig({
+        workspaceId: workspace.workspaceId,
+        workspacePath: workspace.workspacePath,
+      });
+      return projectDesktopCanvasGenerationModels(config);
+    },
     media: new DesktopCanvasMediaRuntime({
       resources: resourceRegistry,
     }),
@@ -907,6 +1010,19 @@ async function startDesktop(): Promise<void> {
         target: parseDesktopCutCanvasHandoffPayload(executionPayload),
       });
     },
+    separateAudioInCut: async ({ identity, target, executionPayload }) => {
+      const label =
+        target.locator.kind === 'workspace-file' || target.locator.kind === 'generated-output'
+          ? path.posix.basename(target.locator.path)
+          : target.nodeId;
+      await cutRuntime.addCanvasMaterialAndSeparateAudio({
+        identity,
+        nodeId: target.nodeId,
+        label,
+        locator: target.locator,
+        target: parseDesktopCutCanvasHandoffPayload(executionPayload),
+      });
+    },
     registerPreviewResource: async ({ identity, workspace, locator, mediaType }) => {
       const owner = {
         windowId: identity.windowId,
@@ -948,6 +1064,8 @@ async function startDesktop(): Promise<void> {
       );
     },
   });
+  workspaceBoardMutationCoordinator.coordinate = (workspaceId, operation) =>
+    canvasRuntime.coordinateWorkspaceBoardMutation(workspaceId, operation);
   const resourceBrowser = new ResourceBrowserNodeRuntime({
     globalAssetRoot: globalStorage.assets,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
@@ -1588,6 +1706,7 @@ async function startDesktop(): Promise<void> {
           context: request.context,
           locale: 'en',
           contextPayloads: request.contextPayloads,
+          ...(request.purposeModels === undefined ? {} : { purposeModels: request.purposeModels }),
           ...(request.input.kind === 'skill'
             ? {
                 skillName: request.input.skillName,
@@ -1740,6 +1859,10 @@ async function startDesktop(): Promise<void> {
     settings: applicationSettings,
     extensionManager,
     personalSkillManager,
+    automationEndpoints,
+    automationPermissions: automationHostPermission.management,
+    automationTargetSelections,
+    automationSessions: automationService,
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
     ...(agentAutomationLaunch
@@ -1829,7 +1952,7 @@ async function startDesktop(): Promise<void> {
         title: 'OpenNeko',
         ...(process.platform === 'darwin'
           ? {
-              hasShadow: false,
+              hasShadow: true,
               titleBarStyle: 'hiddenInset' as const,
               trafficLightPosition: { x: 18, y: 16 },
             }
@@ -2069,6 +2192,9 @@ async function startDesktop(): Promise<void> {
     await closeDesktopWindows(BrowserWindow.getAllWindows());
     nativeThemeController.dispose();
     disposeIpc();
+    disposeAutomationTargetSelectionEvents();
+    disposeAutomationSessionControlEvents();
+    automationTargetSelections.dispose();
     await appHost.dispose();
     await entityProjectionRuntime.dispose();
     await localMetadataStore.dispose();

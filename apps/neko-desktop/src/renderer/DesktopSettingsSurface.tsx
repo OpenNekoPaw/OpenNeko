@@ -136,22 +136,12 @@ export function DesktopSettingsMainSurface({
             description={t('settings.category.general.description')}
             title={t('settings.category.general')}
           >
-            <SettingsSelect
-              disabled={pending}
-              label={t('settings.startup.label')}
-              description={t('settings.startup.description')}
-              value={settings.projection.preferences.startupTarget}
-              options={[
-                { value: 'restore', label: t('settings.startup.restore') },
-                { value: 'home', label: t('settings.startup.home') },
-              ]}
-              onChange={(value) =>
-                update({
-                  ...settings.projection.preferences,
-                  startupTarget: value,
-                })
-              }
-            />
+            <div className="desktop-settings__row">
+              <span>
+                <strong>{t('settings.startup.label')}</strong>
+                <small>{t('settings.startup.description')}</small>
+              </span>
+            </div>
           </SettingsGroup>
         ) : null}
         {section === 'appearance' ? (

@@ -3,17 +3,30 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./rich-surface": "./src/browser/milkdown-rich-surface.tsx",
     "./testing": "./src/testing/index.ts"
   },
   "scripts": {
     "test": "vitest run",
     "test:run": "vitest --run"
   },
+  "peerDependencies": {
+    "react": ">=18"
+  },
   "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "jsdom": "^27.0.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later",
   "dependencies": {
+    "@milkdown/core": "7.22.0",
+    "@milkdown/preset-commonmark": "7.22.0",
+    "@milkdown/preset-gfm": "7.22.0",
+    "@milkdown/prose": "7.22.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "6.0.0",
     "remark-parse": "^11.0.0",

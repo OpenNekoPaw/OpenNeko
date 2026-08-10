@@ -705,6 +705,17 @@
       "userWorkflow": "Validate one installed or marketplace plugin package release."
     },
     {
+      "businessRequirement": "Extension Management must not report the currently installed package as its own update candidate.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-contracts",
+      "fieldScope": "Exact installed and reviewed update package release equality rejection only",
+      "id": "927df4d3c35f1d4a3a55",
+      "isolationRule": "The comparison validates one user-visible package relationship and cannot dispatch an OpenNeko contract, migration, component generation, provider, or alternate implementation.",
+      "path": "packages/agent/contracts/src/extension-management.ts",
+      "token": "version",
+      "userWorkflow": "Inspect a reviewed Extension update without accepting the installed release as its own candidate."
+    },
+    {
       "businessRequirement": "Extension installation verifies the exact marketplace package release selected by the user.",
       "category": "internal-version-field",
       "domainOwner": "@neko/agent-runtime",
@@ -714,6 +725,17 @@
       "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
       "token": "version",
       "userWorkflow": "Install the exact plugin package release selected from the marketplace."
+    },
+    {
+      "businessRequirement": "Extension update discovery verifies the exact reviewed candidate package release before projecting it to the user.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Reviewed update candidate release passed into one isolated repository entry only",
+      "id": "a81309296ab26caefeb1",
+      "isolationRule": "The value verifies candidate package metadata without registering candidate Tools or selecting an internal schema, migration, provider, or fallback implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version",
+      "userWorkflow": "Inspect the exact reviewed Extension package release offered as an update."
     },
     {
       "businessRequirement": "A repository plugin entry identifies the immutable package release selected by the user.",
@@ -780,6 +802,17 @@
       "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
       "token": "version",
       "userWorkflow": "Validate the package release of a marketplace plugin entry before offering installation."
+    },
+    {
+      "businessRequirement": "A reviewed Extension update relation must not list the candidate package release as a release it replaces.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Strict marketplace candidate and updatesFrom package release equality rejection only",
+      "id": "1c827fe9ba8a26ffc0b4",
+      "isolationRule": "The comparison rejects one invalid package relationship and cannot select an OpenNeko contract, migration, component generation, provider, or alternate implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version",
+      "userWorkflow": "Inspect an exact reviewed Extension update without offering a no-op replacement."
     },
     {
       "businessRequirement": "The marketplace parser preserves the release field name in the canonical plugin package record.",
@@ -1775,8 +1808,8 @@
       "businessRequirement": "An installed Extension package retains the exact user-selected immutable package release.",
       "category": "internal-version-field",
       "domainOwner": "@neko/agent-runtime",
-      "fieldScope": "Installed computer-use Extension package manifest release fixture",
-      "id": "0e9b91eca3ee850a2bb5",
+      "fieldScope": "Installed computer-use Extension package manifest release fixture used for explicit update-state projection",
+      "id": "bba394b247b6f8d45e99",
       "isolationRule": "The release identifies one Extension package only and cannot select an OpenNeko contract, migration, component generation, provider, or alternate implementation; invalid metadata rejects only that package.",
       "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
       "token": "version",
@@ -1797,8 +1830,8 @@
       "businessRequirement": "The marketplace index binds an Extension package entry to the exact publisher-managed release.",
       "category": "internal-version-field",
       "domainOwner": "@neko/agent-runtime",
-      "fieldScope": "LaTeX marketplace package release fixture",
-      "id": "ebf14f1da43868fab5e8",
+      "fieldScope": "Reviewed computer-use update candidate marketplace package release fixture",
+      "id": "76050d9f9309112146ef",
       "isolationRule": "The release validates one marketplace package against its manifest and cannot select an OpenNeko schema, migration, component generation, or fallback path.",
       "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
       "token": "version",
@@ -2617,6 +2650,171 @@
       "path": "packages/agent/webview/src/extension-management/root.test.tsx",
       "token": "version",
       "userWorkflow": "Inspect the exact Browser Use Extension release and its unavailable status in Extensions."
+    },
+    {
+      "businessRequirement": "Extension update tests must build the exact immutable candidate package release selected by the user.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Atomic update candidate Extension manifest release fixture",
+      "id": "96465912226e5bddf9a6",
+      "isolationRule": "The release identifies one staged Extension package and cannot select an OpenNeko contract, migration, component generation, provider, or alternate implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Stage and atomically install the exact reviewed Extension update selected by the user."
+    },
+    {
+      "businessRequirement": "Extension update tests bind the candidate package to the exact reviewed marketplace release relation.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Atomic update candidate marketplace release fixture",
+      "id": "4ea7ff7752441f59764c",
+      "isolationRule": "The release validates one updatesFrom relation only and cannot dispatch an internal schema, migration, provider, or fallback path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Select the exact reviewed Extension update that replaces the installed package release."
+    },
+    {
+      "businessRequirement": "Extension update tests assert the exact immutable package release projected after atomic commit.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Atomic update catalog result package release assertion",
+      "id": "1b57e2a4adde32a32aba",
+      "isolationRule": "The value is user-visible package identity only and cannot select a contract, migration, component generation, provider, or alternate implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Inspect the exact Extension package release installed by an accepted update."
+    },
+    {
+      "businessRequirement": "Extension rollback tests retain the exact installed package release when commit ownership is lost.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Update rollback installed Extension manifest release fixture",
+      "id": "fe3147ec2ddd7ef12bc6",
+      "isolationRule": "The release identifies one authoritative installed package and cannot select an internal schema, migration, provider, or fallback implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Retain the exact installed Extension release after a failed update."
+    },
+    {
+      "businessRequirement": "Extension rollback tests stage the exact reviewed candidate package without changing the installed authority.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Update rollback candidate Extension manifest release fixture",
+      "id": "6f5bce737c5b0e1238fb",
+      "isolationRule": "The release identifies one isolated staged package and cannot dispatch an internal schema, migration, provider, or alternate success path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Validate an exact reviewed Extension update before commit while preserving the installed release."
+    },
+    {
+      "businessRequirement": "Extension rollback tests bind the staged candidate to the exact reviewed marketplace release relation.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Update rollback marketplace candidate release fixture",
+      "id": "f9ed10e0d2d6b8484898",
+      "isolationRule": "The release validates one candidate relationship and cannot select an OpenNeko contract, migration, provider, or fallback path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Attempt the exact reviewed Extension update and recover the installed release on failure."
+    },
+    {
+      "businessRequirement": "Installed artifact authority tests preserve the exact Browser Use package release independently from its enable grant.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Installed Browser Use artifact-authority manifest release fixture",
+      "id": "74eb6c81b35b91fe71fd",
+      "isolationRule": "The release identifies one installed package only and cannot select an internal schema, migration, component generation, provider, or alternate path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Inspect the exact installed Browser Use release while managing its enable grant separately."
+    },
+    {
+      "businessRequirement": "An installed App-only Extension retains its exact package release for user inspection and removal.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Installed App-only Extension manifest release fixture after artifact lifecycle coverage",
+      "id": "60f3883bff46395c1f26",
+      "isolationRule": "The release identifies one unsupported package only and cannot enable a contract, migration, component generation, provider, or fallback runtime.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Inspect or remove the exact installed App-only Extension release."
+    },
+    {
+      "businessRequirement": "An installed application Extension retains the exact package release selected by the user.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Installed application Extension manifest release fixture after artifact lifecycle coverage",
+      "id": "4a30ff44099c8d783c6a",
+      "isolationRule": "The release identifies one installed package and never selects contracts, migrations, component generations, providers, or fallback paths.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Inspect or remove the exact installed application Extension release."
+    },
+    {
+      "businessRequirement": "An available Skill Extension retains the exact publisher-managed package release offered to the user.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Available Skill Extension manifest release fixture after artifact lifecycle coverage",
+      "id": "f3b2eb425b3049e9b5db",
+      "isolationRule": "The release identifies one package and cannot select an internal contract, migration, component state, provider, or alternate implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Browse or install the exact Skill Extension package release."
+    },
+    {
+      "businessRequirement": "An available unsupported Extension retains the exact publisher-managed package release while remaining isolated.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Available unsupported Extension manifest release fixture after artifact lifecycle coverage",
+      "id": "c25d899417bb5c819a71",
+      "isolationRule": "The release identifies one unsupported package only and cannot enable contracts, migrations, component generations, providers, or fallback paths.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Keep an unsupported Extension release isolated while browsing supported packages."
+    },
+    {
+      "businessRequirement": "Artifact cancellation tests must retain the exact publisher-managed Extension release selected for installation.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Cancelled artifact operation Extension manifest release fixture",
+      "id": "5013cc1fd58dc907795e",
+      "isolationRule": "The release identifies one cancellable Extension package only and cannot select an OpenNeko contract, migration, component generation, provider, or alternate implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Install and cancel the exact Extension package release selected by the user."
+    },
+    {
+      "businessRequirement": "Artifact cancellation tests bind the marketplace entry to the exact package release selected for installation.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Cancelled artifact operation marketplace package release fixture",
+      "id": "a95ff92958d2eeac3917",
+      "isolationRule": "The release validates one marketplace package only and cannot dispatch an OpenNeko contract, migration, component generation, provider, or fallback path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Select and cancel installation of the exact marketplace Extension release."
+    },
+    {
+      "businessRequirement": "Repository restart cleanup tests preserve the exact installed sibling Extension release while removing only stale staging.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Repository restart sibling Extension manifest release fixture",
+      "id": "3f40edb8e55b639abb15",
+      "isolationRule": "The release identifies one installed sibling package only and cannot select an internal contract, migration, component generation, provider, cleanup target, or alternate path.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version",
+      "userWorkflow": "Recover the Extension repository after restart without changing installed package releases."
+    },
+    {
+      "businessRequirement": "Extension update staging must verify the exact reviewed candidate package release before atomic replacement.",
+      "category": "internal-version-field",
+      "domainOwner": "@neko/agent-runtime",
+      "fieldScope": "Reviewed update candidate release passed into the isolated staged repository entry",
+      "id": "830ba43dbc34a7a59b68",
+      "isolationRule": "The release validates one staged candidate package without registering Tools or selecting an internal schema, migration, provider, or fallback implementation.",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version",
+      "userWorkflow": "Validate the exact reviewed Extension update before replacing the installed runtime."
     }
   ]
 }

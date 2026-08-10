@@ -20,7 +20,6 @@ describe('Desktop application settings state codec', () => {
       preferences: {
         theme: 'light',
         locale: 'system',
-        startupTarget: 'restore',
         resourceBrowserView: 'list',
       },
       opaqueSourceMarker: { source: 'settings-fixture' },
@@ -28,7 +27,7 @@ describe('Desktop application settings state codec', () => {
 
     const parsed = parseDesktopApplicationSettingsStoredState(state);
 
-    expect(parsed).toMatchObject({ preferences: { startupTarget: 'restore' } });
+    expect(parsed).toMatchObject({ preferences: { theme: 'light' } });
     expect(readDesktopApplicationSettingsStateDiagnostics(parsed)).toEqual([
       {
         code: 'desktop-stored-state-metadata-retained',
@@ -47,6 +46,14 @@ describe('Desktop application settings state codec', () => {
         preferences: {
           ...DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
           theme: 'unknown-theme',
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseDesktopApplicationSettingsStoredState({
+        preferences: {
+          ...DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
+          startupTarget: 'restore',
         },
       }),
     ).toThrow();

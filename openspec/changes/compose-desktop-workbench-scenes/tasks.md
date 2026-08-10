@@ -149,3 +149,31 @@ preserve or a legacy path to keep after the replacement is complete.
 - [x] 12.20 Revalidate exact Save As authority before writing, atomically rebind preload Cut listener/cursor identity from the authoritative runtime sequence, and add stale-renderer/View plus post-save event regressions.
 - [x] 12.21 Track overlapping Cut representation requests by exact request/key ownership, merge valid out-of-order results, release failed/completed keys for bounded retry, preserve typed media diagnostics, and add controller/bridge regressions.
 - [x] 12.22 Keep the memoized Cut Webview bridge active across React StrictMode effect replay, dispose it only after final Surface unmount, and rerun the isolated Cut Electron scenario.
+
+## 13. Canonical Startup Entry
+
+- [x] 13.1 Update proposal/design/spec so Window claim always creates a fresh unbound Entry while renderer reload preserves the current Scene; remove restore-last as a supported startup path and record Application Settings local reset semantics.
+- [x] 13.2 Add red Host/SQLite/Settings/renderer tests, implement fresh Entry Window claim, and remove `startupTarget` from the canonical settings contract, Desktop wiring, settings UI and fixtures in one pass.
+- [x] 13.3 Run focused Host/Desktop tests, typecheck, strict OpenSpec and quality gates, then validate persisted Workspace cold startup and same-process renderer reload in real Electron with direct visual evidence.
+
+## 14. Renderer Reload Surface Identity Handoff
+
+- [x] 14.1 Add the renderer-loading identity handoff constraints to proposal/design/spec and a failing Desktop regression proving the outgoing Workspace Roots unmount before stale package snapshots are requested.
+- [x] 14.2 Implement one lifecycle-driven Shell presentation fence: invalidate pending snapshot/sequence state on `renderer-loading`, restore from one authoritative snapshot on same-document `renderer-ready`, and retain strict stale rejection without retry or active-Workspace fallback.
+- [ ] 14.3 Run focused renderer, Resource Browser owner-identity and Desktop lifecycle tests plus typecheck, application boundaries, diff checks and strict OpenSpec validation.
+- [ ] 14.4 Use the authoritative development Electron runtime to reload a Workspace containing Canvas, Resource Browser and Cut; verify the new exact identities load, sibling failures remain local and no stale Resource Browser handler error persists as a stuck panel, then apply UI and quality review evidence.
+
+## 15. Canvas Generation Job Persistence Recovery
+
+- [x] 15.1 Trace the exact Canvas submit path and record the failure boundary: the local database contains an empty retired `generation_jobs` shape with required `revision` and `snapshot_version` columns, while the canonical writer correctly omits internal version fields.
+- [x] 15.2 Add persistence regressions for empty non-canonical table reset and populated non-canonical table preservation; implement package-owned canonical schema validation/reset without migration, compatibility writer or fallback store, and project an actionable Generation persistence diagnostic.
+- [ ] 15.3 Run focused Generation/Canvas/Desktop tests, typecheck, application boundaries, diff checks and strict OpenSpec validation; then trigger one real Canvas image submission far enough to prove durable Job creation and provider invocation, without automatically retrying or duplicating a charged request.
+
+## 16. Extensions Management And Configuration Panels
+
+- [x] 16.1 Add Agent Webview regressions for package-owned Skill/extension selection, isolated configuration content, grid/list switching, empty results and presentation reconstruction after unmount.
+- [x] 16.2 Compose Extensions management and configuration as independent Workbench Main/Secondary Main shells with the shared equal split and bounded resize behavior; keep Desktop limited to Root placement, typed adapters and extension-only Automation configuration slots.
+- [x] 16.3 Refine the catalog and configuration presentation for list/grid, selected, operation, unavailable and compact states; add Chinese and English UI copy without exposing extension-only configuration on Skill pages.
+- [x] 16.4 Run focused Agent Webview/Host/Desktop tests, typechecks, application-boundary and strict OpenSpec checks; validate Skill/extension, list/grid, selection, resize and compact states in the authoritative visible Electron runtime and apply UI/quality review.
+- [x] 16.5 Remove implicit Skill/extension selection, keep Extensions management full-width while no valid item is selected, and mount/unmount Secondary Main from the package-owned exact selection without persisting selection in Host or Desktop.
+- [x] 16.6 Make selected Extensions management/configuration panels edge-to-edge with an overlaid resize handle and no blank margin/gap; add focused Webview/Desktop regressions and visible Electron evidence for the unselected-to-selected cycle.

@@ -1,3 +1,4 @@
+import { CANVAS_NODE_DEFAULT_SIZES } from '@neko/canvas-domain';
 import type { NodeTypeDescriptorRegistry } from './nodeTypeDescriptor';
 
 export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
@@ -8,7 +9,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'M',
       tagLabel: 'MD',
       tagColor: '#0891b2',
-      defaultSize: { width: 320, height: 220 },
+      defaultSize: CANVAS_NODE_DEFAULT_SIZES.markdown,
       presentation: 'foundational',
       fullscreenPresentation: 'text-document',
     },
@@ -18,7 +19,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'Media',
       tagLabel: 'MEDIA',
       tagColor: '#2563eb',
-      defaultSize: { width: 300, height: 220 },
+      defaultSize: CANVAS_NODE_DEFAULT_SIZES.media,
       presentation: 'foundational',
       fullscreenPresentation: (node) =>
         node.type === 'media' && node.data.mediaType === 'image' ? 'image-viewer' : 'visual-stage',
@@ -29,7 +30,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'Group',
       tagLabel: 'GROUP',
       tagColor: '#64748b',
-      defaultSize: { width: 420, height: 300 },
+      defaultSize: CANVAS_NODE_DEFAULT_SIZES.group,
       presentation: 'spatial-container',
     },
     job: {
@@ -38,7 +39,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'Job',
       tagLabel: 'JOB',
       tagColor: '#7c3aed',
-      defaultSize: { width: 320, height: 190 },
+      defaultSize: CANVAS_NODE_DEFAULT_SIZES.job,
       presentation: 'foundational',
     },
     file: {
@@ -47,7 +48,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'File',
       tagLabel: 'FILE',
       tagColor: '#475569',
-      defaultSize: { width: 280, height: 180 },
+      defaultSize: CANVAS_NODE_DEFAULT_SIZES.file,
       presentation: 'foundational',
     },
     'canvas-embed': {
@@ -56,7 +57,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'Canvas',
       tagLabel: 'CANVAS',
       tagColor: '#0f766e',
-      defaultSize: { width: 280, height: 200 },
+      defaultSize: CANVAS_NODE_DEFAULT_SIZES['canvas-embed'],
       presentation: 'foundational',
     },
     generation: {
@@ -65,7 +66,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       icon: 'AI',
       tagLabel: 'GEN',
       tagColor: '#0f766e',
-      defaultSize: { width: 300, height: 220 },
+      defaultSize: CANVAS_NODE_DEFAULT_SIZES.generation,
       presentation: 'foundational',
     },
   };

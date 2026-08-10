@@ -61,6 +61,7 @@ describe('conversation projection presenter', () => {
     expect(result.messages[0]).toMatchObject({
       content: 'exact final content',
       isStreaming: false,
+      turnTiming: { startedAt: 1, completedAt: 2 },
     });
     expect(result).toMatchObject({ isThinking: false, streamingMessageId: null });
   });

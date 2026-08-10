@@ -8,6 +8,7 @@ export const BROWSER_USE_OBSERVE_PROFILE: AutomationProfile = Object.freeze({
     providerId: 'browser-use',
     kind: 'browser',
     upstreamRelease: '0.13.7',
+    deliverySource: Object.freeze({ kind: 'github-release' as const }),
   }),
   operations: Object.freeze([
     reviewedObserveOperation(

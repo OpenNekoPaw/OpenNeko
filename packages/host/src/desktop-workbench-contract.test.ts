@@ -255,6 +255,32 @@ describe('Desktop Workbench contract', () => {
     });
   });
 
+  it('accepts empty Main only while an exact Cut Panel is docked', () => {
+    const initial = createDefaultDesktopWorkbenchLayout('window-1');
+    expect(() => setWorkbenchDisplayMode(initial, 'empty-main')).toThrow(
+      "display mode 'empty-main' requires a docked Cut Panel",
+    );
+
+    const withCut = openOrFocusCutView(initial, viewRef('cut-1', 'cut'));
+    const cutOnly = setWorkbenchDisplayMode(withCut, 'empty-main');
+    expect(cutOnly.display.mode).toBe('empty-main');
+    expect(cutOnly.cutPanel?.presentation).toBe('docked');
+    const withoutFinalCut = closeCutView(cutOnly, 'cut-1');
+    expect(withoutFinalCut.display.mode).toBe('chat-only');
+    expect(withoutFinalCut.cutPanel).toBeUndefined();
+
+    const hiddenCut = setCutPanelPresentation(withCut, 'hidden');
+    expect(() => setWorkbenchDisplayMode(hiddenCut, 'empty-main')).toThrow(
+      "display mode 'empty-main' requires a docked Cut Panel",
+    );
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...hiddenCut,
+        display: { ...hiddenCut.display, mode: 'empty-main' },
+      }),
+    ).toThrow("display mode 'empty-main' requires a docked Cut Panel");
+  });
+
   it('rejects unknown renderer/path fields', () => {
     expect(() =>
       parseDesktopWorkbenchLayout({

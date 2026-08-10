@@ -38,6 +38,22 @@ canonical JSON，再计算 SHA-256。该发布没有为这些 Tool 声明 MCP an
 Desktop adapter 因此必须把 cwd 固定到新建 session directory，并在启动前写入 `llm: {}` 的精确 config；
 仅清空继承环境不足以证明没有 runtime-adjacent `.env` 或默认 LLM 配置参与。
 
+Target/domain 审计还发现两个发布阻塞：
+
+- [direct MCP dispatcher](https://github.com/browser-use/browser-use/blob/0.13.7/browser_use/mcp/server.py) 在第一次
+  `browser_*` 调用时新建隔离 `BrowserSession`，没有把 OpenNeko 授权的 exact
+  origin/tab 作为启动输入；当前 contained client factory 因而只能证明进程、环境和 profile 隔离，不能证明
+  返回内容属于授权页面。用未审核的 `browser_navigate` 在 adapter 内隐式打开 origin 会形成隐藏成功路径，禁止采用。
+- [`SecurityWatchdog`](https://github.com/browser-use/browser-use/blob/0.13.7/browser_use/browser/watchdogs/security_watchdog.py)
+  会在 `NavigateToUrlEvent` 前拒绝显式越域导航，但 redirect 只在
+  `NavigationCompleteEvent` 后检测并跳转到 `about:blank`，新 tab 也在 `TabCreatedEvent` 后关闭；这不满足
+  “越域内容进入页面前阻断”的资格要求。`browse-read` 与 `interact` 必须保持 unavailable，直到固定上游
+  release 提供可验证的 pre-commit redirect/new-tab policy；不得用事后跳空页或关闭 tab 作为通过证据。
+
+因此当前五个 observe Tool 只是精确 reviewed policy，不是可用性声明。真实 `observe` 仍需一个不调用隐藏
+navigation Tool 的 exact page/session binding，并通过 packaged local fixture 证明 state/HTML/screenshot 均来自
+授权 target。
+
 ## Cua Driver
 
 - 仓库：[`trycua/cua`](https://github.com/trycua/cua)
@@ -69,6 +85,15 @@ artifact 同样只记录供应链事实；在 packaged Windows OpenNeko、标准
 `pid`、`window_id` 和 `session`，模型参数不得声明这些 routing fields。该记录只证明 schema 审核，
 不证明 macOS TCC、target-only capture 或 packaged qualification 已完成。
 
+固定 commit 的 macOS platform registry 还注册了只读 `list_apps` 与 `list_windows`，它们不在上述 portable
+`contract/manifest.json` 子集中，因此目标选择 adapter 以同一固定 source tree 的
+`platform-macos/src/tools/list_apps.rs`、`list_windows.rs` 为事实来源分别锁定 schema digest：
+`sha256:99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa` 与
+`sha256:17649c06ad39be8e10d8148ebb47f6e90d0f0bae57675b1e57cb508d581ce0ed`。后者返回 exact
+`window_id`、PID、bounds、`is_on_screen` 与 `on_current_space`；OpenNeko 只接受当前 Space、可见且正尺寸的
+窗口。该 metadata 枚举只服务显式 target selection/revalidation，不进入 Agent reviewed operation allowlist，
+也不构成 screenshot 或 input 资格证据。
+
 ## Official MCP SDK
 
 - npm package：`@modelcontextprotocol/sdk@1.30.0`
@@ -81,7 +106,25 @@ artifact 同样只记录供应链事实；在 packaged Windows OpenNeko、标准
 ## Qualification blockers
 
 - Browser Use Python/Chromium 自包含 artifact、可复现 build recipe、完整 dependency lock 和 SBOM 未完成。
-- Browser Use/Cua Driver 的生产 transitive license inventory 尚未生成和审查。
-- 两个 artifact 的 OpenNeko catalog signature/provenance、archive poison tests 和 packaged qualification 未完成。
+- Browser Use 的生产 transitive license inventory 尚未生成；Cua Driver 已生成精确锁定的 367-package SPDX
+  候选，但尚未完成人工 license expression/text 审查。
+- Cua Node runtime 已有 OpenNeko-owned exact source/36-package Cargo lock/Rust `1.97.1`/双架构 `--locked`
+  rebuild recipe；隔离的 official rustup `1.29.0` 已安装并校验 Rust
+  `1.97.1 (8bab26f4f 2026-07-14)` 与两个 macOS target。正式 recipe 的两个 independent build 已产生相同
+  1,569,136-byte universal binary 与 receipt，SHA-256 为
+  `c4e5b70fddbf6ffdd6477a90ea4da5fa3881d99796d9ded9f5faaf3e1039725a`；receipt 记录隔离 HOME 与
+  `/openneko/cargo-home` canonical remap。
+- `darwin-arm64` 上游三个 main root package 的 locked target closure 与 first-party Node runtime Darwin closure 合并后
+  在排除只由 Cargo `dev` edge 引入的 `cua-driver-testkit@0.19.2` 后，是 367 个唯一 `name@release` identity；
+  locale-independent canonical array SHA-256 为 `aaaa49126e1de4500915ddccb371a7688d11d283b57ef114ddba0e4c2b9bad93`。
+  Candidate SPDX 必须精确覆盖该 production-only 集合；
+  identity closure 通过不代表 license expression 或文本已完成人工审核。
+- 两次真实离线 metadata 运行生成逐字节一致的 SPDX candidate：476,482 bytes，SHA-256
+  `08756f9c17062202d0efeb8b149aece1a105486cbcb13ea80f9f1816d6725a51`，`reviewed=false`。两次真实 assembly
+  生成逐字节一致的 contained candidate：63,911,219 bytes，SHA-256
+  `9e3bae3b3358fe0d9ea44007916610e3c5b997360a2146a32349135df2ab63f6`，`catalogReady=false`。
+- OpenNeko artifact Host 已实现 catalog-bound Ed25519 signature、streaming size/digest、contained provenance、
+  license inventory digest 与 tar.gz/ZIP poison validation；真实 Browser Use/Cua Driver 发布 artifact 的签名、
+  已有未复核 provenance/license candidate；真实发布签名、人工许可复核和 packaged qualification 仍未完成。
 - Cua Driver macOS signing/notarization、TCC、target-only capture 实机证据未完成。
 - Windows 只记录 artifact，不声明产品支持；Browser Use 其他 OS/arch 也未资格化。

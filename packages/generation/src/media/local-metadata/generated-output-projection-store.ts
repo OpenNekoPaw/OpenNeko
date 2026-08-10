@@ -11,6 +11,7 @@ import type {
 } from '@neko/local-metadata/resource-cache';
 import { PathResolver } from '@neko/shared/path';
 import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/local-metadata/node';
+import type { GenerationOwner } from '@neko/generation/job';
 
 export interface GeneratedOutputProjectionStore {
   load(): Promise<readonly GeneratedAsset[]>;
@@ -45,7 +46,8 @@ interface GeneratedOutputProjectionPayload {
 
 export interface LocalMetadataGeneratedOutputProjectionStoreOptions {
   readonly manifestStore: ResourceCacheManifestStore;
-  readonly workspaceRoot: string;
+  readonly owner: GenerationOwner;
+  readonly ownerRoot: string;
   readonly pathResolver: PathResolver;
   readonly now?: () => string;
   readonly rejectedProjectionPolicy?: PreserveAndReportGeneratedOutputProjectionRejectionPolicy;
@@ -55,14 +57,18 @@ const GENERATED_OUTPUT_INDEX_PROVIDER = 'generated-output-index';
 const GENERATED_OUTPUT_PROJECTION_FIELD = 'generatedOutputProjection';
 
 /**
- * Host-only adapter preserving the existing generated-output projection ledger while keeping
- * ResourceCache contracts out of product packages. Generated files remain durable workspace data.
+ * Host-only adapter preserving the generated-output projection ledger while keeping ResourceCache
+ * contracts out of product packages. Generated files remain durable data of the exact owner.
  */
 export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOutputProjectionStore {
   private readonly now: () => string;
+  private readonly projectionProvider: string;
+  private readonly rootVariable: 'WORKSPACE' | 'ASSISTANT_SPACE';
 
   constructor(private readonly options: LocalMetadataGeneratedOutputProjectionStoreOptions) {
     this.now = options.now ?? (() => new Date().toISOString());
+    this.projectionProvider = resolveProjectionProvider(options.owner);
+    this.rootVariable = options.owner.kind === 'workspace' ? 'WORKSPACE' : 'ASSISTANT_SPACE';
   }
 
   async load(): Promise<readonly GeneratedAsset[]> {
@@ -107,7 +113,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
 
   private encodeEntry(asset: GeneratedAsset): ResourceCacheEntry {
     const pathKey = this.toPortablePathKey(asset.path);
-    assertLifecycleMatchesProjectionPath(asset, pathKey);
+    assertLifecycleMatchesProjectionPath(asset, pathKey, this.rootVariable);
     const projection: GeneratedOutputProjectionPayload = {
       asset: stripGeneratedAssetPath(asset),
       pathKey,
@@ -119,12 +125,13 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
           }
         : {}),
     };
-    const projectRelativePath = this.toProjectRelativePath(pathKey);
+    const projectRelativePath =
+      this.options.owner.kind === 'workspace' ? this.toProjectRelativePath(pathKey) : undefined;
     return {
       descriptor: {
-        id: `generated-output:${asset.id}`,
-        scope: 'project',
-        provider: GENERATED_OUTPUT_INDEX_PROVIDER,
+        id: resolveProjectionStorageId(this.options.owner, asset.id),
+        scope: this.options.owner.kind === 'workspace' ? 'project' : 'global',
+        provider: this.projectionProvider,
         kind: 'generated',
         source: {
           kind: 'generated-asset',
@@ -167,7 +174,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
 
   private decodeEntryStrict(entry: ResourceCacheEntry): GeneratedAsset | null {
     if (!this.isProjectionEntry(entry)) return null;
-    const projection = readGeneratedOutputProjection(entry);
+    const projection = readGeneratedOutputProjection(entry, this.projectionProvider);
     if (!projection) {
       throw createProjectionRejection(
         'invalid-generated-output-projection',
@@ -175,7 +182,12 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
         `Resource ${entry.descriptor.id} contains an invalid generated output projection.`,
       );
     }
-    assertLifecycleMatchesProjectionPath(projection.asset, projection.pathKey, entry.descriptor.id);
+    assertLifecycleMatchesProjectionPath(
+      projection.asset,
+      projection.pathKey,
+      this.rootVariable,
+      entry.descriptor.id,
+    );
     const assetPath = this.resolvePathKey(projection.pathKey, entry.descriptor.id);
     switch (projection.asset.type) {
       case 'generated-image':
@@ -228,8 +240,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
 
   private isProjectionEntry(entry: ResourceCacheEntry): boolean {
     return (
-      entry.descriptor.kind === 'generated' &&
-      entry.descriptor.provider === GENERATED_OUTPUT_INDEX_PROVIDER
+      entry.descriptor.kind === 'generated' && entry.descriptor.provider === this.projectionProvider
     );
   }
 
@@ -255,9 +266,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
         resourceId,
       );
     }
-    return path.isAbsolute(resolved)
-      ? resolved
-      : path.resolve(this.options.workspaceRoot, resolved);
+    return path.isAbsolute(resolved) ? resolved : path.resolve(this.options.ownerRoot, resolved);
   }
 
   private toProjectRelativePath(pathKey: string): string | undefined {
@@ -286,7 +295,8 @@ export async function createNodeGeneratedOutputProjectionBinding(options: {
   return {
     store: new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: metadataBinding.manifestStore,
-      workspaceRoot: options.workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: metadataBinding.workspaceId },
+      ownerRoot: options.workspaceRoot,
       pathResolver,
       ...(options.now ? { now: options.now } : {}),
       ...(options.rejectedProjectionPolicy
@@ -299,12 +309,25 @@ export async function createNodeGeneratedOutputProjectionBinding(options: {
 
 function readGeneratedOutputProjection(
   entry: ResourceCacheEntry,
+  projectionProvider: string,
 ): GeneratedOutputProjectionPayload | undefined {
   const value =
-    entry.descriptor.provider === GENERATED_OUTPUT_INDEX_PROVIDER
+    entry.descriptor.provider === projectionProvider
       ? entry.providerMetadata?.[GENERATED_OUTPUT_PROJECTION_FIELD]
       : undefined;
   return isGeneratedOutputProjectionPayload(value) ? value : undefined;
+}
+
+function resolveProjectionProvider(owner: GenerationOwner): string {
+  return owner.kind === 'workspace'
+    ? GENERATED_OUTPUT_INDEX_PROVIDER
+    : `${GENERATED_OUTPUT_INDEX_PROVIDER}:assistant:${owner.assistantSpaceId}`;
+}
+
+function resolveProjectionStorageId(owner: GenerationOwner, assetId: string): string {
+  return owner.kind === 'workspace'
+    ? `generated-output:${assetId}`
+    : `generated-output:assistant:${owner.assistantSpaceId}:${assetId}`;
 }
 
 function isGeneratedOutputProjectionPayload(
@@ -397,15 +420,17 @@ function isPortablePathKey(value: unknown): value is string {
 function assertLifecycleMatchesProjectionPath(
   asset: PathlessGeneratedAsset | GeneratedAsset,
   pathKey: string,
+  rootVariable: 'WORKSPACE' | 'ASSISTANT_SPACE',
   resourceId?: string,
 ): void {
   if (!asset.lifecycle) return;
-  const workspacePrefix = '${WORKSPACE}/';
-  const contentPath = pathKey.startsWith(workspacePrefix)
-    ? pathKey.slice(workspacePrefix.length)
+  const ownerPrefix = `\${${rootVariable}}/`;
+  const contentPath = pathKey.startsWith(ownerPrefix)
+    ? pathKey.slice(ownerPrefix.length)
     : undefined;
   if (contentPath !== asset.lifecycle.contentLocator.path) {
-    const message = `Generated asset ${asset.id} lifecycle locator does not match its workspace projection path.`;
+    const ownerLabel = rootVariable === 'WORKSPACE' ? 'workspace' : 'Assistant Space';
+    const message = `Generated asset ${asset.id} lifecycle locator does not match its ${ownerLabel} projection path.`;
     if (resourceId) {
       throw createProjectionRejection('invalid-generated-output-projection', resourceId, message);
     }

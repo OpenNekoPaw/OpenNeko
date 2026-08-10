@@ -115,6 +115,9 @@ export function createAgentLaunchDraftSubmissionApplicationService(options: {
         references: draftInput.references,
         contextReferences,
         resourceGrantIds: draftInput.resourceGrantIds,
+        ...(draftInput.purposeModels === undefined
+          ? {}
+          : { purposeModels: draftInput.purposeModels }),
         configuration: {
           request: draftInput.configuration,
           projection: configurationProjection,

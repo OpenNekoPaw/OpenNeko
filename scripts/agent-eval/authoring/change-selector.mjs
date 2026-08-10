@@ -21,6 +21,15 @@ const RULES = Object.freeze([
     'scripts/agent-eval/',
     '.codex/skills/neko-agent-evaluation/',
   ]),
+  rule('capability-tool-routing', 'agent-runtime.external-automation', [
+    'packages/automation/',
+    'packages/agent/runtime/src/extensions/automation-capability-adapter',
+    'apps/neko-desktop/src/main/desktop-automation-',
+    'apps/neko-desktop/src/main/desktop-browser-use-',
+    'apps/neko-desktop/src/main/desktop-cua-driver-',
+    'apps/neko-desktop/src/renderer/desktop-automation-',
+    'apps/neko-desktop/src/shared/automation-target-selection-contract',
+  ]),
   rule('timeline-projection-authority', 'agent-runtime.stream-delivery', [
     'packages/agent/contracts/src/agent-turn-timeline.ts',
     'packages/agent/contracts/src/conversation-projection.ts',
@@ -161,11 +170,17 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/skills/src/builtins/') ||
     path.startsWith('packages/agent/runtime/src/') ||
     path.startsWith('packages/agent/contracts/src/') ||
+    path.startsWith('packages/automation/') ||
     path.startsWith('packages/ai/sdk/src/') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-agent') ||
+    path.startsWith('apps/neko-desktop/src/main/desktop-automation-') ||
+    path.startsWith('apps/neko-desktop/src/main/desktop-browser-use-') ||
+    path.startsWith('apps/neko-desktop/src/main/desktop-cua-driver-') ||
     path.startsWith('apps/neko-desktop/src/preload/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/renderer/DesktopAgent') ||
     path.startsWith('apps/neko-desktop/src/renderer/desktop-agent') ||
+    path.startsWith('apps/neko-desktop/src/renderer/desktop-automation-') ||
+    path.startsWith('apps/neko-desktop/src/shared/automation-target-selection-contract') ||
     path.startsWith('packages/agent/webview/src/') ||
     path.startsWith('packages/host/src/settings/') ||
     path === 'packages/content/src/document/read-document-tool.ts' ||

@@ -2,6 +2,7 @@
 
 import { act, StrictMode, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ControlledWorkbenchShell,
@@ -162,6 +163,7 @@ describe('editor workbench shell primitives', () => {
     expect(shell?.dataset['mainSplit']).toBe('columns');
     expect(shell?.dataset['mainComposition']).toBe('independent-shells');
     expect(shell?.dataset['bottomPanelVisible']).toBe('true');
+    expect(shell?.dataset['bottomPanelPresentation']).toBe('docked');
     expect(shell?.style.getPropertyValue('--neko-controlled-primary-width')).toBe('232px');
     expect(shell?.style.getPropertyValue('--neko-controlled-bottom-panel-height')).toBe('420px');
     expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('40%');
@@ -232,6 +234,101 @@ describe('editor workbench shell primitives', () => {
     expect(
       host.querySelector('.neko-controlled-workbench-dock--left[data-presentation="hidden"]'),
     ).not.toBeNull();
+  });
+
+  it('expands one retained bottom Panel without remounting it or exposing resize', () => {
+    const mounted = vi.fn();
+    const disposed = vi.fn();
+    const bottomPanel = <LifecycleProbe mounted={mounted} disposed={disposed} />;
+    const bottomPanelResize = {
+      label: 'Resize bottom panel',
+      onResizeEnd: vi.fn(),
+    };
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          main={<div data-testid="main" />}
+          bottomPanel={bottomPanel}
+          bottomPanelVisible
+          bottomPanelHeight={420}
+          bottomPanelResize={bottomPanelResize}
+        />,
+      );
+    });
+
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(disposed).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="Resize bottom panel"]')).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          main={<div data-testid="main" />}
+          bottomPanel={bottomPanel}
+          bottomPanelVisible
+          bottomPanelPresentation="expanded"
+          bottomPanelHeight={420}
+          bottomPanelResize={bottomPanelResize}
+        />,
+      );
+    });
+
+    const shell = host.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+    expect(shell?.dataset['bottomPanelPresentation']).toBe('expanded');
+    expect(shell?.style.getPropertyValue('--neko-controlled-bottom-panel-height')).toBe('420px');
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(disposed).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="Resize bottom panel"]')).toBeNull();
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          main={<div data-testid="main" />}
+          bottomPanel={bottomPanel}
+          bottomPanelVisible
+          bottomPanelHeight={420}
+          bottomPanelResize={bottomPanelResize}
+        />,
+      );
+    });
+
+    expect(
+      host.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]')?.dataset[
+        'bottomPanelPresentation'
+      ],
+    ).toBe('docked');
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(disposed).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="Resize bottom panel"]')).not.toBeNull();
+  });
+
+  it('rejects expanded bottom Panel presentation without visible content', () => {
+    expect(() => {
+      renderToStaticMarkup(
+        <ControlledWorkbenchShell
+          main={<div data-testid="main" />}
+          bottomPanel={<div data-testid="bottom-panel" />}
+          bottomPanelPresentation="expanded"
+          bottomPanelVisible={false}
+        />,
+      );
+    }).toThrow('Controlled Workbench expanded bottom Panel requires visible content.');
+  });
+
+  it('rejects expanded bottom Panel presentation with Interaction in Main', () => {
+    expect(() => {
+      renderToStaticMarkup(
+        <ControlledWorkbenchShell
+          interaction={<div data-testid="interaction" />}
+          interactionPresentation="main"
+          main={<div data-testid="main" />}
+          bottomPanel={<div data-testid="bottom-panel" />}
+          bottomPanelPresentation="expanded"
+          bottomPanelVisible
+        />,
+      );
+    }).toThrow('Controlled Workbench expanded bottom Panel cannot share Main with Interaction.');
   });
 
   it('updates a panel live and emits one final resize size', () => {

@@ -1579,6 +1579,426 @@
       "normativeSource": "https://github.com/trycua/cua/tree/20bb34b16ad7c6c56221c332e46b1875e9d8af8c/libs/cua-driver",
       "path": "apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.ts",
       "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream Cua Driver release tag",
+      "id": "02c31124368c2adf2f02",
+      "isolationRule": "The tag identifies one third-party Cua Driver release input; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream Cua Driver release-manifest URL",
+      "id": "17e5f59e81b084b8f9eb",
+      "isolationRule": "The URL downloads one exact third-party release manifest for supply-chain verification; it cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream macOS arm64 Cua Driver asset URL",
+      "id": "633b290421e3ed6821c7",
+      "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream macOS x64 Cua Driver asset URL",
+      "id": "603b5df05a260cc229d1",
+      "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream Linux arm64 Cua Driver asset URL",
+      "id": "dadb1303eeaaf603c5d5",
+      "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream Linux x64 Cua Driver asset URL",
+      "id": "8aa1f0674f775247cb8a",
+      "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream Windows arm64 Cua Driver asset URL",
+      "id": "79f224b51e64f6149545",
+      "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream Windows x64 Cua Driver asset URL",
+      "id": "c445653046327b1f0607",
+      "isolationRule": "The URL identifies exact third-party bytes for one platform input; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "-v0."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "SPDX specification",
+      "fieldScope": "Incomplete SPDX inventory poison fixture",
+      "id": "dea9661e00346912a5ea",
+      "isolationRule": "The field identifies the external SPDX document format in a release-tooling rejection fixture; it cannot select an OpenNeko contract, schema, migration, provider, or runtime path.",
+      "normativeSource": "https://spdx.github.io/spdx-spec/v2.3/",
+      "path": "scripts/test-orchestration/automation-runtime-artifact-builder.test.mjs",
+      "token": "spdxVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "OpenNeko extension package release",
+      "fieldScope": "Computer Use package manifest release fixture",
+      "id": "297c663b804681c23ddc",
+      "isolationRule": "The value is the user-visible Computer Use extension package release checked against the pinned Cua release; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/test-orchestration/automation-runtime-artifact-builder.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Cua Driver GitHub Release",
+      "fieldScope": "Pinned upstream Cua Driver URL in artifact builder fixture",
+      "id": "4738601b11fb48a455a7",
+      "isolationRule": "The URL identifies exact third-party bytes used by the release-tooling fixture; digest mismatch rejects the artifact and cannot dispatch an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "scripts/test-orchestration/automation-runtime-artifact-builder.test.mjs",
+      "token": "-v0."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "SPDX specification",
+      "fieldScope": "Reviewed SPDX license inventory fixture",
+      "id": "429fca63b726011e6c23",
+      "isolationRule": "The field identifies the external SPDX document format in deterministic release-tooling evidence; it cannot select an OpenNeko contract, schema, migration, provider, or runtime path.",
+      "normativeSource": "https://spdx.github.io/spdx-spec/v2.3/",
+      "path": "scripts/test-orchestration/automation-runtime-artifact-builder.test.mjs",
+      "token": "spdxVersion"
+    },
+    {
+      "category": "data-generation-alias",
+      "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
+      "fieldScope": "Contained provenance for the timestamp supplied to the pinned external Rust build",
+      "id": "9757fa86654845819273",
+      "isolationRule": "The value records one external compiler input in artifact provenance; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
+      "path": "scripts/automation-runtime-artifact-builder.mjs",
+      "token": "sourceDateEpoch"
+    },
+    {
+      "category": "data-generation-alias",
+      "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
+      "fieldScope": "Environment variable supplied to the pinned external Rust compiler",
+      "id": "dbef8870dcad02a133a2",
+      "isolationRule": "The variable controls external build timestamps only; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
+      "path": "scripts/automation-runtime-cua-node-rebuilder.mjs",
+      "token": "SOURCE_DATE_EPOCH"
+    },
+    {
+      "category": "data-generation-alias",
+      "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
+      "fieldScope": "First-party Node runtime receipt for the external Rust build timestamp",
+      "id": "b956b2dc9e546c247d0c",
+      "isolationRule": "The value preserves one external build input for provenance validation; it cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
+      "path": "scripts/automation-runtime-cua-node-rebuilder.mjs",
+      "token": "sourceDateEpoch"
+    },
+    {
+      "category": "data-generation-alias",
+      "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
+      "fieldScope": "Pinned external build timestamp in the Cua Node runtime input lock",
+      "id": "82c548b952f4c943c958",
+      "isolationRule": "The value is an immutable external compiler input and cannot identify or dispatch an OpenNeko contract, schema, migration, provider, or alternate runtime path.",
+      "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
+      "path": "scripts/automation-runtime-release-inputs.json",
+      "token": "sourceDateEpoch"
+    },
+    {
+      "category": "data-generation-alias",
+      "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
+      "fieldScope": "Artifact builder fixture for the pinned external Rust build timestamp",
+      "id": "092f89326a82a91d901b",
+      "isolationRule": "The fixture validates one external build input and cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
+      "path": "scripts/test-orchestration/automation-runtime-artifact-builder.test.mjs",
+      "token": "sourceDateEpoch"
+    },
+    {
+      "category": "data-generation-alias",
+      "externalOwner": "SOURCE_DATE_EPOCH reproducible-build convention",
+      "fieldScope": "Artifact receipt fixture for the pinned external Rust build timestamp",
+      "id": "b0bd987a2c9919fb870d",
+      "isolationRule": "The fixture validates contained external build provenance and cannot select an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://reproducible-builds.org/docs/source-date-epoch/",
+      "path": "scripts/test-orchestration/automation-runtime-artifact-builder.test.mjs",
+      "token": "sourceDateEpoch"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "uniffi-bindgen-react-native npm package",
+      "fieldScope": "Pinned third-party npm source package manifest fixture",
+      "id": "e0a39a65830383075b46",
+      "isolationRule": "The field is the external npm package release identity; mismatch rejects the source and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://www.npmjs.com/package/uniffi-bindgen-react-native/v/0.31.0-3",
+      "path": "scripts/test-orchestration/automation-runtime-cua-node-rebuilder.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "crates.io Registry Web API",
+      "fieldScope": "SPDX package download location for an exact locked Cargo crate",
+      "id": "d12724a6719ef615a02b",
+      "isolationRule": "The v1 path is owned by the external crates.io download API and is emitted only as SPDX provenance; it cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
+      "normativeSource": "https://doc.rust-lang.org/cargo/reference/registry-web-api.html",
+      "path": "scripts/automation-runtime-cua-spdx-builder.mjs",
+      "token": "/v1/"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "SPDX specification",
+      "fieldScope": "Generated SPDX 2.3 candidate document format",
+      "id": "15ba3e8dbedee598c18d",
+      "isolationRule": "The field identifies the external SPDX document format and cannot select an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
+      "normativeSource": "https://spdx.github.io/spdx-spec/v2.3/",
+      "path": "scripts/automation-runtime-cua-spdx-builder.mjs",
+      "token": "spdxVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "uniffi-bindgen-react-native npm package",
+      "fieldScope": "Pinned third-party npm source package manifest in the SPDX builder fixture",
+      "id": "0e602f11afd001c5df8c",
+      "isolationRule": "The field is the external npm package release identity; mismatch rejects the source and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
+      "normativeSource": "https://www.npmjs.com/package/uniffi-bindgen-react-native/v/0.31.0-3",
+      "path": "scripts/test-orchestration/automation-runtime-cua-spdx-builder.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cargo metadata format",
+      "fieldScope": "External Cargo package release parameter in the SPDX metadata fixture",
+      "id": "00c980ff7b12093ac40d",
+      "isolationRule": "The parameter models Cargo package release metadata used to verify the locked SPDX closure and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
+      "normativeSource": "https://doc.rust-lang.org/cargo/commands/cargo-metadata.html",
+      "path": "scripts/test-orchestration/automation-runtime-cua-spdx-builder.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cargo metadata format",
+      "fieldScope": "External workspace Cargo package release field in the SPDX metadata fixture",
+      "id": "c81ba57dc66ae5108f6f",
+      "isolationRule": "The field models Cargo package release metadata used to verify the locked SPDX closure and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
+      "normativeSource": "https://doc.rust-lang.org/cargo/commands/cargo-metadata.html",
+      "path": "scripts/test-orchestration/automation-runtime-cua-spdx-builder.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cargo metadata format",
+      "fieldScope": "External registry Cargo package release field in the SPDX metadata fixture",
+      "id": "323594efc75f8f66a5fe",
+      "isolationRule": "The field models Cargo package release metadata used to verify the locked SPDX closure and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
+      "normativeSource": "https://doc.rust-lang.org/cargo/commands/cargo-metadata.html",
+      "path": "scripts/test-orchestration/automation-runtime-cua-spdx-builder.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cargo lockfile format",
+      "fieldScope": "External Cargo package release value used to construct the SPDX lock fixture",
+      "id": "4482c0603ae5d5dcab1a",
+      "isolationRule": "The value models Cargo lockfile package release metadata used to verify exact dependency provenance and cannot dispatch an OpenNeko contract, schema, migration, provider fallback, or runtime path.",
+      "normativeSource": "https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html",
+      "path": "scripts/test-orchestration/automation-runtime-cua-spdx-builder.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Browser Use extension package release",
+      "fieldScope": "Official-download marketplace package manifest fixture",
+      "id": "00adaec1494218543cc0",
+      "isolationRule": "The value is the user-visible Browser Use package release used to test one exact managed delivery source; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Browser Use extension package release",
+      "fieldScope": "GitHub-release marketplace package manifest rejection fixture",
+      "id": "4f6f56b709f81db288ed",
+      "isolationRule": "The value is the user-visible Browser Use package release used to prove a mismatched managed source is rejected; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Browser Use extension package release",
+      "fieldScope": "Installed Browser Use package manifest fixture",
+      "id": "8387a4f14a143f581834",
+      "isolationRule": "The value preserves the exact external Browser Use package release in an installed-artifact authority test and cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Browser Use extension package release",
+      "fieldScope": "Restart recovery fixture for the exact installed Browser Use package release",
+      "id": "b95bcbccc93bc5280d55",
+      "isolationRule": "The value preserves the external Browser Use package release while testing durable artifact and enable-grant recovery; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "OpenNeko extension package manifest",
+      "fieldScope": "Installed package integrity fixture for an external extension release",
+      "id": "83570ccbb6691d346ac2",
+      "isolationRule": "The value identifies the external extension package whose installed tree is checked after restart; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "OpenNeko extension package manifest",
+      "fieldScope": "Deterministic package-tree digest fixture for an external extension release",
+      "id": "9869d6560ec303d70ee6",
+      "isolationRule": "The value is external package manifest metadata included in the inspected package tree; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "packages/agent/runtime/src/extensions/extension-package-integrity.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Official MCP client connection fixture protocol release",
+      "id": "4eb7b9db8fc56cd4a872",
+      "isolationRule": "The fixture value is negotiated external MCP connection metadata and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Official MCP client connection fixture server implementation release",
+      "id": "69dc3669fdc53adb6530",
+      "isolationRule": "The fixture value identifies one external MCP server implementation and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Mismatched MCP client connection fixture protocol release",
+      "id": "1e9a2a48858051030059",
+      "isolationRule": "The fixture value is negotiated external MCP connection metadata used to reject one mismatched endpoint and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Mismatched MCP server implementation release fixture",
+      "id": "1a007bb84633e75e2716",
+      "isolationRule": "The fixture value identifies an external MCP server implementation used to prove exact endpoint rejection and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Browser Use MCP server",
+      "fieldScope": "Reviewed Browser Use MCP server implementation release identity",
+      "id": "224671a13582fcfda50f",
+      "isolationRule": "The value qualifies the exact external Browser Use MCP server implementation; mismatch rejects only that endpoint and cannot dispatch an internal contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
+      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cua Driver MCP server",
+      "fieldScope": "Reviewed Cua Driver MCP server implementation release identity",
+      "id": "9f6fc68fbefdadfb5e67",
+      "isolationRule": "The value qualifies the exact external Cua Driver MCP server implementation; mismatch rejects only that endpoint and cannot dispatch an internal contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://github.com/injaneity/pi-computer-use/releases/tag/v0.19.2",
+      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Automation endpoint server identity fixture implementation release",
+      "id": "412ed4af7eae2b63cad5",
+      "isolationRule": "The fixture value identifies one external MCP server implementation and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "packages/automation/node/src/endpoint-management.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Mismatched external MCP server implementation release fixture",
+      "id": "e49eefac1751f57f2076",
+      "isolationRule": "The fixture value proves that an unreviewed external MCP server identity is rejected and cannot select an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "packages/automation/node/src/endpoint-management.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Reviewed endpoint connector expected MCP server implementation release",
+      "id": "08bd6c7db65bd0a4ba90",
+      "isolationRule": "The field qualifies one external MCP server identity; mismatch rejects only that endpoint and cannot dispatch an internal contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "packages/automation/node/src/endpoint-management.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "Endpoint probe result MCP server implementation release",
+      "id": "f47a5efe883f6940d3bb",
+      "isolationRule": "The field reports the connected external MCP server identity for qualification only and cannot dispatch an internal contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+      "path": "packages/automation/node/src/endpoint-management.ts",
+      "token": "version"
     }
   ]
 }

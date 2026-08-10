@@ -1,0 +1,200 @@
+{
+  "browserUse": {
+    "repository": "https://github.com/browser-use/browser-use",
+    "release": "0.13.7",
+    "tag": "0.13.7",
+    "sourceCommit": "f0aa3a8bb03779c71a5aa262d389e3bfe6b77cdc",
+    "license": {
+      "spdx": "MIT",
+      "path": "LICENSE",
+      "sha256": "sha256:135c57671b0ee957669b05a0ca00cc06f645496d351e2e732832c6e276da9a5e"
+    },
+    "python": {
+      "release": "3.12",
+      "declarationPath": ".python-version",
+      "declarationSha256": "sha256:7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d"
+    },
+    "dependencyDeclaration": {
+      "path": "pyproject.toml",
+      "sha256": "sha256:fe1b8a0a928cf6e4a8db04fc2ad88c98bb231b4b67d1c988dd46488ddc604509"
+    },
+    "githubReleaseAssets": []
+  },
+  "cuaDriver": {
+    "repository": "https://github.com/trycua/cua",
+    "release": "0.19.2",
+    "tag": "cua-driver-rs-v0.19.2",
+    "sourceCommit": "20bb34b16ad7c6c56221c332e46b1875e9d8af8c",
+    "license": {
+      "spdx": "MIT",
+      "path": "LICENSE.md",
+      "sha256": "sha256:c0779290c1d4783169aa3dbfb55feb505e563ef8a004bbf55298ceffcfbda8d9"
+    },
+    "releaseManifest": {
+      "url": "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.19.2/release-manifest.json",
+      "bytes": 5743,
+      "sha256": "sha256:0479bd0b35e1232bed8f7b24d84e3966ca93eb4a73c85f775bddf0f6f8257c09"
+    },
+    "buildEvidence": {
+      "releaseWorkflow": {
+        "path": ".github/workflows/cd-rust-cua-driver.yml",
+        "sha256": "sha256:5b8565bf4488ead8768ee7730056b472cb61c839597d7cf000f890ec82789087",
+        "runId": 31217509888,
+        "runUrl": "https://github.com/trycua/cua/actions/runs/31217509888",
+        "runLogsSha256": "sha256:b6b5b6d4ef65bbecab73ad97f8fb53a5215d86d41fdd0bd14d41fad2bd69848d"
+      },
+      "rustWorkspace": {
+        "manifestPath": "libs/cua-driver/rust/Cargo.toml",
+        "manifestSha256": "sha256:76dbb7cf3b90d288796bd860b916e00196bb61f53688e180855fadf7276b9e77",
+        "lockPath": "libs/cua-driver/rust/Cargo.lock",
+        "lockSha256": "sha256:ce1094999972cfa1e8fc62f81838932a16ff4c0e5dace4d3b04fa52c9aeab9f3",
+        "rootPackages": ["cua-driver", "cursor-theme-cli", "cua-driver-sdk"],
+        "targets": ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+      },
+      "nodeRuntime": {
+        "sourcePackage": "uniffi-bindgen-react-native",
+        "sourceRelease": "0.31.0-3",
+        "sourceIntegrity": "sha512-br7giBJRr/j00rdMXhOZGMGuDWMAVUcxC9O3lco0KRqzEAxUz00+gegPW5tKamvKbrnj7NB682XUCYrcagtxFA==",
+        "packageLockPath": "libs/cua-driver/typescript/package-lock.json",
+        "packageLockSha256": "sha256:fb8667e07bf99ad0e915df83d743803dd2e6dd7c5c67aeecee6ffbbc76847ea7",
+        "buildScriptPath": "libs/cua-driver/scripts/build-node-runtime.mjs",
+        "buildScriptSha256": "sha256:4b334c58361b901d3d2d6f08df2d0e1e7c968f8b9eaa6ff7f28773e1ebacfe49",
+        "publishedCargoLock": null,
+        "runtimeSource": {
+          "files": 53,
+          "sha256": "sha256:916971c075e809d312453ca6fd4d0c4e35d1cf641ac1339e53f3de758ab81d1e",
+          "licenseSpdx": "MPL-2.0",
+          "packageJsonSha256": "sha256:35b450722888f14e31ac6c2daaf3da7e9ab521a59411119ea869000d987cc087",
+          "licenseSha256": "sha256:d1cc4c0ada218e8a336dc8c3d8bb7d5b1c8dedfa31f5b25c9ea1759d21b8b62d",
+          "coreManifestSha256": "sha256:9d7af9677e8eef6257bae274189a63b9240313eaf31809de1657807d65423de0",
+          "napiManifestSha256": "sha256:faf13fd540fcbbad15e3c9e55e1091213e52f5386e1f56979d81604bd0ad7dc8"
+        },
+        "firstPartyCargoLock": {
+          "path": "scripts/release-inputs/cua-driver-node-runtime-0.19.2.Cargo.lock",
+          "sha256": "sha256:31ad587c083cec15a6cc927e3e552a4833789342ef5a684b6fd1e863dd50402c",
+          "packages": 36
+        },
+        "rustToolchain": {
+          "release": "1.97.1",
+          "rustcCommit": "8bab26f4f",
+          "releaseDate": "2026-07-14"
+        },
+        "sourceDateEpoch": 1786135742,
+        "compiledPackages": [
+          { "name": "aho-corasick", "release": "1.1.5" },
+          { "name": "bitflags", "release": "2.13.1" },
+          { "name": "cc", "release": "1.4.1" },
+          { "name": "cfg-if", "release": "1.0.4" },
+          { "name": "convert_case", "release": "0.6.0" },
+          { "name": "ctor", "release": "0.2.9" },
+          { "name": "dlopen2", "release": "0.7.0" },
+          { "name": "dlopen2_derive", "release": "0.4.3" },
+          { "name": "find-msvc-tools", "release": "0.1.10" },
+          { "name": "libc", "release": "0.2.189" },
+          { "name": "libffi", "release": "5.1.1" },
+          { "name": "libffi-sys", "release": "4.2.0" },
+          { "name": "memchr", "release": "2.8.3" },
+          { "name": "napi", "release": "2.16.17" },
+          { "name": "napi-build", "release": "2.4.0" },
+          { "name": "napi-derive", "release": "2.16.13" },
+          { "name": "napi-derive-backend", "release": "1.0.75" },
+          { "name": "napi-sys", "release": "2.4.0" },
+          { "name": "once_cell", "release": "1.21.4" },
+          { "name": "proc-macro2", "release": "1.0.107" },
+          { "name": "quote", "release": "1.0.47" },
+          { "name": "regex", "release": "1.13.1" },
+          { "name": "regex-automata", "release": "0.4.18" },
+          { "name": "regex-syntax", "release": "0.8.11" },
+          { "name": "semver", "release": "1.0.28" },
+          { "name": "shlex", "release": "2.0.1" },
+          { "name": "syn", "release": "2.0.119" },
+          { "name": "unicode-ident", "release": "1.0.24" },
+          { "name": "unicode-segmentation", "release": "1.13.3" },
+          { "name": "uniffi-runtime-core", "release": "0.1.0" },
+          { "name": "uniffi-runtime-napi", "release": "0.1.0" }
+        ]
+      },
+      "licenseClosure": {
+        "target": "darwin-arm64",
+        "packages": 367,
+        "sha256": "sha256:aaaa49126e1de4500915ddccb371a7688d11d283b57ef114ddba0e4c2b9bad93"
+      },
+      "payloadOwners": [
+        { "path": "cua-driver", "owner": "cua-driver" },
+        { "path": "cua-cursor-theme", "owner": "cursor-theme-cli" },
+        { "path": "libcua_driver_sdk.dylib", "owner": "cua-driver-sdk" },
+        { "path": "cua_driver_node_runtime.node", "owner": "uniffi-runtime-napi" },
+        { "path": "cua_driver_abi.h", "owner": "cua-driver-sdk" },
+        { "path": "CuaDriver.app/Contents/MacOS/cua-driver", "owner": "cua-driver" },
+        {
+          "path": "CuaDriver.app/Contents/MacOS/cua-cursor-theme",
+          "owner": "cursor-theme-cli"
+        },
+        { "path": "CuaDriver.app/Contents/Info.plist", "owner": "CuaDriverBundle" },
+        { "path": "CuaDriver.app/Contents/Resources/AppIcon.icns", "owner": "CuaDriverBundle" }
+      ]
+    },
+    "platformArtifacts": [
+      {
+        "target": "darwin-arm64",
+        "archive": "tar.gz",
+        "name": "cua-driver-rs-0.19.2-darwin-arm64.tar.gz",
+        "url": "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.19.2/cua-driver-rs-0.19.2-darwin-arm64.tar.gz",
+        "bytes": 64208172,
+        "sha256": "sha256:c30a81f6b5cfd44d40653f7549d7d714b445e9cbd0ed012c4c524f1c43d2872b"
+      },
+      {
+        "target": "darwin-x64",
+        "archive": "tar.gz",
+        "name": "cua-driver-rs-0.19.2-darwin-x86_64.tar.gz",
+        "url": "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.19.2/cua-driver-rs-0.19.2-darwin-x86_64.tar.gz",
+        "bytes": 64208160,
+        "sha256": "sha256:a9c0ae771f984077dfaddde50f340e52e8b9919f2b8f5917f44334bce92e92de"
+      },
+      {
+        "target": "linux-arm64",
+        "archive": "tar.gz",
+        "name": "cua-driver-rs-0.19.2-linux-arm64.tar.gz",
+        "url": "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.19.2/cua-driver-rs-0.19.2-linux-arm64.tar.gz",
+        "bytes": 27363328,
+        "sha256": "sha256:72383e69ca33ee82197e635d82b77301e37620da5f1230b2b17880c22e89b2af"
+      },
+      {
+        "target": "linux-x64",
+        "archive": "tar.gz",
+        "name": "cua-driver-rs-0.19.2-linux-x86_64.tar.gz",
+        "url": "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.19.2/cua-driver-rs-0.19.2-linux-x86_64.tar.gz",
+        "bytes": 27251018,
+        "sha256": "sha256:f5a4d57bafe1d1298029685440c1cd2c1eac4a3e411c8febab654a815f64936c"
+      },
+      {
+        "target": "win32-arm64",
+        "archive": "zip",
+        "name": "cua-driver-rs-0.19.2-windows-arm64.zip",
+        "url": "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.19.2/cua-driver-rs-0.19.2-windows-arm64.zip",
+        "bytes": 24986788,
+        "sha256": "sha256:0474a1ee1ffc9aa58b6a79800f7d1d766ca22f2ee33ab59aa8e843d7047924e1"
+      },
+      {
+        "target": "win32-x64",
+        "archive": "zip",
+        "name": "cua-driver-rs-0.19.2-windows-x86_64.zip",
+        "url": "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.19.2/cua-driver-rs-0.19.2-windows-x86_64.zip",
+        "bytes": 26571927,
+        "sha256": "sha256:0ed022bac9607db7a42ccea9b3c5cc0cff1849529c620aaa6746a01dc5a4257a"
+      }
+    ]
+  },
+  "mcpSdk": {
+    "package": "@modelcontextprotocol/sdk",
+    "release": "1.30.0",
+    "repository": "https://github.com/modelcontextprotocol/typescript-sdk",
+    "sourceCommit": "2d889f2b329e46680ec9bdd565de4616c497825a",
+    "license": {
+      "spdx": "MIT",
+      "path": "LICENSE",
+      "sha256": "sha256:5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d"
+    },
+    "npmIntegrity": "sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA=="
+  }
+}

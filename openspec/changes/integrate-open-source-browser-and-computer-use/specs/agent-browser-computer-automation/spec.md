@@ -214,6 +214,36 @@ credential or undeclared secret.
 - **AND** model-provider credentials, the real user `HOME`, general `PATH` and unrelated application secrets SHALL be
   absent
 
+### Requirement: Automation runtime delivery source is explicit
+
+An Automation provider MUST use one explicitly selected delivery source: a reviewed fixed GitHub Release artifact, a
+reviewed fixed official-vendor artifact, or a user-managed endpoint. Managed artifacts MUST use the same verified install
+contract regardless of host. A user-managed endpoint MUST remain externally owned: OpenNeko MUST NOT download, install,
+update or start that service. Delivery sources MUST NOT be fallback candidates for each other.
+
+#### Scenario: OpenNeko installs a GitHub or official artifact
+
+- **WHEN** the user confirms installation of a reviewed managed runtime
+- **THEN** OpenNeko SHALL download the exact catalog URL and allow only its reviewed origin and redirect hosts
+- **AND** SHALL verify the fixed size, digest, signature, provenance, license inventory and contained runtime before commit
+- **AND** SHALL NOT resolve `latest`, execute an install script or install dependencies on the user machine
+
+#### Scenario: User connects an already-running service
+
+- **WHEN** the user explicitly selects a user-managed endpoint for a reviewed provider
+- **THEN** OpenNeko SHALL validate the exact endpoint authorization, transport, provider identity and reviewed Tool schemas
+- **AND** the exact Automation session SHALL own only its connection, target and action lifecycle
+- **AND** OpenNeko SHALL NOT install, update, launch or terminate the user's service process
+- **AND** endpoint failure SHALL NOT download or start a managed runtime
+
+#### Scenario: Generic plugin runtime sees adapter-only automation
+
+- **WHEN** an enabled Automation extension contributes an `adapter-only` MCP descriptor
+- **THEN** the generic plugin runtime MAY validate the contained descriptor statically
+- **AND** SHALL NOT register, connect, start or expose that server
+- **AND** only the exact Automation session owner MAY open the reviewed runtime or endpoint connection
+- **AND** ordinary sibling MCP extensions SHALL remain available
+
 ### Requirement: Play-use remains outside Browser and Computer automation
 
 Browser Use and Computer Use MUST remain transport capabilities and MUST NOT create Character Play, Game Activity,

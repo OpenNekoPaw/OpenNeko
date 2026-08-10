@@ -1,9 +1,7 @@
 import { evaluateStructuredOutput } from './structured-output.mjs';
 import { isDesktopEvaluationFacts, runDesktopHardGate } from '../desktop/evidence.mjs';
-import {
-  assertOrderedWorkflowEvents,
-  assertWorkflowQueueState,
-} from './workflow-evidence.mjs';
+import { assertOrderedWorkflowEvents, assertWorkflowQueueState } from './workflow-evidence.mjs';
+import { assertAutomationToolResult } from './automation-tool-evidence.mjs';
 
 const EVALUATION_OUTCOMES = Object.freeze({
   pass: 'pass',
@@ -77,6 +75,8 @@ function runGate(assertion, facts, context) {
       return assertModel(assertion, facts, context);
     case 'tool-call':
       return assertToolCall(assertion, facts);
+    case 'automation-tool-result':
+      return assertNeutralAutomationToolResult(assertion, facts);
     case 'todo-projection':
       return assertTodoProjection(assertion, facts);
     case 'process-order':
@@ -448,6 +448,17 @@ function assertToolCall(assertion, facts) {
     throw new Error(`tool call ${assertion.name} failed without error observation evidence`);
   }
   return { id: matching.id, name: matching.name, status: assertion.status };
+}
+
+function assertNeutralAutomationToolResult(assertion, facts) {
+  assertCompleteEvidence(facts, ['turns', 'turnToolCalls']);
+  const matches = arrayOrEmpty(facts?.turns)
+    .flatMap((turn) => arrayOrEmpty(turn?.toolCalls))
+    .filter((call) => call?.name === assertion.name && matchesToolStatus(call?.status, 'success'));
+  if (matches.length !== 1 || matches[0].resultObservation !== 'available') {
+    throw new Error(`Automation Tool ${assertion.name} requires one observed successful result.`);
+  }
+  return assertAutomationToolResult(assertion, matches[0].result);
 }
 
 function containsExpectedValue(actual, expected) {

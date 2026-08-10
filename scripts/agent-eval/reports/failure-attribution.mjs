@@ -104,7 +104,7 @@ function hypothesize(kind) {
       'Review model profile application and provider routing.',
     );
   }
-  if (kind === 'tool-call') {
+  if (kind === 'tool-call' || kind === 'automation-tool-result') {
     return hypothesis(
       'capability-tool',
       0.65,

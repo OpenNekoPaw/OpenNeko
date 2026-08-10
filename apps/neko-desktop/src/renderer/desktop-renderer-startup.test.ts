@@ -94,7 +94,6 @@ function createSettings(): DesktopApplicationSettingsProjection {
     preferences: {
       theme: 'light',
       locale: 'system',
-      startupTarget: 'home',
       resourceBrowserView: 'list',
     },
   };

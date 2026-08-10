@@ -77,6 +77,23 @@ describe('Desktop Cua Driver MCP client factory', () => {
       }),
     ).toThrow("unavailable on 'win32'");
   });
+
+  it('isolates target discovery in a short-lived read-only Desktop metadata policy', async () => {
+    const fixture = await createFixture();
+    const client = fixture.factory.createTargetDiscoveryClient();
+    await client.connect({});
+    const launch = fixture.configs[0]!;
+    const policyPath = launch.env?.['CUA_DRIVER_SESSION_POLICY_FILE'] ?? '';
+    expect(JSON.parse(await readFile(policyPath, 'utf8'))).toMatchObject({
+      mode: 'bounded',
+      allow: { tools: ['list_apps', 'list_windows'] },
+      resources: { desktop: { display: true } },
+    });
+    expect(launch.args).toEqual(['mcp', '--direct']);
+    expect(launch.inheritProcessEnv).toBe(false);
+    await client.disconnect();
+    await expect(readFile(policyPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 });
 
 async function createFixture() {

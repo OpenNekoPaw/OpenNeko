@@ -16,6 +16,12 @@
 - Core `Write` results expose only a portable `workspace-file` locator and become output artifacts.
   Ordinary `Read` results remain source-only unless the same terminal batch contains a named
   reviewable result. Agent-linked Generation Tool attachments retain their Generation Job evidence.
+- Workspace Board mutation and exact open Canvas session creation now share one Workspace-scoped serial
+  boundary. Dirty sessions block before ledger mutation; clean sessions receive the committed document
+  immediately, discard stale undo/redo history and keep the same nodes after save, detach and reopen.
+- Canvas keyboard ownership now follows the delayed Webview Root through document-level focus/pointer
+  observation. Select, pan, group, ungroup and zoom actions use the same shared dispatcher as the existing
+  edit shortcuts and remain excluded while an editable boundary owns input.
 
 ## Deterministic evidence
 
@@ -30,6 +36,12 @@
   Conversation-scoped renderer diagnostic and records the blocked result in neutral automation facts.
 - Agent Runtime, Canvas Node and Desktop typechecks passed. Focused ESLint, Prettier and
   `git diff --check` passed.
+- The follow-up live-session and keyboard regression set passed 4 files / 47 tests, including two attached
+  exact Board Views, dirty prewrite rejection, stale undo isolation, save/reopen preservation, delayed Root
+  mount, editable ownership and shortcut action mapping. Canvas Domain/Webview/Desktop typechecks and the
+  full Electron Forge Desktop package build passed.
+- Strict OpenSpec validation passed 72 items. Key-free Agent Evaluation passed 44 files / 294 tests and the
+  all-suite dry-run passed 24 suites / 64 cases; these remain harness/contract evidence only.
 - `pnpm check:quality` passed the internal-versioning, package, content, application and Agent
   boundaries, then stopped at the current dirty Renderer finding that
   `DesktopCanvasSurface.tsx` does not mount the public Canvas Webview root. The remaining quality
@@ -47,9 +59,10 @@
 - Authoritative renderer save followed by another Generation delivery.
 
 `neko-ui-validation` is applicable because the `@` candidate set and Workspace Board contents are
-user-visible. It is currently blocked: no isolated visible Electron run and screenshot inspection was
-performed in this pass, and no real-provider/cost authorization was supplied. Unit/Main integration
-evidence does not replace that UI path.
+user-visible. The follow-up attempted `canvas-openneko-consumer` in a visible isolated development
+fixture, but the Desktop CDP target never became ready (`fetch failed`), so no new screenshot or direct
+interaction evidence was produced. No real-provider/cost authorization was supplied. Unit/Main integration
+evidence and the successful Desktop package build do not replace that UI path.
 
 The change remains incomplete until all three tasks pass through isolated Electron fixtures. Unit tests,
 browser-only runs or retired Host evidence do not satisfy the remaining gate.

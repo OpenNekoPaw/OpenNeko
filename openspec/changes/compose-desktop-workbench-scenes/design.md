@@ -133,6 +133,32 @@ Surface 并原子切换 Scene，使 renderer 不会先挂载一个必然 bootstr
 
 PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects` 与 `agentHome.conversations`，因此删除 Home composer/management page 时必须保留最近项目、最近会话、attention 和显式恢复/删除操作。
 
+Extensions Scene 将 management 与 configuration 组合为按选择出现的两个 sibling panel。Agent Webview
+拥有当前 `skills | extensions` 分类、查询、`grid | list` 展示模式和精确选择；这些均为 Scene Root
+卸载即可丢弃的 presentation state，不进入 Host Scene、durable catalog 或全局 store。Management Main
+只呈现可扫描目录与目录级动作；默认不选择条目并独占全部 Main，只有用户选择有效 Skill 或扩展后才
+挂载 Secondary Main，呈现对应详情和条目级动作。两个 panel 贴边共享一条视觉边界，resize handle 覆盖
+在分界线上而不占据空白 margin/gap。Skill 配置
+仅包含 Skill 的来源、描述与允许的个人 Skill 管理操作；Automation endpoint、Computer Use Host
+permission 及其他扩展运行时配置只在 `extensions` 分类下挂载。Desktop 只提供两个 Workbench panel
+target、typed Host adapter 和 Automation configuration slot，不复制 Agent catalog 或选择规则。目录在
+grid/list 间切换时保持同一选择和 detail identity；切换分类时只恢复该分类内仍有效的选择，非法或消失
+的条目只清空当前分类的 detail 并恢复全宽 management。
+
+#### Window claim always enters a fresh Entry Draft
+
+应用启动或用户重新打开一个已经释放的 Window 时，Host Shell 的 `claimWindowId()` 是唯一 startup
+presentation owner。它先把当前 Project layout 捕获到 exact tab snapshot，再保留 Window identity、
+PrimarySidebar、Project tabs/catalog 与所有 durable domain records，随后用新的 `draftId` 原子替换当前
+Workbench layout/Scene 为 canonical unbound Entry。上次可见 Workspace、conversation、Assets、Extensions、
+Projects 或 Settings Scene 不参与启动选择，也不自动 attach runtime。
+
+该语义不同于 Renderer reload：同一已 claim Window 的 renderer session replacement 继续读取当前 exact
+Scene，不创建 draft、不切换入口。Application Settings 因此删除 `startupTarget` 与“恢复上次工作区”UI；
+Desktop Main 不再把 preference 传给 Shell，Shell 也不保留 `home | restore` 分支。旧 Settings 文档不能走
+兼容 reader 或字段迁移；既有 authority-local strict recovery 将原记录 quarantine 后只初始化 canonical
+Settings defaults，并投影 diagnostic。Shell、Project、Conversation、Assets 与用户文件不受影响。
+
 PrimarySidebar 顶部品牌区只承载自身显隐控件。Exact Workspace composition 通过 `ControlledWorkbenchShell.titleBar` 插槽把 Agent、Main、管理面板与 Cut Panel 四个独立控件浮置在现有窗口顶部 chrome 右侧；该插槽在 Desktop 视觉层使用 absolute overlay，不参与 Workbench grid track sizing，不增加背景、边框、标题或额外 header 高度，并保持与 macOS 原生 title chrome 的垂直对齐。每个控件只改变其所属区域的 presentation，不能通过一个混合菜单或 Main 内按钮同时管理多个区域；Agent 与 Main 仍必须保证至少一个业务区域可见。
 
 Window 级 Main、Interaction 与 Manager Surface 必须 full-bleed 占用 `ControlledWorkbenchShell` 分配的完整 grid track。Desktop 不得通过 panel 外层 margin、Dock padding、responsive inset 或顶层圆角缩小 package Root/Webview viewport 或露出 Window 背景；顶层 panel shell 使用直角边界，Sidebar/Main 和兄弟 Surface 的结构关系由 divider、现有 resize primitive 与功能性 gutter 表达。Overlay/Docked manager 在其当前业务 track 内同样使用完整高度、直角和外侧边界。领域页面的 readable width、toolbar alignment、内容 padding 和内部组件圆角继续由 owning package 管理，因此删除 Window 装饰性 inset 与圆角不得拉伸管理控件或把页面内容贴到窗口边缘。
@@ -402,6 +428,38 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 | Preview                    | `@neko/preview-domain` + `@neko/preview-webview/root`                | Preview session owner         | Workbench Main             | 只消费 authorized descriptor，不保存 raw path                          |
 | Electron composition       | `apps/neko-desktop`                                                  | Window/sender/native adapters | Product window             | 只保留 slot mapping、typed IPC 和 lifecycle                            |
 
+### 14. Renderer loading fences the outgoing Scene before identity replacement
+
+`renderer-loading` 是 Window lifecycle authority 发出的精确 renderer replacement 边界。Desktop
+renderer 必须在收到该事件时使尚未完成的 Shell snapshot 无效、清空 projection sequence，并把当前
+Scene presentation 切换为 Window-level loading state，使 Canvas、Cut、Resource Browser 和其他
+view-scoped Roots 在旧 `rendererSessionId` 下停止挂载。它不能等待某个 package snapshot 报错后再推断
+reload，也不能把 stale package 请求重试到当前 Session。
+
+若同一个 document 继续存活到 `renderer-ready`，它从 Shell authority 获取一次新 snapshot；正常完整
+reload 中，新 document 仍通过相同的首次 snapshot 路径启动。两种情况都只使用 Shell 返回的当前
+`rendererSessionId` 重建 Roots。旧请求如果已经越过 IPC 边界，Main/Node runtime 继续严格拒绝；该拒绝
+只属于旧 Surface，不改变 Shell、Workspace facts 或兄弟 package runtime。preload 不缓存或重写新的
+Resource Browser identity，也不从 active/recent Workspace 派生替代 identity。
+
+### 15. Generation Job schema recovery is isolated to an empty package-owned table
+
+Canvas 生成按钮通过唯一链路 `Canvas Webview intent -> Canvas Node runtime -> Workspace Generation owner ->
+GenerationJobCoordinator -> persistent GenerationJobStore` 启动任务。provider 调用必须发生在 initial Job
+snapshot 成功写入之后；因此 `generation_jobs` schema 不兼容属于 Generation owner 初始化失败，不能由
+Canvas 重试、改写请求或切换到内存 store 掩盖。
+
+`@neko/generation` 在初始化自己的表前读取 `pragma_table_info('generation_jobs')`，并与当前 canonical 列集
+精确比较。表不存在或列集一致时继续 additive initialization。若同名表包含已删除的内部版本列但行数为
+零，owner 在一个 system-write transaction 内删除该空表及其索引，然后立即创建唯一 canonical 表；这个
+操作不转换任何记录，也不保留旧 schema 成功路径。若表中存在一条或多条记录，owner 拒绝初始化并报告
+`generation-job-persistence-invalid`，原表和全部记录保持不变。用户生成资产由独立 Asset/Workspace 文件
+authority 持有，不参与此空 runtime table reset。
+
+该策略只服务真实的 package-owned runtime boundary，不扩展成通用 schema migrator、版本 registry 或
+自动 repair framework。SQLite adapter 仍保留原始 cause；Generation UI 投影 owner-qualified diagnostic，
+不得只显示无法定位约束的通用 `operation failed: run`。
+
 ## Risks / Trade-offs
 
 - [Shell 抽取造成 workspace 回归] -> 先建立 normal workspace baseline tests，再只移动 Shell owner；props、View identity、layout helpers 与 Workspace CSS scope保持不变。
@@ -420,6 +478,7 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 - [已写入的 non-canonical scene 无法启动] -> 保留原字节并只拒绝精确 Scene/Workbench instance；有效 sibling instance 与 Shell 继续可用，不执行 shape migration。
 - [新 draft 显示旧 session] -> Host 分配 exact `draftId`，Agent package 在 identity transition 时清除 instance state，并删除通过 stable Scene/View 猜测 draft 的路径。
 - [StrictMode cleanup 使 Desktop 白屏] -> subscription cleanup 与 runtime final disposal 分离；保留 disposed fail-visible，并以 StrictMode + development/packaged Electron exception 证据验证。
+- [旧空 Generation 表阻止新任务] -> Generation owner 精确校验 canonical 列集；只重置零行 non-canonical 表，含记录表保持原样并 fail-visible。
 
 ## Replacement Plan
 
@@ -433,6 +492,7 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 8. 删除 Home composer、agentInitialInput、模型 intent scene routing 与所有隐式 Project owner selection。
 9. 运行 package tests/build、Agent evaluation、legacy/boundary gates和隔离真实 Electron大/小窗口场景。
 10. 引入 unbound Entry Draft identity、确定性的自动 Assistant 首次提交、显式 Workspace/Role binding 与 package-owned presentation reset；修复 renderer runtime StrictMode lifecycle并复验用户启动路径。
+11. 将 Window claim 收敛为 fresh Entry 的唯一启动路径，删除 startup destination preference，并以持久 Workspace/Settings 冷启动与 renderer reload 验证区分两种生命周期。
 
 回滚只能整体恢复上一稳定 commit 的 composition，不能删除实施期间创建的 conversation、published Asset、Workspace或用户授权记录。非 canonical shape 必须在精确 owner 边界明确拒绝并保持原字节；不能执行产品迁移，也不能静默回退 Home composer、默认 Project或双 sidebar路径。
 

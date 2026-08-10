@@ -53,13 +53,6 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
       catalog = await input.bridge.agentLaunch.bindTarget(connection, binding);
       return catalog;
     },
-    async bindAssistant() {
-      if (disposed) throw new Error('Agent launch adapter is disposed.');
-      catalog = { ...catalog, inputs: [] };
-      emit({ type: 'projectFiles', filter: '', purpose: 'entry', files: [], mentionExtras: [] });
-      catalog = await input.bridge.agentLaunch.bindAssistant(connection);
-      return catalog;
-    },
     async updateDraftConfiguration(configuration) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       catalog = await input.bridge.agentLaunch.updateConfiguration(connection, configuration);
@@ -140,13 +133,14 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
                 modelId: entry.modelId,
                 category: entry.modelType,
               })),
+              defaultMediaModels: { ...catalog.defaultMediaModels },
+              mediaUnderstandingModels: structuredClone(catalog.mediaUnderstandingModels),
               selectedProviderId: selected?.providerId ?? null,
               selectedModelId: selected?.modelId ?? null,
               temperature: catalog.configuration.fields.temperature.effectiveValue ?? undefined,
               maxTokens:
                 catalog.configuration.fields.maximumOutputTokens.effectiveValue ?? undefined,
-              executionMode:
-                catalog.configuration.fields.executionMode.effectiveValue ?? undefined,
+              executionMode: catalog.configuration.fields.executionMode.effectiveValue ?? undefined,
               agentConfiguration: catalog.configuration,
             },
           });

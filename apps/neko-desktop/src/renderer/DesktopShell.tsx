@@ -13,6 +13,7 @@ import {
   MessageIcon,
   OpenIcon,
   PackageIcon,
+  Popover,
   PlusIcon,
   RemoveIcon,
   SearchIcon,
@@ -76,6 +77,7 @@ import {
 import { DesktopAssetManagementSurface } from './DesktopAssetManagementSurface';
 import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementSurface';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
+import { WorkbenchMainPanelSurface } from './WorkbenchMainPanelSurface';
 import { DesktopProjectCatalogSurface } from './DesktopProjectManagementSurface';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
 import { DesktopAssistantPreviewSurface } from './DesktopAssistantPreviewSurface';
@@ -127,8 +129,58 @@ export const MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO = 0.5;
 export const MANAGEMENT_MAIN_SPLIT_MIN_RATIO = 0.5;
 const SHELL_DIAGNOSTIC_DURATION_MS = 6_000;
 
+type DesktopShellPendingScope =
+  'scene' | 'workbench' | 'navigation' | 'sidebar' | 'target-selection';
+
+export interface DesktopShellPendingProjection {
+  readonly scene: boolean;
+  readonly workbench: boolean;
+  readonly navigation: boolean;
+  readonly sidebar: boolean;
+  readonly targetSelection: boolean;
+}
+
+export interface DesktopShellInteractionLocks {
+  readonly workbench: boolean;
+  readonly navigation: boolean;
+  readonly sidebar: boolean;
+  readonly targetSelection: boolean;
+}
+
+const EMPTY_DESKTOP_SHELL_PENDING: DesktopShellPendingProjection = {
+  scene: false,
+  workbench: false,
+  navigation: false,
+  sidebar: false,
+  targetSelection: false,
+};
+
+function projectDesktopShellPending(
+  counts: ReadonlyMap<DesktopShellPendingScope, number>,
+): DesktopShellPendingProjection {
+  return {
+    scene: counts.has('scene'),
+    workbench: counts.has('workbench'),
+    navigation: counts.has('navigation'),
+    sidebar: counts.has('sidebar'),
+    targetSelection: counts.has('target-selection'),
+  };
+}
+
+export function projectDesktopShellInteractionLocks(
+  pending: DesktopShellPendingProjection,
+): DesktopShellInteractionLocks {
+  return {
+    workbench: pending.scene || pending.workbench,
+    navigation: pending.scene || pending.navigation,
+    sidebar: pending.scene || pending.sidebar,
+    targetSelection: pending.scene || pending.targetSelection,
+  };
+}
+
 interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
+  readonly onOpenWorkspaceDirectory: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onDeleteConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
@@ -159,7 +211,10 @@ interface ShellActions {
 export function DesktopApplication(): JSX.Element {
   const { t } = useTranslation();
   const [state, setState] = useState<ShellState>({ kind: 'loading' });
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<DesktopShellPendingProjection>(
+    EMPTY_DESKTOP_SHELL_PENDING,
+  );
+  const pendingScopeCounts = useRef(new Map<DesktopShellPendingScope, number>());
   const [diagnostic, setDiagnostic] = useState<string>();
   const [startupMetadataDiagnostic, setStartupMetadataDiagnostic] =
     useState<RetainedMetadataDiagnostic>();
@@ -167,6 +222,7 @@ export function DesktopApplication(): JSX.Element {
   const lastSequence = useRef<number | null>(null);
   const textEditorCloseRequestOrdinal = useRef(0);
   const rendererSessionId = useRef<string>();
+  const loadingRendererSessionId = useRef<string>();
   const pendingProjectionRequest = useRef<object>();
   const startupProjectionCaptured = useRef(false);
 
@@ -182,6 +238,7 @@ export function DesktopApplication(): JSX.Element {
   }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
+    if (loadingRendererSessionId.current) return;
     const request = {};
     pendingProjectionRequest.current = request;
     const projection = await window.openNekoDesktop.shell.getSnapshot();
@@ -198,6 +255,7 @@ export function DesktopApplication(): JSX.Element {
     const unsubscribe = window.openNekoDesktop.shell.subscribe((event) => {
       if (!active) return;
       pendingProjectionRequest.current = undefined;
+      if (loadingRendererSessionId.current) return;
       if (
         rendererSessionId.current &&
         event.projection.rendererSessionId !== rendererSessionId.current
@@ -230,6 +288,35 @@ export function DesktopApplication(): JSX.Element {
     };
   }, [captureStartupMetadataDiagnostic, refresh, t]);
 
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = window.openNekoDesktop.lifecycle.subscribe((event) => {
+      if (!active) return;
+      if (event.type === 'renderer-loading') {
+        loadingRendererSessionId.current = event.rendererSessionId;
+        rendererSessionId.current = event.rendererSessionId;
+        pendingProjectionRequest.current = undefined;
+        lastSequence.current = null;
+        setState({ kind: 'loading' });
+        return;
+      }
+      if (
+        event.type !== 'renderer-ready' ||
+        loadingRendererSessionId.current !== event.rendererSessionId
+      ) {
+        return;
+      }
+      loadingRendererSessionId.current = undefined;
+      void refresh().catch((error: unknown) => {
+        if (active) setState({ kind: 'error', message: describeError(error) });
+      });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [refresh]);
+
   const persistedDiagnostic = useMemo(
     () =>
       state.kind === 'ready'
@@ -238,6 +325,24 @@ export function DesktopApplication(): JSX.Element {
     [state, t],
   );
   const persistedDiagnosticKey = persistedDiagnostic?.key;
+
+  const beginPending = useCallback((scope: DesktopShellPendingScope): (() => void) => {
+    const counts = pendingScopeCounts.current;
+    counts.set(scope, (counts.get(scope) ?? 0) + 1);
+    setPending(projectDesktopShellPending(counts));
+    let finished = false;
+    return () => {
+      if (finished) return;
+      finished = true;
+      const count = counts.get(scope);
+      if (count === undefined) {
+        throw new Error(`Desktop Shell pending scope '${scope}' is not active.`);
+      }
+      if (count === 1) counts.delete(scope);
+      else counts.set(scope, count - 1);
+      setPending(projectDesktopShellPending(counts));
+    };
+  }, []);
 
   useEffect(() => {
     if (!startupMetadataDiagnostic) return;
@@ -265,8 +370,11 @@ export function DesktopApplication(): JSX.Element {
   }, [dismissedPersistedDiagnosticKey, persistedDiagnosticKey]);
 
   const runMutation = useCallback(
-    async (operation: () => Promise<DesktopShellProjection>): Promise<void> => {
-      setPending(true);
+    async (
+      scope: DesktopShellPendingScope,
+      operation: () => Promise<DesktopShellProjection>,
+    ): Promise<void> => {
+      const finishPending = beginPending(scope);
       setDiagnostic(undefined);
       try {
         const request = {};
@@ -283,10 +391,10 @@ export function DesktopApplication(): JSX.Element {
         setDiagnostic(describeError(error));
         await refresh();
       } finally {
-        setPending(false);
+        finishPending();
       }
     },
-    [refresh, t],
+    [beginPending, refresh, t],
   );
 
   if (state.kind === 'loading') {
@@ -311,7 +419,7 @@ export function DesktopApplication(): JSX.Element {
     diagnostic ?? visiblePersistedDiagnostic?.message ?? startupMetadataMessage;
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
   const transitionScene = (intent: DesktopSceneTransitionIntent): void => {
-    setPending(true);
+    const finishPending = beginPending('scene');
     setDiagnostic(undefined);
     void window.openNekoDesktop.scenes
       .transition(projection.window.windowId, intent, activeWorkbench.scene.sceneId)
@@ -324,10 +432,28 @@ export function DesktopApplication(): JSX.Element {
         setDiagnostic(describeError(error));
         await refresh();
       })
-      .finally(() => setPending(false));
+      .finally(finishPending);
   };
   const actions: ShellActions = {
     onSelectProject: (projectId) => transitionScene({ kind: 'open-project-workspace', projectId }),
+    onOpenWorkspaceDirectory: () => {
+      const finishPending = beginPending('navigation');
+      setDiagnostic(undefined);
+      void window.openNekoDesktop.workspaceGrants
+        .chooseDirectory(projection.window.windowId)
+        .then((result) => {
+          if (result.status === 'cancelled') return;
+          transitionScene({
+            kind: 'open-workspace',
+            workspaceGrantId: result.grant.workspaceGrantId,
+          });
+        })
+        .catch(async (error: unknown) => {
+          setDiagnostic(describeError(error));
+          await refresh();
+        })
+        .finally(finishPending);
+    },
     onOpenConversation: (conversation) =>
       transitionScene({
         kind: 'restore-conversation',
@@ -344,7 +470,7 @@ export function DesktopApplication(): JSX.Element {
       if (!globalThis.confirm(confirmation)) {
         return;
       }
-      void runMutation(() =>
+      void runMutation('navigation', () =>
         window.openNekoDesktop.conversations.delete(
           conversations.map((conversation) => conversation.navigation),
         ),
@@ -361,7 +487,7 @@ export function DesktopApplication(): JSX.Element {
       if (!globalThis.confirm(confirmation)) {
         return;
       }
-      void runMutation(() =>
+      void runMutation('navigation', () =>
         window.openNekoDesktop.projects.remove(projects.map((project) => project.projectId)),
       );
     },
@@ -393,7 +519,7 @@ export function DesktopApplication(): JSX.Element {
               conversationCount,
             });
       if (!globalThis.confirm(confirmation)) return;
-      void runMutation(() =>
+      void runMutation('navigation', () =>
         window.openNekoDesktop.projects.deleteConversations(
           projects.map((project) => project.projectId),
         ),
@@ -403,12 +529,12 @@ export function DesktopApplication(): JSX.Element {
       if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
         throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
       }
-      void runMutation(() =>
+      void runMutation('workbench', () =>
         window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
       );
     },
     onCreateCutDraft: (workbenchInstanceId) => {
-      void runMutation(async () => {
+      void runMutation('workbench', async () => {
         const result = await window.openNekoDesktop.cut.createDraft({
           requestId: `cut-draft-create:${globalThis.crypto.randomUUID()}`,
           windowId: projection.window.windowId,
@@ -421,7 +547,7 @@ export function DesktopApplication(): JSX.Element {
     onCloseCutView: (workbenchInstanceId, view) => {
       if (!view.documentId) throw new Error('Desktop Cut close requires a document identity.');
       const documentId = view.documentId;
-      void runMutation(async () => {
+      void runMutation('workbench', async () => {
         const result = await window.openNekoDesktop.cut.closeView({
           requestId: `cut-view-close:${globalThis.crypto.randomUUID()}`,
           windowId: projection.window.windowId,
@@ -446,7 +572,7 @@ export function DesktopApplication(): JSX.Element {
         if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
           throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
         }
-        void runMutation(() =>
+        void runMutation('workbench', () =>
           window.openNekoDesktop.workbench.update(
             workbenchInstanceId,
             closeMainView(workbench, view.viewId),
@@ -473,7 +599,7 @@ export function DesktopApplication(): JSX.Element {
         rendererSessionId: projection.rendererSessionId,
       };
       const requestPrefix = `desktop-text-editor:close:${textEditorCloseRequestOrdinal.current}`;
-      setPending(true);
+      const finishPending = beginPending('workbench');
       setDiagnostic(undefined);
       void window.openNekoDesktop.textEditor
         .execute({
@@ -511,10 +637,10 @@ export function DesktopApplication(): JSX.Element {
           setDiagnostic(describeError(error));
           await refresh();
         })
-        .finally(() => setPending(false));
+        .finally(finishPending);
     },
     onUpdateApplicationSidebar: (sidebar) =>
-      void runMutation(() =>
+      void runMutation('sidebar', () =>
         window.openNekoDesktop.applicationSidebar.update(
           sidebar.windowId,
           sidebar.visible,
@@ -523,7 +649,7 @@ export function DesktopApplication(): JSX.Element {
       ),
     onTransitionScene: transitionScene,
     onChooseWorkspaceTarget: async () => {
-      setPending(true);
+      const finishPending = beginPending('target-selection');
       setDiagnostic(undefined);
       try {
         const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
@@ -543,11 +669,11 @@ export function DesktopApplication(): JSX.Element {
         await refresh();
         return undefined;
       } finally {
-        setPending(false);
+        finishPending();
       }
     },
     onSelectWorkspaceProjectTarget: async (projectId) => {
-      setPending(true);
+      const finishPending = beginPending('target-selection');
       setDiagnostic(undefined);
       try {
         const result = await window.openNekoDesktop.workspaceGrants.selectProject(
@@ -568,7 +694,7 @@ export function DesktopApplication(): JSX.Element {
         await refresh();
         return undefined;
       } finally {
-        setPending(false);
+        finishPending();
       }
     },
   };
@@ -623,6 +749,7 @@ export function DesktopShellView({
 }): JSX.Element {
   const actions: ShellActions = {
     onSelectProject: () => undefined,
+    onOpenWorkspaceDirectory: () => undefined,
     onOpenConversation: () => undefined,
     onDeleteConversations: () => undefined,
     onRemoveProjects: () => undefined,
@@ -639,7 +766,7 @@ export function DesktopShellView({
   return (
     <DesktopSceneWorkbench
       actions={actions}
-      pending={false}
+      pending={EMPTY_DESKTOP_SHELL_PENDING}
       projection={projection}
       interactive={false}
     />
@@ -655,17 +782,19 @@ function DesktopSceneWorkbench({
 }: {
   readonly actions: ShellActions;
   readonly interactive?: boolean;
-  readonly pending: boolean;
+  readonly pending: DesktopShellPendingProjection;
   readonly projection: DesktopShellProjection;
   readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
 }): JSX.Element {
   const { locale, t } = useTranslation();
   const settings = useDesktopApplicationSettings();
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
+  const interactionLocks = projectDesktopShellInteractionLocks(pending);
   const scene = activeWorkbench.scene;
   const [managementSplitRatios, setManagementSplitRatios] = useState<ReadonlyMap<string, number>>(
     () => new Map(),
   );
+  const [extensionDetailOwner, setExtensionDetailOwner] = useState<string>();
   const [portalTargets, setPortalTargets] = useState<ReadonlyMap<string, HTMLDivElement>>(
     () => new Map(),
   );
@@ -735,8 +864,20 @@ function DesktopSceneWorkbench({
     workspaceScene && scene.slots.interaction?.kind === 'agent'
       ? scene.slots.interaction
       : undefined;
+  const workspaceMainSurface =
+    workspaceScene && scene.slots.main?.kind === 'workspace-main' ? scene.slots.main : undefined;
+  const cutPanel = workspaceScene ? activeWorkbench.layout.cutPanel : undefined;
+  const workspaceCutSurface =
+    workspaceScene && scene.slots.cutPanel?.kind === 'workspace-cut'
+      ? scene.slots.cutPanel
+      : undefined;
+  const cutPanelVisible = workspaceCutSurface !== undefined && cutPanel?.presentation === 'docked';
+  const workspaceMainVisible =
+    workspaceMainSurface !== undefined && isWorkbenchRegionVisible(activeWorkbench.layout, 'main');
+  const cutPanelExpanded = cutPanelVisible && !workspaceMainVisible;
   const workspaceAgentVisible =
-    workspaceAgentSurface !== undefined && activeWorkbench.layout.display.mode !== 'main-only';
+    workspaceAgentSurface !== undefined &&
+    isWorkbenchRegionVisible(activeWorkbench.layout, 'agent');
   const interactionVisible = Boolean(launchScope) || workspaceAgentVisible;
   const interactionPresentation = launchScope
     ? characterInteractionScene
@@ -744,11 +885,11 @@ function DesktopSceneWorkbench({
       : assistantPreviewVisible
         ? ('docked' as const)
         : ('main' as const)
-    : workspaceScene && activeWorkbench.layout.display.mode === 'chat-only'
-      ? ('main' as const)
-      : workspaceAgentVisible
+    : workspaceAgentVisible
+      ? cutPanelExpanded || workspaceMainVisible
         ? ('docked' as const)
-        : ('hidden' as const);
+        : ('main' as const)
+      : ('hidden' as const);
   const interactionPosition =
     characterInteractionScene ||
     (workspaceScene &&
@@ -763,7 +904,7 @@ function DesktopSceneWorkbench({
         interaction: scene.slots.interaction,
         onChooseWorkspaceTarget: actions.onChooseWorkspaceTarget,
         onSelectWorkspaceProjectTarget: actions.onSelectWorkspaceProjectTarget,
-        workspaceSelectionDisabled: pending || !interactive,
+        workspaceSelectionDisabled: interactionLocks.targetSelection || !interactive,
       })
     : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
@@ -814,8 +955,26 @@ function DesktopSceneWorkbench({
   const managementSplitRatio =
     managementSplitRatios.get(activeWorkbench.workbenchInstanceId) ??
     MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO;
+  const extensionSceneOwner =
+    scene.context.kind === 'extensions'
+      ? `${activeWorkbench.workbenchInstanceId}:${scene.sceneId}`
+      : undefined;
+  const extensionDetailVisible =
+    extensionSceneOwner !== undefined &&
+    extensionDetailOwner === extensionSceneOwner &&
+    scene.slots.secondaryMain?.kind === 'extension-detail';
+  const onExtensionDetailVisibilityChange = useCallback(
+    (visible: boolean) => {
+      if (!extensionSceneOwner) return;
+      setExtensionDetailOwner((current) => {
+        if (visible) return extensionSceneOwner;
+        return current === extensionSceneOwner ? undefined : current;
+      });
+    },
+    [extensionSceneOwner],
+  );
   const mainSplit =
-    assetPreviewVisible || characterDetailVisible
+    assetPreviewVisible || characterDetailVisible || extensionDetailVisible
       ? ('columns' as const)
       : workspaceScene
         ? (activeWorkbench.layout.main.split?.axis ?? 'none')
@@ -823,9 +982,10 @@ function DesktopSceneWorkbench({
   const secondaryMainVisible =
     assetPreviewVisible ||
     characterDetailVisible ||
+    extensionDetailVisible ||
     Boolean(workspaceScene && activeWorkbench.layout.main.groups[1]);
   const mainSplitResize: ControlledWorkbenchResizeBinding | undefined =
-    assetPreviewVisible || characterDetailVisible
+    assetPreviewVisible || characterDetailVisible || extensionDetailVisible
       ? createManagementMainSplitResizeBinding({
           label: t('workspace.resizeMainSplit'),
           onResizeEnd: (ratio) => {
@@ -843,14 +1003,6 @@ function DesktopSceneWorkbench({
       : undefined;
   const resourceDockVisible =
     workspaceResourceSurface !== undefined && activeResourcePresentation !== 'hidden';
-  const workspaceMainSurface =
-    workspaceScene && scene.slots.main?.kind === 'workspace-main' ? scene.slots.main : undefined;
-  const cutPanel = workspaceScene ? activeWorkbench.layout.cutPanel : undefined;
-  const workspaceCutSurface =
-    workspaceScene && scene.slots.cutPanel?.kind === 'workspace-cut'
-      ? scene.slots.cutPanel
-      : undefined;
-  const cutPanelVisible = workspaceCutSurface !== undefined && cutPanel?.presentation === 'docked';
   const characterManagerVisible =
     characterInteractionScene && scene.slots.rightManager?.kind === 'character-runtime-manager';
   const rightDockVisible = resourceDockVisible || characterManagerVisible;
@@ -858,7 +1010,7 @@ function DesktopSceneWorkbench({
     characterInteractionScene && scene.slots.cutPanel?.kind === 'character-room-timeline';
   const bottomPanelVisible = cutPanelVisible || roomTimelineVisible;
   const interactionResize =
-    workspaceScene && interactionPresentation === 'docked' && !pending
+    workspaceScene && interactionPresentation === 'docked' && !interactionLocks.workbench
       ? createProjectDockResizeBinding({
           actions,
           dock: {
@@ -873,7 +1025,7 @@ function DesktopSceneWorkbench({
         })
       : undefined;
   const resourceDockResize =
-    resourceDockVisible && !pending
+    resourceDockVisible && !interactionLocks.workbench
       ? createProjectDockResizeBinding({
           actions,
           dock: {
@@ -888,7 +1040,7 @@ function DesktopSceneWorkbench({
         })
       : undefined;
   const cutPanelResize =
-    cutPanelVisible && !pending
+    cutPanelVisible && !cutPanelExpanded && !interactionLocks.workbench
       ? {
           label: t('workspace.resizeCutPanel'),
           minSize: DESKTOP_WORKBENCH_LIMITS.cutPanelHeight.min,
@@ -922,7 +1074,7 @@ function DesktopSceneWorkbench({
           workspaceProject ? (
             <WorkspaceRegionControls
               actions={actions}
-              disabled={pending}
+              disabled={interactionLocks.workbench}
               regionState={{
                 agent: {
                   available: workspaceAgentSurface !== undefined,
@@ -935,7 +1087,7 @@ function DesktopSceneWorkbench({
                   selected:
                     workspaceMainSurface !== undefined &&
                     activeWorkbench.layout.main.views.length > 0 &&
-                    activeWorkbench.layout.display.mode !== 'chat-only',
+                    isWorkbenchRegionVisible(activeWorkbench.layout, 'main'),
                 },
                 management: {
                   available: workspaceResourceSurface !== undefined,
@@ -955,7 +1107,7 @@ function DesktopSceneWorkbench({
           <ApplicationPrimarySidebar
             activeSection={activeSection}
             compact={compact}
-            disabled={pending}
+            disabled={interactionLocks.navigation || interactionLocks.sidebar}
             activeProjectId={workspaceProject?.projectId}
             onDeleteConversations={actions.onDeleteConversations}
             onDeleteProjectConversations={(project) =>
@@ -976,7 +1128,7 @@ function DesktopSceneWorkbench({
         primarySidebarWidth={compact ? 64 : sidebar.width}
         primarySidebarResize={createApplicationPrimarySidebarResizeBinding({
           actions,
-          disabled: pending || compact,
+          disabled: interactionLocks.sidebar || compact,
           t,
           sidebar,
         })}
@@ -988,12 +1140,10 @@ function DesktopSceneWorkbench({
         main={portalDeck('main')}
         secondaryMain={portalDeck('secondaryMain', secondaryMainVisible)}
         secondaryMainVisible={secondaryMainVisible}
-        mainComposition={
-          assetPreviewVisible || characterDetailVisible ? 'independent-shells' : 'continuous'
-        }
+        mainComposition="continuous"
         mainSplit={mainSplit}
         mainSplitRatio={
-          assetPreviewVisible || characterDetailVisible
+          assetPreviewVisible || characterDetailVisible || extensionDetailVisible
             ? managementSplitRatio
             : activeWorkbench.layout.main.split?.ratio
         }
@@ -1004,6 +1154,7 @@ function DesktopSceneWorkbench({
             : undefined
         }
         bottomPanelVisible={bottomPanelVisible}
+        bottomPanelPresentation={cutPanelExpanded ? 'expanded' : 'docked'}
         bottomPanelHeight={cutPanel?.height ?? (roomTimelineVisible ? 260 : undefined)}
         bottomPanelResize={cutPanelResize}
         leftDock={portalDeck('leftDock', scene.context.kind === 'settings')}
@@ -1028,6 +1179,7 @@ function DesktopSceneWorkbench({
           actions={actions}
           composition={activeWorkbench}
           interactive={interactive}
+          onExtensionDetailVisibilityChange={onExtensionDetailVisibilityChange}
           portalTargets={portalTargets}
           projection={projection}
           roomWorkbench={roomWorkbench}
@@ -1074,6 +1226,7 @@ function DesktopWorkbenchRuntimePortals({
   actions,
   composition,
   interactive,
+  onExtensionDetailVisibilityChange,
   portalTargets,
   projection,
   roomWorkbench,
@@ -1082,6 +1235,7 @@ function DesktopWorkbenchRuntimePortals({
   readonly actions: ShellActions;
   readonly composition: DesktopWindowCompositionProjection;
   readonly interactive: boolean;
+  readonly onExtensionDetailVisibilityChange: (visible: boolean) => void;
   readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
   readonly projection: DesktopShellProjection;
   readonly roomWorkbench: ReturnType<typeof useCharacterRoomWorkbenchRuntime>;
@@ -1139,6 +1293,12 @@ function DesktopWorkbenchRuntimePortals({
     typeof assetPreviewSession === 'string' && assetCenter.projection ? (
       <DesktopAssetCenterMainSurface projection={assetCenter.projection} />
     ) : undefined;
+  const extensionDetailTarget =
+    scene.context.kind === 'extensions' && scene.slots.secondaryMain?.kind === 'extension-detail'
+      ? portalTargets.get(
+          createDesktopWorkbenchPortalTargetKey(composition.workbenchInstanceId, 'secondaryMain'),
+        )
+      : undefined;
   const mainContent =
     settingsSection !== undefined ? (
       <DesktopSettingsMainSurface section={settingsSection} />
@@ -1149,7 +1309,10 @@ function DesktopWorkbenchRuntimePortals({
     ) : scene.context.kind === 'extensions' ? (
       extensionManagement ? (
         <DesktopExtensionManagementSurface
+          detailLabel={t('home.capabilities.configuration')}
+          detailTarget={extensionDetailTarget}
           interactive={interactive}
+          onDetailVisibilityChange={onExtensionDetailVisibilityChange}
           runtime={extensionManagement}
         />
       ) : null
@@ -1157,6 +1320,7 @@ function DesktopWorkbenchRuntimePortals({
       <DesktopProjectCatalogSurface
         conversations={projection.agentHome.conversations}
         interactive={interactive}
+        onOpenDirectory={actions.onOpenWorkspaceDirectory}
         onOpen={actions.onSelectProject}
         onDeleteConversations={actions.onDeleteProjectConversations}
         onRemove={actions.onRemoveProjects}
@@ -1208,6 +1372,7 @@ function DesktopWorkbenchRuntimePortals({
         label={t('home.capabilities')}
         panelId="extension-management"
         role="management"
+        size="compact"
       >
         {mainContent}
       </StaticWorkbenchMainPanelSurface>
@@ -1423,41 +1588,6 @@ function CharacterRuntimeManagerSurface({
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-function WorkbenchMainPanelSurface({
-  active,
-  children,
-  mainGroupId,
-  label,
-  panelId,
-  role = 'workspace',
-  size = 'full',
-  tabs,
-}: {
-  readonly active?: boolean;
-  readonly children: ReactNode;
-  readonly mainGroupId?: string;
-  readonly label?: string;
-  readonly panelId: string;
-  readonly role?: 'workspace' | 'management' | 'detail';
-  readonly size?: 'compact' | 'full';
-  readonly tabs?: ReactNode;
-}): JSX.Element {
-  return (
-    <section
-      className="project-main-group desktop-workbench-main-panel"
-      data-active={active === undefined ? undefined : active ? 'true' : 'false'}
-      data-main-group={mainGroupId}
-      data-panel-role={role}
-      data-panel-size={size}
-      data-workbench-main-panel={panelId}
-      aria-label={label}
-    >
-      {tabs ? <header className="project-main-group__tabs">{tabs}</header> : null}
-      <div className="project-main-group__content">{children}</div>
     </section>
   );
 }
@@ -1819,7 +1949,7 @@ function useContentProjectWorkbenchSlots({
         );
   const mainSurface = (
     <MainViewGroupSurface
-      visible={workbench.display.mode !== 'chat-only'}
+      visible={isWorkbenchRegionVisible(workbench, 'main')}
       actions={actions}
       canvasCapability={canvasCapability}
       group={primaryGroup}
@@ -1854,7 +1984,7 @@ function useContentProjectWorkbenchSlots({
     bottomPanel,
     secondaryMain: secondaryGroup ? (
       <MainViewGroupSurface
-        visible={workbench.display.mode !== 'chat-only'}
+        visible={isWorkbenchRegionVisible(workbench, 'main')}
         actions={actions}
         canvasCapability={canvasCapability}
         group={secondaryGroup}
@@ -1972,36 +2102,38 @@ function MainViewGroupSurface({
       mainGroupId={group.groupId}
       panelId={`workspace:${group.groupId}`}
       tabs={
-        <WorkbenchEditorTabs
-          activeId={group.activeViewId}
-          emptyLabel={t('workspace.mainTabs.empty')}
-          label={t('workspace.mainTabs.label')}
-          contextActionsRef={setContextActionsTarget}
-          tabs={views.map((view) => ({
-            id: view.viewId,
-            label: view.displayLabel,
-            closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
-          }))}
-          onClose={(viewId) => {
-            const view = views.find((candidate) => candidate.viewId === viewId);
-            if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-            actions.onCloseWorkbenchView(workbenchInstanceId, workbench, view);
-          }}
-          onReorder={(sourceViewId, targetViewId) => {
-            actions.onUpdateWorkbench(
-              workbenchInstanceId,
-              reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
-            );
-          }}
-          onSelect={(viewId) => {
-            const view = views.find((candidate) => candidate.viewId === viewId);
-            if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-            actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusMainView(workbench, view));
-          }}
-        />
+        visible ? (
+          <WorkbenchEditorTabs
+            activeId={group.activeViewId}
+            emptyLabel={t('workspace.mainTabs.empty')}
+            label={t('workspace.mainTabs.label')}
+            contextActionsRef={setContextActionsTarget}
+            tabs={views.map((view) => ({
+              id: view.viewId,
+              label: view.displayLabel,
+              closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
+            }))}
+            onClose={(viewId) => {
+              const view = views.find((candidate) => candidate.viewId === viewId);
+              if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+              actions.onCloseWorkbenchView(workbenchInstanceId, workbench, view);
+            }}
+            onReorder={(sourceViewId, targetViewId) => {
+              actions.onUpdateWorkbench(
+                workbenchInstanceId,
+                reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
+              );
+            }}
+            onSelect={(viewId) => {
+              const view = views.find((candidate) => candidate.viewId === viewId);
+              if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+              actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusMainView(workbench, view));
+            }}
+          />
+        ) : undefined
       }
     >
-      {views.length === 0 ? (
+      {!visible || views.length === 0 ? (
         <EmptyMainSurface />
       ) : activeView && visible ? (
         <div className="project-main-view-stack__item" data-main-view-id={activeView.viewId}>
@@ -2083,6 +2215,8 @@ function WorkspaceRegionControls({
   readonly workbenchInstanceId: string;
 }): JSX.Element {
   const { t } = useTranslation();
+  const [creativePanelsOpen, setCreativePanelsOpen] = useState(false);
+  const creativePanelsSelected = regionState.main.selected || regionState.cutPanel.selected;
   return (
     <div
       className="workspace-region-controls"
@@ -2095,9 +2229,11 @@ function WorkspaceRegionControls({
         disabled={
           disabled ||
           !regionState.agent.available ||
-          (regionState.agent.selected && !regionState.main.selected)
+          (regionState.agent.selected &&
+            !regionState.main.selected &&
+            !regionState.cutPanel.selected)
         }
-        icon={<span className={toCodiconClassName('layout')} aria-hidden="true" />}
+        icon={<span className={toCodiconClassName('layout-sidebar-left')} aria-hidden="true" />}
         label={t('workspace.agent')}
         size="xs"
         title={t('workspace.agent')}
@@ -2106,41 +2242,89 @@ function WorkspaceRegionControls({
           actions.onUpdateWorkbench(workbenchInstanceId, toggleWorkbenchRegion(workbench, 'agent'))
         }
       />
-      <IconButton
-        className="workbench-region-toggle"
-        data-workbench-region-control="main"
-        disabled={
-          disabled ||
-          !regionState.main.available ||
-          (regionState.main.selected && !regionState.agent.selected)
+      <Popover
+        align="end"
+        contentClassName="workspace-creative-panels-popover"
+        onOpenChange={setCreativePanelsOpen}
+        open={creativePanelsOpen}
+        trigger={
+          <IconButton
+            className="workbench-region-toggle"
+            data-workbench-region-control="creative-panels"
+            disabled={disabled || (!regionState.main.available && !regionState.cutPanel.available)}
+            icon={<span className={toCodiconClassName('layout')} aria-hidden="true" />}
+            label={t('workspace.creativePanels')}
+            size="xs"
+            title={t('workspace.creativePanels')}
+            aria-expanded={creativePanelsOpen}
+            aria-haspopup="menu"
+            aria-pressed={creativePanelsSelected}
+          />
         }
-        icon={<span className={toCodiconClassName('layout-centered')} aria-hidden="true" />}
-        label={t('workspace.mainPanel')}
-        size="xs"
-        title={t('workspace.mainPanel')}
-        aria-pressed={regionState.main.selected}
-        onClick={() =>
-          actions.onUpdateWorkbench(workbenchInstanceId, toggleWorkbenchRegion(workbench, 'main'))
-        }
-      />
-      <IconButton
-        className="workbench-region-toggle"
-        data-workbench-region-control="cut-panel"
-        disabled={disabled || !regionState.cutPanel.available}
-        icon={<span className={toCodiconClassName('layout-panel')} aria-hidden="true" />}
-        label={t('workspace.cutPanel')}
-        size="xs"
-        title={t('workspace.cutPanel')}
-        aria-pressed={regionState.cutPanel.selected}
-        onClick={() =>
-          workbench.cutPanel
-            ? actions.onUpdateWorkbench(
+      >
+        <div
+          className="workspace-creative-panels-popover__menu"
+          role="menu"
+          aria-label={t('workspace.creativePanels')}
+        >
+          <button
+            type="button"
+            className="workspace-creative-panels-popover__item"
+            data-workbench-region-option="main"
+            disabled={
+              disabled ||
+              !regionState.main.available ||
+              (regionState.main.selected &&
+                !regionState.agent.selected &&
+                !regionState.cutPanel.selected)
+            }
+            role="menuitemcheckbox"
+            aria-checked={regionState.main.selected}
+            onClick={() =>
+              actions.onUpdateWorkbench(
                 workbenchInstanceId,
-                toggleWorkbenchRegion(workbench, 'cutPanel'),
+                toggleWorkbenchRegion(workbench, 'main'),
               )
-            : actions.onCreateCutDraft(workbenchInstanceId)
-        }
-      />
+            }
+          >
+            <span className={toCodiconClassName('layout-centered')} aria-hidden="true" />
+            <span>{t('workspace.mainPanel')}</span>
+            <span className="workspace-creative-panels-popover__check" aria-hidden="true">
+              {regionState.main.selected ? <span className={toCodiconClassName('check')} /> : null}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="workspace-creative-panels-popover__item"
+            data-workbench-region-option="cut-panel"
+            disabled={
+              disabled ||
+              !regionState.cutPanel.available ||
+              (regionState.cutPanel.selected &&
+                !regionState.agent.selected &&
+                !regionState.main.selected)
+            }
+            role="menuitemcheckbox"
+            aria-checked={regionState.cutPanel.selected}
+            onClick={() =>
+              workbench.cutPanel
+                ? actions.onUpdateWorkbench(
+                    workbenchInstanceId,
+                    toggleWorkbenchRegion(workbench, 'cutPanel'),
+                  )
+                : actions.onCreateCutDraft(workbenchInstanceId)
+            }
+          >
+            <span className={toCodiconClassName('layout-panel')} aria-hidden="true" />
+            <span>{t('workspace.cutPanel')}</span>
+            <span className="workspace-creative-panels-popover__check" aria-hidden="true">
+              {regionState.cutPanel.selected ? (
+                <span className={toCodiconClassName('check')} />
+              ) : null}
+            </span>
+          </button>
+        </div>
+      </Popover>
       <IconButton
         className="workbench-region-toggle"
         data-workbench-region-control="management"
@@ -2331,9 +2515,14 @@ function isWorkbenchRegionVisible(
   workbench: DesktopWorkbenchLayoutProjection,
   region: WorkbenchRegion,
 ): boolean {
-  if (region === 'agent') return workbench.display.mode !== 'main-only';
+  if (region === 'agent') {
+    return workbench.display.mode === 'chat-main' || workbench.display.mode === 'chat-only';
+  }
   if (region === 'main') {
-    return workbench.main.views.length > 0 && workbench.display.mode !== 'chat-only';
+    return (
+      workbench.main.views.length > 0 &&
+      (workbench.display.mode === 'chat-main' || workbench.display.mode === 'main-only')
+    );
   }
   if (region === 'management') return workbench.resourceDock.presentation !== 'hidden';
   return workbench.cutPanel?.presentation === 'docked';
@@ -2345,23 +2534,28 @@ export function toggleWorkbenchRegion(
 ): DesktopWorkbenchLayoutProjection {
   const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
   const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
+  const cutPanelVisible = isWorkbenchRegionVisible(workbench, 'cutPanel');
   if (region === 'agent') {
-    if (agentVisible && !mainVisible) {
-      throw new Error('Desktop Workbench cannot hide Agent while Main is unavailable.');
+    if (agentVisible) {
+      if (mainVisible) return setWorkbenchDisplayMode(workbench, 'main-only');
+      if (cutPanelVisible) return setWorkbenchDisplayMode(workbench, 'empty-main');
+      throw new Error('Desktop Workbench cannot hide the last visible business region.');
     }
     return setWorkbenchDisplayMode(
       workbench,
-      agentVisible ? 'main-only' : 'chat-main',
+      mainVisible ? 'chat-main' : 'chat-only',
       workbench.display.chatPosition,
     );
   }
   if (region === 'main') {
-    if (mainVisible && !agentVisible) {
-      throw new Error('Desktop Workbench cannot hide Main while Agent is unavailable.');
+    if (mainVisible) {
+      if (agentVisible) return setWorkbenchDisplayMode(workbench, 'chat-only');
+      if (cutPanelVisible) return setWorkbenchDisplayMode(workbench, 'empty-main');
+      throw new Error('Desktop Workbench cannot hide the last visible business region.');
     }
     return setWorkbenchDisplayMode(
       workbench,
-      mainVisible ? 'chat-only' : 'chat-main',
+      agentVisible ? 'chat-main' : 'main-only',
       workbench.display.chatPosition,
     );
   }
@@ -2373,6 +2567,9 @@ export function toggleWorkbenchRegion(
   }
   if (!workbench.cutPanel) {
     throw new Error('Desktop Workbench cannot toggle Cut Panel without an attached Cut View.');
+  }
+  if (cutPanelVisible && !agentVisible && !mainVisible) {
+    throw new Error('Desktop Workbench cannot hide the last visible business region.');
   }
   return setCutPanelPresentation(
     workbench,

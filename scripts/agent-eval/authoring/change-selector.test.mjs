@@ -49,6 +49,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         '.codex/skills/storyboard/SKILL.md',
         'packages/agent/runtime/src/prompt/system-prompt.ts',
         'packages/agent/runtime/src/tools/read-image-tool.ts',
+        'packages/automation/node/src/index.ts',
         'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
         'packages/host/src/settings/config-manager.ts',
         'packages/agent/runtime/src/application/agent-launch-service.ts',
@@ -86,6 +87,11 @@ describe('Agent Evaluation change-to-suite selector', () => {
         }),
         expect.objectContaining({
           behaviorId: 'capability-tool-routing',
+          suiteId: 'agent-runtime.external-automation',
+          changedPaths: ['packages/automation/node/src/index.ts'],
+        }),
+        expect.objectContaining({
+          behaviorId: 'capability-tool-routing',
           suiteId: 'agent-runtime.perception-routing',
         }),
         expect.objectContaining({
@@ -106,6 +112,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
           behaviorId: 'tool-call-lifecycle',
           suiteId: 'agent-runtime.workflow-controller',
           suiteIds: [
+            'agent-runtime.external-automation',
             'agent-runtime.workflow-controller',
             'agent-runtime.stream-delivery',
             'agent-runtime.creative-media-workflow',
@@ -119,7 +126,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         expect.objectContaining({
           behaviorId: 'tool-result-delivery',
           suiteId: 'agent-runtime.stream-delivery',
-          suiteIds: ['agent-runtime.stream-delivery'],
+          suiteIds: ['agent-runtime.external-automation', 'agent-runtime.stream-delivery'],
         }),
         expect.objectContaining({
           behaviorId: 'timeline-projection-authority',
@@ -129,7 +136,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         expect.objectContaining({
           behaviorId: 'desktop-event-projection',
           suiteId: 'agent-runtime.stream-delivery',
-          suiteIds: ['agent-runtime.stream-delivery'],
+          suiteIds: ['agent-runtime.external-automation', 'agent-runtime.stream-delivery'],
         }),
         expect.objectContaining({
           behaviorId: 'resource-display-projection',
@@ -172,6 +179,32 @@ describe('Agent Evaluation change-to-suite selector', () => {
         },
       ]),
     );
+  });
+
+  it('maps external automation packages and Desktop boundaries to their exact suite', () => {
+    const paths = [
+      'packages/automation/contracts/src/index.ts',
+      'packages/agent/runtime/src/extensions/automation-capability-adapter.ts',
+      'apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.ts',
+      'apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.ts',
+      'apps/neko-desktop/src/renderer/desktop-automation-target-selection-runtime.ts',
+      'apps/neko-desktop/src/shared/automation-target-selection-contract.ts',
+    ];
+    expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
+    expect(selectEvaluationCoverage(paths)).toEqual([
+      {
+        behaviorId: 'capability-tool-routing',
+        suiteId: 'agent-runtime.external-automation',
+        suiteIds: [
+          'agent-runtime.external-automation',
+          'agent-runtime.perception-routing',
+          'skill.skill-creator',
+          'skill.image',
+          'skill.video',
+        ],
+        changedPaths: paths,
+      },
+    ]);
   });
 
   it('deduplicates files owned by the same behavior and suite', () => {

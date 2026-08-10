@@ -110,6 +110,60 @@ describe('NodePiConversationAuthority', () => {
     expect(context.messages).toEqual([expect.objectContaining({ role: 'user', content: 'hello' })]);
   });
 
+  it('checkpoints exact Turn presentation timing between its user and assistant messages', async () => {
+    const authority = await createAuthority('desktop-turn-timing');
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+
+    await authority.checkpointTurn({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      turnId: 'turn-1',
+      terminalState: 'completed',
+      userMessagePresentation: { turnId: 'turn-1', content: 'Inspect' },
+      turnPresentationTiming: { turnId: 'turn-1', startedAt: 100, completedAt: 248_000 },
+      messages: [
+        { role: 'user', content: 'Inspect', timestamp: 90 },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Done' }],
+          api: 'openai-completions',
+          provider: 'fixture',
+          model: 'fixture-model',
+          usage: {
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 2,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: 'stop',
+          timestamp: 200,
+        },
+      ],
+    });
+
+    const entries = await authority.readBranchEntries('conversation-1', 'branch-main');
+    expect(
+      entries.map((entry) => (entry.type === 'custom' ? entry.customType : entry.message.role)),
+    ).toEqual([
+      'openneko.user-message-presentation',
+      'user',
+      'openneko.turn-presentation-timing',
+      'assistant',
+    ]);
+    expect(entries[2]).toMatchObject({
+      type: 'custom',
+      data: { turnId: 'turn-1', startedAt: 100, completedAt: 248_000 },
+    });
+  });
+
   it('keeps conversation, branch, and Pi Session identities distinct across history', async () => {
     const authority = await createAuthority('desktop-secondary');
     const lease = authority.acquireLease('conversation-1');

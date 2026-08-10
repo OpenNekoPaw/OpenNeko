@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import {
   createDefaultDesktopWorkbenchLayout,
+  openOrFocusCutView,
   openOrFocusMainView,
   setWorkbenchDisplayMode,
+  type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
@@ -40,8 +42,17 @@ import type {
   OpenNekoDesktopProjectPortabilityBridge,
 } from '@neko/assets-domain/contracts';
 import type { RoomView } from '@neko/chara/contracts';
+import type { DesktopLifecycleEvent } from '../shared/bridge-contract';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+class TestResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+Object.assign(globalThis, { ResizeObserver: TestResizeObserver });
 
 const rendererInstrumentation = vi.hoisted(() => ({
   extensionRootRender: vi.fn(),
@@ -50,16 +61,30 @@ const rendererInstrumentation = vi.hoisted(() => ({
 
 vi.mock('./DesktopExtensionManagementSurface', () => ({
   DesktopExtensionManagementSurface: ({
+    onDetailVisibilityChange,
     runtime,
   }: {
+    readonly onDetailVisibilityChange: (visible: boolean) => void;
     readonly runtime: DesktopExtensionManagementRuntime;
   }) => {
     rendererInstrumentation.extensionRootRender(runtime.identity.windowId);
     return (
-      <div
-        data-extension-management-root="agent"
-        data-extension-management-window={runtime.identity.windowId}
-      />
+      <>
+        <div
+          data-extension-management-root="agent"
+          data-extension-management-window={runtime.identity.windowId}
+        />
+        <button
+          data-select-extension-detail="true"
+          type="button"
+          onClick={() => onDetailVisibilityChange(true)}
+        />
+        <button
+          data-clear-extension-detail="true"
+          type="button"
+          onClick={() => onDetailVisibilityChange(false)}
+        />
+      </>
     );
   },
 }));
@@ -88,6 +113,12 @@ vi.mock('./DesktopTextEditorSurface', () => ({
     rendererInstrumentation.textEditorRootRender(view.viewId);
     return <div data-text-editor-root={view.viewId} />;
   },
+}));
+
+vi.mock('./DesktopCutSurface', () => ({
+  DesktopCutSurface: ({ view }: { readonly view: { readonly viewId: string } }) => (
+    <div data-cut-root={view.viewId} />
+  ),
 }));
 
 describe('DesktopApplication scene lifecycle', () => {
@@ -142,6 +173,160 @@ describe('DesktopApplication scene lifecycle', () => {
 
     await act(async () => root.unmount());
     expect(activeSubscriptions).toBe(0);
+  });
+
+  it('keeps Workspace layout controls interactive while a Sidebar mutation is pending', async () => {
+    const projection = createTextEditorShellProjection();
+    const update = deferred<DesktopShellProjection>();
+    const updateApplicationSidebar = vi.fn(() => update.promise);
+    installBridge({ projection, updateApplicationSidebar });
+    const { container, root } = await renderApplication();
+
+    const collapse = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse sidebar"]',
+    );
+    if (!collapse) throw new Error('Desktop fixture requires the Sidebar toggle.');
+    const layoutControlStateBefore = new Map(
+      [...container.querySelectorAll<HTMLButtonElement>('[data-workbench-region-control]')]
+        .filter((control) => control.dataset['workbenchRegionControl'] !== 'primary-sidebar')
+        .map((control) => [control.dataset['workbenchRegionControl'], control.disabled]),
+    );
+    await act(async () => collapse.click());
+    await waitFor(() => updateApplicationSidebar.mock.calls.length === 1);
+
+    const layoutControls = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-workbench-region-control]'),
+    ].filter((control) => control.dataset['workbenchRegionControl'] !== 'primary-sidebar');
+    expect(layoutControls.length).toBeGreaterThan(0);
+    expect(
+      new Map(
+        layoutControls.map((control) => [
+          control.dataset['workbenchRegionControl'],
+          control.disabled,
+        ]),
+      ),
+    ).toEqual(layoutControlStateBefore);
+
+    await act(async () =>
+      update.resolve({
+        ...projection,
+        window: {
+          ...projection.window,
+          applicationSidebar: { ...projection.window.applicationSidebar, visible: false },
+        },
+      }),
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('delegates the Main choice from one combined creative-panel control', async () => {
+    const projection = createTextEditorCutShellProjection('main-only');
+    const updateWorkbench = vi.fn(
+      async (_workbenchInstanceId: string, _layout: DesktopWorkbenchLayoutProjection) => projection,
+    );
+    installBridge({ projection, updateWorkbench });
+    const { container, root } = await renderApplication();
+
+    const controls = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-workbench-region-control]'),
+    ].filter((control) => control.dataset['workbenchRegionControl'] !== 'primary-sidebar');
+    expect(controls.map((control) => control.dataset['workbenchRegionControl'])).toEqual([
+      'agent',
+      'creative-panels',
+      'management',
+    ]);
+    expect(container.querySelector('[data-workbench-region-control="main"]')).toBeNull();
+    expect(container.querySelector('[data-workbench-region-control="cut-panel"]')).toBeNull();
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-control="creative-panels"]',
+    );
+    if (!trigger) throw new Error('Desktop fixture requires the creative panel control.');
+    await act(async () => trigger.click());
+    const mainOption = document.body.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-option="main"]',
+    );
+    const cutOption = document.body.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-option="cut-panel"]',
+    );
+    expect(mainOption?.getAttribute('aria-checked')).toBe('true');
+    expect(cutOption?.getAttribute('aria-checked')).toBe('true');
+
+    if (!mainOption || !cutOption) throw new Error('Desktop creative panel options are missing.');
+    await act(async () => mainOption.click());
+    await waitFor(() => updateWorkbench.mock.calls.length === 1);
+    expect(updateWorkbench.mock.calls[0]?.[1]).toMatchObject({
+      display: { mode: 'empty-main' },
+      cutPanel: { presentation: 'docked' },
+    });
+
+    await act(async () => root.unmount());
+  });
+
+  it('delegates the Cut choice from the combined creative-panel control', async () => {
+    const projection = createTextEditorCutShellProjection('main-only');
+    const updateWorkbench = vi.fn(
+      async (_workbenchInstanceId: string, _layout: DesktopWorkbenchLayoutProjection) => projection,
+    );
+    installBridge({ projection, updateWorkbench });
+    const { container, root } = await renderApplication();
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-control="creative-panels"]',
+    );
+    if (!trigger) throw new Error('Desktop fixture requires the creative panel control.');
+    await act(async () => trigger.click());
+    const cutOption = document.body.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-option="cut-panel"]',
+    );
+    if (!cutOption) throw new Error('Desktop Cut panel option is missing.');
+    expect(cutOption.getAttribute('aria-checked')).toBe('true');
+    expect(cutOption.disabled).toBe(false);
+
+    await act(async () => cutOption.click());
+    await waitFor(() => updateWorkbench.mock.calls.length === 1);
+    expect(updateWorkbench.mock.calls[0]?.[1]).toMatchObject({
+      display: { mode: 'main-only' },
+      cutPanel: { presentation: 'hidden' },
+    });
+
+    await act(async () => root.unmount());
+  });
+
+  it('expands Cut and unmounts the Main View in Cut-only mode', async () => {
+    const projection = createTextEditorCutShellProjection('empty-main');
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+
+    expect(
+      container
+        .querySelector('[data-neko-controlled-workbench="true"]')
+        ?.getAttribute('data-interaction-presentation'),
+    ).toBe('hidden');
+    expect(
+      container
+        .querySelector('[data-neko-controlled-workbench="true"]')
+        ?.getAttribute('data-bottom-panel-presentation'),
+    ).toBe('expanded');
+    expect(container.querySelector('[data-main-view-id]')).toBeNull();
+    expect(rendererInstrumentation.textEditorRootRender).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-workbench-slot="bottomPanel"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('keeps Agent docked while Cut expands when Main is hidden', async () => {
+    const projection = createTextEditorCutShellProjection('chat-only');
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+    const shell = container.querySelector('[data-neko-controlled-workbench="true"]');
+
+    expect(shell?.getAttribute('data-interaction-presentation')).toBe('docked');
+    expect(shell?.getAttribute('data-bottom-panel-presentation')).toBe('expanded');
+    expect(container.querySelector('[data-cut-root="cut:view-1"]')).not.toBeNull();
+    expect(container.querySelector('[data-workbench-slot="bottomPanel"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
   });
 
   it.each([
@@ -344,6 +529,55 @@ describe('DesktopApplication scene lifecycle', () => {
 
     expect(getSnapshot).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[data-extension-management-root="agent"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('unmounts the outgoing Scene while renderer identity is replaced and restores on ready', async () => {
+    const initial = withActiveScene(createProjection(), settingsScene());
+    const replacement: DesktopShellProjection = {
+      ...initial,
+      rendererSessionId: 'app-1:window-1:2',
+    };
+    let lifecycleListener: ((event: DesktopLifecycleEvent) => void) | undefined;
+    const getSnapshot = vi
+      .fn<() => Promise<DesktopShellProjection>>()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(replacement);
+    installBridge({
+      projection: initial,
+      getSnapshot,
+      lifecycleSubscribe: vi.fn((listener) => {
+        lifecycleListener = listener;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await act(async () => {
+      lifecycleListener?.({
+        applicationInstanceId: initial.applicationInstanceId,
+        windowId: initial.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
+        sequence: 1,
+        type: 'renderer-loading',
+      });
+    });
+
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBeNull();
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      lifecycleListener?.({
+        applicationInstanceId: initial.applicationInstanceId,
+        windowId: initial.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
+        sequence: 2,
+        type: 'renderer-ready',
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
   });
 
@@ -968,6 +1202,33 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('mounts an edge-to-edge Extensions detail split only after exact selection', async () => {
+    const projection = withActiveScene(createProjection(), extensionsScene());
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+    const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+
+    expect(shell?.dataset.mainSplit).toBe('none');
+    expect(shell?.dataset.mainComposition).toBe('continuous');
+    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).toBeNull();
+    expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
+
+    const select = container.querySelector<HTMLButtonElement>('[data-select-extension-detail]');
+    await act(async () => select?.click());
+    expect(shell?.dataset.mainSplit).toBe('columns');
+    expect(shell?.dataset.mainComposition).toBe('continuous');
+    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).not.toBeNull();
+    expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
+
+    const clear = container.querySelector<HTMLButtonElement>('[data-clear-extension-detail]');
+    await act(async () => clear?.click());
+    expect(shell?.dataset.mainSplit).toBe('none');
+    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Resize Main split"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it('composes Asset management and Preview with shared panels and a resizable compact split', async () => {
     const base = createProjection();
     const assetCenterSessionId = 'asset-center:window-1:1';
@@ -1018,7 +1279,7 @@ describe('DesktopApplication scene lifecycle', () => {
     ]);
   });
 
-  it('keeps low-information Project selection in the full management Main', async () => {
+  it('opens a Project Management card directly through the exact scene intent', async () => {
     const base = createProjection();
     const project = {
       projectId: 'content:workspace-1',
@@ -1035,15 +1296,25 @@ describe('DesktopApplication scene lifecycle', () => {
       },
       projectManagementScene(),
     );
-    installBridge({ projection });
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'project-management-open',
+      scene: activeScene(projection),
+    }));
+    installBridge({ projection, transition });
 
     const { container, root } = await renderApplication();
     const projectButton = container.querySelector<HTMLButtonElement>(
-      '.management-surface-row__select',
+      '.management-surface-row__open',
     );
     if (!projectButton) throw new Error('Project management fixture requires a Project row.');
     await act(async () => projectButton.click());
-    await waitFor(() => projectButton.getAttribute('aria-pressed') === 'true');
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenCalledWith(
+      projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      activeScene(projection).sceneId,
+    );
 
     const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
     expect(shell?.dataset.mainSplit).toBe('none');
@@ -1054,6 +1325,8 @@ describe('DesktopApplication scene lifecycle', () => {
     ).toBe(true);
     expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
     expect(container.querySelector('[aria-label="Open project: Project one"]')).toBeNull();
+    expect(container.querySelector('.project-management-batch-toolbar')).toBeNull();
+    expect(projectButton.hasAttribute('aria-pressed')).toBe(false);
     expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
     expect(projectButton.closest('[data-project-id="content:workspace-1"]')).not.toBeNull();
     expect(container.textContent).toContain('Project one');
@@ -1821,7 +2094,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('confirms and delegates the complete Project Management selection as one batch', async () => {
+  it('confirms and delegates one exact Project Management item removal', async () => {
     const base = createProjection();
     const projects = [
       {
@@ -1854,27 +2127,19 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, removeProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { container, root } = await renderApplication();
-    await waitFor(() => container.querySelector('.management-surface-row__select') !== null);
-    const selectionButtons = container.querySelectorAll<HTMLButtonElement>(
-      '.management-surface-row__select',
+    await waitFor(() => container.querySelector('[aria-label="Remove First Project"]') !== null);
+    const removeProject = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Remove First Project"]',
     );
-    const first = selectionButtons[0];
-    const second = selectionButtons[1];
-    if (!first || !second) throw new Error('Project Management batch fixture is incomplete.');
-    await act(async () => first.click());
-    await act(async () =>
-      second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })),
-    );
-    const removeSelected = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Remove selected',
-    );
-    if (!removeSelected) throw new Error('Project Management batch action is unavailable.');
+    if (!removeProject) throw new Error('Project Management item removal is unavailable.');
+    expect(container.querySelector('.project-management-batch-toolbar')).toBeNull();
+    expect(container.querySelector('[data-selected]')).toBeNull();
 
-    await act(async () => removeSelected.click());
+    await act(async () => removeProject.click());
     expect(removeProjects).not.toHaveBeenCalled();
-    await act(async () => removeSelected.click());
+    await act(async () => removeProject.click());
     await waitFor(() => removeProjects.mock.calls.length === 1);
-    expect(removeProjects).toHaveBeenCalledWith(['content:workspace-1', 'content:workspace-2']);
+    expect(removeProjects).toHaveBeenCalledWith(['content:workspace-1']);
     await act(async () => root.unmount());
   });
 
@@ -2200,6 +2465,7 @@ function installBridge({
   textEditorExecute = vi.fn(),
   characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
   characterRoomSubscribe = vi.fn(() => () => undefined),
+  lifecycleSubscribe = vi.fn(() => () => undefined),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -2215,11 +2481,13 @@ function installBridge({
   readonly textEditorExecute?: (request: TextEditorHostRequest) => Promise<TextEditorHostResult>;
   readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
   readonly characterRoomSubscribe?: typeof window.openNekoDesktop.characterRoomWorkbench.subscribe;
+  readonly lifecycleSubscribe?: (listener: (event: DesktopLifecycleEvent) => void) => () => void;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
     value: {
       shell: { getSnapshot, subscribe },
+      lifecycle: { subscribe: lifecycleSubscribe },
       scenes: { transition },
       conversations: { delete: deleteConversation },
       projects: { remove: removeProjects, deleteConversations: deleteProjectConversations },
@@ -2239,7 +2507,6 @@ function installBridge({
         attach: vi.fn(() => new Promise(() => undefined)),
         authorizeResource: vi.fn(),
         bindTarget: vi.fn(),
-        bindAssistant: vi.fn(),
         searchWorkspaceMentions: vi.fn(),
         submitDraft: vi.fn(),
         detach: vi.fn(),
@@ -2273,6 +2540,17 @@ async function renderApplication(strict = false) {
   await act(async () => root.render(strict ? <StrictMode>{application}</StrictMode> : application));
   await waitFor(() => container.querySelector('[data-neko-controlled-workbench="true"]') !== null);
   return { container, root };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }
 
 function createProjection(): DesktopShellProjection {
@@ -2380,6 +2658,41 @@ function createTextEditorShellProjection(): DesktopShellProjection {
         scene,
       }),
     },
+  };
+}
+
+function createTextEditorCutShellProjection(
+  mode: 'chat-only' | 'main-only' | 'empty-main',
+): DesktopShellProjection {
+  const base = createTextEditorShellProjection();
+  const current = resolveActiveDesktopWindowWorkbench(base.window);
+  const cutView = {
+    viewId: 'cut:view-1',
+    viewInstanceId: 'view-instance-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    kind: 'cut' as const,
+    ownerId: 'cut-session:view-1',
+    displayLabel: 'story.otio',
+    documentId: 'story.otio',
+  };
+  const layout = setWorkbenchDisplayMode(openOrFocusCutView(current.layout, cutView), mode);
+  const scene = parseDesktopWorkbenchSceneProjection({
+    ...current.scene,
+    slots: {
+      ...current.scene.slots,
+      cutPanel: {
+        kind: 'workspace-cut',
+        workspaceId: 'workspace-1',
+        viewId: cutView.viewId,
+        viewInstanceId: cutView.viewInstanceId,
+        ownerId: cutView.ownerId,
+      },
+    },
+  });
+  return {
+    ...withActiveScene(base, scene, layout),
+    domains: [{ surface: 'cut', status: 'ready', ownerSlice: 'P1.5' }],
   };
 }
 
@@ -2597,6 +2910,7 @@ function extensionsScene() {
     context: { kind: 'extensions' },
     slots: {
       main: { kind: 'extension-management' },
+      secondaryMain: { kind: 'extension-detail' },
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -2641,7 +2955,7 @@ function expectManagementSplit(
 ): void {
   const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
   expect(shell?.dataset.mainSplit).toBe('columns');
-  expect(shell?.dataset.mainComposition).toBe('independent-shells');
+  expect(shell?.dataset.mainComposition).toBe('continuous');
   expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('50%');
   expect(
     container.querySelector(
@@ -2651,7 +2965,7 @@ function expectManagementSplit(
   expect(container.querySelector(`[data-workbench-main-panel="${detailPanelId}"]`)).not.toBeNull();
   expect(container.querySelector('[data-workbench-main-shell="primary"]')).not.toBeNull();
   expect(container.querySelector('[data-workbench-main-shell="secondary"]')).not.toBeNull();
-  expect(container.querySelector('[data-workbench-main-gutter="true"]')).not.toBeNull();
+  expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
   expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
 }
 

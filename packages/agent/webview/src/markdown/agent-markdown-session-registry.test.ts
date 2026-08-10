@@ -57,6 +57,86 @@ describe('agent markdown session registry', () => {
     expect(final?.document.root.children.some((node) => node.type === 'table')).toBe(true);
   });
 
+  it('bounds intermediate parsing while preserving every append byte', () => {
+    const scheduled = createManualScheduler();
+    const registry = createAgentMarkdownSessionRegistry({
+      scheduleStreamingUpdate: scheduled.schedule,
+    });
+    const key = sessionKey();
+    const listener = vi.fn();
+    registry.subscribe(key, listener);
+
+    registry.commitProjectionPatch(projectionPatch('first', 1)).publish();
+    listener.mockClear();
+    registry.commitProjectionPatch(projectionPatch(' second', 2)).publish();
+    registry.commitProjectionPatch(projectionPatch(' third', 3)).publish();
+
+    expect(scheduled.size()).toBe(1);
+    expect(registry.getSnapshot(key)?.source).toBe('first');
+    expect(registry.metrics().renderUpdates).toBe(1);
+    expect(listener).not.toHaveBeenCalled();
+
+    scheduled.flush();
+
+    expect(registry.getSnapshot(key)).toMatchObject({
+      source: 'first second third',
+      isFinal: false,
+    });
+    expect(registry.metrics().renderUpdates).toBe(2);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a scheduled update and converges synchronously on finalization', () => {
+    const scheduled = createManualScheduler();
+    const registry = createAgentMarkdownSessionRegistry({
+      scheduleStreamingUpdate: scheduled.schedule,
+    });
+    const key = sessionKey();
+
+    registry.commitProjectionPatch(projectionPatch('partial', 1)).publish();
+    registry.commitProjectionPatch(projectionPatch(' final', 2)).publish();
+    expect(scheduled.size()).toBe(1);
+
+    registry
+      .commitProjectionPatch({
+        ...projectionPatch('', 3),
+        operations: [
+          {
+            operation: 'complete',
+            itemId: 'text-1',
+            kind: 'assistant_text',
+            status: 'complete',
+            updatedAt: 3,
+          },
+        ],
+        completion: { status: 'completed', completedAt: 3 },
+      })
+      .publish();
+
+    expect(scheduled.size()).toBe(0);
+    expect(registry.getSnapshot(key)).toMatchObject({
+      source: 'partial final',
+      isFinal: true,
+    });
+    expect(registry.metrics().renderUpdates).toBe(2);
+  });
+
+  it('cancels a scheduled update when an authoritative snapshot removes the turn', () => {
+    const scheduled = createManualScheduler();
+    const registry = createAgentMarkdownSessionRegistry({
+      scheduleStreamingUpdate: scheduled.schedule,
+    });
+
+    registry.commitProjectionPatch(projectionPatch('partial', 1)).publish();
+    registry.commitProjectionPatch(projectionPatch(' update', 2)).publish();
+    expect(scheduled.size()).toBe(1);
+
+    registry.commitProjectionSnapshot({ conversationId: 'conv-1', turns: [] }).publish();
+
+    expect(scheduled.size()).toBe(0);
+    expect(registry.getSnapshot(sessionKey())).toBeUndefined();
+  });
+
   it('reconciles a missing parser session from the authoritative projection snapshot', () => {
     const registry = createAgentMarkdownSessionRegistry();
     const key = sessionKey();
@@ -146,6 +226,26 @@ describe('agent markdown session registry', () => {
     expect(registry.getSnapshot(sessionKey('conv-b'))?.source).toBe('B');
   });
 });
+
+function createManualScheduler(): {
+  readonly schedule: (callback: () => void) => () => void;
+  readonly size: () => number;
+  readonly flush: () => void;
+} {
+  const callbacks = new Set<() => void>();
+  return {
+    schedule: (callback) => {
+      callbacks.add(callback);
+      return () => callbacks.delete(callback);
+    },
+    size: () => callbacks.size,
+    flush: () => {
+      const pending = [...callbacks];
+      callbacks.clear();
+      for (const callback of pending) callback();
+    },
+  };
+}
 
 function sessionKey(conversationId = 'conv-1'): string {
   return createAgentMarkdownSessionKey({

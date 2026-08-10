@@ -13,6 +13,7 @@ import {
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
   CANVAS_REVEAL_ACTION_ID,
+  CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
 } from './canvas-material-action-owner';
 
 const identity: CanvasHostRuntimeIdentity = {
@@ -270,6 +271,61 @@ describe('Desktop Canvas material action owner', () => {
 
     expect(addToCut).toHaveBeenCalledWith({ identity, target: videoTarget, executionPayload });
     await expect(owner.resolve({ identity, targets: [target] })).resolves.toEqual([]);
+  });
+
+  it('contributes and dispatches Cut-owned Video audio separation with the exact target payload', async () => {
+    const videoTarget: CanvasMaterialActionTarget = {
+      nodeId: 'video-1',
+      mediaKind: 'video',
+      origin: 'generated',
+      locator: {
+        kind: 'generated-output',
+        outputId: 'video-output-1',
+        digest: 'sha256:video-output-1',
+        path: 'neko/generated/video-output-1.mp4',
+      },
+    };
+    const executionPayload = {
+      target: {
+        kind: 'existing-cut',
+        viewId: 'cut-view-1',
+        documentId: 'edits/sequence.otio',
+      },
+    } as const;
+    const separateAudioInCut = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({
+      resolveAddToCut: async () => executionPayload,
+      addToCut: async () => undefined,
+      separateAudioInCut,
+    });
+
+    const descriptors = await owner.resolve({ identity, targets: [videoTarget] });
+    const descriptor = descriptors.find(
+      (candidate) => candidate.id === CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+    );
+    if (!descriptor) throw new Error('Video audio-separation descriptor is missing.');
+
+    await owner.execute({
+      identity,
+      descriptor,
+      action: {
+        identity: {
+          projectId: identity.projectId,
+          canvasId: identity.documentId,
+          canvasSessionId: identity.sessionId,
+        },
+        actionId: descriptor.id,
+        selectedNodeIds: [videoTarget.nodeId],
+        payload: executionPayload,
+      },
+      targets: [videoTarget],
+    });
+
+    expect(separateAudioInCut).toHaveBeenCalledWith({
+      identity,
+      target: videoTarget,
+      executionPayload,
+    });
   });
 
   it('exposes explicit project/global Media Library copies and never an Asset promotion action', async () => {

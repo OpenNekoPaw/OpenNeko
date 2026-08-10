@@ -14,6 +14,7 @@ export interface NodeWorkspaceResourceCacheMetadataBinding {
 }
 
 export interface NodeGlobalResourceCacheMetadataBinding {
+  readonly metadataStore: LocalMetadataStore;
   readonly manifestStore: ResourceCacheManifestStore;
   dispose(): Promise<void>;
 }
@@ -31,6 +32,7 @@ export async function createNodeGlobalResourceCacheMetadataBinding(options: {
     await initializeCoreLocalMetadataTables(metadataStore);
     await initializeResourceCacheTables(metadataStore);
     return {
+      metadataStore,
       manifestStore: new LocalMetadataResourceCacheManifestStore({
         metadataStore,
         partition: { scope: 'global', workspaceId: null, domain: 'resource-cache' },

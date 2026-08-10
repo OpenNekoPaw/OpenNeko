@@ -1,4 +1,8 @@
-import type { CanonicalCanvasNodeType } from '@neko/canvas-domain';
+import {
+  CANVAS_DEFAULT_CONTAINER_MIN_SIZE,
+  CANVAS_DEFAULT_NODE_MIN_SIZE,
+  CANVAS_NODE_MIN_SIZES,
+} from '@neko/canvas-domain';
 
 export interface NodeSize {
   width: number;
@@ -16,20 +20,10 @@ export interface NodeSizingInput {
   container?: unknown;
 }
 
-export const DEFAULT_NODE_MIN_SIZE: NodeSize = { width: 180, height: 120 };
-const DEFAULT_CONTAINER_MIN_SIZE: NodeSize = { width: 260, height: 180 };
+export const DEFAULT_NODE_MIN_SIZE: NodeSize = CANVAS_DEFAULT_NODE_MIN_SIZE;
+const DEFAULT_CONTAINER_MIN_SIZE: NodeSize = CANVAS_DEFAULT_CONTAINER_MIN_SIZE;
 
-const KNOWN_NODE_TYPE_MIN_SIZES = {
-  markdown: { width: 180, height: 120 },
-  media: { width: 200, height: 120 },
-  group: { width: 260, height: 180 },
-  generation: { width: 200, height: 120 },
-  job: { width: 240, height: 150 },
-  file: { width: 180, height: 160 },
-  'canvas-embed': { width: 220, height: 150 },
-} satisfies Record<CanonicalCanvasNodeType, NodeSize>;
-
-const NODE_TYPE_MIN_SIZES: Readonly<Partial<Record<string, NodeSize>>> = KNOWN_NODE_TYPE_MIN_SIZES;
+const NODE_TYPE_MIN_SIZES: Readonly<Partial<Record<string, NodeSize>>> = CANVAS_NODE_MIN_SIZES;
 
 export function resolveNodeMinSize(node: NodeSizingInput): NodeSize {
   const knownSize = NODE_TYPE_MIN_SIZES[node.type];

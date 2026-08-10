@@ -16,6 +16,7 @@ export * from './agent-launch';
 export * from './agent-launch-host';
 export * from './agent-model-catalog';
 export * from './agent-output-validation';
+export { parseAgentFlatPurposeModelRefs } from './agent-purpose-model';
 export * from './agent-conversation-context';
 export * from './assistant-resource-host';
 export * from './agent-draft-submit';
@@ -86,6 +87,7 @@ export {
 // Message protocol
 export type {
   Message,
+  MessageTurnTiming,
   MessageContextReference,
   AgentFileReference,
   AgentFileReferenceMediaType,

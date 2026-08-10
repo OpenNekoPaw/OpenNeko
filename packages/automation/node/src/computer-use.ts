@@ -8,6 +8,7 @@ export const CUA_DRIVER_OBSERVE_PROFILE: AutomationProfile = Object.freeze({
     providerId: 'cua-driver',
     kind: 'computer',
     upstreamRelease: '0.19.2',
+    deliverySource: Object.freeze({ kind: 'github-release' as const }),
   }),
   operations: Object.freeze([
     Object.freeze({

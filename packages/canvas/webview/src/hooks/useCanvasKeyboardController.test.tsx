@@ -43,6 +43,7 @@ describe('useCanvasKeyboardController', () => {
       window.dispatchEvent(createKeyEvent('z', 'KeyZ', { ctrlKey: true, shiftKey: true }));
       window.dispatchEvent(createKeyEvent('s', 'KeyS', { ctrlKey: true }));
       window.dispatchEvent(createKeyEvent('g', 'KeyG', { ctrlKey: true }));
+      window.dispatchEvent(createKeyEvent('g', 'KeyG', { ctrlKey: true, shiftKey: true }));
     });
 
     expect(options.onDeleteSelected).toHaveBeenCalledTimes(1);
@@ -50,6 +51,8 @@ describe('useCanvasKeyboardController', () => {
     expect(options.onUndo).toHaveBeenCalledTimes(1);
     expect(options.onRedo).toHaveBeenCalledTimes(1);
     expect(options.onSave).toHaveBeenCalledTimes(1);
+    expect(options.onGroup).toHaveBeenCalledTimes(1);
+    expect(options.onUngroup).toHaveBeenCalledTimes(1);
   });
 
   it('does not mutate editor state while a nested input has DOM focus', () => {
@@ -188,11 +191,17 @@ describe('useCanvasKeyboardController', () => {
 
     act(() => {
       viewport.dispatchEvent(createKeyEvent('h', 'KeyH'));
+      viewport.dispatchEvent(createKeyEvent('v', 'KeyV'));
+      viewport.dispatchEvent(createKeyEvent('-', 'Minus', { ctrlKey: true }));
+      viewport.dispatchEvent(createKeyEvent('=', 'Equal', { ctrlKey: true }));
       viewport.dispatchEvent(createKeyEvent(' ', 'Space'));
       viewport.dispatchEvent(createKeyEvent(' ', 'Space', {}, 'keyup'));
     });
 
     expect(options.onTogglePanMode).toHaveBeenCalledTimes(1);
+    expect(options.onSelectMode).toHaveBeenCalledTimes(1);
+    expect(options.onZoomOut).toHaveBeenCalledTimes(1);
+    expect(options.onZoomIn).toHaveBeenCalledTimes(1);
     expect(options.onSpacePanStart).toHaveBeenCalledTimes(1);
     expect(options.onSpacePanEnd).toHaveBeenCalledTimes(1);
 
@@ -214,6 +223,8 @@ function createOptions(
 ): UseCanvasKeyboardControllerOptions {
   return {
     state: {
+      canGroupSelection: true,
+      canUngroupSelection: true,
       canDeleteSelection: true,
       hasNodes: true,
       isKeyboardFocused: true,
@@ -230,9 +241,14 @@ function createOptions(
     onPaste: vi.fn(),
     onPasteInPlace: vi.fn(),
     onDuplicate: vi.fn(),
+    onGroup: vi.fn(),
+    onSelectMode: vi.fn(),
     onSpacePanEnd: vi.fn(),
     onSpacePanStart: vi.fn(),
     onTogglePanMode: vi.fn(),
+    onUngroup: vi.fn(),
+    onZoomIn: vi.fn(),
+    onZoomOut: vi.fn(),
   };
 }
 

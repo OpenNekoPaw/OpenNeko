@@ -1,5 +1,79 @@
 # Verification
 
+## Extensions Management And Configuration Panels
+
+Date: 2026-08-10
+
+Extensions now uses independent management and configuration panels in the canonical Desktop
+Workbench. The Agent Webview owns the Skill/extension category, query, grid/list presentation and
+exact selection. Desktop owns only panel placement, the detail portal and extension-only Automation
+configuration slots. Neither category selects an item implicitly. With no valid package-owned
+selection, Secondary Main is not mounted and management occupies the full available Main width;
+switching to Skills also unmounts Automation endpoint and Host permission Roots.
+
+Deterministic verification passed:
+
+- Agent Extension Management focused tests: `1 file / 9 tests`;
+- Agent Webview full suite: `94 files / 733 tests`;
+- Desktop Extension/Shell/Application focused tests: `3 files / 77 tests`;
+- Desktop renderer style contract: `1 file / 26 tests`;
+- Agent Webview and Desktop TypeScript checks, focused ESLint, application boundaries (`1591`
+  files, no findings), strict OpenSpec validation and `git diff --check`.
+
+The authoritative visible Electron development runtime passed the complete unselected, selected,
+resized, view-switch and return cycle through user-operable pointer input. Fresh Skill and Extension
+states mounted no configuration panel and exposed no Main split separator. The unselected management
+panel occupied the entire remaining Main (`2301.1 px` in the large capture). Selecting Browser Use
+mounted the configuration panel plus extension-only Automation and Host permission sections. The
+management and configuration panel bounds differed by exactly `1 px`, which is the shared border;
+there was no blank margin or gutter. The `8 px` resize hit target overlaid that boundary, and dragging
+it changed management width from `1150.5 px` to `1330.4 px` while retaining the `1 px` border.
+
+Grid-to-list-to-grid switching preserved the exact selection and configuration panel. Returning to
+Skill removed Secondary Main, its resize separator, Automation endpoint content and system permission
+content, then restored management to the full `2301.1 px` available width. Direct pixel review passed
+for the large viewport and a `1000 x 700` compact viewport: the compact split used approximately
+`371/370 px` sibling panels with no document overflow, overlap, clipping or text occlusion. The
+isolated Electron process emitted no runtime diagnostic during the interaction.
+
+The visible process used a separate Electron user-data directory and a dedicated debugging endpoint
+because another development-window automation flow was active. The existing Vite owner and user data
+were not stopped or modified. Temporary validation profiles were moved to Trash after the process
+closed. `pnpm check:unused` remains blocked by unrelated existing findings: undeclared `jsdom` in the
+Markdown browser test and the unused Canvas export `NODE_DEFAULT_SIZES` (plus configuration hints).
+No Extensions-owned unused path was reported.
+
+## Renderer Reload Surface Identity Handoff
+
+Date: 2026-08-10
+
+The renderer now treats `renderer-loading` as an identity fence. It invalidates pending Shell
+projection work and unmounts the current Scene before package-owned Roots can issue requests with the
+retired renderer identity. A matching same-document `renderer-ready` performs one canonical Shell
+snapshot refresh; a new renderer document continues to use its normal initial snapshot. Resource
+Browser owner validation remains strict and does not retry, rebase to an active Workspace or accept a
+retired identity.
+
+Deterministic verification passed:
+
+- focused Desktop renderer and Resource Browser owner-identity suite: `2 files / 50 tests`;
+- focused ESLint for the implementation and regressions;
+- application boundaries: `1572` files, no findings;
+- strict OpenSpec validation and `git diff --check`.
+
+The Desktop package TypeScript check is currently blocked by unrelated in-progress Automation bridge
+edits: `src/main/index.ts` imports the missing
+`createDesktopAutomationHostPermissionPort`, while
+`src/renderer/DesktopExtensionManagementSurface.tsx` installs a bridge without the newly required
+`automationPermissions` member. This check is not counted as passed and task 14.3 remains open.
+
+The isolated visible development Electron `canvas-openneko-consumer` run reached the canonical Canvas
+and completed its EPUB, rich-text and connection checkpoints with zero console errors, warnings or
+exceptions. It then failed on the existing Canvas-control hit-test assertion before Resource Browser,
+Cut and renderer-reload checkpoints. The report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-10T00-07-11.438Z-canvas-openneko-consumer-development/report.json`; task 14.4 therefore remains open rather
+than treating partial UI evidence as acceptance.
+
 Date: 2026-08-04
 
 ## Deterministic Evidence
@@ -1210,3 +1284,66 @@ passed. The full Desktop suite also remained red in concurrent Preview progressi
 one parallel Resource Browser timeout; the focused Resource Browser timeout test passed alone. These
 failures do not invalidate the focused Cut/Assets or inspected thumbnail evidence, but they remain
 visible as adjacent product/test risks.
+
+## Canonical Startup Entry
+
+Date: 2026-08-10
+
+Window claim now captures the valid active Project presentation, removes process-local temporary
+Preview and expired Cut draft refs, and atomically replaces only the current Window composition with
+a fresh unbound Entry Draft and default layout. Project tabs/catalogs, Conversation authority and
+package-owned Project presentation snapshots remain available for explicit navigation. A renderer
+session refresh does not claim the Window again and therefore preserves the exact current Scene.
+
+Deterministic verification passed:
+
+- focused Host startup/settings suite: `2 files / 53 tests`;
+- focused Desktop Settings/renderer/SQLite suite: `3 files / 10 tests`;
+- `@neko/host` and `@neko/app-desktop` TypeScript checks;
+- strict OpenSpec (`70/70`), package boundaries (`43` packages), package product reachability and
+  application boundaries (`1553` files);
+- Prettier for every touched implementation, fixture and OpenSpec artifact, plus `git diff --check`.
+
+The real development Electron app was first observed on the persisted Extensions scene. After the
+exact development owner was stopped and the same application was cold-started, direct Computer Use
+inspection showed a fresh “Hi，用对话开启创作” Entry Draft while the existing Project and Conversation
+catalogs remained visible. Navigating to Extensions and pressing `Cmd+R` preserved Extensions after
+renderer reconnection. Settings General showed a read-only “应用入口” policy without a restore-last
+selector. Directly inspected screenshots:
+
+- `reports/ui-validation/compose-desktop-workbench-scenes/2026-08-10-startup-entry/01-fresh-entry-after-cold-restart.jpeg`
+- `reports/ui-validation/compose-desktop-workbench-scenes/2026-08-10-startup-entry/02-extensions-after-renderer-reload.jpeg`
+- `reports/ui-validation/compose-desktop-workbench-scenes/2026-08-10-startup-entry/03-read-only-application-entry-setting.jpeg`
+
+The isolated automated Canvas UI scenario was attempted but failed before CDP attachment because the
+development launcher rejected the forwarded `--openneko-functional-fixture` option. Its fail-visible
+report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T18-46-13.957Z-canvas-openneko-consumer-development/report.json`.
+No scenario assertions ran, so it is not counted as acceptance and no fallback target was used.
+
+## Canvas Generation Job Persistence Recovery
+
+Date: 2026-08-10
+
+The Canvas submit path was traced through the single Canvas Node runtime, Workspace Generation owner,
+Generation Job coordinator and persistent store. The local `generation_jobs` table was empty but still
+required retired internal `revision` and `snapshot_version` columns, so the canonical INSERT failed
+before provider invocation. Generation now validates its package-owned table columns, atomically
+replaces only a zero-row non-canonical table, and preserves plus rejects any non-canonical table that
+contains records. Canvas includes owner initialization in the same outcome-unknown diagnostic boundary
+as Job submission, so a persistence rejection remains node-local and actionable.
+
+Verification passed:
+
+- `pnpm --filter @neko/generation test -- src/job/__tests__/persistent-store.test.ts` — 29 files / 178 tests;
+- `pnpm --filter @neko/canvas-node test -- src/canvas-generation-node-runtime.test.ts` — 3 files / 19 tests;
+- focused Desktop Canvas runtime — 1 file / 20 tests;
+- `@neko/generation` and `@neko/canvas-node` typechecks;
+- no-internal-versioning, application boundaries, package boundaries, local-metadata runtime matrix,
+  storage authority and strict OpenSpec gates;
+- exact local database postcondition: canonical six-column table, zero rows.
+
+Visible Electron submission remains unclaimed. The development renderer restarted into an empty
+document during the attempt and stayed empty after one `Cmd+R`; no fallback IPC, direct Job insert or
+provider call was used to disguise that failure. This leaves the final user-click/provider-invocation
+checkpoint open without risking a duplicated or charged generation request.

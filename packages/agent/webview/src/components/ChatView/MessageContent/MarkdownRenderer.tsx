@@ -1682,10 +1682,13 @@ function MarkdownRendererComponent({
       data-markdown-final={snapshot.isFinal ? 'true' : 'false'}
     >
       {renderedDocument}
-      <SemanticPromptSpanProjectionList content={content} markdownResources={markdownResources} />
+      <SemanticPromptSpanProjectionList
+        content={snapshot.source}
+        markdownResources={markdownResources}
+      />
       <SemanticPromptSpanDiagnostics markdownResources={markdownResources} />
       <MarkdownExtensionDiagnostics markdownResources={markdownResources} />
-      <CreativeDraftDiagnostics content={content} markdownResources={markdownResources} />
+      <CreativeDraftDiagnostics content={snapshot.source} markdownResources={markdownResources} />
       {isStreaming && (
         <span className="inline-block w-1.5 h-4 ml-1 bg-[var(--neko-foreground)] animate-pulse" />
       )}
@@ -1711,6 +1714,9 @@ function useCanonicalMarkdownSnapshot(input: {
   return useMemo(() => {
     if (timelineSnapshot) {
       if (timelineSnapshot.source !== input.content) {
+        if (input.isStreaming && input.content.startsWith(timelineSnapshot.source)) {
+          return timelineSnapshot;
+        }
         throw new Error(
           `Normalized Markdown source mismatch for ${input.sessionKey}: Timeline document ${timelineSnapshot.documentId} exposes ${timelineSnapshot.source.length} characters while rendered content exposes ${input.content.length}.`,
         );

@@ -20,16 +20,19 @@ export {
 export { GenerationJobCoordinator, type GenerationJobCoordinatorOptions } from './coordinator';
 export { createPurposeGenerationJobPort } from './purpose-port';
 export {
-  WorkspaceGenerationApplicationRuntime,
-  WorkspaceGenerationRuntimeError,
-  type WorkspaceGenerationApplicationRuntimeOptions,
-  type WorkspaceGenerationBinding,
-  type WorkspaceGenerationJobOwner,
-  type WorkspaceGenerationRuntimeErrorCode,
-} from './workspace-application-runtime';
+  GenerationApplicationRuntime,
+  GenerationRuntimeError,
+  type GenerationApplicationRuntimeOptions,
+  type GenerationBinding,
+  type GenerationJobOwner,
+  type GenerationOwner,
+  type GenerationRuntimeErrorCode,
+} from './generation-application-runtime';
 export {
   createInMemoryGenerationJobStore,
+  createPersistentAssistantGenerationJobStore,
   createPersistentGenerationJobStore,
   initializeGenerationJobTables,
+  type PersistentAssistantGenerationJobStoreOptions,
   type PersistentGenerationJobStoreOptions,
 } from './store';

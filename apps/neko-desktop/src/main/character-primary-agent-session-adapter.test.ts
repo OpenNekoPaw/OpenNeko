@@ -348,7 +348,7 @@ describe('Character primary AgentSession adapter', () => {
         prompt: { text: async () => null, select: async () => null, notify: () => undefined },
       }),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
-      resolveWorkspaceGenerationJobs: async () => unavailableGenerationJobs(),
+      resolveGenerationJobs: async () => unavailableGenerationJobs(),
       createIdentity: (() => {
         let identity = 0;
         return () => `character-agent-identity-${(identity += 1)}`;

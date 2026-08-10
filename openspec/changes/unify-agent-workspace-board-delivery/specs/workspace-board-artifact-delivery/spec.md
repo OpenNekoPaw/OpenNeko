@@ -310,3 +310,48 @@ Desktop Main SHALL validate Canvas renderer save snapshots against the most rece
 
 - **WHEN** a creator intentionally deletes projected nodes from the authoritative `.nkc`
 - **THEN** the delivery ledger SHALL NOT replay completed receipts or reconstruct those nodes automatically
+
+### Requirement: Open Workspace Board sessions project committed deliveries immediately
+
+Desktop Main SHALL coordinate Workspace Board delivery with every currently attached exact Board session through the
+same serialized document mutation boundary. A clean session SHALL receive the committed authoritative Canvas snapshot
+without requiring View close/reopen. A dirty session SHALL block the delivery before `.nkc` mutation rather than merge,
+overwrite or refresh away unsaved creator changes.
+
+#### Scenario: Agent artifact completes while a clean Workspace Board is open
+
+- **WHEN** an exact `neko/boards/workspace.nkc` session is attached and clean and a typed Agent artifact delivery commits
+- **THEN** the Host SHALL emit one updated Canvas projection containing the delivered nodes to that session immediately
+- **AND** closing or reopening the View SHALL NOT be required and SHALL NOT create duplicate nodes
+
+#### Scenario: Agent artifact completes while the Workspace Board has unsaved edits
+
+- **WHEN** an exact Workspace Board session contains dirty creator edits when delivery begins
+- **THEN** the Host SHALL return a typed conflict before the coordinator mutates `.nkc`
+- **AND** it SHALL preserve both the durable Agent artifact and the creator's in-memory edits without last-write-wins,
+  filesystem-watcher merge or active/recent Canvas fallback
+
+#### Scenario: Multiple clean Views show the same Workspace Board
+
+- **WHEN** more than one attached exact Board session is clean during a committed delivery
+- **THEN** the Host SHALL serialize the mutation against all of them and publish the same authoritative Canvas document
+  to every matching session
+
+### Requirement: Canvas shortcuts follow delayed focus ownership and visible labels
+
+The hosted Canvas SHALL enable its keyboard dispatcher after the asynchronously mounted editor Root gains focus or
+pointer ownership. Editable, menu and modal boundaries SHALL retain their scoped keys. Every shortcut shown by Canvas
+toolbar or context-menu presentation SHALL have one matching dispatcher binding with platform-correct primary modifier
+semantics.
+
+#### Scenario: Canvas becomes ready after an initial loading state
+
+- **WHEN** the hosted Canvas first renders loading state, later mounts the editor Root and the user clicks the Canvas
+- **THEN** the Root SHALL become the keyboard owner and editor shortcuts SHALL execute without reopening the View
+
+#### Scenario: User invokes an advertised Canvas shortcut
+
+- **WHEN** the Canvas owns keyboard focus and the user invokes Select, Hand, Group, Ungroup, zoom, undo, redo, copy,
+  cut, paste, duplicate or delete through its displayed shortcut
+- **THEN** exactly the matching Canvas command SHALL execute
+- **AND** an active text input, menu, modal or IME composition SHALL prevent editor mutation according to its boundary

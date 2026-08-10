@@ -198,9 +198,9 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     readonly request: GenerationJobRequest;
     readonly persistCanvas: (canvas: CanvasData) => Promise<void>;
   }): Promise<CanvasGenerationStartResult> {
-    const jobs = await this.requireWorkspaceJobs(input.workspace);
     let snapshot: GenerationJobSnapshot;
     try {
+      const jobs = await this.requireWorkspaceJobs(input.workspace);
       snapshot = await jobs.submitGeneration({
         ...input.request,
         submissionId: input.submissionId,

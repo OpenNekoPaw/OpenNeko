@@ -1,6 +1,14 @@
 # @neko/markdown
 
-`@neko/markdown` owns Neko's host-neutral Markdown semantic contract. It parses authoritative CommonMark/GFM source into exhaustive Neko-owned nodes, annotations, diagnostics and revision-associated resolution contracts without importing Agent, Canvas, Electron, React, DOM, Milkdown, CodeMirror, Streamdown or content services. The package is not a user-visible Neko Markdown dialect or a React renderer.
+`@neko/markdown` owns Neko's Markdown contract and keeps its default entry host-neutral. The default
+entry parses authoritative CommonMark/GFM source into exhaustive Neko-owned nodes, annotations,
+diagnostics and revision-associated resolution contracts without importing Agent, Canvas, Electron,
+React, DOM, Milkdown, CodeMirror, Streamdown or content services. The package is not a user-visible
+Neko Markdown dialect or an application-specific renderer.
+
+The explicit browser-only `@neko/markdown/rich-surface` entry owns the controlled Milkdown lifecycle,
+GFM round-trip gate, composition, history and reconciliation shared by Text Editor and Canvas. It
+does not own either caller's document/session state, Host port, media lease or persisted source.
 
 The package exports `OpenNekoGfmProfile` and a shared conformance corpus while parsing through
 `remark-gfm`. The profile follows CommonMark plus GFM 0.29-gfm autolink literals, one- or two-tilde
@@ -13,6 +21,8 @@ and is inert by default in browser presentations. Cross-surface consumer adoptio
 
 - `parseNormalizedMarkdown(source, options?)`: parse one authoritative source revision into a normalized document or explicit failed result.
 - `MarkdownStreamingSession`: append/finalize lifecycle for one Markdown source identity. Streaming updates produce revisions while retaining session identity; finalization finalizes the same session.
+- `@neko/markdown/rich-surface`: browser-only controlled Rich surface; callers retain exact source
+  authority and provide optional presentation plugins through its narrow extension contract.
 - document/node contracts: exhaustive standard CommonMark/GFM nodes plus registered Neko extension nodes.
 - annotation contracts: range/node-linked overlapping semantics such as prompt spans and creative-table interpretation.
 - resolution contracts: immutable, revision-associated host results for resources, mentions, images, authorization and handoff references.
@@ -59,7 +69,8 @@ Parsing is pure and does not perform workspace, entity, resource, authorization 
 - Validate or mutate Canvas fields, profiles, nodes, connections, prompts or resources.
 - Authorize resources or resolve workspace files inside the parser.
 - Choose Agent Skills, tools, lifecycle phases or approval decisions.
-- Provide React, DOM, layout, syntax-highlighting or Desktop theme implementations.
+- Make the default host-neutral entry depend on React, DOM or a browser editor engine.
+- Own application layout, Desktop theme, Text Document sessions, Canvas nodes or Host media authority.
 
 ## Host adapter boundary
 
@@ -74,11 +85,13 @@ authoritative source/revision
 Resize reprojects/reflows the unchanged normalized revision; it does not reparse source. Layout,
 table presentation, code wrapping and theme behavior remain renderer-owned presentation policy.
 
-Text Editor Rich, Text Editor Source and Agent message content have separate presentation engines,
+Text Editor Rich, Canvas Markdown Rich, Text Editor Source and Agent message content have separate
+application adapters,
 but all must pass the package-owned GFM/extension conformance corpus. A surface engine's third-party
 AST remains private to that surface. It cannot become a cross-package semantic model, file authority
-or fallback renderer. Milkdown Rich and CodeMirror Source consume this contract through the Text
-Editor. Streamdown 2.5.0 was evaluated and rejected for the current Agent surface because incomplete
+or fallback renderer. Text Editor and Canvas reuse the browser-only controlled Milkdown Surface while
+applying changes through their own exact owners; CodeMirror Source remains Text Editor-owned.
+Streamdown 2.5.0 was evaluated and rejected for the current Agent surface because incomplete
 emphasis and Neko resource/semantic/creative presentation parity did not pass. Production Agent
 messages continue to use `MarkdownStreamingSession` and the package-local renderer as the one
 canonical path.

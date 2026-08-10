@@ -4,12 +4,14 @@ import type {
   ContentBlock,
   ToolCall,
   ToolCallProgress,
+  MessageTurnTiming,
 } from '@neko/agent-contracts';
 import {
   projectCompositeBlockRichContent,
   type CompositeRichContentProjection,
 } from './composite-content-presenter';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
+import { projectToolCallDisplayState } from './tool-call-presenter';
 
 export type ContentBlockRenderKind =
   | 'thinking'
@@ -21,24 +23,11 @@ export type ContentBlockRenderKind =
   | 'canvasLifecycle'
   | 'empty';
 
-export type ContentBlockHeaderIconKind = 'thinking' | 'response' | 'tool' | 'edit' | 'composite';
-
-export type ContentBlockHeaderTone = 'purple' | 'green' | 'blue' | 'orange' | 'yellow';
-
-export interface ContentBlockHeaderProjection {
-  iconKind: ContentBlockHeaderIconKind;
-  label: string;
-  tone: ContentBlockHeaderTone;
-  timestamp: number;
-  timestampLabel: string;
-  showStreamingBadge: boolean;
-  streamingLabel: string;
-}
-
 export interface ContentBlockProjectionBase {
   id: string;
   block: ContentBlock;
-  header: ContentBlockHeaderProjection;
+  timestamp: number;
+  isStreaming: boolean;
   parentIsStreaming: boolean;
 }
 
@@ -103,83 +92,35 @@ export type ContentBlockUiProjection =
   | CanvasLifecycleContentBlockProjection
   | EmptyContentBlockProjection;
 
-export interface ContentBlockProcessGroupProjection {
-  id: string;
-  projections: ContentBlockUiProjection[];
-  blockCount: number;
-  toolCallCount: number;
-  thinkingCount: number;
-  isStreaming: boolean;
+export interface AssistantTurnActivitySummary {
+  readonly blockCount: number;
+  readonly toolCallCount: number;
+  readonly thinkingCount: number;
+  readonly isRunning: boolean;
+  readonly startedAt?: number;
+  readonly completedAt?: number;
 }
 
-export type ContentBlocksDisplayItem =
-  | {
-      kind: 'projection';
-      projection: ContentBlockUiProjection;
-    }
-  | {
-      kind: 'processGroup';
-      processGroup: ContentBlockProcessGroupProjection;
-    };
-
-export interface ContentBlocksDisplayProjection {
-  items: ContentBlocksDisplayItem[];
+export interface AssistantTurnProjection {
+  readonly answer: readonly ContentBlockUiProjection[];
+  readonly deliverables: readonly ContentBlockUiProjection[];
+  readonly actionable: readonly ContentBlockUiProjection[];
+  readonly activity: readonly ContentBlockUiProjection[];
+  readonly activitySummary: AssistantTurnActivitySummary;
 }
 
-export interface ProjectContentBlockUiInput {
+interface ProjectContentBlockUiInput {
   block: ContentBlock;
   siblingBlocks?: readonly ContentBlock[];
   toolCalls?: readonly ToolCall[];
   ambientToolCalls?: readonly ToolCall[];
   parentIsStreaming?: boolean;
-  formatTimestamp?: (timestamp: number) => string;
   plugins?: PluginsAvailable;
 }
 
-interface ContentBlockHeaderMetadata {
-  iconKind: ContentBlockHeaderIconKind;
-  label: string;
-  tone: ContentBlockHeaderTone;
-}
-
-const USER_FACING_TOOL_NAMES = new Set(['ReadImage']);
-
-const CONTENT_BLOCK_HEADER_METADATA: Record<ContentBlock['type'], ContentBlockHeaderMetadata> = {
-  thinking: {
-    iconKind: 'thinking',
-    label: 'Thinking',
-    tone: 'purple',
-  },
-  text: {
-    iconKind: 'response',
-    label: 'Response',
-    tone: 'green',
-  },
-  tool_call: {
-    iconKind: 'tool',
-    label: 'Tool',
-    tone: 'blue',
-  },
-  code_diff: {
-    iconKind: 'edit',
-    label: 'Edit',
-    tone: 'orange',
-  },
-  composite: {
-    iconKind: 'composite',
-    label: 'Composite',
-    tone: 'blue',
-  },
-  canvas_lifecycle: {
-    iconKind: 'tool',
-    label: 'Canvas',
-    tone: 'blue',
-  },
-};
-
-export function projectContentBlockUi(input: ProjectContentBlockUiInput): ContentBlockUiProjection {
+function projectContentBlockUi(input: ProjectContentBlockUiInput): ContentBlockUiProjection {
   const parentIsStreaming = input.parentIsStreaming ?? false;
-  const base = projectContentBlockBase(input.block, parentIsStreaming, input.formatTimestamp);
+  const base = projectContentBlockBase(input.block, parentIsStreaming);
 
   switch (input.block.type) {
     case 'thinking':
@@ -253,7 +194,6 @@ export function projectContentBlockUi(input: ProjectContentBlockUiInput): Conten
 export function projectContentBlocksUi(
   blocks: readonly ContentBlock[] | undefined,
   parentIsStreaming = false,
-  formatTimestamp?: (timestamp: number) => string,
   siblingBlocks: readonly ContentBlock[] | undefined = blocks,
   toolCalls: readonly ToolCall[] | undefined = deriveToolCallsFromContentBlocks(siblingBlocks),
   plugins?: PluginsAvailable,
@@ -270,7 +210,6 @@ export function projectContentBlocksUi(
         toolCalls,
         ambientToolCalls,
         parentIsStreaming,
-        formatTimestamp,
         plugins,
       }),
     );
@@ -305,72 +244,75 @@ export function mergeToolCalls(
   return Array.from(byId.values());
 }
 
-export function projectContentBlocksDisplay(
+export function projectAssistantTurn(
   projections: readonly ContentBlockUiProjection[],
-): ContentBlocksDisplayProjection {
-  const hasPrimaryResult = projections.some(isPrimaryResultProjection);
-  if (!hasPrimaryResult) {
-    return {
-      items: projections.map((projection) => ({ kind: 'projection', projection })),
-    };
-  }
+  turnTiming?: MessageTurnTiming,
+): AssistantTurnProjection {
+  const visible = projections.filter((projection) => projection.renderKind !== 'empty');
+  const parentIsStreaming = visible.some((projection) => projection.parentIsStreaming);
+  const lastActivityIndex = findLastIndex(visible, isActivityProjection);
+  const activeAnswerIndex = parentIsStreaming
+    ? findLastIndex(
+        visible,
+        (projection) => projection.renderKind === 'markdown' && projection.renderStreaming,
+      )
+    : -1;
+  const answerStartIndex = parentIsStreaming
+    ? activeAnswerIndex > lastActivityIndex
+      ? activeAnswerIndex
+      : visible.length
+    : lastActivityIndex + 1;
 
-  const items: ContentBlocksDisplayItem[] = [];
-  let processProjections: ContentBlockUiProjection[] = [];
+  const answer: ContentBlockUiProjection[] = [];
+  const deliverables: ContentBlockUiProjection[] = [];
+  const actionable: ContentBlockUiProjection[] = [];
+  const activity: ContentBlockUiProjection[] = [];
 
-  const flushProcessGroup = () => {
-    if (processProjections.length === 0) return;
-    items.push({
-      kind: 'processGroup',
-      processGroup: projectProcessGroup(processProjections),
-    });
-    processProjections = [];
-  };
-
-  for (const projection of projections) {
-    if (isCollapsibleProcessProjection(projection)) {
-      processProjections.push(projection);
-      continue;
+  visible.forEach((projection, index) => {
+    if (isActionableProjection(projection)) {
+      actionable.push(projection);
+      return;
     }
-
-    flushProcessGroup();
-    items.push({ kind: 'projection', projection });
-  }
-
-  flushProcessGroup();
-
-  return { items };
-}
-
-function formatContentBlockTimestamp(timestamp: number): string {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    if (isDeliverableProjection(projection)) {
+      deliverables.push(projection);
+      return;
+    }
+    if (projection.renderKind === 'markdown' && index >= answerStartIndex) {
+      answer.push(projection);
+      return;
+    }
+    activity.push(projection);
   });
+
+  return {
+    answer,
+    deliverables,
+    actionable,
+    activity,
+    activitySummary: {
+      blockCount: activity.length,
+      toolCallCount: activity.reduce(
+        (count, projection) => count + countProjectionToolCalls(projection),
+        0,
+      ),
+      thinkingCount: activity.filter((projection) => projection.renderKind === 'thinking').length,
+      isRunning: parentIsStreaming,
+      ...(turnTiming ? { startedAt: turnTiming.startedAt } : {}),
+      ...(turnTiming?.completedAt === undefined ? {} : { completedAt: turnTiming.completedAt }),
+    },
+  };
 }
 
 function projectContentBlockBase(
   block: ContentBlock,
   parentIsStreaming: boolean,
-  formatTimestamp: ((timestamp: number) => string) | undefined,
 ): ContentBlockProjectionBase {
-  const metadata = CONTENT_BLOCK_HEADER_METADATA[block.type];
-
   return {
     id: block.id,
     block,
+    timestamp: block.timestamp,
+    isStreaming: block.isStreaming === true,
     parentIsStreaming,
-    header: {
-      ...metadata,
-      timestamp: block.timestamp,
-      timestampLabel: formatTimestamp
-        ? formatTimestamp(block.timestamp)
-        : formatContentBlockTimestamp(block.timestamp),
-      showStreamingBadge: block.isStreaming === true,
-      streamingLabel: 'streaming...',
-    },
   };
 }
 
@@ -417,79 +359,71 @@ function aggregateConsecutiveToolProjections(
   return aggregated;
 }
 
-function isPrimaryResultProjection(projection: ContentBlockUiProjection): boolean {
+function isActivityProjection(projection: ContentBlockUiProjection): boolean {
   switch (projection.renderKind) {
-    case 'markdown':
-      return projection.content.trim().length > 0;
-    case 'composite':
-    case 'canvasLifecycle':
-    case 'diff':
-      return true;
     case 'thinking':
     case 'tool':
     case 'toolGroup':
+      return true;
+    case 'markdown':
+    case 'composite':
+    case 'canvasLifecycle':
+    case 'diff':
     case 'empty':
       return false;
   }
 }
 
-function isCollapsibleProcessProjection(projection: ContentBlockUiProjection): boolean {
+function isActionableProjection(projection: ContentBlockUiProjection): boolean {
   switch (projection.renderKind) {
-    case 'thinking':
-      return true;
     case 'tool':
-      return isCollapsibleToolCall(projection.toolCall);
+      return (
+        projection.toolCall.pendingConfirmation === true ||
+        projection.toolCall.result?.success === false
+      );
     case 'toolGroup':
-      return projection.toolCalls.every(isCollapsibleToolCall);
+      return projection.failureCount > 0;
+    case 'canvasLifecycle':
+      return projection.canvasLifecycle.success === false;
+    case 'thinking':
     case 'markdown':
     case 'diff':
     case 'composite':
-    case 'canvasLifecycle':
     case 'empty':
       return false;
   }
 }
 
-function isCollapsibleToolCall(toolCall: ToolCall): boolean {
-  if (USER_FACING_TOOL_NAMES.has(toolCall.name)) return false;
-  if (toolCall.pendingConfirmation === true) return false;
-  if (!toolCall.result || toolCall.result.success !== true) return false;
-  if ((toolCall.result.attachments?.length ?? 0) > 0) return false;
-  if ((toolCall.result.perceptionCards?.length ?? 0) > 0) return false;
-  if ((toolCall.result.artifacts?.length ?? 0) > 0) return false;
-  return true;
+function isDeliverableProjection(projection: ContentBlockUiProjection): boolean {
+  switch (projection.renderKind) {
+    case 'diff':
+    case 'composite':
+    case 'canvasLifecycle':
+      return true;
+    case 'tool':
+      return hasTypedToolDeliverable(projection.toolCall);
+    case 'toolGroup':
+      return projection.toolCalls.some(hasTypedToolDeliverable);
+    case 'thinking':
+    case 'markdown':
+    case 'empty':
+      return false;
+  }
+}
+
+function hasTypedToolDeliverable(toolCall: ToolCall): boolean {
+  if ((toolCall.result?.artifacts?.length ?? 0) > 0) return true;
+  if (projectToolCallDisplayState(toolCall).documentThumbnails.length > 0) return false;
+  return (
+    (toolCall.result?.attachments?.length ?? 0) > 0 &&
+    (toolCall.result?.perceptionCards?.length ?? 0) === 0
+  );
 }
 
 function countProjectionToolCalls(projection: ContentBlockUiProjection): number {
   if (projection.renderKind === 'tool') return 1;
   if (projection.renderKind === 'toolGroup') return projection.count;
   return 0;
-}
-
-function isStreamingProjection(projection: ContentBlockUiProjection): boolean {
-  if (projection.header.showStreamingBadge) return true;
-  return projection.renderKind === 'thinking' && projection.isThinkingComplete === false;
-}
-
-function projectProcessGroup(
-  projections: readonly ContentBlockUiProjection[],
-): ContentBlockProcessGroupProjection {
-  const first = projections[0];
-  if (!first) {
-    throw new Error('Cannot project an empty process group');
-  }
-
-  return {
-    id: `${first.id}-process-records`,
-    projections: [...projections],
-    blockCount: projections.length,
-    toolCallCount: projections.reduce(
-      (count, projection) => count + countProjectionToolCalls(projection),
-      0,
-    ),
-    thinkingCount: projections.filter((projection) => projection.renderKind === 'thinking').length,
-    isStreaming: projections.some(isStreamingProjection),
-  };
 }
 
 function projectToolGroup(
@@ -507,7 +441,8 @@ function projectToolGroup(
   return {
     id: `${first.id}-group-${toolCalls.length}`,
     block: first.block,
-    header: first.header,
+    timestamp: first.timestamp,
+    isStreaming: first.isStreaming,
     parentIsStreaming: first.parentIsStreaming,
     renderKind: 'toolGroup',
     toolCalls,
@@ -524,9 +459,8 @@ function projectToolGroup(
 function isAggregatableTool(projection: ToolContentBlockProjection): boolean {
   const toolCall = projection.toolCall;
   return (
-    !USER_FACING_TOOL_NAMES.has(toolCall.name) &&
     toolCall.pendingConfirmation !== true &&
-    toolCall.result?.success === true &&
+    toolCall.result !== undefined &&
     getToolTargetLabel(toolCall) !== null
   );
 }
@@ -547,6 +481,9 @@ function readToolTargetLabel(value: unknown): string | null {
     readToolString(value, 'filePath') ??
     readToolString(value, 'path') ??
     readToolString(value, 'url') ??
+    readToolString(value, 'cursor_ref') ??
+    readToolString(value, 'input_ref') ??
+    readToolString(value, 'unit_ref') ??
     readToolString(value.source, 'file_path') ??
     readToolString(value.source, 'filePath') ??
     readToolString(value.source, 'path') ??
@@ -572,4 +509,12 @@ function formatDurationRange(durations: readonly number[]): string | null {
   const max = Math.max(...durations);
   if (min === max) return `${min}ms`;
   return `${min}-${max}ms`;
+}
+
+function findLastIndex<T>(items: readonly T[], predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item !== undefined && predicate(item)) return index;
+  }
+  return -1;
 }

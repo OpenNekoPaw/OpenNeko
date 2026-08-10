@@ -120,6 +120,8 @@ runtime kind 和 binding 在 Run 创建时固定。切换模式、CharacterVersi
 
 Character 入口是 Window 级单例管理场景，不是 Character/Dialogue/Chatroom/World 工作区。Main slot 展示可搜索、排序、筛选和多选的 Character catalog；选中 CharacterProject 后，Secondary Main 展示 detail，承载草稿编辑、审阅、发布版本、表现绑定和运行记录。创建角色也是 detail 的 fresh state，不创建 management session 或隐藏业务 Root。
 
+Main 与 Secondary Main 必须沿共享边界连续拼接，只由 Workbench 提供一条可调整的分隔线；场景组合不得在两个 package-owned Surface 之间增加 gutter、margin 或卡片式外边距。Surface 内部仍可按各自内容层级保留字段、工具栏和列表的正常间距。
+
 World Foundation 不作为该管理场景的平级 Tab。WorldProject/Version 只通过 Character detail 的关联资源入口或 Character/Room Workbench 的 manager slot 管理；未来完整 World Library 由独立 World 变更建立自己的 Window 导航场景。
 
 旧 `CharacterFoundationRoot` 四 Tab 组合被原子替换。新路径不得保留隐藏旧 Root、平行导航入口或通过 Tab 继续创建 Dialogue/Room。
@@ -148,6 +150,8 @@ Chatroom 因多角色显式选择而创建，仍是可选扩展能力。单角�
 - `status`: scene/runtime diagnostic。
 
 Interaction、Main、Manager 和 Timeline 是同一可见 composition 的独立 owner Roots。离开场景时全部卸载；受保护 Agent turn/RoomRun/WorldRun 可继续，但不得因此保留 React tree。Main Avatar 与 manager 失败只隔离其 Surface，不能停止 Agent turn 或隐藏 durable record。
+
+这些可见 Roots 必须像 Workspace Workbench 一样沿相邻边界连续拼接，不得由 Character 场景额外包裹 margin 或 gutter；组件间层级通过共享边框和 resize handle 表达。
 
 ### 12. Avatar representation 与 runtime 分离
 

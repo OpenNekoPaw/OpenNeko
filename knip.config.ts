@@ -177,13 +177,11 @@ const config: KnipConfig = {
         'src/main/desktop-openneko-qualification.ts',
         'src/preload/index.ts',
       ],
-      ignore: ['src/renderer/styles.css'],
     },
     'packages/agent/webview': {
       ignore: [
         // Barrel exports
         'src/components/ChatView/InputArea/index.ts',
-        'src/config/index.ts',
       ],
     },
     'packages/agent/runtime': {

@@ -175,6 +175,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
 
     const node = plan.canvasData.nodes[0]!;
     expect(node.type).toBe('media');
+    expect(node.size.width).toBe(208);
     expect(node.size.width / node.size.height).toBeCloseTo(1024 / 1536, 8);
   });
 
@@ -193,6 +194,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
 
     const node = plan.canvasData.nodes[0]!;
     expect(node.type).toBe('media');
+    expect(node.size.width).toBe(208);
     expect(node.size.width / node.size.height).toBeCloseTo(900 / 1600, 8);
   });
 

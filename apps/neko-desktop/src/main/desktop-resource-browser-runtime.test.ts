@@ -273,7 +273,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       stateRepository: createInMemoryDesktopShellStateRepository(),
       workspaceRegistry: registry,
       workspaceGrantAuthority,
-      startupTarget: 'restore',
       createIdentity: () => 'window-1',
     });
     const windowId = await shell.claimWindowId();
@@ -452,28 +451,58 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           workspacePath,
         }),
       });
+      shell.setRendererSessionId(windowId, 'renderer-session-2');
+      await expect(
+        runtime.getSnapshot(
+          windowId,
+          createResourceBrowserSnapshotRequest({
+            requestId: 'snapshot-retired-renderer',
+            identity,
+          }),
+        ),
+      ).rejects.toThrow('owner identity is stale');
+      const replacementProjection = await shell.getProjection(windowId);
+      const replacementIdentity = {
+        ...identity,
+        rendererSessionId: replacementProjection.rendererSessionId,
+      };
+      await expect(
+        runtime.getSnapshot(
+          windowId,
+          createResourceBrowserSnapshotRequest({
+            requestId: 'snapshot-replacement-renderer',
+            identity: replacementIdentity,
+          }),
+        ),
+      ).resolves.toMatchObject({ identity: replacementIdentity });
       await expect(
         runtime.getSnapshot(
           windowId,
           createResourceBrowserSnapshotRequest({
             requestId: 'snapshot-stale',
-            identity: { ...identity, viewId: 'resource-browser:unattached-main-view' },
+            identity: {
+              ...replacementIdentity,
+              viewId: 'resource-browser:unattached-main-view',
+            },
           }),
         ),
       ).rejects.toThrow('Project is not attached');
       await shell.transitionScene(
         createDesktopSceneTransitionRequest({
           requestId: 'leave-workspace-scene',
-          rendererSessionId: projection.rendererSessionId,
+          rendererSessionId: replacementProjection.rendererSessionId,
           windowId,
-          sceneId: resolveActiveDesktopWindowWorkbench(projection.window).scene.sceneId,
+          sceneId: resolveActiveDesktopWindowWorkbench(replacementProjection.window).scene.sceneId,
           intent: { kind: 'open-agent-entry' },
         }),
       );
       await expect(
         runtime.getSnapshot(
           windowId,
-          createResourceBrowserSnapshotRequest({ requestId: 'snapshot-assistant', identity }),
+          createResourceBrowserSnapshotRequest({
+            requestId: 'snapshot-assistant',
+            identity: replacementIdentity,
+          }),
         ),
       ).rejects.toThrow("Desktop Workspace 'workspace-1' is not the current composition");
     } finally {
@@ -774,6 +803,7 @@ function accepted(value: unknown): CanvasHostIntentResult {
       authoringCapabilities: {
         sourceModes: ['import', 'reference'],
         generationKinds: [],
+        generationModels: [],
       },
       generationNodes: [],
     },
@@ -873,7 +903,6 @@ function createGlobalLibraryShell(): DesktopShellService {
     applicationInstanceId: 'app-1',
     stateRepository: createInMemoryDesktopShellStateRepository(),
     workspaceRegistry: registry,
-    startupTarget: 'restore',
     createIdentity: () => 'window-1',
   });
 }

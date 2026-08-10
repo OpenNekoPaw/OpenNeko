@@ -8,7 +8,14 @@ import {
   parseAgentModelCatalogEntry,
   type AgentConfigurationPolicyProjection,
   type AgentModelCatalogEntry,
+  type AgentModelType,
 } from './agent-model-catalog';
+import type {
+  MediaUnderstandingCategory,
+  MediaUnderstandingModelStatus,
+  MediaUnderstandingModels,
+  MediaUnderstandingPurpose,
+} from './ui';
 
 export type AgentLaunchResourceKind = 'file' | 'directory' | 'microphone';
 
@@ -26,6 +33,8 @@ export interface AgentLaunchCatalogProjection {
   readonly connection: AgentLaunchConnectionIdentity;
   readonly interaction: AgentDraftInteractionProjection;
   readonly models: readonly AgentModelCatalogEntry[];
+  readonly defaultMediaModels: Readonly<Partial<Record<Exclude<AgentModelType, 'llm'>, string>>>;
+  readonly mediaUnderstandingModels: MediaUnderstandingModels;
   readonly configuration: AgentConfigurationPolicyProjection;
   readonly inputs: readonly AgentInputCatalogEntry[];
 }
@@ -54,7 +63,15 @@ export function parseAgentLaunchConnectionIdentity(value: unknown): AgentLaunchC
 
 export function parseAgentLaunchCatalogProjection(value: unknown): AgentLaunchCatalogProjection {
   const record = requireRecord(value, 'Agent launch catalog must be an object.');
-  requireExactKeys(record, ['connection', 'interaction', 'models', 'configuration', 'inputs']);
+  requireExactKeys(record, [
+    'connection',
+    'interaction',
+    'models',
+    'defaultMediaModels',
+    'mediaUnderstandingModels',
+    'configuration',
+    'inputs',
+  ]);
   const connection = parseAgentLaunchConnectionIdentity(record['connection']);
   const interaction = parseAgentDraftInteractionProjection(record['interaction']);
   if (interaction.draftId !== connection.draftId) {
@@ -70,9 +87,97 @@ export function parseAgentLaunchCatalogProjection(value: unknown): AgentLaunchCa
     connection,
     interaction,
     models: parseArray(record['models'], parseAgentModelCatalogEntry),
+    defaultMediaModels: parseDefaultMediaModels(record['defaultMediaModels']),
+    mediaUnderstandingModels: parseMediaUnderstandingModels(record['mediaUnderstandingModels']),
     configuration: parseAgentConfigurationPolicyProjection(record['configuration']),
     inputs: parseAgentInputCatalog(record['inputs']),
   };
+}
+
+const MEDIA_UNDERSTANDING_PURPOSES = {
+  image: 'image.understand',
+  audio: 'audio.understand',
+  video: 'video.understand',
+} as const satisfies Record<MediaUnderstandingCategory, MediaUnderstandingPurpose>;
+
+function parseMediaUnderstandingModels(value: unknown): MediaUnderstandingModels {
+  const record = requireRecord(value, 'Agent launch media understanding models must be an object.');
+  requireExactKeys(record, ['image', 'audio', 'video']);
+  return {
+    image: parseMediaUnderstandingModelStatus(record['image'], 'image'),
+    audio: parseMediaUnderstandingModelStatus(record['audio'], 'audio'),
+    video: parseMediaUnderstandingModelStatus(record['video'], 'video'),
+  };
+}
+
+function parseMediaUnderstandingModelStatus(
+  value: unknown,
+  category: MediaUnderstandingCategory,
+): MediaUnderstandingModelStatus {
+  const record = requireRecord(
+    value,
+    `Agent launch ${category} understanding model status must be an object.`,
+  );
+  requireAllowedKeys(record, [
+    'category',
+    'purpose',
+    'status',
+    'providerId',
+    'modelId',
+    'optionId',
+    'label',
+    'providerLabel',
+    'source',
+  ]);
+  if (
+    record['category'] !== category ||
+    record['purpose'] !== MEDIA_UNDERSTANDING_PURPOSES[category]
+  ) {
+    throw new Error(`Agent launch ${category} understanding model identity is invalid.`);
+  }
+  const status = record['status'];
+  if (status !== 'configured' && status !== 'auto' && status !== 'missing') {
+    throw new Error(`Agent launch ${category} understanding model status is invalid.`);
+  }
+  const source = record['source'];
+  if (source !== undefined && source !== 'explicit-config') {
+    throw new Error(`Agent launch ${category} understanding model source is invalid.`);
+  }
+  return {
+    category,
+    purpose: MEDIA_UNDERSTANDING_PURPOSES[category],
+    status,
+    ...optionalIdentities(record, ['providerId', 'modelId', 'optionId', 'label', 'providerLabel']),
+    ...(source === undefined ? {} : { source }),
+  };
+}
+
+function optionalIdentities<K extends string>(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly K[],
+): Partial<Record<K, string>> {
+  const result: Partial<Record<K, string>> = {};
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== undefined) result[key] = requireIdentity(value, key);
+  }
+  return result;
+}
+
+function parseDefaultMediaModels(
+  value: unknown,
+): AgentLaunchCatalogProjection['defaultMediaModels'] {
+  const record = requireRecord(value, 'Agent launch media model defaults must be an object.');
+  const supported = new Set(['image', 'video', 'audio']);
+  if (Object.keys(record).some((key) => !supported.has(key))) {
+    throw new Error('Agent launch media model defaults contain unsupported fields.');
+  }
+  return Object.fromEntries(
+    Object.entries(record).map(([category, modelCatalogEntryId]) => [
+      category,
+      requireIdentity(modelCatalogEntryId, `${category} model catalog entry`),
+    ]),
+  );
 }
 
 function parseArray<T>(value: unknown, parse: (entry: unknown) => T): readonly T[] {
@@ -91,6 +196,15 @@ function requireExactKeys(
 ): void {
   const actual = Object.keys(record);
   if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) {
+    throw new Error('Agent launch contract contains unsupported fields.');
+  }
+}
+
+function requireAllowedKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+): void {
+  if (Object.keys(record).some((key) => !keys.includes(key))) {
     throw new Error('Agent launch contract contains unsupported fields.');
   }
 }

@@ -74,6 +74,11 @@ export interface BaseNodeProps {
   isConnecting?: boolean;
   connectionTargetState?: ConnectionDragTargetState | null;
   children: ReactNode;
+  /** Compact content identity rendered outside and above the node card. */
+  nodeLabel?: {
+    readonly icon: ReactNode;
+    readonly text: string;
+  };
   className?: string;
   autoSizeContent?: boolean;
   minSize?: NodeSize;
@@ -142,6 +147,7 @@ export function BaseNode({
   isConnecting = false,
   connectionTargetState,
   children,
+  nodeLabel,
   className,
   autoSizeContent = true,
   minSize,
@@ -378,6 +384,13 @@ export function BaseNode({
         id: node.id,
       })}
     >
+      {nodeLabel ? (
+        <div className="canvas-node-external-label" data-canvas-node-label title={nodeLabel.text}>
+          {nodeLabel.icon}
+          <span>{nodeLabel.text}</span>
+        </div>
+      ) : null}
+
       {/* Node content */}
       <div
         ref={contentRef}

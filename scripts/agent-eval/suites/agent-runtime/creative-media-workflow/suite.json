@@ -59,6 +59,12 @@
       "visibility": "public"
     },
     {
+      "id": "assistant-generated-output-recovery",
+      "file": "cases/assistant-generated-output-recovery.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
       "id": "workspace-board-material-analysis",
       "file": "cases/workspace-board-material-analysis.json",
       "group": "workflow",

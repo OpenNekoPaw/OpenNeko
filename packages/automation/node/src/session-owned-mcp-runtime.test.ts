@@ -104,6 +104,50 @@ describe('session-owned Automation MCP runtime', () => {
     );
     expect(shared.connect).toHaveBeenCalledOnce();
   });
+
+  it('preserves qualification failure when cleanup also fails', async () => {
+    const qualification = createClient();
+    qualification.listTools.mockRejectedValueOnce(new Error('inspection failed'));
+    qualification.disconnect.mockRejectedValueOnce(new Error('cleanup failed'));
+    const runtime = createSessionOwnedAutomationMcpRuntime({
+      clients: {
+        createQualificationClient: () => qualification,
+        createSessionClient: () => createClient(),
+      },
+      targets: { revalidate: vi.fn(async () => target) },
+    });
+
+    const failure = await runtime.inspectTools({}).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).errors).toMatchObject([
+      { message: 'inspection failed' },
+      { message: 'cleanup failed' },
+    ]);
+  });
+
+  it('retains exact session ownership when disconnect fails so cleanup can be retried', async () => {
+    const client = createClient();
+    client.disconnect.mockRejectedValueOnce(new Error('disconnect failed'));
+    const runtime = createSessionOwnedAutomationMcpRuntime({
+      clients: {
+        createQualificationClient: () => createClient(),
+        createSessionClient: () => client,
+      },
+      targets: { revalidate: vi.fn(async () => target) },
+    });
+    await runtime.openSession(openInput('session-a'));
+
+    await expect(runtime.closeSession('session-a')).rejects.toThrow('disconnect failed');
+    await expect(
+      runtime.callTool({
+        providerSessionId: 'session-a',
+        name: 'browser_get_state',
+        arguments: {},
+      }),
+    ).resolves.toEqual({ content: [] });
+    await expect(runtime.closeSession('session-a')).resolves.toBeUndefined();
+    expect(client.disconnect).toHaveBeenCalledTimes(2);
+  });
 });
 
 function createFixture() {
@@ -127,6 +171,7 @@ function createFixture() {
 function createClient(): AutomationMcpClientPort & {
   readonly connect: ReturnType<typeof vi.fn>;
   readonly disconnect: ReturnType<typeof vi.fn>;
+  readonly listTools: ReturnType<typeof vi.fn>;
   readonly callTool: ReturnType<typeof vi.fn>;
 } {
   return {

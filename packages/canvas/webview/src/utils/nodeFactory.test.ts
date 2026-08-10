@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CanonicalCanvasNodeType } from '@neko/canvas-domain';
+import { createCanvasGenerationNodeData, type CanonicalCanvasNodeType } from '@neko/canvas-domain';
 import { buildCanvasNode } from './nodeFactory';
 
 describe('buildCanvasNode', () => {
@@ -31,6 +31,7 @@ describe('buildCanvasNode', () => {
     });
     expect(media).toMatchObject({
       type: 'media',
+      size: { width: 240, height: 180 },
       data: { assetPath: 'media/hero.png', mediaType: 'image' },
     });
     expect(group).toMatchObject({
@@ -74,6 +75,16 @@ describe('buildCanvasNode', () => {
     expect(node.size.height).toBe(120);
     expect(node.data).not.toHaveProperty('unsupportedPrompt');
     expect((node.data as Record<string, unknown>).duration).toBeUndefined();
+  });
+
+  it('uses the compact content-specific Generation size', () => {
+    const prompt = createNode('generation', { ...createCanvasGenerationNodeData('prompt') });
+    const image = createNode('generation', { ...createCanvasGenerationNodeData('image') });
+    const audio = createNode('generation', { ...createCanvasGenerationNodeData('audio') });
+
+    expect(prompt.size).toEqual({ width: 240, height: 160 });
+    expect(image.size).toEqual({ width: 240, height: 180 });
+    expect(audio.size).toEqual({ width: 240, height: 120 });
   });
 
   it('rejects unsupported node types at the authoring boundary', () => {

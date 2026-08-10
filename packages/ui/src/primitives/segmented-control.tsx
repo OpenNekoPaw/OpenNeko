@@ -10,6 +10,7 @@ export interface SegmentedControlOption {
 }
 
 export interface SegmentedControlProps {
+  readonly appearance?: 'accent' | 'neutral';
   readonly label: string;
   readonly options: readonly SegmentedControlOption[];
   readonly value: string;
@@ -17,13 +18,18 @@ export interface SegmentedControlProps {
   readonly className?: string;
   readonly id?: string;
   readonly controls?: string;
+  readonly density?: 'compact' | 'comfortable';
+  readonly maxWidth?: number | string;
 }
 
 export function SegmentedControl({
+  appearance = 'accent',
   className,
   controls,
+  density = 'compact',
   id,
   label,
+  maxWidth = 176,
   onValueChange,
   options,
   value,
@@ -40,15 +46,21 @@ export function SegmentedControl({
     <div
       id={id}
       className={cn('neko-segmented-control', className)}
+      data-appearance={appearance}
       role="tablist"
       aria-label={label}
-      style={SEGMENTED_CONTROL_STYLE}
+      style={{
+        ...SEGMENTED_CONTROL_STYLE,
+        ...(appearance === 'neutral' ? SEGMENTED_CONTROL_NEUTRAL_STYLE : null),
+        maxWidth,
+      }}
     >
       <span
         className="neko-segmented-control-thumb"
         aria-hidden="true"
         style={{
           ...SEGMENTED_CONTROL_THUMB_STYLE,
+          ...(appearance === 'neutral' ? SEGMENTED_CONTROL_NEUTRAL_THUMB_STYLE : null),
           width: thumbWidth,
           transform: `translateX(${activeIndex * 100}%)`,
         }}
@@ -61,25 +73,60 @@ export function SegmentedControl({
             type="button"
             role="tab"
             aria-controls={controls}
+            aria-description={option.description}
             aria-selected={selected}
             className={cn('neko-segmented-control-item', selected ? 'active' : null)}
             disabled={option.disabled}
             title={option.description ?? String(option.label)}
             onBlur={() => setFocusedValue((current) => (current === option.value ? null : current))}
             onClick={() => onValueChange(option.value)}
-            onFocus={() => setFocusedValue(option.value)}
+            onFocus={(event) =>
+              setFocusedValue(event.currentTarget.matches(':focus-visible') ? option.value : null)
+            }
             onMouseEnter={() => setHoveredValue(option.value)}
             onMouseLeave={() =>
               setHoveredValue((current) => (current === option.value ? null : current))
             }
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              const enabledOptions = options.filter((candidate) => !candidate.disabled);
+              const currentIndex = enabledOptions.findIndex(
+                (candidate) => candidate.value === option.value,
+              );
+              if (currentIndex < 0 || enabledOptions.length === 0) return;
+              const nextIndex =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? enabledOptions.length - 1
+                    : (currentIndex +
+                        (event.key === 'ArrowRight' ? 1 : -1) +
+                        enabledOptions.length) %
+                      enabledOptions.length;
+              const nextOption = enabledOptions[nextIndex];
+              if (!nextOption) return;
+              event.preventDefault();
+              onValueChange(nextOption.value);
+              const nextElement = Array.from(
+                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                  '[data-segmented-value]',
+                ) ?? [],
+              ).find((element) => element.dataset.segmentedValue === nextOption.value);
+              nextElement?.focus();
+            }}
+            data-segmented-value={option.value}
             style={{
               ...SEGMENTED_CONTROL_ITEM_STYLE,
+              ...(density === 'comfortable' ? SEGMENTED_CONTROL_ITEM_COMFORTABLE_STYLE : null),
               ...(hoveredValue === option.value && !selected
                 ? SEGMENTED_CONTROL_ITEM_HOVER_STYLE
                 : null),
               ...(focusedValue === option.value ? SEGMENTED_CONTROL_ITEM_FOCUS_STYLE : null),
               ...(option.disabled ? SEGMENTED_CONTROL_ITEM_DISABLED_STYLE : null),
               ...(selected ? SEGMENTED_CONTROL_ITEM_ACTIVE_STYLE : null),
+              ...(selected && appearance === 'neutral'
+                ? SEGMENTED_CONTROL_NEUTRAL_ITEM_ACTIVE_STYLE
+                : null),
             }}
           >
             <span className="neko-segmented-control-label" style={SEGMENTED_CONTROL_LABEL_STYLE}>
@@ -124,6 +171,18 @@ const SEGMENTED_CONTROL_THUMB_STYLE: React.CSSProperties = {
   zIndex: 0,
 };
 
+const SEGMENTED_CONTROL_NEUTRAL_STYLE: React.CSSProperties = {
+  border: 'none',
+  background: 'color-mix(in srgb, var(--neko-foreground, #242424) 6%, transparent)',
+  boxShadow: 'none',
+};
+
+const SEGMENTED_CONTROL_NEUTRAL_THUMB_STYLE: React.CSSProperties = {
+  border: 'none',
+  background: 'var(--neko-editor-background, #ffffff)',
+  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 3px 8px rgba(0, 0, 0, 0.06)',
+};
+
 const SEGMENTED_CONTROL_ITEM_STYLE: React.CSSProperties = {
   position: 'relative',
   flex: '1 1 0',
@@ -148,6 +207,12 @@ const SEGMENTED_CONTROL_ITEM_HOVER_STYLE: React.CSSProperties = {
   background: 'color-mix(in srgb, var(--neko-foreground, #000000) 6%, transparent)',
 };
 
+const SEGMENTED_CONTROL_ITEM_COMFORTABLE_STYLE: React.CSSProperties = {
+  height: 30,
+  fontSize: 13,
+  lineHeight: '28px',
+};
+
 const SEGMENTED_CONTROL_ITEM_FOCUS_STYLE: React.CSSProperties = {
   boxShadow: '0 0 0 2px var(--neko-focusBorder, rgba(0, 122, 255, 0.42)) inset',
 };
@@ -160,6 +225,10 @@ const SEGMENTED_CONTROL_ITEM_DISABLED_STYLE: React.CSSProperties = {
 const SEGMENTED_CONTROL_ITEM_ACTIVE_STYLE: React.CSSProperties = {
   color: 'var(--neko-button-foreground, #ffffff)',
   fontWeight: 600,
+};
+
+const SEGMENTED_CONTROL_NEUTRAL_ITEM_ACTIVE_STYLE: React.CSSProperties = {
+  color: 'var(--neko-foreground, #242424)',
 };
 
 const SEGMENTED_CONTROL_LABEL_STYLE: React.CSSProperties = {

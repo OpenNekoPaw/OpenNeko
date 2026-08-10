@@ -70,10 +70,11 @@ composition。
 下表内容仍在评审或等待实施。其约束只有在 ADR 被接受且对应 OpenSpec 完成验收后，才能提升为
 当前架构事实；在此之前，代码、`package.json` 和 Accepted 文档仍是现状证据。
 
-| 文档                                                                                                                               | 目标与实施入口                                                                                                                                             |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md)         | Desktop 统一 OpenNeko resource capability、per-consumer PCM、安全和硬件目标；不得从 transport 成功推断 direct codec、10-bit/HDR 或全部 runtime path 已交付 |
-| [`adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md`](adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md) | 专业工具 handoff、MCP/Computer Use 和 round-trip 目标；具体能力以已完成实施 change 和 Desktop 运行态证据为准                                               |
+| 文档                                                                                                                                 | 目标与实施入口                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`adr-agent-web-search-provider-extension-and-billing-boundary.md`](adr-agent-web-search-provider-extension-and-billing-boundary.md) | Agent WebSearch、国内外供应商 adapter-only 扩展、Host 凭据、BYOK 计费授权、预算回执及 Browser 非 fallback 边界                                             |
+| [`adr-neko-desktop-media-capability-and-security-boundary.md`](adr-neko-desktop-media-capability-and-security-boundary.md)           | Desktop 统一 OpenNeko resource capability、per-consumer PCM、安全和硬件目标；不得从 transport 成功推断 direct codec、10-bit/HDR 或全部 runtime path 已交付 |
+| [`adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md`](adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md)   | 专业工具 handoff、MCP/Computer Use 和 round-trip 目标；具体能力以已完成实施 change 和 Desktop 运行态证据为准                                               |
 
 机器可读的质量门禁输入放在 [`../../quality/`](../../quality/)，例如代码债务台账和 Agent 边界 LCD register；本目录只保留人类可读的架构决策和规则说明。
 

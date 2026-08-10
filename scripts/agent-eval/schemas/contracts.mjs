@@ -508,6 +508,21 @@ const ASSERTION_SCHEMA = s.union([
     },
     { expectedArguments: s.anyJson(), resultIncludes: s.anyJson() },
   ),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('automation-tool-result'),
+    name: EXTERNAL_ID,
+    profileId: ID,
+    targetLabel: SHORT_TEXT,
+    mode: s.enum(['observe', 'browse-read', 'interact']),
+    sessionStatus: s.literal('active'),
+    remainingSteps: s.integer({ min: 0, max: 99 }),
+    requiredEvidenceKinds: s.array(s.enum(['text', 'structured', 'transient-image', 'mutation']), {
+      minLength: 1,
+      maxLength: 4,
+    }),
+    observationTransport: s.enum(['transient-receipt', 'none']),
+  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -1078,6 +1093,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'draft-rejection',
     'configuration-update',
     'tool-call',
+    'automation-tool-result',
     'todo-projection',
     'process-order',
     'queue-state',
@@ -1192,6 +1208,16 @@ export function validateScenario(input) {
   for (const item of [...input.assertions, ...input.artifactChecks]) {
     if (!evidenceRefs.has(item.evidenceRef)) {
       throw new Error(`${item.kind} ${item.id} references undeclared evidence ${item.evidenceRef}`);
+    }
+  }
+  for (const assertion of input.assertions) {
+    if (assertion.kind !== 'automation-tool-result') continue;
+    assertUnique(assertion.requiredEvidenceKinds, `${assertion.id} required evidence kinds`);
+    const expectsTransient = assertion.requiredEvidenceKinds.includes('transient-image');
+    if (expectsTransient !== (assertion.observationTransport === 'transient-receipt')) {
+      throw new Error(
+        `${assertion.id} observation transport must match transient-image evidence requirements`,
+      );
     }
   }
   if ((input.caseGroup === 'holdout') !== (input.visibility === 'holdout')) {

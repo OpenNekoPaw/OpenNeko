@@ -21,7 +21,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Window Scene authority 只消费 Agent application 返回的 committed Conversation/owner projection；在 first submit 尚未完成 target、input、configuration、local commit 和 runtime materialization 前不得切换到 Assistant/Workspace/Character/Room Scene。
 - Scene 只由 typed navigation intent、已提交 Conversation owner 和领域 capability facts 决定；模型文本、active/current/recent Project 和组件可用性不得发明 owner 或可执行 Scene。
 - 资源中心建立 Assets-owned `AssetCenterSession`，由同一 session 的 Management Root 在 Main 管理 catalog/filter/selection，并把选中资源通过授权 descriptor 投影给可选 Secondary Preview Root；Desktop 不拥有 Asset selection、资源事实或 preview 类型判断。
-- 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个视觉、DOM 与 overflow 边界独立的共享 panel shell；两个 shell 各自拥有边框、直角边界、背景并由带间距的 resize composition 连接，不能只在同一连续 Main 底板上画分隔线。
+- 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个 DOM 与 overflow 边界独立的共享 panel；两个 panel 以直角边界贴边连接，resize handle 覆盖在分界线上，不得通过空白 margin/gap 分隔内容。
 - 扩展/Skill、项目管理和 Settings 也通过明确 Surface slots 组合；缺失真实 owner/public Root 时显示 owner-qualified unavailable，而不是在 Desktop 复制临时业务实现。
 - Conversation 创建本地原子提交 context、conversation、initial message 和 durable pending-turn intent，并在返回 session Scene 前把同一 identity 物化到精确 Assistant/Workspace Agent runtime；外部 provider turn 以 request identity 幂等启动和恢复，不宣称与本地事务原子。
 - Entry Draft 首次提交完成一次 owner/session/endpoint 交接：lifecycle authority 已提交 initial message/pending intent、正确 scope 的 runtime conversation 可启动、session Scene 和新 projection endpoint 同时可附着；旧 launch attachment 只能经旧 endpoint 释放。崩溃重放可修复缺失的本地 session materialization，但不得重复 provider execution 或忽略 endpoint identity mismatch。
@@ -35,9 +35,21 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Renderer effect 只拥有自身 subscription；后台 task/runtime 由 package application owner 管理，不依赖
   React Root 是否挂载。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实
   Electron exception/DOM 证据验收。
+- Renderer 开始 reload 时，Window lifecycle 必须先使旧 renderer 的当前 Scene projection 失效并卸载
+  Canvas、Cut、Resource Browser 等 view-scoped Roots；新的 renderer 只从同一 Window authority 获取带
+  当前 `rendererSessionId` 的精确 projection 后重建 Roots。旧 Surface 请求仍保持 stale 拒绝，但不得继续
+  占据可见 slot、重复请求或让兄弟面板长期停留在 package lazy-loading fallback。
+- Canvas 生成节点启动任务前必须验证 package-owned `generation_jobs` 表是当前唯一 canonical shape；同名
+  空表若仍包含已删除的内部版本列，只重置该空表并创建 canonical 表。非 canonical 表只要含有记录就必须
+  保留原记录并返回明确的 Generation persistence diagnostic，不得迁移、补写旧字段、清空或阻止其他
+  Workspace/Canvas 使用自己的有效 authority。
 - Window 只保留唯一 `ControlledWorkbenchShell`、当前 Scene/Workspace identity 和必要布局；Create 与
   Assets/Extensions/Projects/Settings 是当前导航场景，不创建长期 open Workbench instance。只有用户显式
   分屏时才允许第二个同时可见的业务 Surface。
+- 每次应用启动或重新打开一个已释放的 Window 都创建新的 unbound Entry Draft 并显示入口界面；上次可见
+  Workspace、conversation 或管理 Scene 只保留在各自 durable catalog/presentation snapshot 中，不作为启动
+  目标。Renderer reload 仍恢复当前进程内的 exact Scene，不触发新的 Entry。删除 Application Settings 中
+  “恢复上次工作区”的启动目标选项，保持一条 canonical startup path。
 - Workspace、Conversation、Room、Project、Asset 和文档是可持久、可恢复且不设总量硬上限的业务记录，
   但 inactive UI 不常驻。Renderer 只挂载当前和显式分屏 package Root；切换前由 owning package 保存最小
   View snapshot，切回时从 durable facts 与 snapshot 重建。
@@ -69,12 +81,19 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - `@neko/ui` 继续拥有无领域状态的 `ControlledWorkbenchShell`、slots、resize 与可访问交互 primitive；不新增产品 scene registry 或领域判断。
 - `@neko/agent-contracts`、`@neko/agent-runtime` 与 `@neko/agent-webview` 拥有唯一 Agent Root、draft/session presentation、`assistant | workspace` scope、launch-safe capability catalog、conversation context、Assistant user-space/scratch lifecycle 和幂等 initial turn。
 - `@neko/assets-domain` 与 `@neko/assets-webview` 拥有 `AssetCenterSession`、management selection 和资源 Root；`@neko/preview-*` 消费 Host 授权的 exact resource descriptor，不接收本地路径。
+- Extensions Scene 复用 Assets 的管理/详情 sibling panel composition：`@neko/agent-webview` 拥有 Skill/扩展分类、查询、网格/列表和当前选择等可丢弃 presentation state。没有选择时管理 Main 独占可用区域；选择后 Secondary Main 贴边显示当前配置，不保留空白 margin/gap。Automation endpoint 与 Host permission Roots 仅在已选择的扩展配置中挂载，不得出现在 Skill 页面或未选择状态。
 - `@neko/canvas-*`、`@neko/cut-*`、`@neko/preview-*` 继续拥有 workspace creative Roots；scene composition 不复制其状态、业务逻辑或媒体 runtime。
 - Agent extension management UI 必须通过 Agent package public Root/port 暴露；项目目录与 Settings 只保留 app-level placement，领域状态与操作继续委托 owning Host/package contract。
 - `apps/neko-desktop` 只保留 Electron Window/View 生命周期、typed IPC/preload、目录/文件/麦克风授权 adapter 和将公开 Roots 放入已验证 slots 的 presentation composition。
 - `@neko/host` 同时拥有 Entry Draft identity 与 `unbound entry -> committed owner-qualified session` Scene transition fencing；`@neko/agent-webview` 拥有同一 Root 内 presentation reset 和未发送 target/configuration snapshot，Desktop renderer 不推断 scope 或以 Scene 表示 Draft target。
+- `@neko/host` 的 Window claim 负责把已释放 Window 的可见 presentation 原子切换为 fresh Entry，同时保留
+  Project tabs/catalog、conversation authority 和 package snapshots。Application Settings 不再拥有 startup
+  destination；旧 Settings shape 由既有 strict recovery/quarantine 边界局部拒绝并重置该 settings record，
+  不修改 Shell、Project、Conversation、Assets 或用户文件。
 - `@neko/host` 拥有 Window 当前 Scene/Workspace/View identity 与布局，不拥有 Renderer residency policy；
   package runtime 继续拥有业务状态与后台任务，Desktop renderer 只挂载当前和显式分屏 Roots。
+- `@neko/generation` 拥有 Generation Job 表的 canonical schema、空的 non-canonical runtime table reset 与
+  含记录 schema rejection；Desktop/Canvas 只投影明确 diagnostic，不拥有 SQLite shape 或恢复规则。
 - 用户数据不删除、不复制，产品运行时不迁移、不兼容读取也不自动修复。持久记录必须长期保持单一稳定 shape；无法满足 canonical shape 的记录在其最小实例边界返回明确 diagnostic，其他 Window、Workbench、conversation 和 Project 继续可用。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。
 
 本变更依赖 `remove-internal-versioning-and-product-migrations` 的 Host/Desktop contract、Agent connection 与 runtime ordering 切片。两项变更必须一次性更新本次边界内全部 producer、consumer、fixture 和测试，不建立版本判别、产品迁移、兼容 reader、双路径或内部代际别名。

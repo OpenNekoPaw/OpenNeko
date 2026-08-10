@@ -56,13 +56,51 @@ export interface PersistentGenerationJobStoreOptions {
   readonly workspaceId: string;
 }
 
+export interface PersistentAssistantGenerationJobStoreOptions {
+  readonly metadataStore: LocalMetadataStore;
+  readonly assistantSpaceId: string;
+}
+
 export function createPersistentGenerationJobStore(
   options: PersistentGenerationJobStoreOptions,
 ): GenerationJobStore {
-  if (!options.workspaceId.trim()) {
+  return createPartitionedPersistentGenerationJobStore({
+    metadataStore: options.metadataStore,
+    ownerId: options.workspaceId,
+    ownerLabel: 'Workspace',
+    table: 'generation_jobs',
+    ownerColumn: 'workspace_id',
+  });
+}
+
+export function createPersistentAssistantGenerationJobStore(
+  options: PersistentAssistantGenerationJobStoreOptions,
+): GenerationJobStore {
+  return createPartitionedPersistentGenerationJobStore({
+    metadataStore: options.metadataStore,
+    ownerId: options.assistantSpaceId,
+    ownerLabel: 'Assistant Space',
+    table: 'assistant_generation_jobs',
+    ownerColumn: 'assistant_space_id',
+  });
+}
+
+interface PersistentGenerationJobPartition {
+  readonly metadataStore: LocalMetadataStore;
+  readonly ownerId: string;
+  readonly ownerLabel: 'Workspace' | 'Assistant Space';
+  readonly table: 'generation_jobs' | 'assistant_generation_jobs';
+  readonly ownerColumn: 'workspace_id' | 'assistant_space_id';
+}
+
+function createPartitionedPersistentGenerationJobStore(
+  options: PersistentGenerationJobPartition,
+): GenerationJobStore {
+  if (!options.ownerId.trim()) {
+    const article = options.ownerLabel === 'Workspace' ? 'a' : 'an';
     throw new GenerationJobError(
       'generation-job-persistence-invalid',
-      'Persistent Generation Job store requires a workspace identity.',
+      `Persistent Generation Job store requires ${article} ${options.ownerLabel} identity.`,
     );
   }
   const observations = createJobObservationHub<GenerationJobSnapshot>();
@@ -80,9 +118,9 @@ export function createPersistentGenerationJobStore(
         },
         async ({ sql }) => {
           const existing = await sql.all(
-            `SELECT job_id FROM generation_jobs
-              WHERE workspace_id = ? AND job_id = ?`,
-            [options.workspaceId, stored.ref.jobId],
+            `SELECT job_id FROM ${options.table}
+              WHERE ${options.ownerColumn} = ? AND job_id = ?`,
+            [options.ownerId, stored.ref.jobId],
           );
           if (existing.length > 0) {
             throw new JobLifecycleError(
@@ -91,11 +129,11 @@ export function createPersistentGenerationJobStore(
             );
           }
           await sql.run(
-            `INSERT INTO generation_jobs (
-              workspace_id, job_id, phase, snapshot_json, created_at, updated_at
+            `INSERT INTO ${options.table} (
+              ${options.ownerColumn}, job_id, phase, snapshot_json, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?)`,
             [
-              options.workspaceId,
+              options.ownerId,
               stored.ref.jobId,
               stored.phase,
               encodeGenerationJobSnapshot(stored),
@@ -119,9 +157,9 @@ export function createPersistentGenerationJobStore(
         async ({ sql }) => {
           const rows = await sql.all(
             `SELECT job_id, phase, snapshot_json, created_at, updated_at
-              FROM generation_jobs
-              WHERE workspace_id = ? AND job_id = ?`,
-            [options.workspaceId, ref.jobId],
+              FROM ${options.table}
+              WHERE ${options.ownerColumn} = ? AND job_id = ?`,
+            [options.ownerId, ref.jobId],
           );
           return decodeRequiredRow(rows, ref);
         },
@@ -139,23 +177,23 @@ export function createPersistentGenerationJobStore(
         async ({ sql }) => {
           const rows = await sql.all(
             `SELECT job_id, phase, snapshot_json, created_at, updated_at
-              FROM generation_jobs
-              WHERE workspace_id = ? AND job_id = ?`,
-            [options.workspaceId, snapshot.ref.jobId],
+              FROM ${options.table}
+              WHERE ${options.ownerColumn} = ? AND job_id = ?`,
+            [options.ownerId, snapshot.ref.jobId],
           );
           const current = decodeRequiredRow(rows, snapshot.ref);
           assertJobTransition(current, snapshot);
           const next = cloneForStorage(snapshot);
           const result = await sql.run(
-            `UPDATE generation_jobs
+            `UPDATE ${options.table}
               SET phase = ?, snapshot_json = ?, created_at = ?, updated_at = ?
-              WHERE workspace_id = ? AND job_id = ?`,
+              WHERE ${options.ownerColumn} = ? AND job_id = ?`,
             [
               next.phase,
               encodeGenerationJobSnapshot(next),
               next.createdAt,
               next.updatedAt,
-              options.workspaceId,
+              options.ownerId,
               next.ref.jobId,
             ],
           );
@@ -186,11 +224,11 @@ export function createPersistentGenerationJobStore(
         async ({ sql }) => {
           const rows = await sql.all(
             `SELECT job_id, phase, snapshot_json, created_at, updated_at
-              FROM generation_jobs
-              WHERE workspace_id = ?
+              FROM ${options.table}
+              WHERE ${options.ownerColumn} = ?
                 AND phase IN ('pending', 'running', 'outcome-unknown')
               ORDER BY updated_at ASC, job_id ASC`,
-            [options.workspaceId],
+            [options.ownerId],
           );
           const snapshots: GenerationJobSnapshot[] = [];
           const diagnostics: GenerationJobReadDiagnostic[] = [];
@@ -224,10 +262,10 @@ export function createPersistentGenerationJobStore(
         async ({ sql }) => {
           const rows = await sql.all(
             `SELECT job_id, phase, snapshot_json, created_at, updated_at
-              FROM generation_jobs
-              WHERE workspace_id = ?
+              FROM ${options.table}
+              WHERE ${options.ownerColumn} = ?
               ORDER BY created_at ASC, job_id ASC`,
-            [options.workspaceId],
+            [options.ownerId],
           );
           const matches: GenerationJobSnapshot[] = [];
           for (const row of rows) {

@@ -136,7 +136,6 @@ export interface DesktopApplicationSidebarProjection {
 export type DesktopSceneTransitionIntent =
   | { readonly kind: 'open-agent-entry' }
   | { readonly kind: 'new-agent-conversation' }
-  | { readonly kind: 'bind-agent-assistant'; readonly draftId: string }
   | { readonly kind: 'open-workspace'; readonly workspaceGrantId: string }
   | { readonly kind: 'open-project-workspace'; readonly projectId: string }
   | { readonly kind: 'open-asset-center' }
@@ -832,10 +831,6 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
     requireExactKeys(record, ['kind', 'selection'], 'Select Character Detail intent');
     return { kind, selection: parseCharacterDetailSelection(record['selection']) };
   }
-  if (kind === 'bind-agent-assistant') {
-    requireExactKeys(record, ['kind', 'draftId'], 'Desktop Scene transition intent');
-    return { kind, draftId: requireIdentity(record['draftId'], 'Agent Draft') };
-  }
   if (kind === 'open-workspace') {
     requireExactKeys(record, ['kind', 'workspaceGrantId'], 'Open Workspace intent');
     return {
@@ -981,6 +976,9 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     assertMainKinds(slots, ['extension-management', 'extension-detail']);
     if (slots.main?.kind !== 'extension-management') {
       throw mismatch('Extensions Scene requires its Extension Management Main Surface.');
+    }
+    if (slots.secondaryMain?.kind !== 'extension-detail') {
+      throw mismatch('Extensions Scene requires its Extension Detail Secondary Main Surface.');
     }
     return;
   }

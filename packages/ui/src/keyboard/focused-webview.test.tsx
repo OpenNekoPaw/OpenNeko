@@ -68,6 +68,24 @@ describe('useFocusedWebviewRoot', () => {
     expect(document.body.getAttribute('data-neko-keyboard-focused')).toBe('true');
   });
 
+  it('restores local focus when the keyboard root mounts after the hook effect', () => {
+    act(() => {
+      root.render(<DelayedFocusedRootHarness />);
+    });
+    act(() => {
+      host.querySelector<HTMLButtonElement>('button')?.click();
+    });
+
+    const shell = host.querySelector<HTMLElement>('[data-testid="delayed-keyboard-root"]');
+    expect(document.body.getAttribute('data-neko-keyboard-focused')).toBe('false');
+    act(() => {
+      shell?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+
+    expect(shell?.getAttribute('data-neko-keyboard-focused')).toBe('true');
+    expect(document.body.getAttribute('data-neko-keyboard-focused')).toBe('true');
+  });
+
   it('releases an active text input when the user clicks a keyboard boundary outside it', () => {
     act(() => {
       root.render(<FocusedRootWithEditableHarness />);
@@ -488,6 +506,22 @@ function FocusedRootWithEditableHarness(): React.ReactElement {
         Button
       </button>
     </div>
+  );
+}
+
+function DelayedFocusedRootHarness(): React.ReactElement {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = React.useState(false);
+  useFocusedWebviewRoot(rootRef, false);
+
+  return mounted ? (
+    <div ref={rootRef} data-testid="delayed-keyboard-root">
+      Canvas
+    </div>
+  ) : (
+    <button type="button" onClick={() => setMounted(true)}>
+      Mount
+    </button>
   );
 }
 

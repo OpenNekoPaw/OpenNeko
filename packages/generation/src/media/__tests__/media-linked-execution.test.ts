@@ -17,6 +17,8 @@ import type {
 } from '@neko/generation';
 import { getMediaAdapterRegistry } from '../adapters/media-adapter-registry';
 import { MediaGenerationExecutor } from '../media-generation-executor';
+import { MediaGenerationService } from '../media-generation-service';
+import { MediaRoutingManager } from '../routing/media-routing-manager';
 
 const provider: Provider = {
   id: 'linked-provider',
@@ -51,7 +53,7 @@ describe('MediaGenerationExecutor linked execution', () => {
     });
     getMediaAdapterRegistry().registerBuiltin('runway', adapter);
     const progress = vi.fn();
-    const executor = new MediaGenerationExecutor(createConfig());
+    const executor = new MediaGenerationExecutor(createConfig(), createProviderResolver());
 
     const result = await executor.executeLinked({
       generationType: 'text-to-image',
@@ -66,6 +68,11 @@ describe('MediaGenerationExecutor linked execution', () => {
       metadata: { providerResolutionSource: 'media-adapter' },
     });
     expect(progress).toHaveBeenCalledWith(100);
+    expect(adapter.generateImage).toHaveBeenCalledWith(
+      expect.any(Object),
+      model,
+      expect.objectContaining({ id: provider.id, apiKey: 'test-key' }),
+    );
   });
 
   it('propagates the Tool Call AbortSignal through external provider polling', async () => {
@@ -81,7 +88,7 @@ describe('MediaGenerationExecutor linked execution', () => {
     });
     getMediaAdapterRegistry().registerBuiltin('runway', adapter);
     const controller = new AbortController();
-    const executor = new MediaGenerationExecutor(createConfig());
+    const executor = new MediaGenerationExecutor(createConfig(), createProviderResolver());
 
     const execution = executor.executeLinked({
       generationType: 'text-to-image',
@@ -104,7 +111,7 @@ describe('MediaGenerationExecutor linked execution', () => {
       })),
     });
     getMediaAdapterRegistry().registerBuiltin('runway', adapter);
-    const executor = new MediaGenerationExecutor(createConfig());
+    const executor = new MediaGenerationExecutor(createConfig(), createProviderResolver());
 
     await expect(
       executor.executeLinked({
@@ -114,6 +121,91 @@ describe('MediaGenerationExecutor linked execution', () => {
         request: { prompt: 'cat' },
       }),
     ).rejects.toThrow(/does not support asynchronous task description/);
+  });
+
+  it('fails before provider execution when the exact credential disappears', async () => {
+    const generateImage = vi.fn(async (): Promise<MediaAdapterResult> => ({
+      status: 'completed',
+      outputs: [{ type: 'image', url: 'https://example.test/generated.png' }],
+    }));
+    getMediaAdapterRegistry().registerBuiltin('runway', createAdapter({ generateImage }));
+    const executor = new MediaGenerationExecutor(createConfig(), {
+      resolveProvider: async () => undefined,
+    });
+
+    await expect(
+      executor.executeLinked({
+        generationType: 'text-to-image',
+        providerId: provider.id,
+        modelId: model.id,
+        request: { prompt: 'cat' },
+      }),
+    ).rejects.toThrow(`Provider or model not found: ${provider.id}/${model.id}`);
+    expect(generateImage).not.toHaveBeenCalled();
+  });
+
+  it('re-resolves the exact provider between routing and linked execution', async () => {
+    const generateImage = vi.fn(async (): Promise<MediaAdapterResult> => ({
+      status: 'completed',
+      outputs: [{ type: 'image', url: 'https://example.test/generated.png' }],
+    }));
+    getMediaAdapterRegistry().registerBuiltin('runway', createAdapter({ generateImage }));
+    let resolution = 0;
+    const providerResolver = {
+      resolveProvider: vi.fn(async () => (++resolution === 1 ? provider : undefined)),
+    };
+    const config = createConfig();
+    const service = new MediaGenerationService(
+      config,
+      new MediaRoutingManager(config, providerResolver),
+      new MediaGenerationExecutor(config, providerResolver),
+    );
+
+    await expect(
+      service.generateImage({
+        prompt: 'cat',
+        providerId: provider.id,
+        modelId: model.id,
+      }),
+    ).rejects.toThrow(`Provider or model not found: ${provider.id}/${model.id}`);
+    expect(providerResolver.resolveProvider).toHaveBeenNthCalledWith(1, provider.id);
+    expect(providerResolver.resolveProvider).toHaveBeenNthCalledWith(2, provider.id);
+    expect(generateImage).not.toHaveBeenCalled();
+  });
+
+  it('re-resolves the provider for external-task observation and cancellation', async () => {
+    const getTaskStatus = vi.fn(async (): Promise<MediaAdapterResult> => ({
+      status: 'processing',
+      progress: 25,
+    }));
+    const cancelTask = vi.fn(async () => undefined);
+    getMediaAdapterRegistry().registerBuiltin(
+      'runway',
+      createAdapter({ getTaskStatus, cancelTask }),
+    );
+    let currentProvider: Provider | undefined = provider;
+    const providerResolver = {
+      resolveProvider: vi.fn(async () => currentProvider),
+    };
+    const executor = new MediaGenerationExecutor(createConfig(), providerResolver);
+
+    await expect(
+      executor.describeExternalTask({
+        providerId: provider.id,
+        externalTaskId: 'external-1',
+      }),
+    ).resolves.toMatchObject({ status: 'processing', progress: 25 });
+    expect(getTaskStatus).toHaveBeenCalledWith('external-1', provider);
+
+    currentProvider = undefined;
+    await expect(
+      executor.cancelExternalTask({
+        providerId: provider.id,
+        externalTaskId: 'external-1',
+      }),
+    ).rejects.toThrow(`Configured media provider ${provider.id} is unavailable.`);
+    expect(providerResolver.resolveProvider).toHaveBeenCalledTimes(2);
+    expect(cancelTask).not.toHaveBeenCalled();
   });
 
   it('keeps provider execution behind GenerationJob and rejects direct Agent Tool execution', () => {
@@ -151,9 +243,17 @@ describe('MediaGenerationExecutor linked execution', () => {
 
 function createConfig(): MediaGenerationConfigPort {
   return {
-    getProvider: (id: string) => (id === provider.id ? provider : undefined),
+    getProvider: (id: string) =>
+      id === provider.id ? { ...provider, apiKey: undefined } : undefined,
     getModel: (id: string) => (id === model.id ? model : undefined),
     getDefaultModelRef: () => undefined,
+  };
+}
+
+function createProviderResolver() {
+  return {
+    resolveProvider: async (providerId: string) =>
+      providerId === provider.id ? provider : undefined,
   };
 }
 

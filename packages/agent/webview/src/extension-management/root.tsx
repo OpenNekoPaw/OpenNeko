@@ -1,7 +1,15 @@
-import { PackageIcon, PlusIcon, SearchIcon, TrashIcon, WarningIcon } from '@neko/ui';
+import {
+  GridIcon,
+  LayersIcon,
+  PackageIcon,
+  PlusIcon,
+  SearchIcon,
+  TrashIcon,
+  WarningIcon,
+} from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { EmptyState, Switch } from '@neko/ui/primitives';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AgentExtensionCatalogItem } from '@neko/agent-contracts';
 import type {
   AgentExtensionManagementProjection,
@@ -9,22 +17,42 @@ import type {
   AgentManagedSkillItem,
 } from '@neko/agent-contracts/extension-management';
 
+export type AgentExtensionManagementTab = 'skills' | 'extensions';
+export type AgentExtensionManagementView = 'grid' | 'list';
+
+export interface AgentExtensionManagementDetailRenderInput {
+  readonly content: ReactNode;
+  readonly selectedItemId: string | undefined;
+  readonly tab: AgentExtensionManagementTab;
+}
+
 export function AgentExtensionManagementRoot({
   confirmAction,
   interactive,
+  onDetailVisibilityChange,
+  renderDetail,
   runtime,
 }: {
   readonly confirmAction: (message: string) => boolean | Promise<boolean>;
   readonly interactive: boolean;
+  readonly onDetailVisibilityChange?: (visible: boolean) => void;
+  readonly renderDetail?: (input: AgentExtensionManagementDetailRenderInput) => ReactNode;
   readonly runtime: AgentExtensionManagementRuntime;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
+  const [tab, setTab] = useState<AgentExtensionManagementTab>('skills');
+  const [view, setView] = useState<AgentExtensionManagementView>('grid');
   const [query, setQuery] = useState('');
+  const [selectedSkillId, setSelectedSkillId] = useState<string>();
+  const [selectedExtensionId, setSelectedExtensionId] = useState<string>();
   const [refreshRequestId, setRefreshRequestId] = useState('initial');
   const [projection, setProjection] = useState<AgentExtensionManagementProjection>();
   const [error, setError] = useState<string>();
   const [operationKey, setOperationKey] = useState<string>();
+  const hasActiveArtifactOperation =
+    projection?.operations.some((operation) => operation.status === 'active') ?? false;
+  const isStartingArtifactOperation =
+    operationKey?.startsWith('install:') === true || operationKey?.startsWith('update:') === true;
 
   useEffect(() => {
     if (!interactive) return;
@@ -43,6 +71,38 @@ export function AgentExtensionManagementRoot({
     };
   }, [interactive, refreshRequestId, runtime]);
 
+  useEffect(() => {
+    if (!interactive || (!hasActiveArtifactOperation && !isStartingArtifactOperation)) return;
+    let active = true;
+    let timer: number | undefined;
+    const poll = async (): Promise<void> => {
+      try {
+        const next = await runtime.getSnapshot();
+        if (active) setProjection(next);
+      } catch (reason: unknown) {
+        if (active) setError(describeError(reason));
+      } finally {
+        if (active) timer = window.setTimeout(() => void poll(), 500);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 0);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [hasActiveArtifactOperation, interactive, isStartingArtifactOperation, runtime]);
+
+  useEffect(() => {
+    const skills = projection?.skills ?? [];
+    setSelectedSkillId((current) =>
+      current && skills.some((item) => item.id === current) ? current : undefined,
+    );
+    const extensions = projection?.extensions ?? [];
+    setSelectedExtensionId((current) =>
+      current && extensions.some((item) => item.id === current) ? current : undefined,
+    );
+  }, [projection?.extensions, projection?.skills]);
+
   const skills = useMemo(
     () => searchAndOrderAgentSkills(projection?.skills ?? [], query),
     [projection?.skills, query],
@@ -51,6 +111,22 @@ export function AgentExtensionManagementRoot({
     () => searchAndOrderAgentExtensions(projection?.extensions ?? [], query),
     [projection?.extensions, query],
   );
+  const selectedSkill = projection?.skills.find((item) => item.id === selectedSkillId);
+  const selectedExtension = projection?.extensions.find((item) => item.id === selectedExtensionId);
+  const selectedItem = tab === 'skills' ? selectedSkill : selectedExtension;
+  const detailVisible = selectedItem !== undefined;
+
+  useEffect(() => {
+    onDetailVisibilityChange?.(detailVisible);
+  }, [detailVisible, onDetailVisibilityChange]);
+
+  useEffect(
+    () => () => {
+      onDetailVisibilityChange?.(false);
+    },
+    [onDetailVisibilityChange],
+  );
+
   const runMutation = useCallback(
     async (key: string, operation: () => Promise<void>): Promise<void> => {
       if (operationKey) return;
@@ -67,220 +143,471 @@ export function AgentExtensionManagementRoot({
     },
     [operationKey],
   );
+  const cancelArtifactOperation = useCallback(
+    async (artifactOperationId: string): Promise<void> => {
+      setError(undefined);
+      try {
+        await runtime.cancelPluginOperation(artifactOperationId);
+        setProjection(await runtime.getSnapshot());
+      } catch (reason: unknown) {
+        setError(describeError(reason));
+      }
+    },
+    [runtime],
+  );
   const issueCount =
     (projection?.skillDiscovery.diagnostics.reduce((total, item) => total + item.count, 0) ?? 0) +
     (projection?.skillDiscovery.duplicateCount ?? 0) +
     (projection?.extensionDiscovery.diagnostics.reduce((total, item) => total + item.count, 0) ??
       0);
+  const visibleEntries =
+    tab === 'skills'
+      ? skills.map((item) => ({ kind: 'skill' as const, item }))
+      : extensions.map((item) => ({ kind: 'extension' as const, item }));
+  const selectedItemId = selectedItem?.id;
+  const detail = selectedItem ? (
+    <AgentExtensionConfigurationRoot
+      cancelArtifactOperation={cancelArtifactOperation}
+      confirmAction={confirmAction}
+      hasActiveArtifactOperation={hasActiveArtifactOperation}
+      interactive={interactive}
+      operationKey={operationKey}
+      operations={projection?.operations ?? []}
+      runMutation={runMutation}
+      runtime={runtime}
+      selectedExtension={tab === 'extensions' ? selectedExtension : undefined}
+      selectedSkill={tab === 'skills' ? selectedSkill : undefined}
+      tab={tab}
+    />
+  ) : undefined;
 
   return (
-    <section className="agent-extension-management-root">
-      <header className="management-surface-header">
-        <div>
-          <p className="section-label">{t('home.capabilities.eyebrow')}</p>
-          <h2>{t('home.capabilities')}</h2>
-          <p>{t('home.capabilities.description')}</p>
-        </div>
-        <div className="management-surface-actions">
-          <button
-            type="button"
-            disabled={!interactive || !projection || operationKey !== undefined}
-            onClick={() => {
-              void runMutation('refresh', () => runtime.refreshMarketplaces());
-            }}
-          >
-            {t('home.capabilities.refresh')}
-          </button>
-          {tab === 'skills' ? (
+    <>
+      <section className="agent-extension-management-root" data-catalog-view={view}>
+        <header className="management-surface-header">
+          <div>
+            <p className="section-label">{t('home.capabilities.eyebrow')}</p>
+            <h2>{t('home.capabilities')}</h2>
+            <p>{t('home.capabilities.description')}</p>
+          </div>
+          <div className="management-surface-actions">
             <button
               type="button"
-              disabled={!interactive || !projection || operationKey !== undefined}
-              onClick={() => {
-                void runMutation('skill-install', () => runtime.installPersonalSkill());
-              }}
+              disabled={
+                !interactive ||
+                !projection ||
+                operationKey !== undefined ||
+                hasActiveArtifactOperation
+              }
+              onClick={() => void runMutation('refresh', () => runtime.refreshMarketplaces())}
             >
-              <PlusIcon size={14} />
-              {t('home.capabilities.addSkill')}
+              {t('home.capabilities.refresh')}
             </button>
-          ) : null}
-        </div>
-      </header>
-      <div className="management-surface-toolbar">
-        <label className="management-search-field">
-          <SearchIcon size={16} />
-          <input
-            aria-label={t('home.capabilities.search')}
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div className="management-segmented-control" aria-label={t('home.capabilities.tabs')}>
-          <button type="button" aria-pressed={tab === 'skills'} onClick={() => setTab('skills')}>
-            {t('home.capabilities.skills')}
+            {tab === 'skills' ? (
+              <button
+                type="button"
+                disabled={!interactive || !projection || operationKey !== undefined}
+                onClick={() =>
+                  void runMutation('skill-install', () => runtime.installPersonalSkill())
+                }
+              >
+                <PlusIcon size={14} />
+                <span>{t('home.capabilities.addSkill')}</span>
+              </button>
+            ) : null}
+          </div>
+        </header>
+        <div className="management-surface-toolbar">
+          <label className="management-search-field">
+            <SearchIcon size={16} />
+            <input
+              aria-label={t('home.capabilities.search')}
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+            />
+          </label>
+          <div className="management-segmented-control" aria-label={t('home.capabilities.tabs')}>
+            <button
+              type="button"
+              aria-pressed={tab === 'skills'}
+              data-extension-catalog-tab="skills"
+              onClick={() => setTab('skills')}
+            >
+              {t('home.capabilities.skills')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={tab === 'extensions'}
+              data-extension-catalog-tab="extensions"
+              onClick={() => setTab('extensions')}
+            >
+              {t('home.capabilities.extensions')}
+            </button>
+          </div>
+          <button
+            type="button"
+            aria-label={t('home.capabilities.view.grid')}
+            aria-pressed={view === 'grid'}
+            data-catalog-view-control="grid"
+            title={t('home.capabilities.view.grid')}
+            onClick={() => setView('grid')}
+          >
+            <GridIcon size={15} />
           </button>
           <button
             type="button"
-            aria-pressed={tab === 'extensions'}
-            onClick={() => setTab('extensions')}
+            aria-label={t('home.capabilities.view.list')}
+            aria-pressed={view === 'list'}
+            data-catalog-view-control="list"
+            title={t('home.capabilities.view.list')}
+            onClick={() => setView('list')}
           >
-            {t('home.capabilities.extensions')}
+            <LayersIcon size={15} />
           </button>
         </div>
-      </div>
-      {error ? (
-        <div className="management-surface-diagnostic" role="alert">
-          <WarningIcon size={17} />
-          <span>{error}</span>
+        {error ? (
+          <div className="management-surface-diagnostic" role="alert">
+            <WarningIcon size={17} />
+            <span>{error}</span>
+          </div>
+        ) : issueCount > 0 ? (
+          <div className="management-surface-diagnostic" role="alert">
+            <WarningIcon size={17} />
+            <span>{t('home.capabilities.discoveryIssues', { count: issueCount })}</span>
+          </div>
+        ) : null}
+        <div
+          aria-label={t(
+            tab === 'skills' ? 'home.capabilities.skills' : 'home.capabilities.extensions',
+          )}
+          className={`management-surface-list is-${view}`}
+          data-empty={visibleEntries.length === 0}
+          role="listbox"
+        >
+          {visibleEntries.length === 0 ? (
+            <EmptyState
+              fill
+              icon={<PackageIcon size={24} />}
+              title={t(
+                tab === 'skills' ? 'home.capabilities.noSkills' : 'home.capabilities.noExtensions',
+              )}
+            />
+          ) : null}
+          {visibleEntries.map((entry) => {
+            const selected = entry.item.id === selectedItemId;
+            const name = entry.kind === 'skill' ? entry.item.name : entry.item.displayName;
+            return (
+              <button
+                type="button"
+                aria-selected={selected}
+                className="management-surface-row management-surface-row__select"
+                data-selected={selected}
+                key={entry.item.id}
+                role="option"
+                onClick={() => {
+                  if (entry.kind === 'skill') setSelectedSkillId(entry.item.id);
+                  else setSelectedExtensionId(entry.item.id);
+                }}
+              >
+                <span className="management-surface-icon">
+                  {entry.kind === 'extension' && entry.item.iconDataUrl ? (
+                    <img alt="" src={entry.item.iconDataUrl} />
+                  ) : (
+                    <PackageIcon size={18} />
+                  )}
+                </span>
+                <span className="management-surface-copy">
+                  <strong>{name}</strong>
+                  <small>{entry.item.description || entry.item.id}</small>
+                  <small>
+                    {entry.kind === 'skill'
+                      ? t(`home.capabilities.source.${entry.item.source}`)
+                      : `${entry.item.version} · ${t(
+                          `home.capabilities.agentStatus.${entry.item.agentStatus}`,
+                        )}`}
+                  </small>
+                </span>
+              </button>
+            );
+          })}
         </div>
-      ) : issueCount > 0 ? (
-        <div className="management-surface-diagnostic" role="alert">
-          <WarningIcon size={17} />
-          <span>{t('home.capabilities.discoveryIssues', { count: issueCount })}</span>
+      </section>
+      {detail && selectedItemId
+        ? renderDetail
+          ? renderDetail({ content: detail, selectedItemId, tab })
+          : detail
+        : null}
+    </>
+  );
+}
+
+function AgentExtensionConfigurationRoot({
+  cancelArtifactOperation,
+  confirmAction,
+  hasActiveArtifactOperation,
+  interactive,
+  operationKey,
+  operations,
+  runMutation,
+  runtime,
+  selectedExtension,
+  selectedSkill,
+  tab,
+}: {
+  readonly cancelArtifactOperation: (operationId: string) => Promise<void>;
+  readonly confirmAction: (message: string) => boolean | Promise<boolean>;
+  readonly hasActiveArtifactOperation: boolean;
+  readonly interactive: boolean;
+  readonly operationKey: string | undefined;
+  readonly operations: AgentExtensionManagementProjection['operations'];
+  readonly runMutation: (key: string, operation: () => Promise<void>) => Promise<void>;
+  readonly runtime: AgentExtensionManagementRuntime;
+  readonly selectedExtension: AgentExtensionCatalogItem | undefined;
+  readonly selectedSkill: AgentManagedSkillItem | undefined;
+  readonly tab: AgentExtensionManagementTab;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const item = tab === 'skills' ? selectedSkill : selectedExtension;
+  if (!item) {
+    throw new Error('Extension configuration requires an exact selected catalog item.');
+  }
+
+  const name = selectedSkill?.name ?? selectedExtension?.displayName ?? item.id;
+  const mutationsDisabled =
+    !interactive || operationKey !== undefined || hasActiveArtifactOperation;
+  return (
+    <section className="agent-extension-configuration-root" data-configuration-kind={tab}>
+      <header className="extension-configuration-header">
+        <span className="management-surface-icon">
+          {selectedExtension?.iconDataUrl ? (
+            <img alt="" src={selectedExtension.iconDataUrl} />
+          ) : (
+            <PackageIcon size={20} />
+          )}
+        </span>
+        <div>
+          <p className="section-label">{t('home.capabilities.configuration')}</p>
+          <h2>{name}</h2>
+          <p>{item.description || item.id}</p>
+        </div>
+      </header>
+
+      {selectedSkill ? (
+        <div className="extension-configuration-facts">
+          <Definition label={t('home.capabilities.detail.source')}>
+            {t(`home.capabilities.source.${selectedSkill.source}`)}
+          </Definition>
+          <Definition label={t('home.capabilities.detail.identifier')}>
+            {selectedSkill.id}
+          </Definition>
         </div>
       ) : null}
-      <div
-        className="management-surface-list"
-        data-empty={tab === 'skills' ? skills.length === 0 : extensions.length === 0}
-      >
-        {(tab === 'skills' ? skills.length === 0 : extensions.length === 0) ? (
-          <EmptyState
-            fill
-            icon={<PackageIcon size={24} />}
-            title={t(
-              tab === 'skills' ? 'home.capabilities.noSkills' : 'home.capabilities.noExtensions',
-            )}
-          />
+
+      {selectedExtension ? (
+        <>
+          {operations
+            .filter((operation) => operation.pluginId === selectedExtension.id)
+            .map((operation) => (
+              <div
+                className="management-surface-diagnostic"
+                data-extension-operation-status={operation.status}
+                key={operation.operationId}
+                role="status"
+              >
+                <span>
+                  {t('home.capabilities.artifactOperation', {
+                    kind: t(`home.capabilities.artifactOperationKind.${operation.kind}`),
+                    status: t(`home.capabilities.artifactOperationStatus.${operation.status}`),
+                    phase: t(`home.capabilities.artifactOperationPhase.${operation.phase}`),
+                    progress:
+                      operation.totalBytes > 0
+                        ? `${formatByteSize(operation.transferredBytes)} / ${formatByteSize(operation.totalBytes)}`
+                        : t('home.capabilities.artifactOperationPending'),
+                  })}
+                </span>
+                {operation.canCancel ? (
+                  <button
+                    type="button"
+                    onClick={() => void cancelArtifactOperation(operation.operationId)}
+                  >
+                    {t('home.capabilities.cancelOperation')}
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          <div className="extension-configuration-facts">
+            <Definition label={t('home.capabilities.detail.version')}>
+              {selectedExtension.version}
+            </Definition>
+            <Definition label={t('home.capabilities.detail.developer')}>
+              {selectedExtension.developer || selectedExtension.marketplace}
+            </Definition>
+            <Definition label={t('home.capabilities.detail.contributions')}>
+              {describeExtensionContributions(selectedExtension, t)}
+            </Definition>
+            <Definition label={t('home.capabilities.detail.agentStatus')}>
+              {t(`home.capabilities.agentStatus.${selectedExtension.agentStatus}`)}
+              {selectedExtension.runtimeDiagnosticCode
+                ? ` · ${describeRuntimeDiagnostic(selectedExtension.runtimeDiagnosticCode, t)}`
+                : ''}
+            </Definition>
+            <Definition label={t('home.capabilities.detail.artifact')}>
+              {t(`home.capabilities.artifactStatus.${selectedExtension.artifactStatus}`)}
+              {selectedExtension.deliverySource
+                ? ` · ${t(`home.capabilities.deliverySource.${selectedExtension.deliverySource}`)}`
+                : ''}
+              {selectedExtension.downloadSizeBytes > 0
+                ? ` · ${formatByteSize(selectedExtension.downloadSizeBytes)}`
+                : ''}
+            </Definition>
+            <Definition label={t('home.capabilities.detail.runtime')}>
+              {t('home.capabilities.runtimeFacts', {
+                dependency: t(
+                  `home.capabilities.dependencyStatus.${selectedExtension.dependencyStatus}`,
+                ),
+                enableGrant: t(
+                  `home.capabilities.enableGrantStatus.${selectedExtension.enableGrantStatus}`,
+                ),
+                hostPermission: t(
+                  `home.capabilities.hostPermissionStatus.${selectedExtension.hostPermissionStatus}`,
+                ),
+                qualification: t(
+                  `home.capabilities.qualificationStatus.${selectedExtension.qualificationStatus}`,
+                ),
+              })}
+            </Definition>
+            <Definition label={t('home.capabilities.detail.permissions')}>
+              {selectedExtension.declaredPermissions.join(', ') ||
+                t('home.capabilities.permissions.none')}
+            </Definition>
+          </div>
+        </>
+      ) : null}
+
+      <div className="extension-configuration-actions">
+        {selectedExtension?.canInstall ? (
+          <button
+            type="button"
+            disabled={mutationsDisabled}
+            onClick={() => {
+              void Promise.resolve(
+                confirmAction(
+                  t('home.capabilities.confirmInstallPlugin', {
+                    name: selectedExtension.displayName,
+                  }),
+                ),
+              ).then((confirmed) => {
+                if (confirmed) {
+                  void runMutation(`install:${selectedExtension.id}`, () =>
+                    runtime.installPlugin(selectedExtension.id),
+                  );
+                }
+              });
+            }}
+          >
+            <PlusIcon size={14} />
+            <span>{t('home.capabilities.install')}</span>
+          </button>
         ) : null}
-        {(tab === 'skills'
-          ? skills.map((item) => ({ kind: 'skill' as const, item }))
-          : extensions.map((item) => ({ kind: 'extension' as const, item }))
-        ).map((entry) => {
-          const skill = entry.kind === 'skill' ? entry.item : undefined;
-          const extension = entry.kind === 'extension' ? entry.item : undefined;
-          const item = entry.item;
-          return (
-            <article className="management-surface-row" key={item.id}>
-              <span className="management-surface-icon">
-                {extension?.iconDataUrl ? (
-                  <img alt="" src={extension.iconDataUrl} />
-                ) : (
-                  <PackageIcon size={18} />
-                )}
-              </span>
-              <span className="management-surface-copy">
-                <strong>{skill?.name ?? extension?.displayName}</strong>
-                <small>{skill?.description || extension?.description || item.id}</small>
-                {extension ? (
-                  <>
-                    <small>
-                      {extension.version}
-                      {extension.developer ? ` · ${extension.developer}` : ''}
-                      {' · '}
-                      {describeExtensionContributions(extension, t)}
-                    </small>
-                    <small>
-                      {t(`home.capabilities.agentStatus.${extension.agentStatus}`)}
-                      {extension.runtimeDiagnosticCode
-                        ? ` · ${describeRuntimeDiagnostic(extension.runtimeDiagnosticCode, t)}`
-                        : ''}
-                      {extension.declaredPermissions.length > 0
-                        ? ` · ${t('home.capabilities.permissions', {
-                            permissions: extension.declaredPermissions.join(', '),
-                          })}`
-                        : ''}
-                    </small>
-                  </>
-                ) : null}
-              </span>
-              <span className="management-surface-row-actions">
-                {extension?.canInstall ? (
-                  <button
-                    type="button"
-                    aria-label={t('home.capabilities.install')}
-                    disabled={!projection || operationKey !== undefined}
-                    onClick={() => {
-                      void Promise.resolve(
-                        confirmAction(
-                          t('home.capabilities.confirmInstallPlugin', {
-                            name: extension.displayName,
-                          }),
-                        ),
-                      ).then((confirmed) => {
-                        if (confirmed) {
-                          void runMutation(`install:${extension.id}`, () =>
-                            runtime.installPlugin(extension.id),
-                          );
-                        }
-                      });
-                    }}
-                  >
-                    <PlusIcon size={13} />
-                  </button>
-                ) : null}
-                {extension?.installed ? (
-                  <Switch
-                    aria-label={t('home.capabilities.enablement', {
-                      name: extension.displayName,
-                    })}
-                    checked={extension.enabled}
-                    disabled={
-                      !projection ||
-                      operationKey !== undefined ||
-                      (!extension.canEnable && !extension.canDisable)
-                    }
-                    onCheckedChange={(checked) => {
-                      if (!checked) {
-                        void runMutation(`disable:${extension.id}`, () =>
-                          runtime.disablePlugin(extension.id),
-                        );
-                        return;
-                      }
-                      void Promise.resolve(
-                        confirmAction(
-                          t('home.capabilities.confirmEnablePlugin', {
-                            name: extension.displayName,
-                            permissions:
-                              extension.declaredPermissions.join(', ') ||
-                              t('home.capabilities.permissions.none'),
-                          }),
-                        ),
-                      ).then((confirmed) => {
-                        if (confirmed) {
-                          void runMutation(`enable:${extension.id}`, () =>
-                            runtime.enablePlugin(extension.id),
-                          );
-                        }
-                      });
-                    }}
-                  />
-                ) : null}
-                {skill?.canRemove || extension?.canRemove ? (
-                  <button
-                    type="button"
-                    disabled={!projection || operationKey !== undefined}
-                    onClick={() => {
-                      const name = skill?.name ?? extension?.displayName ?? item.id;
-                      void Promise.resolve(confirmAction(name)).then((confirmed) => {
-                        if (!confirmed) return;
-                        void runMutation(`remove:${item.id}`, () => {
-                          if (skill) {
-                            return runtime.removePersonalSkill(skill.managementId);
-                          }
-                          if (!extension) throw new Error('Extension management item is invalid.');
-                          return runtime.removePlugin(extension.id);
-                        });
-                      });
-                    }}
-                  >
-                    <TrashIcon size={13} />
-                  </button>
-                ) : null}
-              </span>
-            </article>
-          );
-        })}
+        {selectedExtension?.canUpdate ? (
+          <button
+            type="button"
+            disabled={mutationsDisabled}
+            onClick={() => {
+              void Promise.resolve(
+                confirmAction(
+                  t('home.capabilities.confirmUpdatePlugin', {
+                    name: selectedExtension.displayName,
+                    release: selectedExtension.updatePackageRelease,
+                  }),
+                ),
+              ).then((confirmed) => {
+                if (confirmed) {
+                  void runMutation(`update:${selectedExtension.id}`, () =>
+                    runtime.updatePlugin(selectedExtension.id),
+                  );
+                }
+              });
+            }}
+          >
+            <span>{t('home.capabilities.update')}</span>
+          </button>
+        ) : null}
+        {selectedExtension?.installed ? (
+          <label className="extension-configuration-switch">
+            <span>{t('home.capabilities.enabled')}</span>
+            <Switch
+              aria-label={t('home.capabilities.enablement', {
+                name: selectedExtension.displayName,
+              })}
+              checked={selectedExtension.enabled}
+              disabled={
+                mutationsDisabled || (!selectedExtension.canEnable && !selectedExtension.canDisable)
+              }
+              onCheckedChange={(checked) => {
+                if (!checked) {
+                  void runMutation(`disable:${selectedExtension.id}`, () =>
+                    runtime.disablePlugin(selectedExtension.id),
+                  );
+                  return;
+                }
+                void Promise.resolve(
+                  confirmAction(
+                    t('home.capabilities.confirmEnablePlugin', {
+                      name: selectedExtension.displayName,
+                      permissions:
+                        selectedExtension.declaredPermissions.join(', ') ||
+                        t('home.capabilities.permissions.none'),
+                    }),
+                  ),
+                ).then((confirmed) => {
+                  if (confirmed) {
+                    void runMutation(`enable:${selectedExtension.id}`, () =>
+                      runtime.enablePlugin(selectedExtension.id),
+                    );
+                  }
+                });
+              }}
+            />
+          </label>
+        ) : null}
+        {selectedSkill?.canRemove || selectedExtension?.canRemove ? (
+          <button
+            type="button"
+            disabled={mutationsDisabled}
+            onClick={() => {
+              const message = selectedSkill
+                ? t('home.capabilities.confirmRemoveSkill', { name })
+                : t('home.capabilities.confirmRemovePlugin', { name });
+              void Promise.resolve(confirmAction(message)).then((confirmed) => {
+                if (!confirmed) return;
+                void runMutation(`remove:${item.id}`, () => {
+                  if (selectedSkill) {
+                    return runtime.removePersonalSkill(selectedSkill.managementId);
+                  }
+                  if (!selectedExtension) {
+                    throw new Error('Extension management selection is invalid.');
+                  }
+                  return runtime.removePlugin(selectedExtension.id);
+                });
+              });
+            }}
+          >
+            <TrashIcon size={14} />
+            <span>{t('home.capabilities.remove')}</span>
+          </button>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function Definition({ children, label }: { readonly children: ReactNode; readonly label: string }) {
+  return (
+    <div className="extension-configuration-fact">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 
@@ -345,4 +672,10 @@ function describeRuntimeDiagnostic(
     return t('home.capabilities.runtimeDiagnostic.artifact-unavailable');
   }
   return t('home.capabilities.runtimeDiagnostic.other', { code });
+}
+
+function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }

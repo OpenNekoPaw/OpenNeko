@@ -95,6 +95,14 @@ describe('projectPiConversationEntries', () => {
         content: 'inspect the image',
         timestamp: 10,
       }),
+      {
+        type: 'custom',
+        id: 'turn-timing',
+        parentId: 'user-entry',
+        timestamp: new Date(11).toISOString(),
+        customType: 'openneko.turn-presentation-timing',
+        data: { turnId: 'turn-1', startedAt: 20, completedAt: 60 },
+      },
       messageEntry('assistant-entry', 'user-entry', {
         role: 'assistant',
         content: [
@@ -138,6 +146,7 @@ describe('projectPiConversationEntries', () => {
         id: 'assistant-entry',
         role: 'assistant',
         content: 'Done.',
+        turnTiming: { startedAt: 20, completedAt: 60 },
         contentBlocks: expect.arrayContaining([
           expect.objectContaining({ type: 'thinking', thinking: 'need evidence' }),
           expect.objectContaining({
@@ -151,6 +160,124 @@ describe('projectPiConversationEntries', () => {
         ]),
       }),
     ]);
+  });
+
+  it('projects every assistant iteration in one persisted user turn as one ordered message', () => {
+    const entries: PiConversationTranscriptEntry[] = [
+      messageEntry('user-entry', null, {
+        role: 'user',
+        content: 'analyze the document',
+        timestamp: 10,
+      }),
+      {
+        type: 'custom',
+        id: 'turn-timing',
+        parentId: 'user-entry',
+        timestamp: new Date(11).toISOString(),
+        customType: 'openneko.turn-presentation-timing',
+        data: { turnId: 'turn-1', startedAt: 20, completedAt: 60 },
+      },
+      messageEntry('assistant-read-document', 'user-entry', {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'inspect the manifest' },
+          {
+            type: 'toolCall',
+            id: 'tool-document',
+            name: 'ReadDocument',
+            arguments: { ref: 'document' },
+          },
+        ],
+        api: 'openai-completions',
+        provider: 'fixture',
+        model: 'fixture-model',
+        usage: zeroUsage(),
+        stopReason: 'toolUse',
+        timestamp: 20,
+      }),
+      messageEntry('tool-document-result', 'assistant-read-document', {
+        role: 'toolResult',
+        toolCallId: 'tool-document',
+        toolName: 'ReadDocument',
+        content: [{ type: 'text', text: 'manifest' }],
+        details: { pages: 402 },
+        isError: false,
+        timestamp: 30,
+      }),
+      messageEntry('assistant-read-image', 'tool-document-result', {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'inspect representative pages' },
+          {
+            type: 'toolCall',
+            id: 'tool-image',
+            name: 'ReadImage',
+            arguments: { ref: 'page-1' },
+          },
+        ],
+        api: 'openai-completions',
+        provider: 'fixture',
+        model: 'fixture-model',
+        usage: zeroUsage(),
+        stopReason: 'toolUse',
+        timestamp: 40,
+      }),
+      messageEntry('tool-image-result', 'assistant-read-image', {
+        role: 'toolResult',
+        toolCallId: 'tool-image',
+        toolName: 'ReadImage',
+        content: [{ type: 'text', text: 'page evidence' }],
+        details: { images: 5 },
+        isError: false,
+        timestamp: 50,
+      }),
+      messageEntry('assistant-final', 'tool-image-result', {
+        role: 'assistant',
+        content: [{ type: 'text', text: '# Final analysis' }],
+        api: 'openai-completions',
+        provider: 'fixture',
+        model: 'fixture-model',
+        usage: zeroUsage(),
+        stopReason: 'stop',
+        timestamp: 60,
+      }),
+    ];
+
+    const messages = projectPiConversationEntries(entries);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      id: 'assistant-read-document',
+      role: 'assistant',
+      content: '# Final analysis',
+      timestamp: 20,
+      turnTiming: { startedAt: 20, completedAt: 60 },
+      contentBlocks: [
+        { id: 'assistant-read-document:thinking:0', type: 'thinking' },
+        {
+          id: 'assistant-read-document:tool:tool-document',
+          type: 'tool_call',
+          toolCall: {
+            id: 'tool-document',
+            result: { success: true, data: { pages: 402 } },
+          },
+        },
+        { id: 'assistant-read-image:thinking:0', type: 'thinking' },
+        {
+          id: 'assistant-read-image:tool:tool-image',
+          type: 'tool_call',
+          toolCall: {
+            id: 'tool-image',
+            result: { success: true, data: { images: 5 } },
+          },
+        },
+        {
+          id: 'assistant-final:text:0',
+          type: 'text',
+          content: '# Final analysis',
+        },
+      ],
+    });
   });
 
   it('fails visibly when a tool result has no originating Pi tool call', () => {
@@ -213,5 +340,16 @@ function messageEntry(
     parentId,
     timestamp: new Date(message.timestamp).toISOString(),
     message,
+  };
+}
+
+function zeroUsage() {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
 }

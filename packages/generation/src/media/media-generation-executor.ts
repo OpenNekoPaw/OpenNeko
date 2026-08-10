@@ -26,7 +26,7 @@ import {
   requireMediaTaskCanceller,
   requireMediaVideoSubmitter,
 } from './media-adapter-capabilities';
-import type { MediaGenerationConfigPort } from './types';
+import type { MediaExecutionProviderResolver, MediaGenerationConfigPort } from './types';
 import { getLogger } from '../utils/logger';
 import { resolveProvider, type ResolvedProvider } from '@neko/ai-sdk';
 import { generateImage, experimental_generateVideo, experimental_generateSpeech } from 'ai';
@@ -113,6 +113,7 @@ export interface MediaGenerationExecutorOptions {
  */
 export class MediaGenerationExecutor {
   private readonly configManager: MediaGenerationConfigPort;
+  private readonly providerResolver: MediaExecutionProviderResolver;
   private readonly requestAssetMaterializer?: MediaRequestAssetMaterializer;
   private readonly imageTaskTimeoutMs: number;
   private readonly videoTaskTimeoutMs: number;
@@ -120,9 +121,11 @@ export class MediaGenerationExecutor {
 
   constructor(
     configManager: MediaGenerationConfigPort,
+    providerResolver: MediaExecutionProviderResolver,
     options: MediaGenerationExecutorOptions = {},
   ) {
     this.configManager = configManager;
+    this.providerResolver = providerResolver;
     this.requestAssetMaterializer = options.requestAssetMaterializer;
     this.imageTaskTimeoutMs = options.imageTaskTimeoutMs ?? DEFAULT_IMAGE_TASK_TIMEOUT_MS;
     this.videoTaskTimeoutMs = options.videoTaskTimeoutMs ?? DEFAULT_VIDEO_TASK_TIMEOUT_MS;
@@ -151,8 +154,8 @@ export class MediaGenerationExecutor {
     readonly providerId: string;
     readonly externalTaskId: string;
   }): Promise<MediaAdapterResult> {
-    const provider = this.configManager.getProvider(input.providerId);
-    if (!provider) {
+    const provider = await this.providerResolver.resolveProvider(input.providerId);
+    if (!provider || provider.id !== input.providerId) {
       throw new Error(`Configured media provider ${input.providerId} is unavailable.`);
     }
     const adapter = getMediaAdapterRegistry().getForType(provider.type);
@@ -164,8 +167,8 @@ export class MediaGenerationExecutor {
     readonly providerId: string;
     readonly externalTaskId: string;
   }): Promise<void> {
-    const provider = this.configManager.getProvider(input.providerId);
-    if (!provider) {
+    const provider = await this.providerResolver.resolveProvider(input.providerId);
+    if (!provider || provider.id !== input.providerId) {
       throw new Error(`Configured media provider ${input.providerId} is unavailable.`);
     }
     const adapter = getMediaAdapterRegistry().getForType(provider.type);
@@ -180,11 +183,11 @@ export class MediaGenerationExecutor {
   ): Promise<MediaExecutionOutput> {
     const { generationType, providerId, modelId, request } = payload;
 
-    // Get provider and model (uses configManager for config data)
-    const provider = this.configManager.getProvider(providerId);
+    // Resolve current execution credentials separately from secret-free model configuration.
+    const provider = await this.providerResolver.resolveProvider(providerId);
     const model = this.configManager.getModel(modelId);
 
-    if (!provider || !model) {
+    if (!provider || provider.id !== providerId || !model || model.providerId !== providerId) {
       return {
         error: `Provider or model not found: ${providerId}/${modelId}`,
       };

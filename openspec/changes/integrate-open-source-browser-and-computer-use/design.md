@@ -25,6 +25,61 @@ installed OpenNeko plugin
 | Cua Driver  | `trycua/cua` tag `cua-driver-rs-v0.19.2`, commit `20bb34b16ad7c6c56221c332e46b1875e9d8af8c` | MIT; optional dependencies retain their own licenses | `cua-driver mcp` bounded native desktop tools               |
 | MCP SDK     | npm `@modelcontextprotocol/sdk@1.30.0`                                                      | MIT                                                  | stdio/Streamable HTTP client, negotiation and result codecs |
 
+2026-08-10 的 release 资产核对结果：Browser Use `0.13.7` 没有 GitHub Release binary asset，不能把
+GitHub 自动生成的 source archive 当作可安装 runtime；Cua Driver `0.19.2` 提供 GitHub Release platform
+assets 和 checksum，但仍须满足 OpenNeko 的 contained provenance、license inventory、签名与平台资格门禁。
+当前 managed runtime 交付线使用固定 GitHub Release asset URL；若上游资产不能满足完整 contract，则由
+OpenNeko 从固定 source/dependency 可复现构建并发布到 OpenNeko GitHub Releases，而不是在用户机器安装依赖。
+Exact upstream input lock 由 `scripts/automation-runtime-release-inputs.json` 拥有，记录 Browser Use、Cua Driver
+六个完整平台归档和 MCP SDK 的 release、commit、license、URL、bytes、digest/integrity；检查器拒绝 `latest`、
+平台缺项、重复 target、错误 host/path 与 poisoned local archive。Browser Use 仓库没有 resolver lock，因此固定
+direct dependency 不等于完整 Python/native/browser closure。Cua `darwin-arm64` tar 的真实下载已通过 bytes/digest
+复核，内部 CLI 为 Cua Developer ID 签名、App bundle 有 stapled notarization ticket；这些上游签名事实不能替代
+OpenNeko 二次封装的 contained provenance、完整许可清单、artifact signature 或产品资格证据。
+
+Cua macOS release 的 `cua-driver`、`cua-cursor-theme` 与 `libcua_driver_sdk.dylib` 来自仓库内 locked Rust
+workspace 的 arm64/x86_64 build 后 lipo；`CuaDriver.app` 复用前两个 universal executable。独立的
+`cua_driver_node_runtime.node` 则来自 npm-locked `uniffi-bindgen-react-native@0.31.0-3` 源码，但其 runtime
+Cargo workspace 不携带 `Cargo.lock`，上游脚本也未对该 build 使用 `--locked`。Input lock 记录 exact workflow/hash、
+main Cargo lock、npm integrity、payload owner，以及 release run `31217509888` 缓存未命中日志中的 31 个实际 crate/release；
+该日志足以发现 resolver drift，却不能证明上游已发布二进制的完整 graph/checksum/features。OpenNeko 因此不再复用
+该 `.node`：first-party release recipe 固定 npm runtime 的 53-file source tree、36-package Cargo lock、release 使用的
+Rust `1.97.1`、两个 macOS targets、`SOURCE_DATE_EPOCH` 和 Electron RustBuffer patch boundary，并强制 `--locked`。
+Release recipe 还固定 build root/path remap、外部 Cargo home 到 `/openneko/cargo-home` 的映射、Mach-O install name、单 build job/codegen unit、locale，并移除
+Mach-O UUID；正式命令必须连续完成两个 independent build，只有产物 bytes 与完整 build receipt 均相同时才输出。
+2026-08-10 使用隔离的官方 Rust `1.97.1` 工具链已得到两份相同的 1,569,136-byte universal binary，SHA-256 为
+`c4e5b70fddbf6ffdd6477a90ea4da5fa3881d99796d9ded9f5faaf3e1039725a`。这些事实只建立 OpenNeko 自己的
+canonical rebuild provenance，不把后来解析结果伪装成上游二进制 provenance。
+
+Cua `darwin-arm64` first-party candidate 先由
+`scripts/automation-runtime-cua-node-rebuilder.mjs` 生成锁定的 universal Node runtime，再由唯一 assembly recipe
+`scripts/automation-runtime-artifact-builder.mjs` 产生。Assembly 只接受 input lock 中 exact filename/bytes/digest 的
+上游 tar 和结构有效的 candidate SPDX 2.3 inventory；SPDX packages 必须与 macOS 三个 main root 加 first-party Node
+runtime 计算出的 367-item production-only locked identity closure 完全一致，并拒绝重复 identity、仅由 dev edge 引入的 crate 与未断言 license。它安全解析
+普通文件/目录，拒绝 link、unexpected root、case collision、
+缺失 launcher/native/App payload、无效 Node rebuild receipt 和既有输出覆盖，并用 first-party `.node` 替换上游副本。
+输出以稳定 USTAR order/mode/mtime 和规范化 GZIP header
+封装 marketplace metadata、全部上游 CLI/App/native bytes、contained build inputs、artifact provenance 与 license
+digest。Receipt 始终声明 `catalogReady=false`，并保留 transitive license 人工审核、signature 与 qualification
+blockers；recipes 不持有发布 key，
+不修改 catalog，也不启动任何 runtime。Browser Use 使用同一最终 artifact contract，但在 Python/native/Chromium
+closure 与完整 license inventory 准备完成前没有可交给封装阶段的 payload。
+
+同日真实 release-tooling 运行从 exact main/Node Cargo locks 以隔离 HOME、crates.io 预取缓存和
+`cargo metadata --locked --offline` 生成两份逐字节一致的 367-package SPDX 2.3 候选（476,482 bytes，
+SHA-256 `08756f9c17062202d0efeb8b149aece1a105486cbcb13ea80f9f1816d6725a51`），并组装两份逐字节一致的
+`darwin-arm64` contained artifact（63,911,219 bytes，SHA-256
+`9e3bae3b3358fe0d9ea44007916610e3c5b997360a2146a32349135df2ab63f6`）。SPDX document 与 artifact receipt
+仍分别声明 `reviewed=false`、`catalogReady=false`，所以这些只是可复核候选，不是可安装发布。
+
+[`injaneity/pi-computer-use`](https://github.com/injaneity/pi-computer-use) `v0.5.0`
+（commit `c838d3a2ed6352fd7b4fb3ecd7a4ebd5692e1399`，MIT）也完成了候选审计。它是直接注册
+`@earendil-works/pi-coding-agent` Tools 的 Pi extension，npm package 通过 `postinstall` 安装 native helper，
+并拥有自身 config、permission、state/session 与 browser CDP surface。直接加载会绕过 OpenNeko 的
+product-owned Automation wrapper、安装禁执行与 exact session authority，因此本变更不选择它作为直接
+Computer Use 插件。未来只有在底层 bridge 能通过窄 Automation provider port 复用、且不加载其 Pi extension
+entry、不执行 postinstall、不建立第二套状态/授权路径时，才可通过独立 spike 重新评估；当前仍使用 Cua Driver。
+
 Browser Use 的 `--cli-mcp` 暴露任意 Python execution；`--mcp` 还包含可启动上游自治 Agent 的操作。
 两者都不能原样全部注册。OpenNeko 只允许审核后的 direct browser Tool 集，并拒绝嵌套 Agent、任意代码、
 任意文件和隐式 cloud browser。Cua Driver 使用 `bounded` permission mode；禁止
@@ -129,10 +184,40 @@ when Agent turns, extension-owned MCP processes and automation sessions are all 
 is deleted and does not create a fallback runtime path. On Windows, replacement also waits for the exact executable
 process handles to close; failure is visible and never triggers elevation.
 
+The extension application service invokes candidate qualification through one exact injected port. A successful
+qualification returns an operation-owned close handle, and commit is impossible until that handle has terminated the
+candidate runtime and the service has repeated the ownership-idle check. The generic plugin qualifier may build an
+isolated, unregistered Agent plugin runtime for ordinary Skills/MCP contributions; it rejects `adapter-only`
+Automation candidates without starting their MCP server. Browser Use and Cua Driver updates therefore require their
+provider-owned qualifier rather than falling through to generic MCP qualification.
+
+Production `AgentPluginRuntime` partitions ordinary plugin resources into extension-owned child runtimes, each with its
+own MCP Manager and exact close handle. The aggregate is a read-only projection over those children: it flattens Skills,
+Tools and readiness into the existing single Workspace Tool Registry/Pi path and does not introduce a second Tool
+registration route. Reconciliation fingerprints each extension contribution, reuses unchanged children, preflights all
+Workspace registries, swaps only changed Tools/Skill roots, then closes only replaced children. Initial MCP server-id
+conflicts become local readiness errors without starting either conflicting child; a changed candidate that conflicts
+with an authoritative sibling is rejected and its isolated resources are discarded.
+
+Each queued/running Agent turn records the exact extension contribution set available at enqueue and unions the exact
+set captured when execution begins. Execution also freezes one Tool and plugin-Skill snapshot before its first await.
+Extension mutation ownership therefore queries `pluginId -> run identity` rather than a global active-turn boolean, and
+the two reconciliation idle checks reject only changes whose child is owned by one of those turns. A sibling child added
+after the turn snapshot can be reconciled without changing that turn's Tool/Skill path. The remaining task 3.8 process
+gap is the repository transaction boundary: an authoritative extension-owned MCP process still needs an explicit
+pre-commit quiesce/close handoff before replacement, in addition to provider-owned Browser/Cua candidate qualification.
+
 An update confirmation is bound to the exact candidate package release. An identical or reduced declared permission
 set may retain the existing enable grant after the explicit update; any added Tool, action class, environment secret,
 network scope, OS capability or data access invalidates enablement for the candidate until the user separately accepts
 the expanded set. The candidate cannot run to discover or request expanded permission before acceptance.
+
+Enablement and permission acceptance use one strict canonical grant-state document with independent `enabled` and
+`acceptedPermissions` facts. Disabling writes `enabled=false` without discarding an exact accepted permission set, and
+never contributes a runtime descriptor. After update, a candidate whose declarations are a subset of the previously
+accepted set stores exactly the candidate declarations; an expansion stores no accepted permissions and remains
+disabled. The prelaunch shape that inferred enablement from document existence is rejected as `state_invalid`; the
+installed record remains visible and non-runnable, with no dual-read or silent trust-state repair.
 
 The extension application service owns durable installed artifact identity, package release, verified digest,
 provenance, enablement and accepted declared permission set. Download progress and staging ownership are operation
@@ -162,6 +247,20 @@ and again immediately before input, so approval cannot survive a target change.
 Plugin/upstream release numbers are third-party/package facts and remain required. No `schemaVersion`,
 `contractVersion`, internal generation field or version-dispatch registry is added.
 
+Runtime 接入支持三种显式来源，但同一个 provider/profile 只选择其中一个，不按失败顺序试探：
+
+| Delivery source            | OpenNeko responsibility                                                                                                                        | Runtime owner                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| fixed GitHub Release asset | 下载 exact release asset，限制 `github.com` 与审核后的 release CDN redirect host，验证 size/digest/signature/provenance/license 后安装         | exact Automation session 启动安装包内 runtime                     |
+| fixed official download    | 下载 exact vendor release asset，限制官方 origin/CDN，执行与 GitHub 相同的完整验证；“official” 不降低门禁                                      | exact Automation session 启动安装包内 runtime                     |
+| user-managed endpoint      | 不下载、不安装、不更新、不启动；只保存 Host-owned endpoint authorization，检查 transport/auth、provider identity、Tool schema 与 qualification | 用户拥有服务进程；exact Automation session 只建立并关闭自己的连接 |
+
+GitHub 与官方下载都属于 managed artifact，不是两套安装协议。Catalog 必须固定完整 HTTPS URL、最终允许主机、
+byte size、digest 和 provenance，不允许 `latest`、源代码归档、在线 package manager 或 install script。用户自托管
+属于 connector，不得显示 artifact install/update 状态，也不得在 endpoint 不可用时自动下载 managed runtime；
+managed runtime 失败也不得自动连接 recent/default endpoint。三种来源都必须经过同一 reviewed profile、session
+grant、Tool schema/annotation intersection、target revalidation、approval 与 evidence 路径。
+
 ### 3. Automation is a package-owned capability
 
 New packages use the existing family pattern:
@@ -187,11 +286,25 @@ consumed once by Automation after extension and current OS-permission checks but
 exact session, provider/upstream release, browser profile/domain set or computer target, mode, timeout, step budget and
 conversation/run/toolCall owner. Launch failure does not make the grant reusable.
 
+Target routing is never a model-authored Tool argument. The package-owned authorization service discovers bounded exact
+candidates from the selected provider, projects only redacted labels/origin/domain or window bounds to a Desktop
+selection port, accepts one explicit user selection, and immediately revalidates the same target facts before issuing
+the one-time grant. Cancellation, stale authorization identity, missing/duplicated target, changed bounds or changed
+provider/profile fails the current Tool Call without choosing an active, recent, title-matched or alternate target.
+Desktop owns only the user-interaction and trust-boundary adapter; it does not own selection or grant semantics.
+
+Pending selection promises are owned by an Automation coordinator keyed by exact authorization identity and filtered by
+Workspace plus Conversation. Desktop Main accepts list/resolve only after the sender-derived Window, current Agent
+connection, current visible Agent Surface and session Conversation all agree. The generic changed event carries no
+candidate or owner facts; an authorized Renderer re-queries through typed IPC. Leaving or replacing the exact Agent
+Surface unmounts the selection Root, and no focused/active Window, recent Conversation or first candidate is inferred.
+
 `AutomationMcpRuntimePort` owns the upstream process and connection per Automation session. Tool calls, target
 revalidation and close use the opaque `providerSessionId`; there is no shared current Browser Use connection across
 Agent sessions. Candidate Tool inspection uses an isolated qualification runtime and cannot register raw Tools into Pi.
 
-The Agent adapter wraps approved upstream MCP operations as ordinary Pi Tools. It freezes session, target, mode,
+The Agent adapter wraps approved upstream MCP operations as ordinary Pi Tools. It asks the Host authorization port to
+resolve the explicitly selected target, then freezes session, target, mode,
 step/time budget and permission policy at Tool Call start, revalidates mutable target facts before state-changing
 actions, delegates exactly once to the selected upstream MCP server and returns structured evidence. It never tries a
 second provider or raw MCP Tool after failure.
@@ -204,7 +317,9 @@ the user cannot convert an unreviewed Tool into an allowed Tool.
 ### 4. Browser Use uses the upstream direct MCP surface
 
 The Browser Use artifact contains a pinned Python runtime, the upstream `browser-use` package and its qualified browser
-runtime. Its contained launcher starts only `browser-use --mcp` through the existing plugin MCP lifecycle.
+runtime. Its contained launcher starts only `browser-use --mcp` through the Automation session-owned MCP lifecycle.
+The generic plugin runtime may statically validate its `adapter-only` descriptor but never registers, connects or starts
+that server.
 
 Initial modes are explicit:
 
@@ -264,6 +379,15 @@ click/type/shortcut/scroll/drag operations. Before every input, Host revalidates
 Window closure, process replacement, target mismatch, lock screen, permission loss or user takeover pauses the session.
 Resume requires rebind; no active/recent window fallback exists.
 
+Window discovery and revalidation reuse the fixed Cua Driver platform Tools rather than an Electron/CGWindow/active-window
+implementation in OpenNeko. A short-lived target-discovery client admits only the reviewed `list_apps` and
+`list_windows` schemas under a bounded metadata-enumeration policy. OpenNeko joins the exact running bundle/PID fact to
+the exact visible current-Space window id and positive bounds, issues an opaque `targetKey`, and re-reads the same two
+upstream facts for session revalidation. Schema drift, PID/bundle replacement, window disappearance and geometry change
+fail visibly; the adapter never substitutes another title-matched, foreground or recent window. The broader Desktop
+metadata scope exists only in the explicit selection client and does not widen the session client, Agent Tool allowlist
+or screenshot scope.
+
 Target-only capture is a qualification invariant. An upstream path that captures the full screen and crops it afterward
 does not qualify, because unrelated pixels have already crossed the capture boundary.
 
@@ -282,6 +406,14 @@ Agent Timeline uses the existing Tool Call item and adds an automation session p
 mode, budget, current observation/action phase, evidence status and `Pause`, `Stop`, `Take over`. It does not create a
 global Activity catalog or retain a hidden React root. Closing the Agent UI does not transfer the Tool Call to another
 conversation; a protected active Tool may continue only under its exact runtime owner.
+
+The live projection is package-owned and contains only provider release, opaque target identity and label, mode,
+remaining budget, phase, evidence status and exact conversation/run/toolCall owner. Browser profile/tab, process/window,
+region and user-managed endpoint identity remain outside Renderer. Lists are filtered by exact Conversation; commands
+also carry the exact Run and Tool Call owner. Desktop accepts list/control only after sender-derived Window, current
+Agent connection, visible session Surface and Conversation agree. Changed events are data-free and require a fresh
+authorized query. Pause and Take over revoke product execution authority and abort the in-flight provider signal before
+late results can be projected as success; Agent-owned cleanup preserves an already terminal Take over state.
 
 ### 7. Failure and data boundaries
 
@@ -332,6 +464,10 @@ focused regression coverage.
   exact size before confirmation.
 - **Upstream supply-chain drift**: pin release/source, checksum, license inventory and build recipe; no `latest` or
   install script execution.
+- **Upstream signature is not product qualification**: preserve and inspect vendor signing/notarization, but require a
+  separately sealed OpenNeko artifact plus contained provenance, complete license inventory and packaged runtime tests.
+- **Candidate is not a release**: deterministic sealing emits a non-installable receipt; catalog publication separately
+  requires a reviewed complete SPDX inventory, OpenNeko artifact signature and packaged qualification evidence.
 - **Annotations are incomplete**: reviewed OpenNeko policy can only restrict upstream traits, never relax them.
 - **Browser GET requests can have side effects**: `browse-read` is separate from strict `observe`, and domain changes
   require explicit authorization.

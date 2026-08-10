@@ -357,36 +357,7 @@ export class DesktopCutRuntime {
     const target =
       currentTarget.kind === 'existing-cut'
         ? currentTarget
-        : await this.createDraft({
-            windowId: input.identity.windowId,
-            rendererSessionId: input.identity.rendererSessionId,
-            workbenchInstanceId: currentTarget.workbenchInstanceId,
-          }).then((projection) => {
-            const workbench = resolveDesktopWindowWorkspaceWorkbench(
-              projection.window,
-              input.identity.workspaceId,
-            );
-            const activeCut = getActiveCutView(workbench.layout);
-            if (
-              workbench.workbenchInstanceId !== currentTarget.workbenchInstanceId ||
-              workbench.layout.cutPanel?.presentation !== 'docked' ||
-              !activeCut ||
-              activeCut.kind !== 'cut' ||
-              !activeCut.documentId ||
-              activeCut.projectId !== input.identity.projectId ||
-              activeCut.workspaceId !== input.identity.workspaceId
-            ) {
-              throw new Error('Desktop Cut draft did not produce the exact Canvas handoff target.');
-            }
-            return {
-              kind: 'existing-cut' as const,
-              workbenchInstanceId: workbench.workbenchInstanceId,
-              viewId: activeCut.viewId,
-              viewInstanceId: activeCut.viewInstanceId,
-              documentId: activeCut.documentId,
-              sessionId: createCutHostSessionId(activeCut.viewId, activeCut.viewInstanceId),
-            };
-          });
+        : await this.resolveCreatedDraftTarget(input.identity, currentTarget);
     return this.addResource({
       resourceIdentity: {
         projectId: input.identity.projectId,
@@ -408,6 +379,80 @@ export class DesktopCutRuntime {
       },
       target,
     });
+  }
+
+  async addCanvasMaterialAndSeparateAudio(input: {
+    readonly identity: DesktopCutCanvasSourceIdentity;
+    readonly nodeId: string;
+    readonly label: string;
+    readonly locator: ContentLocator;
+    readonly target: DesktopCutCanvasHandoffTarget;
+  }): Promise<CutHostRuntimeSnapshot> {
+    const currentTarget = await this.resolveCanvasHandoffTarget(input.identity);
+    if (!sameCanvasHandoffTarget(currentTarget, input.target)) {
+      throw new Error('Desktop Cut Canvas handoff target changed before execution.');
+    }
+    const target =
+      currentTarget.kind === 'existing-cut'
+        ? currentTarget
+        : await this.resolveCreatedDraftTarget(input.identity, currentTarget);
+    return this.addResource({
+      resourceIdentity: {
+        projectId: input.identity.projectId,
+        workspaceId: input.identity.workspaceId,
+        windowId: input.identity.windowId,
+        viewId: input.identity.viewId,
+        viewInstanceId: input.identity.viewInstanceId,
+        rendererSessionId: input.identity.rendererSessionId,
+      },
+      item: {
+        resourceId: `canvas-material:${input.nodeId}:separate-audio`,
+        facet: 'files',
+        role: 'content',
+        depth: 0,
+        kind: 'file',
+        label: input.label,
+        locator: input.locator,
+        capabilities: ['add-to-cut'],
+      },
+      target,
+      postImportAction: 'separate-audio',
+    });
+  }
+
+  private async resolveCreatedDraftTarget(
+    identity: DesktopCutCanvasSourceIdentity,
+    target: Extract<DesktopCutCanvasHandoffTarget, { readonly kind: 'new-cut-draft' }>,
+  ): Promise<Extract<DesktopCutCanvasHandoffTarget, { readonly kind: 'existing-cut' }>> {
+    const projection = await this.createDraft({
+      windowId: identity.windowId,
+      rendererSessionId: identity.rendererSessionId,
+      workbenchInstanceId: target.workbenchInstanceId,
+    });
+    const workbench = resolveDesktopWindowWorkspaceWorkbench(
+      projection.window,
+      identity.workspaceId,
+    );
+    const activeCut = getActiveCutView(workbench.layout);
+    if (
+      workbench.workbenchInstanceId !== target.workbenchInstanceId ||
+      workbench.layout.cutPanel?.presentation !== 'docked' ||
+      !activeCut ||
+      activeCut.kind !== 'cut' ||
+      !activeCut.documentId ||
+      activeCut.projectId !== identity.projectId ||
+      activeCut.workspaceId !== identity.workspaceId
+    ) {
+      throw new Error('Desktop Cut draft did not produce the exact Canvas handoff target.');
+    }
+    return {
+      kind: 'existing-cut',
+      workbenchInstanceId: workbench.workbenchInstanceId,
+      viewId: activeCut.viewId,
+      viewInstanceId: activeCut.viewInstanceId,
+      documentId: activeCut.documentId,
+      sessionId: createCutHostSessionId(activeCut.viewId, activeCut.viewInstanceId),
+    };
   }
 
   private async createDraftOwned(input: {
@@ -630,6 +675,7 @@ export class DesktopCutRuntime {
       readonly documentId: string;
       readonly sessionId: string;
     };
+    readonly postImportAction?: 'separate-audio';
   }): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
     return this.application.addResource(input);

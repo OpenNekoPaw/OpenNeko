@@ -90,8 +90,44 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(baseNodeSource).not.toMatch(/right: -4/);
   });
 
-  it('keeps foundational node chrome borderless', () => {
-    expect(cssSource).toMatch(/\.node-card--foundational\s*\{[^}]*border:\s*0;/s);
+  it('keeps foundational nodes on one neutral white or glass card surface', () => {
+    expect(cssSource).toMatch(
+      /\.node-card--foundational\s*\{[^}]*background:\s*var\(--canvas-card-surface\);[^}]*border:\s*1px solid var\(--node-border\);[^}]*box-shadow:\s*var\(--canvas-card-shadow\);/s,
+    );
+    expect(cssSource).not.toMatch(/\.node-card--foundational\s*\{[^}]*background:\s*transparent;/s);
+  });
+
+  it('uses one elevated Canvas surface hierarchy without persistent child fills', () => {
+    expect(cssSource).toMatch(
+      /--canvas-card-surface:\s*color-mix\(in srgb, var\(--neko-elevated\) 97%, transparent\);/,
+    );
+    expect(cssSource).toMatch(
+      /\.selection-generation-input-panel\s*\{[^}]*background:\s*var\(--canvas-overlay-surface\);[^}]*box-shadow:\s*var\(--canvas-overlay-shadow\);/s,
+    );
+    expect(cssSource).toMatch(
+      /\.selection-generation-input-panel__footer\s*\{[^}]*margin:\s*0;[^}]*background:\s*transparent;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.selection-generation-input-panel__option-grid button\s*\{[^}]*background:\s*transparent;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.selection-action-overflow \[data-danger='true'\]\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--neko-desktop-danger-foreground, var\(--neko-danger\)\);/s,
+    );
+  });
+
+  it('keeps the Image composer and parameter popovers aligned with the compact reference layout', () => {
+    expect(cssSource).toMatch(
+      /\.selection-generation-input-panel__prompt\s*\{[^}]*min-height:\s*92px;[^}]*flex:\s*1 1 auto;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.selection-generation-input-panel__parameter-menu\s*\{[^}]*width:\s*min\(380px,/s,
+    );
+    expect(cssSource).toMatch(
+      /data-option-layout='ratio'[\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);/,
+    );
+    expect(cssSource).toMatch(
+      /\.selection-generation-input-panel__count-menu\s*\{[^}]*width:\s*min\(124px,/s,
+    );
   });
 
   it('keeps viewport writes in runtime state and webview snapshots', () => {
@@ -384,7 +420,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(addActionPopoverSource).toContain('className="canvas-add-action-popover__icon"');
     expect(addActionPopoverSource).not.toMatch(/\bw-72\b|\bh-11\b|\bw-11\b|\brounded-xl\b/);
     expect(cssSource).toMatch(
-      /\.canvas-add-action-popover-surface\s*\{[^}]*--neko-menu-background:\s*var\(--neko-elevated\);[^}]*--neko-menu-border:\s*var\(--neko-border\);[^}]*--neko-menu-foreground:\s*var\(--neko-fg\);[^}]*--neko-menu-selectionBackground:\s*var\(--neko-hover\);[^}]*--neko-popover-background:\s*var\(--neko-menu-background\);[^}]*--neko-popover-border:\s*var\(--neko-menu-border\);[^}]*--neko-popover-shadow:\s*var\(--neko-shadow-md\);/s,
+      /\.canvas-add-action-popover-surface\s*\{[^}]*--neko-menu-background:\s*color-mix\(in srgb, var\(--neko-elevated\) 96%, transparent\);[^}]*--neko-menu-border:\s*var\(--neko-border\);[^}]*--neko-menu-foreground:\s*var\(--neko-fg\);[^}]*--neko-menu-selectionBackground:\s*var\(--neko-hover\);[^}]*--neko-popover-background:\s*var\(--neko-menu-background\);[^}]*--neko-popover-border:\s*var\(--neko-menu-border\);[^}]*--neko-popover-shadow:\s*var\(--neko-desktop-shadow-overlay, var\(--neko-shadow-md\)\);/s,
     );
     expect(cssSource).toMatch(
       /\.canvas-add-action-popover\s*\{[^}]*width:\s*236px;[^}]*color:\s*var\(--neko-fg\);/s,

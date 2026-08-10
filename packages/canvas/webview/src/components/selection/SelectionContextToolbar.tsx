@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionEffect,
@@ -7,24 +7,51 @@ import type {
 } from '@neko/canvas-domain';
 import {
   CANVAS_ADD_TO_CUT_ACTION_ID,
+  CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID,
   CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_EDIT_AND_GENERATE_ACTION_ID,
+  CANVAS_IMAGE_COLOR_GRADE_ACTION_ID,
+  CANVAS_IMAGE_CROP_ACTION_ID,
+  CANVAS_IMAGE_ERASE_ACTION_ID,
+  CANVAS_IMAGE_GRID_SPLIT_ACTION_ID,
+  CANVAS_IMAGE_OPEN_EDITOR_TOOLS_ACTION_ID,
+  CANVAS_IMAGE_OUTPAINT_ACTION_ID,
+  CANVAS_IMAGE_REDRAW_ACTION_ID,
+  CANVAS_IMAGE_REMOVE_BACKGROUND_ACTION_ID,
+  CANVAS_IMAGE_ROTATE_ACTION_ID,
+  CANVAS_IMAGE_UPSCALE_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
   CANVAS_REVEAL_ACTION_ID,
+  CANVAS_VIDEO_COLOR_GRADE_ACTION_ID,
+  CANVAS_VIDEO_ENHANCE_ACTION_ID,
+  CANVAS_VIDEO_EXTRACT_FRAME_ACTION_ID,
+  CANVAS_VIDEO_GENERATE_SUBTITLES_ACTION_ID,
+  CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID,
+  CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID,
+  CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
 } from '@neko/canvas-domain';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
   CopyIcon,
+  CameraIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FullscreenIcon,
+  GridIcon,
   LayersIcon,
   MoreHorizontalIcon,
   OpenIcon,
+  PackageIcon,
   PlayIcon,
   RefreshIcon,
+  RemoveIcon,
+  RotateIcon,
   ScissorsIcon,
-  TrashIcon,
+  SettingsIcon,
+  VolumeOffIcon,
   ZoomInIcon,
 } from '@neko/ui/icons';
 import {
@@ -36,6 +63,7 @@ import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
 import { getNodeLabel } from '../nodes/nodeTypeDescriptor';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
+import { resolveSelectionToolbarTop } from './selectionAttachmentGeometry';
 
 const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
 
@@ -55,7 +83,9 @@ interface ToolbarAction {
   readonly danger?: boolean;
   readonly placement: 'visible' | 'overflow';
   readonly priority: number;
-  readonly overflowGroup?: 'file' | 'media-library' | 'node' | 'other';
+  readonly display: 'icon' | 'label';
+  readonly section: 'edit' | 'asset' | 'utility' | 'canvas';
+  readonly overflowGroup?: 'file' | 'media-edit' | 'media-library' | 'other';
 }
 
 export function SelectionContextToolbar({
@@ -78,6 +108,10 @@ export function SelectionContextToolbar({
     [nodes, selectedNodeIds],
   );
   const selectionKey = selectedNodeIds.join('\u0000');
+  const materialIdentityKey = useMemo(
+    () => selectedNodes.map(materialActionIdentityKey).join('\u0000'),
+    [selectedNodes],
+  );
   useEffect(() => {
     let current = true;
     setOwnerDescriptors([]);
@@ -97,7 +131,7 @@ export function SelectionContextToolbar({
     return () => {
       current = false;
     };
-  }, [host, selectionKey]);
+  }, [host, materialIdentityKey, selectionKey]);
   const actions = useMemo(
     () =>
       resolveActions(
@@ -131,17 +165,35 @@ export function SelectionContextToolbar({
         {selectionLabel}
       </span>
       <span className="selection-context-toolbar__divider" aria-hidden="true" />
-      {primary.map((action) => (
-        <IconButton
-          key={action.key}
-          data-selection-action={action.key}
-          data-selection-action-location="primary"
-          size="xs"
-          variant={action.danger ? 'danger' : 'ghost'}
-          label={action.label}
-          icon={action.icon}
-          onClick={action.run}
-        />
+      {primary.map((action, index) => (
+        <Fragment key={action.key}>
+          {index > 0 && primary[index - 1]?.section !== action.section ? (
+            <span className="selection-context-toolbar__divider" aria-hidden="true" />
+          ) : null}
+          {action.display === 'label' ? (
+            <Button
+              data-selection-action={action.key}
+              data-selection-action-location="primary"
+              size="xs"
+              variant="ghost"
+              leadingIcon={action.icon}
+              className="selection-context-toolbar__text-action"
+              onClick={action.run}
+            >
+              {action.label}
+            </Button>
+          ) : (
+            <IconButton
+              data-selection-action={action.key}
+              data-selection-action-location="primary"
+              size="xs"
+              variant="ghost"
+              label={action.label}
+              icon={action.icon}
+              onClick={action.run}
+            />
+          )}
+        </Fragment>
       ))}
       {overflow.length > 0 && (
         <Popover
@@ -149,6 +201,7 @@ export function SelectionContextToolbar({
           side="bottom"
           open={overflowOpen}
           onOpenChange={setOverflowOpen}
+          contentClassName="selection-action-overflow-surface"
           trigger={
             <IconButton
               data-selection-overflow="true"
@@ -178,7 +231,8 @@ export function SelectionContextToolbar({
                     data-selection-action={action.key}
                     data-selection-action-location="overflow"
                     size="xs"
-                    variant={action.danger ? 'danger' : 'ghost'}
+                    variant="ghost"
+                    data-danger={action.danger ? 'true' : undefined}
                     leadingIcon={action.icon}
                     className="justify-start"
                     role="menuitem"
@@ -199,6 +253,22 @@ export function SelectionContextToolbar({
   );
 }
 
+function materialActionIdentityKey(node: CanvasNode): string {
+  if (node.type === 'generation') {
+    const output = node.data.outputs.find(
+      (candidate) => candidate.outputId === node.data.selectedOutputId,
+    );
+    return `${node.id}:generation:${node.data.selectedOutputId ?? ''}:${output?.kind ?? ''}:${JSON.stringify(output?.locator ?? null)}`;
+  }
+  if (node.type === 'media') {
+    return `${node.id}:media:${node.data.mediaType ?? ''}:${JSON.stringify(node.data.contentLocator ?? null)}`;
+  }
+  if (node.type === 'file') {
+    return `${node.id}:file:${node.data.mediaKind ?? ''}:${JSON.stringify(node.data.contentLocator ?? null)}`;
+  }
+  return `${node.id}:${node.type}`;
+}
+
 function resolveActions(
   selectedNodes: readonly CanvasNode[],
   host: ReturnType<typeof useOptionalCanvasHost>,
@@ -217,9 +287,10 @@ function resolveActions(
         icon: <LayersIcon size={14} />,
         placement: 'visible',
         priority: 10,
+        display: 'label',
+        section: 'canvas',
         run: () => canvasStore.getState().groupNodes(selectedIds),
       },
-      createDeleteAction(selectedIds, canvasStore),
     ];
   }
 
@@ -234,6 +305,8 @@ function resolveActions(
       icon: <OpenIcon size={14} />,
       placement: 'visible',
       priority: 10,
+      display: 'label',
+      section: 'utility',
       run: () =>
         void host?.previewResource({
           kind: 'workspace-file',
@@ -249,6 +322,8 @@ function resolveActions(
         icon: <ZoomInIcon size={14} />,
         placement: 'visible',
         priority: 10,
+        display: 'label',
+        section: 'canvas',
         run: () => canvasStore.getState().fitGroupToContent(node.id),
       },
       {
@@ -257,15 +332,14 @@ function resolveActions(
         icon: <LayersIcon size={14} />,
         placement: 'visible',
         priority: 20,
+        display: 'label',
+        section: 'canvas',
         run: () =>
           canvasStore.getState().setGroupCollapsed(node.id, node.container?.collapsed !== true),
       },
     );
   }
-  actions.push(
-    createDuplicateAction(node.id, canvasStore, clipboardStore, historyStore),
-    createDeleteAction([node.id], canvasStore),
-  );
+  actions.push(createDuplicateAction(node.id, canvasStore, clipboardStore, historyStore));
   return actions;
 }
 
@@ -299,6 +373,44 @@ function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNo
   ) {
     return <ScissorsIcon size={14} />;
   }
+  switch (descriptor.id) {
+    case CANVAS_PREVIEW_ACTION_ID:
+      return <FullscreenIcon size={14} />;
+    case CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID:
+    case CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID:
+      return <PackageIcon size={14} />;
+    case CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID:
+      return <VolumeOffIcon size={14} />;
+    case CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID:
+      return <LayersIcon size={14} />;
+    case CANVAS_VIDEO_ENHANCE_ACTION_ID:
+    case CANVAS_IMAGE_UPSCALE_ACTION_ID:
+      return <ZoomInIcon size={14} />;
+    case CANVAS_VIDEO_EXTRACT_FRAME_ACTION_ID:
+      return <CameraIcon size={14} />;
+    case CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID:
+      return <EyeOffIcon size={14} />;
+    case CANVAS_VIDEO_GENERATE_SUBTITLES_ACTION_ID:
+      return <EyeIcon size={14} />;
+    case CANVAS_VIDEO_COLOR_GRADE_ACTION_ID:
+    case CANVAS_IMAGE_COLOR_GRADE_ACTION_ID:
+    case CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID:
+    case CANVAS_IMAGE_OPEN_EDITOR_TOOLS_ACTION_ID:
+      return <SettingsIcon size={14} />;
+    case CANVAS_IMAGE_CROP_ACTION_ID:
+      return <ScissorsIcon size={14} />;
+    case CANVAS_IMAGE_REDRAW_ACTION_ID:
+      return <RefreshIcon size={14} />;
+    case CANVAS_IMAGE_ERASE_ACTION_ID:
+    case CANVAS_IMAGE_REMOVE_BACKGROUND_ACTION_ID:
+      return <RemoveIcon size={14} />;
+    case CANVAS_IMAGE_OUTPAINT_ACTION_ID:
+      return <ZoomInIcon size={14} />;
+    case CANVAS_IMAGE_ROTATE_ACTION_ID:
+      return <RotateIcon size={14} />;
+    case CANVAS_IMAGE_GRID_SPLIT_ACTION_ID:
+      return <GridIcon size={14} />;
+  }
   const icons: Record<CanvasMaterialActionEffect, ReactNode> = {
     read: <PlayIcon size={14} />,
     derive: <RefreshIcon size={14} />,
@@ -311,24 +423,99 @@ function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNo
 
 function materialActionPresentation(
   actionId: string,
-): Pick<ToolbarAction, 'placement' | 'priority' | 'overflowGroup'> {
+): Pick<ToolbarAction, 'placement' | 'priority' | 'display' | 'section' | 'overflowGroup'> {
   switch (actionId) {
     case CANVAS_ADD_TO_CUT_ACTION_ID:
     case CANVAS_OPEN_IN_CUT_ACTION_ID:
-      return { placement: 'visible', priority: 10 };
+      return {
+        placement: 'visible',
+        priority: 10,
+        display: 'label',
+        section: 'edit',
+      };
+    case CANVAS_IMAGE_CROP_ACTION_ID:
+      return { placement: 'visible', priority: 10, display: 'label', section: 'edit' };
+    case CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID:
+    case CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID:
+    case CANVAS_IMAGE_UPSCALE_ACTION_ID:
+      return { placement: 'visible', priority: 20, display: 'label', section: 'edit' };
+    case CANVAS_IMAGE_REDRAW_ACTION_ID:
+      return { placement: 'visible', priority: 30, display: 'label', section: 'edit' };
     case CANVAS_REGENERATE_ACTION_ID:
     case CANVAS_EDIT_AND_GENERATE_ACTION_ID:
-      return { placement: 'visible', priority: 20 };
-    case CANVAS_PREVIEW_ACTION_ID:
-      return { placement: 'visible', priority: 30 };
-    case CANVAS_REVEAL_ACTION_ID:
-      return { placement: 'overflow', priority: 10, overflowGroup: 'file' };
+      return { placement: 'visible', priority: 40, display: 'label', section: 'edit' };
     case CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID:
+      return { placement: 'visible', priority: 70, display: 'label', section: 'asset' };
+    case CANVAS_PREVIEW_ACTION_ID:
+      return { placement: 'visible', priority: 100, display: 'icon', section: 'utility' };
+    case CANVAS_REVEAL_ACTION_ID:
+      return {
+        placement: 'overflow',
+        priority: 10,
+        display: 'label',
+        section: 'utility',
+        overflowGroup: 'file',
+      };
     case CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID:
-      return { placement: 'overflow', priority: 20, overflowGroup: 'media-library' };
+      return {
+        placement: 'overflow',
+        priority: 20,
+        display: 'label',
+        section: 'asset',
+        overflowGroup: 'media-library',
+      };
+    case CANVAS_VIDEO_ENHANCE_ACTION_ID:
+    case CANVAS_VIDEO_EXTRACT_FRAME_ACTION_ID:
+    case CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID:
+    case CANVAS_VIDEO_GENERATE_SUBTITLES_ACTION_ID:
+    case CANVAS_VIDEO_COLOR_GRADE_ACTION_ID:
+    case CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID:
+    case CANVAS_IMAGE_ERASE_ACTION_ID:
+    case CANVAS_IMAGE_OUTPAINT_ACTION_ID:
+    case CANVAS_IMAGE_REMOVE_BACKGROUND_ACTION_ID:
+    case CANVAS_IMAGE_COLOR_GRADE_ACTION_ID:
+    case CANVAS_IMAGE_ROTATE_ACTION_ID:
+    case CANVAS_IMAGE_GRID_SPLIT_ACTION_ID:
+    case CANVAS_IMAGE_OPEN_EDITOR_TOOLS_ACTION_ID:
+      return {
+        placement: 'overflow',
+        priority: mediaEditOverflowPriority(actionId),
+        display: 'label',
+        section: 'edit',
+        overflowGroup: 'media-edit',
+      };
     default:
-      return { placement: 'overflow', priority: 30, overflowGroup: 'other' };
+      return {
+        placement: 'overflow',
+        priority: 30,
+        display: 'label',
+        section: 'utility',
+        overflowGroup: 'other',
+      };
   }
+}
+
+function mediaEditOverflowPriority(actionId: string): number {
+  const order = [
+    CANVAS_VIDEO_ENHANCE_ACTION_ID,
+    CANVAS_VIDEO_EXTRACT_FRAME_ACTION_ID,
+    CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID,
+    CANVAS_VIDEO_GENERATE_SUBTITLES_ACTION_ID,
+    CANVAS_VIDEO_COLOR_GRADE_ACTION_ID,
+    CANVAS_IMAGE_ERASE_ACTION_ID,
+    CANVAS_IMAGE_OUTPAINT_ACTION_ID,
+    CANVAS_IMAGE_REMOVE_BACKGROUND_ACTION_ID,
+    CANVAS_IMAGE_COLOR_GRADE_ACTION_ID,
+    CANVAS_IMAGE_ROTATE_ACTION_ID,
+    CANVAS_IMAGE_GRID_SPLIT_ACTION_ID,
+    CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID,
+    CANVAS_IMAGE_OPEN_EDITOR_TOOLS_ACTION_ID,
+  ];
+  const index = order.indexOf(actionId);
+  if (index < 0) {
+    throw new Error(`Unknown Canvas media edit action presentation "${actionId}".`);
+  }
+  return index + 1;
 }
 
 function createDuplicateAction(
@@ -343,6 +530,8 @@ function createDuplicateAction(
     icon: <CopyIcon size={14} />,
     placement: 'visible',
     priority: 90,
+    display: 'icon',
+    section: 'canvas',
     run: () => {
       const canvasState = canvasStore.getState();
       const canvasData = canvasState.canvasData;
@@ -393,26 +582,6 @@ function resolveSelectionLabel(selectedNodes: readonly CanvasNode[]): string {
   }
 }
 
-function createDeleteAction(
-  nodeIds: readonly string[],
-  canvasStore: ReturnType<typeof useCanvasStoreApi>,
-): ToolbarAction {
-  return {
-    key: 'delete-selection',
-    label: t('menu.delete'),
-    icon: <TrashIcon size={14} />,
-    danger: true,
-    placement: 'overflow',
-    priority: 40,
-    overflowGroup: 'node',
-    run: () => {
-      const store = canvasStore.getState();
-      store.selectNodes([...nodeIds]);
-      store.deleteSelected();
-    },
-  };
-}
-
 function partitionActions(actions: readonly ToolbarAction[]): {
   primary: ToolbarAction[];
   overflow: ToolbarAction[];
@@ -423,15 +592,23 @@ function partitionActions(actions: readonly ToolbarAction[]): {
       .sort((left, right) => left.priority - right.priority),
     overflow: actions
       .filter((action) => action.placement === 'overflow')
-      .sort((left, right) => left.priority - right.priority),
+      .sort(
+        (left, right) =>
+          overflowGroupOrder(left.overflowGroup) - overflowGroupOrder(right.overflowGroup) ||
+          left.priority - right.priority,
+      ),
   };
+}
+
+function overflowGroupOrder(group: ToolbarAction['overflowGroup']): number {
+  return ['media-edit', 'file', 'media-library', 'other'].indexOf(group ?? 'other');
 }
 
 function groupOverflowActions(actions: readonly ToolbarAction[]): readonly {
   readonly id: NonNullable<ToolbarAction['overflowGroup']>;
   readonly actions: readonly ToolbarAction[];
 }[] {
-  const order = ['file', 'media-library', 'node', 'other'] as const;
+  const order = ['media-edit', 'file', 'media-library', 'other'] as const;
   return order.flatMap((id) => {
     const groupActions = actions.filter((action) => (action.overflowGroup ?? 'other') === id);
     return groupActions.length === 0 ? [] : [{ id, actions: groupActions }];
@@ -442,10 +619,10 @@ function overflowGroupLabel(group: NonNullable<ToolbarAction['overflowGroup']>):
   switch (group) {
     case 'file':
       return t('selection.group.file');
+    case 'media-edit':
+      return t('selection.group.mediaEdit');
     case 'media-library':
       return t('selection.group.mediaLibrary');
-    case 'node':
-      return t('selection.group.node');
     case 'other':
       return t('selection.group.other');
   }
@@ -454,16 +631,21 @@ function overflowGroupLabel(group: NonNullable<ToolbarAction['overflowGroup']>):
 function resolveToolbarPosition(
   nodes: readonly CanvasNode[],
   viewport: CanvasViewport,
-  viewportSize: { readonly width: number; readonly height: number },
+  _viewportSize: { readonly width: number; readonly height: number },
 ): { readonly x: number; readonly y: number } {
   const left = Math.min(...nodes.map((node) => node.position.x));
   const right = Math.max(...nodes.map((node) => node.position.x + node.size.width));
   const top = Math.min(...nodes.map((node) => node.position.y));
   const centerX = viewport.pan.x + ((left + right) / 2) * viewport.zoom;
-  const preferredY = viewport.pan.y + top * viewport.zoom - 42;
-  const horizontalInset = Math.min(170, Math.max(0, (viewportSize.width - 24) / 2));
+  const reservesExternalLabel = nodes.some(
+    (node) => node.type === 'media' || node.type === 'file' || node.type === 'generation',
+  );
   return {
-    x: Math.max(12 + horizontalInset, Math.min(viewportSize.width - 12 - horizontalInset, centerX)),
-    y: Math.max(10, Math.min(viewportSize.height - 42, preferredY)),
+    x: centerX,
+    y: resolveSelectionToolbarTop(
+      viewport.pan.y + top * viewport.zoom,
+      viewport.zoom,
+      reservesExternalLabel,
+    ),
   };
 }

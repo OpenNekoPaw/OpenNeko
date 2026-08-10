@@ -105,7 +105,7 @@ describe('AgentAppHost', () => {
     const fixture = await createFixture();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
 
-    expect(fixture.resolveWorkspaceGenerationJobs).not.toHaveBeenCalled();
+    expect(fixture.resolveGenerationJobs).not.toHaveBeenCalled();
     expect(workspace.tools.list().map((tool) => tool.name)).toEqual(
       expect.arrayContaining([
         'GenerateImage',
@@ -259,12 +259,13 @@ describe('AgentAppHost', () => {
     const assistantSpacePath = join(fixture.root, 'assistant-space');
     const assistantDataRoot = join(fixture.root, 'assistant-data');
     await mkdir(assistantSpacePath, { recursive: true });
+    const resolveGenerationJobs = vi.fn(async () => createTestGenerationJobs());
     const composition = createAgentAppHost({
       userDataRoot: assistantDataRoot,
       userHome: fixture.userHome,
       hostId: 'desktop-host-assistant-tool-scope',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs,
       catalogReader: await NodePiConversationCatalogReader.create({
         userDataRoot: assistantDataRoot,
       }),
@@ -286,11 +287,78 @@ describe('AgentAppHost', () => {
         TOOL_NAMES_CUT.CUT_QUERY_TIMELINE,
       ]),
     );
+    await workspace.tools.execute('DescribeGenerationJob', { jobId: 'generation-missing' });
+    expect(resolveGenerationJobs).toHaveBeenCalledWith({
+      owner: { kind: 'assistant', assistantSpaceId },
+      root: assistantSpacePath,
+    });
+  });
+
+  it('delivers creator-visible artifacts only for the exact Workspace owner', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'neko-agent-artifact-owner-'));
+    roots.push(root);
+    const userHome = join(root, 'home');
+    const userDataRoot = join(userHome, '.neko');
+    const assistantSpaceId = 'assistant-space:local-user';
+    const assistantSpacePath = join(userHome, '.neko', 'assistant-spaces', 'local-user');
+    const workspacePath = join(root, 'workspace');
+    await Promise.all([
+      mkdir(assistantSpacePath, { recursive: true }),
+      mkdir(workspacePath, { recursive: true }),
+    ]);
+    const deliver = vi.fn(async () => ({ status: 'accepted' as const }));
+    const composition = createAgentAppHost({
+      userDataRoot,
+      userHome,
+      hostId: 'desktop-host-artifact-owner',
+      credentialRuntime: createTestCredentialRuntime(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
+      catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
+      assistantSpaceIds: [assistantSpaceId],
+      creatorVisibleArtifactDelivery: { deliver },
+    });
+    compositions.push(composition);
+    const assistantRuntime = await composition.attachWorkspace({
+      workspaceId: assistantSpaceId,
+      workspacePath: assistantSpacePath,
+      displayName: 'Assistant',
+      locator: { kind: 'variable', value: '${HOME}/.neko/assistant-spaces/local-user' },
+    });
+    const workspaceRuntime = await composition.attachWorkspace({
+      workspaceId: '33333333-3333-4333-8333-333333333333',
+      workspacePath,
+      displayName: 'Workspace',
+      locator: { kind: 'variable', value: '${HOME}/workspace' },
+    });
+
+    const assistantTurn = await executeArtifactFixtureTurn(
+      assistantRuntime,
+      'conversation-assistant-artifact',
+    );
+
+    expect(assistantTurn.artifactDelivery).toBeUndefined();
+    expect(JSON.stringify(assistantTurn.projection)).toContain('reviewable-artifact');
+    expect(deliver).not.toHaveBeenCalled();
+
+    const workspaceTurn = await executeArtifactFixtureTurn(
+      workspaceRuntime,
+      'conversation-workspace-artifact',
+    );
+
+    expect(workspaceTurn.artifactDelivery).toEqual({ status: 'accepted' });
+    expect(deliver).toHaveBeenCalledOnce();
+    expect(deliver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: '33333333-3333-4333-8333-333333333333',
+        conversationId: 'conversation-workspace-artifact',
+        artifacts: [expect.objectContaining({ artifactId: 'reviewable-artifact' })],
+      }),
+    );
   });
 
   it('isolates Generation owner failure to the requested Tool operation and permits canonical retry', async () => {
     const fixture = await createFixture();
-    fixture.resolveWorkspaceGenerationJobs.mockRejectedValueOnce(
+    fixture.resolveGenerationJobs.mockRejectedValueOnce(
       new Error('Workspace Generation owner unavailable.'),
     );
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -301,8 +369,11 @@ describe('AgentAppHost', () => {
       success: false,
       error: expect.stringContaining('Workspace Generation owner unavailable.'),
     });
-    expect(fixture.resolveWorkspaceGenerationJobs).toHaveBeenCalledOnce();
-    expect(fixture.resolveWorkspaceGenerationJobs).toHaveBeenLastCalledWith(fixture.workspace);
+    expect(fixture.resolveGenerationJobs).toHaveBeenCalledOnce();
+    expect(fixture.resolveGenerationJobs).toHaveBeenLastCalledWith({
+      owner: { kind: 'workspace', workspaceId: fixture.workspace.workspaceId },
+      root: fixture.workspace.workspacePath,
+    });
 
     await expect(
       workspace.tools.execute('DescribeGenerationJob', { jobId: 'generation-missing' }),
@@ -310,7 +381,7 @@ describe('AgentAppHost', () => {
       success: false,
       error: expect.stringContaining('Generation Job fixture operation is unavailable.'),
     });
-    expect(fixture.resolveWorkspaceGenerationJobs).toHaveBeenCalledTimes(2);
+    expect(fixture.resolveGenerationJobs).toHaveBeenCalledTimes(2);
   });
 
   it('deletes a persisted catalog conversation without attaching its Workspace runtime', async () => {
@@ -924,7 +995,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-catalog-host',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot,
     });
@@ -969,7 +1040,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-global-catalog-host',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot,
     });
@@ -1002,7 +1073,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-missing-builtin-host',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot: join(fixture.root, 'missing-builtin-skills'),
     });
@@ -1744,7 +1815,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-assistant-home-scope',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations,
         findConversation: (conversationId) =>
@@ -1770,7 +1841,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-failed-catalog',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => {
           throw new Error('catalog fixture failed');
@@ -1812,7 +1883,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-local-catalog-failure',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => ({
           records: [invalidRecord, validRecord],
@@ -1898,7 +1969,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-invalid-owner-scope',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => ({ records, diagnostics: [] }),
         findConversation: (conversationId) =>
@@ -2030,7 +2101,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-missing-context',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => ({ records: [missingContext, valid], diagnostics: [] }),
         findConversation: (conversationId) =>
@@ -2693,6 +2764,9 @@ describe('AgentAppHost', () => {
           {
             status: 'ready',
             diagnosticCode: '',
+            dependencyStatus: 'ready',
+            hostPermissionStatus: 'not-applicable',
+            qualificationStatus: 'qualified',
           },
         ],
       ]),
@@ -2727,6 +2801,85 @@ describe('AgentAppHost', () => {
     ).toBe(false);
   });
 
+  it('tracks exact extension-owned turns while reconciling sibling child runtimes', async () => {
+    const fixture = await createFixture();
+    const targetRoot = join(fixture.root, 'target-plugin');
+    const siblingRoot = join(fixture.root, 'sibling-plugin');
+    const targetSkillRoot = join(targetRoot, 'skills');
+    const siblingSkillRoot = join(siblingRoot, 'skills');
+    await writePluginSkill(targetSkillRoot, 'target-skill');
+    await writePluginSkill(siblingSkillRoot, 'sibling-skill');
+    const targetDescriptor = {
+      pluginId: 'target@openneko',
+      pluginRoot: targetRoot,
+      skillRoot: targetSkillRoot,
+      mcpServerIds: [],
+      appIds: [],
+    };
+    const siblingDescriptor = {
+      pluginId: 'sibling@openneko',
+      pluginRoot: siblingRoot,
+      skillRoot: siblingSkillRoot,
+      mcpServerIds: [],
+      appIds: [],
+    };
+    await fixture.composition.reconcilePluginRuntime({
+      records: [],
+      runtimeDescriptors: [targetDescriptor],
+      diagnostics: [],
+    });
+    const stream = createAssistantMessageEventStream();
+    const models = createFixtureModels(() => stream);
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-plugin-owner',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const turn = workspace.startTurn({
+      conversationId: 'conversation-plugin-owner',
+      prompt: 'hold plugin owner',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await vi.waitFor(() =>
+      expect(fixture.composition.listActivePluginTurns('target@openneko')).toHaveLength(1),
+    );
+    expect(fixture.composition.listActivePluginTurns('sibling@openneko')).toEqual([]);
+
+    await expect(
+      fixture.composition.reconcilePluginRuntime({
+        records: [],
+        runtimeDescriptors: [targetDescriptor, siblingDescriptor],
+        diagnostics: [],
+      }),
+    ).resolves.toBeInstanceOf(Map);
+    await expect(
+      fixture.composition.reconcilePluginRuntime({
+        records: [],
+        runtimeDescriptors: [siblingDescriptor],
+        diagnostics: [],
+      }),
+    ).rejects.toThrow("plugin 'target@openneko' runtime cannot change");
+
+    const message = assistant('plugin owner complete');
+    stream.push({ type: 'start', partial: message });
+    stream.push({ type: 'done', reason: 'stop', message });
+    stream.end();
+    await turn.completion;
+    await expect(
+      fixture.composition.reconcilePluginRuntime({
+        records: [],
+        runtimeDescriptors: [],
+        diagnostics: [],
+      }),
+    ).resolves.toBeInstanceOf(Map);
+  });
+
   async function createFixture(
     createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger,
   ) {
@@ -2757,13 +2910,13 @@ describe('AgentAppHost', () => {
       displayName: 'Fixture',
       locator: { kind: 'variable', value: '${HOME}/workspace' },
     };
-    const resolveWorkspaceGenerationJobs = vi.fn(async () => createTestGenerationJobs());
+    const resolveGenerationJobs = vi.fn(async () => createTestGenerationJobs());
     const composition = createAgentAppHost({
       userDataRoot,
       userHome,
       hostId: 'desktop-host-1',
       credentialRuntime: createTestCredentialRuntime(),
-      resolveWorkspaceGenerationJobs,
+      resolveGenerationJobs,
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       createIdentity: () => `identity-${(identity += 1)}`,
       ...(createWorkspaceLogger ? { createWorkspaceLogger } : {}),
@@ -2775,8 +2928,19 @@ describe('AgentAppHost', () => {
       userDataRoot,
       workspace,
       composition,
-      resolveWorkspaceGenerationJobs,
+      resolveGenerationJobs,
     };
+  }
+
+  async function writePluginSkill(skillRoot: string, name: string): Promise<void> {
+    await mkdir(join(skillRoot, name), { recursive: true });
+    await writeFile(
+      join(skillRoot, name, 'SKILL.md'),
+      ['---', `name: ${name}`, `description: ${name} fixture`, '---', `${name} body`, ''].join(
+        '\n',
+      ),
+      'utf8',
+    );
   }
 });
 
@@ -2792,7 +2956,7 @@ async function createComposition(
     userHome: fixture.userHome,
     hostId,
     credentialRuntime: createTestCredentialRuntime(),
-    resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
+    resolveGenerationJobs: async () => createTestGenerationJobs(),
     catalogReader: await NodePiConversationCatalogReader.create({
       userDataRoot: fixture.userDataRoot,
     }),
@@ -2898,6 +3062,59 @@ function fixtureTool(): Tool {
     isReadOnly: true,
     execute: async () => ({ success: true, data: { owner: 'desktop-workspace' } }),
   };
+}
+
+async function executeArtifactFixtureTurn(
+  workspace: Awaited<ReturnType<AgentAppHost['attachWorkspace']>>,
+  conversationId: string,
+) {
+  workspace.tools.register({
+    name: 'CreateReviewableArtifactFixture',
+    description: 'Creates one reviewable artifact for owner routing coverage.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    category: 'system',
+    isReadOnly: true,
+    execute: async () => ({
+      success: true,
+      artifacts: [
+        {
+          type: 'artifactSnapshot' as const,
+          complete: true,
+          artifact: {
+            kind: 'composite-artifact' as const,
+            artifactId: 'reviewable-artifact',
+            title: 'Reviewable Artifact',
+            blocks: [{ blockId: 'summary', kind: 'text' as const, text: 'Durable result.' }],
+          },
+        },
+      ],
+    }),
+  });
+  const models = createFixtureModels((_model, context) =>
+    context.messages.some((message) => message.role === 'toolResult')
+      ? completedStream(assistant('Artifact completed.'))
+      : completedStream(assistantToolCall('CreateReviewableArtifactFixture')),
+  );
+  const policy = fixturePolicy();
+  await workspace.openConversation({
+    conversationId,
+    models,
+    initialModelPolicy: policy,
+    baseSystemPrompt: 'Desktop Agent artifact owner fixture',
+  });
+  return workspace.executeTurn({
+    conversationId,
+    prompt: 'Create the artifact.',
+    modelPolicy: policy,
+    configuration: fixtureConfiguration(),
+    permissionPolicy: allowTools(),
+    workspaceTrusted: true,
+    locale: 'en',
+  });
 }
 
 function createFixtureModels(

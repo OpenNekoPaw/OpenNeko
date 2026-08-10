@@ -15,6 +15,7 @@ describe('Cua Driver Computer Use profile', () => {
       provider: {
         upstreamRelease: '0.19.2',
         kind: 'computer',
+        deliverySource: { kind: 'github-release' },
       },
       requiredPermissions: { observe: ['screen-recording'] },
     });

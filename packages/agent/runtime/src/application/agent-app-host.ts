@@ -43,7 +43,7 @@ import {
   createCutProjectCapabilityProvider,
   registerMediaAgentTools,
 } from '@neko/agent-runtime/tools';
-import type { GenerationJobPort } from '@neko/generation';
+import type { GenerationBinding, GenerationJobPort, GenerationOwner } from '@neko/generation/job';
 import {
   buildEnhancedAgentMessage,
   projectContextReferences,
@@ -67,6 +67,7 @@ import {
   type AgentContextPayload,
   type IToolRegistry,
   type PromptFragment,
+  type Tool,
 } from '@neko/agent-contracts';
 import {
   createNodeHostContentReadService,
@@ -94,8 +95,11 @@ import type {
   AgentExtensionRuntimeReadiness,
 } from '@neko/agent-contracts';
 import {
-  buildAgentPluginRuntime,
   createPluginRuntimeSourceFingerprint,
+  disposeAgentPluginRuntimeChanges,
+  listChangedAgentPluginRuntimeIds,
+  listChangedPluginRuntimeSourceIds,
+  reconcileAgentPluginRuntime,
   type AgentPluginRuntime,
 } from '@neko/agent-runtime/extensions';
 import {
@@ -320,6 +324,7 @@ export interface AgentAppHost {
   findConversation(conversationId: string): PiConversationCatalogRecord | undefined;
   readGlobalSkillCatalog(): Promise<AgentSkillCatalog>;
   hasActiveTurns(): boolean;
+  listActivePluginTurns(pluginId: string): readonly PiToolRunIdentity[];
   reconcilePluginRuntime(
     snapshot: AgentExtensionCatalogSnapshot,
   ): Promise<ReadonlyMap<string, AgentExtensionRuntimeReadiness>>;
@@ -339,9 +344,7 @@ export interface CreateAgentAppHostOptions {
   readonly builtinSkillRoot?: string;
   readonly createIdentity?: () => string;
   readonly createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger;
-  readonly resolveWorkspaceGenerationJobs: (
-    workspace: AssetWorkspaceResolution,
-  ) => Promise<GenerationJobPort>;
+  readonly resolveGenerationJobs: (binding: GenerationBinding) => Promise<GenerationJobPort>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
 }
 
@@ -456,6 +459,16 @@ class DefaultAgentAppHost implements AgentAppHost {
     return [...this.workspaces.values()].some((workspace) => workspace.hasActiveTurns());
   }
 
+  listActivePluginTurns(pluginId: string): readonly PiToolRunIdentity[] {
+    this.requireActive();
+    requireIdentity(pluginId, 'Plugin');
+    return Object.freeze(
+      [...this.workspaces.values()]
+        .flatMap((workspace) => workspace.listActivePluginTurns(pluginId))
+        .sort((left, right) => left.runId.localeCompare(right.runId)),
+    );
+  }
+
   async reconcilePluginRuntime(
     snapshot: AgentExtensionCatalogSnapshot,
   ): Promise<ReadonlyMap<string, AgentExtensionRuntimeReadiness>> {
@@ -469,15 +482,15 @@ class DefaultAgentAppHost implements AgentAppHost {
     }
     this.pluginRuntimeChanging = true;
     try {
-      if (this.hasActiveTurns()) {
-        throw new Error('Agent plugin runtime cannot change while an Agent turn is active.');
-      }
-      const next = await buildAgentPluginRuntime(snapshot);
-      if (this.hasActiveTurns()) {
-        await next.dispose();
-        throw new Error('Agent plugin runtime cannot change while an Agent turn is active.');
-      }
+      const expectedChangedPluginIds = listChangedPluginRuntimeSourceIds(
+        this.pluginRuntime,
+        snapshot,
+      );
+      this.assertPluginRuntimeChangesIdle(expectedChangedPluginIds);
+      const next = await reconcileAgentPluginRuntime(this.pluginRuntime, snapshot);
+      const changedPluginIds = listChangedAgentPluginRuntimeIds(this.pluginRuntime, next);
       try {
+        this.assertPluginRuntimeChangesIdle(changedPluginIds);
         for (const workspace of this.workspaces.values()) {
           workspace.assertPluginRuntimeCompatible(next);
         }
@@ -485,15 +498,26 @@ class DefaultAgentAppHost implements AgentAppHost {
           workspace.applyPluginRuntime(next);
         }
       } catch (error) {
-        await next.dispose();
+        await disposeAgentPluginRuntimeChanges(next, this.pluginRuntime);
         throw error;
       }
       const previous = this.pluginRuntime;
       this.pluginRuntime = next;
-      await previous?.dispose();
+      await disposeAgentPluginRuntimeChanges(previous, next);
       return next.readiness;
     } finally {
       this.pluginRuntimeChanging = false;
+    }
+  }
+
+  private assertPluginRuntimeChangesIdle(pluginIds: readonly string[]): void {
+    for (const pluginId of pluginIds) {
+      const turns = this.listActivePluginTurns(pluginId);
+      if (turns.length > 0) {
+        throw new Error(
+          `Agent plugin '${pluginId}' runtime cannot change while it owns ${turns.length} Agent turn(s).`,
+        );
+      }
     }
   }
 
@@ -638,8 +662,13 @@ class DefaultAgentAppHost implements AgentAppHost {
       workspaceId: workspace.workspaceId,
       hostId: `${this.options.hostId}:${workspace.workspaceId}`,
     });
+    const isAssistantSpace = this.assistantSpaceIds.includes(workspace.workspaceId);
+    const owner: GenerationOwner = isAssistantSpace
+      ? { kind: 'assistant', assistantSpaceId: workspace.workspaceId }
+      : { kind: 'workspace', workspaceId: workspace.workspaceId };
+    const generationBinding: GenerationBinding = { owner, root: workspace.workspacePath };
     const generationJobs = createDeferredGenerationJobPort(() =>
-      this.options.resolveWorkspaceGenerationJobs(workspace),
+      this.options.resolveGenerationJobs(generationBinding),
     );
     if (this.disposed) {
       await authority.dispose();
@@ -657,13 +686,14 @@ class DefaultAgentAppHost implements AgentAppHost {
         : { builtinSkillRoot: this.options.builtinSkillRoot }),
       createIdentity: this.options.createIdentity ?? randomUUID,
       credentialRuntime: this.options.credentialRuntime,
+      owner,
       generationJobs,
       onHomeProjectionChanged: this.emitHomeProjectionChanged,
       canStartTurn: () => !this.pluginRuntimeChanging,
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
-      structuredProjectAuthoring: !this.assistantSpaceIds.includes(workspace.workspaceId),
-      ...(this.options.creatorVisibleArtifactDelivery
+      structuredProjectAuthoring: !isAssistantSpace,
+      ...(owner.kind === 'workspace' && this.options.creatorVisibleArtifactDelivery
         ? { creatorVisibleArtifactDelivery: this.options.creatorVisibleArtifactDelivery }
         : {}),
     });
@@ -734,6 +764,7 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly builtinSkillRoot?: string;
   readonly createIdentity: () => string;
   readonly credentialRuntime: AgentCredentialRuntime;
+  readonly owner: GenerationOwner;
   readonly generationJobs: GenerationJobPort;
   readonly onHomeProjectionChanged: () => void;
   readonly canStartTurn: () => boolean;
@@ -747,6 +778,7 @@ interface PendingAgentTurnOperation {
   readonly queueItemId: string;
   readonly input: AgentTurnInput;
   readonly identity: PiToolRunIdentity;
+  readonly pluginIds: Set<string>;
   readonly completion: Promise<AgentTurnResult>;
   readonly resolve: (result: AgentTurnResult) => void;
   readonly reject: (error: unknown) => void;
@@ -768,7 +800,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   private readonly projections = new Map<string, ConversationProjectionStore>();
   private readonly opening = new Map<string, Promise<AgentConversationOwner>>();
   private readonly materializing = new Map<string, Promise<void>>();
-  private readonly activeTurnOperations = new Set<Promise<AgentTurnResult>>();
+  private readonly activeTurnOperations = new Map<
+    Promise<AgentTurnResult>,
+    PendingAgentTurnOperation
+  >();
   private readonly pendingConversationTurns = new Map<string, PendingAgentConversationTurns>();
   private readonly activeConversationTurns = new Map<string, PendingAgentTurnOperation>();
   private readonly visibleBindings = new Map<string, { conversationId: string | undefined }>();
@@ -781,6 +816,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   >();
   private pluginSkillRoots: readonly SkillSourceRoot[] = [];
   private readonly pluginToolNames = new Set<string>();
+  private pluginRuntime: AgentPluginRuntime | undefined;
   private residencyTail: Promise<void> = Promise.resolve();
   private visibilityLifecycleAttached = false;
   private releaseRequested = false;
@@ -1030,12 +1066,13 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       queueItemId: queueItem.id,
       input,
       identity,
+      pluginIds: new Set(this.pluginRuntime?.contributions.keys() ?? []),
       completion,
       resolve: settlement.resolve,
       reject: settlement.reject,
     };
     queue.operations.set(queueItem.id, pending);
-    this.activeTurnOperations.add(completion);
+    this.activeTurnOperations.set(completion, pending);
     this.startNextConversationTurn(input.conversationId);
     return Object.freeze({ identity, completion });
   }
@@ -1046,6 +1083,14 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   hasActiveTurns(): boolean {
     return this.activeTurnOperations.size > 0;
+  }
+
+  listActivePluginTurns(pluginId: string): readonly PiToolRunIdentity[] {
+    return Object.freeze(
+      [...this.activeTurnOperations.values()]
+        .filter((operation) => operation.pluginIds.has(pluginId))
+        .map((operation) => operation.identity),
+    );
   }
 
   readMessageQueue(conversationId: string): AgentMessageQueueSnapshot {
@@ -1093,10 +1138,13 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   assertPluginRuntimeCompatible(pluginRuntime: AgentPluginRuntime): void {
     this.requireActive();
-    if (this.hasActiveTurns()) {
-      throw new Error(
-        `Agent workspace '${this.workspaceId}' cannot replace plugin Tools during an active turn.`,
-      );
+    const changedPluginIds = listChangedAgentPluginRuntimeIds(this.pluginRuntime, pluginRuntime);
+    for (const pluginId of changedPluginIds) {
+      if (this.listActivePluginTurns(pluginId).length > 0) {
+        throw new Error(
+          `Agent workspace '${this.workspaceId}' cannot replace plugin '${pluginId}' Tools during an owning turn.`,
+        );
+      }
     }
     for (const tool of pluginRuntime.tools) {
       if (this.tools.has(tool.name) && !this.pluginToolNames.has(tool.name)) {
@@ -1107,12 +1155,20 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   applyPluginRuntime(pluginRuntime: AgentPluginRuntime): void {
     this.assertPluginRuntimeCompatible(pluginRuntime);
-    for (const name of this.pluginToolNames) this.tools.unregister(name);
-    this.pluginToolNames.clear();
-    for (const tool of pluginRuntime.tools) {
-      this.tools.register(tool);
-      this.pluginToolNames.add(tool.name);
+    const changedPluginIds = listChangedAgentPluginRuntimeIds(this.pluginRuntime, pluginRuntime);
+    for (const pluginId of changedPluginIds) {
+      for (const tool of this.pluginRuntime?.contributions.get(pluginId)?.tools ?? []) {
+        this.tools.unregister(tool.name);
+        this.pluginToolNames.delete(tool.name);
+      }
     }
+    for (const pluginId of changedPluginIds) {
+      for (const tool of pluginRuntime.contributions.get(pluginId)?.tools ?? []) {
+        this.tools.register(tool);
+        this.pluginToolNames.add(tool.name);
+      }
+    }
+    this.pluginRuntime = pluginRuntime;
     this.pluginSkillRoots = pluginRuntime.skillRoots;
   }
 
@@ -1134,13 +1190,20 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   }
 
   private async runConversationTurn(pending: PendingAgentTurnOperation): Promise<void> {
+    for (const pluginId of this.pluginRuntime?.contributions.keys() ?? []) {
+      pending.pluginIds.add(pluginId);
+    }
+    const runtimeSnapshot = Object.freeze({
+      tools: Object.freeze([...this.tools.list()]),
+      pluginSkillRoots: this.pluginSkillRoots,
+    });
     let outcome:
       | { readonly ok: true; readonly result: AgentTurnResult }
       | { readonly ok: false; readonly error: unknown };
     try {
       outcome = {
         ok: true,
-        result: await this.executeTurnOwned(pending.input, pending.identity),
+        result: await this.executeTurnOwned(pending.input, pending.identity, runtimeSnapshot),
       };
     } catch (error) {
       outcome = { ok: false, error };
@@ -1251,21 +1314,28 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   private async executeTurnOwned(
     input: AgentTurnInput,
     identity: PiToolRunIdentity,
+    runtimeSnapshot: {
+      readonly tools: readonly Tool[];
+      readonly pluginSkillRoots: readonly SkillSourceRoot[];
+    },
   ): Promise<AgentTurnResult> {
     this.requireActive();
     const owner = this.requireConversation(input.conversationId);
     const messageId = this.options.createIdentity();
-    const skills = await this.discoverSkills(input.workspaceTrusted);
+    const skills = await this.discoverSkills(
+      input.workspaceTrusted,
+      runtimeSnapshot.pluginSkillRoots,
+    );
     const contextPayloads = await materializeAgentTurnContextPayloads({
       contextPayloads: input.contextPayloads,
       contentAccessRuntime: this.contentAccessRuntime,
-      toolNames: new Set(this.tools.list().map((tool) => tool.name)),
+      toolNames: new Set(runtimeSnapshot.tools.map((tool) => tool.name)),
     });
     const contentReferenceIds = this.contentToolModelProtocol.bindInputs(
       input.conversationId,
       input.contextPayloads,
     );
-    const capabilityTools = projectOpenNekoTools(this.tools.list(), {
+    const capabilityTools = projectOpenNekoTools(runtimeSnapshot.tools, {
       locale: input.locale,
       purposesForTool: resolveOpenNekoToolModelPurposes,
       purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
@@ -1294,9 +1364,9 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       contextPayloads,
       modelPolicy: input.modelPolicy,
       contentAccessRuntime: this.contentAccessRuntime,
-      hasImagePerceptionTool: this.tools
-        .list()
-        .some((tool) => tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND),
+      hasImagePerceptionTool: runtimeSnapshot.tools.some(
+        (tool) => tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND,
+      ),
     });
     const prompt = buildEnhancedAgentMessage({
       message: input.prompt,
@@ -1378,16 +1448,19 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         `Agent turn ${identity.conversationId}/${identity.turnId} has no terminal projection.`,
       );
     }
-    const artifactDelivery = await deliverCreatorVisibleArtifactsFromTurnProjection({
-      turn,
-      workspaceId: identity.workspaceId,
-      conversationId: identity.conversationId,
-      turnId: identity.turnId,
-      runId: identity.runId,
-      ...(this.options.creatorVisibleArtifactDelivery
-        ? { delivery: this.options.creatorVisibleArtifactDelivery }
-        : {}),
-    });
+    const artifactDelivery =
+      this.options.owner.kind === 'workspace'
+        ? await deliverCreatorVisibleArtifactsFromTurnProjection({
+            turn,
+            workspaceId: identity.workspaceId,
+            conversationId: identity.conversationId,
+            turnId: identity.turnId,
+            runId: identity.runId,
+            ...(this.options.creatorVisibleArtifactDelivery
+              ? { delivery: this.options.creatorVisibleArtifactDelivery }
+              : {}),
+          })
+        : undefined;
     return Object.freeze({
       identity,
       durability,
@@ -1652,7 +1725,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     const runtimeResults = await Promise.allSettled(
       [...conversations].map((conversation) => conversation.stop()),
     );
-    const operationResults = await Promise.allSettled(this.activeTurnOperations);
+    const operationResults = await Promise.allSettled(this.activeTurnOperations.keys());
     for (const projection of this.projections.values()) projection.dispose();
     this.conversations.clear();
     this.projections.clear();
@@ -1667,6 +1740,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.models.clearProviders();
     this.pluginSkillRoots = [];
     this.pluginToolNames.clear();
+    this.pluginRuntime = undefined;
     this.contentToolModelProtocol.clear();
     let authorityError: unknown;
     try {
@@ -1794,7 +1868,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }
   }
 
-  private async discoverSkills(workspaceTrusted: boolean) {
+  private async discoverSkills(
+    workspaceTrusted: boolean,
+    pluginSkillRoots: readonly SkillSourceRoot[] = this.pluginSkillRoots,
+  ) {
     const roots = await existingSkillRoots({
       workspacePath: this.options.workspace.workspacePath,
       userHome: this.options.userHome,
@@ -1808,7 +1885,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         isTrusted: ({ source }) => source.kind !== 'project' || workspaceTrusted,
         isEnabled: () => true,
       },
-    }).discover([...roots, ...this.pluginSkillRoots]);
+    }).discover([...roots, ...pluginSkillRoots]);
   }
 
   private reconcileRuntimeResidency(): Promise<void> {

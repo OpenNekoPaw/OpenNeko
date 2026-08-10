@@ -1,19 +1,19 @@
 import { memo, useCallback } from 'react';
 import { useAgentHostMessages } from '../../../host-runtime-context';
-import { CopyIcon, FileIcon } from '@neko/ui/icons';
-import { SendToMenu } from '../SendToMenu';
+import { CopyIcon, FileIcon, MoreHorizontalIcon, UploadIcon } from '@neko/ui/icons';
 import { useMessageActions } from '../MessageActionsContext';
 import { projectCanvasContentTransferTarget } from '../../../presenters/plugin-transfer-presenter';
 import type { DocumentImageThumbnailProjection } from '../../../presenters/tool-call-presenter';
+import { useTranslation } from '../../../i18n/I18nContext';
 
 interface DocumentImageThumbnailsProps {
   thumbnails: readonly DocumentImageThumbnailProjection[];
 }
 
 function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnailsProps) {
+  const { t } = useTranslation();
   const agentHostMessages = useAgentHostMessages();
-  const { pluginsAvailable, contextChips, ambientNodes, activeConversationId } =
-    useMessageActions();
+  const { pluginsAvailable, contextChips, ambientNodes } = useMessageActions();
 
   const handleOpen = useCallback(
     (thumbnail: DocumentImageThumbnailProjection) => {
@@ -29,6 +29,27 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
   const handleCopy = useCallback(async (value: string) => {
     await navigator.clipboard.writeText(value);
   }, []);
+
+  const handleSendToCanvas = useCallback(
+    (thumbnail: DocumentImageThumbnailProjection) => {
+      if (!thumbnail.contentLocator) return;
+      agentHostMessages.sendToPlugin('canvas', {
+        kind: 'singleAsset',
+        asset: {
+          mediaType: 'image',
+          name: getFileName(thumbnail.path),
+          contentLocator: thumbnail.contentLocator,
+        },
+        target: projectCanvasContentTransferTarget({ ambientNodes, contextChips }),
+        provenance: {
+          source: 'webview',
+          label: `document-image:${thumbnail.label}`,
+          metadata: { contentLocator: thumbnail.contentLocator },
+        },
+      });
+    },
+    [agentHostMessages, ambientNodes, contextChips],
+  );
 
   if (thumbnails.length === 0) return null;
 
@@ -93,52 +114,37 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                   Preview unavailable
                 </div>
               )}
-              <div className="flex border-t border-[var(--agent-input-border)]">
-                <ThumbnailActionButton
-                  title="Copy reference JSON"
-                  onClick={() => handleCopy(thumbnail.referenceJson)}
-                >
-                  <CopyIcon className="h-3 w-3" />
-                </ThumbnailActionButton>
-                <ThumbnailActionButton
-                  title="Copy thumbnail summary"
-                  onClick={() => handleCopy(formatThumbnailSummary(thumbnail))}
-                >
-                  <span className="text-[9px] font-medium leading-none">i</span>
-                </ThumbnailActionButton>
+              <div className="border-t border-[var(--agent-input-border)] px-1 py-0.5">
+                <details className="group/thumbnail-menu">
+                  <summary
+                    className="ml-auto flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded text-[var(--agent-fg-secondary)] hover:bg-[var(--agent-hover)] hover:text-[var(--agent-fg)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--agent-accent)] [&::-webkit-details-marker]:hidden"
+                    title={t('chat.documentThumbnail.moreActions')}
+                    aria-label={t('chat.documentThumbnail.moreActions')}
+                  >
+                    <MoreHorizontalIcon className="h-3.5 w-3.5" />
+                  </summary>
+                  <div className="space-y-0.5 border-t border-[var(--agent-input-border)] pt-1">
+                    <button
+                      type="button"
+                      className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[10px] text-[var(--agent-fg)] hover:bg-[var(--agent-hover)]"
+                      onClick={() => void handleCopy(formatLocatorReference(thumbnail))}
+                    >
+                      <CopyIcon className="h-3 w-3" />
+                      <span>{t('chat.documentThumbnail.copyReference')}</span>
+                    </button>
+                    {pluginsAvailable?.canvas && thumbnail.contentLocator && (
+                      <button
+                        type="button"
+                        className="flex min-h-7 w-full items-center gap-2 rounded px-2 text-left text-[10px] leading-tight text-[var(--agent-fg)] hover:bg-[var(--agent-hover)]"
+                        onClick={() => handleSendToCanvas(thumbnail)}
+                      >
+                        <UploadIcon className="h-3 w-3 shrink-0" />
+                        <span>{t('chat.documentThumbnail.sendToCanvas')}</span>
+                      </button>
+                    )}
+                  </div>
+                </details>
               </div>
-              {pluginsAvailable?.canvas && thumbnail.contentLocator && (
-                <div className="border-t border-[var(--agent-input-border)] px-1 py-1">
-                  <SendToMenu
-                    payload={{
-                      kind: 'singleAsset',
-                      asset: {
-                        mediaType: 'image',
-                        name: getFileName(thumbnail.path),
-                        contentLocator: thumbnail.contentLocator,
-                      },
-                      target: projectCanvasContentTransferTarget({
-                        ambientNodes,
-                        contextChips,
-                      }),
-                      provenance: {
-                        source: 'webview',
-                        label: `document-image:${thumbnail.label}`,
-                        metadata: {
-                          contentLocator: thumbnail.contentLocator,
-                        },
-                      },
-                    }}
-                    mediaType="image"
-                    plugins={pluginsAvailable}
-                    conversationId={activeConversationId}
-                    allowedTargets={['canvas']}
-                    showDirectCanvasImport
-                    hidePrefixLabel
-                    className="justify-center"
-                  />
-                </div>
-              )}
             </div>
           );
         })}
@@ -147,48 +153,9 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
   );
 }
 
-interface ThumbnailActionButtonProps {
-  children: React.ReactNode;
-  title: string;
-  onClick: () => void;
-}
-
-function ThumbnailActionButton({ children, title, onClick }: ThumbnailActionButtonProps) {
-  return (
-    <button
-      type="button"
-      className="flex h-6 flex-1 items-center justify-center text-[var(--agent-fg-secondary)] transition-colors hover:bg-[var(--agent-hover)] hover:text-[var(--agent-fg)]"
-      title={title}
-      onClick={(event) => {
-        event.stopPropagation();
-        void onClick();
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 function formatLocatorReference(thumbnail: DocumentImageThumbnailProjection): string {
   const locator = formatThumbnailLocation(thumbnail);
   return `${thumbnail.filePath}#${locator}`;
-}
-
-function formatThumbnailSummary(thumbnail: DocumentImageThumbnailProjection): string {
-  const parts = [
-    `Document: ${thumbnail.filePath}`,
-    `Reference: ${formatLocatorReference(thumbnail)}`,
-    `Location: ${formatThumbnailLocation(thumbnail)}`,
-  ];
-  if (thumbnail.contentLocator?.kind === 'document-entry') {
-    parts.push(`Entry: ${thumbnail.contentLocator.entryPath}`);
-  }
-  const dimensions = formatDimensions(thumbnail.width, thumbnail.height);
-  if (dimensions) parts.push(`Dimensions: ${dimensions}`);
-  const byteSize = formatByteSize(thumbnail.byteSize);
-  if (byteSize) parts.push(`Size: ${byteSize}`);
-  if (thumbnail.mimeType) parts.push(`MIME: ${thumbnail.mimeType}`);
-  return parts.join('\n');
 }
 
 function formatThumbnailLocation(thumbnail: DocumentImageThumbnailProjection): string {

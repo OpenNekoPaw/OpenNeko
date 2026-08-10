@@ -24,6 +24,11 @@ import {
   parsePiUserMessagePresentation,
   type PiUserMessagePresentation,
 } from './user-message-presentation';
+import {
+  PI_TURN_PRESENTATION_TIMING_CUSTOM_TYPE,
+  parsePiTurnPresentationTiming,
+  type PiTurnPresentationTiming,
+} from './turn-presentation-timing';
 
 export interface ConversationExecutionLease {
   readonly conversationId: string;
@@ -128,6 +133,7 @@ export interface CheckpointPiTurnInput {
   readonly turnId: string;
   readonly terminalState: PiTurnCheckpointRecord['terminalState'];
   readonly userMessagePresentation?: PiUserMessagePresentation;
+  readonly turnPresentationTiming?: PiTurnPresentationTiming;
   readonly messages?: readonly AgentMessage[];
 }
 
@@ -593,6 +599,16 @@ export class NodePiConversationAuthority {
         `Pi user message presentation Turn '${userMessagePresentation.turnId}' does not match checkpoint Turn '${input.turnId}'.`,
       );
     }
+    const turnPresentationTiming =
+      input.turnPresentationTiming === undefined
+        ? undefined
+        : parsePiTurnPresentationTiming(input.turnPresentationTiming);
+    if (turnPresentationTiming && turnPresentationTiming.turnId !== input.turnId) {
+      throw new PiConversationAuthorityError(
+        'invalid-identity',
+        `Pi Turn presentation timing '${turnPresentationTiming.turnId}' does not match checkpoint Turn '${input.turnId}'.`,
+      );
+    }
     const key = checkpointKey(input.conversationId, input.turnId);
     this.durability.set(key, 'persisting');
     try {
@@ -614,8 +630,26 @@ export class NodePiConversationAuthority {
             userMessagePresentation,
           );
         }
+        let turnPresentationTimingAppended = false;
         for (const message of input.messages ?? []) {
           await session.appendMessage(message);
+          if (
+            turnPresentationTiming &&
+            !turnPresentationTimingAppended &&
+            message.role === 'user'
+          ) {
+            await session.appendCustomEntry(
+              PI_TURN_PRESENTATION_TIMING_CUSTOM_TYPE,
+              turnPresentationTiming,
+            );
+            turnPresentationTimingAppended = true;
+          }
+        }
+        if (turnPresentationTiming && !turnPresentationTimingAppended) {
+          throw new PiConversationAuthorityError(
+            'invalid-identity',
+            `Pi Turn presentation timing ${input.turnId} requires its user message.`,
+          );
         }
         const leafId = await session.getLeafId();
         const committedAt = new Date(this.now()).toISOString();

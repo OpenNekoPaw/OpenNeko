@@ -13,7 +13,6 @@ import {
   RefreshIcon,
   ScissorsIcon,
   SendIcon,
-  TrashIcon,
   UndoIcon,
   RedoIcon,
   PlayIcon,
@@ -59,7 +58,6 @@ export interface CanvasMenuContext {
     pos: { x: number; y: number },
     sourceMode?: CanvasAddSourceModeId,
   ) => void;
-  onDelete: () => void;
   onSelectAll: () => void;
   onFitContent: () => void;
   onResetView: () => void;
@@ -188,13 +186,6 @@ export function buildNodeMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
       icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
       shortcut: '⌘D',
       onClick: () => ctx.onDuplicate?.(),
-    },
-    { separator: true },
-    {
-      label: t('menu.delete'),
-      icon: menuIcon(<TrashIcon size={MENU_ICON_SIZE} />),
-      shortcut: '⌫',
-      onClick: ctx.onDelete,
     },
     { separator: true },
     {

@@ -293,6 +293,20 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **AND** Workbench passes through the canonical Agent Launch Draft projection without independently enabling or disabling model, command, Skill, reference or voice capabilities
 - **AND** conversation Tabs/history are hidden and no conversation or scratch is created by rendering or editing the draft
 
+#### Scenario: Application reopens after another scene was visible
+
+- **WHEN** Desktop claims a released Window after the previous application lifecycle ended while Workspace, conversation or management content was visible
+- **THEN** Host captures any active Project presentation snapshot and atomically replaces the visible Workbench with a new unbound Entry Draft and default Entry layout
+- **AND** the new draft, Scene, Agent View and Agent Surface identities differ from the prior visible presentation
+- **AND** Project tabs/catalog, conversations, package snapshots and user files remain available through their explicit navigation paths
+- **AND** no startup preference, active/recent Project or last visible Scene restores that content automatically
+
+#### Scenario: Renderer reloads inside the current application lifecycle
+
+- **WHEN** the renderer session is replaced after the Window has already been claimed
+- **THEN** it reattaches the current exact Scene and draft/session identity
+- **AND** renderer reload does not create a new Entry Draft or reinterpret the operation as application startup
+
 #### Scenario: Agent-only draft uses the complete Agent layout
 
 - **WHEN** the Agent draft is the only business panel in a wide Workbench
@@ -494,24 +508,47 @@ Extensions and project management SHALL place their package-owned management Roo
 - **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
 - **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
 
+#### Scenario: Extensions management separates catalog and configuration
+
+- **WHEN** the Extensions Scene is active
+- **THEN** Main renders the package-owned Skill/extension catalog without a preselected item or reserved Secondary Main column
+- **AND** category, query, grid/list mode and exact selection remain package-owned disposable presentation state
+- **AND** selecting an item mounts Secondary Main and updates only that configuration panel without opening a Workspace, creating a conversation or changing durable extension facts
+- **AND** when the selection is absent or becomes invalid, management returns to full width with no empty configuration panel or resize gutter
+- **AND** leaving the Scene unmounts both Roots and reconstructs their canonical presentation defaults when the Scene is opened again
+
+#### Scenario: Skill configuration excludes extension-only settings
+
+- **WHEN** the Skill category is visible
+- **THEN** Secondary Main is absent until a Skill is selected, then displays only that Skill's source, description and allowed personal-Skill management actions
+- **AND** Automation endpoint, Host permission, extension runtime status and plugin lifecycle controls are not mounted in that configuration Root
+- **AND** switching to Extensions does not mount those extension-only settings until an extension is selected
+
+#### Scenario: Extensions catalog switches between grid and list
+
+- **WHEN** the user activates the grid or list presentation control in Extensions management
+- **THEN** the same filtered Skill or extension catalog is rendered in the selected presentation
+- **AND** the exact current selection and configuration identity are preserved
+- **AND** both presentations expose an accessible selected state, bounded item geometry and a compact one-column layout when the management panel is narrow
+
 #### Scenario: Low-information Project selection remains in management Main
 
 - **WHEN** a Project catalog selection has no content-rich owner-qualified Detail Root
 - **THEN** Workbench keeps Project Management as the only Main shell and does not reserve a Secondary Main column or resize gutter
 - **AND** the selected row exposes a separate explicit open action without making selection itself open the Workspace
 
-#### Scenario: Management and detail use independent tabless shells
+#### Scenario: Management and detail use adjacent tabless panels
 
 - **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
-- **THEN** management and Preview/Detail occupy two independent shared panel shells connected by the shared resize primitive
-- **AND** each sibling shell has its own DOM, border, zero-radius boundary, background, clipping and overflow boundary with a visible gutter between them
-- **AND** the composition does not render both contents on one continuous Main surface separated only by a line
+- **THEN** management and Preview/Detail occupy two sibling panel DOM and overflow boundaries connected by the shared resize primitive
+- **AND** both panels use zero-radius boundaries and meet edge-to-edge without blank margin or gap
+- **AND** the resize handle overlays their shared divider without reserving visible layout space
 - **AND** neither shell renders a synthetic single-item Workbench tab strip
 - **AND** Preview/Detail content does not render a descriptor header and inherits the same theme background as its sibling management shell
 
 #### Scenario: User resizes a management and detail split
 
-- **WHEN** Assets, Extensions or Projects displays a qualified Preview/Detail and the user drags the shared resize gutter
+- **WHEN** Assets, Extensions or Projects displays a qualified Preview/Detail and the user drags the shared resize handle
 - **THEN** the management Main remains at least as wide as the Preview/Detail panel
 - **AND** the resize contract rejects ratios below one half while preserving the full-width management layout when Secondary Main is absent
 
@@ -544,6 +581,20 @@ Every Agent connection, Workspace View, management session, Preview resource and
 - **WHEN** Desktop restores or opens an Asset Center scene in development or packaged Electron
 - **THEN** the renderer mounts a non-empty Workbench without uncaught runtime-disposed exceptions
 - **AND** reload restores the exact scene/session and does not leak duplicate subscriptions or Preview handles
+
+#### Scenario: Renderer loading replaces a visible Workspace session
+
+- **WHEN** Window lifecycle announces `renderer-loading` while Canvas, Cut and Workspace Resources are visible
+- **THEN** the outgoing renderer invalidates every pending Shell snapshot and unmounts the current Scene Roots before requesting package snapshots with the retired renderer identity
+- **AND** the replacement renderer obtains one authoritative Shell projection carrying the current `rendererSessionId` before rebuilding those Roots
+- **AND** an already-dispatched stale package request remains rejected at its exact owner boundary without retrying against active or recent Workspace state
+- **AND** Canvas, Cut and Resource Browser failures remain isolated from each other and cannot leave all Workbench slots indefinitely showing lazy-loading fallbacks
+
+#### Scenario: Renderer ready is observed without document replacement
+
+- **WHEN** the same renderer document receives `renderer-ready` after it already handled `renderer-loading`
+- **THEN** it fetches one authoritative Shell snapshot and reconstructs the exact current Scene
+- **AND** it does not reuse the retired projection, create a new Entry Draft or retain old Surface subscriptions
 
 ### Requirement: Recent navigation distinguishes sessions from containers
 
@@ -780,3 +831,27 @@ in-flight keys without accepting stale-document or removed-Clip results.
 - **THEN** every still-relevant result is merged by its exact representation key
 - **AND** a later batch does not invalidate an earlier successful batch
 - **AND** failed keys can be requested again without an unbounded retry loop
+
+### Requirement: Canvas Generation starts only after canonical Job persistence is available
+
+The Generation package SHALL own the single canonical `generation_jobs` table shape used by Canvas and Agent
+generation. Workspace Generation owner initialization MUST validate that exact shape before accepting a submission.
+It MUST NOT write retired internal version fields, switch to an in-memory store, or invoke a provider before the
+initial Job snapshot is durably created.
+
+#### Scenario: A retired Generation Job table is empty
+
+- **WHEN** the package finds a zero-row `generation_jobs` table whose columns are not the canonical column set
+- **THEN** it atomically removes only that empty package-owned table and its index
+- **AND** creates the canonical table before accepting the new Canvas submission
+- **AND** the initial Job snapshot is persisted and the selected provider execution starts through the one canonical path
+- **AND** no old column, compatibility writer, migration registry or fallback store remains reachable
+
+#### Scenario: A non-canonical Generation Job table contains records
+
+- **WHEN** the package finds one or more records in a `generation_jobs` table whose columns are not canonical
+- **THEN** it rejects only that Generation owner with `generation-job-persistence-invalid`
+- **AND** preserves the table and every record byte-for-byte
+- **AND** does not call the provider or report the submission as started
+- **AND** other valid Workspace, Canvas, Asset and application authorities remain available
+- **AND** the Canvas diagnostic identifies Generation Job persistence rather than exposing only a generic SQLite run failure

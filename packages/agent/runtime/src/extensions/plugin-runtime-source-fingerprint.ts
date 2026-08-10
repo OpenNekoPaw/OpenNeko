@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 
-import type { AgentExtensionCatalogSnapshot } from '@neko/agent-contracts';
+import type {
+  AgentExtensionCatalogSnapshot,
+  AgentExtensionRuntimeDescriptor,
+} from '@neko/agent-contracts';
 
 export function createPluginRuntimeSourceFingerprint(
   snapshot: AgentExtensionCatalogSnapshot,
@@ -15,4 +18,21 @@ export function createPluginRuntimeSourceFingerprint(
     ),
   };
   return `sha256:${createHash('sha256').update(JSON.stringify(source)).digest('hex')}`;
+}
+
+export function createPluginRuntimeContributionFingerprint(
+  snapshot: AgentExtensionCatalogSnapshot,
+  descriptor: AgentExtensionRuntimeDescriptor,
+): string {
+  return createPluginRuntimeSourceFingerprint({
+    records: snapshot.records.filter((candidate) => candidate.id === descriptor.pluginId),
+    runtimeDescriptors: [
+      {
+        ...descriptor,
+        mcpServerIds: [...descriptor.mcpServerIds].sort(),
+        appIds: [...descriptor.appIds].sort(),
+      },
+    ],
+    diagnostics: [],
+  });
 }

@@ -46,6 +46,18 @@ describe('Canvas Host runtime contract', () => {
 
     expect(request.identity.documentId).toBe('canvas-document-1');
     expect(snapshot.canvas.name).toBe(DEFAULT_CANVAS_DATA.name);
+    expect(snapshot.authoringCapabilities.generationModels).toEqual([
+      {
+        binding: {
+          purpose: 'image.generate',
+          providerId: 'provider-1',
+          modelId: 'image-model-1',
+        },
+        label: 'Image Model',
+        providerLabel: 'Provider One',
+        isDefault: true,
+      },
+    ]);
   });
 
   it('requires explicit source semantics and typed Generation Node creation', () => {
@@ -86,6 +98,34 @@ describe('Canvas Host runtime contract', () => {
         intent: { type: 'request-source', sourceKind: 'image' },
       }),
     ).toThrowError(CanvasHostRuntimeContractError);
+  });
+
+  it('preserves a stale-Recipe Generation projection and rejects invalid projection fields', () => {
+    const projection = {
+      nodeId: 'generation-1',
+      submissionId: 'submission-1',
+      recipeInputFingerprint: 'sha256:recipe-1',
+      phase: 'succeeded',
+      recipeStale: true,
+    };
+    const snapshot = parseCanvasHostSnapshot({
+      ...validSnapshot(),
+      generationNodes: [projection],
+    });
+
+    expect(snapshot.generationNodes).toEqual([projection]);
+    expect(() =>
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [{ ...projection, recipeStale: 'true' }],
+      }),
+    ).toThrowError('Canvas Generation Recipe stale marker is invalid.');
+    expect(() =>
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [{ ...projection, staleReason: 'recipe-changed' }],
+      }),
+    ).toThrowError('Canvas Generation runtime projection contains unsupported fields.');
   });
 
   it('rejects removed fields, absolute identities and stale sessions', () => {
@@ -176,6 +216,18 @@ function validSnapshot() {
     authoringCapabilities: {
       sourceModes: ['import', 'reference'],
       generationKinds: ['prompt', 'image', 'audio', 'video'],
+      generationModels: [
+        {
+          binding: {
+            purpose: 'image.generate',
+            providerId: 'provider-1',
+            modelId: 'image-model-1',
+          },
+          label: 'Image Model',
+          providerLabel: 'Provider One',
+          isDefault: true,
+        },
+      ],
     },
     generationNodes: [],
   };

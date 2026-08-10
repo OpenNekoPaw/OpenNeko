@@ -12,6 +12,7 @@ export * from './media-operation-capabilities';
 
 export type {
   MediaGenerationConfigPort,
+  MediaExecutionProviderResolver,
   MediaModel,
   MediaProvider,
   MediaRoutingResult,
@@ -80,9 +81,9 @@ export {
   type MediaGenerationDeliverySettingsPlan,
 } from './media-generation-delivery-settings';
 export {
-  createNodeWorkspaceGenerationJobOwner,
-  type NodeWorkspaceGenerationJobOwnerOptions,
-} from './workspace-generation-job-owner';
+  createNodeGenerationJobOwner,
+  type NodeGenerationJobOwnerOptions,
+} from './node-generation-job-owner';
 export {
   GeneratedAssetIndex,
   generateAssetId,
@@ -125,8 +126,8 @@ export {
 } from './vision-preprocessor';
 
 // Factory
-import type { MediaGenerationConfigPort } from './types';
-import { MediaAdapterRegistry, getMediaAdapterRegistry } from './adapters/media-adapter-registry';
+import type { MediaExecutionProviderResolver, MediaGenerationConfigPort } from './types';
+import { getMediaAdapterRegistry } from './adapters/media-adapter-registry';
 import { OpenAICompatMediaAdapter } from './adapters/openai-compat-media-adapter';
 import { RunwayMediaAdapter } from './adapters/runway-media-adapter';
 import { LumaMediaAdapter } from './adapters/luma-media-adapter';
@@ -147,6 +148,7 @@ import type { MediaRequestAssetMaterializer } from './media-request-assets';
  */
 export interface MediaPlatformDeps {
   configManager: MediaGenerationConfigPort;
+  providerResolver: MediaExecutionProviderResolver;
   requestAssetMaterializer?: MediaRequestAssetMaterializer;
 }
 
@@ -154,10 +156,7 @@ export interface MediaPlatformDeps {
  * Media platform components
  */
 export interface MediaPlatform {
-  adapterRegistry: MediaAdapterRegistry;
-  routingManager: MediaRoutingManager;
-  executor: MediaGenerationExecutor;
-  service: MediaGenerationService;
+  readonly service: MediaGenerationService;
 }
 
 /**
@@ -188,19 +187,14 @@ export function createMediaPlatform(deps: MediaPlatformDeps): MediaPlatform {
   adapterRegistry.registerBuiltin('dashscope', new DashScopeMediaAdapter());
 
   // Create routing manager
-  const routingManager = new MediaRoutingManager(deps.configManager);
+  const routingManager = new MediaRoutingManager(deps.configManager, deps.providerResolver);
 
-  const executor = new MediaGenerationExecutor(deps.configManager, {
+  const executor = new MediaGenerationExecutor(deps.configManager, deps.providerResolver, {
     requestAssetMaterializer: deps.requestAssetMaterializer,
   });
 
   const service = new MediaGenerationService(deps.configManager, routingManager, executor);
 
-  return {
-    adapterRegistry,
-    routingManager,
-    executor,
-    service,
-  };
+  return { service };
 }
 export * from './local-metadata/generated-output-projection-store';

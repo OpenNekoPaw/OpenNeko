@@ -49,3 +49,51 @@
 - [x] 6.2 Add OpenSpec proposal, five-layer design, requirements, tasks and Agent Evaluation disposition.
 - [x] 6.3 Update the stable Markdown ADR, architecture navigation, document navigation and package-owned Markdown contract without claiming unimplemented dependencies are present.
 - [ ] 6.4 After implementation evidence passes, archive the change and remove target/implementation-gap wording from stable documentation.
+
+## 7. Agent Turn Presentation And Narrowed Renderer Replacement
+
+- [x] 7.1 Capture the 2026-08-10 visible Desktop hierarchy defect and update proposal, five-layer design, requirements and tasks before implementation.
+- [x] 7.2 Replace block-level primary-result grouping with one turn-level presentation projection that preserves exact Timeline identity and separates answer, deliverable, actionable and activity roles without tool-name routing.
+- [x] 7.3 Render one assistant identity gutter, header-free answer Markdown and at most one flat process disclosure; remove nested Tool/Thinking disclosure chrome while keeping failures and approvals visible.
+- [x] 7.4 Add a package-owned semantic Agent Markdown theme with constrained text measure and explicit wide lanes for tables, code, Diff and authorized media in full and narrow layouts.
+- [x] 7.5 Re-run the Streamdown 2.5.0 gate against the narrowed text-only contract; the candidate passes base GFM/CJK, incomplete-suffix visibility, stable blocks and hostile input but fails owner-aware Workspace resource projection, so record the renewed no-go without production registration.
+- [x] 7.6 Add deterministic presenter, component, GFM, streaming identity, security, evidence/deliverable placement and no-old-path tests; run focused package typecheck and Webview tests.
+- [ ] 7.7 Use `neko-ui-validation` on the visible Electron Desktop for running, completed, expanded activity, actionable failure/approval, dense GFM, media evidence/deliverable, light/dark and narrow/full layouts. Two authoritative attempts are blocked by stale adjacent scenario assertions before the transcript inventory completes; deterministic DOM/layout coverage passes, but is not substituted for visible evidence.
+- [x] 7.8 Reuse and update `agent-runtime.stream-delivery` for Desktop event-projection evidence; key-free validation passes (44 files / 294 tests, 24 suites / 64 cases), while real-provider visible/hidden execution is infrastructure-blocked because provider, model and cost authorization are unset.
+- [x] 7.9 Run `neko-quality-review`, dependency/OpenSpec gates and adjacent regression checks; focused Webview, Agent Evaluation, package/application/Agent/Webview boundary, strict Agent, legacy debt, unused and OpenSpec gates pass, with UI and smoke blockers recorded fail-visible.
+
+## 8. Active Output Interaction And Scheduling
+
+- [x] 8.1 Record the active-output interaction defect and update proposal, five-layer design, requirements, Evaluation disposition and tasks before implementation.
+- [x] 8.2 Add one Agent Webview streaming-presentation scheduler that preserves every append, establishes the first visible snapshot immediately, bounds intermediate full-source parses and flushes finalization synchronously without another renderer path.
+- [x] 8.3 Keep the active-run composer editable and exact text queue/Stop behavior available while retaining current-Turn configuration locks and explicit unsupported queued-input boundaries.
+- [x] 8.4 Replace Desktop's broad Shell pending presentation with owner-scoped scene, layout, sidebar/catalog and target-selection pending state so unrelated Workbench controls remain interactive.
+- [x] 8.5 Add deterministic scheduler, final-convergence, composer-focus/queue, pending-scope and no-fallback tests; run focused package builds/typechecks and boundary gates.
+- [x] 8.6 Run `neko-ui-validation`, reuse `agent-runtime.stream-delivery` for the unchanged event-projection path, run `neko-quality-review`, and record visible Electron/performance evidence or exact blockers.
+
+## 9. Live And Reopened Turn Projection Parity
+
+- [x] 9.1 Record the reopened-conversation fragmentation defect and define Agent runtime history projection, not Webview adjacent-message grouping, as the canonical owner.
+- [x] 9.2 Segment persisted Pi entries by user turn and project all assistant iterations plus exact Tool results into one ordered assistant `Message` without changing raw transcript authority.
+- [x] 9.3 Add deterministic runtime and Webview tests proving a multi-Tool turn has one activity disclosure and identical final hierarchy before and after reopen, while orphan Tool results remain fail-visible.
+- [x] 9.4 Reuse the existing persistence/resume Agent Evaluation disposition, run focused runtime/Webview validation and `neko-ui-validation`/`neko-quality-review`, and record exact visible-runtime blockers.
+
+## 10. Turn Timing, Ordered Evidence And Thumbnail Interaction
+
+- [x] 10.1 Record the duration/sequence/evidence hierarchy defect and update proposal, five-layer design, requirements, Evaluation disposition and tasks before implementation.
+- [x] 10.2 Project one canonical Turn timing interval from the earliest item `createdAt` through `completion.completedAt` for live and reopened messages; keep the active clock disposable and never sum Tool durations.
+- [x] 10.3 Replace the collapsed process-record title with active/completed elapsed time, move Tool/Thinking counts into expanded secondary metadata, and preserve exact Timeline sequence in the expanded list while keeping approvals/failures always visible.
+- [x] 10.4 Nest ReadImage/document-page evidence under its exact Tool step, keep only generated/saved typed outputs in the post-answer deliverable region, and replace persistent JSON/info thumbnail controls with open plus typed overflow actions.
+- [x] 10.5 Add deterministic runtime/presenter/component tests for timing arithmetic, overlap, original order, live/reopen parity, actionable placement, evidence nesting and thumbnail actions; run focused package validation.
+- [x] 10.6 Replace the legacy execution-status row once a canonical running Turn exists, and compact repeated completed failures for one exact target without hiding their diagnostics.
+- [x] 10.7 Run `neko-ui-validation`, reuse the existing `agent-runtime.stream-delivery` and persistence/resume Agent Evaluation dispositions, run `neko-quality-review`, and record visible-runtime evidence or exact blockers.
+
+## 11. Reusable Rich Surface And Canvas Markdown Nodes
+
+- [x] 11.1 Define the browser-only controlled Milkdown Surface boundary and separate Text Document, Canvas node and media-authority ownership before implementation.
+- [x] 11.2 Extract Milkdown lifecycle, GFM round-trip gating, composition, history and reconciliation into the explicit shared browser entry; keep Text Editor session queue and media projection in its adapter.
+- [x] 11.3 Replace Canvas selection-driven raw textarea editing with compact read-only WYSIWYG presentation and explicit lazy Rich activation for the exact Markdown node.
+- [x] 11.4 Add deterministic shared-surface, Text Editor adapter and Canvas interaction tests, then run focused typechecks and package-boundary gates.
+- [x] 11.5 Run `neko-ui-validation` and `neko-quality-review`; record authoritative visible Desktop evidence or exact blockers without substituting unit tests for visual acceptance.
+  - Visible development Electron evidence: `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T23-31-50.567Z-canvas-openneko-consumer-development/report.json` records the passing `canvas-markdown-node-rich-surface` checkpoint and compact/Rich screenshots. The broader scenario later failed in the pre-existing Generation model-menu assertion because the single model option did not expose an inline provider row; this occurred after the Markdown checkpoint and is not treated as a passing full Canvas scenario.
+  - Quality review found no blocking issue in the shared Surface, Text Editor adapter or Canvas Markdown activation scope; focused lint, tests, typecheck, package roles/boundaries, strict OpenSpec validation and diff hygiene passed.

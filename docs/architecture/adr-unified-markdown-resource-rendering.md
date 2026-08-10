@@ -10,13 +10,16 @@
 
 Workspace Markdown source 是内容 authority。`@neko/markdown` 是 OpenNeko GFM profile、normalized
 semantic contract、source range、annotation、diagnostic、outline/reference 和扩展语义的唯一基础
-owner；它不是用户可见的私有 Markdown 方言，也不拥有 React/DOM 编辑器或展示组件。
+owner；它不是用户可见的私有 Markdown 方言。默认入口保持 host-neutral；显式 browser entry 只拥有
+受控 Milkdown Rich Surface 的可丢弃浏览器生命周期，不拥有调用方文档事实。
 
 不同用户意图使用一个精确的 presentation owner，不共享 renderer，也不得在失败后切换：
 
 | 意图                                     | Presentation owner                     | 约束                                                 |
 | ---------------------------------------- | -------------------------------------- | ---------------------------------------------------- |
-| Markdown Rich 编辑                       | Text Editor Webview / Milkdown         | 只投影 exact Text Document session，不拥有文件       |
+| Markdown Rich 引擎                       | `@neko/markdown/rich-surface` / Milkdown | 只投影 caller-owned source，不拥有文档               |
+| Markdown 文件 Rich 编辑                  | Text Editor Webview adapter            | exact Text Document session 拥有 accepted source     |
+| Canvas Markdown Rich 编辑                | Canvas Webview adapter                 | exact Canvas Markdown node 拥有 inline source        |
 | Markdown Source 与其他文本编辑           | Text Editor Webview / CodeMirror 6     | 完整源码编辑；Milkdown code-block component 不能替代 |
 | Agent text content block                 | Agent Webview / package-local renderer | partial 到 final 使用同一 surface                    |
 | Tool、Approval、Artifact、媒体和领域结果 | owning typed presenter                 | 不进入 Markdown renderer                             |
@@ -28,8 +31,8 @@ authoritative Markdown source/revision
   -> exact surface adapter or domain consumer
 ```
 
-Markdown core 不依赖 Agent、Canvas、Electron、React、DOM、Milkdown、CodeMirror、Streamdown 或
-领域内部实现。Surface engine 的第三方 AST 不跨包暴露；每个 surface 必须通过同一 GFM conformance
+Markdown 默认入口不依赖 Agent、Canvas、Electron、React、DOM、Milkdown、CodeMirror、Streamdown 或
+领域内部实现。浏览器 Rich entry 与默认入口显式隔离。Surface engine 的第三方 AST 不跨包暴露；每个 surface 必须通过同一 GFM conformance
 corpus，但不得把另一个 surface 的 DOM、selection 或 editor transaction 当成内容事实。
 
 ## GFM Profile
@@ -49,6 +52,11 @@ Markdown 内容编辑器使用 `Rich | Source | Split`。Milkdown Rich 与 CodeM
 必须通过同一个 Text Document session/edit sequence 提交和接收 accepted source。Milkdown 内嵌
 CodeMirror 只服务 fenced code block。无法无损保留语义的 Rich construct 必须保持原 source、
 禁用受影响修改并提供 Source 入口；不得在打开文件时迁移或重写。
+
+Text Editor 与 Canvas 复用同一个受控 Milkdown Surface，但不复用业务 Root 或 authority。Text Editor
+adapter 继续拥有 edit-sequence queue、外部冲突和授权媒体 lease；Canvas adapter 只更新 exact `.nkc`
+Markdown node。Canvas 节点默认显示紧凑只读所见所得，普通选中不进入源码输入；只有显式双击激活才
+懒加载 Rich mutation，Escape 或离开选中态即释放该 Surface。
 
 Agent text content 从首个 partial delta 到 final state 只能使用同一个 Agent message renderer。
 Streamdown 2.5.0 已完成候选 spike：完成态 GFM、CJK、sanitize 和 stable block 通过，但 incomplete
@@ -85,7 +93,8 @@ active/recent Canvas，不生成私有 Canvas DTO，也不绕过 revisioned appl
 ## 当前实施状态
 
 `@neko/markdown` 已定义公共 GFM profile、extension declaration、conformance corpus、Rich
-round-trip assessment、outline 和 reference projection。Agent core writer 已使用 freshness/CAS，
+round-trip assessment、outline、reference projection 和显式 browser-only controlled Rich Surface。
+Text Editor 与 Canvas 通过各自 adapter 复用该 Surface，且保留各自 authority。Agent core writer 已使用 freshness/CAS，
 `.nkc`/`.otio` generic-file denial 和 Text Editor external-change watcher 已实施。Markdown Text
 Editor 已使用 lazy Milkdown `Rich | Source | Split`，CodeMirror 继续拥有完整 Source 和其他文本；
 Source 已组合 GFM snippet 与 Workspace mention/resource completion，Rich/Split 已从精确授权投影展示

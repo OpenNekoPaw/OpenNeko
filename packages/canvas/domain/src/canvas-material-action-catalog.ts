@@ -10,6 +10,7 @@ import {
   type CanvasMaterialMediaKind,
   type CanvasMaterialOrigin,
 } from './types/canvas-material-contracts';
+import { selectedCanvasGenerationOutput } from './types/canvas-generation-node';
 import { type CanvasNode } from './types/canvas';
 
 export interface CanvasMaterialActionTarget {
@@ -43,6 +44,23 @@ export function resolveCanvasMaterialActionTargets(
     const node = nodesById.get(nodeId);
     if (!node) {
       throw new Error(`Canvas material action selection references unknown node "${nodeId}".`);
+    }
+    if (node.type === 'generation') {
+      const output = selectedCanvasGenerationOutput(node.data);
+      if (!output || output.kind === 'prompt') return [];
+      const locatorResult = validateContentLocator(output.locator);
+      if (!locatorResult.ok) {
+        throw new Error(
+          `Canvas Generation node "${nodeId}" selected output requires a valid canonical ContentLocator.`,
+        );
+      }
+      targets.push({
+        nodeId,
+        mediaKind: output.kind,
+        origin: 'generated',
+        locator: locatorResult.locator,
+      });
+      continue;
     }
     if (node.type !== 'media' && node.type !== 'file') {
       return [];

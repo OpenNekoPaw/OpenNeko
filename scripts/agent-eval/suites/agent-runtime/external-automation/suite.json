@@ -1,0 +1,80 @@
+{
+  "schema": "neko.agent-eval.suite",
+  "id": "agent-runtime.external-automation",
+  "owner": { "kind": "agent-runtime", "id": "external-automation" },
+  "target": {
+    "kind": "capability",
+    "id": "external-automation",
+    "contractHash": "sha256:831d5b04bb301c2316323d6b2e594409f80ee93f46d56c590ee14b799cbd4e02"
+  },
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "browser-observe-selected-tab",
+      "file": "cases/browser-observe-selected-tab.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "browser-mutation-denied-in-observe-profile",
+      "file": "cases/browser-mutation-denied-in-observe-profile.json",
+      "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "disabled-and-unknown-automation-tools",
+      "file": "cases/disabled-and-unknown-automation-tools.json",
+      "group": "failure",
+      "visibility": "public"
+    },
+    {
+      "id": "computer-observe-selected-window",
+      "file": "cases/computer-observe-selected-window.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "computer-target-routing-fields-rejected",
+      "file": "cases/computer-target-routing-fields-rejected.json",
+      "group": "failure",
+      "visibility": "public"
+    },
+    {
+      "id": "computer-observation-cancelled",
+      "file": "cases/computer-observation-cancelled.json",
+      "group": "workflow",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

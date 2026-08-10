@@ -5,11 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import {
-  applyProjectSelection,
   DesktopProjectCatalogSurface,
   filterAndSortProjectCatalog,
-  reconcileProjectSelection,
-  selectAllProjectIds,
 } from './DesktopProjectManagementSurface';
 import { createDesktopI18n } from './i18n';
 
@@ -20,12 +17,32 @@ describe('Desktop Project Management surfaces', () => {
     document.body.replaceChildren();
   });
 
-  it('selects on click and opens the exact Workspace on double click without an open button', async () => {
+  it('keeps folder authorization as an explicit Project Management action', async () => {
+    const onOpenDirectory = vi.fn();
+    const { container, root } = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        conversations={[]}
+        interactive
+        onDeleteConversations={vi.fn()}
+        onOpen={vi.fn()}
+        onOpenDirectory={onOpenDirectory}
+        onRemove={vi.fn()}
+        projects={[]}
+      />,
+    );
+
+    await act(async () => findButton(container, 'Open folder').click());
+    expect(onOpenDirectory).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+  });
+
+  it('opens the exact Workspace on one native button click without a selection surface', async () => {
     const onOpen = vi.fn();
     const { container, root } = await renderWithI18n(
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={onOpen}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}
@@ -33,20 +50,20 @@ describe('Desktop Project Management surfaces', () => {
       />,
     );
     const projectButton = findButton(container, 'Demo');
+    expect(projectButton.tagName).toBe('BUTTON');
+    expect(projectButton.type).toBe('button');
     await act(async () => projectButton.click());
-    expect(projectButton.getAttribute('aria-pressed')).toBe('true');
-    expect(onOpen).not.toHaveBeenCalled();
-    expect(container.querySelector('button[aria-label="Open project: Demo"]')).toBeNull();
-    expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
-    await act(async () => {
-      projectButton.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, button: 0 }));
-    });
+    expect(projectButton.hasAttribute('aria-pressed')).toBe(false);
     expect(onOpen).toHaveBeenCalledWith('project-1');
     expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.project-management-batch-toolbar')).toBeNull();
+    expect(container.querySelector('button[aria-label="Open project: Demo"]')).toBeNull();
+    expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
     await act(async () => root.unmount());
   });
 
-  it('supports range, modifier, filtered select-all, escape, and keyboard batch removal', async () => {
+  it('does not retain modifier selection, select-all, or keyboard removal paths', async () => {
+    const onOpen = vi.fn();
     const onRemove = vi.fn();
     const projects = [
       project('Alpha', 'project-alpha'),
@@ -57,63 +74,27 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
-        onOpen={vi.fn()}
+        onOpenDirectory={vi.fn()}
+        onOpen={onOpen}
         onDeleteConversations={vi.fn()}
         onRemove={onRemove}
         projects={projects}
       />,
     );
     const list = markup.container.querySelector<HTMLElement>('.management-surface-list');
-    const alpha = findButton(markup.container, 'Alpha');
     const gamma = findButton(markup.container, 'Gamma');
-    await act(async () => alpha.click());
     await act(async () =>
       gamma.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })),
     );
-    expect(markup.container.textContent).toContain('3 selected');
-
-    await act(async () => {
-      list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
-    });
-    expect(markup.container.textContent).not.toContain('selected');
-
-    const search = markup.container.querySelector<HTMLInputElement>('input');
-    if (!search) throw new Error('Project Management search is unavailable.');
-    await act(async () => {
-      setNativeInputValue(search, 'Beta');
-      search.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    expect(onOpen).toHaveBeenCalledWith('project-gamma');
+    expect(markup.container.querySelector('.project-management-batch-toolbar')).toBeNull();
     await act(async () => {
       list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a', metaKey: true }));
-    });
-    expect(markup.container.textContent).toContain('1 selected');
-    await act(async () => {
       list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' }));
     });
-    expect(onRemove).toHaveBeenCalledWith([projects[1]]);
+    expect(onRemove).not.toHaveBeenCalled();
+    expect(markup.container.querySelector('[data-selected]')).toBeNull();
     await act(async () => markup.root.unmount());
-  });
-
-  it('applies deterministic selection updates and removes stale identities', () => {
-    const projects = [
-      project('Alpha', 'alpha'),
-      project('Beta', 'beta'),
-      project('Gamma', 'gamma'),
-    ];
-    const selected = applyProjectSelection({
-      projectIds: projects.map((item) => item.projectId),
-      selectedProjectIds: new Set(['alpha']),
-      anchorId: 'alpha',
-      projectId: 'gamma',
-      toggle: true,
-      range: true,
-    });
-    expect([...selected.selectedProjectIds]).toEqual(['alpha', 'beta', 'gamma']);
-    expect([...selectAllProjectIds(projects.slice(1))]).toEqual(['beta', 'gamma']);
-    expect([...reconcileProjectSelection(selected.selectedProjectIds, projects.slice(1))]).toEqual([
-      'beta',
-      'gamma',
-    ]);
   });
 
   it('sorts the catalog deterministically without creating a Detail surface', () => {
@@ -129,6 +110,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}
@@ -148,7 +130,7 @@ describe('Desktop Project Management surfaces', () => {
     await act(async () => markup.root.unmount());
   });
 
-  it('defaults to list mode and keeps unavailable Workspace fields visible and removable', async () => {
+  it('defaults to grid mode and keeps unavailable Workspace fields visible and removable', async () => {
     const onOpen = vi.fn();
     const onRemove = vi.fn();
     const unavailable = {
@@ -162,6 +144,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={onOpen}
         onDeleteConversations={vi.fn()}
         onRemove={onRemove}
@@ -170,8 +153,13 @@ describe('Desktop Project Management surfaces', () => {
     );
 
     expect(markup.container.querySelector('.management-surface-list')?.className).toContain(
-      'is-list',
+      'is-grid',
     );
+    expect(
+      markup.container.querySelector('.management-surface-list')?.getAttribute('data-view-mode'),
+    ).toBe('grid');
+    expect(findButton(markup.container, 'Grid view').getAttribute('aria-pressed')).toBe('true');
+    expect(findButton(markup.container, 'List view').getAttribute('aria-pressed')).toBe('false');
     expect(markup.container.querySelector('.management-surface-list')).toHaveProperty(
       'tabIndex',
       0,
@@ -193,16 +181,14 @@ describe('Desktop Project Management surfaces', () => {
       'currentLocator: Workspace directory is unavailable.',
     );
     const unavailableProject = findButton(markup.container, 'Demo');
-    expect(unavailableProject.disabled).toBe(false);
+    expect(unavailableProject.disabled).toBe(true);
     expect(
       unavailableProject
         .closest('.management-surface-row')
         ?.getAttribute('data-workspace-open-disabled'),
     ).toBe('true');
     expect(markup.container.querySelector('button[aria-label="Open project: Demo"]')).toBeNull();
-    await act(async () => {
-      unavailableProject.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, button: 0 }));
-    });
+    await act(async () => unavailableProject.click());
     expect(findButton(markup.container, 'Delete Workspace conversations for Demo').disabled).toBe(
       true,
     );
@@ -220,6 +206,7 @@ describe('Desktop Project Management surfaces', () => {
         conversations={[workspaceConversation('conversation-1', demo.workspaceId)]}
         interactive
         onDeleteConversations={onDeleteConversations}
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onRemove={vi.fn()}
         projects={[demo]}
@@ -238,6 +225,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}
@@ -246,22 +234,19 @@ describe('Desktop Project Management surfaces', () => {
     );
     const search = first.container.querySelector<HTMLInputElement>('input');
     const sort = first.container.querySelector<HTMLSelectElement>('select');
-    const viewButtons = first.container.querySelectorAll<HTMLButtonElement>(
-      '.management-surface-toolbar button',
-    );
-    if (!search || !sort || !viewButtons[0]) {
+    if (!search || !sort) {
       throw new Error('Project Management controls are unavailable.');
     }
-    const gridButton = viewButtons[0];
+    const listButton = findButton(first.container, 'List view');
     await act(async () => {
       search.value = 'missing';
       search.dispatchEvent(new Event('input', { bubbles: true }));
       sort.value = 'name-ascending';
       sort.dispatchEvent(new Event('change', { bubbles: true }));
-      gridButton.click();
+      listButton.click();
     });
     expect(first.container.querySelector('.management-surface-list')?.className).toContain(
-      'is-grid',
+      'is-list',
     );
     await act(async () => first.root.unmount());
 
@@ -269,6 +254,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         conversations={[]}
         interactive
+        onOpenDirectory={vi.fn()}
         onOpen={vi.fn()}
         onDeleteConversations={vi.fn()}
         onRemove={vi.fn()}
@@ -280,7 +266,7 @@ describe('Desktop Project Management surfaces', () => {
       'updated-descending',
     );
     expect(restored.container.querySelector('.management-surface-list')?.className).toContain(
-      'is-list',
+      'is-grid',
     );
     await act(async () => restored.root.unmount());
   });
@@ -306,12 +292,6 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   );
   if (!button) throw new Error(`Project Management fixture requires button '${label}'.`);
   return button;
-}
-
-function setNativeInputValue(input: HTMLInputElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  if (!setter) throw new Error('HTML input value setter is unavailable.');
-  setter.call(input, value);
 }
 
 function project(name = 'Demo', projectId = 'project-1') {

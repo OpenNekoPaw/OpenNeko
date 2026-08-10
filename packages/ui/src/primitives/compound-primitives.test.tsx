@@ -182,4 +182,58 @@ describe('@neko/ui compound primitives', () => {
 
     expect(onValueChange).toHaveBeenCalledWith('basic');
   });
+
+  it('supports a neutral wide presentation and keyboard navigation that skips disabled tabs', () => {
+    const onValueChange = vi.fn();
+
+    act(() => {
+      root.render(
+        <SegmentedControl
+          appearance="neutral"
+          density="comfortable"
+          label="Experience"
+          maxWidth={544}
+          value="assistant"
+          onValueChange={onValueChange}
+          options={[
+            { value: 'assistant', label: 'Assistant' },
+            { value: 'workspace', label: 'Workspace' },
+            { value: 'world', label: 'World', disabled: true },
+          ]}
+        />,
+      );
+    });
+
+    const control = host.querySelector<HTMLElement>('.neko-segmented-control');
+    const tabs = host.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    expect(control?.dataset.appearance).toBe('neutral');
+    expect(control?.style.maxWidth).toBe('544px');
+    expect(control?.style.borderStyle).toBe('none');
+    expect(control?.style.boxShadow).toBe('none');
+    expect(
+      control?.querySelector<HTMLElement>('.neko-segmented-control-thumb')?.style.borderStyle,
+    ).toBe('none');
+    expect(tabs[0]?.style.height).toBe('30px');
+
+    const matchesFocusVisible = vi
+      .spyOn(tabs[0] as HTMLButtonElement, 'matches')
+      .mockReturnValue(false);
+    act(() => {
+      tabs[0]?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    expect(tabs[0]?.style.boxShadow).toBe('');
+
+    matchesFocusVisible.mockReturnValue(true);
+    act(() => {
+      tabs[0]?.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      tabs[0]?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    expect(tabs[0]?.style.boxShadow).toContain('var(--neko-focusBorder');
+
+    act(() => {
+      tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+
+    expect(onValueChange).toHaveBeenCalledWith('workspace');
+  });
 });

@@ -3,6 +3,7 @@ import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
 
 import type { PiToolRunIdentity } from './capability-tool-bridge';
 import type { PiTurnDurabilityState } from './node-conversation-authority';
+import type { PiTurnPresentationTiming } from './turn-presentation-timing';
 
 export interface PiProductEventBase {
   readonly identity: PiToolRunIdentity;
@@ -89,6 +90,8 @@ export interface PiProductEventSink {
 
 export class PiEventProjector {
   private terminal = false;
+  private firstItemCreatedAt: number | undefined;
+  private terminalCompletedAt: number | undefined;
 
   constructor(
     private readonly identity: PiToolRunIdentity,
@@ -97,6 +100,17 @@ export class PiEventProjector {
     private readonly resolveToolName: (wireName: string) => string = identityToolName,
   ) {
     validateIdentity(identity);
+  }
+
+  get turnPresentationTiming(): PiTurnPresentationTiming | undefined {
+    if (this.firstItemCreatedAt === undefined || this.terminalCompletedAt === undefined) {
+      return undefined;
+    }
+    return Object.freeze({
+      turnId: this.identity.turnId,
+      startedAt: this.firstItemCreatedAt,
+      completedAt: this.terminalCompletedAt,
+    });
   }
 
   async project(event: AgentEvent): Promise<void> {
@@ -215,9 +229,28 @@ export class PiEventProjector {
   }
 
   private emit(event: PiProductEventPayload): Promise<void> {
-    return Promise.resolve(
-      this.sink.emit({ ...event, identity: this.identity, timestamp: this.now() }),
-    );
+    const timestamp = this.now();
+    this.observePresentationTiming(event, timestamp);
+    return Promise.resolve(this.sink.emit({ ...event, identity: this.identity, timestamp }));
+  }
+
+  private observePresentationTiming(event: PiProductEventPayload, timestamp: number): void {
+    const createsVisibleItem =
+      event.type === 'assistant.text.delta' ||
+      event.type === 'assistant.thinking.delta' ||
+      event.type === 'tool.started' ||
+      event.type === 'turn.failed' ||
+      (event.type === 'assistant.message.completed' && event.message.content.length > 0);
+    if (createsVisibleItem && this.firstItemCreatedAt === undefined) {
+      this.firstItemCreatedAt = timestamp;
+    }
+    if (
+      event.type === 'turn.completed' ||
+      event.type === 'turn.cancelled' ||
+      event.type === 'turn.failed'
+    ) {
+      this.terminalCompletedAt = timestamp;
+    }
   }
 }
 

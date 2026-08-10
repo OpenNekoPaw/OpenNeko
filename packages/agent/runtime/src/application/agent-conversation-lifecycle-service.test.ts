@@ -108,6 +108,36 @@ describe('Agent Conversation lifecycle service', () => {
     );
   });
 
+  it('restores exact generation purpose models before a pending first Turn starts', async () => {
+    const repository = createInMemoryAgentConversationLifecycleRepository();
+    const first = createFixture({ repository });
+    const purposeModels = {
+      'image.generate': {
+        providerId: 'image-provider',
+        modelId: 'image-model',
+        category: 'image' as const,
+      },
+    };
+    const committed = await first.service.firstSubmit({
+      ...assistantInput('request-image'),
+      purposeModels,
+    });
+
+    const replacement = createFixture({ repository });
+    await replacement.service.startProviderExecution(committed.conversationId);
+    await replacement.service.waitForProviderIdle();
+
+    expect(replacement.provider.start).toHaveBeenCalledWith(
+      expect.objectContaining({ purposeModels }),
+    );
+    await expect(
+      replacement.service.readConversation(committed.conversationId),
+    ).resolves.toMatchObject({
+      initialInput: { purposeModels },
+      pendingTurn: { status: 'completed' },
+    });
+  });
+
   it('persists and executes the exact first-input Skill intent without prompt re-parsing', async () => {
     const fixture = createFixture();
     const input = {

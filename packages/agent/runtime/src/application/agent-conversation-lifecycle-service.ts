@@ -5,6 +5,7 @@ import {
   parseAgentConversationConfiguration,
   parseAgentConversationTurnConfigurationSnapshot,
   parseAgentDraftInputIntent,
+  parseAgentFlatPurposeModelRefs,
   parseAgentInputReferenceReceipt,
   parseMessageContextReference,
   parseAgentScratchArtifactRef,
@@ -16,6 +17,7 @@ import {
   type AgentScratchArtifactRef,
   type AgentContextPayload,
   type AgentDraftInputIntent,
+  type AgentFlatPurposeModelRefs,
   type AgentInputReferenceReceipt,
   type Message,
   type MessageContextReference,
@@ -49,6 +51,7 @@ export interface AgentConversationLifecycleRecord {
     readonly references: readonly AgentInputReferenceReceipt[];
     readonly contextReferences: readonly MessageContextReference[];
     readonly resourceGrantIds: readonly string[];
+    readonly purposeModels?: AgentFlatPurposeModelRefs;
   };
   readonly configuration: AgentConversationConfiguration;
   readonly pendingTurn: {
@@ -68,6 +71,7 @@ export interface AgentFirstSubmitInput {
   readonly references: readonly AgentInputReferenceReceipt[];
   readonly contextReferences: readonly MessageContextReference[];
   readonly resourceGrantIds: readonly string[];
+  readonly purposeModels?: AgentFlatPurposeModelRefs;
   readonly configuration: {
     readonly request: AgentConfigurationRequest;
     readonly projection: AgentConfigurationPolicyProjection;
@@ -177,6 +181,7 @@ export interface AgentProviderExecutionPort {
     readonly resourceGrantIds: readonly string[];
     readonly contextPayloads: readonly AgentContextPayload[];
     readonly configuration: AgentConversationTurnConfigurationSnapshot;
+    readonly purposeModels?: AgentFlatPurposeModelRefs;
   }): Promise<void>;
 }
 
@@ -273,6 +278,10 @@ export function createAgentConversationLifecycleService(options: {
       input.resourceGrantIds,
       'Agent first-submit Resource grants',
     );
+    const purposeModels =
+      input.purposeModels === undefined
+        ? undefined
+        : parseAgentFlatPurposeModelRefs(input.purposeModels);
     await options.grants.validate({ context, resourceGrantIds });
     const configurationRequest = parseAgentConfigurationRequest(input.configuration.request);
     const configurationProjection = parseAgentConfigurationPolicyProjection(
@@ -289,6 +298,7 @@ export function createAgentConversationLifecycleService(options: {
         references,
         contextReferences,
         resourceGrantIds,
+        ...(purposeModels === undefined ? {} : { purposeModels }),
         configuration: {
           conversationId: existing.conversationId,
           request: configurationRequest,
@@ -325,6 +335,7 @@ export function createAgentConversationLifecycleService(options: {
         references,
         contextReferences,
         resourceGrantIds,
+        ...(purposeModels === undefined ? {} : { purposeModels }),
       },
       configuration,
       pendingTurn: { requestId, turnId, status: 'pending', configuration: turnConfiguration },
@@ -343,6 +354,7 @@ export function createAgentConversationLifecycleService(options: {
       references,
       contextReferences,
       resourceGrantIds,
+      ...(purposeModels === undefined ? {} : { purposeModels }),
       configuration,
     });
     await options.session.materialize({
@@ -388,6 +400,9 @@ export function createAgentConversationLifecycleService(options: {
         context: exact.context,
         input: exact.initialInput.intent,
         resourceGrantIds: exact.initialInput.resourceGrantIds,
+        ...(exact.initialInput.purposeModels === undefined
+          ? {}
+          : { purposeModels: exact.initialInput.purposeModels }),
         contextPayloads: [...domainContextPayloads, ...resourceContextPayloads],
         configuration: exact.pendingTurn.configuration,
       });
@@ -706,6 +721,9 @@ function cloneRecord(record: AgentConversationLifecycleRecord): AgentConversatio
         ...reference,
       })),
       resourceGrantIds: [...record.initialInput.resourceGrantIds],
+      ...(record.initialInput.purposeModels === undefined
+        ? {}
+        : { purposeModels: structuredClone(record.initialInput.purposeModels) }),
     },
     configuration: structuredClone(record.configuration),
     pendingTurn: structuredClone(record.pendingTurn),
@@ -748,6 +766,7 @@ function assertSameFirstSubmit(
     readonly references: readonly AgentInputReferenceReceipt[];
     readonly contextReferences: readonly MessageContextReference[];
     readonly resourceGrantIds: readonly string[];
+    readonly purposeModels?: AgentFlatPurposeModelRefs;
     readonly configuration: AgentConversationLifecycleRecord['configuration'];
   },
 ): void {
@@ -759,6 +778,7 @@ function assertSameFirstSubmit(
       JSON.stringify(input.contextReferences) ||
     JSON.stringify(record.initialInput.resourceGrantIds) !==
       JSON.stringify(input.resourceGrantIds) ||
+    JSON.stringify(record.initialInput.purposeModels) !== JSON.stringify(input.purposeModels) ||
     JSON.stringify(record.configuration) !== JSON.stringify(input.configuration)
   ) {
     throw new Error(

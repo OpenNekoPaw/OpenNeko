@@ -3,12 +3,18 @@ export type AutomationMode = 'observe' | 'browse-read' | 'interact';
 export type AutomationPermission = 'screen-recording' | 'accessibility' | 'input-control';
 export type AutomationSessionStatus = 'active' | 'paused' | 'stopped' | 'taken-over';
 
+export type AutomationProviderDeliverySource =
+  | { readonly kind: 'github-release' }
+  | { readonly kind: 'official-download' }
+  | { readonly kind: 'user-managed-endpoint'; readonly endpointId: string };
+
 export interface AutomationProviderIdentity {
   readonly extensionId: string;
   readonly providerId: string;
   readonly kind: AutomationProviderKind;
   /** Third-party release identity qualified with the extension artifact. */
   readonly upstreamRelease: string;
+  readonly deliverySource: AutomationProviderDeliverySource;
 }
 
 export interface AutomationActionTrait {
@@ -197,7 +203,7 @@ export function parseAutomationProfile(value: unknown): AutomationProfile {
   const requiredPermissions = parseRequiredPermissions(record['requiredPermissions']);
   return {
     id: identity(record['id'], 'Automation profile'),
-    provider: parseProviderIdentity(record['provider']),
+    provider: parseAutomationProviderIdentity(record['provider']),
     operations,
     requiredPermissions,
   };
@@ -235,7 +241,7 @@ export function parseAutomationProviderInspection(value: unknown): AutomationPro
     operations.map((operation) => operation.name),
     'Automation provider operations',
   );
-  return { provider: parseProviderIdentity(record['provider']), operations };
+  return { provider: parseAutomationProviderIdentity(record['provider']), operations };
 }
 
 export function parseAutomationSessionRequest(value: unknown): AutomationSessionRequest {
@@ -328,10 +334,10 @@ function sameOrderedStrings(left: readonly string[], right: readonly string[]): 
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function parseProviderIdentity(value: unknown): AutomationProviderIdentity {
+export function parseAutomationProviderIdentity(value: unknown): AutomationProviderIdentity {
   const record = exactRecord(
     value,
-    ['extensionId', 'providerId', 'kind', 'upstreamRelease'],
+    ['extensionId', 'providerId', 'kind', 'upstreamRelease', 'deliverySource'],
     'Automation provider identity',
   );
   const kind = record['kind'];
@@ -342,7 +348,33 @@ function parseProviderIdentity(value: unknown): AutomationProviderIdentity {
     providerId: identity(record['providerId'], 'Automation provider'),
     kind,
     upstreamRelease: nonEmptyString(record['upstreamRelease'], 'Automation upstream release'),
+    deliverySource: parseProviderDeliverySource(record['deliverySource']),
   };
+}
+
+function parseProviderDeliverySource(value: unknown): AutomationProviderDeliverySource {
+  const source = recordValue(value, 'Automation provider delivery source');
+  switch (source['kind']) {
+    case 'github-release':
+      exactRecord(source, ['kind'], 'Automation provider delivery source');
+      return { kind: 'github-release' };
+    case 'official-download':
+      exactRecord(source, ['kind'], 'Automation provider delivery source');
+      return { kind: 'official-download' };
+    case 'user-managed-endpoint': {
+      const endpoint = exactRecord(
+        source,
+        ['kind', 'endpointId'],
+        'Automation provider delivery source',
+      );
+      return {
+        kind: 'user-managed-endpoint',
+        endpointId: identity(endpoint['endpointId'], 'Automation endpoint'),
+      };
+    }
+    default:
+      throw new Error('Automation provider delivery source is invalid.');
+  }
 }
 
 function parseReviewedOperation(value: unknown): AutomationReviewedOperation {
@@ -429,7 +461,7 @@ export function parseAutomationSessionGrant(value: unknown): AutomationSessionGr
     sessionId: identity(record['sessionId'], 'Automation session'),
     extensionId: identity(record['extensionId'], 'Automation extension'),
     profileId: identity(record['profileId'], 'Automation profile'),
-    provider: parseProviderIdentity(record['provider']),
+    provider: parseAutomationProviderIdentity(record['provider']),
     target: parseAutomationTarget(record['target']),
     mode: mode(record['mode']),
     timeoutMs: positiveInteger(record['timeoutMs'], 'Automation timeout'),

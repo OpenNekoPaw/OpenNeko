@@ -672,7 +672,14 @@ describe('PiConversationRuntime', () => {
           }),
         ],
       }),
-      expect.objectContaining({ role: 'assistant', content: 'context read' }),
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'context read',
+        turnTiming: {
+          startedAt: expect.any(Number),
+          completedAt: expect.any(Number),
+        },
+      }),
     ]);
     runtime.dispose();
   });

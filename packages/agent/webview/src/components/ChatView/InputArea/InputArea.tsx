@@ -101,13 +101,18 @@ interface InputAreaProps {
   composerMenuState?: ComposerMenuState;
   onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   disabled?: boolean;
+  submissionBlockedReason?: string;
+  draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  showDraftWorkspaceControl?: boolean;
+  draftTargetSelectionPending?: boolean;
+  onDraftWorkspaceTargetChange?: (
+    target: AgentComposerWorkspaceTarget | undefined,
+  ) => Promise<void>;
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
-  draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
-  onDraftWorkspaceTargetChange?: (target: AgentComposerWorkspaceTarget | undefined) => void;
   onDraftCharacterTargetSelect?: (
     binding: Extract<AgentDomainBinding, { readonly kind: 'character' }>,
   ) => Promise<void>;
@@ -216,11 +221,14 @@ export function InputArea({
   composerMenuState: controlledComposerMenuState,
   onComposerMenuStateChange,
   disabled = false,
+  submissionBlockedReason,
+  draftWorkspaceTarget,
+  showDraftWorkspaceControl = false,
+  draftTargetSelectionPending = false,
+  onDraftWorkspaceTargetChange,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
-  draftWorkspaceTarget,
-  onDraftWorkspaceTargetChange,
   onDraftCharacterTargetSelect,
   selectedCharacterLaunches = [],
   onRemoveCharacterLaunch,
@@ -933,8 +941,10 @@ export function InputArea({
     configurationPolicy,
     currentSessionMediaModelCount,
     compactControls: composerPresentation === 'compact',
+    submissionBlocked: submissionBlockedReason !== undefined,
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
+  const attachmentInputDisabled = disabled || isRunActive;
   return (
     <div className="flex-shrink-0">
       {/* ── Suggestion chips — float above border-t, at bottom of message list ── */}
@@ -1067,6 +1077,12 @@ export function InputArea({
             />
           </div>
 
+          {submissionBlockedReason ? (
+            <p className="agent-composer-validation" role="status">
+              {submissionBlockedReason}
+            </p>
+          ) : null}
+
           {/* ── Bottom bar: utilities + execution mode + send ── */}
           <div className="agent-composer-toolbar">
             {/* Attachment button */}
@@ -1081,8 +1097,11 @@ export function InputArea({
                 }
                 fileInputRef.current?.click();
               }}
+              disabled={attachmentInputDisabled}
               className="agent-composer-tool-button"
-              title={t('chat.input.attach')}
+              title={
+                isRunActive ? t('chat.input.attachUnavailableWhileRunning') : t('chat.input.attach')
+              }
             >
               <PlusIcon className="w-4 h-4" />
             </button>
@@ -1093,10 +1112,11 @@ export function InputArea({
               accept="image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml"
               className="hidden"
               onChange={handleFileSelect}
-              disabled={onAuthorizeResource !== undefined}
+              disabled={attachmentInputDisabled || onAuthorizeResource !== undefined}
             />
 
             {composerWorkspace &&
+            (composerWorkspace.kind === 'workspace' || showDraftWorkspaceControl) &&
             (presentation === 'entry' || composerPresentation === 'default') ? (
               <div
                 className="agent-composer-workspace"
@@ -1112,7 +1132,7 @@ export function InputArea({
                     <button
                       type="button"
                       className="agent-composer-workspace-button"
-                      disabled={composerWorkspace.disabled}
+                      disabled={composerWorkspace.disabled || draftTargetSelectionPending}
                       onClick={() => setWorkspaceMenuOpen((open) => !open)}
                       aria-expanded={workspaceMenuOpen}
                     >
@@ -1123,7 +1143,8 @@ export function InputArea({
                         type="button"
                         className="agent-composer-workspace-clear"
                         title={t('chat.input.workspace.clear')}
-                        onClick={() => onDraftWorkspaceTargetChange?.(undefined)}
+                        disabled={draftTargetSelectionPending}
+                        onClick={() => void onDraftWorkspaceTargetChange?.(undefined)}
                       >
                         <CloseIcon size={12} />
                       </button>
@@ -1135,12 +1156,12 @@ export function InputArea({
                             key={project.projectId}
                             type="button"
                             role="menuitem"
-                            disabled={project.disabled}
+                            disabled={project.disabled || draftTargetSelectionPending}
                             onClick={() => {
                               void composerWorkspace
                                 .onSelectProject(project.projectId)
                                 .then((target) => {
-                                  if (target) onDraftWorkspaceTargetChange?.(target);
+                                  if (target) void onDraftWorkspaceTargetChange?.(target);
                                   setWorkspaceMenuOpen(false);
                                 });
                             }}
@@ -1151,9 +1172,10 @@ export function InputArea({
                         <button
                           type="button"
                           role="menuitem"
+                          disabled={composerWorkspace.disabled || draftTargetSelectionPending}
                           onClick={() => {
                             void composerWorkspace.onChooseDirectory().then((target) => {
-                              if (target) onDraftWorkspaceTargetChange?.(target);
+                              if (target) void onDraftWorkspaceTargetChange?.(target);
                               setWorkspaceMenuOpen(false);
                             });
                           }}
@@ -1254,8 +1276,8 @@ export function InputArea({
                       ? 'agent-composer-send'
                       : 'bg-[var(--agent-control-muted-bg)] text-[var(--neko-descriptionForeground)]'
                 }`}
-                title={t(inputAreaProjection.sendTitleKey)}
-                aria-label={t(inputAreaProjection.sendTitleKey)}
+                title={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
+                aria-label={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
               >
                 <SendIcon className="w-3.5 h-3.5" />
               </button>
@@ -1283,8 +1305,12 @@ export function InputArea({
 
 function resizeTextarea(textarea: HTMLTextAreaElement, value: string): void {
   textarea.style.height = 'auto';
-  if (value.length > 0) {
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+  delete textarea.dataset.overflowing;
+  if (value.length === 0) return;
+
+  textarea.style.height = `${textarea.scrollHeight}px`;
+  if (textarea.scrollHeight > textarea.clientHeight) {
+    textarea.dataset.overflowing = 'true';
   }
 }
 

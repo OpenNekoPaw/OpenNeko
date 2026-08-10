@@ -1,0 +1,117 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "browser-observe-selected-tab",
+  "suiteId": "agent-runtime.external-automation",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "external-tool",
+    "protected": true,
+    "lifecycleChecks": ["graceful-close"]
+  },
+  "evidenceContract": {
+    "userBehavior": "Select the exact Browser evaluation tab in the visible Desktop and observe its real viewport through the reviewed Browser Use screenshot Tool.",
+    "canonicalPath": [
+      "visible Desktop Agent composer",
+      "Pi agent.main Tool call",
+      "explicit Browser target selector",
+      "browser-use.observe profile",
+      "qualified Browser Use 0.13.7 MCP operation",
+      "transient screenshot receipt",
+      "terminal Tool result projection"
+    ],
+    "observables": [
+      {
+        "ref": "browser-observe-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Tool name and arguments, selected target label, observe profile, terminal session result, screenshot receipt, Timeline result, and forbidden raw upstream Tools.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The selected OpenNeko Evaluation Browser tab is observed once through browser-use.observe and the Agent receives transient screenshot evidence without raw bytes.",
+    "expectedFailure": "Implicit active-tab routing, a different provider/profile, raw browser_exec access, missing screenshot receipt, or fabricated observation fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "Use automation_browser-use_browser_screenshot exactly once with arguments {\"full_page\":false}, timeoutMs 30000, and stepBudget 1. In the visible selector choose only the tab labelled OpenNeko Evaluation Browser. Base the answer on the returned evidence and finish with BROWSER_OBSERVE_OK. Do not call browser_exec or retry_with_browser_use_agent."
+    },
+    {
+      "id": "approve",
+      "kind": "confirm",
+      "afterStepId": "submit",
+      "toolName": "automation_browser-use_browser_screenshot",
+      "approved": true,
+      "timeoutMs": 120000
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "browser-tool",
+      "kind": "tool-call",
+      "name": "automation_browser-use_browser_screenshot",
+      "status": "success",
+      "expectedArguments": {
+        "arguments": { "full_page": false },
+        "timeoutMs": 30000,
+        "stepBudget": 1
+      },
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "browser-result",
+      "kind": "automation-tool-result",
+      "name": "automation_browser-use_browser_screenshot",
+      "profileId": "browser-use.observe",
+      "targetLabel": "OpenNeko Evaluation Browser",
+      "mode": "observe",
+      "sessionStatus": "active",
+      "remainingSteps": 0,
+      "requiredEvidenceKinds": ["text", "structured", "transient-image"],
+      "observationTransport": "transient-receipt",
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "browser-timeline",
+      "kind": "timeline-projection",
+      "terminalStatus": "completed",
+      "toolName": "automation_browser-use_browser_screenshot",
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "no-browser-exec",
+      "kind": "tool-call",
+      "name": "browser_exec",
+      "status": "absent",
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "no-browser-agent-fallback",
+      "kind": "tool-call",
+      "name": "retry_with_browser_use_agent",
+      "status": "absent",
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["BROWSER_OBSERVE_OK"],
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "browser-observe-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+}

@@ -31,6 +31,7 @@ const translations: Record<string, string> = {
   'chat.input.entryPlaceholder': '描述你想要完成的内容...',
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
   'chat.input.attach': '添加附件',
+  'chat.input.attachUnavailableWhileRunning': '当前回复结束后可添加附件',
   'chat.input.attachFile': '添加附件',
   'chat.input.workspace.label': '工作目录',
   'chat.input.workspace.openProject': '打开项目',
@@ -560,7 +561,7 @@ describe('InputArea composer controls', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
-  it('resets the textarea height when a sent draft is cleared programmatically', () => {
+  it('grows the textarea with content and marks only capped content as overflowing', () => {
     const props = {
       isThinking: false,
       onInputChange: vi.fn(),
@@ -572,9 +573,34 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
-    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 180 });
+    let scrollHeight = 88;
+    let clientHeight = 88;
+    Object.defineProperty(textarea, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+    Object.defineProperty(textarea, 'clientHeight', {
+      configurable: true,
+      get: () => clientHeight,
+    });
+
     fireEvent.change(textarea, { target: { value: 'line one\nline two\nline three' } });
-    expect(textarea.style.height).toBe('120px');
+    expect(textarea.style.height).toBe('88px');
+    expect(textarea.dataset.overflowing).toBeUndefined();
+
+    scrollHeight = 360;
+    clientHeight = 240;
+    fireEvent.change(textarea, {
+      target: { value: Array.from({ length: 20 }, () => 'line').join('\n') },
+    });
+    expect(textarea.style.height).toBe('360px');
+    expect(textarea.dataset.overflowing).toBe('true');
+
+    scrollHeight = 68;
+    clientHeight = 68;
+    fireEvent.change(textarea, { target: { value: 'short again' } });
+    expect(textarea.style.height).toBe('68px');
+    expect(textarea.dataset.overflowing).toBeUndefined();
 
     rerender(
       <Harness>
@@ -583,6 +609,31 @@ describe('InputArea composer controls', () => {
     );
 
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('auto');
+  });
+
+  it('applies the same bounded measurement when a controlled long draft is restored', () => {
+    const props = {
+      isThinking: false,
+      onInputChange: vi.fn(),
+      onSend: vi.fn(),
+    };
+    const { rerender } = render(
+      <Harness>
+        <InputArea {...props} inputValue="" />
+      </Harness>,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 320 });
+    Object.defineProperty(textarea, 'clientHeight', { configurable: true, value: 240 });
+
+    rerender(
+      <Harness>
+        <InputArea {...props} inputValue="restored long draft" />
+      </Harness>,
+    );
+
+    expect(textarea.style.height).toBe('320px');
+    expect(textarea.dataset.overflowing).toBe('true');
   });
 
   it('focuses only when the owning Tab focus request changes', () => {
@@ -725,6 +776,46 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
   });
 
+  it('selects an exact Workspace target from the Entry composer', async () => {
+    const target = {
+      label: 'OpenNeko',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+      },
+    };
+    const onSelectProject = vi.fn(async () => target);
+    const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
+    render(
+      <Harness
+        composerWorkspace={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject,
+        }}
+      >
+        <InputArea
+          presentation="entry"
+          inputValue="preserved"
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          showDraftWorkspaceControl
+          onDraftWorkspaceTargetChange={onDraftWorkspaceTargetChange}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'OpenNeko' }));
+
+    await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
+    expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(target);
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
+  });
+
   it('keeps command and Skill discovery available in the Entry composer', () => {
     render(
       <Harness
@@ -745,7 +836,7 @@ describe('InputArea composer controls', () => {
     const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
     expect(within(modeGroup).getByRole('button', { name: '配置模型' })).toBeTruthy();
     expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '审批' })).toBeNull();
+    expect(screen.getByRole('button', { name: '审批' })).toBeTruthy();
     expect(screen.queryByTitle('命令')).toBeNull();
     expect(screen.queryByTitle('技能')).toBeNull();
     expect(screen.queryByTitle('chat.usage.clickToCompress')).toBeNull();
@@ -753,43 +844,26 @@ describe('InputArea composer controls', () => {
     expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('描述你想要完成的内容...');
   });
 
-  it('keeps Entry Workspace target selection in the package-owned composer', async () => {
-    const target = {
-      label: 'OpenNeko',
-      context: {
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'workspace-grant-1',
-      },
-    };
-    const onSelectProject = vi.fn().mockResolvedValue(target);
-    const onTargetChange = vi.fn();
+  it('keeps the Entry textarea editable while a prerequisite blocks only send', () => {
     render(
-      <Harness
-        composerWorkspace={{
-          kind: 'entry',
-          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
-          onChooseDirectory: vi.fn().mockResolvedValue(undefined),
-          onSelectProject,
-        }}
-      >
+      <Harness>
         <InputArea
           presentation="entry"
-          inputValue=""
+          inputValue="keep editing"
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
-          onDraftWorkspaceTargetChange={onTargetChange}
+          submissionBlockedReason="请选择项目或已授权目录。"
         />
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'OpenNeko' }));
-
-    await waitFor(() => expect(onTargetChange).toHaveBeenCalledWith(target));
-    expect(onSelectProject).toHaveBeenCalledWith('project-1');
-    expect(screen.queryByRole('button', { name: 'chat.emptyState.entry.startChat' })).toBeNull();
+    expect(screen.getByRole('textbox')).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: '请选择项目或已授权目录。' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('status').textContent).toBe('请选择项目或已授权目录。');
   });
 
   it('keeps unbound Entry @ discovery local and closes its empty menu with Escape', () => {
@@ -1803,6 +1877,12 @@ describe('InputArea composer controls', () => {
 
     const textarea = screen.getByPlaceholderText('正在回答... 2 条排队消息待处理');
     expect(textarea).toBeTruthy();
+    expect((textarea as HTMLTextAreaElement).disabled).toBe(false);
+    (textarea as HTMLTextAreaElement).focus();
+    expect(document.activeElement).toBe(textarea);
+    expect((screen.getByTitle('当前回复结束后可添加附件') as HTMLButtonElement).disabled).toBe(
+      true,
+    );
     expect(screen.getByTitle('取消 (Esc)').className).toContain('agent-composer-stop');
     expect(document.querySelector('.agent-composer-queue-count')).toBeNull();
     const queuePanel = document.querySelector('.agent-composer-queue-panel');

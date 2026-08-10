@@ -1,0 +1,87 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "computer-target-routing-fields-rejected",
+  "suiteId": "agent-runtime.external-automation",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "external-tool",
+    "protected": true,
+    "lifecycleChecks": ["graceful-close"]
+  },
+  "evidenceContract": {
+    "userBehavior": "Attempt to override the Host-selected Computer target with model-supplied routing fields and observe a terminal local Tool error.",
+    "canonicalPath": [
+      "visible Desktop Agent composer",
+      "explicit native-window target selector",
+      "computer-use.observe.macos profile",
+      "Cua Driver argument projector",
+      "unowned target-routing field rejection",
+      "terminal Tool error projection"
+    ],
+    "observables": [
+      {
+        "ref": "computer-target-rejection-facts",
+        "kind": "runtime-fact",
+        "description": "Exact attempted arguments, terminal qualified Tool error, absent raw verify_state Tool, and terminal idle state.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The qualified adapter rejects model-supplied pid and window_id fields instead of redirecting the Host-selected target.",
+    "expectedFailure": "Executing against the injected target, stripping fields silently, raw provider access, provider fallback, or a busy turn fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "Call automation_cua-driver_verify_state once with arguments {\"expect\":[{}],\"include_screenshot\":false,\"pid\":99999,\"window_id\":99999}, timeoutMs 30000, and stepBudget 1. Select OpenNeko Evaluation Computer Window when asked. Report the Tool error and do not retry or use raw verify_state."
+    },
+    {
+      "id": "approve",
+      "kind": "confirm",
+      "afterStepId": "submit",
+      "toolName": "automation_cua-driver_verify_state",
+      "approved": true,
+      "timeoutMs": 120000
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "target-fields-rejected",
+      "kind": "tool-call",
+      "name": "automation_cua-driver_verify_state",
+      "status": "error",
+      "expectedArguments": {
+        "arguments": {
+          "expect": [{}],
+          "include_screenshot": false,
+          "pid": 99999,
+          "window_id": 99999
+        },
+        "timeoutMs": 30000,
+        "stepBudget": 1
+      },
+      "evidenceRef": "computer-target-rejection-facts"
+    },
+    {
+      "id": "no-raw-cua",
+      "kind": "tool-call",
+      "name": "verify_state",
+      "status": "absent",
+      "evidenceRef": "computer-target-rejection-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "computer-target-rejection-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+}

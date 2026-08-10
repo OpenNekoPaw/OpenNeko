@@ -241,12 +241,34 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
 
       await clickApplicationNavigation(evaluate, click, 2);
       await waitForSelector('.agent-extension-management-root');
-      const extensions = await inspectWorkbench(evaluate, 'management', 'extension-management');
-      assertManagementMain(extensions, 'extension-management');
-      assertSharedManagementPanel(extensions, 'extension-management');
-      assertBoundedManagement(extensions, 'extension-management');
-      const extensionsScreenshot = await screenshot('extension-management-main-large');
-      checkpoint('extension-management-main-large', extensions);
+      const extensionsGrid = await inspectExtensionsManagement(evaluate);
+      assertExtensionsCatalogOnly(extensionsGrid, 'grid', 'skills');
+      const extensionsGridScreenshot = await screenshot('extension-management-skills-grid-large');
+      checkpoint('extension-management-skills-grid-large', extensionsGrid);
+
+      await click('[data-catalog-view-control="list"]');
+      await waitForSelector('.agent-extension-management-root[data-catalog-view="list"]');
+      const extensionsList = await inspectExtensionsManagement(evaluate);
+      assertExtensionsCatalogOnly(extensionsList, 'list', 'skills');
+      const extensionsListScreenshot = await screenshot('extension-management-skills-list-large');
+      checkpoint('extension-management-skills-list-large', extensionsList);
+
+      await click('[data-extension-catalog-tab="extensions"]');
+      await click('.agent-extension-management-root [role="option"]');
+      await waitForSelector('[data-workbench-main-panel="extension-detail"]');
+      await waitForSelector('[data-automation-endpoint-management="true"]');
+      await waitForSelector('[data-automation-permission-management="true"]');
+      const extensionsConfiguration = await inspectExtensionsManagement(evaluate);
+      assertExtensionsManagement(extensionsConfiguration, 'list', 'extensions');
+      const extensionsResize = await exerciseManagementMainSplit(evaluate, drag);
+      const extensionsScreenshot = await screenshot('extension-management-configuration-large');
+      const extensions = {
+        grid: extensionsGrid,
+        list: extensionsList,
+        configuration: extensionsConfiguration,
+        resize: extensionsResize,
+      };
+      checkpoint('extension-management-configuration-large', extensions);
 
       await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('.project-management-catalog');
@@ -386,34 +408,27 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await waitForSelector(
         `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row`,
       );
-      await click(
-        `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row__select`,
-      );
-      await waitForSelector(
-        `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row[data-selected="true"]`,
-      );
-      const projectSelection = await inspectWorkbench(evaluate, 'management', 'project-management');
-      assertSharedManagementPanel(projectSelection, 'project-management');
+      const projectCatalog = await inspectWorkbench(evaluate, 'management', 'project-management');
+      assertSharedManagementPanel(projectCatalog, 'project-management');
       if (
-        projectSelection.projectDetailInSecondary ||
-        projectSelection.mainPanelIds.includes('project-detail') ||
-        projectSelection.projectRowActionCount !== 2 ||
-        !projectSelection.projectDoubleClickTargetVisible
+        projectCatalog.projectDetailInSecondary ||
+        projectCatalog.mainPanelIds.includes('project-detail') ||
+        projectCatalog.projectRowActionCount !== 2 ||
+        !projectCatalog.projectOpenTargetVisible ||
+        projectCatalog.projectCatalogViewMode !== 'grid'
       ) {
-        throw new Error(
-          'Project selection reserved a sparse Detail shell or lost double-click open.',
-        );
+        throw new Error('Project catalog lost its direct-open grid presentation.');
       }
-      const projectSelectionScreenshot = await screenshot('project-management-selected-large');
-      checkpoint('project-management-selected-large', projectSelection);
+      const projectCatalogScreenshot = await screenshot('project-management-grid-large');
+      checkpoint('project-management-grid-large', projectCatalog);
 
-      await doubleClickProjectCatalogItem(evaluate, workspaceActivation.projectId);
+      await openProjectCatalogItem(evaluate, workspaceActivation.projectId);
       await waitForSelector('.desktop-scene-workbench--workspace');
-      const catalogDoubleClickRestore = await inspectExactWorkspace(
+      const catalogDirectRestore = await inspectExactWorkspace(
         evaluate,
         workspaceActivation.workspaceId,
       );
-      checkpoint('project-management-double-click-exact-restore', catalogDoubleClickRestore);
+      checkpoint('project-management-direct-open-exact-restore', catalogDirectRestore);
 
       await waitForNavigationButton(evaluate, 1);
       await clickApplicationNavigation(evaluate, click, 1);
@@ -595,7 +610,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           assets,
           extensions,
           projects,
-          projectSelection,
+          projectCatalog,
           settings,
           workspace,
           workspacePreview,
@@ -610,10 +625,12 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           smallAgentScreenshot,
           assetsScreenshot,
           assetPreviewScreenshot,
+          extensionsGridScreenshot,
+          extensionsListScreenshot,
           extensionsScreenshot,
           projectsScreenshot,
           settingsScreenshot,
-          projectSelectionScreenshot,
+          projectCatalogScreenshot,
           workspaceScreenshot,
           workspaceMention.screenshot,
           workspacePreviewScreenshot,
@@ -1136,7 +1153,7 @@ export const desktopWorkspaceResizeScenario = Object.freeze({
     assertWorkspacePanelHeaderAlignment(panelHeaderAlignment);
     const workspaceScreenshot = await screenshot('workspace-resized-shell-chrome');
     const displayModes = await exerciseWorkspaceDisplayModes(evaluate, click, screenshot);
-    const cutTabs = await exerciseCutTabAdd(evaluate, click, screenshot);
+    const cutTabs = await exerciseCutTabAdd(evaluate, click, pressKey, screenshot);
     const evidence = {
       workspaceActivation,
       workspaceDockResize,
@@ -2147,9 +2164,7 @@ async function exerciseProjectConversationGroups({
       const root = document.querySelector('.project-management-catalog');
       const rows = [...(root?.querySelectorAll('.management-surface-row') ?? [])];
       const retainedProject = rows.find((row) =>
-        row.querySelector('.management-surface-row__select')?.getAttribute('aria-label')?.includes(
-          ${JSON.stringify(cleanup.projectId)},
-        ),
+        row.getAttribute('data-project-id') === ${JSON.stringify(cleanup.projectId)},
       ) ?? rows[0];
       const actions = retainedProject?.querySelectorAll(
         '.management-surface-row-actions button',
@@ -2417,21 +2432,16 @@ async function openProjectWorkspace(evaluate, projectId) {
   );
 }
 
-async function doubleClickProjectCatalogItem(evaluate, projectId) {
+async function openProjectCatalogItem(evaluate, projectId) {
   await evaluate(`(() => {
     const row = [...document.querySelectorAll('.project-management-catalog .management-surface-row')]
       .find((candidate) => candidate instanceof HTMLElement &&
         candidate.dataset.projectId === ${JSON.stringify(projectId)});
-    const target = row?.querySelector('.management-surface-row__select');
+    const target = row?.querySelector('.management-surface-row__open');
     if (!(target instanceof HTMLButtonElement) || target.disabled) {
-      throw new Error('Exact Project catalog item is unavailable for double-click open.');
+      throw new Error('Exact Project catalog item is unavailable for direct open.');
     }
-    target.dispatchEvent(new MouseEvent('dblclick', {
-      bubbles: true,
-      button: 0,
-      detail: 2,
-      view: window,
-    }));
+    target.click();
     return true;
   })()`);
 }
@@ -4053,18 +4063,19 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
       region: 'agent',
       mode: 'main-only',
       pressed: false,
-      selectedRegions: ['main', 'management'],
+      selectedRegions: ['creative-panels', 'management'],
     },
     {
       label: 'agent-restored',
       region: 'agent',
       mode: 'chat-main',
       pressed: true,
-      selectedRegions: ['agent', 'main', 'management'],
+      selectedRegions: ['agent', 'creative-panels', 'management'],
     },
     {
       label: 'main-hidden',
       region: 'main',
+      option: 'main',
       mode: 'chat-only',
       pressed: false,
       selectedRegions: ['agent', 'management'],
@@ -4072,30 +4083,37 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
     {
       label: 'main-restored',
       region: 'main',
+      option: 'main',
       mode: 'chat-main',
       pressed: true,
-      selectedRegions: ['agent', 'main', 'management'],
+      selectedRegions: ['agent', 'creative-panels', 'management'],
     },
     {
       label: 'management-hidden',
       region: 'management',
       resources: 'hidden',
       pressed: false,
-      selectedRegions: ['agent', 'main'],
+      selectedRegions: ['agent', 'creative-panels'],
     },
     {
       label: 'management-restored',
       region: 'management',
       resources: 'docked',
       pressed: true,
-      selectedRegions: ['agent', 'main', 'management'],
+      selectedRegions: ['agent', 'creative-panels', 'management'],
     },
   ];
   const states = [];
   const screenshots = [];
   for (const expected of cases) {
-    const selector = `[data-workbench-region-control="${expected.region}"]`;
-    await waitForWorkspaceRegionControl(evaluate, expected.region);
+    const selector = expected.option
+      ? `[data-workbench-region-option="${expected.option}"]`
+      : `[data-workbench-region-control="${expected.region}"]`;
+    if (expected.option) {
+      await openWorkspaceCreativePanels(evaluate, click);
+    } else {
+      await waitForWorkspaceRegionControl(evaluate, expected.region);
+    }
     await click(selector);
     await waitForCondition(
       evaluate,
@@ -4106,7 +4124,7 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
         const control = document.querySelector(${JSON.stringify(selector)});
         return ${expected.mode ? `workbench.display.mode === ${JSON.stringify(expected.mode)}` : 'true'} &&
           ${expected.resources ? `workbench.resourceDock.presentation === ${JSON.stringify(expected.resources)}` : 'true'} &&
-          control?.getAttribute('aria-pressed') === ${JSON.stringify(String(expected.pressed))};
+          control?.getAttribute(${JSON.stringify(expected.option ? 'aria-checked' : 'aria-pressed')}) === ${JSON.stringify(String(expected.pressed))};
       })()`,
       `Workspace region '${expected.region}' did not commit its presentation.`,
     );
@@ -4127,7 +4145,7 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
           resources: workbench.resourceDock.presentation,
           hasAgent: Boolean(document.querySelector('[data-dock-owner="agent"], [data-primary-surface="agent"]')),
           hasMain: Boolean(document.querySelector('[data-main-view-id]')),
-          pressed: control?.getAttribute('aria-pressed') === 'true',
+          pressed: control?.getAttribute(${JSON.stringify(expected.option ? 'aria-checked' : 'aria-pressed')}) === 'true',
           selectedRegions: [...document.querySelectorAll(
             '.workspace-region-controls [data-workbench-region-control][aria-pressed="true"]',
           )].map((element) => element.getAttribute('data-workbench-region-control')),
@@ -4156,15 +4174,16 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
     states.push(state);
     screenshots.push(await screenshot(`workspace-layout-${expected.label}`));
   }
+  await openWorkspaceCreativePanels(evaluate, click);
   const cutPanel = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('projection')}
-    const control = document.querySelector('[data-workbench-region-control="cut-panel"]');
+    const control = document.querySelector('[data-workbench-region-option="cut-panel"]');
     const workbench = activeWorkbench.layout;
     return {
       hasCutPanel: Boolean(workbench.cutPanel),
       disabled: control instanceof HTMLButtonElement && control.disabled,
-      pressed: control?.getAttribute('aria-pressed') === 'true',
+      pressed: control?.getAttribute('aria-checked') === 'true',
     };
   })()`);
   if (cutPanel.hasCutPanel || cutPanel.disabled || cutPanel.pressed) {
@@ -4188,8 +4207,28 @@ async function waitForWorkspaceRegionControl(evaluate, region) {
   );
 }
 
-async function exerciseCutTabAdd(evaluate, click, screenshot) {
-  await click('[data-workbench-region-control="cut-panel"]');
+async function openWorkspaceCreativePanels(evaluate, click) {
+  await waitForWorkspaceRegionControl(evaluate, 'creative-panels');
+  const alreadyOpen = await evaluate(
+    `document.querySelector('[data-workbench-region-option="main"]') instanceof HTMLButtonElement`,
+  );
+  if (!alreadyOpen) {
+    await click('[data-workbench-region-control="creative-panels"]');
+  }
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const main = document.querySelector('[data-workbench-region-option="main"]');
+      const cut = document.querySelector('[data-workbench-region-option="cut-panel"]');
+      return main instanceof HTMLButtonElement && cut instanceof HTMLButtonElement;
+    })()`,
+    'Combined Main and Cut choices did not become interactive.',
+  );
+}
+
+async function exerciseCutTabAdd(evaluate, click, pressKey, screenshot) {
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="cut-panel"]');
   await waitForCondition(
     evaluate,
     `document.querySelectorAll('.project-cut-panel__tabs .neko-workbench-editor-tab').length === 1 &&
@@ -4219,10 +4258,11 @@ async function exerciseCutTabAdd(evaluate, click, screenshot) {
         fitsHeader: addRect.right <= headerRect.right + 0.5,
         remainingRightSpace: headerRect.right - addRect.right,
       };
-    })()`);
+  })()`);
   const initial = await inspect();
-  assertCutTabAddGeometry(initial, 'initial');
   const initialScreenshot = await screenshot('workspace-cut-tab-add-adjacent');
+  const layoutScreenshots = await exerciseCutOnlyLayout(evaluate, click, pressKey, screenshot);
+  assertCutTabAddGeometry(initial, 'initial');
   await click('[data-cut-tab-add="true"]');
   await waitForCondition(
     evaluate,
@@ -4234,7 +4274,145 @@ async function exerciseCutTabAdd(evaluate, click, screenshot) {
   const added = await inspect();
   assertCutTabAddGeometry(added, 'added');
   const addedScreenshot = await screenshot('workspace-cut-tab-add-second-draft');
-  return { states: { initial, added }, screenshots: [initialScreenshot, addedScreenshot] };
+  return {
+    states: { initial, added },
+    screenshots: [initialScreenshot, ...layoutScreenshots, addedScreenshot],
+  };
+}
+
+async function exerciseCutOnlyLayout(evaluate, click, pressKey, screenshot) {
+  await evaluate(`(() => {
+    const cutRoot = document.querySelector('[data-owner-root="cut"]');
+    if (!(cutRoot instanceof HTMLElement)) {
+      throw new Error('Cut layout lifecycle probe requires the exact Cut Root.');
+    }
+    window.__openNekoCutLayoutProbe = cutRoot;
+  })()`);
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="main"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      return activeWorkbench.layout.display.mode === 'chat-only' &&
+        activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        shell?.getAttribute('data-interaction-presentation') === 'docked' &&
+        shell?.getAttribute('data-bottom-panel-presentation') === 'expanded' &&
+        !document.querySelector('[data-main-view-id]') &&
+        document.querySelector('[data-owner-root="cut"]') === window.__openNekoCutLayoutProbe;
+    })()`,
+    'Main did not hide while retaining a docked Agent and expanding the same Cut Root.',
+  );
+  const agentCutScreenshot = await screenshot('workspace-layout-agent-cut-expanded');
+  await click('[data-workbench-region-control="agent"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      return activeWorkbench.layout.display.mode === 'empty-main' &&
+        activeWorkbench.layout.main.views.length > 0 &&
+        activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        shell?.getAttribute('data-interaction-presentation') === 'hidden' &&
+        shell?.getAttribute('data-bottom-panel-presentation') === 'expanded' &&
+        !document.querySelector('[data-main-view-id]') &&
+        Boolean(document.querySelector('[data-workbench-cut-panel="true"]')) &&
+        document.querySelector('[data-owner-root="cut"]') === window.__openNekoCutLayoutProbe;
+    })()`,
+    'Cut-only did not project hidden Agent, retained Main refs and the same expanded Cut Root.',
+  );
+  const cutOnlyScreenshot = await screenshot('workspace-layout-cut-only-expanded');
+
+  await evaluate(`(() => {
+    const control = document.querySelector('[data-workbench-region-control="creative-panels"]');
+    if (!(control instanceof HTMLButtonElement)) {
+      throw new Error('Combined Main and Cut control is unavailable for keyboard validation.');
+    }
+    control.focus();
+  })()`);
+  await pressKey('Enter');
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const trigger = document.querySelector('[data-workbench-region-control="creative-panels"]');
+      const menu = document.querySelector('.workspace-creative-panels-popover__menu');
+      return trigger?.getAttribute('aria-expanded') === 'true' &&
+        menu?.getAttribute('role') === 'menu' &&
+        document.querySelectorAll('[data-workbench-region-option]').length === 2;
+    })()`,
+    'Combined Main and Cut Popover did not open from the keyboard.',
+  );
+  const keyboardScreenshot = await screenshot('workspace-layout-keyboard-popover');
+  await pressKey('Escape');
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[data-workbench-region-option]') === null`,
+    'Combined Main and Cut Popover did not close with Escape.',
+  );
+
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="main"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      return activeWorkbench.layout.display.mode === 'main-only' &&
+        Boolean(document.querySelector('[data-main-view-id]')) &&
+        activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        shell?.getAttribute('data-bottom-panel-presentation') === 'docked' &&
+        document.querySelector('[data-owner-root="cut"]') === window.__openNekoCutLayoutProbe;
+    })()`,
+    'Main did not restore above the retained Cut Root.',
+  );
+  const restoredMainScreenshot = await screenshot('workspace-layout-main-restored-with-cut');
+  await click('[data-workbench-region-control="agent"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      return activeWorkbench.layout.display.mode === 'chat-main';
+    })()`,
+    'Agent did not restore alongside Main and Cut.',
+  );
+
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="cut-panel"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      return activeWorkbench.layout.cutPanel?.presentation === 'hidden' &&
+        !document.querySelector('[data-workbench-cut-panel="true"]');
+    })()`,
+    'Cut did not hide while preserving Agent and Main.',
+  );
+  const hiddenCutScreenshot = await screenshot('workspace-layout-cut-hidden');
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="cut-panel"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      return activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        Boolean(document.querySelector('[data-workbench-cut-panel="true"]'));
+    })()`,
+    'Cut did not restore through the combined control.',
+  );
+  return [
+    agentCutScreenshot,
+    cutOnlyScreenshot,
+    keyboardScreenshot,
+    restoredMainScreenshot,
+    hiddenCutScreenshot,
+  ];
 }
 
 function assertCutTabAddGeometry(detail, phase) {
@@ -4618,11 +4796,15 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         activeMainTarget?.querySelector(
           '.project-management-catalog .management-surface-row-actions',
         )?.querySelectorAll('button').length ?? -1,
-      projectDoubleClickTargetVisible: Boolean(
+      projectOpenTargetVisible: Boolean(
         activeMainTarget?.querySelector(
-          '.project-management-catalog .management-surface-row__select',
+          '.project-management-catalog .management-surface-row__open',
         ),
       ),
+      projectCatalogViewMode:
+        activeMainTarget
+          ?.querySelector('.project-management-catalog .management-surface-list')
+          ?.getAttribute('data-view-mode') ?? null,
       mainPanelIds: [
         ...(activeMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),
         ...(activeSecondaryMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),
@@ -4703,6 +4885,9 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       secondaryMainBorderWidth: secondaryMainStyle
         ? parseFloat(secondaryMainStyle.borderTopWidth)
         : 0,
+      secondaryMainSeparatorWidth: secondaryMainStyle
+        ? parseFloat(secondaryMainStyle.borderLeftWidth)
+        : 0,
       secondaryMainBorderRadius: secondaryMainStyle?.borderRadius,
       secondaryMainOverflow: secondaryMainStyle?.overflow,
       secondaryMainShadow: secondaryMainStyle?.boxShadow,
@@ -4757,6 +4942,31 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       viewport: { width: window.innerWidth, height: window.innerHeight },
     };
   })()`);
+}
+
+async function inspectExtensionsManagement(evaluate) {
+  const workbench = await inspectWorkbench(evaluate, 'management', 'extension-management');
+  const catalog = await evaluate(`(() => {
+    const root = document.querySelector('.agent-extension-management-root');
+    const secondary = document.querySelector('${ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR}');
+    return {
+      view: root?.getAttribute('data-catalog-view'),
+      activeTab: root
+        ?.querySelector('[data-extension-catalog-tab][aria-pressed="true"]')
+        ?.getAttribute('data-extension-catalog-tab'),
+      selectedCount: root?.querySelectorAll('[role="option"][aria-selected="true"]').length ?? 0,
+      configurationKind: secondary
+        ?.querySelector('[data-extension-configuration-kind]')
+        ?.getAttribute('data-extension-configuration-kind'),
+      endpointConfigurationVisible: Boolean(
+        secondary?.querySelector('[data-automation-endpoint-management="true"]'),
+      ),
+      permissionConfigurationVisible: Boolean(
+        secondary?.querySelector('[data-automation-permission-management="true"]'),
+      ),
+    };
+  })()`);
+  return { ...workbench, ...catalog };
 }
 
 function assertAgentDraftControls(detail) {
@@ -4854,20 +5064,21 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.panelTabHeaderIds.includes(detailPanelId) ||
     !detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'columns' ||
-    detail.mainComposition !== 'independent-shells' ||
+    detail.mainComposition !== 'continuous' ||
     Math.abs(detail.mainSplitRatio - 0.5) > 0.025 ||
     !detail.hasMainSplitResize ||
     detail.primaryMainShell !== 'primary' ||
     detail.secondaryMainShell !== 'secondary' ||
-    !detail.hasMainGutter ||
-    Math.abs(detail.mainGutterWidth - 10) > 1 ||
-    Math.abs(detail.mainShellGap - 10) > 1 ||
-    detail.enclosingMainBorderWidth !== 0 ||
+    detail.hasMainGutter ||
+    detail.mainGutterWidth !== 0 ||
+    Math.abs(detail.mainShellGap) > 1 ||
+    detail.enclosingMainBorderWidth <= 0 ||
     detail.enclosingMainBorderRadius !== '0px' ||
-    detail.enclosingMainOverflow !== 'visible' ||
+    detail.enclosingMainOverflow !== 'hidden' ||
     detail.enclosingMainShadow !== 'none' ||
-    detail.primaryMainBorderWidth <= 0 ||
-    detail.secondaryMainBorderWidth <= 0 ||
+    detail.primaryMainBorderWidth !== 0 ||
+    detail.secondaryMainBorderWidth !== 0 ||
+    detail.secondaryMainSeparatorWidth <= 0 ||
     detail.primaryMainBorderRadius !== '0px' ||
     detail.secondaryMainBorderRadius !== '0px' ||
     detail.primaryMainOverflow !== 'hidden' ||
@@ -4879,7 +5090,44 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.primaryMainWidth < detail.secondaryMainWidth
   ) {
     throw new Error(
-      `Management + Detail did not preserve the shared compact Workbench composition: ${JSON.stringify(detail)}`,
+      `Management + Detail did not preserve the edge-to-edge Workbench composition: ${JSON.stringify(detail)}`,
+    );
+  }
+}
+
+function assertExtensionsManagement(detail, view, tab) {
+  assertManagementDetailSplit(detail, 'extension-management', 'extension-detail');
+  if (
+    !detail.compactPanelIds.includes('extension-detail') ||
+    detail.view !== view ||
+    detail.activeTab !== tab ||
+    detail.configurationKind !== tab ||
+    detail.selectedCount !== 1 ||
+    (tab === 'skills' &&
+      (detail.endpointConfigurationVisible || detail.permissionConfigurationVisible)) ||
+    (tab === 'extensions' &&
+      (!detail.endpointConfigurationVisible || !detail.permissionConfigurationVisible))
+  ) {
+    throw new Error(
+      `Extensions management did not preserve its catalog/configuration contract: ${JSON.stringify(detail)}`,
+    );
+  }
+}
+
+function assertExtensionsCatalogOnly(detail, view, tab) {
+  assertSingleWorkbench(detail);
+  assertManagementMain(detail, 'extension-management');
+  assertSharedManagementPanel(detail, 'extension-management');
+  if (
+    detail.view !== view ||
+    detail.activeTab !== tab ||
+    detail.selectedCount !== 0 ||
+    detail.configurationKind !== undefined ||
+    detail.endpointConfigurationVisible ||
+    detail.permissionConfigurationVisible
+  ) {
+    throw new Error(
+      `Extensions management reserved configuration without a selection: ${JSON.stringify(detail)}`,
     );
   }
 }
@@ -4892,13 +5140,15 @@ function assertResponsiveManagementDetailSplit(detail, managementPanelId, detail
     !detail.mainPanelIds.includes(detailPanelId) ||
     !detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'columns' ||
-    detail.mainComposition !== 'independent-shells' ||
+    detail.mainComposition !== 'continuous' ||
     !detail.hasMainSplitResize ||
     detail.primaryMainShell !== 'primary' ||
     detail.secondaryMainShell !== 'secondary' ||
-    !detail.hasMainGutter ||
-    Math.abs(detail.mainGutterWidth - 10) > 1 ||
-    Math.abs(detail.mainShellGap - 10) > 1 ||
+    detail.hasMainGutter ||
+    detail.mainGutterWidth !== 0 ||
+    Math.abs(detail.mainShellGap) > 1 ||
+    detail.enclosingMainBorderWidth <= 0 ||
+    detail.secondaryMainSeparatorWidth <= 0 ||
     detail.mainPanelsOverlap ||
     detail.primaryMainWidth <= 0 ||
     detail.secondaryMainWidth <= 0
@@ -4921,7 +5171,7 @@ function assertWorkspaceTopControls(detail) {
     detail.layoutControlInFooter ||
     JSON.stringify(detail.sidebarControlKinds) !== JSON.stringify(['primary-sidebar']) ||
     JSON.stringify(detail.workspaceLayoutControlKinds) !==
-      JSON.stringify(['agent', 'main', 'cut-panel', 'management'])
+      JSON.stringify(['agent', 'creative-panels', 'management'])
   ) {
     throw new Error('Workspace layout controls are not in the shared Workbench title chrome.');
   }

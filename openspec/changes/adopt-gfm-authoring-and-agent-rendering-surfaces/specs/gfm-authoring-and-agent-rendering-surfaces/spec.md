@@ -98,6 +98,38 @@ admitted non-Markdown text mode.
 - **THEN** the document uses the canonical CodeMirror source surface
 - **AND** Milkdown and Agent presentation do not mount for that editing intent
 
+### Requirement: Browser Rich presentation is reusable without sharing authority
+
+OpenNeko SHALL expose one controlled browser-only Milkdown Rich Surface for callers that own Markdown
+source. The Surface SHALL own only disposable browser presentation state and SHALL NOT own a Text
+Document session, Canvas document, Host runtime, media lease or persisted buffer. Text Editor and
+Canvas SHALL apply emitted source through their separate exact owning commands.
+
+#### Scenario: User selects a Canvas Markdown node
+
+- **WHEN** a Canvas Markdown node becomes selected but has not been explicitly activated for editing
+- **THEN** it remains a compact read-only WYSIWYG Markdown projection
+- **AND** selection does not replace it with a raw textarea or mount a mutable Milkdown editor
+
+#### Scenario: User explicitly edits a Canvas Markdown node
+
+- **WHEN** the user double-activates a selected Markdown node whose source passes Rich round-trip gating
+- **THEN** Canvas lazily mounts the shared Milkdown Surface and applies each emitted source to that exact node
+- **AND** Text Document session, edit sequence and Host media authority do not participate
+- **AND** pressing Escape or leaving node selection returns to the compact read-only projection
+
+#### Scenario: Canvas Markdown cannot round-trip safely
+
+- **WHEN** a Canvas Markdown node contains a construct that cannot round-trip through the declared schema
+- **THEN** the shared Surface keeps a read-only projection visible and reports a node-local Rich diagnostic
+- **AND** the original Canvas node source remains unchanged without textarea fallback or silent normalization
+
+#### Scenario: Text Editor mounts the shared Rich Surface
+
+- **WHEN** a Markdown Text Document enters Rich or Split presentation
+- **THEN** the Text Editor adapter supplies the accepted session source and its authorized media extension
+- **AND** ordered edit acceptance, conflict handling and media leases remain owned by Text Editor rather than the shared Surface
+
 ### Requirement: Agent text uses one renderer from partial delta through finalization
 
 The Agent Webview SHALL render an exact Timeline text content block through one package-owned
@@ -138,6 +170,100 @@ or become their authority.
   identity and lifecycle
 - **AND** failure in either block remains local and cannot reclassify the sibling
 
+### Requirement: One Assistant turn presents a primary answer and one bounded activity disclosure
+
+The Agent Webview SHALL project one completed Assistant turn as a primary answer document, typed
+user-facing deliverables and at most one activity disclosure. Ordinary answer Markdown SHALL NOT
+display a repeated `Response` label, file icon or per-block assistant avatar. Progress narration,
+Thinking and completed Tool execution SHALL NOT create independent process groups or nested
+disclosure cards.
+
+#### Scenario: A turn contains text before and after Tool execution
+
+- **WHEN** one turn contains progress text, Thinking, one or more Tool calls and a terminal answer
+- **THEN** the terminal answer remains one readable Markdown document and completed activity is
+  summarized by one disclosure control
+- **AND** expanding the activity renders a flat ordered list without nested Tool or Thinking
+  disclosures
+- **AND** authoritative Timeline block order and identities remain unchanged
+
+#### Scenario: A run is active
+
+- **WHEN** the current turn is still executing
+- **THEN** the Webview displays one `Processing <duration>` activity status derived from the earliest
+  Turn item timestamp rather than accumulating multiple expanded process headers
+- **AND** answer text already emitted remains readable without a `Response` header
+
+#### Scenario: A running turn contains only failed Tool results
+
+- **WHEN** the canonical assistant Turn owns an active timing record and its visible blocks are failed
+  Tool results
+- **THEN** the Turn-level `Processing <duration>` summary replaces the older conversation-level
+  execution status
+- **AND** the Webview MUST NOT render a second clock for the same Turn
+
+#### Scenario: A run completes after overlapping Tool calls
+
+- **WHEN** a Turn has an earliest item `createdAt`, an authoritative `completion.completedAt` and Tool
+  calls whose execution intervals may overlap
+- **THEN** the summary displays `Processed <duration>` using the Turn start-to-completion interval
+- **AND** it MUST NOT sum Tool durations or promote Tool/Thinking counts into the collapsed title
+- **AND** expanding the summary may show those counts as secondary metadata
+
+#### Scenario: User expands completed activity
+
+- **WHEN** Thinking, progress, Tool calls and evidence were interleaved in the authoritative Timeline
+- **THEN** the detail renders those surviving items in exact Timeline sequence without grouping by type
+- **AND** the terminal answer remains after the activity summary
+
+#### Scenario: A Tool requires action or fails
+
+- **WHEN** a Tool is awaiting approval or reports failure
+- **THEN** the affected action or diagnostic remains directly visible and keyboard accessible
+- **AND** collapsing prior successful activity cannot hide or convert the actionable state into success
+
+#### Scenario: Consecutive calls fail for the same exact target
+
+- **WHEN** two or more completed Tool calls share one exact typed target and one or more calls fail
+- **THEN** the Webview may compact them into one always-visible actionable group
+- **AND** expanding the group preserves every call and diagnostic in execution order
+- **AND** pending approval calls remain individually visible and MUST NOT be compacted
+
+### Requirement: Evidence and deliverables retain typed placement semantics
+
+Tool output used only as execution evidence SHALL remain secondary activity content. User-facing
+media, files, Diffs, Artifacts and owning-domain results SHALL render as typed deliverables adjacent
+to the answer. Placement SHALL derive from typed result semantics rather than Tool names, Markdown
+inference or arbitrary JSON inspection.
+
+#### Scenario: A document Tool exposes page thumbnails
+
+- **WHEN** thumbnails are execution evidence rather than a requested output artifact
+- **THEN** they remain nested beneath their exact Tool step inside the activity detail and do not
+  interrupt the primary answer
+- **AND** a true generated or published artifact remains visible outside the collapsed activity
+
+#### Scenario: User acts on a document evidence thumbnail
+
+- **WHEN** an authorized document page thumbnail is visible inside its Tool step
+- **THEN** clicking it opens the full projection or exact document location
+- **AND** a compact overflow menu exposes typed copy-reference and Canvas-handoff actions when available
+- **AND** persistent raw-JSON copy and information buttons do not occupy the thumbnail footer
+
+### Requirement: Agent Markdown uses a readable semantic layout
+
+The canonical Agent text surface SHALL use semantic GFM components and package-owned theme tokens.
+Paragraphs SHALL use a constrained reading measure while tables, code, Diff and media may use a wider
+lane. Third-party default styles SHALL NOT become the product theme.
+
+#### Scenario: A final answer contains dense GFM and media
+
+- **WHEN** an answer contains headings, paragraphs, nested lists, task items, quotes, tables, fenced
+  code, links and authorized images
+- **THEN** hierarchy, spacing, markers, overflow and focus states remain readable in the full Agent
+  scene and supported narrow dock widths
+- **AND** table or media width does not expand ordinary paragraph measure or clip essential controls
+
 ### Requirement: Markdown presentation is secure and source-backed semantics remain reusable
 
 Raw HTML SHALL be inert by default, unsafe URL protocols SHALL be rejected, and Desktop resource
@@ -172,3 +298,65 @@ Timeline output into a file mutation.
 - **THEN** a clean Text Document session reloads from authoritative bytes and a dirty session preserves
   its working source with an external-change conflict
 - **AND** the Agent write is not represented as a Milkdown, ProseMirror or CodeMirror transaction
+
+### Requirement: Active Agent output preserves composer and Workbench interaction
+
+An active Agent Turn SHALL freeze only configuration owned by that in-flight Turn. Streaming Markdown
+presentation SHALL preserve every ordered Timeline update while yielding bounded opportunities for
+urgent composer, scroll and pointer interaction. Desktop command pending state SHALL be scoped to the
+mutation owner and SHALL NOT derive from Agent run state.
+
+#### Scenario: User prepares the next message while output streams
+
+- **WHEN** an eligible Agent conversation is receiving partial text
+- **THEN** the composer remains focusable and editable, plain text can enter the existing exact queue,
+  and Stop remains available
+- **AND** model/generation configuration captured by the current Turn remains locked
+- **AND** unsupported queued attachments, context references or action triggers remain visibly
+  unavailable rather than being accepted without a runtime snapshot
+
+#### Scenario: Dense Markdown arrives in many small patches
+
+- **WHEN** multiple append-only Timeline patches arrive inside one bounded presentation interval
+- **THEN** the canonical renderer may publish one coherent normalized snapshot for their accumulated
+  source while preserving every source byte and stable content-block identity
+- **AND** finalization synchronously converges to the exact final source before the final projection is
+  presented
+- **AND** no raw-text, alternate renderer, dropped-patch or static-final path participates
+
+#### Scenario: User changes layout during an Agent run
+
+- **WHEN** the current conversation is running and no scene or layout command currently owns the
+  affected control
+- **THEN** the user can scroll, resize supported Workbench regions, toggle layout regions and navigate
+  through controls whose exact identity remains valid
+- **AND** a pending sidebar, target-selection or unrelated command does not disable those layout
+  controls
+- **AND** switching presentation does not cancel, redirect or transfer the exact Conversation task
+
+### Requirement: Live and reopened conversations preserve one turn presentation shape
+
+The Agent runtime SHALL project the successful assistant iterations in one persisted Pi user-turn
+segment into at most one assistant `Message`, preserving every assistant content part and exact Tool
+result in order. A terminal provider error SHALL remain a separate typed error diagnostic. Reopening a
+conversation SHALL feed that canonical message into the same Webview turn presenter used by live
+Timeline output. The Webview SHALL NOT merge adjacent persisted messages as a recovery path.
+
+#### Scenario: A multi-iteration Tool turn is reopened
+
+- **WHEN** one user turn contains multiple persisted assistant Pi entries separated by Tool results
+- **THEN** history projection emits one assistant message containing the ordered Thinking, progress,
+  Tool and terminal-answer blocks
+- **AND** the reopened Webview renders one assistant identity, one bounded activity disclosure and the
+  same final Markdown hierarchy as the completed live turn
+- **AND** the activity disclosure precedes the terminal answer in processing-to-result reading order
+- **AND** no per-entry assistant row, reopen-only renderer or adjacent-message grouping participates
+- **AND** its elapsed summary uses the restored Turn start/completion facts rather than mount time or
+  accumulated Tool duration
+
+#### Scenario: A persisted Tool result has no owner in its turn
+
+- **WHEN** history projection encounters a Tool result without its exact originating Tool call
+- **THEN** the affected transcript projection fails visibly at that entry
+- **AND** it does not attach the result to another turn, merge by Tool name or present a successful
+  empty restored message

@@ -63,6 +63,43 @@ describe('message-list-presenter', () => {
     ).toBe(false);
   });
 
+  it('lets a canonical running Turn with failed Tools replace generic activity', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'assistant-failed-tool',
+          role: 'assistant',
+          content: '',
+          timestamp: 1_100,
+          isStreaming: true,
+          turnTiming: { startedAt: 1_000 },
+          contentBlocks: [
+            {
+              id: 'failed-tool-block',
+              type: 'tool_call',
+              timestamp: 1_100,
+              toolCall: {
+                id: 'failed-tool',
+                name: 'ReadDocument',
+                arguments: { cursor_ref: 'cursor_12b95yb' },
+                result: {
+                  success: false,
+                  data: null,
+                  error: 'Document content could not be read.',
+                },
+              },
+            },
+          ],
+        },
+      ],
+      agentState: { phase: 'acting', toolName: 'ReadDocument', startedAt: 1_000 },
+      streamingMessageId: 'assistant-failed-tool',
+    });
+
+    expect(projection.showExecutionActivity).toBe(false);
+    expect(projection.items).toHaveLength(1);
+  });
+
   it('keeps activity visible for an empty streaming message shell', () => {
     const projection = projectMessageList({
       messages: [
@@ -263,7 +300,7 @@ describe('message-list-presenter', () => {
     expect(projection.items).toEqual([]);
   });
 
-  it('projects repeated assistant tool blocks as a single grouped list item', () => {
+  it('projects one durable message row for repeated assistant tool blocks', () => {
     const items = projectMessageListItems(
       [
         {
@@ -283,13 +320,13 @@ describe('message-list-presenter', () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
-      kind: 'content_block',
-      projection: {
-        renderKind: 'toolGroup',
-        toolName: 'ReadDocument',
-        count: 3,
-        targetLabel: '/books/a.epub',
-      },
+      kind: 'message',
+      message: { id: 'msg-1' },
+      ambientToolCalls: [
+        expect.objectContaining({ id: 'tool-1' }),
+        expect.objectContaining({ id: 'tool-2' }),
+        expect.objectContaining({ id: 'tool-3' }),
+      ],
     });
   });
 
@@ -330,7 +367,7 @@ describe('message-list-presenter', () => {
     });
   });
 
-  it('keeps completed process records before the assistant result when they happened first', () => {
+  it('keeps one message projection for answer and process activity in the same turn', () => {
     const items = projectMessageListItems(
       [
         {
@@ -359,23 +396,11 @@ describe('message-list-presenter', () => {
       false,
     );
 
-    expect(items.map((item) => item.kind)).toEqual(['process_group', 'content_block']);
+    expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
-      kind: 'process_group',
-      isFirst: true,
-      processGroup: {
-        blockCount: 2,
-        toolCallCount: 1,
-        thinkingCount: 1,
-      },
-    });
-    expect(items[1]).toMatchObject({
-      kind: 'content_block',
-      isFirst: false,
-      projection: {
-        renderKind: 'markdown',
-        content: 'Final storyboard summary.',
-      },
+      kind: 'message',
+      message: { id: 'msg-1' },
+      ambientToolCalls: [expect.objectContaining({ id: 'tool-1' })],
     });
   });
 
@@ -432,16 +457,13 @@ describe('message-list-presenter', () => {
 
     expect(items).toHaveLength(2);
     expect(items[1]).toMatchObject({
-      kind: 'content_block',
-      projection: {
-        renderKind: 'markdown',
-        toolCalls: [expect.objectContaining({ id: 'read-image-1', name: 'ReadImage' })],
-      },
+      kind: 'message',
+      message: { id: 'msg-storyboard' },
       ambientToolCalls: [expect.objectContaining({ id: 'read-image-1', name: 'ReadImage' })],
     });
   });
 
-  it('keeps process records between assistant response blocks when they happen in the middle', () => {
+  it('does not fragment a message when process records occur between text blocks', () => {
     const items = projectMessageListItems(
       [
         {
@@ -469,26 +491,8 @@ describe('message-list-presenter', () => {
       false,
     );
 
-    expect(items.map((item) => item.kind)).toEqual([
-      'content_block',
-      'process_group',
-      'content_block',
-    ]);
-    expect(items[0]).toMatchObject({
-      kind: 'content_block',
-      projection: { renderKind: 'markdown', content: 'I will inspect the source.' },
-    });
-    expect(items[1]).toMatchObject({
-      kind: 'process_group',
-      processGroup: {
-        blockCount: 1,
-        toolCallCount: 1,
-      },
-    });
-    expect(items[2]).toMatchObject({
-      kind: 'content_block',
-      projection: { renderKind: 'markdown', content: 'Here is the summary.' },
-    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'message', message: { id: 'msg-1' } });
   });
 
   it('keeps failed tools visible instead of hiding them in process records', () => {
@@ -513,13 +517,8 @@ describe('message-list-presenter', () => {
       false,
     );
 
-    expect(items.map((item) => item.kind)).toEqual(['content_block', 'content_block']);
-    expect(items[0]).toMatchObject({
-      kind: 'content_block',
-      projection: {
-        renderKind: 'tool',
-      },
-    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'message', message: { id: 'msg-1' } });
   });
 });
 

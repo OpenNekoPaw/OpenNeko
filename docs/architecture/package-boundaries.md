@@ -2,11 +2,12 @@
 
 状态：Accepted
 
-更新日期：2026-08-09
+更新日期：2026-08-10
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
 `define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`、
-`add-markdown-workspace-references-and-media-embeds`
+`add-markdown-workspace-references-and-media-embeds`、
+`integrate-open-source-browser-and-computer-use`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
@@ -15,12 +16,12 @@ Package 角色、独立拆包条件、领域家族命名、显式 exports 和产
 
 ## 分层与依赖方向
 
-| 层级            | 主要包                                                                                                                              | 可依赖                          | 不得依赖                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
-| L0 host-neutral | `@neko/shared`、`@neko/content`、`@neko/entity-domain`、`@neko/search-domain`、`@neko/markdown`、`@neko/skills`、包自有 L0 contract | 更低层纯 contract/utility       | Electron、React、应用根、功能包内部实现                                           |
-| L1 host/runtime | `@neko/host`、`@neko/media`、各功能包 host-neutral core/platform                                                                    | L0、明确 runtime dependency     | React/Webview 实现、`apps/*`、其他功能包内部实现                                  |
-| L2 browser UI   | `@neko/ui`、`packages/<domain>/webview` package                                                                                     | L0、L2 公共 UI、包自有 contract | Electron、Node-only API、本地文件路径                                             |
-| Application     | `apps/neko-desktop`                                                                                                                 | package public entries          | package root 下的 `src/` 内部实现、应用级领域/contract 副本、业务状态机/策略/事务 |
+| 层级            | 主要包                                                                                                                                       | 可依赖                          | 不得依赖                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
+| L0 host-neutral | `@neko/shared`、`@neko/content`、`@neko/entity-domain`、`@neko/search-domain`、`@neko/markdown` 默认入口、`@neko/skills`、包自有 L0 contract | 更低层纯 contract/utility       | Electron、React、应用根、功能包内部实现                                           |
+| L1 host/runtime | `@neko/host`、`@neko/media`、各功能包 host-neutral core/platform                                                                             | L0、明确 runtime dependency     | React/Webview 实现、`apps/*`、其他功能包内部实现                                  |
+| L2 browser UI   | `@neko/ui`、`@neko/markdown/rich-surface`、`packages/<domain>/webview` package                                                               | L0、L2 公共 UI、包自有 contract | Electron、Node-only API、本地文件路径                                             |
+| Application     | `apps/neko-desktop`                                                                                                                          | package public entries          | package root 下的 `src/` 内部实现、应用级领域/contract 副本、业务状态机/策略/事务 |
 
 依赖必须自上而下组合：
 
@@ -223,17 +224,17 @@ Desktop 应用和本地资源统一使用 `openneko:` scheme：`desktop` host �
 
 Agent 能力按 owning package 职责分层：
 
-| 子包                    | 职责                                                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/agent-contracts` | Agent/Main/preload/renderer contract、effective configuration、facts 和状态投影                                            |
-| `@neko/agent-runtime`   | Pi product runtime、conversation identity、permission、Skill Host、Capability Tool bridge、facts projector 与 host effects |
+| 子包                         | 职责                                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `@neko/agent-contracts`      | Agent/Main/preload/renderer contract、effective configuration、facts 和状态投影                                            |
+| `@neko/agent-runtime`        | Pi product runtime、conversation identity、permission、Skill Host、Capability Tool bridge、facts projector 与 host effects |
 | `@neko/automation-contracts` | Browser/Computer provider、profile、exact target/session grant、action、evidence 与 diagnostic 的 L0 contract              |
-| `@neko/automation-node` | 自动化 session/target/mode/budget/approval policy、reviewed MCP provider wrapper 与 transient observation 编排             |
-| `@neko/ai-contracts`    | provider/model configuration contracts                                                                                     |
-| `@neko/ai-sdk`          | provider/AI SDK adapter                                                                                                    |
-| `@neko/host`            | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
-| `@neko/agent-webview`   | Chat/Agent UI、消息投影和用户输入                                                                                          |
-| `@neko/chara-webview`   | Character、Dialogue、Chatroom 与 World Foundation 的 browser-only 产品视图和可丢弃展示状态                                 |
+| `@neko/automation-node`      | 自动化 session/target/mode/budget/approval policy、reviewed MCP provider wrapper 与 transient observation 编排             |
+| `@neko/ai-contracts`         | provider/model configuration contracts                                                                                     |
+| `@neko/ai-sdk`               | provider/AI SDK adapter                                                                                                    |
+| `@neko/host`                 | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
+| `@neko/agent-webview`        | Chat/Agent UI、消息投影和用户输入                                                                                          |
+| `@neko/chara-webview`        | Character、Dialogue、Chatroom 与 World Foundation 的 browser-only 产品视图和可丢弃展示状态                                 |
 
 Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime 与 Host 不导入 Electron、React
 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
@@ -244,8 +245,9 @@ Browser Use 与 Computer Use 的控制实现由审核固定的开源 upstream MC
 第二套浏览器、截图、键鼠输入、VLA 或 GUI Agent loop。`@neko/automation-contracts` 是 L0 canonical
 shape owner，`@neko/automation-node` 是 L1 session 与 policy owner。Agent 只通过 canonical Capability、
 Tool Registry 和 Pi Tool Call 消费 package-owned wrapper；automation MCP server 必须禁止 generic raw MCP
-Tool exposure。Desktop Main 只提供一次性用户 grant authority、当前 OS permission 查询、每 session 独占
-的受限进程/MCP connection、精确 app/process/window revalidation 与短生命周期 observation projection。
+Tool exposure。`@neko/automation-node` 拥有目标发现、脱敏候选、显式选择、选择后 exact revalidation 与
+一次性 grant 语义；Desktop Main 只提供 sender/Window-bound 用户选择 interaction adapter、当前 OS permission
+查询、每 session 独占的受限进程/MCP connection、精确 app/process/window facts 与短生命周期 observation projection。
 自动化 grant 必须绑定 exact provider/upstream release、browser profile 和 domains 或 computer target、
 mode、timeout、step budget 与 conversation/run/toolCall owner；上游进程启动失败后也不得重放。Renderer
 不得接收截图原始持久字节、真实 HOME/path、secret、process/window handle 或 MCP connection。
@@ -298,10 +300,10 @@ Tools media-diff 原型因没有 Desktop producer、产品入口或运行态验�
 
 Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 Agent、应用根或现有 Assets/Preview 内部。`@neko/chara` 已完成第一阶段 owner 迁移；World package 仍未实现：
 
-| 包            | 状态                                   | 聚合主线                                                          | 主要职责                                                                                                                                              | 关键边界                                                                                                                   |
-| ------------- | -------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion -> narrative/companion run` | 角色创作与发布、关系记忆、Dialogue/Chatroom 运行、持久化和 package-owned 产品视图 | 完全复用 Agent/Pi；World、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合 |
-| `@neko/world` / `@neko/world-node` | Foundation / Node adapter | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` | 世界书、事实、规则/事件、运行、存档、分支、WorldView；Node 包只拥有 durable repository adapter | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实 |
+| 包                                                         | 状态                                   | 聚合主线                                                          | 主要职责                                                                                       | 关键边界                                                                                                         |
+| ---------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion -> narrative/companion run` | 角色创作与发布、关系记忆、Dialogue/Chatroom 运行、持久化和 package-owned 产品视图              | 完全复用 Agent/Pi；World、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合 |
+| `@neko/world` / `@neko/world-node`                         | Foundation / Node adapter              | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`    | 世界书、事实、规则/事件、运行、存档、分支、WorldView；Node 包只拥有 durable repository adapter | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实           |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
 Agent、Renderer、Device、表现 runtime 和 host adapter。Agent package 不导入 Character/World；

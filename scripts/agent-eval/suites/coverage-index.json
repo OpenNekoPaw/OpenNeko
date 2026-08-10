@@ -145,6 +145,7 @@
       "id": "capability-tool-routing",
       "disposition": "suite",
       "suiteIds": [
+        "agent-runtime.external-automation",
         "agent-runtime.perception-routing",
         "skill.skill-creator",
         "skill.image",
@@ -168,6 +169,7 @@
       "id": "tool-call-lifecycle",
       "disposition": "suite",
       "suiteIds": [
+        "agent-runtime.external-automation",
         "agent-runtime.workflow-controller",
         "agent-runtime.stream-delivery",
         "agent-runtime.creative-media-workflow"
@@ -207,13 +209,13 @@
       "kind": "agent-runtime-capability",
       "id": "tool-result-delivery",
       "disposition": "suite",
-      "suiteIds": ["agent-runtime.stream-delivery"]
+      "suiteIds": ["agent-runtime.external-automation", "agent-runtime.stream-delivery"]
     },
     {
       "kind": "agent-runtime-capability",
       "id": "desktop-event-projection",
       "disposition": "suite",
-      "suiteIds": ["agent-runtime.stream-delivery"]
+      "suiteIds": ["agent-runtime.external-automation", "agent-runtime.stream-delivery"]
     },
     {
       "kind": "agent-runtime-capability",

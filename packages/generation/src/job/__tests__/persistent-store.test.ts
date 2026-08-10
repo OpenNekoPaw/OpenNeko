@@ -19,6 +19,42 @@ afterEach(async () => {
 });
 
 describe('persistent GenerationJobStore', () => {
+  it('replaces an empty non-canonical Generation Job table before the first submission', async () => {
+    const metadata = await createMetadata({ initializeGeneration: false });
+    await createRetiredGenerationJobTable(metadata);
+
+    await initializeGenerationJobTables(metadata);
+
+    await expect(readGenerationJobColumns(metadata)).resolves.toEqual([
+      'workspace_id',
+      'job_id',
+      'phase',
+      'snapshot_json',
+      'created_at',
+      'updated_at',
+    ]);
+    const store = createPersistentGenerationJobStore({
+      metadataStore: metadata,
+      workspaceId: WORKSPACE_ID,
+    });
+    await expect(store.create(snapshot())).resolves.toEqual(snapshot());
+    await metadata.dispose();
+  });
+
+  it('preserves a populated non-canonical Generation Job table and rejects its owner', async () => {
+    const metadata = await createMetadata({ initializeGeneration: false });
+    await createRetiredGenerationJobTable(metadata);
+    await insertRetiredGenerationJob(metadata);
+
+    await expect(initializeGenerationJobTables(metadata)).rejects.toMatchObject({
+      code: 'generation-job-persistence-invalid',
+    });
+
+    await expect(readGenerationJobColumns(metadata)).resolves.toContain('snapshot_version');
+    await expect(readRetiredGenerationJobCount(metadata)).resolves.toBe(1);
+    await metadata.dispose();
+  });
+
   it('persists exact snapshots through the serialized owner save path', async () => {
     const metadata = await createMetadata();
     const first = createPersistentGenerationJobStore({
@@ -154,7 +190,9 @@ async function corruptSnapshot(metadata: LocalMetadataStore, jobId: string): Pro
   );
 }
 
-async function createMetadata(): Promise<LocalMetadataStore> {
+async function createMetadata(
+  options: { readonly initializeGeneration?: boolean } = {},
+): Promise<LocalMetadataStore> {
   const homedir = await mkdtemp(join(tmpdir(), 'neko-generation-job-store-'));
   temporaryDirectories.push(homedir);
   const metadata = createNodeSqliteLocalMetadataStore({ homedir });
@@ -163,13 +201,89 @@ async function createMetadata(): Promise<LocalMetadataStore> {
     busyTimeoutMs: 1_000,
   });
   await initializeCoreLocalMetadataTables(metadata);
-  await initializeGenerationJobTables(metadata);
   await metadata.repositories.workspaces.bind({
     identity: { workspaceId: WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },
     seenAt: '2026-07-24T00:00:00.000Z',
   });
+  if (options.initializeGeneration !== false) {
+    await initializeGenerationJobTables(metadata);
+  }
   return metadata;
+}
+
+async function createRetiredGenerationJobTable(metadata: LocalMetadataStore): Promise<void> {
+  await metadata.transaction(
+    {
+      mode: 'system-write',
+      ownership: 'state',
+      operation: 'create-retired-generation-job-table-fixture',
+    },
+    async ({ sql }) => {
+      await sql.run(
+        `CREATE TABLE generation_jobs (
+          workspace_id TEXT NOT NULL,
+          job_id TEXT NOT NULL,
+          phase TEXT NOT NULL,
+          revision INTEGER NOT NULL,
+          snapshot_version INTEGER NOT NULL,
+          snapshot_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (workspace_id, job_id),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(workspace_id) ON DELETE CASCADE
+        ) STRICT`,
+      );
+      await sql.run(
+        `CREATE INDEX generation_jobs_workspace_phase_updated_idx
+          ON generation_jobs(workspace_id, phase, updated_at DESC)`,
+      );
+    },
+  );
+}
+
+async function insertRetiredGenerationJob(metadata: LocalMetadataStore): Promise<void> {
+  const value = snapshot({ jobId: 'retired-generation-1' });
+  await metadata.transaction(
+    {
+      mode: 'state-write',
+      ownership: 'state',
+      operation: 'insert-retired-generation-job-fixture',
+    },
+    ({ sql }) =>
+      sql.run(
+        `INSERT INTO generation_jobs (
+          workspace_id, job_id, phase, revision, snapshot_version,
+          snapshot_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          WORKSPACE_ID,
+          value.ref.jobId,
+          value.phase,
+          1,
+          2,
+          JSON.stringify(value),
+          value.createdAt,
+          value.updatedAt,
+        ],
+      ),
+  );
+}
+
+async function readGenerationJobColumns(metadata: LocalMetadataStore): Promise<readonly unknown[]> {
+  const rows = await metadata.transaction(
+    { mode: 'read', ownership: 'state', operation: 'read-generation-job-columns-fixture' },
+    ({ sql }) => sql.all(`SELECT name FROM pragma_table_info('generation_jobs') ORDER BY cid`),
+  );
+  return rows.map((row) => row['name']);
+}
+
+async function readRetiredGenerationJobCount(metadata: LocalMetadataStore): Promise<number> {
+  const rows = await metadata.transaction(
+    { mode: 'read', ownership: 'state', operation: 'count-retired-generation-jobs-fixture' },
+    ({ sql }) => sql.all('SELECT COUNT(*) AS row_count FROM generation_jobs'),
+  );
+  return Number(rows[0]?.['row_count']);
 }
 
 function snapshot(options: { readonly jobId?: string } = {}): GenerationJobSnapshot {

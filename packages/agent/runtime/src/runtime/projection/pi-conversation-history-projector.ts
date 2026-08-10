@@ -1,8 +1,11 @@
 import type { ContentBlock, Message, ToolCall } from '@neko/agent-contracts';
 import {
   isPiUserMessagePresentationEntry,
+  isPiTurnPresentationTimingEntry,
+  parsePiTurnPresentationTiming,
   parsePiUserMessagePresentation,
   type PiConversationTranscriptEntry,
+  type PiTurnPresentationTiming,
   type PiUserMessagePresentation,
 } from '../../pi';
 
@@ -11,14 +14,41 @@ export function projectPiConversationEntries(
 ): Message[] {
   const messages: Message[] = [];
   const toolCalls = new Map<string, { readonly block: ContentBlock; readonly call: ToolCall }>();
+  let activeAssistantMessage:
+    | {
+        readonly message: Message;
+        readonly blocks: ContentBlock[];
+      }
+    | undefined;
   let pendingUserPresentation:
     | {
         readonly entryId: string;
         readonly presentation: PiUserMessagePresentation;
       }
     | undefined;
+  let activeTurnId: string | undefined;
+  let pendingTurnTiming: PiTurnPresentationTiming | undefined;
 
   for (const entry of entries) {
+    if (isPiTurnPresentationTimingEntry(entry)) {
+      if (pendingUserPresentation) {
+        throw new Error(
+          `Pi Turn presentation timing follows unresolved user presentation ${pendingUserPresentation.entryId}.`,
+        );
+      }
+      if (activeAssistantMessage || pendingTurnTiming) {
+        throw new Error('Pi transcript contains duplicate Turn presentation timing.');
+      }
+      const timing = parsePiTurnPresentationTiming(entry.data);
+      if (activeTurnId !== undefined && timing.turnId !== activeTurnId) {
+        throw new Error(
+          `Pi Turn presentation timing ${timing.turnId} does not match user Turn ${activeTurnId}.`,
+        );
+      }
+      activeTurnId = timing.turnId;
+      pendingTurnTiming = timing;
+      continue;
+    }
     if (isPiUserMessagePresentationEntry(entry)) {
       if (pendingUserPresentation) {
         throw new Error(
@@ -59,6 +89,11 @@ export function projectPiConversationEntries(
     }
 
     if (source.role === 'user') {
+      if (pendingTurnTiming) {
+        throw new Error(
+          `Pi Turn presentation timing ${pendingTurnTiming.turnId} has no assistant message.`,
+        );
+      }
       if (pendingUserPresentation && entry.parentId !== pendingUserPresentation.entryId) {
         throw new Error(
           `Pi user message presentation ${pendingUserPresentation.entryId} does not own user message ${entry.id}.`,
@@ -79,6 +114,9 @@ export function projectPiConversationEntries(
           : {}),
       });
       pendingUserPresentation = undefined;
+      activeAssistantMessage = undefined;
+      activeTurnId = presentation?.turnId;
+      toolCalls.clear();
       continue;
     }
 
@@ -92,7 +130,59 @@ export function projectPiConversationEntries(
       throw new Error(`Pi transcript contains unsupported presentation role ${source.role}.`);
     }
 
-    const blocks: ContentBlock[] = [];
+    if (source.stopReason === 'error') {
+      const responseText = source.content
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('');
+      const message: Message = {
+        id: entry.id,
+        role: 'assistant',
+        content: source.errorMessage
+          ? responseText.length > 0
+            ? `${responseText}\n\n${source.errorMessage}`
+            : source.errorMessage
+          : responseText,
+        timestamp: source.timestamp,
+        isError: true,
+        ...(pendingTurnTiming
+          ? {
+              turnTiming: {
+                startedAt: pendingTurnTiming.startedAt,
+                completedAt: pendingTurnTiming.completedAt,
+              },
+            }
+          : {}),
+      };
+      messages.push(message);
+      activeAssistantMessage = { message, blocks: [] };
+      pendingTurnTiming = undefined;
+      toolCalls.clear();
+      continue;
+    }
+
+    if (!activeAssistantMessage) {
+      const blocks: ContentBlock[] = [];
+      const message: Message = {
+        id: entry.id,
+        role: 'assistant',
+        content: '',
+        timestamp: source.timestamp,
+        ...(pendingTurnTiming
+          ? {
+              turnTiming: {
+                startedAt: pendingTurnTiming.startedAt,
+                completedAt: pendingTurnTiming.completedAt,
+              },
+            }
+          : {}),
+      };
+      activeAssistantMessage = { message, blocks };
+      pendingTurnTiming = undefined;
+      messages.push(message);
+    }
+
+    const blocks = activeAssistantMessage.blocks;
     for (const [index, part] of source.content.entries()) {
       if (part.type === 'text') {
         blocks.push({
@@ -132,25 +222,18 @@ export function projectPiConversationEntries(
       .filter((part) => part.type === 'text')
       .map((part) => part.text)
       .join('');
-    const content =
-      source.stopReason === 'error' && source.errorMessage
-        ? responseText.length > 0
-          ? `${responseText}\n\n${source.errorMessage}`
-          : source.errorMessage
-        : responseText;
-    messages.push({
-      id: entry.id,
-      role: 'assistant',
-      content,
-      timestamp: source.timestamp,
-      ...(source.stopReason === 'error' ? { isError: true } : {}),
-      ...(blocks.length === 0 ? {} : { contentBlocks: blocks }),
-    });
+    activeAssistantMessage.message.content += responseText;
+    if (blocks.length > 0) activeAssistantMessage.message.contentBlocks = blocks;
   }
 
   if (pendingUserPresentation) {
     throw new Error(
       `Pi user message presentation ${pendingUserPresentation.entryId} has no user message.`,
+    );
+  }
+  if (pendingTurnTiming) {
+    throw new Error(
+      `Pi Turn presentation timing ${pendingTurnTiming.turnId} has no assistant message.`,
     );
   }
 

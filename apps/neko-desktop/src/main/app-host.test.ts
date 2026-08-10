@@ -15,6 +15,9 @@ import {
   createDesktopApplicationSettingsUpdateRequest,
 } from '@neko/host/application-settings';
 import { createAgentExtensionManagementHostRequest } from '@neko/agent-contracts/extension-management-host';
+import { parseAutomationEndpointManagementHostRequest } from '@neko/automation-contracts/endpoint-management';
+import { parseAutomationPermissionManagementHostRequest } from '@neko/automation-contracts/permission-management';
+import { createAutomationTargetSelectionCoordinator } from '@neko/automation-node';
 import { type AgentHomeNavigationIdentity } from '@neko/agent-contracts';
 import {
   createDesktopConversationDeleteRequest,
@@ -152,6 +155,10 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      automationEndpoints: createAutomationEndpoints(),
+      automationPermissions: createAutomationPermissions(),
+      automationTargetSelections: createAutomationTargetSelectionCoordinator(),
+      automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
       characterConversations: createCharacterConversations(),
@@ -236,6 +243,10 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      automationEndpoints: createAutomationEndpoints(),
+      automationPermissions: createAutomationPermissions(),
+      automationTargetSelections: createAutomationTargetSelectionCoordinator(),
+      automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
       characterConversations: createCharacterConversations(),
@@ -303,6 +314,10 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
+      automationEndpoints: createAutomationEndpoints(),
+      automationPermissions: createAutomationPermissions(),
+      automationTargetSelections: createAutomationTargetSelectionCoordinator(),
+      automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
       characterConversations: createCharacterConversations(),
@@ -521,90 +536,6 @@ describe('DesktopAppHost', () => {
     ).toHaveLength(workspaceConversationCount);
   });
 
-  it('binds Agent launch operations to the exact Assistant Scene and connection identity', async () => {
-    const agentLaunch = createAgentLaunchRuntime();
-    const fixture = await createShellAppHost({ agentLaunch });
-    const projection = await bindAssistantDraft(fixture);
-    const scene = activeScene(projection);
-    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'assistant') {
-      throw new Error('Agent launch AppHost fixture requires an Assistant Scene.');
-    }
-    const launchBinding = {
-      kind: 'assistant' as const,
-      assistantSpaceId: scene.context.scope.assistantSpaceId,
-      baseGrantIds: [],
-    };
-    const launchWorkbench = activeWorkbench(projection);
-    const launchAgentSurfaceId = currentAgentSurfaceId(projection);
-    const catalog = createLaunchCatalog({
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: launchWorkbench.workbenchInstanceId,
-      agentSurfaceId: launchAgentSurfaceId,
-      viewId: scene.context.agentViewId,
-      connectionId: 'launch-1',
-      draftId: scene.context.scope.draftId,
-      binding: launchBinding,
-    });
-    vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
-    vi.spyOn(agentLaunch, 'authorizeResource').mockResolvedValue(catalog);
-
-    await fixture.appHost.transitionScene(
-      fixture.sender,
-      createDesktopSceneTransitionRequest({
-        requestId: 'open-settings-before-launch-attach',
-        rendererSessionId: projection.rendererSessionId,
-        windowId: fixture.windowId,
-        sceneId: scene.sceneId,
-        intent: { kind: 'open-settings', sectionId: 'general' },
-      }),
-    );
-
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-attach-1',
-        operation: 'attach',
-        workbenchInstanceId: launchWorkbench.workbenchInstanceId,
-        agentSurfaceId: launchAgentSurfaceId,
-        viewId: scene.context.agentViewId,
-        draft: {
-          phase: 'draft',
-          draftId: scene.context.scope.draftId,
-          binding: launchBinding,
-          bindingReceipt: null,
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
-    expect(agentLaunch.attach).not.toHaveBeenCalled();
-
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-attach-forged-surface',
-        operation: 'attach',
-        workbenchInstanceId: launchWorkbench.workbenchInstanceId,
-        agentSurfaceId: 'agent-surface:forged',
-        viewId: scene.context.agentViewId,
-        draft: {
-          phase: 'draft',
-          draftId: scene.context.scope.draftId,
-          binding: launchBinding,
-          bindingReceipt: null,
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
-
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-authorize-1',
-        operation: 'authorize-resource',
-        connection: catalog.connection,
-        resourceKind: 'file',
-      }),
-    ).resolves.toEqual({ requestId: 'launch-authorize-1', status: 'ready', catalog });
-    expect(agentLaunch.authorizeResource).toHaveBeenCalledWith(catalog.connection, 'file');
-    await fixture.appHost.dispose();
-  });
-
   it('binds Agent launch attach to the exact unbound Entry Draft identity', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
@@ -650,34 +581,6 @@ describe('DesktopAppHost', () => {
       viewId: scene.context.agentViewId,
       draft,
     });
-    const assistantBinding = {
-      kind: 'assistant' as const,
-      assistantSpaceId: 'assistant-space:local-user',
-      baseGrantIds: [],
-    };
-    const boundCatalog = createLaunchCatalog({
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: workbench.workbenchInstanceId,
-      agentSurfaceId,
-      viewId: scene.context.agentViewId,
-      connectionId: catalog.connection.connectionId,
-      draftId: scene.context.scope.draftId,
-      binding: assistantBinding,
-    });
-    vi.mocked(agentLaunch.bindTarget).mockResolvedValueOnce(boundCatalog);
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-entry-bind-assistant-1',
-        operation: 'bind-assistant',
-        connection: catalog.connection,
-      }),
-    ).resolves.toEqual({
-      requestId: 'launch-entry-bind-assistant-1',
-      status: 'ready',
-      catalog: boundCatalog,
-    });
-    expect(agentLaunch.bindTarget).toHaveBeenCalledWith(catalog.connection, assistantBinding);
     await fixture.appHost.dispose();
   });
 
@@ -2556,9 +2459,19 @@ describe('DesktopAppHost', () => {
           installed: true,
           enabled: true,
           canInstall: false,
+          canUpdate: false,
           canEnable: false,
           canDisable: true,
           canRemove: false,
+          updatePackageRelease: '',
+          deliverySource: 'official-download',
+          artifactPlatform: 'darwin-arm64',
+          downloadSizeBytes: 64_208_172,
+          artifactStatus: 'installed',
+          dependencyStatus: 'ready',
+          enableGrantStatus: 'accepted',
+          hostPermissionStatus: 'granted',
+          qualificationStatus: 'qualified',
           declaredPermissions: ['accessibility', 'screen-recording'],
           acceptedPermissions: ['accessibility', 'screen-recording'],
           agentStatus: 'ready',
@@ -2673,10 +2586,232 @@ describe('DesktopAppHost', () => {
     ).rejects.toThrow('does not match the active Scene');
   });
 
-  it('rejects plugin mutation while an Agent turn is active before changing the repository', async () => {
+  it('keeps user-managed endpoint authorization sender-bound and delegates no service lifecycle', async () => {
+    const automationEndpoints: DesktopAppHostOptions['automationEndpoints'] = {
+      list: vi.fn(async () => []),
+      configure: vi.fn(async (configuration) => [
+        {
+          connectorId: configuration.connectorId,
+          displayName: 'Browser Use 0.13.7',
+          providerKind: 'browser' as const,
+          upstreamRelease: '0.13.7',
+          configured: true,
+          endpointId: configuration.endpointId,
+          endpointUrl: configuration.url,
+          authorizationState: 'configured' as const,
+          healthStatus: 'reachable' as const,
+          providerStatus: 'matched' as const,
+          qualificationStatus: 'qualified' as const,
+          diagnostics: [],
+        },
+      ]),
+      remove: vi.fn(async () => []),
+    };
+    const fixture = await createShellAppHost({ automationEndpoints });
+    const extensions = await openExtensionsScene(fixture);
+    const configuration = {
+      connectorId: 'browser-use.observe.endpoint',
+      endpointId: 'endpoint-1',
+      url: 'https://browser.example/mcp',
+      authorization: { kind: 'bearer', secret: 'host-only' } as const,
+    };
+    const request = parseAutomationEndpointManagementHostRequest({
+      requestId: 'endpoint-configure-1',
+      identity: extensions.identity,
+      route: 'endpoint.configure',
+      configuration,
+    });
+
+    await fixture.appHost.executeAutomationEndpointManagement(fixture.sender, request);
+    expect(automationEndpoints.configure).toHaveBeenCalledWith(configuration);
+    expect(automationEndpoints.list).not.toHaveBeenCalled();
+    expect(Object.keys(automationEndpoints).sort()).toEqual(['configure', 'list', 'remove']);
+    await expect(
+      fixture.appHost.executeAutomationEndpointManagement(fixture.sender, {
+        ...request,
+        identity: { windowId: 'window-2' },
+      }),
+    ).rejects.toThrow('belongs to another Window');
+  });
+
+  it('keeps explicit OS permission requests sender-bound to the Extensions scene', async () => {
+    const automationPermissions: DesktopAppHostOptions['automationPermissions'] = {
+      list: vi.fn(async () => []),
+      request: vi.fn(async () => []),
+    };
+    const fixture = await createShellAppHost({ automationPermissions });
+    const extensions = await openExtensionsScene(fixture);
+    const request = parseAutomationPermissionManagementHostRequest({
+      requestId: 'permission-request-1',
+      identity: extensions.identity,
+      route: 'permission.request',
+      permission: 'accessibility',
+    });
+
+    await fixture.appHost.executeAutomationPermissionManagement(fixture.sender, request);
+    expect(automationPermissions.request).toHaveBeenCalledExactlyOnceWith('accessibility');
+    expect(automationPermissions.list).not.toHaveBeenCalled();
+    await expect(
+      fixture.appHost.executeAutomationPermissionManagement(fixture.sender, {
+        ...request,
+        identity: { windowId: 'window-2' },
+      }),
+    ).rejects.toThrow('belongs to another Window');
+  });
+
+  it('routes Automation selection and live control only through the exact active Agent Conversation surface', async () => {
+    const automationTargetSelections = createAutomationTargetSelectionCoordinator();
+    const automationSessions: DesktopAppHostOptions['automationSessions'] = {
+      listSessionControls: vi.fn(() => [sessionControlProjection()]),
+      controlSession: vi.fn(async () => undefined),
+      subscribeSessionControls: vi.fn(() => () => undefined),
+    };
+    const fixture = await createShellAppHost({
+      automationTargetSelections,
+      automationSessions,
+    });
+    const workbench = activeWorkbench(fixture.projection);
+    const interaction = {
+      kind: 'agent' as const,
+      agentSurfaceId: 'agent-surface-1',
+      agentViewId: 'view-1',
+      phase: 'session' as const,
+      scope: {
+        kind: 'workspace' as const,
+        draftId: 'draft-1',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+        conversationId: 'conversation-1',
+      },
+    };
+    vi.spyOn(fixture.appHost.shell, 'resolveAgentSurfaceGrant').mockResolvedValue({
+      windowId: fixture.windowId,
+      workbenchInstanceId: workbench.workbenchInstanceId,
+      agentSurfaceId: interaction.agentSurfaceId,
+      workbench,
+      interaction,
+    });
+    vi.spyOn(fixture.appHost.shell, 'resolveAgentViewGrant').mockResolvedValue({
+      windowId: fixture.windowId,
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      viewId: 'view-1',
+    });
+    vi.spyOn(fixture.appHost.agentBridge, 'assertConnection').mockImplementation(() => undefined);
+    const connection = {
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: workbench.workbenchInstanceId,
+      agentSurfaceId: interaction.agentSurfaceId,
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      viewId: 'view-1',
+      connectionId: 'connection-1',
+    };
+    const pending = automationTargetSelections.select(targetSelectionProjection());
+
+    await expect(
+      fixture.appHost.executeAutomationTargetSelection(fixture.sender, {
+        requestId: 'selection-list-1',
+        connection,
+        conversationId: 'conversation-1',
+        route: 'pending.list',
+      }),
+    ).resolves.toMatchObject({
+      requestId: 'selection-list-1',
+      route: 'pending.list',
+      pending: [{ authorizationId: 'authorization-1' }],
+    });
+    await expect(
+      fixture.appHost.executeAutomationTargetSelection(fixture.sender, {
+        requestId: 'selection-poison-1',
+        connection,
+        conversationId: 'conversation-other',
+        route: 'pending.list',
+      }),
+    ).rejects.toThrow('exact active Agent Conversation surface');
+    await expect(
+      fixture.appHost.executeAutomationTargetSelection(fixture.sender, {
+        requestId: 'selection-poison-2',
+        connection: { ...connection, workspaceId: 'workspace-other' },
+        conversationId: 'conversation-1',
+        route: 'pending.list',
+      }),
+    ).rejects.toThrow('exact active Agent Conversation surface');
+    await expect(
+      fixture.appHost.executeAutomationTargetSelection(fixture.sender, {
+        requestId: 'selection-cancel-1',
+        connection,
+        conversationId: 'conversation-1',
+        route: 'selection.resolve',
+        decision: { authorizationId: 'authorization-1', decision: 'cancel' },
+      }),
+    ).resolves.toMatchObject({ pending: [] });
+    await expect(pending).resolves.toBeUndefined();
+
+    await expect(
+      fixture.appHost.executeAutomationSessionControl(fixture.sender, {
+        requestId: 'session-controls-list-1',
+        connection,
+        conversationId: 'conversation-1',
+        route: 'controls.list',
+      }),
+    ).resolves.toMatchObject({
+      requestId: 'session-controls-list-1',
+      controls: [{ sessionId: 'session-1' }],
+    });
+    await expect(
+      fixture.appHost.executeAutomationSessionControl(fixture.sender, {
+        requestId: 'session-controls-poison-1',
+        connection,
+        conversationId: 'conversation-other',
+        route: 'controls.list',
+      }),
+    ).rejects.toThrow('exact active Agent Conversation surface');
+    await expect(
+      fixture.appHost.executeAutomationSessionControl(fixture.sender, {
+        requestId: 'session-controls-poison-2',
+        connection,
+        conversationId: 'conversation-1',
+        route: 'session.control',
+        command: {
+          sessionId: 'session-1',
+          owner: {
+            conversationId: 'conversation-other',
+            runId: 'run-1',
+            toolCallId: 'tool-call-1',
+          },
+          action: 'take-over',
+        },
+      }),
+    ).rejects.toThrow('belongs to another Conversation');
+    const command = {
+      sessionId: 'session-1',
+      owner: {
+        conversationId: 'conversation-1',
+        runId: 'run-1',
+        toolCallId: 'tool-call-1',
+      },
+      action: 'take-over' as const,
+    };
+    await expect(
+      fixture.appHost.executeAutomationSessionControl(fixture.sender, {
+        requestId: 'session-controls-takeover-1',
+        connection,
+        conversationId: 'conversation-1',
+        route: 'session.control',
+        command,
+      }),
+    ).resolves.toMatchObject({ route: 'session.control' });
+    expect(automationSessions.controlSession).toHaveBeenCalledExactlyOnceWith(command);
+  });
+
+  it('delegates plugin mutation ownership to the extension application service', async () => {
     const fixture = await createShellAppHost();
     const extensions = await openExtensionsScene(fixture);
-    vi.mocked(fixture.agent.hasActiveTurns).mockReturnValue(true);
+    vi.mocked(fixture.extensionManager.removePlugin).mockRejectedValue(
+      new Error("OpenNeko extension 'computer-use@openneko' runtime is owned."),
+    );
 
     await expect(
       fixture.appHost.executeExtensionManagement(
@@ -2688,8 +2823,58 @@ describe('DesktopAppHost', () => {
           pluginId: 'computer-use@openneko',
         }),
       ),
-    ).rejects.toThrow('Agent turn is active');
-    expect(fixture.extensionManager.removePlugin).not.toHaveBeenCalled();
+    ).rejects.toThrow('runtime is owned');
+    expect(fixture.extensionManager.removePlugin).toHaveBeenCalledWith('computer-use@openneko');
+    expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
+
+    vi.mocked(fixture.extensionManager.updatePlugin).mockRejectedValue(
+      new Error("OpenNeko extension 'computer-use@openneko' update is owned."),
+    );
+    await expect(
+      fixture.appHost.executeExtensionManagement(
+        fixture.sender,
+        createAgentExtensionManagementHostRequest({
+          route: 'plugin.update',
+          requestId: 'plugin-update-1',
+          identity: extensions.identity,
+          pluginId: 'computer-use@openneko',
+        }),
+      ),
+    ).rejects.toThrow('update is owned');
+    expect(fixture.extensionManager.updatePlugin).toHaveBeenCalledWith('computer-use@openneko');
+    expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
+
+    vi.mocked(fixture.extensionManager.readArtifactOperations).mockReturnValue([
+      {
+        operationId: 'artifact-operation-1',
+        pluginId: 'computer-use@openneko',
+        kind: 'update',
+        phase: 'downloading',
+        status: 'active',
+        transferredBytes: 32,
+        totalBytes: 64,
+        canCancel: true,
+        diagnosticCode: '',
+      },
+    ]);
+    await expect(
+      fixture.appHost.executeExtensionManagement(
+        fixture.sender,
+        createAgentExtensionManagementHostRequest({
+          route: 'plugin.operation.cancel',
+          requestId: 'plugin-operation-cancel-1',
+          identity: extensions.identity,
+          operationId: 'artifact-operation-1',
+        }),
+      ),
+    ).resolves.toMatchObject({
+      projection: {
+        operations: [expect.objectContaining({ operationId: 'artifact-operation-1' })],
+      },
+    });
+    expect(fixture.extensionManager.cancelArtifactOperation).toHaveBeenCalledWith(
+      'artifact-operation-1',
+    );
   });
 
   it('cleans up an Asset Center Preview after leaving its Scene without projecting into the new Scene', async () => {
@@ -3132,7 +3317,6 @@ function createShellFixture(applicationInstanceId: string): {
       stateRepository: repository,
       workspaceRegistry: registry,
       workspaceGrantAuthority: workspaceGrants,
-      startupTarget: 'restore',
       createIdentity: () => {
         identity += 1;
         return identity === 1 ? 'window-1' : `shell-identity-${identity}`;
@@ -3189,6 +3373,62 @@ function createConversationLifecycle() {
   });
 }
 
+function targetSelectionProjection() {
+  return {
+    authorizationId: 'authorization-1',
+    profileId: 'computer.observe',
+    provider: {
+      extensionId: 'computer-use@openneko',
+      providerId: 'cua-driver',
+      kind: 'computer' as const,
+      upstreamRelease: '0.19.2',
+      deliverySource: { kind: 'github-release' as const },
+    },
+    mode: 'observe' as const,
+    timeoutMs: 30_000,
+    stepBudget: 1,
+    owner: {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      runId: 'run-1',
+      toolCallId: 'tool-call-1',
+    },
+    candidates: [
+      {
+        kind: 'computer' as const,
+        targetKey: 'target-1',
+        label: 'Editor',
+        region: { x: 10, y: 20, width: 800, height: 600 },
+      },
+    ],
+  };
+}
+
+function sessionControlProjection() {
+  return {
+    sessionId: 'session-1',
+    profileId: 'computer.observe',
+    provider: {
+      extensionId: 'computer-use@openneko',
+      providerId: 'cua-driver',
+      kind: 'computer' as const,
+      upstreamRelease: '0.19.2',
+    },
+    target: { kind: 'computer' as const, targetKey: 'target-1', label: 'Editor' },
+    mode: 'observe' as const,
+    status: 'active' as const,
+    remainingSteps: 1,
+    phase: 'observation' as const,
+    evidenceStatus: 'none' as const,
+    owner: {
+      conversationId: 'conversation-1',
+      runId: 'run-1',
+      toolCallId: 'tool-call-1',
+    },
+    availableActions: ['pause', 'stop', 'take-over'] as const,
+  };
+}
+
 async function createShellAppHost(options?: {
   readonly configureShell?: (shell: DesktopShellService) => void;
   readonly agentLaunch?: DesktopAgentLaunchRuntime;
@@ -3201,6 +3441,10 @@ async function createShellAppHost(options?: {
   readonly characterConversations?: DesktopAppHostOptions['characterConversations'];
   readonly characterRoomConversations?: DesktopAppHostOptions['characterRoomConversations'];
   readonly characterRoomWorkbench?: DesktopAppHostOptions['characterRoomWorkbench'];
+  readonly automationEndpoints?: DesktopAppHostOptions['automationEndpoints'];
+  readonly automationPermissions?: DesktopAppHostOptions['automationPermissions'];
+  readonly automationTargetSelections?: DesktopAppHostOptions['automationTargetSelections'];
+  readonly automationSessions?: DesktopAppHostOptions['automationSessions'];
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -3304,6 +3548,14 @@ async function createShellAppHost(options?: {
     textEditor: options?.textEditor,
     extensionManager,
     personalSkillManager: createPersonalSkillManager(),
+    automationEndpoints: options?.automationEndpoints ?? createAutomationEndpoints(),
+    automationPermissions: options?.automationPermissions ?? {
+      list: async () => [],
+      request: async () => [],
+    },
+    automationTargetSelections:
+      options?.automationTargetSelections ?? createAutomationTargetSelectionCoordinator(),
+    automationSessions: options?.automationSessions ?? createAutomationSessions(),
     characterFoundation: createCharacterFoundationService(),
     characterFoundationCommands:
       options?.characterFoundationCommands ?? createCharacterFoundationCommands(),
@@ -3420,24 +3672,6 @@ function createAssetCenterRuntime(): AssetCenterNodeRuntime {
   });
 }
 
-async function bindAssistantDraft(fixture: Awaited<ReturnType<typeof createShellAppHost>>) {
-  const scene = activeScene(fixture.projection);
-  if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
-    throw new Error('Assistant binding fixture requires an unbound Entry Draft.');
-  }
-  await fixture.appHost.transitionScene(
-    fixture.sender,
-    createDesktopSceneTransitionRequest({
-      requestId: 'bind-assistant-fixture',
-      rendererSessionId: fixture.projection.rendererSessionId,
-      windowId: fixture.windowId,
-      sceneId: scene.sceneId,
-      intent: { kind: 'bind-agent-assistant', draftId: scene.context.scope.draftId },
-    }),
-  );
-  return fixture.appHost.shell.getProjection(fixture.windowId);
-}
-
 function createLaunchCatalog(input: {
   readonly applicationInstanceId: string;
   readonly windowId: string;
@@ -3474,6 +3708,12 @@ function createLaunchCatalog(input: {
             },
     },
     models: [],
+    defaultMediaModels: {},
+    mediaUnderstandingModels: {
+      image: { category: 'image', purpose: 'image.understand', status: 'missing' },
+      audio: { category: 'audio', purpose: 'audio.understand', status: 'missing' },
+      video: { category: 'video', purpose: 'video.understand', status: 'missing' },
+    },
     configuration: projectAgentConfigurationPolicy({
       models: [],
       request: null,
@@ -3566,7 +3806,10 @@ function createExtensionManager(): AgentExtensionManager & {
       runtimeDescriptors: [],
       diagnostics: [],
     })),
+    readArtifactOperations: vi.fn(() => []),
+    cancelArtifactOperation: vi.fn(),
     installPlugin: vi.fn(),
+    updatePlugin: vi.fn(),
     enablePlugin: vi.fn(),
     disablePlugin: vi.fn(),
     removePlugin: vi.fn(),
@@ -3632,6 +3875,7 @@ function createAgentComposition(): AgentAppHost & {
       warnings: [],
     })),
     hasActiveTurns: vi.fn(() => false),
+    listActivePluginTurns: vi.fn(() => []),
     reconcilePluginRuntime: vi.fn(async () => new Map()),
     readHomeProjection: vi.fn(() => ({
       conversations: [],
@@ -3810,6 +4054,31 @@ function createTestPiModels() {
     modify: async (_providerId, operation) => operation(undefined),
     delete: async () => undefined,
   });
+}
+
+function createAutomationEndpoints() {
+  return {
+    list: async () => [],
+    configure: async () => {
+      throw new Error('Automation endpoint configuration is not expected by this AppHost test.');
+    },
+    remove: async () => [],
+  };
+}
+
+function createAutomationPermissions() {
+  return {
+    list: async () => [],
+    request: async () => [],
+  };
+}
+
+function createAutomationSessions(): DesktopAppHostOptions['automationSessions'] {
+  return {
+    listSessionControls: vi.fn(() => []),
+    controlSession: vi.fn(async () => undefined),
+    subscribeSessionControls: vi.fn(() => () => undefined),
+  };
 }
 
 function createWorkspaceResolution(): AssetWorkspaceResolution {

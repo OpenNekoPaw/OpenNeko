@@ -31,7 +31,6 @@ export interface UseContextMenuOptions {
   nodes: CanvasNode[];
   screenToCanvas: (screenX: number, screenY: number) => { x: number; y: number };
   addActionAt: (actionId: CanvasAddActionId, pos: { x: number; y: number }) => void;
-  deleteSelected: () => void;
   handleFitContent: () => void;
   handleResetViewport: () => void;
   handleCopy: () => void;
@@ -67,7 +66,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     nodes,
     screenToCanvas,
     addActionAt,
-    deleteSelected,
     handleFitContent,
     handleResetViewport,
     handleCopy,
@@ -110,7 +108,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         hasSelection: showNodeMenu,
         selectedCount: effectiveSelectedNodeIds.length,
         onAddAction: addActionAt,
-        onDelete: deleteSelected,
         onSelectAll: () => {
           const { selectNodes } = canvasStore.getState();
           selectNodes(nodes.map((n) => n.id));
@@ -150,7 +147,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       selectedNodeIds,
       nodes,
       addActionAt,
-      deleteSelected,
       handleFitContent,
       handleResetViewport,
       handleCopy,

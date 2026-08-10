@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,8 +12,12 @@ import type {
 } from '@neko/agent-contracts';
 import {
   buildAgentPluginRuntime,
+  createAgentExtensionCandidateQualification,
   createAgentExtensionSupport,
+  disposeAgentPluginRuntimeChanges,
+  listChangedAgentPluginRuntimeIds,
   parsePluginMcpDocument,
+  reconcileAgentPluginRuntime,
 } from './plugin-runtime';
 
 const resolveFixtureModule = createRequire(import.meta.url).resolve;
@@ -205,8 +209,74 @@ describe('Desktop plugin runtime', () => {
       expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
+        dependencyStatus: 'ready',
+        hostPermissionStatus: 'not-applicable',
+        qualificationStatus: 'qualified',
       });
       await pluginRuntime.dispose();
+    });
+  });
+
+  it('qualifies a candidate in an isolated runtime and requires its exact handle to close once', async () => {
+    await withPlugin(async (pluginRoot) => {
+      const skillRoot = join(pluginRoot, 'skills');
+      await mkdir(join(skillRoot, 'fixture'), { recursive: true });
+      await writeFile(
+        join(skillRoot, 'fixture', 'SKILL.md'),
+        '---\nname: fixture\ndescription: Candidate fixture\n---\nUse the fixture method.\n',
+        'utf8',
+      );
+      const qualifier = createAgentExtensionCandidateQualification({ processEnv: {} });
+      const qualification = await qualifier.qualify({
+        operationId: 'candidate-operation-1',
+        descriptor: {
+          pluginId: 'fixture@market',
+          pluginRoot,
+          skillRoot,
+          mcpServerIds: [],
+          appIds: [],
+        },
+        signal: new AbortController().signal,
+      });
+
+      await expect(qualification.close()).resolves.toBeUndefined();
+      await expect(qualification.close()).rejects.toThrow('already closed');
+    });
+  });
+
+  it('rejects adapter-only candidates without starting their MCP process', async () => {
+    await withPlugin(async (pluginRoot) => {
+      const markerPath = join(pluginRoot, 'adapter-started');
+      const launcher = join(pluginRoot, 'adapter-mcp.mjs');
+      await writeFile(
+        launcher,
+        [
+          '#!/usr/bin/env node',
+          "import { writeFileSync } from 'node:fs';",
+          `writeFileSync(${JSON.stringify(markerPath)}, 'started', 'utf8');`,
+          'process.exit(1);',
+          '',
+        ].join('\n'),
+        { mode: 0o755 },
+      );
+      await writeFile(
+        join(pluginRoot, '.mcp.json'),
+        JSON.stringify({ mcpServers: { automation: { command: './adapter-mcp.mjs' } } }),
+        'utf8',
+      );
+      const qualifier = createAgentExtensionCandidateQualification({ processEnv: {} });
+
+      await expect(
+        qualifier.qualify({
+          operationId: 'candidate-operation-2',
+          descriptor: {
+            ...mcpDescriptor(pluginRoot, ['automation'], 'automation@market'),
+            mcpToolExposure: 'adapter-only',
+          },
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow('automation-adapter-unavailable');
+      await expect(readFile(markerPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     });
   });
 
@@ -260,6 +330,9 @@ describe('Desktop plugin runtime', () => {
       expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
+        dependencyStatus: 'ready',
+        hostPermissionStatus: 'not-applicable',
+        qualificationStatus: 'qualified',
       });
       await pluginRuntime.dispose();
 
@@ -281,20 +354,293 @@ describe('Desktop plugin runtime', () => {
       );
       expect(adapterRuntime.tools).toEqual([]);
       expect(adapterRuntime.readiness.get('fixture@market')).toEqual({
-        status: 'ready',
-        diagnosticCode: '',
+        status: 'unsupported',
+        diagnosticCode: 'automation-adapter-unavailable',
+        dependencyStatus: 'unchecked',
+        hostPermissionStatus: 'unknown',
+        qualificationStatus: 'unqualified',
       });
       await adapterRuntime.dispose();
     });
   });
+
+  it('never starts adapter-only MCP and keeps a sibling generic MCP Tool available', async () => {
+    await withPlugin(async (adapterRoot) => {
+      await withPlugin(async (genericRoot) => {
+        const markerPath = join(adapterRoot, 'adapter-started');
+        const adapterLauncher = join(adapterRoot, 'adapter-mcp.mjs');
+        await writeFile(
+          adapterLauncher,
+          [
+            '#!/usr/bin/env node',
+            "import { writeFileSync } from 'node:fs';",
+            `writeFileSync(${JSON.stringify(markerPath)}, 'started', 'utf8');`,
+            'process.exit(1);',
+            '',
+          ].join('\n'),
+          { mode: 0o755 },
+        );
+        await writeFile(
+          join(adapterRoot, '.mcp.json'),
+          JSON.stringify({
+            mcpServers: {
+              automation: { command: './adapter-mcp.mjs' },
+            },
+          }),
+          'utf8',
+        );
+
+        const genericLauncher = join(genericRoot, 'generic-mcp.mjs');
+        await writeFile(
+          genericLauncher,
+          [
+            '#!/usr/bin/env node',
+            `import { McpServer } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/mcp.js')).href)};`,
+            `import { StdioServerTransport } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/stdio.js')).href)};`,
+            "const server = new McpServer({ name: 'generic-sibling', version: '1.0.0' });",
+            "server.registerTool('echo', { description: 'Echo sibling' }, async () => ({ content: [{ type: 'text', text: 'sibling-ready' }] }));",
+            'await server.connect(new StdioServerTransport());',
+            '',
+          ].join('\n'),
+          { mode: 0o755 },
+        );
+        await writeFile(
+          join(genericRoot, '.mcp.json'),
+          JSON.stringify({
+            mcpServers: {
+              generic: { command: './generic-mcp.mjs' },
+            },
+          }),
+          'utf8',
+        );
+
+        const runtime = await buildAgentPluginRuntime(
+          {
+            records: [],
+            runtimeDescriptors: [
+              {
+                ...mcpDescriptor(adapterRoot, ['automation'], 'automation@market'),
+                mcpToolExposure: 'adapter-only',
+              },
+              mcpDescriptor(genericRoot, ['generic'], 'generic@market'),
+            ],
+            diagnostics: [],
+          },
+          {
+            processEnv: {
+              HOME: process.env['HOME'],
+              PATH: process.env['PATH'],
+              TMPDIR: process.env['TMPDIR'],
+            },
+          },
+        );
+
+        await expect(readFile(markerPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(runtime.tools.map((tool) => tool.name)).toEqual(['mcp__generic__echo']);
+        await expect(runtime.tools[0]?.execute({})).resolves.toMatchObject({
+          success: true,
+          data: 'sibling-ready',
+        });
+        expect(runtime.readiness.get('automation@market')).toEqual({
+          status: 'unsupported',
+          diagnosticCode: 'automation-adapter-unavailable',
+          dependencyStatus: 'unchecked',
+          hostPermissionStatus: 'unknown',
+          qualificationStatus: 'unqualified',
+        });
+        expect(runtime.readiness.get('generic@market')).toEqual({
+          status: 'ready',
+          diagnosticCode: '',
+          dependencyStatus: 'ready',
+          hostPermissionStatus: 'not-applicable',
+          qualificationStatus: 'qualified',
+        });
+        await runtime.dispose();
+      });
+    });
+  });
+
+  it('replaces and closes only the changed extension child runtime', async () => {
+    await withPlugin(async (firstRoot) => {
+      await withPlugin(async (updatedRoot) => {
+        await withPlugin(async (siblingRoot) => {
+          await writeEchoMcp(firstRoot, 'first', 'first-old');
+          await writeEchoMcp(updatedRoot, 'first', 'first-new');
+          await writeEchoMcp(siblingRoot, 'sibling', 'sibling-ready');
+          const initialSnapshot: AgentExtensionCatalogSnapshot = {
+            records: [],
+            runtimeDescriptors: [
+              mcpDescriptor(firstRoot, ['first'], 'first@market'),
+              mcpDescriptor(siblingRoot, ['sibling'], 'sibling@market'),
+            ],
+            diagnostics: [],
+          };
+          const initial = await buildAgentPluginRuntime(initialSnapshot, {
+            processEnv: fixtureProcessEnv(),
+          });
+          const previousFirstTool = initial.contributions.get('first@market')?.tools[0];
+          const previousSibling = initial.contributions.get('sibling@market');
+          const next = await reconcileAgentPluginRuntime(
+            initial,
+            {
+              records: [],
+              runtimeDescriptors: [
+                mcpDescriptor(updatedRoot, ['first'], 'first@market'),
+                mcpDescriptor(siblingRoot, ['sibling'], 'sibling@market'),
+              ],
+              diagnostics: [],
+            },
+            { processEnv: fixtureProcessEnv() },
+          );
+
+          expect(listChangedAgentPluginRuntimeIds(initial, next)).toEqual(['first@market']);
+          expect(next.contributions.get('sibling@market')).toBe(previousSibling);
+          await disposeAgentPluginRuntimeChanges(initial, next);
+          await expect(previousFirstTool?.execute({})).resolves.toMatchObject({
+            success: false,
+            error: 'MCP server first is not connected',
+          });
+          await expect(
+            next.contributions.get('first@market')?.tools[0]?.execute({}),
+          ).resolves.toMatchObject({
+            success: true,
+            data: 'first-new',
+          });
+          await expect(previousSibling?.tools[0]?.execute({})).resolves.toMatchObject({
+            success: true,
+            data: 'sibling-ready',
+          });
+          await next.dispose();
+        });
+      });
+    });
+  });
+
+  it('discards a conflicting child candidate without replacing the authoritative sibling', async () => {
+    await withPlugin(async (siblingRoot) => {
+      await withPlugin(async (conflictRoot) => {
+        await writeEchoMcp(siblingRoot, 'shared', 'authoritative');
+        await writeEchoMcp(conflictRoot, 'shared', 'candidate');
+        const initial = await buildAgentPluginRuntime(
+          {
+            records: [],
+            runtimeDescriptors: [mcpDescriptor(siblingRoot, ['shared'], 'sibling@market')],
+            diagnostics: [],
+          },
+          { processEnv: fixtureProcessEnv() },
+        );
+
+        await expect(
+          reconcileAgentPluginRuntime(
+            initial,
+            {
+              records: [],
+              runtimeDescriptors: [
+                mcpDescriptor(siblingRoot, ['shared'], 'sibling@market'),
+                mcpDescriptor(conflictRoot, ['shared'], 'candidate@market'),
+              ],
+              diagnostics: [],
+            },
+            { processEnv: fixtureProcessEnv() },
+          ),
+        ).rejects.toThrow("conflict would replace authoritative contribution 'sibling@market'");
+        await expect(initial.tools[0]?.execute({})).resolves.toMatchObject({
+          success: true,
+          data: 'authoritative',
+        });
+        await initial.dispose();
+      });
+    });
+  });
+
+  it('isolates initial MCP server conflicts without starting either child', async () => {
+    await withPlugin(async (firstRoot) => {
+      await withPlugin(async (secondRoot) => {
+        const firstMarker = join(firstRoot, 'started');
+        const secondMarker = join(secondRoot, 'started');
+        await writeEchoMcp(firstRoot, 'shared', 'first', firstMarker);
+        await writeEchoMcp(secondRoot, 'shared', 'second', secondMarker);
+        const runtime = await buildAgentPluginRuntime(
+          {
+            records: [],
+            runtimeDescriptors: [
+              mcpDescriptor(firstRoot, ['shared'], 'first@market'),
+              mcpDescriptor(secondRoot, ['shared'], 'second@market'),
+            ],
+            diagnostics: [],
+          },
+          { processEnv: fixtureProcessEnv() },
+        );
+
+        expect(runtime.tools).toEqual([]);
+        expect(runtime.readiness.get('first@market')).toMatchObject({
+          status: 'error',
+          diagnosticCode: 'mcp-server-conflict',
+        });
+        expect(runtime.readiness.get('second@market')).toMatchObject({
+          status: 'error',
+          diagnosticCode: 'mcp-server-conflict',
+        });
+        await expect(readFile(firstMarker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(readFile(secondMarker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        await runtime.dispose();
+      });
+    });
+  });
 });
+
+async function writeEchoMcp(
+  pluginRoot: string,
+  serverId: string,
+  response: string,
+  startMarker?: string,
+): Promise<void> {
+  const launcher = join(pluginRoot, `${serverId}-mcp.mjs`);
+  await writeFile(
+    launcher,
+    [
+      '#!/usr/bin/env node',
+      ...(startMarker
+        ? [
+            "import { writeFileSync } from 'node:fs';",
+            `writeFileSync(${JSON.stringify(startMarker)}, 'started', 'utf8');`,
+          ]
+        : []),
+      `import { McpServer } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/mcp.js')).href)};`,
+      `import { StdioServerTransport } from ${JSON.stringify(pathToFileURL(resolveFixtureModule('@modelcontextprotocol/sdk/server/stdio.js')).href)};`,
+      `const server = new McpServer({ name: ${JSON.stringify(serverId)}, version: '1.0.0' });`,
+      `server.registerTool('echo', { description: 'Echo fixture' }, async () => ({ content: [{ type: 'text', text: ${JSON.stringify(response)} }] }));`,
+      'await server.connect(new StdioServerTransport());',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  await writeFile(
+    join(pluginRoot, '.mcp.json'),
+    JSON.stringify({
+      mcpServers: {
+        [serverId]: { command: `./${serverId}-mcp.mjs`, cwd: '.' },
+      },
+    }),
+    'utf8',
+  );
+}
+
+function fixtureProcessEnv(): Readonly<NodeJS.ProcessEnv> {
+  return {
+    HOME: process.env['HOME'],
+    PATH: process.env['PATH'],
+    TMPDIR: process.env['TMPDIR'],
+  };
+}
 
 function mcpDescriptor(
   pluginRoot: string,
   mcpServerIds: readonly string[],
+  pluginId = 'fixture@market',
 ): AgentExtensionRuntimeDescriptor {
   return {
-    pluginId: 'fixture@market',
+    pluginId,
     pluginRoot,
     mcpDocumentPath: join(pluginRoot, '.mcp.json'),
     mcpServerIds,

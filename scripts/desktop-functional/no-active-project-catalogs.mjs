@@ -146,7 +146,6 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
             preferences: {
               theme: 'light',
               locale: 'en',
-              startupTarget: 'home',
               resourceBrowserView: 'list',
             },
           }),
@@ -593,16 +592,45 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       return {
         diagnostic: row?.querySelector('.management-surface-row__diagnostic')?.textContent?.trim() ?? '',
         openDisabled: row?.getAttribute('data-workspace-open-disabled') === 'true',
-        listMode: document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-list.is-list`)}) !== null,
+        gridMode: document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-list.is-grid`)}) !== null,
+        batchToolbarAbsent:
+          document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-batch-toolbar`)}) === null,
       };
     })()`);
-    if (!project.openDisabled || !project.listMode) {
-      throw new Error('Unavailable Workspace actions or default list mode are incorrect.');
+    if (!project.openDisabled || !project.gridMode || !project.batchToolbarAbsent) {
+      throw new Error('Unavailable Workspace actions or default grid mode are incorrect.');
     }
     if (await evaluate(`(() => document.querySelector('.shell-diagnostic') !== null)()`)) {
       throw new Error('Startup notice reappeared after Project navigation.');
     }
     checkpoint('retained-workspace-visible', project);
+    const directOpen = await evaluate(`(() => {
+      const row = [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-row`)})]
+        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'workspace');
+      const open = row?.querySelector('.management-surface-row__open');
+      if (!(open instanceof HTMLButtonElement) || open.disabled) {
+        throw new Error('Available Project direct-open control is unavailable.');
+      }
+      const result = {
+        projectId: row?.getAttribute('data-project-id') ?? '',
+        ariaPressedAbsent: !open.hasAttribute('aria-pressed'),
+        batchToolbarAbsent:
+          document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-batch-toolbar`)}) === null,
+      };
+      open.click();
+      return result;
+    })()`);
+    await waitForSelector('.desktop-scene-workbench--agent-only');
+    if (
+      directOpen.projectId !== `content:${EMPTY_WORKSPACE_ID}` ||
+      !directOpen.ariaPressedAbsent ||
+      !directOpen.batchToolbarAbsent
+    ) {
+      throw new Error(`Project direct open is incorrect: ${JSON.stringify(directOpen)}`);
+    }
+    checkpoint('project-catalog-direct-open', directOpen);
+    await clickNavigation(evaluate, 3);
+    await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
     const scrollSelector = `${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-list`;
     const scrollBefore = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
@@ -701,58 +729,62 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     checkpoint('project-catalog-final-row-reachable', { scrollBefore, scrollAfter });
     const projectScrollEndScreenshot = await screenshot('project-catalog-scroll-end');
 
-    const wideBatchSelection = await evaluate(`(async () => {
+    const wideGrid = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const buttons = root?.querySelectorAll('.management-surface-row__select');
-      const first = buttons?.[buttons.length - 2];
-      const second = buttons?.[buttons.length - 1];
-      if (!(root instanceof HTMLElement) || !(first instanceof HTMLButtonElement) ||
-          !(second instanceof HTMLButtonElement)) {
-        throw new Error('Wide Project batch fixture requires two rows.');
+      const list = root?.querySelector('.management-surface-list');
+      const gridControl = root?.querySelector('button[aria-label="Grid view"]');
+      const listControl = root?.querySelector('button[aria-label="List view"]');
+      if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement) ||
+          !(gridControl instanceof HTMLButtonElement) || !(listControl instanceof HTMLButtonElement)) {
+        throw new Error('Wide Project view controls are unavailable.');
       }
-      first.click();
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      second.scrollIntoView({ block: 'end' });
-      const toolbar = root.querySelector('.project-management-batch-toolbar');
-      const toolbarRect = toolbar?.getBoundingClientRect();
-      const rootRect = root.getBoundingClientRect();
+      list.scrollTop = 0;
+      const listRect = list.getBoundingClientRect();
+      const rows = [...list.querySelectorAll('.management-surface-row')];
+      const rowTops = new Set(rows.slice(0, 6).map((row) => Math.round(row.getBoundingClientRect().top)));
       return {
         viewportWidth: window.innerWidth,
-        selectedCount: root.querySelectorAll('.management-surface-row[data-selected="true"]').length,
-        toolbarText: toolbar?.textContent?.trim() ?? '',
-        toolbarFits:
-          toolbarRect !== undefined && toolbarRect.left >= rootRect.left && toolbarRect.right <= rootRect.right,
+        viewMode: list.dataset.viewMode,
+        gridPressed: gridControl.getAttribute('aria-pressed'),
+        listPressed: listControl.getAttribute('aria-pressed'),
+        batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
+        selectedStateAbsent: root.querySelector('[data-selected]') === null,
+        hasMultipleColumns: rowTops.size < Math.min(rows.length, 6),
+        rowsFit: rows.every((row) => {
+          const rectangle = row.getBoundingClientRect();
+          return rectangle.left >= listRect.left && rectangle.right <= listRect.right;
+        }),
       };
     })()`);
     if (
-      wideBatchSelection.viewportWidth < 1200 ||
-      wideBatchSelection.selectedCount !== 2 ||
-      !wideBatchSelection.toolbarText ||
-      !wideBatchSelection.toolbarFits
+      wideGrid.viewportWidth < 1200 ||
+      wideGrid.viewMode !== 'grid' ||
+      wideGrid.gridPressed !== 'true' ||
+      wideGrid.listPressed !== 'false' ||
+      !wideGrid.batchToolbarAbsent ||
+      !wideGrid.selectedStateAbsent ||
+      !wideGrid.hasMultipleColumns ||
+      !wideGrid.rowsFit
     ) {
-      throw new Error(
-        `Wide Project batch selection is incorrect: ${JSON.stringify(wideBatchSelection)}`,
-      );
+      throw new Error(`Wide Project grid is incorrect: ${JSON.stringify(wideGrid)}`);
     }
-    checkpoint('project-catalog-batch-selected-wide', wideBatchSelection);
-    const wideBatchSelectionScreenshot = await screenshot('project-catalog-batch-selected-wide');
-    const gridBatchSelection = await evaluate(`(async () => {
+    checkpoint('project-catalog-grid-wide', wideGrid);
+    const wideGridScreenshot = await screenshot('project-catalog-grid-wide');
+    const wideList = await evaluate(`(async () => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const viewButtons = root?.querySelectorAll('.management-surface-toolbar > button');
-      const grid = viewButtons?.[0];
-      if (!(root instanceof HTMLElement) || !(grid instanceof HTMLButtonElement)) {
-        throw new Error('Project grid view control is unavailable.');
+      const listControl = root?.querySelector('button[aria-label="List view"]');
+      if (!(root instanceof HTMLElement) || !(listControl instanceof HTMLButtonElement)) {
+        throw new Error('Project list view control is unavailable.');
       }
-      grid.click();
+      listControl.click();
       await new Promise((resolve) => setTimeout(resolve, 100));
       const list = root.querySelector('.management-surface-list');
       const listRect = list?.getBoundingClientRect();
       const rows = [...(list?.querySelectorAll('.management-surface-row') ?? [])];
       return {
-        gridMode: list?.classList.contains('is-grid') === true,
-        selectedCount: root.querySelectorAll('.management-surface-row[data-selected="true"]').length,
+        viewMode: list?.getAttribute('data-view-mode') ?? '',
+        listPressed: listControl.getAttribute('aria-pressed'),
+        batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
         rowsFit:
           listRect !== undefined &&
           rows.every((row) => {
@@ -762,33 +794,28 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       };
     })()`);
     if (
-      !gridBatchSelection.gridMode ||
-      gridBatchSelection.selectedCount !== 2 ||
-      !gridBatchSelection.rowsFit
+      wideList.viewMode !== 'list' ||
+      wideList.listPressed !== 'true' ||
+      !wideList.batchToolbarAbsent ||
+      !wideList.rowsFit
     ) {
-      throw new Error(
-        `Project grid batch selection is incorrect: ${JSON.stringify(gridBatchSelection)}`,
-      );
+      throw new Error(`Wide Project list is incorrect: ${JSON.stringify(wideList)}`);
     }
-    checkpoint('project-catalog-batch-selected-grid-wide', gridBatchSelection);
-    const gridBatchSelectionScreenshot = await screenshot(
-      'project-catalog-batch-selected-grid-wide',
-    );
+    checkpoint('project-catalog-list-wide', wideList);
+    const wideListScreenshot = await screenshot('project-catalog-list-wide');
     await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const list = root?.querySelectorAll('.management-surface-toolbar > button')[1];
-      const clear = root?.querySelector('.project-management-batch-toolbar button:last-child');
-      if (!(list instanceof HTMLButtonElement) || !(clear instanceof HTMLButtonElement)) {
-        throw new Error('Project list or batch clear control is unavailable.');
+      const grid = root?.querySelector('button[aria-label="Grid view"]');
+      if (!(grid instanceof HTMLButtonElement)) {
+        throw new Error('Project grid view control is unavailable.');
       }
-      list.click();
-      clear.click();
+      grid.click();
       return true;
     })()`);
     await waitForCondition(
       evaluate,
-      `document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-batch-toolbar`)}) === null`,
-      'Project batch clear did not restore the unselected catalog.',
+      `document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .management-surface-list`)})?.getAttribute('data-view-mode') === 'grid'`,
+      'Project catalog did not return to grid view.',
     );
 
     await evaluate(`(() => {
@@ -821,94 +848,84 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     checkpoint('project-catalog-minimum-window-bounded', compactProject);
     const compactProjectScreenshot = await screenshot('project-catalog-minimum-window');
 
-    const batchSelection = await evaluate(`(async () => {
+    const compactUnavailableItem = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const buttons = root?.querySelectorAll('.management-surface-row__select');
-      const first = buttons?.[buttons.length - 2];
-      const second = buttons?.[buttons.length - 1];
-      if (!(root instanceof HTMLElement) || !(first instanceof HTMLButtonElement) ||
-          !(second instanceof HTMLButtonElement)) {
-        throw new Error('Unavailable Project batch fixture requires two rows.');
+      const list = root?.querySelector('.management-surface-list');
+      const row = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
+      const open = row?.querySelector('.management-surface-row__open');
+      const actions = row?.querySelectorAll('.management-surface-row-actions button');
+      const cleanup = actions?.[0];
+      const removal = actions?.[1];
+      if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement) ||
+          !(row instanceof HTMLElement) || !(open instanceof HTMLButtonElement) ||
+          !(cleanup instanceof HTMLButtonElement) || !(removal instanceof HTMLButtonElement)) {
+        throw new Error('Compact unavailable Project item is incomplete.');
       }
-      first.click();
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      second.scrollIntoView({ block: 'end' });
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      const toolbar = root.querySelector('.project-management-batch-toolbar');
-      const toolbarRect = toolbar?.getBoundingClientRect();
-      const rootRect = root.getBoundingClientRect();
-      const removal = [...(toolbar?.querySelectorAll('button') ?? [])].find((button) =>
-        /^(Remove selected|移除所选项目)$/u.test(button.textContent?.trim() ?? ''),
-      );
-      const cleanup = [...(toolbar?.querySelectorAll('button') ?? [])].find((button) =>
-        /^(Delete conversations|删除项目会话)$/u.test(button.textContent?.trim() ?? ''),
-      );
+      row.scrollIntoView({ block: 'end' });
+      const rowRect = row.getBoundingClientRect();
+      const removalRect = removal.getBoundingClientRect();
       return {
-        selectedCount: root.querySelectorAll('.management-surface-row[data-selected="true"]').length,
-        toolbarVisible: toolbar instanceof HTMLElement,
-        toolbarText: toolbar?.textContent?.trim() ?? '',
-        toolbarFits:
-          toolbarRect !== undefined && toolbarRect.left >= rootRect.left && toolbarRect.right <= rootRect.right,
-        cleanupDisabled: cleanup instanceof HTMLButtonElement && cleanup.disabled,
-        removalEnabled: removal instanceof HTMLButtonElement && !removal.disabled,
+        projectId: row.dataset.projectId ?? '',
+        viewMode: list.dataset.viewMode,
+        openDisabled: open.disabled,
+        cleanupDisabled: cleanup.disabled,
+        removalEnabled: !removal.disabled,
+        removalFits: removalRect.left >= rowRect.left && removalRect.right <= rowRect.right,
+        batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
+        selectedStateAbsent: root.querySelector('[data-selected]') === null,
       };
     })()`);
     if (
-      batchSelection.selectedCount !== 2 ||
-      !batchSelection.toolbarVisible ||
-      !batchSelection.toolbarText ||
-      !batchSelection.toolbarFits ||
-      !batchSelection.cleanupDisabled ||
-      !batchSelection.removalEnabled
+      compactUnavailableItem.viewMode !== 'grid' ||
+      !compactUnavailableItem.openDisabled ||
+      !compactUnavailableItem.cleanupDisabled ||
+      !compactUnavailableItem.removalEnabled ||
+      !compactUnavailableItem.removalFits ||
+      !compactUnavailableItem.batchToolbarAbsent ||
+      !compactUnavailableItem.selectedStateAbsent
     ) {
       throw new Error(
-        `Unavailable Project batch selection is incorrect: ${JSON.stringify(batchSelection)}`,
+        `Compact unavailable Project item is incorrect: ${JSON.stringify(compactUnavailableItem)}`,
       );
     }
-    checkpoint('project-catalog-batch-selected', batchSelection);
-    const batchSelectionScreenshot = await screenshot('project-catalog-batch-selected-minimum');
+    checkpoint('project-catalog-unavailable-item-compact', compactUnavailableItem);
+    const compactUnavailableItemScreenshot = await screenshot(
+      'project-catalog-unavailable-item-compact',
+    );
 
-    const batchCancellation = await evaluate(`(async () => {
+    const itemRemovalCancellation = await evaluate(`(async () => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const removal = [
-        ...(root?.querySelectorAll('.project-management-batch-toolbar button') ?? []),
-      ].find((button) =>
-        /^(Remove selected|移除所选项目)$/u.test(button.textContent?.trim() ?? ''),
-      );
+      const row = root?.querySelector(${JSON.stringify(`[data-project-id="${compactUnavailableItem.projectId}"]`)});
+      const removal = row?.querySelector('.management-surface-row-actions button:last-child');
       const rowsBefore = root?.querySelectorAll('.management-surface-row').length ?? 0;
       globalThis.confirm = () => false;
       if (!(removal instanceof HTMLButtonElement)) {
-        throw new Error('Project batch removal is unavailable.');
+        throw new Error('Project item removal is unavailable.');
       }
       removal.click();
       await new Promise((resolve) => setTimeout(resolve, 100));
       return {
         rowsBefore,
         rowsAfter: root?.querySelectorAll('.management-surface-row').length ?? 0,
-        selectedAfter:
-          root?.querySelectorAll('.management-surface-row[data-selected="true"]').length ?? 0,
+        targetPresent:
+          root?.querySelector(${JSON.stringify(`[data-project-id="${compactUnavailableItem.projectId}"]`)}) !== null,
       };
     })()`);
     if (
-      batchCancellation.rowsBefore !== batchCancellation.rowsAfter ||
-      batchCancellation.selectedAfter !== 2
+      itemRemovalCancellation.rowsBefore !== itemRemovalCancellation.rowsAfter ||
+      !itemRemovalCancellation.targetPresent
     ) {
-      throw new Error('Cancelled unavailable Project batch removal changed catalog state.');
+      throw new Error('Cancelled unavailable Project item removal changed catalog state.');
     }
-    checkpoint('project-catalog-batch-cancelled', batchCancellation);
+    checkpoint('project-catalog-item-removal-cancelled', itemRemovalCancellation);
 
     await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const removal = [
-        ...(root?.querySelectorAll('.project-management-batch-toolbar button') ?? []),
-      ].find((button) =>
-        /^(Remove selected|移除所选项目)$/u.test(button.textContent?.trim() ?? ''),
-      );
+      const row = root?.querySelector(${JSON.stringify(`[data-project-id="${compactUnavailableItem.projectId}"]`)});
+      const removal = row?.querySelector('.management-surface-row-actions button:last-child');
       globalThis.confirm = () => true;
       if (!(removal instanceof HTMLButtonElement)) {
-        throw new Error('Project batch removal is unavailable.');
+        throw new Error('Project item removal is unavailable.');
       }
       removal.click();
       return true;
@@ -918,23 +935,23 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       `(() => {
         const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
         return root?.querySelectorAll('.management-surface-row').length === ${String(
-          SCROLL_PROJECT_COUNT,
-        )} && root.querySelector('.project-management-batch-toolbar') === null;
+          SCROLL_PROJECT_COUNT + 1,
+        )} && root.querySelector(${JSON.stringify(`[data-project-id="${compactUnavailableItem.projectId}"]`)}) === null;
       })()`,
-      'Confirmed Project batch removal did not remove exactly two selected records.',
+      'Confirmed Project item removal did not remove the exact record.',
     );
-    const batchRemoval = await evaluate(`(() => {
+    const itemRemoval = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
       const list = root?.querySelector('.management-surface-list');
       if (list instanceof HTMLElement) list.scrollTop = 0;
       return {
         remainingRows: root?.querySelectorAll('.management-surface-row').length ?? -1,
-        selectedRows: root?.querySelectorAll('.management-surface-row[data-selected="true"]').length ?? -1,
-        batchToolbarVisible: root?.querySelector('.project-management-batch-toolbar') !== null,
+        selectedStateAbsent: root?.querySelector('[data-selected]') === null,
+        batchToolbarAbsent: root?.querySelector('.project-management-batch-toolbar') === null,
       };
     })()`);
-    checkpoint('project-catalog-batch-removed', batchRemoval);
-    const batchRemovalScreenshot = await screenshot('project-catalog-batch-removed-minimum');
+    checkpoint('project-catalog-item-removed', itemRemoval);
+    const itemRemovalScreenshot = await screenshot('project-catalog-item-removed-compact');
 
     await clickNavigation(evaluate, 0);
     await waitForSelector('.desktop-scene-workbench--agent-only');
@@ -1012,53 +1029,41 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     );
     await clickNavigation(evaluate, 3);
     await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
-    const darkBatchSelection = await evaluate(`(async () => {
+    const darkGrid = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const buttons = root?.querySelectorAll('.management-surface-row__select');
-      const first = buttons?.[0];
-      const second = buttons?.[1];
-      if (!(root instanceof HTMLElement) || !(first instanceof HTMLButtonElement) ||
-          !(second instanceof HTMLButtonElement)) {
-        throw new Error('Dark Project batch fixture requires two rows.');
+      const list = root?.querySelector('.management-surface-list');
+      const row = list?.querySelector('.management-surface-row');
+      const actions = row?.querySelector('.management-surface-row-actions');
+      if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement) ||
+          !(row instanceof HTMLElement) || !(actions instanceof HTMLElement)) {
+        throw new Error('Dark Project grid fixture is incomplete.');
       }
-      first.click();
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      const selected = root.querySelector('.management-surface-row[data-selected="true"]');
-      const toolbar = root.querySelector('.project-management-batch-toolbar');
-      const selectedStyle = selected instanceof HTMLElement ? getComputedStyle(selected) : undefined;
+      const rowRect = row.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      const rowStyle = getComputedStyle(row);
       return {
         theme: document.documentElement.dataset.nekoTheme,
-        selectedCount: root.querySelectorAll('.management-surface-row[data-selected="true"]').length,
-        toolbarVisible: toolbar instanceof HTMLElement,
-        selectedBackground: selectedStyle?.backgroundColor ?? '',
-        selectedBorder: selectedStyle?.borderColor ?? '',
-        selectedShadow: selectedStyle?.boxShadow ?? '',
+        viewMode: list.dataset.viewMode,
+        batchToolbarAbsent: root.querySelector('.project-management-batch-toolbar') === null,
+        selectedStateAbsent: root.querySelector('[data-selected]') === null,
+        rowBackground: rowStyle.backgroundColor,
+        rowBorder: rowStyle.borderColor,
+        actionsFit: actionsRect.left >= rowRect.left && actionsRect.right <= rowRect.right,
       };
     })()`);
     if (
-      darkBatchSelection.theme !== 'dark' ||
-      darkBatchSelection.selectedCount !== 2 ||
-      !darkBatchSelection.toolbarVisible ||
-      !darkBatchSelection.selectedBackground ||
-      !darkBatchSelection.selectedBorder ||
-      darkBatchSelection.selectedShadow !== 'none'
+      darkGrid.theme !== 'dark' ||
+      darkGrid.viewMode !== 'grid' ||
+      !darkGrid.batchToolbarAbsent ||
+      !darkGrid.selectedStateAbsent ||
+      !darkGrid.rowBackground ||
+      !darkGrid.rowBorder ||
+      !darkGrid.actionsFit
     ) {
-      throw new Error(
-        `Dark Project batch selection is incorrect: ${JSON.stringify(darkBatchSelection)}`,
-      );
+      throw new Error(`Dark Project grid is incorrect: ${JSON.stringify(darkGrid)}`);
     }
-    checkpoint('project-catalog-batch-selected-dark', darkBatchSelection);
-    const darkBatchSelectionScreenshot = await screenshot('project-catalog-batch-selected-dark');
-    await evaluate(`(() => {
-      const clear = document.querySelector(
-        ${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-batch-toolbar button:last-child`)},
-      );
-      if (!(clear instanceof HTMLButtonElement)) throw new Error('Dark Project batch clear is unavailable.');
-      clear.click();
-      return true;
-    })()`);
+    checkpoint('project-catalog-grid-dark', darkGrid);
+    const darkGridScreenshot = await screenshot('project-catalog-grid-dark');
 
     await clickNavigation(evaluate, 0);
     await waitForSelector('.desktop-scene-workbench--agent-only');
@@ -1147,12 +1152,13 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       scrollBefore,
       scrollAfter,
       compactProject,
-      wideBatchSelection,
-      gridBatchSelection,
-      batchSelection,
-      batchCancellation,
-      batchRemoval,
-      darkBatchSelection,
+      directOpen,
+      wideGrid,
+      wideList,
+      compactUnavailableItem,
+      itemRemovalCancellation,
+      itemRemoval,
+      darkGrid,
       lightNarrowEmptyProject,
       darkNarrowEmptyProject,
       screenshots: [
@@ -1164,13 +1170,13 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         emptyProjectKeyboardScreenshot,
         projectScrollStartScreenshot,
         projectScrollEndScreenshot,
-        wideBatchSelectionScreenshot,
-        gridBatchSelectionScreenshot,
+        wideGridScreenshot,
+        wideListScreenshot,
         compactProjectScreenshot,
-        batchSelectionScreenshot,
-        batchRemovalScreenshot,
+        compactUnavailableItemScreenshot,
+        itemRemovalScreenshot,
         lightNarrowEmptyProjectScreenshot,
-        darkBatchSelectionScreenshot,
+        darkGridScreenshot,
         darkNarrowEmptyProjectScreenshot,
         catalogScreenshot,
       ],

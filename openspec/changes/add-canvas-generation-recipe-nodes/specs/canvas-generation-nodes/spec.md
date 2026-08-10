@@ -108,6 +108,14 @@ Every explicit rerun SHALL create a new GenerationJob and new immutable outputs.
 - **THEN** the terminal output remains bound to its submitted Recipe/input fingerprint and is preserved
 - **AND** Canvas visibly indicates that the current Recipe differs from the selected generated result
 
+#### Scenario: A stale-Recipe runtime projection crosses the Desktop boundary
+
+- **GIVEN** the exact Generation Node Recipe differs from its submitted Recipe/input fingerprint
+- **WHEN** Node/Main projects `recipeStale: true` through preload and the Webview rebuilds the Canvas snapshot
+- **THEN** the canonical Canvas Host decoder validates and preserves that boolean stale marker
+- **AND** Canvas opens with the node-local stale indication instead of rejecting the snapshot or reporting a project load failure
+- **AND** unknown projection fields and non-boolean stale markers still fail visibly at the current message boundary
+
 ### Requirement: One node has at most one active run
 
 The first release SHALL allow at most one non-terminal GenerationJob per Generation Node. It SHALL NOT automatically run a node because an upstream value, connection, output selection or Recipe changed.
@@ -144,7 +152,11 @@ GenerationJob execution SHALL survive Canvas renderer unmount, View closure and 
 
 Prompt/Text Generation Nodes SHALL render generated text content, and Image/Audio/Video Generation Nodes SHALL render their selected media through authorized package-owned preview paths. Editing generated text SHALL preserve the immutable generated source artifact and provenance.
 
-Canvas SHALL present selected content as separate action, node-content and Generation-input layers. The selection action toolbar SHALL remain independent of the node, identify the selected Text/Image/Audio/Video content kind and expose common actions directly rather than collapsing an otherwise empty toolbar to only a More control. A selected Generation Node SHALL render its Recipe editor as a wide package-owned bottom composer anchored inside the current Canvas viewport, while the durable node uses the same content-card visual grammar as an ordinary referenced node of its Recipe kind. Empty, running and completed states SHALL remain content states rather than a separate Generation task-card header. The composer SHALL NOT repeat the node type heading or phase and SHALL NOT size or position itself like a second graph node. Ordinary imported or referenced nodes SHALL NOT display the Generation input composer.
+Canvas SHALL present selected content as separate action, node-content and Generation-input layers. The selection action toolbar SHALL remain independent of the node, identify the selected Text/Image/Audio/Video content kind and expose common actions directly rather than collapsing an otherwise empty toolbar to only a More control. A selected Generation Node SHALL render its Recipe editor as a compact package-owned composer anchored to the selected node's current screen-space bounds, while the durable node uses the same opaque neutral content-card visual grammar as an ordinary referenced node of its Recipe kind without reusing the Canvas background fill. The toolbar, node and composer SHALL form one fixed screen-space attachment stack: toolbar above the node, composer below the node, and a shared horizontal center during node movement, Canvas pan and zoom. Canvas SHALL pan the viewport when needed to contain the complete stack and SHALL NOT independently clamp or flip either accessory away from the node. The composer body SHALL use the elevated editor surface used by input controls and SHALL NOT reuse the tinted Canvas background fill. Empty, running and completed states SHALL remain content states rather than a separate Generation task-card header. The composer SHALL NOT repeat the node type heading or phase and SHALL NOT size or position itself like a second graph node. Ordinary imported or referenced nodes SHALL NOT display the Generation input composer.
+
+Canvas node cards SHALL use one white or light-glass neutral surface family with shared subtle border and shadow semantics rather than becoming fully transparent or reusing the Canvas grid/background fill. The selection toolbar, composer and popovers SHALL use one elevated white/light-glass surface family. Individual toolbar buttons, composer controls and popover rows SHALL have no persistent background at rest; only hover, selected, focus and disabled states may add restrained neutral state styling. Composer footer controls SHALL remain on the composer surface without a separate gray footer band, and destructive overflow actions SHALL use danger foreground plus a soft interaction tint instead of a saturated danger block.
+
+Ordinary Image, Video, Audio and File nodes, plus Generation content nodes, SHALL render one compact icon-and-name label above the card through the shared BaseNode label slot. Media names SHALL NOT appear in a footer below the preview or inside Audio player content. File labels SHALL remain visible and contain only the resolved basename.
 
 #### Scenario: Prompt generation succeeds
 
@@ -161,7 +173,7 @@ Canvas SHALL present selected content as separate action, node-content and Gener
 #### Scenario: A Generation Node is selected before generation
 
 - **WHEN** one Prompt, Image, Audio or Video Generation Node is the exact selection
-- **THEN** Canvas shows a labeled selection action toolbar, the content node and one viewport-bottom Generation input composer
+- **THEN** Canvas shows a labeled selection action toolbar, the content node and one compact Generation input composer adjacent to that node
 - **AND** the content node is labeled and shaped as Text, Image, Audio or Video rather than as a Generation task card
 - **AND** the composer uses one shared reference, prompt, model/parameter footer and run/cancel structure to edit the same node without repeating a node heading or creating another Canvas node
 
@@ -169,13 +181,47 @@ Canvas SHALL present selected content as separate action, node-content and Gener
 
 - **WHEN** the selected Generation Node receives a successful committed output
 - **THEN** the output fills the content area of the same node
-- **AND** the bottom composer remains available for an explicit rerun without resizing or visually merging with the node content
+- **AND** the adjacent composer remains available for an explicit rerun without resizing or visually merging with the node content
 
 #### Scenario: A referenced content node is selected
 
 - **WHEN** the exact selection is an ordinary imported or referenced Media, Markdown or File node
 - **THEN** Canvas shows its labeled selection actions and content node
 - **AND** it does not show a Generation Recipe composer or infer generation authority from provenance
+
+#### Scenario: A media or file node is presented
+
+- **WHEN** Canvas renders an ordinary Image, Video, Audio or File node
+- **THEN** its icon and resolved name appear once above the card using the same external label grammar as Generation content
+- **AND** Video/Image do not append the name below their preview, Audio does not embed it in the player, and File does not lose or repeat its basename
+- **AND** when the node is selected, the action toolbar remains above and clear of that external label at the current Canvas zoom
+
+#### Scenario: Canvas surfaces are rendered together
+
+- **WHEN** a user selects a node and opens its model, parameter or action popover
+- **THEN** the node remains a legible white/light-glass card with one subtle border and shadow while toolbar, composer and popover use one consistent elevated surface family
+- **AND** controls are transparent at rest with restrained interaction states, the composer footer does not introduce a separate gray band and Delete is not rendered as a full saturated red block
+
+#### Scenario: A reference material is added from the composer
+
+- **GIVEN** one Generation Node is selected and its composer is visible
+- **WHEN** the user activates the reference-add control and authorizes a valid Workspace material
+- **THEN** the Canvas Host creates exactly one material node and one `reference` connection from that material to the exact Generation Node in the same serial command
+- **AND** the composer immediately summarizes the new connected reference
+- **AND** the Renderer receives no raw local path and cancellation or invalid selection leaves the document unchanged
+
+#### Scenario: A Workspace material is dragged into the reference area
+
+- **GIVEN** the Resource Browser exposes an authorized `ContentLocator` for a compatible material
+- **WHEN** the user drops it on the selected Generation Node composer reference area
+- **THEN** Canvas creates one ordinary material node and one exact `reference` connection without copying the Workspace source
+- **AND** an incompatible, generated-output or malformed drag payload fails visibly without mutating the document
+
+#### Scenario: An external material is selected as a reference
+
+- **WHEN** the user chooses the explicit external-import action from the reference source chooser
+- **THEN** Desktop imports the source into the exact Workspace before Canvas authors the material node and connection
+- **AND** no raw absolute path is stored in the Recipe, Canvas node or Renderer state
 
 ### Requirement: Canvas mutations preserve user-observed command order
 
@@ -193,6 +239,12 @@ All Webview-originated mutations of one Canvas Host session SHALL enter one seri
 - **THEN** the Webview Host treats it as acknowledgement of the same ordered command stream
 - **AND** it does not publish an older snapshot as a competing success path or merge stale nodes back into the document
 
+#### Scenario: Canvas opens while pending Agent Board delivery is reconciled
+
+- **WHEN** opening the exact Workspace Board resolves its Workspace authority and that resolution reconciles pending Agent artifact delivery
+- **THEN** Workspace resolution completes before Canvas enters the Board mutation queue and the initial snapshot is returned
+- **AND** Canvas does not recursively wait on the same Board queue or require a second application open to display the delivered nodes
+
 ### Requirement: Historical Canvas content remains visible without a parallel regenerate path
 
 Existing Markdown, Media, File and Job nodes SHALL remain readable and editable according to their canonical node contracts. New Generation authoring SHALL NOT continue the historical material-result regenerate path that creates another Job/Media graph.
@@ -202,3 +254,127 @@ Existing Markdown, Media, File and Job nodes SHALL remain readable and editable 
 - **WHEN** an existing Canvas contains a Media Node with Generation provenance but no Generation Recipe node
 - **THEN** the media and provenance remain visible
 - **AND** regeneration requires an explicit new Generation Node using that material as input rather than invoking the removed parallel path
+
+#### Scenario: A File Node is presented
+
+- **WHEN** an existing File Node contains a Workspace-relative path or a path-shaped historical title
+- **THEN** Canvas displays only the basename in the compact label above the node using the same label grammar as a Generation Node
+- **AND** the card body does not repeat the path, title or media type while the durable File node facts remain unchanged
+
+### Requirement: Material actions are media-specific and capability-owned
+
+Canvas SHALL present selected ordinary Image, Video and Audio materials, plus a Generation Node's exact selected successful media output, with a compact media-specific action layout. Stable action identities SHALL map real owner-contributed capabilities into direct and overflow positions without Canvas inferring executable behavior from the media type. Existing Cut, Preview and project Media Library operations SHALL retain their canonical owners and execution paths when presented as Edit, full-screen preview and Save Material. Cut-owned audio separation SHALL import the exact selected Video material into the exact Cut target and apply Cut's canonical `separate-audio` command. An unavailable advanced operation SHALL be absent rather than disabled, no-op or routed through Agent/provider fallback.
+
+#### Scenario: An Audio material is selected
+
+- **WHEN** the exact selected Audio material has Cut, project Media Library and Preview owners
+- **THEN** Canvas presents Edit, Save Material and full-screen preview through those exact owner descriptors
+- **AND** voice denoise appears only when its exact Audio operation owner contributes and executes that descriptor
+
+#### Scenario: A Video material is selected
+
+- **WHEN** the exact selected Video material has owner-contributed actions
+- **THEN** Canvas keeps Edit and audio separation directly reachable, groups enhance/frame interpolation, frame extraction, subtitle removal/generation, color grading and editor tools under More, and keeps Save Material plus full-screen preview in the common trailing group
+- **AND** each absent owner removes only its own action without disabling the remaining toolbar
+
+#### Scenario: A generated Video output is selected
+
+- **WHEN** the exact selected Generation Node has a successful selected Video output and the Cut owner is available
+- **THEN** Canvas resolves that immutable generated-output locator as the selected Video material
+- **AND** Edit and audio separation target that exact output without creating a second Canvas material node
+- **AND** audio separation imports the video once into the exact Cut target and applies Cut's canonical separation command there
+
+#### Scenario: An Image material is selected
+
+- **WHEN** the exact selected Image material has owner-contributed actions
+- **THEN** Canvas keeps crop, upscale and redraw directly reachable, groups erase, outpaint, background removal, color grading, rotate, grid split and editor tools under More, and keeps Save Material plus full-screen preview in the common trailing group
+- **AND** Canvas does not present image operations whose exact owner is unavailable
+
+### Requirement: Node deletion is keyboard-only from the selected-node surface
+
+The selected-node toolbar, its overflow menus and the node context menu SHALL NOT render a Delete action for single or multiple selection. Delete and Backspace SHALL continue to remove the current Canvas selection through the canonical keyboard controller only when the Canvas focus boundary owns the key event; editable controls SHALL retain their normal text deletion behavior.
+
+#### Scenario: A selected node opens its action toolbar
+
+- **WHEN** one or more Canvas nodes are selected
+- **THEN** no primary or overflow action has a Delete identity or label
+- **AND** Duplicate and Group remain available when their existing Canvas authoring preconditions hold
+
+#### Scenario: The user presses a deletion shortcut
+
+- **WHEN** Canvas owns focus and the current selection is deletable
+- **THEN** Delete or Backspace invokes the existing exact selection deletion path
+- **AND** the same key inside an editable prompt, text input or content editor does not delete the Canvas node
+
+### Requirement: Generation composer uses configured model choices and typed parameters
+
+The Canvas Host SHALL project a secret-free list of enabled Workspace models whose exact capability supports the selected generation purpose. The Canvas composer SHALL use that list and bounded typed controls instead of editable provider/model identifiers or free-form ratio/resolution fields. Model and provider labels SHALL appear on one row in each selector option. Portal-rendered parameter controls SHALL retain the owning composer width context, remain inside the owning Canvas viewport, present grouped options as a multi-column grid where space permits and use bounded internal scrolling rather than collapsing into a viewport-spanning single column. It SHALL NOT silently select or substitute another provider/model when a binding is absent or unavailable.
+
+For Image Recipes, Canvas SHALL keep the reference row at the top of the composer, let the prompt region consume remaining editor height and keep model, parameter summary, output count and Run in one compact footer. Aspect ratio, resolution and quality SHALL share one bounded parameter popover with a five-column ratio-card layout where space permits. Output count SHALL use a separate narrow vertical popover while remaining the same canonical typed Recipe field.
+
+New Generation Nodes SHALL initialize their exact model from the Workspace-configured purpose default, or the configured model-type default when no purpose override exists, and SHALL initialize canonical typed parameters for their kind. Existing nodes SHALL retain their authored Recipe when Workspace defaults later change.
+
+#### Scenario: A new node has a valid configured default
+
+- **WHEN** the user creates a Prompt, Image, Video or Audio Generation Node and the exact Workspace has an enabled compatible default binding
+- **THEN** the new Recipe contains that exact provider/model/purpose binding and kind-specific typed defaults
+- **AND** the composer immediately shows usable model and parameter summaries without requiring manual selection
+
+#### Scenario: The configured default is unavailable
+
+- **WHEN** the configured default model is missing, disabled or incompatible with the Recipe purpose
+- **THEN** the new Recipe keeps the model unset and Run remains disabled with a local diagnostic
+- **AND** Canvas does not select the first available model or reuse another purpose binding
+
+#### Scenario: An untouched unset Recipe becomes authorable
+
+- **GIVEN** a Generation Node has no model, prompt, references, outputs or run history because no valid default catalog was available when it was created
+- **WHEN** its composer receives one exact compatible configured default
+- **THEN** Canvas persists that exact binding once and immediately presents the canonical typed parameter summary
+- **AND** it does not rewrite an authored Recipe or select a model by list order
+
+#### Scenario: A configured image model is selected
+
+- **GIVEN** the Workspace config contains enabled models with different purposes
+- **WHEN** the user opens an Image Generation Node model selector
+- **THEN** only models supporting `image.generate` are listed with their provider labels
+- **AND** choosing one persists its exact purpose/provider/model binding
+- **AND** aspect ratio, quality and output count are edited through bounded typed options
+
+#### Scenario: Image parameters are opened from the compact footer
+
+- **WHEN** the user opens the Image parameter summary
+- **THEN** Canvas presents the complete supported ratio card catalog plus explicit 1K, 2K and 4K resolution and low, medium and high quality choices in a contained grouped surface
+- **AND** output count remains a separate compact footer control whose `1..4` vertical choices update the same Image Recipe
+- **AND** closing either popover preserves the footer's single-line model, parameter, count and Run hierarchy without horizontal overflow
+
+#### Scenario: A persisted model is no longer available
+
+- **GIVEN** a Recipe references a model that is disabled or removed from the Workspace config
+- **WHEN** the composer is rebuilt
+- **THEN** the binding is shown as unavailable and Run is disabled with a local diagnostic
+- **AND** Canvas does not choose a default, another provider or another model
+
+#### Scenario: Video parameters are configured
+
+- **WHEN** the user edits a Video Generation Node
+- **THEN** the composer exposes bounded aspect-ratio, resolution, duration and frame-rate controls
+- **AND** the selected values remain canonical typed Recipe fields submitted through the single Generation Job path
+
+### Requirement: Audio and music authoring are explicit modes of one Audio node
+
+An Audio Generation Node SHALL expose separate Audio and Music authoring modes while retaining one `audio` Recipe and one Generation Job application path. Audio mode SHALL require an `audio.generate` binding; Music mode SHALL require an `audio.music.generate` binding.
+
+#### Scenario: The user switches from audio to music
+
+- **WHEN** the user selects the Music authoring tab
+- **THEN** the Recipe records music mode and the selector lists only music-capable configured models
+- **AND** an incompatible audio-model binding is replaced only by the exact configured `audio.music.generate` default (or the configured audio-type default), otherwise it remains visibly unset
+- **AND** Canvas never selects the first music model or an alternate provider as fallback
+- **AND** the node remains the same Audio Generation Node
+
+#### Scenario: Music-specific input is authored
+
+- **WHEN** Music mode is active
+- **THEN** the composer presents music-oriented prompt/genre controls and supported output parameters
+- **AND** Run submits `text-to-music` through the same exact Workspace Generation Job owner

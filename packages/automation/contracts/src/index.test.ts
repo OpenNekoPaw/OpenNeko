@@ -46,6 +46,7 @@ describe('Automation contracts', () => {
           providerId: 'browser-use',
           kind: 'browser',
           upstreamRelease: '0.13.7',
+          deliverySource: { kind: 'github-release' },
         },
         operations: [
           {
@@ -66,6 +67,39 @@ describe('Automation contracts', () => {
     ).toMatchObject({ id: 'browser.observe' });
   });
 
+  it('keeps a user-managed endpoint as an opaque exact identity without endpoint secrets', () => {
+    const profile = {
+      id: 'browser.observe.endpoint',
+      provider: {
+        extensionId: 'browser-use@openneko',
+        providerId: 'browser-use',
+        kind: 'browser',
+        upstreamRelease: '0.13.7',
+        deliverySource: { kind: 'user-managed-endpoint', endpointId: 'endpoint-1' },
+      },
+      operations: [],
+      requiredPermissions: {},
+    };
+
+    expect(parseAutomationProfile(profile)).toMatchObject({
+      provider: {
+        deliverySource: { kind: 'user-managed-endpoint', endpointId: 'endpoint-1' },
+      },
+    });
+    expect(() =>
+      parseAutomationProfile({
+        ...profile,
+        provider: {
+          ...profile.provider,
+          deliverySource: {
+            ...profile.provider.deliverySource,
+            authorization: 'must-stay-in-host',
+          },
+        },
+      }),
+    ).toThrow('unsupported or missing fields');
+  });
+
   it('rejects internal version fields and contradictory action traits', () => {
     const base = {
       id: 'browser.observe',
@@ -74,6 +108,7 @@ describe('Automation contracts', () => {
         providerId: 'browser-use',
         kind: 'browser',
         upstreamRelease: '0.13.7',
+        deliverySource: { kind: 'github-release' },
       },
       operations: [],
       requiredPermissions: {},
@@ -162,6 +197,7 @@ function sessionRequest() {
         providerId: 'browser-use',
         kind: 'browser',
         upstreamRelease: '0.13.7',
+        deliverySource: { kind: 'github-release' },
       },
       target: {
         kind: 'browser',

@@ -35,11 +35,6 @@ export const AGENT_LAUNCH_HOST_CHANNEL = 'neko:agent:launch' as const;
 export type AgentLaunchHostRequest =
   | {
       readonly requestId: string;
-      readonly operation: 'bind-assistant';
-      readonly connection: AgentLaunchConnectionIdentity;
-    }
-  | {
-      readonly requestId: string;
       readonly operation: 'bind-target';
       readonly connection: AgentLaunchConnectionIdentity;
       readonly binding: AgentDomainBinding;
@@ -125,7 +120,6 @@ export interface OpenNekoAgentLaunchBridge {
       connection: AgentLaunchConnectionIdentity,
       binding: AgentDomainBinding,
     ): Promise<AgentLaunchCatalogProjection>;
-    bindAssistant(connection: AgentLaunchConnectionIdentity): Promise<AgentLaunchCatalogProjection>;
     updateConfiguration(
       connection: AgentLaunchConnectionIdentity,
       configuration: AgentConfigurationRequest,
@@ -190,14 +184,6 @@ export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequ
       operation: 'bind-target',
       connection: parseAgentLaunchConnectionIdentity(record['connection']),
       binding: parseAgentDomainBinding(record['binding']),
-    };
-  }
-  if (record['operation'] === 'bind-assistant') {
-    requireExactKeys(record, ['requestId', 'operation', 'connection']);
-    return {
-      requestId,
-      operation: 'bind-assistant',
-      connection: parseAgentLaunchConnectionIdentity(record['connection']),
     };
   }
   if (record['operation'] === 'search-workspace-mentions') {

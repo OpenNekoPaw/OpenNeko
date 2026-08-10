@@ -24,12 +24,17 @@ describe('Electron Agent launch Host runtime adapter', () => {
       config: {
         selectedProviderId: 'openai',
         selectedModelId: 'gpt-5',
+        defaultMediaModels: { image: 'openai:gpt-image-1' },
+        mediaUnderstandingModels: {
+          image: expect.objectContaining({ optionId: 'openai:gpt-5' }),
+        },
       },
     });
     expect(JSON.stringify(messages[0])).not.toContain('apiKey');
     expect(messages[1]).toEqual({
       type: 'globalError',
-      message: "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+      message:
+        "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
     });
   });
 
@@ -50,7 +55,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
           resolveSearch = resolve;
         }),
     );
-    bridge.agentLaunch.bindAssistant.mockResolvedValueOnce(
+    bridge.agentLaunch.bindTarget.mockResolvedValueOnce(
       createCatalog({ bindingReceiptId: 'binding:assistant-replacement' }),
     );
     const adapter = createElectronAgentLaunchHostRuntimeAdapter({
@@ -67,7 +72,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       workspaceCatalog.interaction.bindingReceipt?.bindingReceiptId,
       'hero',
     );
-    await adapter.bindAssistant();
+    await adapter.bindTarget({ kind: 'unbound' });
     resolveSearch?.({
       bindingReceiptId: workspaceCatalog.interaction.bindingReceipt?.bindingReceiptId ?? '',
       filter: 'hero',
@@ -296,7 +301,6 @@ function createBridge() {
       attach: vi.fn(),
       authorizeResource: vi.fn(),
       bindTarget: vi.fn(),
-      bindAssistant: vi.fn(),
       updateConfiguration: vi.fn(),
       searchWorkspaceMentions: vi.fn(),
       submitDraft: vi.fn(),
@@ -328,6 +332,17 @@ function createCatalog(
       contextWindow: 128_000,
       maximumOutputTokens: 16_384,
       purposeCapabilities: ['agent.main'],
+      availability: { status: 'available' as const },
+    },
+    {
+      id: 'openai:gpt-image-1',
+      label: 'GPT Image 1',
+      providerId: 'openai',
+      modelId: 'gpt-image-1',
+      modelType: 'image' as const,
+      contextWindow: null,
+      maximumOutputTokens: null,
+      purposeCapabilities: ['image.generate'],
       availability: { status: 'available' as const },
     },
   ];
@@ -362,6 +377,20 @@ function createCatalog(
       },
     },
     models,
+    defaultMediaModels: { image: 'openai:gpt-image-1' },
+    mediaUnderstandingModels: {
+      image: {
+        category: 'image',
+        purpose: 'image.understand',
+        status: 'configured',
+        providerId: 'openai',
+        modelId: 'gpt-5',
+        optionId: 'openai:gpt-5',
+        source: 'explicit-config',
+      },
+      audio: { category: 'audio', purpose: 'audio.understand', status: 'missing' },
+      video: { category: 'video', purpose: 'video.understand', status: 'missing' },
+    },
     configuration: projectAgentConfigurationPolicy({
       models,
       request,

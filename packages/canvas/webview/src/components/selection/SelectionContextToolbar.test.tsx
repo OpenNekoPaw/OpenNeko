@@ -26,7 +26,7 @@ Object.assign(globalThis, {
 enableDefaultCanvasTestStoreScope();
 
 describe('SelectionContextToolbar', () => {
-  it('projects owner-contributed media preview and keeps dangerous deletion in overflow', async () => {
+  it('projects owner-contributed media preview without synthesizing unavailable or delete actions', async () => {
     const node: CanvasNode = {
       id: 'media',
       type: 'media',
@@ -52,6 +52,7 @@ describe('SelectionContextToolbar', () => {
     ]);
 
     const container = document.createElement('div');
+    document.body.appendChild(container);
     const root = createRoot(container);
     await act(async () => {
       root.render(
@@ -68,7 +69,7 @@ describe('SelectionContextToolbar', () => {
     });
     const markup = container.innerHTML;
 
-    expect(markup).toContain('data-selection-overflow="true"');
+    expect(markup).not.toContain('data-selection-overflow="true"');
     expect(markup).not.toContain('data-selection-action="node:edit-media"');
     expect(markup).not.toContain('data-selection-action="selection:quick-generate"');
     expect(markup).toContain('data-selection-action="preview:open"');
@@ -76,12 +77,16 @@ describe('SelectionContextToolbar', () => {
     expect(markup).not.toContain('data-selection-action="node:open-content-overlay"');
     expect(markup).toContain('data-selection-action="node:duplicate"');
     expect(markup).toContain('data-selection-action-location="primary"');
-    expect(markup).toContain('data-selection-overflow-actions="delete-selection"');
+    expect(markup).not.toContain('delete-selection');
     expect(container.querySelector('[data-selection-kind-label]')?.textContent).toBe('Image');
+    expect(
+      container.querySelector<HTMLElement>('[data-selection-context-toolbar]')?.style.top,
+    ).toBe('32px');
     await act(async () => root.unmount());
+    container.remove();
   });
 
-  it('keeps Add to Cut and Preview visible while grouping video management actions in More', async () => {
+  it('keeps Video edit, audio separation, save material and preview visible while grouping advanced edits in More', async () => {
     const node: CanvasNode = {
       id: 'video',
       type: 'media',
@@ -99,6 +104,13 @@ describe('SelectionContextToolbar', () => {
       descriptor('desktop:reveal', 'Reveal in Finder', 'handoff'),
       descriptor('media-library:copy-to-project', 'Copy to project Media Library', 'copy'),
       descriptor('media-library:copy-to-global', 'Copy to global Media Library', 'copy'),
+      descriptor('video:separate-audio', 'Separate audio', 'derive'),
+      descriptor('video:enhance', 'Enhance & interpolate', 'derive'),
+      descriptor('video:extract-frame', 'Extract frame', 'derive'),
+      descriptor('video:remove-subtitles', 'Remove subtitles', 'derive'),
+      descriptor('video:generate-subtitles', 'Generate subtitles', 'generate'),
+      descriptor('video:color-grade', 'Color grade', 'derive'),
+      descriptor('video:open-editor-tools', 'Editor tools', 'handoff'),
       {
         ...descriptor('cut:add-resource', 'Add to Cut', 'handoff'),
         executionPayload: {
@@ -136,11 +148,22 @@ describe('SelectionContextToolbar', () => {
         ?.getAttribute('data-selection-action-location'),
     ).toBe('primary');
     expect(
+      Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
+        (element) => element.getAttribute('data-selection-action'),
+      ),
+    ).toEqual([
+      'cut:add-resource',
+      'video:separate-audio',
+      'media-library:copy-to-project',
+      'node:duplicate',
+      'preview:open',
+    ]);
+    expect(
       container
         .querySelector('[data-selection-overflow]')
         ?.getAttribute('data-selection-overflow-actions'),
     ).toBe(
-      'desktop:reveal media-library:copy-to-project media-library:copy-to-global delete-selection',
+      'video:enhance video:extract-frame video:remove-subtitles video:generate-subtitles video:color-grade video:open-editor-tools desktop:reveal media-library:copy-to-global',
     );
 
     await act(async () => {
@@ -150,11 +173,11 @@ describe('SelectionContextToolbar', () => {
       '[data-selection-overflow-group="media-library"]',
     );
     expect(mediaLibraryGroup?.textContent).toContain('Media Library');
-    expect(mediaLibraryGroup?.textContent).toContain('Copy to project Media Library');
     expect(mediaLibraryGroup?.textContent).toContain('Copy to global Media Library');
-    const nodeGroup = document.body.querySelector('[data-selection-overflow-group="node"]');
-    expect(nodeGroup?.textContent).not.toContain('Duplicate node');
-    expect(nodeGroup?.textContent).toContain('Delete');
+    expect(
+      document.body.querySelector('[data-selection-overflow-group="media-edit"]')?.textContent,
+    ).toContain('Enhance & interpolate');
+    expect(document.body.textContent).not.toContain('Delete');
 
     await act(async () => {
       container
@@ -164,10 +187,84 @@ describe('SelectionContextToolbar', () => {
     expect(executeMaterialAction).toHaveBeenCalledWith(
       'cut:add-resource',
       [node.id],
-      descriptors[4]?.executionPayload,
+      descriptors[11]?.executionPayload,
     );
     await act(async () => root.unmount());
     container.remove();
+  });
+
+  it('orders Audio edit, denoise, save and preview only when owners contribute them', async () => {
+    const node = mediaNode('audio', 'audio', 'media/voice.wav');
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        descriptor('preview:open', 'Full-screen preview', 'read'),
+        descriptor('media-library:copy-to-project', 'Save material', 'copy'),
+        descriptor('audio:voice-denoise', 'Voice denoise', 'derive'),
+        descriptor('cut:add-resource', 'Edit', 'handoff'),
+      ],
+    );
+
+    expect(
+      Array.from(
+        toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
+      ).map((element) => element.getAttribute('data-selection-action')),
+    ).toEqual([
+      'cut:add-resource',
+      'audio:voice-denoise',
+      'media-library:copy-to-project',
+      'node:duplicate',
+      'preview:open',
+    ]);
+    expect(toolbar.container.textContent).toContain('Voice denoise');
+    expect(toolbar.container.innerHTML).not.toContain('video:separate-audio');
+    expect(toolbar.container.innerHTML).not.toContain('delete-selection');
+    await toolbar.dispose();
+  });
+
+  it('orders Image crop, upscale and redraw before a capability-owned advanced edit menu', async () => {
+    const node = mediaNode('image', 'image', 'media/still.png');
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        descriptor('preview:open', 'Full-screen preview', 'read'),
+        descriptor('media-library:copy-to-project', 'Save material', 'copy'),
+        descriptor('image:crop', 'Crop', 'derive'),
+        descriptor('image:upscale', 'Upscale', 'derive'),
+        descriptor('image:redraw', 'Redraw', 'generate'),
+        descriptor('image:erase', 'Erase', 'derive'),
+        descriptor('image:outpaint', 'Outpaint', 'generate'),
+        descriptor('image:remove-background', 'Remove background', 'derive'),
+        descriptor('image:color-grade', 'Color grade', 'derive'),
+        descriptor('image:rotate', 'Rotate', 'derive'),
+        descriptor('image:grid-split', 'Grid split', 'derive'),
+        descriptor('image:open-editor-tools', 'Editor tools', 'handoff'),
+      ],
+    );
+
+    expect(
+      Array.from(
+        toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
+      ).map((element) => element.getAttribute('data-selection-action')),
+    ).toEqual([
+      'image:crop',
+      'image:upscale',
+      'image:redraw',
+      'media-library:copy-to-project',
+      'node:duplicate',
+      'preview:open',
+    ]);
+    expect(
+      toolbar.container
+        .querySelector('[data-selection-overflow]')
+        ?.getAttribute('data-selection-overflow-actions'),
+    ).toBe(
+      'image:erase image:outpaint image:remove-background image:color-grade image:rotate image:grid-split image:open-editor-tools',
+    );
+    expect(toolbar.container.innerHTML).not.toContain('delete-selection');
+    await toolbar.dispose();
   });
 
   it('keeps Open Cut and Generation actions visible by canonical identity', async () => {
@@ -267,7 +364,80 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-action="node:duplicate"');
   });
 
-  it('keeps Group visible and destructive deletion in More for multi-selection', () => {
+  it('refreshes material actions when a selected Generation node receives its first output', async () => {
+    const emptyNode: CanvasNode = {
+      id: 'generation-video',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 320, height: 180 },
+      zIndex: 1,
+      data: { recipe: { kind: 'video', prompt: '' }, outputs: [] },
+    };
+    const completedNode: CanvasNode = {
+      ...emptyNode,
+      data: {
+        ...emptyNode.data,
+        outputs: [
+          {
+            outputId: 'video-output-1',
+            jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+            locator: {
+              kind: 'generated-output',
+              outputId: 'video-output-1',
+              digest: 'sha256:video-output-1',
+              path: 'neko/generated/video-output-1.mp4',
+            },
+            kind: 'video',
+            recipeInputFingerprint: 'recipe-fingerprint-1',
+          },
+        ],
+        selectedOutputId: 'video-output-1',
+      },
+    };
+    const resolveMaterialActions = vi
+      .fn<CanvasWebviewHostPort['resolveMaterialActions']>()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        descriptor('cut:add-resource', 'Edit', 'handoff'),
+        descriptor('video:separate-audio', 'Separate audio', 'derive'),
+      ]);
+    const host = { ...createMaterialHost([]), resolveMaterialActions };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = (node: CanvasNode): void =>
+      root.render(
+        <CanvasHostProvider host={host}>
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+        </CanvasHostProvider>,
+      );
+
+    await act(async () => {
+      render(emptyNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).toBeNull();
+
+    await act(async () => {
+      render(completedNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(resolveMaterialActions).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-selection-action="video:separate-audio"]'),
+    ).not.toBeNull();
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('keeps Group visible without rendering Delete for multi-selection', () => {
     const nodes: readonly CanvasNode[] = [
       {
         id: 'note-1',
@@ -297,11 +467,12 @@ describe('SelectionContextToolbar', () => {
 
     expect(markup).toContain('data-selection-action="group-selection"');
     expect(markup).toContain('data-selection-action-location="primary"');
-    expect(markup).toContain('data-selection-overflow-actions="delete-selection"');
+    expect(markup).not.toContain('delete-selection');
+    expect(markup).not.toContain('data-selection-overflow="true"');
     expect(markup).not.toContain('node:duplicate');
   });
 
-  it('renders outside Canvas scaling with a clamped screen-space position', () => {
+  it('renders outside Canvas scaling while remaining fixed to the selected node', () => {
     const node: GroupCanvasNode = {
       id: 'note',
       type: 'group',
@@ -335,8 +506,9 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-count="1"');
     expect(markup).toContain('data-selection-action="group:fit"');
     expect(markup).toContain('data-selection-action="group:toggle"');
-    expect(markup).toContain('data-selection-overflow="true"');
-    expect(markup).toContain('top:10px');
+    expect(markup).not.toContain('data-selection-overflow="true"');
+    expect(markup).toContain('left:1920px');
+    expect(markup).toContain('top:-142px');
   });
 });
 
@@ -357,6 +529,12 @@ function createMaterialHost(
       throw new Error('Not used by this static component test.');
     },
     createGenerationNode: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    attachGenerationReference: async () => {
+      throw new Error('Not used by this static component test.');
+    },
+    attachGenerationReferenceMaterial: async () => {
       throw new Error('Not used by this static component test.');
     },
     updateGenerationRecipe: async () => {
@@ -383,6 +561,7 @@ function createMaterialHost(
     getAuthoringCapabilities: () => ({
       sourceModes: [],
       generationKinds: [],
+      generationModels: [],
     }),
     resolveMaterialActions: async () => descriptors,
     executeMaterialAction,
@@ -420,6 +599,21 @@ function fileNode(id: string, path: string): CanvasNode {
       contentLocator: { kind: 'workspace-file', path },
     },
   } as CanvasNode;
+}
+
+function mediaNode(id: string, mediaType: 'image' | 'audio' | 'video', path: string): CanvasNode {
+  return {
+    id,
+    type: 'media',
+    position: { x: 100, y: 100 },
+    size: { width: 280, height: 180 },
+    zIndex: 1,
+    data: {
+      mediaType,
+      assetPath: path,
+      contentLocator: { kind: 'workspace-file', path },
+    },
+  };
 }
 
 async function renderToolbar(
@@ -470,7 +664,7 @@ function materialActionSnapshot(): CanvasHostSnapshot {
       viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
       selectedNodeIds: [],
     },
-    authoringCapabilities: { sourceModes: [], generationKinds: [] },
+    authoringCapabilities: { sourceModes: [], generationKinds: [], generationModels: [] },
     generationNodes: [],
   };
 }

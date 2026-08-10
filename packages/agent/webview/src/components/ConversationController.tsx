@@ -51,7 +51,8 @@ import type {
   GenCategory,
   GenerationParams,
 } from './ChatView/InputArea/types';
-import { EmptyState, type EmptyStateEntryAction } from './ChatView/EmptyState';
+import { EmptyState } from './ChatView/EmptyState';
+import { HomeExperienceModeSelector } from './ChatView/HomeExperienceModeSelector';
 import { InputArea } from './ChatView/InputArea';
 import { resolveAgentInputInvocationIntent } from './ChatView/InputArea/slash-command-catalog';
 import {
@@ -96,6 +97,7 @@ import {
 import { projectOptimisticQueuedMessageItem } from '../presenters/message-queue-presenter';
 import {
   projectChatWorkspaceModelState,
+  projectMessageModelSelection,
   projectMediaModelSelectionDefaults,
   projectMediaModelSelectionForSessionModeChange,
 } from '../presenters/config-message-presenter';
@@ -118,6 +120,8 @@ import {
   useComposerWorkspacePresentation,
   type AgentComposerWorkspaceTarget,
 } from './ComposerWorkspaceContext';
+import type { AgentEntryExperienceMode } from '../entry-experience-mode';
+import { projectHomeExperienceEntry } from '../presenters/home-experience-entry-presenter';
 
 // =============================================================================
 // Props
@@ -275,13 +279,15 @@ export function ConversationController({
   const [foregroundAvailabilityByConversation, setForegroundAvailabilityByConversation] = useState<
     Map<string, ForegroundConversationAvailability>
   >(() => new Map());
-  const [entryAction, setEntryAction] = useState<EmptyStateEntryAction>('start-chat');
   const [entryInputValue, setEntryInputValue] = useState('');
   const [entryContextReferences, setEntryContextReferences] = useState<AgentContextPayload[]>([]);
   const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<SelectedCharacterLaunch[]>(
     [],
   );
+  const [entryExperienceMode, setEntryExperienceMode] =
+    useState<AgentEntryExperienceMode>('assistant');
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
+  const [isEntryBindingPending, setIsEntryBindingPending] = useState(false);
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
   const [entryExecutionMode, setEntryExecutionMode] = useState<SettingsState['executionMode']>(
     settings.executionMode,
@@ -330,7 +336,6 @@ export function ConversationController({
     setEntryContextReferences((current) => current.filter((reference) => reference.id !== id));
   }, []);
   const addEntryCharacterLaunch = useCallback((selection: SelectedCharacterLaunch) => {
-    setEntryWorkspaceTarget(undefined);
     setEntryContextReferences([]);
     setEntryCharacterLaunches((current) =>
       current.some((candidate) => candidate.characterVersionId === selection.characterVersionId)
@@ -343,16 +348,6 @@ export function ConversationController({
       current.filter((selection) => selection.characterVersionId !== characterVersionId),
     );
   }, []);
-  const updateEntryWorkspaceTarget = useCallback(
-    (target: AgentComposerWorkspaceTarget | undefined) => {
-      if (target) {
-        setEntryCharacterLaunches([]);
-        setEntryContextReferences([]);
-      }
-      setEntryWorkspaceTarget(target);
-    },
-    [],
-  );
   const hydrateConversationSettings = useCallback(
     (conversationId: string, snapshot: ConversationSettingsSnapshot) => {
       settingsSnapshotByConversationRef.current.set(conversationId, snapshot);
@@ -445,13 +440,22 @@ export function ConversationController({
     setActiveConversationId(null);
     clearVisibleState();
     setActiveTab('chat');
-    setEntryAction('start-chat');
+    const launchCatalog =
+      requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog();
+    setEntryExperienceMode(
+      entryDraft?.experienceMode ?? projectEntryExperienceMode(launchCatalog.interaction.binding),
+    );
+    setEntryWorkspaceTarget(entryDraft?.workspaceTarget);
+    setIsEntryBindingPending(false);
     updateEntryInputValue(entryDraft?.inputValue ?? '');
     setEntryContextReferences(entryDraft ? [...entryDraft.contextReferences] : []);
     setEntryCharacterLaunches(entryDraft ? [...entryDraft.characterLaunches] : []);
-    setEntryWorkspaceTarget(entryDraft?.workspaceTarget);
-    const launchConfiguration =
-      requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog().configuration;
+    setEntryMediaModelSelection(
+      entryDraft?.mediaModelSelection
+        ? { ...entryDraft.mediaModelSelection }
+        : { image: 'none', video: 'none', audio: 'none' },
+    );
+    const launchConfiguration = launchCatalog.configuration;
     setEntrySelectedModel(
       launchConfiguration.fields.model.effectiveValue?.modelCatalogEntryId ?? '',
     );
@@ -493,14 +497,18 @@ export function ConversationController({
       characterLaunches: entryCharacterLaunches,
       ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
       selectedModel: entrySelectedModel,
+      mediaModelSelection: entryMediaModelSelection,
       executionMode: entryExecutionMode,
+      experienceMode: entryExperienceMode,
     });
   }, [
     agentPresentation,
     entryContextReferences,
     entryCharacterLaunches,
     entryExecutionMode,
+    entryExperienceMode,
     entryInputValue,
+    entryMediaModelSelection,
     entrySelectedModel,
     entryWorkspaceTarget,
     hostRuntimeAdapter,
@@ -611,6 +619,28 @@ export function ConversationController({
     ? requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog()
     : undefined;
   const draftSkills = projectDraftSkillSummaries(draftLaunchCatalog);
+  const homeExperienceProjection =
+    draftLaunchCatalog && composerWorkspace?.kind === 'entry'
+      ? projectHomeExperienceEntry({
+          mode: entryExperienceMode,
+          draft: draftLaunchCatalog.interaction,
+          ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
+          workspaceChooserAvailable: !composerWorkspace.disabled,
+          bindingPending: isEntryBindingPending || isForegroundConversationActivationPending,
+          configurationReady:
+            hasConfigSnapshot &&
+            draftLaunchCatalog.configuration.request !== undefined &&
+            draftLaunchCatalog.configuration.fields.model.policy.status !== 'unavailable',
+        })
+      : undefined;
+  const draftSubmissionBlockedReason = homeExperienceProjection?.submissionBlockedReasonKey
+    ? t(homeExperienceProjection.submissionBlockedReasonKey)
+    : draftLaunchCatalog &&
+        (!hasConfigSnapshot ||
+          draftLaunchCatalog.configuration.request === undefined ||
+          draftLaunchCatalog.configuration.fields.model.policy.status === 'unavailable')
+      ? t('chat.input.configurationRequired')
+      : undefined;
 
   useEffect(() => {
     for (const tab of openTabs) {
@@ -652,18 +682,31 @@ export function ConversationController({
           ? configuredModelId
           : '',
     );
-    setEntryMediaModelSelection(
-      (current) =>
-        projectMediaModelSelectionDefaults({
-          selection: current,
-          defaults: activeSettings.defaultMediaModels ?? {},
-        }).selection,
-    );
+    setEntryMediaModelSelection((current) => {
+      const availableMediaModels = new Map(
+        entryModelState.availableMediaModels.map((model) => [model.id, model.category]),
+      );
+      const selection: MediaModelSelection = {
+        image: availableMediaModels.get(current.image) === 'image' ? current.image : 'none',
+        video: availableMediaModels.get(current.video) === 'video' ? current.video : 'none',
+        audio: availableMediaModels.get(current.audio) === 'audio' ? current.audio : 'none',
+      };
+      const projected = projectMediaModelSelectionDefaults({
+        selection,
+        defaults: activeSettings.defaultMediaModels ?? {},
+      }).selection;
+      return projected.image === current.image &&
+        projected.video === current.video &&
+        projected.audio === current.audio
+        ? current
+        : projected;
+    });
   }, [
     draftLaunchCatalog,
     activeSettings.defaultMediaModels,
     activeSettings.selectedModelId,
     activeSettings.selectedProviderId,
+    entryModelState.availableMediaModels,
   ]);
   const handleModelSelectForConversation = useCallback(
     (conversationId: string, modelId: string) => {
@@ -1077,48 +1120,41 @@ export function ConversationController({
     startNewForegroundConversation();
   }, [conversationKind, startNewForegroundConversation]);
 
-  const handleRequestRoleplayItems = useCallback(() => {
-    setMentionItems([]);
-    updateMentionSearchFilter('');
-    agentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
-  }, [agentHostMessages, setMentionItems, updateMentionSearchFilter]);
-
-  const handleEntryAction = useCallback(
-    (action: EmptyStateEntryAction) => {
-      setEntryAction(action);
-      setEntrySessionMode('agent');
-
-      switch (action) {
-        case 'start-chat':
-          setPendingSendRequest(null);
-          setInitialInputRequest(null);
-          setInitialSessionModeRequest(null);
-          setEntryPromptMenu(null);
-          updateEntryInputValue('');
-          if (agentPresentation?.phase === 'draft') {
-            return;
-          }
-          startNewForegroundConversation();
-          return;
-        case 'roleplay':
-          setPendingSendRequest(null);
-          setInitialInputRequest(null);
-          setInitialSessionModeRequest(null);
-          if (agentPresentation?.phase === 'draft') {
-            setEntryPromptMenu(null);
-            setGlobalError('Character and Room scope is not available.');
-            return;
-          }
-          setEntryPromptMenu('roleplay');
-          handleRequestRoleplayItems();
-          return;
+  const handleEntryExperienceModeChange = useCallback(
+    (mode: AgentEntryExperienceMode) => {
+      if (mode === entryExperienceMode || isEntryBindingPending) return;
+      if (agentPresentation?.phase !== 'draft' || composerWorkspace?.kind !== 'entry') {
+        throw new Error('Agent Entry mode requires an exact Draft presentation.');
       }
+      const nextTarget = mode === 'workspace' ? entryWorkspaceTarget : undefined;
+      setIsEntryBindingPending(true);
+      void requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter)
+        .bindTarget(nextTarget?.context ?? { kind: 'unbound' })
+        .then(() => {
+          setEntryExperienceMode(mode);
+          if (mode !== 'workspace') setEntryWorkspaceTarget(undefined);
+          setEntrySessionMode('agent');
+          setEntryContextReferences([]);
+          setEntryCharacterLaunches([]);
+          setProjectFiles([]);
+          setMentionItems([]);
+          updateMentionSearchFilter('');
+          setEntryPromptMenu(null);
+          setGlobalError(null);
+        })
+        .catch((error: unknown) => setGlobalError(describeError(error)))
+        .finally(() => setIsEntryBindingPending(false));
     },
     [
       agentPresentation,
-      handleRequestRoleplayItems,
-      startNewForegroundConversation,
-      updateEntryInputValue,
+      composerWorkspace,
+      entryExperienceMode,
+      entryWorkspaceTarget,
+      hostRuntimeAdapter,
+      isEntryBindingPending,
+      setMentionItems,
+      setProjectFiles,
+      updateMentionSearchFilter,
     ],
   );
 
@@ -1146,22 +1182,31 @@ export function ConversationController({
         if (!agentPresentation) throw new Error('Agent Draft presentation is unavailable.');
         const launchCatalog = draftHostRuntimeAdapter.readLaunchCatalog();
         const authoritativeDraft = launchCatalog.interaction;
-        if (
-          entryWorkspaceTarget &&
-          (authoritativeDraft.binding.kind !== 'workspace' ||
-            authoritativeDraft.binding.workspaceId !== entryWorkspaceTarget.context.workspaceId ||
-            authoritativeDraft.binding.workspaceGrantId !==
-              entryWorkspaceTarget.context.workspaceGrantId)
-        ) {
-          setGlobalError('The selected Workspace is not bound to this Draft.');
-          return;
+        if (composerWorkspace?.kind === 'entry') {
+          const validation = projectHomeExperienceEntry({
+            mode: entryExperienceMode,
+            draft: authoritativeDraft,
+            ...(entryWorkspaceTarget === undefined
+              ? {}
+              : { workspaceTarget: entryWorkspaceTarget }),
+            workspaceChooserAvailable: !composerWorkspace.disabled,
+            bindingPending: isEntryBindingPending,
+            configurationReady:
+              hasConfigSnapshot &&
+              launchCatalog.configuration.request !== undefined &&
+              launchCatalog.configuration.fields.model.policy.status !== 'unavailable',
+          });
+          if (validation.submissionBlockedReasonKey) {
+            setGlobalError(t(validation.submissionBlockedReasonKey));
+            return;
+          }
         }
         const configuration = launchCatalog.configuration.request;
         if (
           !configuration ||
           launchCatalog.configuration.fields.model.policy.status === 'unavailable'
         ) {
-          setGlobalError('Choose a configured provider and model before sending.');
+          setGlobalError(t('chat.input.configurationRequired'));
           return;
         }
         let references: readonly AgentInputReferenceReceipt[];
@@ -1182,6 +1227,13 @@ export function ConversationController({
           const data = readRecord(payload.data);
           return typeof data?.['resourceGrantId'] === 'string' ? [data['resourceGrantId']] : [];
         });
+        const submittedReferenceIds = new Set(contextPayloads.map((payload) => payload.id));
+        const purposeModels = projectMessageModelSelection({
+          selectedModel: entrySelectedModel,
+          chatModelOptions: activeSettings.chatModelOptions,
+          sessionMode: 'agent',
+          agentMediaModels: entryModelState.agentMediaModels,
+        }).purposeModels;
         setIsForegroundConversationActivationPending(true);
         void draftHostRuntimeAdapter
           .submitDraft({
@@ -1190,14 +1242,16 @@ export function ConversationController({
             references,
             resourceGrantIds,
             configuration,
+            ...(purposeModels && Object.keys(purposeModels).length > 0 ? { purposeModels } : {}),
           })
           .then((projection) => {
             committedEntryDraftIdRef.current = agentPresentation.draftId;
             writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
-            updateEntryInputValue('');
-            setEntryContextReferences([]);
+            setEntryInputValue((current) => (current === entryInputValue ? '' : current));
+            setEntryContextReferences((current) =>
+              current.filter((reference) => !submittedReferenceIds.has(reference.id)),
+            );
             setEntryCharacterLaunches([]);
-            setEntryWorkspaceTarget(undefined);
             if (projection.turnStatus === 'failed' && projection.diagnostic) {
               setGlobalError(projection.diagnostic);
             }
@@ -1207,45 +1261,35 @@ export function ConversationController({
         return;
       }
 
-      switch (entryAction) {
-        case 'start-chat': {
-          setInitialInputRequest(null);
-          setInitialSessionModeRequest(null);
-          handleSendWithoutConversation({
-            ...input,
-            messageText,
-            displayMessageText: input?.displayMessageText ?? messageText,
-            sessionMode: input?.sessionMode ?? entrySessionMode,
-            ...(contextPayloads.length > 0 ? { contextPayloads: [...contextPayloads] } : {}),
-          });
-          updateEntryInputValue('');
-          setEntryContextReferences([]);
-          return;
-        }
-        case 'roleplay':
-          setPendingSendRequest(null);
-          setInitialInputRequest(null);
-          setInitialSessionModeRequest(null);
-          setEntryPromptMenu('roleplay');
-          handleRequestRoleplayItems();
-          return;
-      }
+      setInitialInputRequest(null);
+      setInitialSessionModeRequest(null);
+      handleSendWithoutConversation({
+        ...input,
+        messageText,
+        displayMessageText: input?.displayMessageText ?? messageText,
+        sessionMode: input?.sessionMode ?? entrySessionMode,
+        ...(contextPayloads.length > 0 ? { contextPayloads: [...contextPayloads] } : {}),
+      });
+      updateEntryInputValue('');
+      setEntryContextReferences([]);
     },
     [
-      entryAction,
-      activeSettings.chatModelOptions,
       agentPresentation,
+      activeSettings.chatModelOptions,
+      composerWorkspace,
       entryContextReferences,
-      entryGenParams,
+      entryExperienceMode,
       entryInputValue,
-      entrySessionMode,
+      entryModelState.agentMediaModels,
       entrySelectedModel,
-      entryExecutionMode,
+      entrySessionMode,
       entryWorkspaceTarget,
       handleSendWithoutConversation,
-      handleRequestRoleplayItems,
+      hasConfigSnapshot,
       hostRuntimeAdapter,
+      isEntryBindingPending,
       isDraftPresentation,
+      t,
       updateEntryInputValue,
     ],
   );
@@ -1265,7 +1309,6 @@ export function ConversationController({
   const handleEntrySessionModeChange = useCallback(
     (mode: SessionMode) => {
       setEntrySessionMode(mode);
-      setEntryAction('start-chat');
       setEntryMediaModelSelection((prev) => {
         const projection = projectMediaModelSelectionForSessionModeChange({
           sessionMode: mode,
@@ -1573,19 +1616,25 @@ export function ConversationController({
               isDraftPresentation ? 'agent-entry-composition' : ''
             }`}
           >
+            {homeExperienceProjection ? (
+              <HomeExperienceModeSelector
+                projection={homeExperienceProjection}
+                selectionPending={isEntryBindingPending}
+                onChange={handleEntryExperienceModeChange}
+              />
+            ) : null}
             <EmptyState
               presentation={emptyStatePresentation}
               draftScope={
                 agentPresentation?.phase === 'draft' ? agentPresentation.binding.kind : undefined
               }
-              selectedAction={entryAction}
               disabled={isForegroundConversationActivationPending}
-              onEntryAction={handleEntryAction}
+              experienceProjection={homeExperienceProjection}
               skills={draftSkills}
               onSkillSelect={(skill) => updateEntryInputValue(`$${skill.name} `)}
             />
             <InputAreaProvider
-              isBusy={!hasConfigSnapshot}
+              isBusy={!hasConfigSnapshot && !isDraftPresentation}
               modelCatalogStatus={hasConfigSnapshot ? 'ready' : 'loading'}
               sessionMode={entrySessionMode}
               onSessionModeChange={handleEntrySessionModeChange}
@@ -1632,6 +1681,33 @@ export function ConversationController({
                 isThinking={false}
                 onInputChange={updateEntryInputValue}
                 onSend={handleEntryInputSend}
+                submissionBlockedReason={draftSubmissionBlockedReason}
+                draftWorkspaceTarget={entryWorkspaceTarget}
+                showDraftWorkspaceControl={homeExperienceProjection?.showWorkspaceControl ?? false}
+                draftTargetSelectionPending={isEntryBindingPending}
+                onDraftWorkspaceTargetChange={
+                  composerWorkspace?.kind === 'entry' && entryExperienceMode === 'workspace'
+                    ? async (target) => {
+                        setEntryContextReferences([]);
+                        setEntryCharacterLaunches([]);
+                        setProjectFiles([]);
+                        setMentionItems([]);
+                        updateMentionSearchFilter('');
+                        setIsEntryBindingPending(true);
+                        try {
+                          await requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).bindTarget(
+                            target?.context ?? { kind: 'unbound' },
+                          );
+                          setEntryWorkspaceTarget(target);
+                          setGlobalError(null);
+                        } catch (error) {
+                          setGlobalError(describeError(error));
+                        } finally {
+                          setIsEntryBindingPending(false);
+                        }
+                      }
+                    : undefined
+                }
                 onAuthorizeResource={
                   isDraftPresentation
                     ? async () => {
@@ -1646,47 +1722,13 @@ export function ConversationController({
                       }
                     : undefined
                 }
-                draftWorkspaceTarget={entryWorkspaceTarget}
-                onDraftCharacterTargetSelect={
-                  isDraftPresentation
-                    ? async (binding) => {
-                        setEntryContextReferences([]);
-                        setProjectFiles([]);
-                        setMentionItems([]);
-                        updateMentionSearchFilter('');
-                        try {
-                          await requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).bindTarget(
-                            binding,
-                          );
-                          setEntryWorkspaceTarget(undefined);
-                        } catch (error) {
-                          setGlobalError(describeError(error));
-                        }
-                      }
-                    : undefined
-                }
-                onDraftWorkspaceTargetChange={
-                  composerWorkspace?.kind === 'entry'
-                    ? async (target) => {
-                        setEntryContextReferences([]);
-                        setProjectFiles([]);
-                        setMentionItems([]);
-                        updateMentionSearchFilter('');
-                        try {
-                          await requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).bindTarget(
-                            target?.context ?? { kind: 'unbound' },
-                          );
-                          updateEntryWorkspaceTarget(target);
-                        } catch (error) {
-                          setGlobalError(describeError(error));
-                        }
-                      }
-                    : undefined
-                }
                 selectedCharacterLaunches={entryCharacterLaunches}
                 onAddCharacterLaunch={addEntryCharacterLaunch}
                 onRemoveCharacterLaunch={removeEntryCharacterLaunch}
-                disabled={isForegroundConversationActivationPending || !hasConfigSnapshot}
+                disabled={
+                  !isDraftPresentation &&
+                  (isForegroundConversationActivationPending || !hasConfigSnapshot)
+                }
                 entryPromptMenu={entryPromptMenu}
                 onEntryPromptMenuChange={setEntryPromptMenu}
               />
@@ -1858,6 +1900,23 @@ function projectDraftInputIntent(input: {
     phase: 'draft',
     bindingKind: input.bindingKind,
   });
+}
+
+function projectEntryExperienceMode(
+  binding: import('@neko/agent-contracts').AgentDomainBinding,
+): AgentEntryExperienceMode {
+  switch (binding.kind) {
+    case 'unbound':
+    case 'assistant':
+      return 'assistant';
+    case 'workspace':
+      return 'workspace';
+    case 'character':
+    case 'room':
+      return 'character';
+    case 'world':
+      return 'world';
+  }
 }
 
 function projectDraftReferenceReceipt(payload: AgentContextPayload): AgentInputReferenceReceipt {

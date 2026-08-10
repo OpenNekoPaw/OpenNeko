@@ -129,7 +129,15 @@ describe('createCanvasWebviewHost', () => {
         type: 'generation',
         position: { x: 80, y: 120 },
         data: expect.objectContaining({
-          recipe: { kind: 'image', prompt: '' },
+          recipe: expect.objectContaining({
+            kind: 'image',
+            prompt: '',
+            aspectRatio: '1:1',
+            width: 1024,
+            height: 1024,
+            count: 1,
+            quality: 'standard',
+          }),
           outputs: [],
         }),
       }),

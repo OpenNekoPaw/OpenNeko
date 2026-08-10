@@ -19,6 +19,12 @@ export interface AgentMarkdownSessionRegistryMetrics {
   readonly activeSubscriptions: number;
 }
 
+export type AgentMarkdownStreamingUpdateScheduler = (callback: () => void) => () => void;
+
+export interface AgentMarkdownSessionRegistryOptions {
+  readonly scheduleStreamingUpdate?: AgentMarkdownStreamingUpdateScheduler;
+}
+
 export interface AgentMarkdownSessionPublication {
   /** Notify external-store subscribers after the owning conversation commit is visible. */
   publish(): void;
@@ -48,6 +54,8 @@ interface RegistryEntry {
   readonly messageId: string;
   readonly session: MarkdownStreamingSession;
   snapshot: MarkdownStreamingSnapshot;
+  targetSource: string;
+  cancelScheduledUpdate?: () => void;
 }
 
 type MarkdownTimelineItem = Extract<
@@ -71,7 +79,9 @@ export function getAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegistry 
   return defaultRegistry;
 }
 
-export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegistry {
+export function createAgentMarkdownSessionRegistry(
+  options: AgentMarkdownSessionRegistryOptions = {},
+): AgentMarkdownSessionRegistry {
   const entries = new Map<string, RegistryEntry>();
   const listeners = new Map<string, Set<() => void>>();
   let createdSessions = 0;
@@ -86,8 +96,27 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
     for (const listener of subscribers) listener();
   };
 
+  const cancelScheduledUpdate = (entry: RegistryEntry): void => {
+    entry.cancelScheduledUpdate?.();
+    entry.cancelScheduledUpdate = undefined;
+  };
+
+  const flushScheduledUpdate = (sessionKey: string, entry: RegistryEntry): void => {
+    if (entries.get(sessionKey) !== entry || !entry.cancelScheduledUpdate) return;
+    entry.cancelScheduledUpdate = undefined;
+    const result = entry.session.updateSource(entry.targetSource);
+    entry.snapshot = requireReadySnapshot(result, sessionKey);
+    renderUpdates += 1;
+    notify(sessionKey);
+  };
+
   const replaceEntry = (mutation: PendingSessionMutation): void => {
-    if (entries.delete(mutation.sessionKey)) disposedSessions += 1;
+    const previous = entries.get(mutation.sessionKey);
+    if (previous) {
+      cancelScheduledUpdate(previous);
+      entries.delete(mutation.sessionKey);
+      disposedSessions += 1;
+    }
     const session = new MarkdownStreamingSession();
     const result = mutation.complete
       ? session.finalize(mutation.source)
@@ -98,22 +127,32 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
       messageId: mutation.messageId,
       session,
       snapshot,
+      targetSource: mutation.source,
     });
     createdSessions += 1;
     renderUpdates += 1;
   };
 
-  const appendEntry = (mutation: PendingSessionMutation): void => {
+  const appendEntry = (mutation: PendingSessionMutation): boolean => {
     const entry = entries.get(mutation.sessionKey);
     if (!entry) {
       replaceEntry(mutation);
-      return;
+      return true;
     }
+    entry.targetSource = `${entry.targetSource}${mutation.source}`;
+    if (!mutation.complete && options.scheduleStreamingUpdate) {
+      entry.cancelScheduledUpdate ??= options.scheduleStreamingUpdate(() =>
+        flushScheduledUpdate(mutation.sessionKey, entry),
+      );
+      return false;
+    }
+    cancelScheduledUpdate(entry);
     const result = mutation.complete
-      ? entry.session.finalize(`${entry.session.source}${mutation.source}`)
-      : entry.session.append(mutation.source);
+      ? entry.session.finalize(entry.targetSource)
+      : entry.session.updateSource(entry.targetSource);
     entry.snapshot = requireReadySnapshot(result, mutation.sessionKey);
     renderUpdates += 1;
+    return true;
   };
 
   const createPublication = (
@@ -140,7 +179,12 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
       if (predicate(sessionKey)) affectedKeys.add(sessionKey);
     }
     for (const sessionKey of affectedKeys) {
-      if (entries.delete(sessionKey)) disposedSessions += 1;
+      const entry = entries.get(sessionKey);
+      if (entry) {
+        cancelScheduledUpdate(entry);
+        entries.delete(sessionKey);
+        disposedSessions += 1;
+      }
       notify(sessionKey);
       listeners.delete(sessionKey);
     }
@@ -160,6 +204,7 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
     for (const [sessionKey, entry] of entries) {
       if (entry.conversationId !== owner.conversationId) continue;
       if (owner.messageIds && !owner.messageIds.has(entry.messageId)) {
+        cancelScheduledUpdate(entry);
         entries.delete(sessionKey);
         disposedSessions += 1;
         affectedSessionKeys.add(sessionKey);
@@ -167,6 +212,7 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
       }
       if (owner.messageId && entry.messageId !== owner.messageId) continue;
       if (expectedSessionKeys.has(sessionKey)) continue;
+      cancelScheduledUpdate(entry);
       entries.delete(sessionKey);
       disposedSessions += 1;
       affectedSessionKeys.add(sessionKey);
@@ -175,7 +221,9 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
     for (const mutation of mutations.values()) {
       const entry = entries.get(mutation.sessionKey);
       const isMatching =
-        entry?.snapshot.source === mutation.source && entry.snapshot.isFinal === mutation.complete;
+        entry?.targetSource === mutation.source &&
+        entry.snapshot.source === mutation.source &&
+        entry.snapshot.isFinal === mutation.complete;
       if (isMatching) continue;
       replaceEntry(mutation);
       affectedSessionKeys.add(mutation.sessionKey);
@@ -214,9 +262,14 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
       });
       const affectedSessionKeys = new Set<string>();
       for (const mutation of mutations.values()) {
-        if (mutation.mode === 'append') appendEntry(mutation);
-        else replaceEntry(mutation);
-        affectedSessionKeys.add(mutation.sessionKey);
+        let updatedImmediately: boolean;
+        if (mutation.mode === 'append') {
+          updatedImmediately = appendEntry(mutation);
+        } else {
+          replaceEntry(mutation);
+          updatedImmediately = true;
+        }
+        if (updatedImmediately) affectedSessionKeys.add(mutation.sessionKey);
       }
       return createPublication(affectedSessionKeys);
     },
@@ -237,6 +290,7 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
       disposeMatching((sessionKey) => belongsToConversation(sessionKey, conversationId));
     },
     disposeAll(): void {
+      for (const entry of entries.values()) cancelScheduledUpdate(entry);
       disposedSessions += entries.size;
       entries.clear();
       listeners.clear();

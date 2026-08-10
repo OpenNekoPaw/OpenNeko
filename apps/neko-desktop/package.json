@@ -7,7 +7,7 @@
   "main": ".vite/build/main.cjs",
   "scripts": {
     "build": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge package && node ../../scripts/assert-desktop-package-output.mjs",
-    "dev": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge start",
+    "dev": "node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop-functional/run-development.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "make": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge make && node ../../scripts/assert-desktop-package-output.mjs",
     "package": "node ../../scripts/assert-supported-desktop-host.mjs && electron-forge package && node ../../scripts/assert-desktop-package-output.mjs",
@@ -21,6 +21,7 @@
     "@neko/agent-webview": "workspace:*",
     "@neko/automation-contracts": "workspace:*",
     "@neko/automation-node": "workspace:*",
+    "@neko/automation-webview": "workspace:*",
     "@neko/assets-domain": "workspace:*",
     "@neko/assets-node": "workspace:*",
     "@neko/assets-webview": "workspace:*",
@@ -49,6 +50,7 @@
     "@neko/ui": "workspace:*",
     "@neko/world": "workspace:*",
     "@neko/world-node": "workspace:*",
+    "@zip.js/zip.js": "^2.8.26",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
@@ -64,7 +66,6 @@
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react": "4.3.4",
-    "@zip.js/zip.js": "^2.8.26",
     "autoprefixer": "10.4.27",
     "electron": "43.2.0",
     "jsdom": "^27.0.1",

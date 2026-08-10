@@ -6,9 +6,13 @@ import type {
 } from './tab-render-runtime';
 import {
   parseAgentBoundDomainBinding,
-  type AgentContextPayload,
   type AgentBoundDomainBinding,
+  type AgentContextPayload,
 } from '@neko/agent-contracts';
+import {
+  isAgentEntryExperienceMode,
+  type AgentEntryExperienceMode,
+} from '../entry-experience-mode';
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly inputValue: string;
@@ -29,7 +33,9 @@ export interface AgentEntryDraftSnapshot {
     readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
   };
   readonly selectedModel: string;
+  readonly mediaModelSelection?: Readonly<Record<'image' | 'video' | 'audio', string>>;
   readonly executionMode: 'plan' | 'ask' | 'auto';
+  readonly experienceMode?: AgentEntryExperienceMode;
 }
 
 export interface TabRenderRealmState {
@@ -119,7 +125,17 @@ export function parseTabRenderRealmState(value: unknown): ParsedTabRenderRealmSt
   let entryDraft: AgentEntryDraftSnapshot | undefined;
   if (value.entryDraft !== undefined) {
     try {
-      entryDraft = parseEntryDraft(value.entryDraft);
+      const invalidExperienceMode =
+        isRecord(value.entryDraft) &&
+        value.entryDraft.experienceMode !== undefined &&
+        !isAgentEntryExperienceMode(value.entryDraft.experienceMode);
+      entryDraft = parseEntryDraft(value.entryDraft, invalidExperienceMode);
+      if (invalidExperienceMode) {
+        diagnostics.push({
+          code: 'invalid-entry-draft',
+          message: 'Agent entry draft snapshot experienceMode is invalid and was reset.',
+        });
+      }
     } catch (error) {
       diagnostics.push({
         code: 'invalid-entry-draft',
@@ -327,7 +343,10 @@ function parseDraft(value: unknown, index: number): TabRenderDraftSnapshot {
   };
 }
 
-function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
+function parseEntryDraft(
+  value: unknown,
+  recoverInvalidExperienceMode = false,
+): AgentEntryDraftSnapshot {
   const path = 'Agent entry draft snapshot';
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   const contextReferences = value.contextReferences;
@@ -348,6 +367,14 @@ function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
     throw new Error(`${path}.characterLaunches must not contain duplicate CharacterVersions.`);
   }
   const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
+  const experienceMode = value.experienceMode;
+  if (
+    experienceMode !== undefined &&
+    !isAgentEntryExperienceMode(experienceMode) &&
+    !recoverInvalidExperienceMode
+  ) {
+    throw new Error(`${path}.experienceMode is invalid.`);
+  }
   return {
     draftId: nonEmptyString(value.draftId, `${path}.draftId`),
     inputValue: stringValue(value.inputValue, `${path}.inputValue`),
@@ -357,7 +384,53 @@ function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
     characterLaunches: parsedCharacterLaunches,
     ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
     selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
+    ...(value.mediaModelSelection === undefined
+      ? {}
+      : {
+          mediaModelSelection: parseEntryMediaModelSelection(
+            value.mediaModelSelection,
+            `${path}.mediaModelSelection`,
+          ),
+        }),
     executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
+    ...(isAgentEntryExperienceMode(experienceMode) ? { experienceMode } : {}),
+  };
+}
+
+function parseEntryMediaModelSelection(
+  value: unknown,
+  path: string,
+): NonNullable<AgentEntryDraftSnapshot['mediaModelSelection']> {
+  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  const categories = ['image', 'video', 'audio'] as const;
+  if (
+    Object.keys(value).length !== categories.length ||
+    Object.keys(value).some(
+      (category) => !categories.includes(category as (typeof categories)[number]),
+    )
+  ) {
+    throw new Error(`${path} must contain exact image, video and audio selections.`);
+  }
+  return {
+    image: stringValue(value.image, `${path}.image`),
+    video: stringValue(value.video, `${path}.video`),
+    audio: stringValue(value.audio, `${path}.audio`),
+  };
+}
+
+function parseEntryWorkspaceTarget(
+  value: unknown,
+  path: string,
+): AgentEntryDraftSnapshot['workspaceTarget'] {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`${path}.workspaceTarget must be an object.`);
+  const context = parseAgentBoundDomainBinding(value.context);
+  if (context.kind !== 'workspace') {
+    throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
+  }
+  return {
+    label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
+    context,
   };
 }
 
@@ -378,22 +451,6 @@ function parseEntryCharacterLaunch(
     characterProjectId: nonEmptyString(value.characterProjectId, `${path}.characterProjectId`),
     characterVersionId: nonEmptyString(value.characterVersionId, `${path}.characterVersionId`),
     label: nonEmptyString(value.label, `${path}.label`),
-  };
-}
-
-function parseEntryWorkspaceTarget(
-  value: unknown,
-  path: string,
-): AgentEntryDraftSnapshot['workspaceTarget'] {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) throw new Error(`${path}.workspaceTarget must be an object.`);
-  const context = parseAgentBoundDomainBinding(value.context);
-  if (context.kind !== 'workspace') {
-    throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
-  }
-  return {
-    label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
-    context,
   };
 }
 

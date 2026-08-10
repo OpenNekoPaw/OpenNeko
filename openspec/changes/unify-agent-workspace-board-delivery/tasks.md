@@ -14,6 +14,10 @@
       and safe conflict diagnostics.
 - [ ] 2.3 Run focused Canvas Domain/renderer tests and typecheck/build, then verify authoritative save
       and subsequent Generation delivery through the same Electron fixture and renderer diagnostics.
+- [x] 2.4 Coordinate canonical Board delivery with all attached exact Canvas sessions, reject dirty sessions before
+      mutation, immediately project committed clean documents and prove later save/reopen cannot lose or duplicate nodes.
+- [x] 2.5 Repair delayed Canvas Root keyboard ownership, register every advertised Canvas shortcut through the shared
+      dispatcher and add loading-to-ready, editable-boundary and action mapping regression coverage.
 
 ## 3. Locator-backed image display
 

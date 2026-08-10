@@ -5,8 +5,14 @@ export const CANVAS_GENERATION_KINDS = ['prompt', 'image', 'audio', 'video'] as 
 
 export type CanvasGenerationKind = (typeof CANVAS_GENERATION_KINDS)[number];
 
-export type CanvasGenerationPurpose =
-  'canvas.prompt' | 'image.generate' | 'audio.generate' | 'video.generate';
+export const CANVAS_GENERATION_PURPOSES = [
+  'canvas.prompt',
+  'image.generate',
+  'audio.generate',
+  'audio.music.generate',
+  'video.generate',
+] as const;
+export type CanvasGenerationPurpose = (typeof CANVAS_GENERATION_PURPOSES)[number];
 
 export interface CanvasGenerationModelBinding {
   readonly purpose: CanvasGenerationPurpose;
@@ -117,10 +123,65 @@ export function purposeForCanvasGenerationKind(
   }
 }
 
+export function purposeForCanvasGenerationRecipe(
+  recipe: Pick<CanvasGenerationRecipe, 'kind'> &
+    Partial<Pick<CanvasAudioGenerationRecipe, 'isMusic'>>,
+): CanvasGenerationPurpose {
+  return recipe.kind === 'audio' && recipe.isMusic
+    ? 'audio.music.generate'
+    : purposeForCanvasGenerationKind(recipe.kind);
+}
+
 export function createCanvasGenerationNodeData(
   kind: CanvasGenerationKind,
+  model?: CanvasGenerationModelBinding,
 ): CanvasGenerationNodeData {
-  return { recipe: { kind, prompt: '' }, outputs: [] };
+  if (model && model.purpose !== purposeForCanvasGenerationKind(kind)) {
+    throw new Error('Canvas Generation default model purpose does not match the node kind.');
+  }
+  const recipe: CanvasGenerationRecipe = (() => {
+    switch (kind) {
+      case 'prompt':
+        return {
+          kind,
+          prompt: '',
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+          ...(model ? { model } : {}),
+        };
+      case 'image':
+        return {
+          kind,
+          prompt: '',
+          aspectRatio: '1:1',
+          width: 1024,
+          height: 1024,
+          count: 1,
+          quality: 'standard',
+          ...(model ? { model } : {}),
+        };
+      case 'audio':
+        return {
+          kind,
+          prompt: '',
+          duration: 10,
+          isMusic: false,
+          format: 'mp3',
+          ...(model ? { model } : {}),
+        };
+      case 'video':
+        return {
+          kind,
+          prompt: '',
+          aspectRatio: '16:9',
+          resolution: '720p',
+          duration: 5,
+          fps: 24,
+          ...(model ? { model } : {}),
+        };
+    }
+  })();
+  return { recipe, outputs: [] };
 }
 
 export function isCanvasGenerationRecipe(value: unknown): value is CanvasGenerationRecipe {
@@ -128,7 +189,15 @@ export function isCanvasGenerationRecipe(value: unknown): value is CanvasGenerat
   if (typeof value['prompt'] !== 'string') return false;
   if (!hasOnlyKeys(value, recipeKeys(value['kind']))) return false;
   const model = value['model'];
-  if (model !== undefined && !isCanvasGenerationModelBinding(model, value['kind'])) return false;
+  if (
+    model !== undefined &&
+    !isCanvasGenerationModelBinding(model, {
+      kind: value['kind'],
+      ...(typeof value['isMusic'] === 'boolean' ? { isMusic: value['isMusic'] } : {}),
+    })
+  ) {
+    return false;
+  }
   switch (value['kind']) {
     case 'prompt':
       return (
@@ -364,12 +433,13 @@ export function selectedCanvasGenerationOutput(
 
 function isCanvasGenerationModelBinding(
   value: unknown,
-  kind: CanvasGenerationKind,
+  recipe: Pick<CanvasGenerationRecipe, 'kind'> &
+    Partial<Pick<CanvasAudioGenerationRecipe, 'isMusic'>>,
 ): value is CanvasGenerationModelBinding {
   return (
     isRecord(value) &&
     hasOnlyKeys(value, MODEL_BINDING_KEYS) &&
-    value['purpose'] === purposeForCanvasGenerationKind(kind) &&
+    value['purpose'] === purposeForCanvasGenerationRecipe(recipe) &&
     isNonEmptyString(value['providerId']) &&
     isNonEmptyString(value['modelId'])
   );

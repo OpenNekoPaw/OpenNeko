@@ -218,6 +218,34 @@ describe('agent evaluation suite and scenario contracts', () => {
     expect(validateScenarioForExecution(scenario())).toEqual(scenario());
   });
 
+  it('validates Automation Tool result evidence and transient receipt consistency', () => {
+    const value = scenario();
+    value.assertions.push({
+      id: 'automation-result',
+      kind: 'automation-tool-result',
+      name: 'automation_browser-use_browser_screenshot',
+      profileId: 'browser-use.observe',
+      targetLabel: 'OpenNeko Evaluation Browser',
+      mode: 'observe',
+      sessionStatus: 'active',
+      remainingSteps: 0,
+      requiredEvidenceKinds: ['text', 'structured', 'transient-image'],
+      observationTransport: 'transient-receipt',
+      evidenceRef: 'turn-facts',
+    });
+    expect(validateScenario(value)).toBe(value);
+
+    const duplicate = globalThis.structuredClone(value);
+    duplicate.assertions.at(-1).requiredEvidenceKinds.push('transient-image');
+    expect(() => validateScenario(duplicate)).toThrow('required evidence kinds must be unique');
+
+    const mismatched = globalThis.structuredClone(value);
+    mismatched.assertions.at(-1).observationTransport = 'none';
+    expect(() => validateScenario(mismatched)).toThrow(
+      'observation transport must match transient-image',
+    );
+  });
+
   it('accepts supported workflow steps and rejects invalid references before execution', () => {
     const workflow = scenario();
     workflow.steps = [

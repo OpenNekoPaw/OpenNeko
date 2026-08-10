@@ -42,6 +42,23 @@ describe('Desktop renderer styles', () => {
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
   });
 
+  it('keeps the combined Main and Cut menu compact and keyboard-visible', () => {
+    const popoverRule = styles.match(
+      /\.workspace-creative-panels-popover\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const itemRule = styles.match(
+      /\.workspace-creative-panels-popover__item\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(popoverRule?.groups?.body).toMatch(/width\s*:\s*190px/u);
+    expect(itemRule?.groups?.body).toMatch(
+      /grid-template-columns\s*:\s*18px minmax\(0, 1fr\) 18px/u,
+    );
+    expect(styles).toMatch(
+      /\.workspace-creative-panels-popover__item:hover:not\(:disabled\),\s*\n\.workspace-creative-panels-popover__item:focus-visible\s*\{[^}]*background/u,
+    );
+  });
+
   it('keeps the Cut add target adjacent to the final tab while allowing tab overflow', () => {
     const tabsRule = styles.match(
       /\.project-cut-panel__tabs \.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u,
@@ -398,7 +415,27 @@ describe('Desktop renderer styles', () => {
     expect(styles).toMatch(
       /\.management-surface-list\[data-empty='true'\]\s*\{[\s\S]*?display\s*:\s*grid[\s\S]*?grid-template-columns\s*:\s*minmax\(0, 1fr\)[\s\S]*?flex\s*:\s*1/u,
     );
+    expect(styles).toMatch(
+      /\.management-surface-list\.is-grid\s*\{[\s\S]*?grid-template-columns\s*:\s*repeat\(auto-fill, minmax\(260px, 1fr\)\)/u,
+    );
+    expect(styles).toMatch(
+      /\.management-surface-list\.is-grid \.management-surface-row\s*\{[\s\S]*?min-height\s*:\s*132px[\s\S]*?flex-direction\s*:\s*column/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.management-surface-row__select\[data-selected='true'\]\s*\{[^}]*border-color[^}]*background/u,
+    );
+    expect(styles).toMatch(
+      /\.desktop-workbench-main-panel\[data-panel-size='compact'\] \.management-surface-list\.is-grid\s*\{[\s\S]*?grid-template-columns\s*:\s*1fr/u,
+    );
+    expect(styles).toMatch(
+      /\.management-surface-row__open:focus-visible,[\s\S]*?\.management-surface-row-actions button:focus-visible\s*\{[\s\S]*?outline\s*:\s*2px/u,
+    );
     expect(styles).toMatch(/\.management-surface-row-actions button\s*\{[\s\S]*?width\s*:\s*28px/u);
+    expect(styles).not.toMatch(
+      /\.management-surface-list\.is-grid \.management-surface-row-actions\s*\{[^}]*border-top/u,
+    );
+    expect(styles).not.toMatch(/\.project-management-batch-toolbar/u);
+    expect(styles).not.toMatch(/\.management-surface-row\[data-selected='true'\]/u);
     expect(styles).not.toMatch(/\.management-surface-empty/u);
     expect(styles).not.toMatch(/\.project-management-detail(?:__content)?\s*\{/u);
     expect(styles).not.toMatch(

@@ -83,7 +83,7 @@ function projectTurnMessage(turn: ConversationTurnProjection): Message {
   return projectTimelineTurnToMessage({
     messageId: turn.messageId,
     items: turn.items,
-    completed: turn.completion !== undefined,
+    ...(turn.completion ? { completion: turn.completion } : {}),
   });
 }
 
@@ -102,6 +102,7 @@ function mergeProjectedMessage(messages: readonly Message[], projection: Message
           content: projection.content,
           isStreaming: projection.isStreaming,
           contentBlocks: projection.contentBlocks,
+          turnTiming: projection.turnTiming,
           workItemIds: mergeIds(message.workItemIds, projection.workItemIds),
         }
       : message,

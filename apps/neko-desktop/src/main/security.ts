@@ -121,8 +121,12 @@ export function configureDesktopWindowSecurity(
   webContents.on('will-navigate', onWillNavigate);
 
   const targetSession = webContents.session;
-  targetSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
+  targetSession.setPermissionRequestHandler((requestingWebContents, permission, callback, details) => {
+    callback(
+      requestingWebContents === webContents &&
+        permission === 'clipboard-sanitized-write' &&
+        isAllowedDesktopRendererUrl(details.requestingUrl, allowedOrigin),
+    );
   });
 
   const csp = createDesktopContentSecurityPolicy(allowedOrigin, policyOptions);
