@@ -43,13 +43,13 @@ describe('Agent Automation Capability adapter', () => {
 
     const result = await screenshot?.execute(
       {
-        targetKey: target.targetKey,
         arguments: { full_page: false },
         timeoutMs: 30_000,
         stepBudget: 1,
       },
       {
         metadata: {
+          workspaceId: 'workspace-1',
           conversationId: 'conversation-1',
           runId: 'run-1',
           toolCallId: 'tool-call-1',
@@ -66,8 +66,8 @@ describe('Agent Automation Capability adapter', () => {
     expect(authorization.authorizeSession).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'session-1',
-        targetKey: target.targetKey,
         owner: {
+          workspaceId: 'workspace-1',
           conversationId: 'conversation-1',
           runId: 'run-1',
           toolCallId: 'tool-call-1',
@@ -121,9 +121,10 @@ describe('Agent Automation Capability adapter', () => {
     const tool = tools[0]!;
     await expect(
       tool.execute(
-        { targetKey: target.targetKey, arguments: {}, timeoutMs: 30_000, stepBudget: 1 },
+        { arguments: {}, timeoutMs: 30_000, stepBudget: 1 },
         {
           metadata: {
+            workspaceId: 'workspace-1',
             conversationId: 'conversation-1',
             runId: 'run-1',
             toolCallId: 'tool-call-1',
@@ -134,6 +135,92 @@ describe('Agent Automation Capability adapter', () => {
     expect(service.stopSession).toHaveBeenCalledWith('session-failure');
     expect(service.executeAction).toHaveBeenCalledTimes(1);
   });
+
+  it('preserves Take over as the terminal owner and does not close the session twice', async () => {
+    const service = createService();
+    service.executeAction.mockRejectedValueOnce(new Error('session taken over'));
+    service.readSession.mockReturnValueOnce({
+      sessionId: 'session-takeover',
+      profileId: BROWSER_USE_OBSERVE_PROFILE.id,
+      provider: BROWSER_USE_OBSERVE_PROFILE.provider,
+      target,
+      mode: 'observe',
+      status: 'taken-over',
+      remainingSteps: 1,
+    });
+    const tools = createAgentAutomationCapabilityTools({
+      profile: BROWSER_USE_OBSERVE_PROFILE,
+      service,
+      authorization: {
+        authorizeSession: vi.fn(async (input) => ({
+          target,
+          grant: {
+            grantId: 'grant-takeover',
+            sessionId: input.sessionId,
+            extensionId: input.profile.provider.extensionId,
+            profileId: input.profile.id,
+            provider: input.profile.provider,
+            target,
+            mode: input.mode,
+            timeoutMs: input.timeoutMs,
+            stepBudget: input.stepBudget,
+            conversationId: input.owner.conversationId,
+            runId: input.owner.runId,
+            toolCallId: input.owner.toolCallId,
+          },
+        })),
+      },
+      createId: (() => {
+        const ids = ['session-takeover', 'action-takeover'];
+        return () => ids.shift() ?? 'unexpected';
+      })(),
+    });
+
+    await expect(
+      tools[0]!.execute(
+        { arguments: {}, timeoutMs: 30_000, stepBudget: 1 },
+        {
+          metadata: {
+            workspaceId: 'workspace-1',
+            conversationId: 'conversation-1',
+            runId: 'run-1',
+            toolCallId: 'tool-call-1',
+          },
+        },
+      ),
+    ).rejects.toThrow('session taken over');
+    expect(service.stopSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects model-authored target routing before requesting Host authorization', async () => {
+    const service = createService();
+    const authorization = { authorizeSession: vi.fn() };
+    const tool = createAgentAutomationCapabilityTools({
+      profile: BROWSER_USE_OBSERVE_PROFILE,
+      service,
+      authorization,
+    })[0]!;
+
+    await expect(
+      tool.execute(
+        {
+          targetKey: target.targetKey,
+          arguments: {},
+          timeoutMs: 30_000,
+          stepBudget: 1,
+        },
+        {
+          metadata: {
+            conversationId: 'conversation-1',
+            runId: 'run-1',
+            toolCallId: 'tool-call-1',
+          },
+        },
+      ),
+    ).rejects.toThrow('arguments contain unsupported fields');
+    expect(authorization.authorizeSession).not.toHaveBeenCalled();
+    expect(service.openSession).not.toHaveBeenCalled();
+  });
 });
 
 function createService() {
@@ -141,6 +228,9 @@ function createService() {
     listQualificationDiagnostics: vi.fn(() => []),
     listAvailableOperations: vi.fn(() => BROWSER_USE_OBSERVE_PROFILE.operations),
     listOwnedSessions: vi.fn(() => []),
+    listSessionControls: vi.fn(() => []),
+    controlSession: vi.fn(async () => undefined),
+    subscribeSessionControls: vi.fn(() => () => undefined),
     openSession: vi.fn(async (input) => ({
       sessionId: input.sessionId,
       profileId: input.profileId,

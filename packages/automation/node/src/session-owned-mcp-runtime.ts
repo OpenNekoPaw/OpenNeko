@@ -59,12 +59,23 @@ export function createSessionOwnedAutomationMcpRuntime(options: {
     async inspectTools(input) {
       const client = options.clients.createQualificationClient();
       claimExclusiveClient(claimedClients, client);
+      let tools: readonly AutomationMcpToolDefinition[];
       try {
         await client.connect(input);
-        return await client.listTools(input);
-      } finally {
-        await client.disconnect();
+        tools = await client.listTools(input);
+      } catch (operationError) {
+        try {
+          await client.disconnect();
+        } catch (disconnectError) {
+          throw new AggregateError(
+            [operationError, disconnectError],
+            'Automation MCP qualification and cleanup both failed.',
+          );
+        }
+        throw operationError;
       }
+      await client.disconnect();
+      return tools;
     },
 
     async openSession(input) {
@@ -80,9 +91,16 @@ export function createSessionOwnedAutomationMcpRuntime(options: {
       claimExclusiveClient(claimedClients, client);
       try {
         await client.connect({ ...(input.signal === undefined ? {} : { signal: input.signal }) });
-      } catch (error) {
-        await client.disconnect();
-        throw error;
+      } catch (connectError) {
+        try {
+          await client.disconnect();
+        } catch (disconnectError) {
+          throw new AggregateError(
+            [connectError, disconnectError],
+            `Automation MCP session '${input.sessionId}' connection and cleanup both failed.`,
+          );
+        }
+        throw connectError;
       }
       sessions.set(input.sessionId, { target: input.target, client });
       return { providerSessionId: input.sessionId };
@@ -110,8 +128,8 @@ export function createSessionOwnedAutomationMcpRuntime(options: {
 
     async closeSession(providerSessionId) {
       const session = requireSession(sessions, providerSessionId);
-      sessions.delete(providerSessionId);
       await session.client.disconnect();
+      sessions.delete(providerSessionId);
     },
 
     async dispose() {

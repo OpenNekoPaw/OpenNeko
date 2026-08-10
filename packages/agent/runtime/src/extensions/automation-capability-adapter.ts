@@ -6,32 +6,15 @@ import {
   parseAutomationTarget,
   type AutomationActionApproval,
   type AutomationProfile,
-  type AutomationSessionGrant,
-  type AutomationTarget,
 } from '@neko/automation-contracts';
 import type {
   AutomationActionApprovalProjection,
   AutomationApplicationService,
+  AutomationSessionAuthorizationService,
 } from '@neko/automation-node';
 import type { Tool, ToolExecuteOptions, ToolParameters } from '@neko/agent-contracts';
 
-export interface AgentAutomationAuthorizationPort {
-  authorizeSession(input: {
-    readonly sessionId: string;
-    readonly profile: AutomationProfile;
-    readonly targetKey: string;
-    readonly mode: 'observe' | 'browse-read' | 'interact';
-    readonly timeoutMs: number;
-    readonly stepBudget: number;
-    readonly owner: {
-      readonly conversationId: string;
-      readonly runId: string;
-      readonly toolCallId: string;
-    };
-  }): Promise<{
-    readonly target: AutomationTarget;
-    readonly grant: AutomationSessionGrant;
-  }>;
+export interface AgentAutomationAuthorizationPort extends AutomationSessionAuthorizationService {
   authorizeAction?(
     projection: AutomationActionApprovalProjection,
   ): Promise<AutomationActionApproval>;
@@ -85,15 +68,15 @@ export function createAgentAutomationCapabilityTools(options: {
           const authorized = await options.authorization.authorizeSession({
             sessionId,
             profile,
-            targetKey: input.targetKey,
             mode,
             timeoutMs: input.timeoutMs,
             stepBudget: input.stepBudget,
             owner,
+            ...(executionOptions?.signal === undefined ? {} : { signal: executionOptions.signal }),
           });
           const target = parseAutomationTarget(authorized.target);
-          if (target.targetKey !== input.targetKey || target.kind !== profile.provider.kind) {
-            throw new Error('Automation Host authorization returned a mismatched exact target.');
+          if (target.kind !== profile.provider.kind) {
+            throw new Error('Automation Host authorization returned a mismatched target kind.');
           }
           const grant = parseAutomationSessionGrant(authorized.grant);
           await options.service.openSession(
@@ -143,7 +126,10 @@ export function createAgentAutomationCapabilityTools(options: {
           }
           let closeError: unknown;
           try {
-            await options.service.stopSession(sessionId);
+            const current = options.service.readSession(sessionId);
+            if (current?.status !== 'stopped' && current?.status !== 'taken-over') {
+              await options.service.stopSession(sessionId);
+            }
           } catch (error) {
             closeError = error;
           }
@@ -182,10 +168,6 @@ export function createAgentAutomationCapabilityTools(options: {
 const AUTOMATION_TOOL_PARAMETERS: ToolParameters = {
   type: 'object',
   properties: {
-    targetKey: {
-      type: 'string',
-      description: 'Opaque user-selected target identity resolved only by the Host authorization.',
-    },
     arguments: {
       type: 'object',
       description: 'Reviewed upstream operation arguments. Target routing fields are Host-owned.',
@@ -204,20 +186,19 @@ const AUTOMATION_TOOL_PARAMETERS: ToolParameters = {
       maximum: 100,
     },
   },
-  required: ['targetKey', 'arguments', 'timeoutMs', 'stepBudget'],
+  required: ['arguments', 'timeoutMs', 'stepBudget'],
   additionalProperties: false,
 };
 
 function parseAdapterArguments(value: Readonly<Record<string, unknown>>): {
-  readonly targetKey: string;
   readonly arguments: Readonly<Record<string, unknown>>;
   readonly timeoutMs: number;
   readonly stepBudget: number;
 } {
   const keys = Object.keys(value);
   if (
-    keys.length !== 4 ||
-    keys.some((key) => !['targetKey', 'arguments', 'timeoutMs', 'stepBudget'].includes(key))
+    keys.length !== 3 ||
+    keys.some((key) => !['arguments', 'timeoutMs', 'stepBudget'].includes(key))
   ) {
     throw new Error('Automation Tool arguments contain unsupported fields.');
   }
@@ -225,7 +206,6 @@ function parseAdapterArguments(value: Readonly<Record<string, unknown>>): {
     throw new Error('Automation Tool operation arguments must be an object.');
   }
   return {
-    targetKey: requireInputIdentity(value['targetKey'], 'target'),
     arguments: Object.freeze({ ...value['arguments'] }),
     timeoutMs: boundedInteger(value['timeoutMs'], 1, 120_000, 'timeout'),
     stepBudget: boundedInteger(value['stepBudget'], 1, 100, 'step budget'),
@@ -233,11 +213,13 @@ function parseAdapterArguments(value: Readonly<Record<string, unknown>>): {
 }
 
 function requireOwner(options: ToolExecuteOptions | undefined): {
+  readonly workspaceId: string;
   readonly conversationId: string;
   readonly runId: string;
   readonly toolCallId: string;
 } {
   return {
+    workspaceId: requireMetadataIdentity(options, 'workspaceId'),
     conversationId: requireMetadataIdentity(options, 'conversationId'),
     runId: requireMetadataIdentity(options, 'runId'),
     toolCallId: requireMetadataIdentity(options, 'toolCallId'),
@@ -266,13 +248,6 @@ function requireCreatedIdentity(value: string, label: string): string {
   return value;
 }
 
-function requireInputIdentity(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/u.test(value)) {
-    throw new Error(`Automation Tool ${label} identity is invalid.`);
-  }
-  return value;
-}
-
 function createToolName(profile: AutomationProfile, operation: string): string {
   return `automation_${profile.provider.providerId}_${operation}`.replace(/[^A-Za-z0-9_-]/gu, '_');
 }
@@ -282,7 +257,7 @@ function createToolDescription(
   operation: string,
   mode: string,
 ): string {
-  return `Run reviewed ${operation} through ${profile.provider.providerId} in ${mode} mode on one explicitly authorized target. The target, budget, Tool Call owner and provider selection are frozen.`;
+  return `Run reviewed ${operation} through ${profile.provider.providerId} in ${mode} mode after the user explicitly selects one Host-discovered target. The target, budget, Tool Call owner and provider selection are frozen.`;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

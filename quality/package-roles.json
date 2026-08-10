@@ -46,6 +46,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/automation/webview",
+      "name": "@neko/automation-webview",
+      "family": "automation",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/ai/contracts",
       "name": "@neko/ai-contracts",
       "family": "ai",

@@ -1,7 +1,18 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button, RefreshIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import type { AgentInteractionProjection, AgentLaunchHostResult } from '@neko/agent-contracts';
+import type {
+  AgentInteractionProjection,
+  AgentLaunchHostResult,
+  DesktopAgentConnectionIdentity,
+} from '@neko/agent-contracts';
+import { AutomationTargetSelectionRoot } from '@neko/automation-webview/target-selection/root';
+import {
+  AutomationSessionControlProvider,
+  AutomationSessionControlTimelineItem,
+} from '@neko/automation-webview/session-control/root';
+import type { AutomationTargetSelectionRuntime } from '@neko/automation-contracts/target-selection';
+import type { AutomationSessionControlRuntime } from '@neko/automation-contracts/session-control';
 import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
 import type { DesktopProjectTabProjection } from '@neko/host/desktop-shell-contract';
 import {
@@ -13,10 +24,27 @@ import {
   type ElectronAgentLaunchHostRuntimeAdapter,
 } from './desktop-agent-launch-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
-import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
+import type {
+  AgentComposerWorkspacePresentation,
+  AgentToolCallAccessoryRenderer,
+} from '@neko/agent-webview/root';
+import { createDesktopAutomationTargetSelectionRuntime } from './desktop-automation-target-selection-runtime';
+import { createDesktopAutomationSessionControlRuntime } from './desktop-automation-session-control-runtime';
 
 const AgentWebviewRoot = lazy(() =>
   loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
+);
+
+const renderAutomationSessionControl: AgentToolCallAccessoryRenderer = ({
+  conversationId,
+  toolCall,
+}) => (
+  <AutomationSessionControlTimelineItem
+    conversationId={conversationId}
+    isRunning={toolCall.result === undefined}
+    toolCallId={toolCall.id}
+    toolName={toolCall.name}
+  />
 );
 
 type DesktopAgentSurfaceState =
@@ -25,6 +53,7 @@ type DesktopAgentSurfaceState =
       readonly kind: 'ready';
       readonly connectionKey: string;
       readonly adapter: DesktopAgentSurfaceRuntimeAdapter;
+      readonly connection?: DesktopAgentConnectionIdentity;
       readonly agentPresentation?: AgentInteractionProjection;
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly initialInput?: { readonly id: string; readonly value: string };
@@ -185,6 +214,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             bridge: window.openNekoDesktop,
             bootstrap,
           }),
+          connection: bootstrap.connection,
           ...(agentPresentation ? { agentPresentation } : {}),
           ...(props.binding === 'workspace' && props.initialConversation
             ? { initialConversation: props.initialConversation }
@@ -204,6 +234,26 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     };
   }, [binding, connectionKey, projectId, retryAttempt, viewId]);
 
+  const automationConnection =
+    state.kind === 'ready' && state.connectionKey === connectionKey ? state.connection : undefined;
+  const automationConversationId =
+    state.kind === 'ready' && state.connectionKey === connectionKey
+      ? state.agentPresentation?.phase === 'session'
+        ? state.agentPresentation.conversationId
+        : state.initialConversation?.id
+      : undefined;
+  const automationSessionControlRuntime = useMemo(
+    () =>
+      automationConnection && automationConversationId
+        ? createDesktopAutomationSessionControlRuntime({
+            connection: automationConnection,
+            conversationId: automationConversationId,
+            bridge: window.openNekoDesktop.automationSessionControl,
+          })
+        : undefined,
+    [automationConnection, automationConversationId],
+  );
+
   const activeAdapter = state.kind === 'ready' ? state.adapter : undefined;
   let content: JSX.Element;
   if (state.kind === 'loading') {
@@ -220,7 +270,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
               ? t('agent.unavailableDetail')
               : state.reason === 'conversation'
                 ? t('agent.conversationUnavailableDetail')
-              : t('agent.runtimeUnavailableDetail')
+                : t('agent.runtimeUnavailableDetail')
             : t('agent.connectionFailureDetail')
         }
         retryLabel={t('agent.retry')}
@@ -240,7 +290,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   } else {
     const connectionReady = state.connectionKey === connectionKey;
     content = (
-      <>
+      <div className="desktop-agent-composition">
         <div
           className="desktop-agent-root"
           data-owner-root="agent"
@@ -248,31 +298,46 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           hidden={!connectionReady}
         >
           <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
-            <AgentWebviewRoot
-              hostRuntimeAdapter={state.adapter}
-              agentPresentation={state.agentPresentation}
-              composerWorkspace={props.composerWorkspace}
-              initialConversation={
-                state.agentPresentation?.phase === 'session'
-                  ? { id: state.agentPresentation.conversationId, title: '' }
-                  : state.initialConversation
-              }
-              initialInput={state.initialInput}
-              locale={locale}
-              presentation="desktop-dock"
-              conversationFeed={
-                props.conversationFeed && state.agentPresentation?.phase === 'session'
-                  ? {
-                      conversationId: state.agentPresentation.conversationId,
-                      content: props.conversationFeed,
-                    }
-                  : undefined
-              }
-            />
+            <DesktopAutomationSessionControlBoundary runtime={automationSessionControlRuntime}>
+              <AgentWebviewRoot
+                hostRuntimeAdapter={state.adapter}
+                agentPresentation={state.agentPresentation}
+                composerWorkspace={props.composerWorkspace}
+                initialConversation={
+                  state.agentPresentation?.phase === 'session'
+                    ? { id: state.agentPresentation.conversationId, title: '' }
+                    : state.initialConversation
+                }
+                initialInput={state.initialInput}
+                locale={locale}
+                presentation="desktop-dock"
+                conversationFeed={
+                  props.conversationFeed && state.agentPresentation?.phase === 'session'
+                    ? {
+                        conversationId: state.agentPresentation.conversationId,
+                        content: props.conversationFeed,
+                      }
+                    : undefined
+                }
+                toolCallAccessoryRenderer={
+                  automationSessionControlRuntime ? renderAutomationSessionControl : undefined
+                }
+              />
+            </DesktopAutomationSessionControlBoundary>
           </Suspense>
         </div>
+        {connectionReady && state.connection ? (
+          <DesktopAutomationTargetSelectionSurface
+            connection={state.connection}
+            conversationId={
+              state.agentPresentation?.phase === 'session'
+                ? state.agentPresentation.conversationId
+                : state.initialConversation?.id
+            }
+          />
+        ) : null}
         {connectionReady ? null : <AgentSurfaceStatus message={t('agent.connecting')} />}
-      </>
+      </div>
     );
   }
   return (
@@ -283,6 +348,99 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   );
 }
 
+function DesktopAutomationTargetSelectionSurface({
+  connection,
+  conversationId,
+}: {
+  readonly connection: DesktopAgentConnectionIdentity;
+  readonly conversationId?: string;
+}): JSX.Element | null {
+  const runtime = useMemo(
+    () =>
+      conversationId
+        ? createDesktopAutomationTargetSelectionRuntime({
+            connection,
+            conversationId,
+            bridge: window.openNekoDesktop.automationTargetSelection,
+          })
+        : undefined,
+    [connection, conversationId],
+  );
+  return runtime ? (
+    <>
+      <AutomationTargetSelectionRoot runtime={runtime} />
+      <DesktopAutomationTargetSelectionRuntimeDisposer runtime={runtime} />
+    </>
+  ) : null;
+}
+
+function DesktopAutomationTargetSelectionRuntimeDisposer({
+  runtime,
+}: {
+  readonly runtime: AutomationTargetSelectionRuntime;
+}): null {
+  const disposals = useRef(new Map<AutomationTargetSelectionRuntime, { cancelled: boolean }>());
+  useEffect(() => {
+    const scheduledDisposals = disposals.current;
+    const scheduled = scheduledDisposals.get(runtime);
+    if (scheduled) {
+      scheduled.cancelled = true;
+      scheduledDisposals.delete(runtime);
+    }
+    return () => {
+      const disposal = { cancelled: false };
+      scheduledDisposals.set(runtime, disposal);
+      queueMicrotask(() => {
+        if (disposal.cancelled || scheduledDisposals.get(runtime) !== disposal) return;
+        scheduledDisposals.delete(runtime);
+        runtime.dispose();
+      });
+    };
+  }, [runtime]);
+  return null;
+}
+
+function DesktopAutomationSessionControlBoundary({
+  children,
+  runtime,
+}: {
+  readonly children: ReactNode;
+  readonly runtime?: AutomationSessionControlRuntime;
+}): JSX.Element {
+  return (
+    <AutomationSessionControlProvider runtime={runtime}>
+      {children}
+      {runtime ? <DesktopAutomationSessionControlRuntimeDisposer runtime={runtime} /> : null}
+    </AutomationSessionControlProvider>
+  );
+}
+
+function DesktopAutomationSessionControlRuntimeDisposer({
+  runtime,
+}: {
+  readonly runtime: AutomationSessionControlRuntime;
+}): null {
+  const disposals = useRef(new Map<AutomationSessionControlRuntime, { cancelled: boolean }>());
+  useEffect(() => {
+    const scheduledDisposals = disposals.current;
+    const scheduled = scheduledDisposals.get(runtime);
+    if (scheduled) {
+      scheduled.cancelled = true;
+      scheduledDisposals.delete(runtime);
+    }
+    return () => {
+      const disposal = { cancelled: false };
+      scheduledDisposals.set(runtime, disposal);
+      queueMicrotask(() => {
+        if (disposal.cancelled || scheduledDisposals.get(runtime) !== disposal) return;
+        scheduledDisposals.delete(runtime);
+        runtime.dispose();
+      });
+    };
+  }, [runtime]);
+  return null;
+}
+
 function DesktopAgentAdapterDisposer({
   adapter,
 }: {
@@ -291,18 +449,19 @@ function DesktopAgentAdapterDisposer({
   const disposals = useRef(new Map<DesktopAgentSurfaceRuntimeAdapter, { cancelled: boolean }>());
   useEffect(() => {
     if (!adapter) return;
-    const scheduled = disposals.current.get(adapter);
+    const scheduledDisposals = disposals.current;
+    const scheduled = scheduledDisposals.get(adapter);
     if (scheduled) {
       scheduled.cancelled = true;
-      disposals.current.delete(adapter);
+      scheduledDisposals.delete(adapter);
     }
     return () => {
       const disposal = { cancelled: false };
-      disposals.current.set(adapter, disposal);
+      scheduledDisposals.set(adapter, disposal);
       // StrictMode replays setup after cleanup in the same turn; child cleanup also finishes first.
       queueMicrotask(() => {
-        if (disposal.cancelled || disposals.current.get(adapter) !== disposal) return;
-        disposals.current.delete(adapter);
+        if (disposal.cancelled || scheduledDisposals.get(adapter) !== disposal) return;
+        scheduledDisposals.delete(adapter);
         reportCleanupFailure(adapter.dispose());
       });
     };

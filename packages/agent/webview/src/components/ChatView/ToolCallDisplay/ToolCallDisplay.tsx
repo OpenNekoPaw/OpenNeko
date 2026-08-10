@@ -33,6 +33,7 @@ import {
 } from './icons';
 import { DocumentImageThumbnails } from './DocumentImageThumbnails';
 import { GenerationJobCard } from './GenerationJobCard';
+import { useToolCallAccessoryRenderer } from '../ToolCallAccessoryContext';
 
 const logger = getLogger('ToolCallDisplay');
 
@@ -52,6 +53,7 @@ function ToolCallDisplayComponent({
   const { t } = useTranslation();
   const agentHostMessages = useAgentHostMessages();
   const { workItems } = useMessageActions();
+  const renderAccessory = useToolCallAccessoryRenderer();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpand = useCallback(() => {
@@ -116,6 +118,7 @@ function ToolCallDisplayComponent({
     workItems,
     workItemIds,
   });
+  const accessory = renderAccessory?.({ conversationId, toolCall });
 
   const toneClass = isFailed ? 'is-danger' : isSuccess ? 'is-success' : isPending ? 'is-info' : '';
   const compactActionClass =
@@ -228,7 +231,7 @@ function ToolCallDisplayComponent({
   // Normal display
   return (
     <div className="my-1">
-      <div className={`agent-inline-card ${toneClass}`}>
+      <div className={`agent-inline-card ${toneClass}`} data-agent-tool-call-id={toolCall.id}>
         {/* Compact single-line header */}
         <div
           className="agent-inline-header flex items-center gap-1.5 px-2 py-1.5 text-[11px] transition-colors"
@@ -285,6 +288,8 @@ function ToolCallDisplayComponent({
         )}
 
         {canvasAuthoringResult && <CanvasAuthoringResultSummary result={canvasAuthoringResult} />}
+
+        {accessory}
 
         {/* Expanded content */}
         {isExpanded && (

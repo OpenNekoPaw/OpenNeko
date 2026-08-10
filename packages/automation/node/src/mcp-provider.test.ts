@@ -24,6 +24,7 @@ describe('reviewed MCP Automation provider', () => {
     expect(BROWSER_USE_OBSERVE_PROFILE.provider).toMatchObject({
       upstreamRelease: '0.13.7',
       kind: 'browser',
+      deliverySource: { kind: 'github-release' },
     });
     expect(BROWSER_USE_OBSERVE_TOOL_NAMES).toEqual([
       'browser_get_state',

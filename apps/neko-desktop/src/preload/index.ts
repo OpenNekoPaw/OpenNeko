@@ -206,6 +206,32 @@ import {
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
 import {
+  AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+  parseAutomationEndpointManagementHostRequest,
+  parseAutomationEndpointManagementHostResult,
+  type OpenNekoAutomationEndpointManagementBridge,
+} from '@neko/automation-contracts/endpoint-management';
+import {
+  AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
+  parseAutomationPermissionManagementHostRequest,
+  parseAutomationPermissionManagementHostResult,
+  type OpenNekoAutomationPermissionManagementBridge,
+} from '@neko/automation-contracts/permission-management';
+import {
+  DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS,
+  parseDesktopAutomationTargetSelectionChangedEvent,
+  parseDesktopAutomationTargetSelectionRequest,
+  parseDesktopAutomationTargetSelectionResult,
+  type OpenNekoDesktopAutomationTargetSelectionBridge,
+} from '../shared/automation-target-selection-contract';
+import {
+  DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS,
+  parseDesktopAutomationSessionControlChangedEvent,
+  parseDesktopAutomationSessionControlRequest,
+  parseDesktopAutomationSessionControlResult,
+  type OpenNekoDesktopAutomationSessionControlBridge,
+} from '../shared/automation-session-control-contract';
+import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
   createCharacterFoundationCommandHostRequest,
@@ -285,6 +311,10 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoAssistantResourceBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
+  OpenNekoAutomationEndpointManagementBridge &
+  OpenNekoAutomationPermissionManagementBridge &
+  OpenNekoDesktopAutomationTargetSelectionBridge &
+  OpenNekoDesktopAutomationSessionControlBridge &
   OpenNekoDesktopApplicationSettingsBridge &
   OpenNekoDesktopProjectPortabilityBridge &
   OpenNekoDesktopCharacterBridge &
@@ -682,6 +712,66 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseAgentExtensionManagementHostResult(response, request);
+    },
+  },
+  automationEndpoints: {
+    async execute(input) {
+      const request = parseAutomationEndpointManagementHostRequest(input);
+      const response: unknown = await ipcRenderer.invoke(
+        AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+        request,
+      );
+      return parseAutomationEndpointManagementHostResult(response, request);
+    },
+  },
+  automationPermissions: {
+    async execute(input) {
+      const request = parseAutomationPermissionManagementHostRequest(input);
+      const response: unknown = await ipcRenderer.invoke(
+        AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
+        request,
+      );
+      return parseAutomationPermissionManagementHostResult(response, request);
+    },
+  },
+  automationTargetSelection: {
+    async execute(input) {
+      const request = parseDesktopAutomationTargetSelectionRequest(input);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.execute,
+        request,
+      );
+      return parseDesktopAutomationTargetSelectionResult(response, request);
+    },
+    subscribe(listener) {
+      const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+        parseDesktopAutomationTargetSelectionChangedEvent(value);
+        listener();
+      };
+      ipcRenderer.on(DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.changed, handler);
+      return () => {
+        ipcRenderer.removeListener(DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.changed, handler);
+      };
+    },
+  },
+  automationSessionControl: {
+    async execute(input) {
+      const request = parseDesktopAutomationSessionControlRequest(input);
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.execute,
+        request,
+      );
+      return parseDesktopAutomationSessionControlResult(response, request);
+    },
+    subscribe(listener) {
+      const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+        parseDesktopAutomationSessionControlChangedEvent(value);
+        listener();
+      };
+      ipcRenderer.on(DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.changed, handler);
+      return () => {
+        ipcRenderer.removeListener(DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.changed, handler);
+      };
     },
   },
   resources: {

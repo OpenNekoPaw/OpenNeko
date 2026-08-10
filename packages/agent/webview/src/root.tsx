@@ -19,6 +19,10 @@ import {
   ComposerWorkspaceProvider,
   type AgentComposerWorkspacePresentation,
 } from './components/ComposerWorkspaceContext';
+import {
+  ToolCallAccessoryProvider,
+  type AgentToolCallAccessoryRenderer,
+} from './components/ChatView/ToolCallAccessoryContext';
 import './index.css';
 
 registerDefaultRenderers();
@@ -36,6 +40,7 @@ export interface AgentWebviewRootProps {
     readonly conversationId: string;
     readonly content: ReactNode;
   };
+  readonly toolCallAccessoryRenderer?: AgentToolCallAccessoryRenderer;
 }
 
 export function AgentWebviewRoot({
@@ -48,6 +53,7 @@ export function AgentWebviewRoot({
   initialInput,
   locale,
   presentation = 'default',
+  toolCallAccessoryRenderer,
 }: AgentWebviewRootProps): ReactElement {
   useEffect(() => {
     if (locale) {
@@ -65,13 +71,15 @@ export function AgentWebviewRoot({
         <AgentHostRuntimeProvider adapter={hostRuntimeAdapter}>
           <I18nProvider service={i18nService}>
             <ComposerWorkspaceProvider value={composerWorkspace}>
-              <AppShell
-                agentPresentation={agentPresentation}
-                initialConversation={initialConversation}
-                initialInput={initialInput}
-                presentation={presentation}
-                conversationFeed={conversationFeed}
-              />
+              <ToolCallAccessoryProvider renderer={toolCallAccessoryRenderer}>
+                <AppShell
+                  agentPresentation={agentPresentation}
+                  initialConversation={initialConversation}
+                  initialInput={initialInput}
+                  presentation={presentation}
+                  conversationFeed={conversationFeed}
+                />
+              </ToolCallAccessoryProvider>
             </ComposerWorkspaceProvider>
           </I18nProvider>
         </AgentHostRuntimeProvider>
@@ -84,6 +92,10 @@ export type {
   AgentComposerWorkspacePresentation,
   AgentComposerWorkspaceTarget,
 } from './components/ComposerWorkspaceContext';
+export type {
+  AgentToolCallAccessoryInput,
+  AgentToolCallAccessoryRenderer,
+} from './components/ChatView/ToolCallAccessoryContext';
 
 interface AgentWebviewFoundationBoundaryProps {
   readonly foundation?: WebviewFoundationContextValue;

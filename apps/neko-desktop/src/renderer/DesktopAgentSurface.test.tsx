@@ -4,8 +4,15 @@ import { act, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import type { AgentHostRuntimeAdapter, AgentInteractionProjection } from '@neko/agent-contracts';
-import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
+import type {
+  AgentHostRuntimeAdapter,
+  AgentInteractionProjection,
+  ToolCall,
+} from '@neko/agent-contracts';
+import type {
+  AgentComposerWorkspacePresentation,
+  AgentToolCallAccessoryRenderer,
+} from '@neko/agent-webview/root';
 import { projectAgentConfigurationPolicy } from '@neko/agent-runtime/application';
 import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
@@ -21,6 +28,7 @@ vi.mock('@neko/agent-webview/root', async () => {
       conversationFeed,
       locale,
       presentation,
+      toolCallAccessoryRenderer,
     }: {
       readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
       readonly agentPresentation?: AgentInteractionProjection;
@@ -29,6 +37,7 @@ vi.mock('@neko/agent-webview/root', async () => {
       readonly locale: string;
       readonly presentation: string;
       readonly conversationFeed?: { readonly conversationId: string; readonly content: ReactNode };
+      readonly toolCallAccessoryRenderer?: AgentToolCallAccessoryRenderer;
     }) => {
       useEffect(
         () => () => {
@@ -62,6 +71,12 @@ vi.mock('@neko/agent-webview/root', async () => {
         >
           {hostRuntimeAdapter.runtimeId}:{locale}
           {conversationFeed?.content}
+          <div data-agent-tool-call-id="tool-call-1" data-testid="tool-call-timeline-item">
+            {toolCallAccessoryRenderer?.({
+              conversationId: initialConversation?.id ?? null,
+              toolCall: automationToolCall(),
+            })}
+          </div>
         </div>
       );
     },
@@ -155,6 +170,171 @@ describe('DesktopAgentSurface', () => {
     expect(agentRoot?.getAttribute('data-initial-conversation-id')).toBe(
       'workspace-conversation-1',
     );
+    await act(async () => root.unmount());
+  });
+
+  it('mounts exact Automation target selection only for the ready Conversation connection', async () => {
+    installBridge(vi.fn(async () => readyBootstrap()));
+    const execute = vi.mocked(window.openNekoDesktop.automationTargetSelection.execute);
+    execute.mockImplementation(async (request) => ({
+      requestId: request.requestId,
+      route: request.route,
+      pending: request.route === 'pending.list' ? [targetSelectionProjection()] : [],
+    }));
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <TestAgentSurface
+          agentPresentation={{
+            phase: 'session',
+            conversationId: 'conversation-1',
+            binding: {
+              kind: 'workspace',
+              workspaceId: 'workspace-1',
+              workspaceGrantId: 'workspace-grant-1',
+            },
+          }}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(container.querySelector('[data-automation-target-selection="true"]')).toBeTruthy();
+    expect(execute).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        connection: readyBootstrap().connection,
+        conversationId: 'conversation-1',
+        route: 'pending.list',
+      }),
+    );
+    const target = container.querySelector<HTMLButtonElement>(
+      '.automation-target-selection__candidate',
+    );
+    await act(async () => target?.click());
+    expect(execute).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        conversationId: 'conversation-1',
+        route: 'selection.resolve',
+        decision: {
+          authorizationId: 'authorization-1',
+          decision: 'select',
+          targetKey: 'target-1',
+        },
+      }),
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('mounts exact Automation live control with the ready Conversation and removes terminal state', async () => {
+    installBridge(vi.fn(async () => readyBootstrap()));
+    const execute = vi.mocked(window.openNekoDesktop.automationSessionControl.execute);
+    let active = true;
+    execute.mockImplementation(async (request) => {
+      if (request.route === 'session.control') active = false;
+      return {
+        requestId: request.requestId,
+        route: request.route,
+        controls: active ? [sessionControlProjection()] : [],
+      };
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <TestAgentSurface
+          agentPresentation={{
+            phase: 'session',
+            conversationId: 'conversation-1',
+            binding: {
+              kind: 'workspace',
+              workspaceId: 'workspace-1',
+              workspaceGrantId: 'workspace-grant-1',
+            },
+          }}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    const control = container.querySelector<HTMLElement>(
+      '[data-automation-session-control="true"]',
+    );
+    expect(control).toBeTruthy();
+    expect(
+      container.querySelector('[data-testid="tool-call-timeline-item"]')?.contains(control ?? null),
+    ).toBe(true);
+    expect(control?.closest('[data-owner-root="agent"]')).toBeTruthy();
+    expect(control?.textContent).toContain('Fixture Window');
+    expect(control?.textContent).not.toMatch(/processId|windowId|tabId|endpointId/u);
+    expect(execute).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        connection: readyBootstrap().connection,
+        conversationId: 'conversation-1',
+        route: 'controls.list',
+      }),
+    );
+    const takeover = container.querySelector<HTMLButtonElement>(
+      '[data-automation-control-action="take-over"]',
+    );
+    await act(async () => takeover?.click());
+    expect(execute).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        conversationId: 'conversation-1',
+        route: 'session.control',
+        command: {
+          sessionId: 'session-1',
+          owner: sessionControlProjection().owner,
+          action: 'take-over',
+        },
+      }),
+    );
+    expect(container.querySelector('[data-automation-session-control="true"]')).toBeNull();
+    expect(container.querySelector('[data-testid="tool-call-timeline-item"]')).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
+  it('keeps the exact Automation selection runtime active through StrictMode replay', async () => {
+    installBridge(vi.fn(async () => readyBootstrap()));
+    const execute = vi.mocked(window.openNekoDesktop.automationTargetSelection.execute);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const presentation = {
+      phase: 'session' as const,
+      conversationId: 'conversation-1',
+      binding: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <StrictMode>
+          <TestAgentSurface agentPresentation={presentation} />
+        </StrictMode>,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation-1',
+        route: 'pending.list',
+      }),
+    );
+    expect(container.textContent).not.toContain('runtime is disposed');
+    expect(container.querySelector('[data-testid="agent-root"]')).toBeTruthy();
     await act(async () => root.unmount());
   });
 
@@ -586,6 +766,24 @@ function installBridge(
       assetCenter: { execute: vi.fn() },
       assistantResources: { execute: vi.fn() },
       extensionManagement: { execute: vi.fn() },
+      automationEndpoints: { execute: vi.fn() },
+      automationPermissions: { execute: vi.fn() },
+      automationTargetSelection: {
+        execute: vi.fn(async (request) => ({
+          requestId: request.requestId,
+          route: request.route,
+          pending: [],
+        })),
+        subscribe: vi.fn(() => () => undefined),
+      },
+      automationSessionControl: {
+        execute: vi.fn(async (request) => ({
+          requestId: request.requestId,
+          route: request.route,
+          controls: [],
+        })),
+        subscribe: vi.fn(() => () => undefined),
+      },
       agentLaunch: {
         attach: launch?.attach ?? vi.fn(),
         authorizeResource: vi.fn(),
@@ -707,6 +905,74 @@ function readyAssistantBootstrap() {
       viewId: 'agent-view:window-1',
       connectionId: 'assistant-connection-1',
     },
+  };
+}
+
+function targetSelectionProjection() {
+  return {
+    authorizationId: 'authorization-1',
+    profileId: 'computer.observe',
+    provider: {
+      extensionId: 'computer-use@openneko',
+      providerId: 'cua-driver',
+      kind: 'computer' as const,
+      upstreamRelease: '0.19.2',
+      deliverySource: { kind: 'github-release' as const },
+    },
+    mode: 'observe' as const,
+    timeoutMs: 30_000,
+    stepBudget: 1,
+    owner: {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      runId: 'run-1',
+      toolCallId: 'tool-call-1',
+    },
+    candidates: [
+      {
+        kind: 'computer' as const,
+        targetKey: 'target-1',
+        label: 'Editor',
+        region: { x: 10, y: 20, width: 800, height: 600 },
+      },
+    ],
+  };
+}
+
+function automationToolCall(): ToolCall {
+  return {
+    id: 'tool-call-1',
+    name: 'automation_cua-driver_screenshot',
+    arguments: {},
+  };
+}
+
+function sessionControlProjection() {
+  return {
+    sessionId: 'session-1',
+    profileId: 'computer.observe',
+    provider: {
+      extensionId: 'computer-use@openneko',
+      providerId: 'cua-driver',
+      kind: 'computer' as const,
+      upstreamRelease: '0.19.2',
+    },
+    target: {
+      kind: 'computer' as const,
+      targetKey: 'target-1',
+      label: 'Fixture Window',
+    },
+    mode: 'observe' as const,
+    status: 'active' as const,
+    remainingSteps: 1,
+    phase: 'observation' as const,
+    evidenceStatus: 'none' as const,
+    owner: {
+      conversationId: 'conversation-1',
+      runId: 'run-1',
+      toolCallId: 'tool-call-1',
+    },
+    availableActions: ['pause', 'stop', 'take-over'] as const,
   };
 }
 

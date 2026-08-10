@@ -4,7 +4,11 @@
   "type": "module",
   "description": "Host-neutral Browser and Computer automation contracts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./endpoint-management": "./src/endpoint-management.ts",
+    "./permission-management": "./src/permission-management.ts",
+    "./session-control": "./src/session-control.ts",
+    "./target-selection": "./src/target-selection.ts"
   },
   "scripts": {
     "test": "vitest run",

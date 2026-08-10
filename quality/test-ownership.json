@@ -57,6 +57,13 @@
       "testScope": "src/**/*.test.ts"
     },
     {
+      "path": "packages/automation/webview",
+      "owner": "packages/automation/webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/assets/domain",
       "owner": "packages/assets/domain",
       "mode": "self",

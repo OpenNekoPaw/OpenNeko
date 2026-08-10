@@ -22,12 +22,31 @@ import {
   type AutomationSessionSnapshot,
   type AutomationTarget,
 } from '@neko/automation-contracts';
+import {
+  actionsForStatus,
+  parseAutomationSessionControlCommand,
+  parseAutomationSessionControlScope,
+  type AutomationSessionControlCommand,
+  type AutomationSessionControlProjection,
+  type AutomationSessionEvidenceStatus,
+  type AutomationSessionPhase,
+} from '@neko/automation-contracts/session-control';
+import {
+  qualifyAutomationProviderProfile,
+  type AutomationQualificationDiagnostic,
+} from './qualification';
 
 export * from './browser-use';
 export * from './computer-use';
+export * from './cua-driver-targets';
+export * from './endpoint-management';
 export * from './mcp-provider';
+export * from './permission-management';
+export * from './qualification';
 export * from './schema-digest';
+export * from './session-authorization';
 export * from './session-owned-mcp-runtime';
+export * from './target-selection-coordinator';
 export * from './transient-observation-store';
 
 export interface AutomationExtensionRuntimePort {
@@ -144,17 +163,6 @@ export interface AutomationActionApprovalProjection {
   readonly remainingSteps: number;
 }
 
-export interface AutomationQualificationDiagnostic {
-  readonly profileId: string;
-  readonly operation: string;
-  readonly code:
-    | 'provider-unavailable'
-    | 'provider-mismatch'
-    | 'operation-unreviewed'
-    | 'operation-schema-changed'
-    | 'operation-annotations-contradictory';
-}
-
 export class AutomationError extends Error {
   constructor(
     readonly code: AutomationDiagnosticCode,
@@ -169,6 +177,9 @@ export interface AutomationApplicationService {
   listQualificationDiagnostics(): readonly AutomationQualificationDiagnostic[];
   listAvailableOperations(profileId: string): readonly AutomationReviewedOperation[];
   listOwnedSessions(extensionId: string): readonly AutomationSessionSnapshot[];
+  listSessionControls(scope: unknown): readonly AutomationSessionControlProjection[];
+  controlSession(input: unknown): Promise<void>;
+  subscribeSessionControls(listener: () => void): () => void;
   openSession(input: unknown, signal?: AbortSignal): Promise<AutomationSessionSnapshot>;
   readSession(sessionId: string): AutomationSessionSnapshot | undefined;
   prepareAction(input: unknown, signal?: AbortSignal): Promise<AutomationActionApprovalProjection>;
@@ -232,45 +243,11 @@ export async function createAutomationApplicationService(options: {
       );
       continue;
     }
-    if (!sameProviderIdentity(profile.provider, inspection.provider)) {
-      qualifications.set(profile.id, new Map());
-      diagnostics.push(
-        ...profile.operations.map((operation) => ({
-          profileId: profile.id,
-          operation: operation.name,
-          code: 'provider-mismatch' as const,
-        })),
-      );
-      continue;
-    }
-    const discovered = new Map(
-      inspection.operations.map((operation) => [operation.name, operation]),
+    const qualification = qualifyAutomationProviderProfile(profile, inspection);
+    const available = new Map(
+      qualification.availableOperations.map((operation) => [operation.name, operation]),
     );
-    const available = new Map<string, AutomationReviewedOperation>();
-    for (const reviewed of profile.operations) {
-      const actual = discovered.get(reviewed.name);
-      if (!actual) {
-        diagnostics.push({
-          profileId: profile.id,
-          operation: reviewed.name,
-          code: 'operation-unreviewed',
-        });
-      } else if (actual.inputSchemaDigest !== reviewed.inputSchemaDigest) {
-        diagnostics.push({
-          profileId: profile.id,
-          operation: reviewed.name,
-          code: 'operation-schema-changed',
-        });
-      } else if (annotationsContradict(reviewed, actual.annotations)) {
-        diagnostics.push({
-          profileId: profile.id,
-          operation: reviewed.name,
-          code: 'operation-annotations-contradictory',
-        });
-      } else {
-        available.set(reviewed.name, reviewed);
-      }
-    }
+    diagnostics.push(...qualification.diagnostics);
     qualifications.set(profile.id, available);
   }
 
@@ -293,12 +270,16 @@ interface RuntimeSession {
   readonly providerSessionId: string;
   status: AutomationSessionSnapshot['status'];
   remainingSteps: number;
+  phase: AutomationSessionPhase;
+  evidenceStatus: AutomationSessionEvidenceStatus;
+  lifecycleController: AbortController;
   readonly consumedApprovalIds: Set<string>;
 }
 
 class DefaultAutomationApplicationService implements AutomationApplicationService {
   private readonly sessions = new Map<string, RuntimeSession>();
   private readonly consumedGrantIds = new Set<string>();
+  private readonly sessionControlListeners = new Set<() => void>();
 
   constructor(
     private readonly profiles: ReadonlyMap<string, AutomationProfile>,
@@ -344,6 +325,45 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
         .map(projectSession)
         .sort((left, right) => left.sessionId.localeCompare(right.sessionId)),
     );
+  }
+
+  listSessionControls(scope: unknown): readonly AutomationSessionControlProjection[] {
+    const parsedScope = parseAutomationSessionControlScope(scope);
+    return Object.freeze(
+      [...this.sessions.values()]
+        .filter(
+          (session) =>
+            session.request.owner.conversationId === parsedScope.conversationId &&
+            (session.status === 'active' || session.status === 'paused'),
+        )
+        .map(projectSessionControl)
+        .sort((left, right) => left.sessionId.localeCompare(right.sessionId)),
+    );
+  }
+
+  async controlSession(input: unknown): Promise<void> {
+    const command = parseAutomationSessionControlCommand(input);
+    const session = this.requireSession(command.sessionId);
+    validateSessionControlOwner(command, session);
+    switch (command.action) {
+      case 'pause':
+        this.pauseSession(command.sessionId);
+        return;
+      case 'resume':
+        await this.resumeSession(command.sessionId, session.request.target);
+        return;
+      case 'stop':
+        await this.stopSession(command.sessionId);
+        return;
+      case 'take-over':
+        await this.takeOverSession(command.sessionId);
+        return;
+    }
+  }
+
+  subscribeSessionControls(listener: () => void): () => void {
+    this.sessionControlListeners.add(listener);
+    return () => this.sessionControlListeners.delete(listener);
   }
 
   async openSession(input: unknown, signal?: AbortSignal): Promise<AutomationSessionSnapshot> {
@@ -409,9 +429,13 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
       providerSessionId: requireProviderSessionId(opened.providerSessionId),
       status: 'active',
       remainingSteps: request.stepBudget,
+      phase: 'idle',
+      evidenceStatus: 'none',
+      lifecycleController: new AbortController(),
       consumedApprovalIds: new Set(),
     };
     this.sessions.set(request.sessionId, session);
+    this.notifySessionControls();
     return projectSession(session);
   }
 
@@ -473,24 +497,52 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
     await this.revalidatePermissions(session);
     await this.revalidate(session, signal);
     session.remainingSteps -= 1;
+    session.phase = operation.trait.readOnly ? 'observation' : 'action';
+    session.evidenceStatus = 'none';
+    this.notifySessionControls();
     let providerResult: AutomationProviderExecutionResult;
     try {
       providerResult = await session.provider.execute({
         providerSessionId: session.providerSessionId,
         operation: operation.name,
         arguments: request.arguments,
-        ...(signal === undefined ? {} : { signal }),
+        signal: combineAbortSignals(signal, session.lifecycleController.signal),
       });
     } catch (error) {
+      if (session.status !== 'active') {
+        throw new AutomationError(
+          'session-not-active',
+          'Automation session stopped while the provider action was running.',
+        );
+      }
+      this.markEvidenceFailed(session);
       throw providerFailure(error);
     }
+    this.requireActiveSession(session);
     if (!operation.trait.readOnly && providerResult.mutationVerified !== true) {
+      this.markEvidenceFailed(session);
       throw new AutomationError(
         'provider-failed',
         'Automation provider did not return independent mutation evidence.',
       );
     }
-    const evidence = await this.projectEvidence(request, session, operation, providerResult);
+    let evidence: readonly AutomationEvidence[];
+    try {
+      evidence = await this.projectEvidence(request, session, operation, providerResult);
+    } catch (error) {
+      if (session.status !== 'active') {
+        throw new AutomationError(
+          'session-not-active',
+          'Automation session stopped before evidence projection completed.',
+        );
+      }
+      this.markEvidenceFailed(session);
+      throw error;
+    }
+    this.requireActiveSession(session);
+    session.phase = 'idle';
+    session.evidenceStatus = evidence.length === 0 ? 'none' : 'available';
+    this.notifySessionControls();
     return {
       actionId: request.actionId,
       session: projectSession(session),
@@ -504,6 +556,11 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
       throw new AutomationError('session-not-active', 'Automation session is not active.');
     }
     session.status = 'paused';
+    session.phase = 'idle';
+    session.lifecycleController.abort(
+      new AutomationError('session-not-active', 'Automation session was paused by the user.'),
+    );
+    this.notifySessionControls();
     return projectSession(session);
   }
 
@@ -519,8 +576,10 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
         'Automation resume target does not match the session.',
       );
     }
+    session.lifecycleController = new AbortController();
     await this.revalidate(session);
     session.status = 'active';
+    this.notifySessionControls();
     return projectSession(session);
   }
 
@@ -560,20 +619,32 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
     return session;
   }
 
+  private requireActiveSession(session: RuntimeSession): void {
+    if (session.status !== 'active') {
+      throw new AutomationError('session-not-active', 'Automation session is not active.');
+    }
+  }
+
   private async revalidate(session: RuntimeSession, signal?: AbortSignal): Promise<void> {
     let actual;
     try {
       actual = await session.provider.revalidateTarget({
         providerSessionId: session.providerSessionId,
         expected: session.request.target,
-        ...(signal === undefined ? {} : { signal }),
+        signal: combineAbortSignals(signal, session.lifecycleController.signal),
       });
     } catch (error) {
-      session.status = 'paused';
+      if (session.status !== 'active' && session.status !== 'paused') {
+        throw new AutomationError(
+          'session-not-active',
+          'Automation session stopped during target revalidation.',
+        );
+      }
+      this.pauseAfterBoundaryFailure(session);
       throw providerFailure(error);
     }
     if (!sameAutomationTarget(session.request.target, actual)) {
-      session.status = 'paused';
+      this.pauseAfterBoundaryFailure(session);
       throw new AutomationError('target-mismatch', 'Automation target changed before input.');
     }
   }
@@ -588,14 +659,14 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
           permission,
         });
       } catch (error) {
-        session.status = 'paused';
+        this.pauseAfterBoundaryFailure(session);
         throw new AutomationError(
           'permission-required',
           `Automation permission '${permission}' could not be verified: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
       if (state !== 'granted') {
-        session.status = 'paused';
+        this.pauseAfterBoundaryFailure(session);
         throw new AutomationError(
           'permission-required',
           `Automation permission '${permission}' is ${state}.`,
@@ -648,13 +719,45 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
     if (session.status === 'stopped' || session.status === 'taken-over') {
       throw new AutomationError('session-not-active', 'Automation session is already closed.');
     }
+    session.status = status;
+    session.phase = 'idle';
+    session.lifecycleController.abort(
+      new AutomationError(
+        'session-not-active',
+        status === 'taken-over'
+          ? 'Automation session control was taken over by the user.'
+          : 'Automation session was stopped by the user.',
+      ),
+    );
+    this.notifySessionControls();
     try {
       await session.provider.closeSession(session.providerSessionId);
     } catch (error) {
+      session.status = 'paused';
+      session.evidenceStatus = 'failed';
+      session.lifecycleController = new AbortController();
+      this.notifySessionControls();
       throw providerFailure(error);
     }
-    session.status = status;
     return projectSession(session);
+  }
+
+  private pauseAfterBoundaryFailure(session: RuntimeSession): void {
+    if (session.status === 'active') {
+      session.status = 'paused';
+      session.phase = 'idle';
+      this.notifySessionControls();
+    }
+  }
+
+  private markEvidenceFailed(session: RuntimeSession): void {
+    session.phase = 'idle';
+    session.evidenceStatus = 'failed';
+    this.notifySessionControls();
+  }
+
+  private notifySessionControls(): void {
+    for (const listener of this.sessionControlListeners) listener();
   }
 }
 
@@ -702,17 +805,6 @@ function validateApproval(
   }
 }
 
-function annotationsContradict(
-  reviewed: AutomationReviewedOperation,
-  actual: { readonly readOnlyHint?: boolean; readonly destructiveHint?: boolean },
-): boolean {
-  return (
-    (reviewed.trait.readOnly && actual.readOnlyHint === false) ||
-    (!reviewed.trait.readOnly && actual.readOnlyHint === true) ||
-    (!reviewed.trait.destructive && actual.destructiveHint === true)
-  );
-}
-
 function projectSession(session: RuntimeSession): AutomationSessionSnapshot {
   return {
     sessionId: session.request.sessionId,
@@ -725,8 +817,66 @@ function projectSession(session: RuntimeSession): AutomationSessionSnapshot {
   };
 }
 
+function projectSessionControl(session: RuntimeSession): AutomationSessionControlProjection {
+  if (session.status !== 'active' && session.status !== 'paused') {
+    throw new AutomationError(
+      'session-not-active',
+      'Closed Automation sessions do not have live controls.',
+    );
+  }
+  return {
+    sessionId: session.request.sessionId,
+    profileId: session.profile.id,
+    provider: {
+      extensionId: session.profile.provider.extensionId,
+      providerId: session.profile.provider.providerId,
+      kind: session.profile.provider.kind,
+      upstreamRelease: session.profile.provider.upstreamRelease,
+    },
+    target: {
+      kind: session.request.target.kind,
+      targetKey: session.request.target.targetKey,
+      label: session.request.target.label,
+    },
+    mode: session.request.mode,
+    status: session.status,
+    remainingSteps: session.remainingSteps,
+    phase: session.phase,
+    evidenceStatus: session.evidenceStatus,
+    owner: session.request.owner,
+    availableActions: actionsForStatus(session.status),
+  };
+}
+
+function validateSessionControlOwner(
+  command: AutomationSessionControlCommand,
+  session: RuntimeSession,
+): void {
+  const owner = session.request.owner;
+  if (
+    command.owner.conversationId !== owner.conversationId ||
+    command.owner.runId !== owner.runId ||
+    command.owner.toolCallId !== owner.toolCallId
+  ) {
+    throw new AutomationError(
+      'session-unavailable',
+      'Automation session control owner does not match the exact Tool Call.',
+    );
+  }
+}
+
+function combineAbortSignals(
+  external: AbortSignal | undefined,
+  lifecycle: AbortSignal,
+): AbortSignal {
+  return external === undefined ? lifecycle : AbortSignal.any([external, lifecycle]);
+}
+
 function providerKey(identity: AutomationProviderIdentity): string {
-  return `${identity.extensionId}:${identity.providerId}`;
+  const source = identity.deliverySource;
+  return `${identity.extensionId}:${identity.providerId}:${
+    source.kind === 'user-managed-endpoint' ? `${source.kind}:${source.endpointId}` : source.kind
+  }`;
 }
 
 function sameProviderIdentity(
@@ -737,8 +887,20 @@ function sameProviderIdentity(
     left.extensionId === right.extensionId &&
     left.providerId === right.providerId &&
     left.kind === right.kind &&
-    left.upstreamRelease === right.upstreamRelease
+    left.upstreamRelease === right.upstreamRelease &&
+    sameProviderDeliverySource(left.deliverySource, right.deliverySource)
   );
+}
+
+function sameProviderDeliverySource(
+  left: AutomationProviderIdentity['deliverySource'],
+  right: AutomationProviderIdentity['deliverySource'],
+): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === 'user-managed-endpoint' && right.kind === 'user-managed-endpoint') {
+    return left.endpointId === right.endpointId;
+  }
+  return true;
 }
 
 function sameSessionGrant(left: AutomationSessionGrant, right: AutomationSessionGrant): boolean {

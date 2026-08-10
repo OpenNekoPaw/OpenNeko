@@ -12,6 +12,10 @@ import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-se
 import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko/assets-domain/contracts';
 import { ASSET_CENTER_HOST_CHANNEL } from '@neko/assets-domain/asset-center/host-contract';
 import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/extension-management-host';
+import { AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/endpoint-management';
+import { AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/permission-management';
+import { DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS } from '../shared/automation-target-selection-contract';
+import { DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS } from '../shared/automation-session-control-contract';
 import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-host';
 import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant-resource-host';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
@@ -267,6 +271,26 @@ export function registerDesktopIpc(
       appHost.executeExtensionManagement(requireSender(event), payload),
   );
   ipcMain.handle(
+    AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeAutomationEndpointManagement(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeAutomationPermissionManagement(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.execute,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeAutomationTargetSelection(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.execute,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeAutomationSessionControl(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectOpenContent,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.openContentProject(requireSender(event), payload, () =>
@@ -370,6 +394,10 @@ export function registerDesktopIpc(
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       ASSET_CENTER_HOST_CHANNEL,
       AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
+      AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+      AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
+      DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.execute,
+      DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.execute,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
       DESKTOP_SHELL_CHANNELS.projectRemove,

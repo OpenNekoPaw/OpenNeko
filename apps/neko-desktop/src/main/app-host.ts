@@ -141,6 +141,28 @@ import type {
   AgentExtensionManagementSessionIdentity,
 } from '@neko/agent-contracts/extension-management';
 import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
+import {
+  parseAutomationEndpointManagementHostRequest,
+  type AutomationEndpointManagementHostResult,
+} from '@neko/automation-contracts/endpoint-management';
+import {
+  parseAutomationPermissionManagementHostRequest,
+  type AutomationPermissionManagementHostResult,
+} from '@neko/automation-contracts/permission-management';
+import type {
+  AutomationApplicationService,
+  AutomationEndpointManagementService,
+  AutomationPermissionManagementService,
+  AutomationTargetSelectionCoordinator,
+} from '@neko/automation-node';
+import {
+  parseDesktopAutomationTargetSelectionRequest,
+  type DesktopAutomationTargetSelectionResult,
+} from '../shared/automation-target-selection-contract';
+import {
+  parseDesktopAutomationSessionControlRequest,
+  type DesktopAutomationSessionControlResult,
+} from '../shared/automation-session-control-contract';
 import type { ProjectPortabilityRuntime } from '@neko/assets-node';
 import type {
   DesktopProjectPortabilityCancelResult,
@@ -248,6 +270,13 @@ export interface DesktopAppHostOptions {
   readonly settings: DesktopApplicationSettingsService;
   readonly extensionManager: AgentExtensionManager;
   readonly personalSkillManager: PersonalSkillManager;
+  readonly automationEndpoints: AutomationEndpointManagementService;
+  readonly automationPermissions: AutomationPermissionManagementService;
+  readonly automationTargetSelections: AutomationTargetSelectionCoordinator;
+  readonly automationSessions: Pick<
+    AutomationApplicationService,
+    'listSessionControls' | 'controlSession' | 'subscribeSessionControls'
+  >;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
   readonly agentAutomation?: {
@@ -1390,6 +1419,148 @@ export class DesktopAppHost {
       route: request.route,
       projection: await this.projectExtensionManagement(request.identity),
     };
+  }
+
+  async executeAutomationEndpointManagement(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<AutomationEndpointManagementHostResult> {
+    this.requireActive();
+    const request = parseAutomationEndpointManagementHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.identity.windowId !== window.windowId) {
+      throw new Error('Automation endpoint management request belongs to another Window.');
+    }
+    const shell = await this.shell.getProjection(window.windowId);
+    const activeScene = resolveActiveDesktopWindowWorkbench(shell.window).scene;
+    if (activeScene.context.kind !== 'extensions') {
+      throw new Error('Automation endpoint management request does not match the active Scene.');
+    }
+    let endpoints;
+    switch (request.route) {
+      case 'snapshot.get':
+        endpoints = await this.options.automationEndpoints.list();
+        break;
+      case 'endpoint.configure':
+        endpoints = await this.options.automationEndpoints.configure(request.configuration);
+        break;
+      case 'endpoint.remove':
+        endpoints = await this.options.automationEndpoints.remove(
+          request.connectorId,
+          request.endpointId,
+        );
+        break;
+    }
+    return {
+      requestId: request.requestId,
+      route: request.route,
+      projection: {
+        identity: request.identity,
+        endpoints,
+      },
+    };
+  }
+
+  async executeAutomationPermissionManagement(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<AutomationPermissionManagementHostResult> {
+    this.requireActive();
+    const request = parseAutomationPermissionManagementHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.identity.windowId !== window.windowId) {
+      throw new Error('Automation permission management request belongs to another Window.');
+    }
+    const shell = await this.shell.getProjection(window.windowId);
+    const activeScene = resolveActiveDesktopWindowWorkbench(shell.window).scene;
+    if (activeScene.context.kind !== 'extensions') {
+      throw new Error('Automation permission management request does not match the active Scene.');
+    }
+    const permissions =
+      request.route === 'snapshot.get'
+        ? await this.options.automationPermissions.list()
+        : await this.options.automationPermissions.request(request.permission);
+    return {
+      requestId: request.requestId,
+      route: request.route,
+      projection: { identity: request.identity, permissions },
+    };
+  }
+
+  async executeAutomationTargetSelection(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopAutomationTargetSelectionResult> {
+    this.requireActive();
+    const request = parseDesktopAutomationTargetSelectionRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const scope = await this.requireAutomationAgentConversation(
+      window.windowId,
+      request.connection,
+      request.conversationId,
+      'target selection',
+    );
+    if (request.route === 'selection.resolve') {
+      this.options.automationTargetSelections.resolve(scope, request.decision);
+    }
+    return {
+      requestId: request.requestId,
+      route: request.route,
+      pending: this.options.automationTargetSelections.listPending(scope),
+    };
+  }
+
+  async executeAutomationSessionControl(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopAutomationSessionControlResult> {
+    this.requireActive();
+    const request = parseDesktopAutomationSessionControlRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    await this.requireAutomationAgentConversation(
+      window.windowId,
+      request.connection,
+      request.conversationId,
+      'session control',
+    );
+    if (
+      request.route === 'session.control' &&
+      request.command.owner.conversationId !== request.conversationId
+    ) {
+      throw new Error('Automation session control command belongs to another Conversation.');
+    }
+    if (request.route === 'session.control') {
+      await this.options.automationSessions.controlSession(request.command);
+    }
+    return {
+      requestId: request.requestId,
+      route: request.route,
+      controls: this.options.automationSessions.listSessionControls({
+        conversationId: request.conversationId,
+      }),
+    };
+  }
+
+  private async requireAutomationAgentConversation(
+    windowId: string,
+    connection: import('@neko/agent-contracts').DesktopAgentConnectionIdentity,
+    conversationId: string,
+    operation: 'target selection' | 'session control',
+  ): Promise<{ readonly workspaceId: string; readonly conversationId: string }> {
+    const grant = await this.resolveAgentConnectionGrant(windowId, connection);
+    this.agentBridge.assertConnection(connection, grant);
+    const surface = await this.shell.resolveAgentSurfaceGrant(windowId, connection);
+    if (
+      surface.interaction.phase !== 'session' ||
+      surface.interaction.scope.kind === 'unbound' ||
+      surface.interaction.scope.conversationId !== conversationId ||
+      connection.workspaceId !== grant.workspaceId
+    ) {
+      throw new Error(
+        `Automation ${operation} does not match the exact active Agent Conversation surface.`,
+      );
+    }
+    return { workspaceId: connection.workspaceId, conversationId };
   }
 
   private async prepareExtensionCatalog() {

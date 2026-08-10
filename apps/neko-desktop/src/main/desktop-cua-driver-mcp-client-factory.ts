@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
@@ -12,6 +13,7 @@ import type {
   AutomationMcpClientFactoryPort,
   AutomationMcpClientPort,
   AutomationMcpToolDefinition,
+  CuaDriverTargetClientFactoryPort,
 } from '@neko/automation-node';
 
 export interface DesktopCuaDriverRuntimeLayout {
@@ -19,6 +21,9 @@ export interface DesktopCuaDriverRuntimeLayout {
   readonly executablePath: string;
   readonly binaryPath: string;
 }
+
+export type DesktopCuaDriverMcpClientFactory = AutomationMcpClientFactoryPort &
+  CuaDriverTargetClientFactoryPort;
 
 interface DesktopCuaDriverMcpClient {
   connect(options?: MCPRequestOptions): Promise<void>;
@@ -36,7 +41,7 @@ export function createDesktopCuaDriverMcpClientFactory(options: {
   readonly storageRoot: string;
   readonly platform?: NodeJS.Platform;
   readonly createClient?: (config: MCPServerConfig) => DesktopCuaDriverMcpClient;
-}): AutomationMcpClientFactoryPort {
+}): DesktopCuaDriverMcpClientFactory {
   const platform = options.platform ?? process.platform;
   if (platform !== 'darwin') {
     throw new Error(`Cua Driver Computer Use is unavailable on '${platform}'.`);
@@ -44,16 +49,16 @@ export function createDesktopCuaDriverMcpClientFactory(options: {
   validateLayout(options.runtime, options.storageRoot);
   const createClient = options.createClient ?? ((config) => createMCPClient(config));
 
-  const factory: AutomationMcpClientFactoryPort = {
+  const factory: DesktopCuaDriverMcpClientFactory = {
     createQualificationClient: () =>
       createPreparedClient({
         id: 'qualification',
-        applicationId: 'invalid.openneko.qualification',
         timeoutMs: 30_000,
         removeDataOnDisconnect: true,
         runtime: options.runtime,
         storageRoot: options.storageRoot,
         createClient,
+        policy: { kind: 'application', applicationId: 'invalid.openneko.qualification' },
       }),
     createSessionClient: (input) => {
       if (input.target.kind !== 'computer') {
@@ -64,26 +69,38 @@ export function createDesktopCuaDriverMcpClientFactory(options: {
       }
       return createPreparedClient({
         id: input.sessionId,
-        applicationId: input.target.applicationId,
         timeoutMs: input.timeoutMs,
         removeDataOnDisconnect: true,
         runtime: options.runtime,
         storageRoot: options.storageRoot,
         createClient,
+        policy: { kind: 'application', applicationId: input.target.applicationId },
       });
     },
+    createTargetDiscoveryClient: () =>
+      createPreparedClient({
+        id: `target-discovery-${randomUUID()}`,
+        timeoutMs: 10_000,
+        removeDataOnDisconnect: true,
+        runtime: options.runtime,
+        storageRoot: options.storageRoot,
+        createClient,
+        policy: { kind: 'target-discovery' },
+      }),
   };
   return Object.freeze(factory);
 }
 
 function createPreparedClient(input: {
   readonly id: string;
-  readonly applicationId: string;
   readonly timeoutMs: number;
   readonly removeDataOnDisconnect: boolean;
   readonly runtime: DesktopCuaDriverRuntimeLayout;
   readonly storageRoot: string;
   readonly createClient: (config: MCPServerConfig) => DesktopCuaDriverMcpClient;
+  readonly policy:
+    | { readonly kind: 'application'; readonly applicationId: string }
+    | { readonly kind: 'target-discovery' };
 }): AutomationMcpClientPort {
   let client: DesktopCuaDriverMcpClient | undefined;
   let sessionRoot: string | undefined;
@@ -148,10 +165,12 @@ function createPreparedClient(input: {
 
 async function prepareConfiguration(input: {
   readonly id: string;
-  readonly applicationId: string;
   readonly timeoutMs: number;
   readonly runtime: DesktopCuaDriverRuntimeLayout;
   readonly storageRoot: string;
+  readonly policy:
+    | { readonly kind: 'application'; readonly applicationId: string }
+    | { readonly kind: 'target-discovery' };
 }): Promise<{ readonly config: MCPServerConfig; readonly sessionRoot: string }> {
   const ownerRoot = path.join(input.storageRoot, 'sessions');
   await mkdir(ownerRoot, { recursive: true, mode: 0o700 });
@@ -169,11 +188,18 @@ async function prepareConfiguration(input: {
     JSON.stringify({
       version: 2,
       mode: 'bounded',
-      allow: { tools: ['verify_state'] },
-      resources: {
-        apps: [{ bundle_id: requireBundleId(input.applicationId), windows: 'all' }],
-        desktop: { display: false },
-      },
+      ...(input.policy.kind === 'target-discovery'
+        ? {
+            allow: { tools: ['list_apps', 'list_windows'] },
+            resources: { desktop: { display: true } },
+          }
+        : {
+            allow: { tools: ['verify_state'] },
+            resources: {
+              apps: [{ bundle_id: requireBundleId(input.policy.applicationId), windows: 'all' }],
+              desktop: { display: false },
+            },
+          }),
     }),
     { encoding: 'utf8', flag: 'wx', mode: 0o600 },
   );

@@ -1504,6 +1504,63 @@ code {
   overflow: auto;
 }
 
+.desktop-extension-management-composition {
+  height: 100%;
+  overflow: auto;
+}
+
+.desktop-extension-management-composition > .agent-extension-management-root {
+  min-height: auto;
+  overflow: visible;
+}
+
+.automation-endpoint-management,
+.automation-permission-management {
+  box-sizing: border-box;
+  width: min(1020px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 0 0 52px;
+}
+
+.automation-endpoint-management .management-surface-header h3,
+.automation-permission-management .management-surface-header h3 {
+  margin: 3px 0 0;
+  color: var(--neko-fg);
+  font-size: 21px;
+}
+
+.automation-endpoint-row,
+.automation-permission-row {
+  align-items: flex-start;
+}
+
+.automation-endpoint-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  background: var(--neko-desktop-surface-raised);
+}
+
+.automation-endpoint-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--neko-fg-secondary);
+  font-size: 11px;
+}
+
+.automation-endpoint-form input,
+.automation-endpoint-form select {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 7px;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-surface);
+}
+
 .project-management-catalog {
   height: 100%;
   min-height: 0;
@@ -1874,6 +1931,29 @@ code {
   font-size: 11px;
 }
 
+.management-surface-diagnostic[data-extension-operation-status] {
+  color: var(--neko-fg);
+}
+
+.management-surface-diagnostic[data-extension-operation-status] > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.management-surface-diagnostic[data-extension-operation-status] button {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 6px;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control);
+}
+
+.management-surface-diagnostic[data-extension-operation-status] button:hover {
+  background: var(--neko-desktop-control-hover);
+}
+
 @media (max-width: 820px) {
   .management-surface-header,
   .management-surface-toolbar {
@@ -1994,14 +2074,6 @@ code {
 
 .desktop-scene-workbench--agent-only > .neko-controlled-workbench-interaction {
   margin: 0;
-}
-
-.desktop-scene-workbench--character-interaction > .neko-controlled-workbench-interaction {
-  margin: 8px 0 8px 8px;
-}
-
-.desktop-scene-workbench--character-interaction > .neko-controlled-workbench-main {
-  margin: 8px;
 }
 
 .desktop-workbench-slot-target {
@@ -2714,6 +2786,243 @@ code {
   --neko-sideBar-background: var(--neko-desktop-main);
   --agent-bg: var(--neko-desktop-main);
   --agent-elevated: var(--neko-desktop-surface-raised);
+}
+
+.desktop-agent-composition {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.automation-target-selection {
+  position: absolute;
+  z-index: 30;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: min(380px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  gap: 8px;
+  overflow: auto;
+  color: var(--neko-fg);
+  pointer-events: auto;
+}
+
+.automation-target-selection__request,
+.automation-target-selection__diagnostic {
+  border: 1px solid color-mix(in srgb, var(--neko-border) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--neko-desktop-surface-raised) 96%, transparent);
+  box-shadow: 0 14px 36px rgb(0 0 0 / 24%);
+  backdrop-filter: blur(16px);
+}
+
+.automation-target-selection__request {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.automation-target-selection__diagnostic {
+  padding: 10px 12px;
+  color: var(--neko-danger-fg, #ef8888);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.automation-target-selection__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.automation-target-selection__header h3,
+.automation-target-selection__eyebrow,
+.automation-target-selection__description {
+  margin: 0;
+}
+
+.automation-target-selection__header h3 {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.automation-target-selection__eyebrow,
+.automation-target-selection__provider {
+  color: var(--neko-fg-secondary);
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.automation-target-selection__provider {
+  max-width: 46%;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.automation-target-selection__description {
+  color: var(--neko-fg-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.automation-target-selection__policy {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.automation-target-selection__policy > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.automation-target-selection__policy dt {
+  color: var(--neko-fg-secondary);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.automation-target-selection__policy dd {
+  margin: 0;
+  font-size: 11px;
+}
+
+.automation-target-selection__candidates {
+  display: grid;
+  gap: 7px;
+}
+
+.automation-target-selection__candidate {
+  justify-content: flex-start;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding-block: 8px;
+  text-align: left;
+  white-space: normal;
+}
+
+.automation-target-selection__candidate-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.automation-target-selection__candidate-copy strong,
+.automation-target-selection__candidate-copy small {
+  overflow-wrap: anywhere;
+}
+
+.automation-target-selection__candidate-copy small {
+  color: var(--neko-fg-secondary);
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.automation-target-selection__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.automation-session-control__session,
+.automation-session-control__diagnostic {
+  border-top: 1px solid var(--agent-divider, var(--neko-border));
+}
+
+.automation-session-control__session {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  color: var(--agent-fg, var(--neko-fg));
+  background: color-mix(
+    in srgb,
+    var(--agent-elevated, var(--neko-desktop-surface-raised)) 82%,
+    transparent
+  );
+}
+
+.automation-session-control__diagnostic {
+  padding: 6px 8px;
+  color: var(--agent-danger, var(--neko-danger-fg, #ef8888));
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.automation-session-control__session > .automation-session-control__diagnostic {
+  margin: -8px -8px 0;
+}
+
+.automation-session-control__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.automation-session-control__header h3,
+.automation-session-control__header p {
+  margin: 0;
+}
+
+.automation-session-control__header h3 {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.automation-session-control__header p,
+.automation-session-control__header span {
+  color: var(--agent-fg-secondary, var(--neko-fg-secondary));
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.automation-session-control__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.automation-session-control__facts > div {
+  display: grid;
+  gap: 2px;
+}
+
+.automation-session-control__facts dt {
+  color: var(--agent-fg-secondary, var(--neko-fg-secondary));
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.automation-session-control__facts dd {
+  margin: 0;
+  font-size: 10px;
+}
+
+.automation-session-control__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .automation-target-selection {
+    top: 8px;
+    right: 8px;
+    width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+  }
 }
 
 .desktop-resource-browser-root {

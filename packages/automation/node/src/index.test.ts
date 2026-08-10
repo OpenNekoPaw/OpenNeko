@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AutomationProfile, AutomationTarget } from '@neko/automation-contracts';
+import type {
+  AutomationProfile,
+  AutomationProviderDeliverySource,
+  AutomationTarget,
+} from '@neko/automation-contracts';
 import {
   createAutomationApplicationService,
   createAutomationSessionGrantAuthority,
@@ -69,6 +73,21 @@ describe('AutomationApplicationService', () => {
       operation: 'browser_screenshot',
       code: 'operation-annotations-contradictory',
     });
+  });
+
+  it('does not try a user-managed endpoint for a GitHub-delivered profile', async () => {
+    const fixture = await createFixture({
+      providerDeliverySource: { kind: 'user-managed-endpoint', endpointId: 'endpoint-1' },
+    });
+
+    expect(fixture.service.listQualificationDiagnostics()).toEqual(
+      profile.operations.map((operation) => ({
+        profileId: profile.id,
+        operation: operation.name,
+        code: 'provider-unavailable',
+      })),
+    );
+    expect(fixture.provider.inspect).not.toHaveBeenCalled();
   });
 
   it('keeps install enablement, OS permission and session grant as independent gates', async () => {
@@ -267,6 +286,143 @@ describe('AutomationApplicationService', () => {
       'extension identity is invalid',
     );
   });
+
+  it('projects redacted live controls only for the exact Conversation owner', async () => {
+    const fixture = await createFixture();
+    await fixture.service.openSession(sessionRequest('session-control'));
+    await fixture.service.openSession(sessionRequest('session-sibling'));
+
+    const controls = fixture.service.listSessionControls({
+      conversationId: 'conversation-session-control',
+    });
+
+    expect(controls).toEqual([
+      {
+        sessionId: 'session-control',
+        profileId: 'browser.default',
+        provider: {
+          extensionId: 'browser-use@openneko',
+          providerId: 'browser-use',
+          kind: 'browser',
+          upstreamRelease: '0.13.7',
+        },
+        target: { kind: 'browser', targetKey: 'target-1', label: 'Example' },
+        mode: 'observe',
+        status: 'active',
+        remainingSteps: 3,
+        phase: 'idle',
+        evidenceStatus: 'none',
+        owner: {
+          conversationId: 'conversation-session-control',
+          runId: 'run-session-control',
+          toolCallId: 'tool-session-control',
+        },
+        availableActions: ['pause', 'stop', 'take-over'],
+      },
+    ]);
+    expect(JSON.stringify(controls)).not.toMatch(
+      /browserProfileId|browserSessionId|tabId|processId|windowId|endpointId/u,
+    );
+  });
+
+  it('controls one exact owner session and emits state changes without affecting siblings', async () => {
+    const fixture = await createFixture();
+    const listener = vi.fn();
+    const unsubscribe = fixture.service.subscribeSessionControls(listener);
+    const request = sessionRequest('session-control-owner');
+    await fixture.service.openSession(request);
+    await fixture.service.openSession(sessionRequest('session-control-sibling'));
+    listener.mockClear();
+    const command = {
+      sessionId: request.sessionId,
+      owner: request.owner,
+    };
+
+    await expect(
+      fixture.service.controlSession({
+        ...command,
+        owner: { ...request.owner, toolCallId: 'tool-other' },
+        action: 'pause',
+      }),
+    ).rejects.toMatchObject({ code: 'session-unavailable' });
+    expect(listener).not.toHaveBeenCalled();
+
+    await fixture.service.controlSession({ ...command, action: 'pause' });
+    expect(
+      fixture.service.listSessionControls({ conversationId: request.owner.conversationId }),
+    ).toEqual([
+      expect.objectContaining({
+        status: 'paused',
+        availableActions: ['resume', 'stop', 'take-over'],
+      }),
+    ]);
+    await fixture.service.controlSession({ ...command, action: 'resume' });
+    expect(fixture.service.readSession(request.sessionId)).toMatchObject({ status: 'active' });
+    await fixture.service.controlSession({ ...command, action: 'stop' });
+    expect(
+      fixture.service.listSessionControls({ conversationId: request.owner.conversationId }),
+    ).toEqual([]);
+    expect(fixture.service.readSession('session-control-sibling')).toMatchObject({
+      status: 'active',
+    });
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    unsubscribe();
+    await fixture.service.stopSession('session-control-sibling');
+    expect(listener).toHaveBeenCalledTimes(3);
+  });
+
+  it('aborts result delivery after Take over and releases only the exact provider session', async () => {
+    const fixture = await createFixture();
+    const execution = deferred<{
+      readonly observation: {
+        readonly data: Uint8Array;
+        readonly mimeType: string;
+        readonly width: number;
+        readonly height: number;
+      };
+    }>();
+    fixture.provider.execute.mockImplementationOnce(async () => execution.promise);
+    const request = sessionRequest('session-takeover');
+    await fixture.service.openSession(request);
+    await fixture.service.openSession(sessionRequest('session-takeover-sibling'));
+
+    const action = fixture.service.executeAction({
+      actionId: 'action-takeover',
+      sessionId: request.sessionId,
+      operation: 'browser_screenshot',
+      arguments: {},
+    });
+    await vi.waitFor(() => {
+      expect(
+        fixture.service.listSessionControls({ conversationId: request.owner.conversationId }),
+      ).toEqual([expect.objectContaining({ phase: 'observation' })]);
+    });
+
+    await fixture.service.controlSession({
+      sessionId: request.sessionId,
+      owner: request.owner,
+      action: 'take-over',
+    });
+    execution.resolve({
+      observation: {
+        data: new Uint8Array([137, 80, 78, 71]),
+        mimeType: 'image/png',
+        width: 800,
+        height: 600,
+      },
+    });
+
+    await expect(action).rejects.toMatchObject({ code: 'session-not-active' });
+    expect(
+      fixture.service.listSessionControls({ conversationId: request.owner.conversationId }),
+    ).toEqual([]);
+    expect(fixture.transientObservations.publish).not.toHaveBeenCalled();
+    expect(fixture.provider.closeSession).toHaveBeenCalledWith('provider-session-1');
+    expect(fixture.service.readSession('session-takeover-sibling')).toMatchObject({
+      status: 'active',
+    });
+  });
 });
 
 async function createFixture(
@@ -276,8 +432,13 @@ async function createFixture(
     readonly omitScreenshotAnnotations?: boolean;
     readonly screenshotReadOnlyHint?: boolean;
     readonly sessionGrantAccepted?: boolean;
+    readonly providerDeliverySource?: AutomationProviderDeliverySource;
   } = {},
 ) {
+  const providerIdentity = {
+    ...profile.provider,
+    deliverySource: options.providerDeliverySource ?? profile.provider.deliverySource,
+  };
   const provider: AutomationProviderPort & {
     readonly inspect: ReturnType<typeof vi.fn>;
     readonly openSession: ReturnType<typeof vi.fn>;
@@ -285,9 +446,9 @@ async function createFixture(
     readonly execute: ReturnType<typeof vi.fn>;
     readonly closeSession: ReturnType<typeof vi.fn>;
   } = {
-    identity: profile.provider,
+    identity: providerIdentity,
     inspect: vi.fn(async () => ({
-      provider: profile.provider,
+      provider: providerIdentity,
       operations: [
         {
           name: 'browser_screenshot',
@@ -363,6 +524,7 @@ const profile: AutomationProfile = {
     providerId: 'browser-use',
     kind: 'browser',
     upstreamRelease: '0.13.7',
+    deliverySource: { kind: 'github-release' },
   },
   operations: [
     {
@@ -433,4 +595,15 @@ function sessionRequest(sessionId: string, mode: 'observe' | 'interact' = 'obser
       toolCallId: `tool-${sessionId}`,
     },
   };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((currentResolve) => {
+    resolve = currentResolve;
+  });
+  return { promise, resolve };
 }

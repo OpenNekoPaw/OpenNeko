@@ -465,7 +465,9 @@ export function parseDesktopAgentEvent(value: unknown): DesktopAgentEvent {
   };
 }
 
-function parseDesktopAgentConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity {
+export function parseDesktopAgentConnectionIdentity(
+  value: unknown,
+): DesktopAgentConnectionIdentity {
   const record = requireRecord(value, 'Desktop Agent connection identity is required.');
   const common = {
     applicationInstanceId: requireNonEmptyString(
