@@ -995,7 +995,7 @@ describe('ConversationController entry state', () => {
                 modelId: 'image-model',
                 label: 'Image Model',
                 category: 'image',
-                capabilities: ['image.generate'],
+                capabilities: ['text_to_image'],
               },
             ],
             defaultMediaModels: { image: 'image-provider:image-model' },

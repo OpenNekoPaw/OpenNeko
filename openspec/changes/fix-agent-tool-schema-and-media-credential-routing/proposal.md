@@ -6,6 +6,7 @@ Neko Agent currently exposes a `ListDirectory` Tool schema that an OpenAI-compat
 
 - Require every provider-facing Agent Tool definition to use a top-level object schema without provider-rejected top-level combinators while retaining exact argument validation inside the canonical Tool boundary.
 - Resolve generation-provider credential availability through the existing CredentialStore authority, preserving configuration-file priority over auth-login SecretStorage.
+- Preserve generation-purpose capabilities when Desktop projects the Agent Launch model catalog into Webview configuration so a configured default media model reaches the first Draft submit.
 - Keep media target routing as an internal Generation responsibility behind one exact execution-provider resolver instead of exposing `MediaRoutingManager` as an application owner.
 - Keep unavailable generation credentials fail-local to the affected generation purpose so unrelated chat and sibling Tools remain usable.
 - Give Project Workspace and Assistant Space generation distinct explicit owners. Assistant output and Job state remain durable under the user-owned Assistant Space root without requiring or fabricating a Project Workspace UUID.
@@ -28,6 +29,6 @@ None.
 - `packages/agent/runtime` remains the owner of Pi Tool projection, flat model-purpose policy, Tool registration, and fail-visible diagnostics.
 - `packages/host` remains the L1 owner of secret-free provider/model configuration and the configuration-file credential source.
 - `packages/agent/webview` remains the L2 producer of explicit/default media model selections; it does not gain credential or provider authority.
-- `apps/neko-desktop` remains the thin Electron composition root that injects the existing credential runtime; no secret parsing or generation policy moves into the application root.
+- `apps/neko-desktop` remains the thin Electron composition root that injects the existing credential runtime and losslessly adapts the package-owned Launch catalog; no secret parsing or generation policy moves into the application root.
 - `scripts/agent-eval` gains or updates external evaluation cases for the real Desktop public Agent input path. No Evaluation capability is added to the product.
 - Existing Project output and Job records keep their current storage contract. Assistant output is added under the existing user-owned Assistant Space root; no persisted conversation shape, provider configuration format, or credential priority changes.

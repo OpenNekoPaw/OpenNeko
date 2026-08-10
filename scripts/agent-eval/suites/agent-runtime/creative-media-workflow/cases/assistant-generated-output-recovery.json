@@ -29,7 +29,7 @@
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["nekoapi-chat-image-purpose"],
+  "modelProfileIds": ["nekoapi-luna-image-purpose"],
   "steps": [
     {
       "id": "generate",
@@ -70,6 +70,7 @@
       "purpose": "agent.main",
       "workspaceLocatorKind": "virtual",
       "turnDurability": "durable",
+      "modelProfileId": "nekoapi-luna-image-purpose",
       "evidenceRef": "assistant-generation-facts"
     },
     {
@@ -77,16 +78,13 @@
       "kind": "tool-call",
       "name": "GenerateImage",
       "status": "success",
-      "evidenceRef": "assistant-generation-facts"
-    },
-    {
-      "id": "artifact",
-      "kind": "artifact",
-      "artifactKind": "generated-asset",
-      "provenanceSource": "generated-output",
-      "validatorId": "content-locator",
-      "contentLocatorKind": "generated-output",
-      "validatorStatus": "valid",
+      "resultIncludes": {
+        "status": "completed",
+        "jobKind": "generation",
+        "jobLifecycleOwner": "generation-job-coordinator",
+        "outputs": [{ "type": "image", "contentLocator": { "kind": "generated-output" } }],
+        "routedTo": { "provider": "nekoapi-media", "model": "gpt-image-2" }
+      },
       "evidenceRef": "assistant-generation-facts"
     },
     {

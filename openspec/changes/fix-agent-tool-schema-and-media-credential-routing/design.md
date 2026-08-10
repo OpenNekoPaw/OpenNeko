@@ -1,18 +1,18 @@
 ## Context
 
-Two independent pre-provider regressions currently share the same Agent surface. `PiContentToolModelProtocol` gives `ListDirectory` a top-level `anyOf`, and `projectOpenNekoTool` copies it into the actual Pi provider definition even though the older `ToolRegistry` projection removes provider-rejected top-level combinators. Separately, Entry Draft and Conversation submits correctly carry default media purpose bindings, but `projectAgentGenerationModelPolicy` checks `provider.apiKey`; canonical TOML parsing intentionally separates that secret from Provider metadata, so a configured media credential is reported missing.
+Three pre-provider regressions currently share the same Agent surface. `PiContentToolModelProtocol` gives `ListDirectory` a top-level `anyOf`, and `projectOpenNekoTool` copies it into the actual Pi provider definition even though the older `ToolRegistry` projection removes provider-rejected top-level combinators. Separately, Desktop drops `purposeCapabilities` while adapting the Agent Launch model catalog into Webview configuration, so the visible default image selection is removed from the first Draft submit before `purposeModels` is created. When a purpose binding does arrive, `projectAgentGenerationModelPolicy` checks `provider.apiKey`; canonical TOML parsing intentionally separates that secret from Provider metadata, so a configured media credential is reported missing.
 
 The same stale assumption continues at media execution: `MediaRoutingManager` and `MediaGenerationExecutor` inspect the secret-free Provider object. Fixing only Agent preflight would allow chat to start but leave the canonical Generation Job provider call broken.
 
 ### Five-layer analysis
 
-| Layer          | Decision                                                                                                                                                                                                                |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Responsibility | Agent runtime owns Pi Tool projection and immutable purpose policy; Host owns provider configuration and credential resolution; Generation owns media routing/execution and receives an injected provider-runtime port. |
-| Dependency     | Webview emits only model identity; Agent and Generation consume narrow Host-injected dependencies; neither imports Electron or reads `config.toml`; Desktop retains only concrete credential/runtime wiring.            |
-| Interface      | Provider-facing Tool schemas are strict top-level objects; media execution resolves one exact provider identity to an ephemeral execution provider immediately before use.                                              |
-| Extension      | New Tools use the same Pi projection invariant; new media providers use the same exact provider resolver and cannot add a second credential source or provider fallback.                                                |
-| Test           | Producer, consumer and complete-path tests prove schema shape, source priority, no secret projection/persistence, ordinary-chat isolation, exact media provider use and no fallback.                                    |
+| Layer          | Decision                                                                                                                                                                                                                          |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responsibility | Agent runtime owns Pi Tool projection and immutable purpose policy; Host owns provider configuration and credential resolution; Generation owns media routing/execution and receives an injected provider-runtime port.           |
+| Dependency     | Webview emits only model identity; Agent and Generation consume narrow Host-injected dependencies; neither imports Electron or reads `config.toml`; Desktop retains only concrete credential/runtime wiring.                      |
+| Interface      | Provider-facing Tool schemas are strict top-level objects; Launch model capabilities survive the Desktop adapter; media execution resolves one exact provider identity to an ephemeral execution provider immediately before use. |
+| Extension      | New Tools use the same Pi projection invariant; new media providers use the same exact provider resolver and cannot add a second credential source or provider fallback.                                                          |
+| Test           | Producer, consumer and complete-path tests prove schema shape, source priority, no secret projection/persistence, ordinary-chat isolation, exact media provider use and no fallback.                                              |
 
 ## Goals / Non-Goals
 
@@ -21,6 +21,7 @@ The same stale assumption continues at media execution: `MediaRoutingManager` an
 - Make every actual Pi provider Tool definition acceptable to providers that require a top-level object without `oneOf`, `anyOf`, `allOf`, `enum`, `const` or `not`.
 - Preserve exact `ListDirectory` `path` versus `cursor_ref` validation inside its existing canonical model protocol.
 - Use the existing CredentialStore as the single authority over configuration-file and interactive-login credentials.
+- Preserve the package-owned Launch model capability contract through Desktop so default media selections produce exact first-turn purpose bindings.
 - Keep generation credential absence local to the affected purpose while allowing `agent.main` and unrelated Tools to run.
 - Resolve the credential again at the exact media provider execution/observation/cancellation boundary without persisting or projecting it.
 - Keep media routing private to the Generation composition and expose only the execution service to Desktop and Agent callers.
@@ -49,6 +50,12 @@ Agent generation-policy projection will query the injected `OpenNekoCredentialSt
 For a configured exact generation purpose, policy resolution includes the exact provider/model. When a required media credential is absent, that purpose is omitted from the policy, so the bridge does not register its required Tool; `agent.main`, sibling purposes and Workspace Tools remain available. No provider/model fallback is attempted.
 
 Alternative considered: restore `apiKey` on `ProviderConfig`. This is rejected because it would leak secrets into renderer-safe configuration projections and duplicate CredentialStore priority semantics.
+
+### Desktop preserves the canonical Launch model catalog
+
+The Agent Launch catalog remains the authority for model identity, category, purpose capabilities, availability and token limits. The Desktop launch adapter may filter unavailable entries for the Webview selector, but it must losslessly map the remaining model facts into `ChatModelOption`, including `purposeCapabilities` as `capabilities`. Webview then applies the configured default media selection and emits the exact `purposeModels` chosen for the Draft.
+
+Alternative considered: infer generation support from model category or restore a missing purpose binding in Main. This is rejected because it creates a hidden success path and ignores explicit capability metadata. A missing or unsupported capability remains fail-visible at the owning projection boundary.
 
 ### Desktop injects an exact media execution-provider resolver
 
@@ -79,14 +86,14 @@ Alternative considered: replace `assistant-space:local-user` with a UUID or crea
 
 ### Ownership and runtime path
 
-| Owner/package role              | Producer -> consumer                                         | Canonical path                                     | Replaced path                                                      |
-| ------------------------------- | ------------------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------ |
-| `@neko/agent-webview` L2        | media selection -> Draft/turn contract                       | existing `purposeModels` projection                | none; selection behavior remains authoritative                     |
-| `@neko/agent-runtime` L1        | Tool/model protocol -> Pi provider and capability bridge     | `projectOpenNekoTool` plus flat `AgentModelPolicy` | top-level combinator forwarding and `provider.apiKey` status check |
-| `@neko/host` L1                 | TOML credential source/SecretStorage -> CredentialStore      | existing config-first persistence chain            | no new path                                                        |
-| `@neko/generation/media` L1     | exact provider runtime port -> router/executor/adapters      | one exact provider/model Generation Job execution  | reading credential availability from secret-free config metadata   |
-| `@neko/generation/job` L1       | exact Generation owner -> one recoverable Job port           | owner-kind-qualified application runtime           | treating every Agent runtime as a Project Workspace                |
-| `apps/neko-desktop` Application | ConfigManager + CredentialStore -> package public media port | Electron Main composition only                     | direct `createMediaPlatform({ configManager })` wiring             |
+| Owner/package role              | Producer -> consumer                                                                           | Canonical path                                         | Replaced path                                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `@neko/agent-webview` L2        | media selection -> Draft/turn contract                                                         | existing `purposeModels` projection                    | none; selection behavior remains authoritative                                                |
+| `@neko/agent-runtime` L1        | Tool/model protocol -> Pi provider and capability bridge                                       | `projectOpenNekoTool` plus flat `AgentModelPolicy`     | top-level combinator forwarding and `provider.apiKey` status check                            |
+| `@neko/host` L1                 | TOML credential source/SecretStorage -> CredentialStore                                        | existing config-first persistence chain                | no new path                                                                                   |
+| `@neko/generation/media` L1     | exact provider runtime port -> router/executor/adapters                                        | one exact provider/model Generation Job execution      | reading credential availability from secret-free config metadata                              |
+| `@neko/generation/job` L1       | exact Generation owner -> one recoverable Job port                                             | owner-kind-qualified application runtime               | treating every Agent runtime as a Project Workspace                                           |
+| `apps/neko-desktop` Application | Launch catalog -> Webview config; ConfigManager + CredentialStore -> package public media port | exact catalog adaptation and Electron Main composition | lossy Launch capability projection and direct `createMediaPlatform({ configManager })` wiring |
 
 The production logic retained in Desktop is only the concrete composition adapter because it has access to the application credential runtime and Workspace ConfigManager instances. Source priority, purpose policy, routing and generation behavior remain package-owned and host-neutral.
 
@@ -94,7 +101,8 @@ The production logic retained in Desktop is only the concrete composition adapte
 
 - `reuse` `agent-runtime.stream-delivery/directory-format-routing` to prove the real provider accepts `ListDirectory` and the canonical directory/read path completes.
 - `update` `agent-runtime.model-binding` with an adjacent negative ordinary-message case that carries a configured image purpose, completes `agent.main`, and proves `GenerateImage` is absent.
-- `reuse` `agent-runtime.creative-media-workflow/generated-output-workspace-board` for configured image generation, exact provider/model, Job, artifact and no-fallback evidence.
+- `update` `agent-runtime.creative-media-workflow`: run the visible Assistant recovery case with Luna, and add a DeepSeek new-conversation regression that requires the current submit to reach `GenerateImage` and forbids historical Job inspection, generated-file scanning and `ReadImage` substitution.
+- `reuse` `agent-runtime.creative-media-workflow/generated-output-workspace-board` for configured Workspace image generation, exact provider/model, Job, artifact and no-fallback evidence.
 - `create` an Assistant Space case in `agent-runtime.creative-media-workflow` proving generation without a Project, durable user-root output, exact Assistant owner, reopen recovery and absence of Workspace Board/Asset/tmp fallback.
 - Missing-credential source priority and fail-local Tool registration remain deterministic because real Evaluation credentials cannot intentionally expose or mutate secret state per case.
 

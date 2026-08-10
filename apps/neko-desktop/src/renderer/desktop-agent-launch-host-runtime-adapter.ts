@@ -132,6 +132,11 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
                 providerId: entry.providerId,
                 modelId: entry.modelId,
                 category: entry.modelType,
+                capabilities: [...entry.purposeCapabilities],
+                ...(entry.contextWindow === null ? {} : { contextWindow: entry.contextWindow }),
+                ...(entry.maximumOutputTokens === null
+                  ? {}
+                  : { maxOutputTokens: entry.maximumOutputTokens }),
               })),
               defaultMediaModels: { ...catalog.defaultMediaModels },
               mediaUnderstandingModels: structuredClone(catalog.mediaUnderstandingModels),

@@ -25,6 +25,26 @@ describe('Electron Agent launch Host runtime adapter', () => {
         selectedProviderId: 'openai',
         selectedModelId: 'gpt-5',
         defaultMediaModels: { image: 'openai:gpt-image-1' },
+        chatModelOptions: [
+          {
+            id: 'openai:gpt-5',
+            label: 'GPT-5',
+            providerId: 'openai',
+            modelId: 'gpt-5',
+            category: 'llm',
+            capabilities: ['agent.main'],
+            contextWindow: 128_000,
+            maxOutputTokens: 16_384,
+          },
+          {
+            id: 'openai:gpt-image-1',
+            label: 'GPT Image 1',
+            providerId: 'openai',
+            modelId: 'gpt-image-1',
+            category: 'image',
+            capabilities: ['text_to_image'],
+          },
+        ],
         mediaUnderstandingModels: {
           image: expect.objectContaining({ optionId: 'openai:gpt-5' }),
         },
@@ -342,7 +362,7 @@ function createCatalog(
       modelType: 'image' as const,
       contextWindow: null,
       maximumOutputTokens: null,
-      purposeCapabilities: ['image.generate'],
+      purposeCapabilities: ['text_to_image'],
       availability: { status: 'available' as const },
     },
   ];
