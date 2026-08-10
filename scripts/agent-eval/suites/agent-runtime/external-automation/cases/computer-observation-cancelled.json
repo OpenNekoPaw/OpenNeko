@@ -1,0 +1,70 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "computer-observation-cancelled",
+  "suiteId": "agent-runtime.external-automation",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "external-tool",
+    "protected": true,
+    "lifecycleChecks": ["graceful-close"]
+  },
+  "evidenceContract": {
+    "userBehavior": "Cancel a pending long-running Computer observation request and return the exact conversation to terminal idle without raw-provider fallback.",
+    "canonicalPath": [
+      "visible Desktop Agent composer",
+      "pending qualified Computer Tool request",
+      "Pi turn cancellation",
+      "AbortSignal propagation",
+      "owned automation session cleanup",
+      "terminal idle projection"
+    ],
+    "observables": [
+      {
+        "ref": "computer-cancel-facts",
+        "kind": "runtime-fact",
+        "description": "Accepted cancellation of the pending qualified Tool request, terminal idle state, and absence of raw Cua Driver fallback.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Cancellation is accepted for the exact conversation and its owned Computer observation stops without switching Tool or provider.",
+    "expectedFailure": "Rejected cancellation, continued observation, raw verify_state fallback, changed conversation identity, or a busy terminal state fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "Use automation_cua-driver_verify_state with arguments {\"expect\":[{\"window\":{\"exists\":true}}],\"include_screenshot\":true,\"stable_samples\":100,\"timeout_ms\":120000}, timeoutMs 120000, and stepBudget 1. Select OpenNeko Evaluation Computer Window and wait for the Tool result."
+    },
+    { "id": "cancel", "kind": "cancel", "afterStepId": "submit" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "cancelled",
+      "kind": "cancellation",
+      "stepId": "cancel",
+      "accepted": true,
+      "evidenceRef": "computer-cancel-facts"
+    },
+    {
+      "id": "no-raw-cua",
+      "kind": "tool-call",
+      "name": "verify_state",
+      "status": "absent",
+      "evidenceRef": "computer-cancel-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "computer-cancel-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 360000, "repetitions": 1 }
+}

@@ -290,6 +290,64 @@ describe('M2 typed path hard gates', () => {
     expect(result.status).toBe('pass');
   });
 
+  it('evaluates Automation Tool result evidence from neutral complete-session facts', () => {
+    const facts = m2Facts();
+    facts.turns[1].toolCalls[0] = {
+      id: 'automation-call-1',
+      name: 'automation_cua-driver_verify_state',
+      status: 'success',
+      resultObservation: 'available',
+      result: {
+        actionId: 'action-1',
+        session: {
+          sessionId: 'session-1',
+          profileId: 'computer-use.observe.macos',
+          targetKey: 'computer-target:opaque-1',
+          targetLabel: 'OpenNeko Evaluation Computer Window',
+          mode: 'observe',
+          status: 'active',
+          remainingSteps: 0,
+        },
+        evidence: [
+          { kind: 'text', text: 'window observed' },
+          {
+            kind: 'transient-image',
+            receiptId: 'receipt-1',
+            mimeType: 'image/png',
+            width: 1024,
+            height: 768,
+          },
+        ],
+      },
+    };
+    const [result] = evaluateHardGates(
+      [
+        {
+          id: 'automation-result',
+          kind: 'automation-tool-result',
+          name: 'automation_cua-driver_verify_state',
+          profileId: 'computer-use.observe.macos',
+          targetLabel: 'OpenNeko Evaluation Computer Window',
+          mode: 'observe',
+          sessionStatus: 'active',
+          remainingSteps: 0,
+          requiredEvidenceKinds: ['text', 'transient-image'],
+          observationTransport: 'transient-receipt',
+          evidenceRef: 'tool-facts',
+        },
+      ],
+      facts,
+    );
+    expect(result).toMatchObject({
+      status: 'pass',
+      details: {
+        sessionId: 'session-1',
+        targetKey: 'computer-target:opaque-1',
+        evidenceKinds: ['text', 'transient-image'],
+      },
+    });
+  });
+
   it('uses the same Pi receipt for the triggered assertion status', () => {
     const [result] = evaluateHardGates(
       [{ ...M2_ASSERTIONS[0], status: 'triggered' }],
@@ -450,9 +508,7 @@ describe('M2 typed path hard gates', () => {
         {
           id: 'prompt',
           kind: 'prompt-composition',
-          requiredFragments: [
-            { id: 'skill:storyboard', source: 'skill-lifecycle', hash: HASH_B },
-          ],
+          requiredFragments: [{ id: 'skill:storyboard', source: 'skill-lifecycle', hash: HASH_B }],
           evidenceRef: 'prompt-facts',
         },
       ],
@@ -525,7 +581,6 @@ describe('M2 typed path hard gates', () => {
       message: expect.stringContaining('evidence for skillReceipts is incomplete'),
     });
   });
-
 });
 
 function m3Facts() {

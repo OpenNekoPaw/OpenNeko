@@ -430,7 +430,11 @@ function inferResourceClass(selection) {
   if (selection.scenario.assertions.some((item) => item.kind === 'resource-display-projection')) {
     return 'media';
   }
-  if (selection.scenario.assertions.some((item) => item.kind === 'tool-call')) {
+  if (
+    selection.scenario.assertions.some((item) =>
+      ['tool-call', 'automation-tool-result'].includes(item.kind),
+    )
+  ) {
     return 'external-tool';
   }
   return 'text';

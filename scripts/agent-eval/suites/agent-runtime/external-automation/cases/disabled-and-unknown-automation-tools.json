@@ -1,0 +1,81 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "disabled-and-unknown-automation-tools",
+  "suiteId": "agent-runtime.external-automation",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Request Browser and Computer automation while both profiles are disabled or unavailable and receive an explicit non-execution response.",
+    "canonicalPath": [
+      "Desktop Agent composer",
+      "Pi agent.main capability snapshot",
+      "exact capability registry",
+      "disabled and unknown Tools remain absent"
+    ],
+    "observables": [
+      {
+        "ref": "disabled-tool-facts",
+        "kind": "runtime-fact",
+        "description": "Absence of qualified Browser/Computer and raw upstream Tools, non-empty answer, and terminal idle state.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent explains that external automation is unavailable without inventing, enabling, installing, or calling a Tool.",
+    "expectedFailure": "Calling a disabled, unknown, raw upstream, or fallback Tool, or claiming an action completed, fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "Browser Use and Computer Use are disabled in this evaluation profile. Explain briefly that you cannot inspect a browser tab or desktop window. Do not install, enable, simulate, or invoke any automation Tool."
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    {
+      "id": "no-browser",
+      "kind": "tool-call",
+      "name": "automation_browser-use_browser_screenshot",
+      "status": "absent",
+      "evidenceRef": "disabled-tool-facts"
+    },
+    {
+      "id": "no-computer",
+      "kind": "tool-call",
+      "name": "automation_cua-driver_verify_state",
+      "status": "absent",
+      "evidenceRef": "disabled-tool-facts"
+    },
+    {
+      "id": "no-browser-exec",
+      "kind": "tool-call",
+      "name": "browser_exec",
+      "status": "absent",
+      "evidenceRef": "disabled-tool-facts"
+    },
+    {
+      "id": "no-cua-raw",
+      "kind": "tool-call",
+      "name": "verify_state",
+      "status": "absent",
+      "evidenceRef": "disabled-tool-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "disabled-tool-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "disabled-tool-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

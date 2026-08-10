@@ -2,6 +2,7 @@ import {
   assertOrderedWorkflowEvents,
   assertWorkflowQueueState,
 } from '../runner/workflow-evidence.mjs';
+import { assertAutomationToolResult } from '../runner/automation-tool-evidence.mjs';
 
 const DESKTOP_EVIDENCE_ASSERTION_KINDS = new Set([
   'runtime-errors-empty',
@@ -17,6 +18,7 @@ const DESKTOP_EVIDENCE_ASSERTION_KINDS = new Set([
   'draft-rejection',
   'configuration-update',
   'tool-call',
+  'automation-tool-result',
   'process-order',
   'queue-state',
   'cancellation',
@@ -127,6 +129,8 @@ export function runDesktopHardGate(assertion, facts, context) {
       return assertConfigurationUpdate(assertion, input);
     case 'tool-call':
       return assertToolCall(assertion, input);
+    case 'automation-tool-result':
+      return assertDesktopAutomationToolResult(assertion, input);
     case 'process-order':
       return assertOrderedWorkflowEvents(assertion, readDesktopWorkflowSteps(input.workflow));
     case 'queue-state':
@@ -498,6 +502,21 @@ function assertToolCall(assertion, input) {
     throw new Error(`Desktop Agent Tool call ${assertion.name} result did not match.`);
   }
   return { id: toolCall.id, name: toolCall.name, status: assertion.status };
+}
+
+function assertDesktopAutomationToolResult(assertion, input) {
+  const projected = collectObjects(input.projection, (item) => item.kind === 'tool_call')
+    .map((item) => item.payload?.toolCall)
+    .filter((item) => item?.name === assertion.name && item.result?.success === true);
+  const receipts = input.facts.receipts.tools.items.filter(
+    (item) => item.name === assertion.name && item.status === 'success',
+  );
+  if (projected.length !== 1 || receipts.length !== 1) {
+    throw new Error(
+      `Desktop Agent Automation Tool ${assertion.name} requires one successful terminal result.`,
+    );
+  }
+  return assertAutomationToolResult(assertion, projected[0].result?.data);
 }
 
 function assertCancellation(assertion, workflow) {

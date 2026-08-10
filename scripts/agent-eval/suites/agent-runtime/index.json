@@ -9,6 +9,12 @@
       "targetKind": "workflow"
     },
     {
+      "suiteId": "agent-runtime.external-automation",
+      "path": "external-automation/suite.json",
+      "ownerId": "external-automation",
+      "targetKind": "capability"
+    },
+    {
       "suiteId": "agent-runtime.launch-binding",
       "path": "launch-binding/suite.json",
       "ownerId": "agent-launch-binding",

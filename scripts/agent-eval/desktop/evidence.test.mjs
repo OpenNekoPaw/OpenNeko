@@ -186,6 +186,82 @@ describe('Desktop Agent assertion-driven evidence', () => {
     expect(run(input)[0]).toEqual(expect.objectContaining({ status: 'pass' }));
   });
 
+  it('proves one exact Automation session result and transient observation receipt', () => {
+    const assertion = {
+      id: 'automation-result',
+      kind: 'automation-tool-result',
+      name: 'automation_browser-use_browser_screenshot',
+      profileId: 'browser-use.observe',
+      targetLabel: 'OpenNeko Evaluation Browser',
+      mode: 'observe',
+      sessionStatus: 'active',
+      remainingSteps: 0,
+      requiredEvidenceKinds: ['text', 'structured', 'transient-image'],
+      observationTransport: 'transient-receipt',
+      evidenceRef: 'facts',
+    };
+    const input = evidenceInput([assertion]);
+    input.facts.receipts.tools.items.push({
+      callId: 'automation-call-1',
+      name: assertion.name,
+      status: 'success',
+    });
+    input.projection.events.push({
+      kind: 'tool_call',
+      payload: {
+        toolCall: {
+          id: 'automation-call-1',
+          name: assertion.name,
+          result: {
+            success: true,
+            data: {
+              actionId: 'action-1',
+              session: {
+                sessionId: 'session-1',
+                profileId: 'browser-use.observe',
+                targetKey: 'browser-target:opaque-1',
+                targetLabel: 'OpenNeko Evaluation Browser',
+                mode: 'observe',
+                status: 'active',
+                remainingSteps: 0,
+              },
+              evidence: [
+                { kind: 'text', text: 'viewport observed' },
+                { kind: 'structured', data: { source: 'browser-use' } },
+                {
+                  kind: 'transient-image',
+                  receiptId: 'receipt-1',
+                  mimeType: 'image/png',
+                  width: 800,
+                  height: 600,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'pass',
+        details: expect.objectContaining({
+          sessionId: 'session-1',
+          targetKey: 'browser-target:opaque-1',
+          evidenceKinds: ['text', 'structured', 'transient-image'],
+        }),
+      }),
+    );
+
+    input.projection.events[0].payload.toolCall.result.data.session.processId = 42;
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'fail',
+        message: expect.stringContaining('session fields'),
+      }),
+    );
+  });
+
   it('requires a real resumed Pi Session snapshot for persistence evidence', () => {
     const assertion = {
       id: 'persistence',
