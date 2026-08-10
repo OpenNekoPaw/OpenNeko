@@ -300,6 +300,13 @@
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/world-webview",
+      "owner": "packages/world-webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
     }
   ]
 }
