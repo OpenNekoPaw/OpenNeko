@@ -465,22 +465,6 @@ code {
   pointer-events: none;
 }
 
-.project-workspace > .neko-controlled-workbench-title:has(.desktop-home-experience-navigation) {
-  top: 44px;
-  right: 20px;
-  left: calc(var(--neko-controlled-primary-width) + 20px);
-  display: flex;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-}
-
-.desktop-home-experience-navigation {
-  width: min(544px, calc(100% - 32px));
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
-}
-
 .home-navigation button,
 .home-navigation .attention-summary {
   -webkit-app-region: no-drag;

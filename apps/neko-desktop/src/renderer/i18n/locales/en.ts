@@ -151,8 +151,6 @@ export const en = {
   'home.unavailableWorkspace': 'Unavailable workspace',
   'home.personalAssistant': 'Personal assistant',
   'home.assistant': 'Assistant',
-  'home.modeSelector': 'Choose a space',
-  'home.worldUnavailable': 'World experiences are not available yet.',
   'home.expandConversations': 'Show more',
   'home.collapseConversations': 'Show less',
   'home.expandConversationGroup': 'Expand {group}',

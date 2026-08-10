@@ -136,8 +136,6 @@ export const zhCN = {
   'home.unavailableWorkspace': '工作区不可用',
   'home.personalAssistant': '个人助手',
   'home.assistant': '助手',
-  'home.modeSelector': '选择空间',
-  'home.worldUnavailable': '世界体验尚未由世界领域提供。',
   'home.expandConversations': '展开显示',
   'home.collapseConversations': '收起',
   'home.expandConversationGroup': '展开 {group}',

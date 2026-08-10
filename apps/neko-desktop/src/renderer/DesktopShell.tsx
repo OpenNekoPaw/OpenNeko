@@ -104,10 +104,6 @@ import {
   useCharacterRoomWorkbenchRuntime,
 } from '@neko/chara-webview/root';
 import '@neko/chara-webview/style.css';
-import {
-  DesktopHomeExperienceNavigation,
-  projectDesktopHomeExperienceNavigation,
-} from './DesktopHomeExperienceNavigation';
 
 type ShellState =
   | { readonly kind: 'loading' }
@@ -131,19 +127,22 @@ export const MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO = 0.5;
 export const MANAGEMENT_MAIN_SPLIT_MIN_RATIO = 0.5;
 const SHELL_DIAGNOSTIC_DURATION_MS = 6_000;
 
-type DesktopShellPendingScope = 'scene' | 'workbench' | 'navigation' | 'sidebar';
+type DesktopShellPendingScope =
+  'scene' | 'workbench' | 'navigation' | 'sidebar' | 'target-selection';
 
 export interface DesktopShellPendingProjection {
   readonly scene: boolean;
   readonly workbench: boolean;
   readonly navigation: boolean;
   readonly sidebar: boolean;
+  readonly targetSelection: boolean;
 }
 
 export interface DesktopShellInteractionLocks {
   readonly workbench: boolean;
   readonly navigation: boolean;
   readonly sidebar: boolean;
+  readonly targetSelection: boolean;
 }
 
 const EMPTY_DESKTOP_SHELL_PENDING: DesktopShellPendingProjection = {
@@ -151,6 +150,7 @@ const EMPTY_DESKTOP_SHELL_PENDING: DesktopShellPendingProjection = {
   workbench: false,
   navigation: false,
   sidebar: false,
+  targetSelection: false,
 };
 
 function projectDesktopShellPending(
@@ -161,6 +161,7 @@ function projectDesktopShellPending(
     workbench: counts.has('workbench'),
     navigation: counts.has('navigation'),
     sidebar: counts.has('sidebar'),
+    targetSelection: counts.has('target-selection'),
   };
 }
 
@@ -171,6 +172,7 @@ export function projectDesktopShellInteractionLocks(
     workbench: pending.scene || pending.workbench,
     navigation: pending.scene || pending.navigation,
     sidebar: pending.scene || pending.sidebar,
+    targetSelection: pending.scene || pending.targetSelection,
   };
 }
 
@@ -196,6 +198,12 @@ interface ShellActions {
   ) => void;
   readonly onUpdateApplicationSidebar: (sidebar: DesktopApplicationSidebarProjection) => void;
   readonly onTransitionScene: (intent: DesktopSceneTransitionIntent) => void;
+  readonly onChooseWorkspaceTarget: () => Promise<
+    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
+  >;
+  readonly onSelectWorkspaceProjectTarget: (
+    projectId: string,
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
 }
 
 export function DesktopApplication(): JSX.Element {
@@ -606,6 +614,55 @@ export function DesktopApplication(): JSX.Element {
         ),
       ),
     onTransitionScene: transitionScene,
+    onChooseWorkspaceTarget: async () => {
+      const finishPending = beginPending('target-selection');
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
+          projection.window.windowId,
+        );
+        if (result.status === 'cancelled') return undefined;
+        return {
+          label: result.grant.label,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: result.workspaceId,
+            workspaceGrantId: result.grant.workspaceGrantId,
+          },
+        };
+      } catch (error: unknown) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        return undefined;
+      } finally {
+        finishPending();
+      }
+    },
+    onSelectWorkspaceProjectTarget: async (projectId) => {
+      const finishPending = beginPending('target-selection');
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.workspaceGrants.selectProject(
+          projection.window.windowId,
+          projectId,
+        );
+        if (result.status === 'cancelled') return undefined;
+        return {
+          label: result.grant.label,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: result.workspaceId,
+            workspaceGrantId: result.grant.workspaceGrantId,
+          },
+        };
+      } catch (error: unknown) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        return undefined;
+      } finally {
+        finishPending();
+      }
+    },
   };
 
   return (
@@ -669,6 +726,8 @@ export function DesktopShellView({
     onCloseWorkbenchView: () => undefined,
     onUpdateApplicationSidebar: () => undefined,
     onTransitionScene: () => undefined,
+    onChooseWorkspaceTarget: async () => undefined,
+    onSelectWorkspaceProjectTarget: async () => undefined,
   };
   return (
     <DesktopSceneWorkbench
@@ -698,7 +757,6 @@ function DesktopSceneWorkbench({
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
   const interactionLocks = projectDesktopShellInteractionLocks(pending);
   const scene = activeWorkbench.scene;
-  const homeExperienceNavigation = projectDesktopHomeExperienceNavigation(scene.context);
   const [managementSplitRatios, setManagementSplitRatios] = useState<ReadonlyMap<string, number>>(
     () => new Map(),
   );
@@ -797,6 +855,9 @@ function DesktopSceneWorkbench({
         projection,
         workbenchInstanceId: activeWorkbench.workbenchInstanceId,
         interaction: scene.slots.interaction,
+        onChooseWorkspaceTarget: actions.onChooseWorkspaceTarget,
+        onSelectWorkspaceProjectTarget: actions.onSelectWorkspaceProjectTarget,
+        workspaceSelectionDisabled: interactionLocks.targetSelection || !interactive,
       })
     : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
@@ -981,12 +1042,6 @@ function DesktopSceneWorkbench({
               }}
               workbench={activeWorkbench.layout}
               workbenchInstanceId={activeWorkbench.workbenchInstanceId}
-            />
-          ) : homeExperienceNavigation ? (
-            <DesktopHomeExperienceNavigation
-              disabled={interactionLocks.navigation || !interactive}
-              onNavigate={actions.onTransitionScene}
-              projection={homeExperienceNavigation}
             />
           ) : undefined
         }
@@ -1529,6 +1584,13 @@ function createDesktopAgentSurfaceProps(input: {
   readonly workbenchInstanceId: string;
   readonly project?: DesktopProjectCatalogItem;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
+  readonly onChooseWorkspaceTarget?: () => Promise<
+    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
+  >;
+  readonly onSelectWorkspaceProjectTarget?: (
+    projectId: string,
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
+  readonly workspaceSelectionDisabled?: boolean;
 }): DesktopAgentSurfaceProps | undefined {
   const { interaction } = input;
   const scope = interaction.scope;
@@ -1565,6 +1627,9 @@ function createDesktopAgentSurfaceProps(input: {
       composerWorkspace: { kind: 'workspace', label: project.displayName },
     };
   }
+  if (!input.onChooseWorkspaceTarget || !input.onSelectWorkspaceProjectTarget) {
+    throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace chooser.`);
+  }
   const agentPresentation = createLaunchAgentPresentation(scope);
   return {
     binding: 'launch',
@@ -1572,6 +1637,23 @@ function createDesktopAgentSurfaceProps(input: {
     agentSurfaceId: interaction.agentSurfaceId,
     viewId: interaction.agentViewId,
     agentPresentation,
+    ...(agentPresentation.phase === 'draft' && agentPresentation.binding.kind === 'unbound'
+      ? {
+          composerWorkspace: {
+            kind: 'entry' as const,
+            projects: input.projection.catalog.projects.map((project) => ({
+              projectId: project.projectId,
+              label: project.displayName,
+              ...(project.unavailable ? { disabled: true } : {}),
+            })),
+            onChooseDirectory: input.onChooseWorkspaceTarget,
+            onSelectProject: input.onSelectWorkspaceProjectTarget,
+            ...(input.workspaceSelectionDisabled === undefined
+              ? {}
+              : { disabled: input.workspaceSelectionDisabled }),
+          },
+        }
+      : {}),
   };
 }
 
