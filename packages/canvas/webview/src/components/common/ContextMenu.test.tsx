@@ -51,7 +51,6 @@ describe('Canvas ContextMenu builders', () => {
       contextNodeId: 'scene-1',
       onSetPlaybackEntry,
       onAddAction: vi.fn(),
-      onDelete: vi.fn(),
       onSelectAll: vi.fn(),
       onFitContent: vi.fn(),
       onResetView: vi.fn(),
@@ -70,6 +69,21 @@ describe('Canvas ContextMenu builders', () => {
     expect(onSetPlaybackEntry).toHaveBeenCalledWith('scene-1');
   });
 
+  it('keeps node deletion out of the context menu so keyboard ownership stays canonical', () => {
+    const items = buildNodeMenuItems({
+      canvasPosition: { x: 0, y: 0 },
+      hasSelection: true,
+      selectedCount: 1,
+      contextNodeId: 'scene-1',
+      onAddAction: vi.fn(),
+      onSelectAll: vi.fn(),
+      onFitContent: vi.fn(),
+      onResetView: vi.fn(),
+    });
+
+    expect(items.some((item) => !('separator' in item) && item.label === 'Delete')).toBe(false);
+  });
+
   it('projects the canonical add catalog without an empty Job action', () => {
     const onAddAction = vi.fn();
     const canvasPosition = { x: 18, y: 42 };
@@ -78,7 +92,6 @@ describe('Canvas ContextMenu builders', () => {
       hasSelection: false,
       selectedCount: 0,
       onAddAction,
-      onDelete: vi.fn(),
       onSelectAll: vi.fn(),
       onFitContent: vi.fn(),
       onResetView: vi.fn(),

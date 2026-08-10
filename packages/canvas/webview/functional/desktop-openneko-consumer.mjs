@@ -13,7 +13,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
   async prepare({ fixtureHome, repositoryRoot }) {
     const workspacePath = join(fixtureHome, 'workspace');
     const boardsRoot = join(workspacePath, 'boards');
-    await mkdir(boardsRoot, { recursive: true });
+    const configRoot = join(fixtureHome, '.neko');
+    await Promise.all([
+      mkdir(boardsRoot, { recursive: true }),
+      mkdir(configRoot, { recursive: true }),
+    ]);
     const media = await createDesktopMediaFixtureSet(workspacePath);
     await copyFile(
       join(
@@ -28,19 +32,104 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     await Promise.all([
       writeFile(
+        join(configRoot, 'config.toml'),
+        [
+          '[default_models.llm]',
+          'provider_id = "canvas-functional"',
+          'model_id = "canvas-text"',
+          '',
+          '[default_models.image]',
+          'provider_id = "canvas-functional"',
+          'model_id = "canvas-image"',
+          '',
+          '[default_models.video]',
+          'provider_id = "canvas-functional"',
+          'model_id = "canvas-video"',
+          '',
+          '[default_models.audio]',
+          'provider_id = "canvas-functional"',
+          'model_id = "canvas-audio"',
+          '',
+          '[default_model_purposes.audio_music_generate]',
+          'provider_id = "canvas-functional"',
+          'model_id = "canvas-music"',
+          '',
+          '[[providers]]',
+          'id = "canvas-functional"',
+          'name = "Canvas Functional"',
+          'type = "generic"',
+          'api_url = "http://127.0.0.1:1/api"',
+          'enabled = true',
+          'connection_kind = "local"',
+          'requires_api_key = false',
+          '',
+          '[[models]]',
+          'id = "canvas-text"',
+          'name = "Canvas Text"',
+          'provider_id = "canvas-functional"',
+          'type = "llm"',
+          'capabilities = ["chat"]',
+          'enabled = true',
+          '',
+          '[[models]]',
+          'id = "canvas-image"',
+          'name = "Canvas Image"',
+          'provider_id = "canvas-functional"',
+          'type = "image"',
+          'capabilities = ["image.generate"]',
+          'enabled = true',
+          '',
+          '[[models]]',
+          'id = "canvas-video"',
+          'name = "Canvas Video"',
+          'provider_id = "canvas-functional"',
+          'type = "video"',
+          'capabilities = ["video.generate"]',
+          'enabled = true',
+          '',
+          '[[models]]',
+          'id = "canvas-audio"',
+          'name = "Canvas Audio"',
+          'provider_id = "canvas-functional"',
+          'type = "audio"',
+          'capabilities = ["audio.generate"]',
+          'enabled = true',
+          '',
+          '[[models]]',
+          'id = "canvas-music"',
+          'name = "Canvas Music"',
+          'provider_id = "canvas-functional"',
+          'type = "audio"',
+          'capabilities = ["audio.music.generate"]',
+          'enabled = true',
+          '',
+        ].join('\n'),
+        { encoding: 'utf8', mode: 0o600 },
+      ),
+      writeFile(
         join(boardsRoot, 'video.nkc'),
         `${JSON.stringify(
-          canvasDocument('Video View', 'video-node', media.video, 'video', [
-            cutDocumentNode('cut-document-node', 'story.otio'),
-            epubImageNode('epub-image-node'),
-          ]),
+          canvasDocument(
+            'Video View',
+            'video-node',
+            media.video,
+            'video',
+            [cutDocumentNode('cut-document-node', 'story.otio'), epubImageNode('epub-image-node')],
+            denseConnectionFixture(),
+          ),
           null,
           2,
         )}\n`,
       ),
       writeFile(
         join(boardsRoot, 'audio.nkc'),
-        `${JSON.stringify(canvasDocument('Audio View', 'audio-node', media.audio, 'audio'), null, 2)}\n`,
+        `${JSON.stringify(
+          canvasDocument('Audio View', 'audio-node', media.audio, 'audio', [
+            markdownNode('markdown-node'),
+          ]),
+          null,
+          2,
+        )}\n`,
       ),
       writeFile(join(workspacePath, 'story.otio'), `${JSON.stringify(emptyOtioDocument())}\n`),
     ]);
@@ -124,6 +213,19 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"] img',
     );
+    await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:audio"]');
+      const control = [...(view?.querySelectorAll('button[aria-label]') ?? [])].find((button) =>
+        ['适应内容', 'Fit content'].includes(button.getAttribute('aria-label') ?? ''),
+      );
+      if (!(control instanceof HTMLButtonElement)) {
+        throw new Error('Canvas fit-content control is unavailable for Markdown validation.');
+      }
+      control.click();
+    })()`);
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="markdown-node"] [data-markdown-document="ready"]',
+    );
     await waitForCondition(
       evaluate,
       `(() => {
@@ -167,12 +269,123 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       resourceStatus: epubResourceStatus,
     });
     const epubImageScreenshot = await screenshot('canvas-epub-document-entry-image');
+    const markdownSelector =
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="markdown-node"]';
+    const markdownPreview = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
+    if (
+      markdownPreview.editing ||
+      markdownPreview.textareaCount !== 0 ||
+      markdownPreview.proseMirrorCount !== 0 ||
+      markdownPreview.headingSize > 18 ||
+      markdownPreview.width > 262 ||
+      markdownPreview.height > 182
+    ) {
+      throw new Error(
+        `Canvas Markdown compact preview is invalid: ${JSON.stringify(markdownPreview)}`,
+      );
+    }
+    const markdownPreviewScreenshot = await screenshot('canvas-markdown-node-compact-preview');
+    await click(markdownSelector);
+    const selectedMarkdownPreview = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
+    if (
+      selectedMarkdownPreview.editing ||
+      selectedMarkdownPreview.textareaCount !== 0 ||
+      selectedMarkdownPreview.proseMirrorCount !== 0
+    ) {
+      throw new Error(
+        `Canvas Markdown selection mounted a mutable editor: ${JSON.stringify(selectedMarkdownPreview)}`,
+      );
+    }
+    await evaluate(`(() => {
+      const node = document.querySelector(${JSON.stringify(markdownSelector)});
+      if (!(node instanceof HTMLElement)) throw new Error('Canvas Markdown node is unavailable.');
+      node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    })()`);
+    await waitForSelector(`${markdownSelector} .ProseMirror[contenteditable="true"]`);
+    const markdownEditing = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
+    if (
+      !markdownEditing.editing ||
+      markdownEditing.textareaCount !== 0 ||
+      markdownEditing.proseMirrorCount !== 1 ||
+      !markdownEditing.text.includes('这是一个紧凑的画布分析节点')
+    ) {
+      throw new Error(
+        `Canvas Markdown Rich editing is invalid: ${JSON.stringify(markdownEditing)}`,
+      );
+    }
+    const markdownEditingScreenshot = await screenshot('canvas-markdown-node-rich-editing');
+    await pressKey('Escape');
+    await waitForSelector(`${markdownSelector} [data-markdown-document="ready"]`);
+    await pressKey('Escape');
+    checkpoint('canvas-markdown-node-rich-surface', {
+      preview: markdownPreview,
+      selectedPreview: selectedMarkdownPreview,
+      editing: markdownEditing,
+    });
+    await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      const control = [...(view?.querySelectorAll('button[aria-label]') ?? [])].find((button) =>
+        ['适应内容', 'Fit content'].includes(button.getAttribute('aria-label') ?? ''),
+      );
+      if (!(control instanceof HTMLButtonElement)) {
+        throw new Error('Canvas fit-content control is unavailable for connection validation.');
+      }
+      control.click();
+    })()`);
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] .connection-group .connection-line',
+    );
+    const quietConnections = await inspectCanvasConnectionVisuals(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      quietConnections.connectionCount !== 6 ||
+      quietConnections.maximumLineOpacity > 0.26 ||
+      quietConnections.flowDotCount !== 0
+    ) {
+      throw new Error(
+        `Canvas ordinary connection visuals are not subdued: ${JSON.stringify(quietConnections)}`,
+      );
+    }
+    const quietConnectionsScreenshot = await screenshot('canvas-connections-quiet-default');
+    await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      const hitPath = view?.querySelector('.connection-group path[stroke="transparent"]');
+      if (!(hitPath instanceof SVGPathElement)) {
+        throw new Error('Canvas connection hit target is unavailable.');
+      }
+      hitPath.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    })()`);
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] .connection-group[data-selected="true"]',
+    );
+    const selectedConnectionVisual = await inspectCanvasConnectionVisuals(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      selectedConnectionVisual.selectedCount !== 1 ||
+      selectedConnectionVisual.selectedLineOpacity !== 0.88 ||
+      selectedConnectionVisual.flowDotCount !== 1
+    ) {
+      throw new Error(
+        `Canvas selected connection feedback is invalid: ${JSON.stringify(selectedConnectionVisual)}`,
+      );
+    }
+    const selectedConnectionScreenshot = await screenshot('canvas-connection-selected-emphasis');
+    await pressKey('Escape');
+    checkpoint('canvas-connection-visual-hierarchy', {
+      quiet: quietConnections,
+      selected: selectedConnectionVisual,
+    });
     await waitForInteractiveSelector(
       evaluate,
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
     );
     const generationAuthoring = await exerciseCanvasGenerationAuthoring({
       click,
+      drag,
       evaluate,
       screenshot,
       viewId: 'canvas:functional:video',
@@ -180,6 +393,19 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     });
     const authoredNodeCount = generationAuthoring.maximumNodeCount;
     checkpoint('canvas-generation-authoring', generationAuthoring);
+    await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      const control = [...(view?.querySelectorAll('button[aria-label]') ?? [])].find((button) =>
+        ['适应内容', 'Fit content'].includes(button.getAttribute('aria-label') ?? ''),
+      );
+      if (!(control instanceof HTMLButtonElement)) {
+        throw new Error('Canvas fit-content control is unavailable.');
+      }
+      control.click();
+    })()`);
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
+    );
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
       0,
@@ -543,6 +769,14 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       epubImageProjection,
       epubResourceStatus,
       epubImageScreenshot,
+      markdownPreview,
+      markdownPreviewScreenshot,
+      markdownEditing,
+      markdownEditingScreenshot,
+      quietConnections,
+      quietConnectionsScreenshot,
+      selectedConnectionVisual,
+      selectedConnectionScreenshot,
       authoredNodeCount,
       generationAuthoring,
       selectedNodePresentation,
@@ -598,6 +832,26 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       throw new Error(
         `Canvas EPUB document-entry image evidence is invalid: ${JSON.stringify(evidence.epubImageProjection)}`,
       );
+    }
+    if (
+      evidence.markdownPreview.editing ||
+      evidence.markdownPreview.textareaCount !== 0 ||
+      evidence.markdownPreview.proseMirrorCount !== 0 ||
+      !evidence.markdownEditing.editing ||
+      evidence.markdownEditing.proseMirrorCount !== 1 ||
+      evidence.markdownEditing.textareaCount !== 0
+    ) {
+      throw new Error('Canvas Markdown preview and Rich activation were not proven.');
+    }
+    if (
+      evidence.quietConnections.connectionCount !== 6 ||
+      evidence.quietConnections.maximumLineOpacity > 0.26 ||
+      evidence.quietConnections.flowDotCount !== 0 ||
+      evidence.selectedConnectionVisual.selectedCount !== 1 ||
+      evidence.selectedConnectionVisual.selectedLineOpacity !== 0.88 ||
+      evidence.selectedConnectionVisual.flowDotCount !== 1
+    ) {
+      throw new Error('Canvas connection visual hierarchy was not proven.');
     }
     if (observation.pcmResponseCount !== 0) {
       throw new Error('Canvas ordinary node playback unexpectedly consumed PCM.');
@@ -697,6 +951,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
 
 async function exerciseCanvasGenerationAuthoring({
   click,
+  drag,
   evaluate,
   screenshot,
   viewId,
@@ -726,28 +981,36 @@ async function exerciseCanvasGenerationAuthoring({
       kind: 'prompt',
       contentKind: 'text',
       label: ['Text', '文本'],
+      modelLabel: 'Canvas Text',
       emptyIconClass: 'codicon-file-text',
+      expectedSize: { width: 240, height: 160 },
     },
     {
       actionId: 'image',
       kind: 'image',
       contentKind: 'image',
       label: ['Image', '图片'],
+      modelLabel: 'Canvas Image',
       emptyIconClass: 'codicon-file-media',
+      expectedSize: { width: 240, height: 180 },
     },
     {
       actionId: 'video',
       kind: 'video',
       contentKind: 'video',
       label: ['Video', '视频'],
+      modelLabel: 'Canvas Video',
       emptyIconClass: 'codicon-play',
+      expectedSize: { width: 240, height: 180 },
     },
     {
       actionId: 'audio',
       kind: 'audio',
       contentKind: 'audio',
       label: ['Audio', '音频'],
+      modelLabel: 'Canvas Audio',
       emptyIconClass: 'codicon-music',
+      expectedSize: { width: 240, height: 120 },
     },
   ];
   let maximumNodeCount = 0;
@@ -767,7 +1030,7 @@ async function exerciseCanvasGenerationAuthoring({
     await click(nodeSelector);
     const inputSelector = `${viewSelector} [data-canvas-generation-input="true"]`;
     await waitForSelector(inputSelector);
-    const state = await evaluate(`(() => {
+    let state = await evaluate(`(() => {
       const node = document.querySelector(${JSON.stringify(nodeSelector)});
       if (!(node instanceof HTMLElement)) throw new Error('Generation Node is unavailable.');
       const nodeContent = node.querySelector(':scope > .node-card');
@@ -783,6 +1046,13 @@ async function exerciseCanvasGenerationAuthoring({
       const nodeBounds = node.getBoundingClientRect();
       const inputBounds = input.getBoundingClientRect();
       const toolbarBounds = toolbar.getBoundingClientRect();
+      const inputPlacement = input.getAttribute('data-placement');
+      const inputStyle = getComputedStyle(input);
+      const nodeStyle = getComputedStyle(node.querySelector('.canvas-generation-node'));
+      const nodeSurfaceStyle = getComputedStyle(nodeContent);
+      const toolbarStyle = getComputedStyle(toolbar);
+      const footer = input.querySelector('.selection-generation-input-panel__footer');
+      if (!(footer instanceof HTMLElement)) throw new Error('Generation input footer is unavailable.');
       const controls = [...input.querySelectorAll('textarea, input, select, button')];
       const overlaps = (left, right) => !(
         left.right <= right.left ||
@@ -801,7 +1071,23 @@ async function exerciseCanvasGenerationAuthoring({
         emptyIconClass:
           node.querySelector('.canvas-generation-node__empty .codicon')?.className ?? '',
         inputKind: input.getAttribute('data-canvas-generation-input-kind'),
-        inputPlacement: input.getAttribute('data-placement'),
+        inputPlacement,
+        inputSurface: input.getAttribute('data-surface'),
+        inputBackgroundColor: inputStyle.backgroundColor,
+        nodeBackgroundColor: nodeStyle.backgroundColor,
+        nodeSurfaceBackgroundColor: nodeSurfaceStyle.backgroundColor,
+        toolbarBackgroundColor: toolbarStyle.backgroundColor,
+        footerBackgroundColor: getComputedStyle(footer).backgroundColor,
+        restingControlBackgroundColors: [
+          input.querySelector('[data-canvas-generation-reference-add="true"]'),
+          input.querySelector('.selection-generation-input-panel__model-trigger'),
+          input.querySelector(
+            'button.selection-generation-input-panel__chip:not(.selection-generation-input-panel__model-trigger)',
+          ),
+          input.querySelector('.selection-generation-input-panel__run'),
+        ].map((control) =>
+          control instanceof HTMLElement ? getComputedStyle(control).backgroundColor : undefined,
+        ),
         inputHeadingCount: input.querySelectorAll(
           '.selection-generation-input-panel__header',
         ).length,
@@ -815,19 +1101,65 @@ async function exerciseCanvasGenerationAuthoring({
         runButtonCount: [...input.querySelectorAll('button')].filter((button) =>
           ['Run', '生成'].includes(button.getAttribute('title') ?? ''),
         ).length,
+        modelTriggerCount: input.querySelectorAll(
+          '.selection-generation-input-panel__model-trigger',
+        ).length,
+        selectedModelLabel:
+          input.querySelector('.selection-generation-input-panel__model-copy strong')?.textContent?.trim() ?? '',
+        parameterTriggerCount: input.querySelectorAll(
+          'button.selection-generation-input-panel__chip:not(.selection-generation-input-panel__model-trigger)',
+        ).length,
+        countTriggerCount: input.querySelectorAll(
+          '.selection-generation-input-panel__count-trigger',
+        ).length,
+        audioModeTabCount: input.querySelectorAll(
+          '.selection-generation-input-panel__mode-tabs [role="tab"]',
+        ).length,
         alertCount: input.querySelectorAll('[role="alert"]').length,
         referenceSummaryCount: input.querySelectorAll(
           '.selection-generation-input-panel__references',
         ).length,
+        referenceAddCount: input.querySelectorAll(
+          '[data-canvas-generation-reference-add="true"]',
+        ).length,
         bounds: {
-          node: { width: nodeBounds.width, height: nodeBounds.height },
-          input: { width: inputBounds.width, height: inputBounds.height },
-          toolbar: { width: toolbarBounds.width, height: toolbarBounds.height },
+          node: {
+            top: nodeBounds.top,
+            bottom: nodeBounds.bottom,
+            centerX: nodeBounds.left + nodeBounds.width / 2,
+            width: nodeBounds.width,
+            height: nodeBounds.height,
+          },
+          input: {
+            top: inputBounds.top,
+            bottom: inputBounds.bottom,
+            centerX: inputBounds.left + inputBounds.width / 2,
+            width: inputBounds.width,
+            height: inputBounds.height,
+          },
+          toolbar: {
+            top: toolbarBounds.top,
+            bottom: toolbarBounds.bottom,
+            centerX: toolbarBounds.left + toolbarBounds.width / 2,
+            width: toolbarBounds.width,
+            height: toolbarBounds.height,
+          },
         },
         overlap: {
           nodeInput: overlaps(nodeBounds, inputBounds),
           nodeToolbar: overlaps(nodeBounds, toolbarBounds),
           inputToolbar: overlaps(inputBounds, toolbarBounds),
+        },
+        anchor: {
+          inputGap: inputBounds.top - nodeBounds.bottom,
+          toolbarGap: nodeBounds.top - toolbarBounds.bottom,
+          centerDelta: Math.abs(
+            nodeBounds.left + nodeBounds.width / 2 - (inputBounds.left + inputBounds.width / 2),
+          ),
+          toolbarCenterDelta: Math.abs(
+            nodeBounds.left + nodeBounds.width / 2 -
+              (toolbarBounds.left + toolbarBounds.width / 2),
+          ),
         },
         overflow: {
           nodeHorizontal: nodeContent.scrollWidth > nodeContent.clientWidth,
@@ -843,20 +1175,42 @@ async function exerciseCanvasGenerationAuthoring({
       !action.label.includes(state.nodeLabel) ||
       !state.emptyIconClass.includes(action.emptyIconClass) ||
       state.inputKind !== action.kind ||
-      state.inputPlacement !== 'viewport-bottom' ||
+      state.inputPlacement !== 'node-below' ||
+      state.inputSurface !== 'editor' ||
+      state.inputBackgroundColor === 'rgba(0, 0, 0, 0)' ||
+      state.nodeBackgroundColor !== 'rgba(0, 0, 0, 0)' ||
+      state.nodeSurfaceBackgroundColor === 'rgba(0, 0, 0, 0)' ||
+      state.toolbarBackgroundColor === 'rgba(0, 0, 0, 0)' ||
+      state.footerBackgroundColor !== 'rgba(0, 0, 0, 0)' ||
+      state.restingControlBackgroundColors.some(
+        (backgroundColor) => backgroundColor !== 'rgba(0, 0, 0, 0)',
+      ) ||
       state.inputHeadingCount !== 0 ||
       state.inputInsideNode ||
       state.nodeControlCount !== 0 ||
       !action.label.includes(state.toolbarLabel) ||
       state.runButtonCount !== 1 ||
+      state.modelTriggerCount !== 1 ||
+      state.selectedModelLabel !== action.modelLabel ||
+      state.parameterTriggerCount !== (action.kind === 'image' ? 2 : 1) ||
+      state.countTriggerCount !== (action.kind === 'image' ? 1 : 0) ||
+      state.audioModeTabCount !== (action.kind === 'audio' ? 2 : 0) ||
       state.alertCount !== 0 ||
       state.referenceSummaryCount !== 1 ||
-      state.bounds.node.width <= 0 ||
-      state.bounds.node.height <= 0 ||
+      state.referenceAddCount !== 1 ||
+      Math.abs(state.bounds.node.width - action.expectedSize.width) > 1 ||
+      Math.abs(state.bounds.node.height - action.expectedSize.height) > 1 ||
       state.bounds.input.width <= 0 ||
       state.bounds.input.height <= 0 ||
       state.bounds.toolbar.width <= 0 ||
       state.bounds.toolbar.height <= 0 ||
+      state.bounds.input.width > 680 ||
+      state.anchor.inputGap < 0 ||
+      state.anchor.inputGap > 24 ||
+      state.anchor.toolbarGap < 0 ||
+      state.anchor.toolbarGap > 16 ||
+      state.anchor.centerDelta > 2 ||
+      state.anchor.toolbarCenterDelta > 2 ||
       state.overlap.nodeInput ||
       state.overlap.nodeToolbar ||
       state.overlap.inputToolbar ||
@@ -867,21 +1221,288 @@ async function exerciseCanvasGenerationAuthoring({
     ) {
       throw new Error(`Canvas Generation presentation is invalid: ${JSON.stringify(state)}`);
     }
+
+    if (action.kind === 'image') {
+      await click(`${inputSelector} [data-canvas-generation-reference-add="true"]`);
+      await waitForSelector('[data-canvas-generation-reference-source="workspace"]');
+      const sourceChooser = await evaluate(`(() => {
+        const menu = document.querySelector('.selection-generation-input-panel__reference-menu');
+        if (!(menu instanceof HTMLElement)) throw new Error('Reference source menu is unavailable.');
+        const bounds = menu.getBoundingClientRect();
+        return {
+          sources: [...menu.querySelectorAll('[data-canvas-generation-reference-source]')]
+            .map((element) => element.getAttribute('data-canvas-generation-reference-source')),
+          width: bounds.width,
+          left: bounds.left,
+          right: bounds.right,
+          viewportWidth: window.innerWidth,
+        };
+      })()`);
+      if (
+        sourceChooser.sources.join('|') !== 'workspace|import' ||
+        sourceChooser.width > 320 ||
+        sourceChooser.left < 0 ||
+        sourceChooser.right > sourceChooser.viewportWidth
+      ) {
+        throw new Error(
+          `Canvas Generation reference source menu is invalid: ${JSON.stringify(sourceChooser)}`,
+        );
+      }
+      state = { ...state, sourceChooser };
+      screenshots.push(await screenshot('canvas-generation-reference-source-menu'));
+      await click(`${inputSelector} [data-canvas-generation-reference-add="true"]`);
+    }
+
+    if (action.kind === 'image' || action.kind === 'audio') {
+      await click(`${inputSelector} .selection-generation-input-panel__model-trigger`);
+      await waitForCondition(
+        evaluate,
+        `document.querySelector('.selection-generation-input-panel__model-menu .selection-generation-input-panel__model-option') instanceof HTMLElement`,
+        'Generation model menu did not stabilize.',
+      );
+      const modelMenu = await evaluate(`(() => {
+      const menu = document.querySelector('.selection-generation-input-panel__model-menu');
+      if (!(menu instanceof HTMLElement)) throw new Error('Generation model menu is unavailable.');
+      const bounds = menu.getBoundingClientRect();
+      return {
+        options: [...menu.querySelectorAll('.selection-generation-input-panel__model-option strong')]
+          .map((element) => element.textContent?.trim() ?? ''),
+        providerRowsInline: [...menu.querySelectorAll('.selection-generation-input-panel__model-option')]
+          .every((option) => {
+            const model = option.querySelector('strong');
+            const provider = option.querySelector('small');
+            if (!(model instanceof HTMLElement) || !(provider instanceof HTMLElement)) return false;
+            return Math.abs(model.getBoundingClientRect().top - provider.getBoundingClientRect().top) <= 2;
+          }),
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        bottom: bounds.bottom,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
+    })()`);
+      if (
+        modelMenu.options.join('|') !== action.modelLabel ||
+        !modelMenu.providerRowsInline ||
+        modelMenu.left < 0 ||
+        modelMenu.right > modelMenu.viewportWidth ||
+        modelMenu.top < 0 ||
+        modelMenu.bottom > modelMenu.viewportHeight
+      ) {
+        throw new Error(`Canvas Generation model menu is invalid: ${JSON.stringify(modelMenu)}`);
+      }
+      screenshots.push(await screenshot(`canvas-generation-${action.kind}-model-menu`));
+      await click('.selection-generation-input-panel__model-option');
+    }
+
+    if (action.kind !== 'prompt') {
+      await click(
+        `${inputSelector} button.selection-generation-input-panel__chip:not(.selection-generation-input-panel__model-trigger)`,
+      );
+      await waitForCondition(
+        evaluate,
+        `document.querySelector('.selection-generation-input-panel__parameter-menu .selection-generation-input-panel__option-group') instanceof HTMLElement`,
+        'Generation parameter menu did not stabilize.',
+      );
+      const parameters = await evaluate(`(() => {
+      const menu = document.querySelector('.selection-generation-input-panel__parameter-menu');
+      if (!(menu instanceof HTMLElement)) throw new Error('Generation parameter menu is unavailable.');
+      const bounds = menu.getBoundingClientRect();
+      const canvas = document.querySelector(${JSON.stringify(`${viewSelector} [data-canvas-viewport-root="true"]`)});
+      if (!(canvas instanceof HTMLElement)) throw new Error('Canvas viewport is unavailable.');
+      const canvasBounds = canvas.getBoundingClientRect();
+      const columnCounts = [...menu.querySelectorAll('.selection-generation-input-panel__option-grid')]
+        .map((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length);
+      return {
+        groups: [...menu.querySelectorAll('.selection-generation-input-panel__option-group legend')]
+          .map((element) => element.textContent?.trim() ?? ''),
+        optionCount: menu.querySelectorAll('.selection-generation-input-panel__option-grid button').length,
+        clientHeight: menu.clientHeight,
+        scrollHeight: menu.scrollHeight,
+        top: bounds.top,
+        bottom: bounds.bottom,
+        left: bounds.left,
+        right: bounds.right,
+        width: bounds.width,
+        canvasLeft: canvasBounds.left,
+        canvasRight: canvasBounds.right,
+        columnCounts,
+        viewportHeight: window.innerHeight,
+        horizontalOverflow: menu.scrollWidth > menu.clientWidth,
+        verticalOverflow: menu.scrollHeight > menu.clientHeight,
+      };
+    })()`);
+      if (
+        parameters.groups.length < 2 ||
+        parameters.optionCount < 4 ||
+        parameters.horizontalOverflow ||
+        parameters.top < 0 ||
+        parameters.bottom > parameters.viewportHeight ||
+        parameters.left < parameters.canvasLeft ||
+        parameters.right > parameters.canvasRight ||
+        parameters.width < 240 ||
+        parameters.width > 500 ||
+        parameters.columnCounts.some((count) => count < 2)
+      ) {
+        throw new Error(
+          `Canvas Generation parameter menu is invalid: ${JSON.stringify(parameters)}`,
+        );
+      }
+      screenshots.push(await screenshot(`canvas-generation-${action.kind}-parameters`));
+      await click(
+        `${inputSelector} button.selection-generation-input-panel__chip:not(.selection-generation-input-panel__model-trigger)`,
+      );
+
+      if (action.kind === 'image') {
+        await click(`${inputSelector} .selection-generation-input-panel__count-trigger`);
+        await waitForCondition(
+          evaluate,
+          `document.querySelector('.selection-generation-input-panel__count-menu [role="menuitemradio"]') instanceof HTMLElement`,
+          'Generation count menu did not stabilize.',
+        );
+        const countMenu = await evaluate(`(() => {
+          const menu = document.querySelector('.selection-generation-input-panel__count-menu');
+          if (!(menu instanceof HTMLElement)) throw new Error('Generation count menu is unavailable.');
+          const bounds = menu.getBoundingClientRect();
+          return {
+            options: [...menu.querySelectorAll('[role="menuitemradio"]')]
+              .map((element) => element.textContent?.trim() ?? ''),
+            width: bounds.width,
+            top: bounds.top,
+            bottom: bounds.bottom,
+            viewportHeight: window.innerHeight,
+          };
+        })()`);
+        if (
+          countMenu.options.join('|') !== '× 1|× 2|× 3|× 4' ||
+          countMenu.width > 140 ||
+          countMenu.top < 0 ||
+          countMenu.bottom > countMenu.viewportHeight
+        ) {
+          throw new Error(`Canvas Generation count menu is invalid: ${JSON.stringify(countMenu)}`);
+        }
+        state = { ...state, countMenu };
+        screenshots.push(await screenshot('canvas-generation-image-count-menu'));
+        await click(`${inputSelector} .selection-generation-input-panel__count-trigger`);
+      }
+    }
+
+    if (action.kind === 'audio') {
+      await click(`${inputSelector} .selection-generation-input-panel__mode-tabs button`, 1);
+      await click(`${inputSelector} .selection-generation-input-panel__model-trigger`);
+      await waitForCondition(
+        evaluate,
+        `document.querySelector('.selection-generation-input-panel__model-menu .selection-generation-input-panel__model-option') instanceof HTMLElement`,
+        'Music model menu did not stabilize.',
+      );
+      const musicModels = await evaluate(`[
+        ...document.querySelectorAll(
+          '.selection-generation-input-panel__model-menu .selection-generation-input-panel__model-option strong',
+        ),
+      ].map((element) => element.textContent?.trim() ?? '')`);
+      if (musicModels.join('|') !== 'Canvas Music') {
+        throw new Error(`Canvas music model filtering is invalid: ${JSON.stringify(musicModels)}`);
+      }
+      screenshots.push(await screenshot('canvas-generation-audio-music-mode'));
+      await click('.selection-generation-input-panel__model-option');
+      const workspaceReference = await qualifyWorkspaceReferenceDrop({
+        click,
+        drag,
+        evaluate,
+        inputSelector,
+        screenshot,
+        waitForSelector,
+      });
+      state = { ...state, workspaceReference };
+    }
     kinds.push(state);
     screenshots.push(await screenshot(`canvas-generation-${action.kind}-selected-large`));
 
     if (action.kind === 'prompt') {
-      await resizeWindow(evaluate, 1040, 700);
+      const beforeMovePosition = await evaluate(`(() => {
+        const node = document.querySelector(${JSON.stringify(nodeSelector)});
+        if (!(node instanceof HTMLElement)) throw new Error('Prompt Generation Node is unavailable.');
+        return { left: Number.parseFloat(node.style.left), top: Number.parseFloat(node.style.top) };
+      })()`);
+      await drag(nodeSelector, `${viewSelector} [data-canvas-viewport-root="true"]`, {
+        sourcePosition: { xRatio: 0.5, yRatio: 0.25 },
+        targetPosition: { xRatio: 0.58, yRatio: 0.38 },
+      });
       await waitForCondition(
         evaluate,
         `(() => {
           const node = document.querySelector(${JSON.stringify(nodeSelector)});
           const input = document.querySelector(${JSON.stringify(inputSelector)});
           if (!(node instanceof HTMLElement) || !(input instanceof HTMLElement)) return false;
-          return node.getBoundingClientRect().bottom <= input.getBoundingClientRect().top;
+          const nodeBounds = node.getBoundingClientRect();
+          const inputBounds = input.getBoundingClientRect();
+          const moved =
+            Math.abs(Number.parseFloat(node.style.left) - ${String(beforeMovePosition.left)}) > 20 ||
+            Math.abs(Number.parseFloat(node.style.top) - ${String(beforeMovePosition.top)}) > 20;
+          const gap = inputBounds.top - nodeBounds.bottom;
+          return moved && gap >= 0 && gap <= 24;
         })()`,
-        'Compact Generation Node remained behind the viewport-bottom input.',
+        'Generation input did not follow the moved Prompt node.',
       );
+      const moved = await evaluate(`(() => {
+        const node = document.querySelector(${JSON.stringify(nodeSelector)});
+        const input = document.querySelector(${JSON.stringify(inputSelector)});
+        if (!(node instanceof HTMLElement) || !(input instanceof HTMLElement)) {
+          throw new Error('Moved Prompt Generation presentation is unavailable.');
+        }
+        const nodeBounds = node.getBoundingClientRect();
+        const inputBounds = input.getBoundingClientRect();
+        return {
+          nodeCenterX: nodeBounds.left + nodeBounds.width / 2,
+          inputCenterX: inputBounds.left + inputBounds.width / 2,
+          nodePosition: {
+            left: Number.parseFloat(node.style.left),
+            top: Number.parseFloat(node.style.top),
+          },
+          placement: input.getAttribute('data-placement'),
+          gap: inputBounds.top - nodeBounds.bottom,
+        };
+      })()`);
+      screenshots.push(await screenshot('canvas-generation-prompt-node-follow'));
+      await resizeWindow(evaluate, 1040, 700);
+      try {
+        await waitForCondition(
+          evaluate,
+          `(() => {
+            const node = document.querySelector(${JSON.stringify(nodeSelector)});
+            const input = document.querySelector(${JSON.stringify(inputSelector)});
+            if (!(node instanceof HTMLElement) || !(input instanceof HTMLElement)) return false;
+            const nodeBounds = node.getBoundingClientRect();
+            const inputBounds = input.getBoundingClientRect();
+            return input.getAttribute('data-placement') === 'node-below' &&
+              nodeBounds.bottom <= inputBounds.top;
+          })()`,
+          'Compact Generation input did not remain adjacent to its node.',
+        );
+      } catch (error) {
+        const geometry = await evaluate(`(() => {
+          const node = document.querySelector(${JSON.stringify(nodeSelector)});
+          const input = document.querySelector(${JSON.stringify(inputSelector)});
+          const root = document.querySelector(${JSON.stringify(`${viewSelector} [data-canvas-viewport-root="true"]`)});
+          const layer = document.querySelector(${JSON.stringify(`${viewSelector} [data-canvas-viewport-layer]`)});
+          const bounds = (element) => {
+            if (!(element instanceof HTMLElement)) return undefined;
+            const rect = element.getBoundingClientRect();
+            return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+          };
+          return {
+            node: bounds(node),
+            input: bounds(input),
+            root: bounds(root),
+            layerTransform: layer instanceof HTMLElement ? layer.style.transform : undefined,
+            window: { width: window.innerWidth, height: window.innerHeight },
+          };
+        })()`);
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} ${JSON.stringify(geometry)}`,
+        );
+      }
       const compact = await evaluate(`(() => {
         const node = document.querySelector(${JSON.stringify(nodeSelector)});
         if (!(node instanceof HTMLElement)) throw new Error('Compact Generation Node is unavailable.');
@@ -898,9 +1519,17 @@ async function exerciseCanvasGenerationAuthoring({
           inputHeight: inputBounds.height,
           inputLeft: inputBounds.left,
           inputRight: inputBounds.right,
+          inputBottom: inputBounds.bottom,
+          nodeTop: nodeBounds.top,
           nodeBottom: nodeBounds.bottom,
           inputTop: inputBounds.top,
-          nodeInputOverlap: nodeBounds.bottom > inputBounds.top,
+          inputPlacement: input.getAttribute('data-placement'),
+          nodeInputOverlap: !(
+            nodeBounds.right <= inputBounds.left ||
+            inputBounds.right <= nodeBounds.left ||
+            nodeBounds.bottom <= inputBounds.top ||
+            inputBounds.bottom <= nodeBounds.top
+          ),
           bodyScrollWidth: document.body.scrollWidth,
           bodyClientWidth: document.body.clientWidth,
         };
@@ -910,27 +1539,89 @@ async function exerciseCanvasGenerationAuthoring({
         compact.inputHeight <= 0 ||
         compact.inputLeft < 0 ||
         compact.inputRight > compact.width ||
+        Math.abs(compact.nodeWidth - action.expectedSize.width) > 1 ||
+        Math.abs(compact.nodeHeight - action.expectedSize.height) > 1 ||
         compact.nodeInputOverlap ||
         compact.bodyScrollWidth > compact.bodyClientWidth
       ) {
         throw new Error(`Compact Generation presentation is invalid: ${JSON.stringify(compact)}`);
       }
-      kinds[kinds.length - 1] = { ...state, compact };
+      kinds[kinds.length - 1] = { ...state, moved, compact };
       screenshots.push(await screenshot('canvas-generation-prompt-selected-compact'));
       await resizeWindow(evaluate, 1200, 800);
     }
 
-    await click(`${viewSelector} [data-selection-overflow="true"]`);
-    await waitForSelector(
-      '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
-    );
-    await click(
-      '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
-    );
-    await waitForCanvasNodeCount(evaluate, viewId, 3);
+    if (index < actions.length - 1) {
+      await click(`${viewSelector} [data-selection-overflow="true"]`);
+      await waitForSelector(
+        '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
+      );
+      await click(
+        '[data-selection-action="delete-selection"][data-selection-action-location="overflow"]',
+      );
+      await waitForCanvasNodeCount(evaluate, viewId, 3);
+    }
   }
 
   return { catalog, kinds, maximumNodeCount, screenshots };
+}
+
+async function qualifyWorkspaceReferenceDrop({
+  click,
+  drag,
+  evaluate,
+  inputSelector,
+  screenshot,
+  waitForSelector,
+}) {
+  const mediaExpanded = await evaluate(`(() => {
+    const rows = [...document.querySelectorAll('.neko-resource-browser__item-row')];
+    const mediaRow = rows.find((row) =>
+      row.querySelector('strong')?.textContent?.trim() === 'media',
+    );
+    const mediaItem = mediaRow?.querySelector('.neko-resource-browser__item');
+    const disclosure = mediaRow?.querySelector('.neko-resource-browser__disclosure');
+    if (!(mediaItem instanceof HTMLButtonElement) || !(disclosure instanceof HTMLElement)) {
+      throw new Error('Workspace media directory is unavailable for Generation references.');
+    }
+    disclosure.dataset.canvasGenerationMediaDisclosure = 'true';
+    return mediaItem.getAttribute('aria-expanded') === 'true';
+  })()`);
+  if (!mediaExpanded) await click('[data-canvas-generation-media-disclosure="true"]');
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const source = [...document.querySelectorAll('.neko-resource-browser__item')].find((item) =>
+        item.querySelector('strong')?.textContent?.trim() === 'tone.wav',
+      );
+      if (!(source instanceof HTMLButtonElement) || !source.draggable) return false;
+      source.dataset.canvasGenerationReferenceSource = 'true';
+      return true;
+    })()`,
+    'Workspace audio resource did not become draggable.',
+  );
+  await drag(
+    '[data-canvas-generation-reference-source="true"]',
+    `${inputSelector} [data-canvas-generation-reference-zone="true"]`,
+    { targetPosition: { xRatio: 0.7, yRatio: 0.5 } },
+  );
+  await waitForSelector(`${inputSelector} .selection-generation-input-panel__reference`, 30_000);
+  const evidence = await evaluate(`(() => {
+    const input = document.querySelector(${JSON.stringify(inputSelector)});
+    if (!(input instanceof HTMLElement)) throw new Error('Generation input is unavailable.');
+    const references = [...input.querySelectorAll('.selection-generation-input-panel__reference')]
+      .map((element) => element.textContent?.trim() ?? '');
+    return {
+      references,
+      dragActive: input
+        .querySelector('[data-canvas-generation-reference-zone="true"]')
+        ?.getAttribute('data-drag-active'),
+    };
+  })()`);
+  if (evidence.references.length !== 1 || !evidence.references[0]?.includes('tone.wav')) {
+    throw new Error(`Workspace reference drop is invalid: ${JSON.stringify(evidence)}`);
+  }
+  return { ...evidence, screenshot: await screenshot('canvas-generation-workspace-reference') };
 }
 
 async function resizeWindow(evaluate, width, height) {
@@ -1248,7 +1939,7 @@ async function waitForReleasedUrl(evaluate, url, mediaType) {
   );
 }
 
-function canvasDocument(name, nodeId, path, mediaType, extraNodes = []) {
+function canvasDocument(name, nodeId, path, mediaType, extraNodes = [], connections = []) {
   return {
     name,
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
@@ -1268,7 +1959,29 @@ function canvasDocument(name, nodeId, path, mediaType, extraNodes = []) {
       },
       ...extraNodes,
     ],
-    connections: [],
+    connections,
+  };
+}
+
+function denseConnectionFixture() {
+  return [
+    fixtureConnection('edge-video-cut', 'video-node', 'cut-document-node'),
+    fixtureConnection('edge-video-epub', 'video-node', 'epub-image-node'),
+    fixtureConnection('edge-cut-video', 'cut-document-node', 'video-node'),
+    fixtureConnection('edge-cut-epub', 'cut-document-node', 'epub-image-node'),
+    fixtureConnection('edge-epub-video', 'epub-image-node', 'video-node'),
+    fixtureConnection('edge-epub-cut', 'epub-image-node', 'cut-document-node'),
+  ];
+}
+
+function fixtureConnection(id, sourceId, targetId) {
+  return {
+    id,
+    sourceId,
+    targetId,
+    sourceEndpoint: { nodeId: sourceId, scope: 'node' },
+    targetEndpoint: { nodeId: targetId, scope: 'node' },
+    type: 'derived-from',
   };
 }
 
@@ -1304,6 +2017,27 @@ function epubImageNode(nodeId) {
         entryPath: 'OEBPS/images/page-1.png',
       },
       mediaType: 'image',
+    },
+  };
+}
+
+function markdownNode(nodeId) {
+  return {
+    id: nodeId,
+    type: 'markdown',
+    position: { x: 440, y: 80 },
+    size: { width: 260, height: 180 },
+    zIndex: 2,
+    data: {
+      title: 'Image Description',
+      content: [
+        '# 第一章：画布分析',
+        '',
+        '这是一个紧凑的画布分析节点，默认显示所见所得内容。',
+        '',
+        '- 选中保持阅读模式',
+        '- 双击进入富文本编辑',
+      ].join('\n'),
     },
   };
 }
@@ -1344,6 +2078,52 @@ function emptyOtioDocument() {
       ],
     },
   };
+}
+
+function inspectCanvasMarkdownNode(evaluate, selector) {
+  return evaluate(`(() => {
+    const node = document.querySelector(${JSON.stringify(selector)});
+    if (!(node instanceof HTMLElement)) throw new Error('Canvas Markdown node is unavailable.');
+    const card = node.querySelector('.node-card');
+    const markdown = node.querySelector('.canvas-markdown-node');
+    const heading = node.querySelector('h1');
+    const rect = card?.getBoundingClientRect();
+    return {
+      editing: markdown?.getAttribute('data-editing') === 'true',
+      textareaCount: node.querySelectorAll('textarea').length,
+      proseMirrorCount: node.querySelectorAll('.ProseMirror').length,
+      headingSize: heading ? Number.parseFloat(getComputedStyle(heading).fontSize) : 0,
+      width: rect?.width ?? 0,
+      height: rect?.height ?? 0,
+      text: node.textContent ?? '',
+    };
+  })()`);
+}
+
+function inspectCanvasConnectionVisuals(evaluate, viewId) {
+  return evaluate(`(() => {
+    const view = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    if (!(view instanceof HTMLElement)) throw new Error('Canvas View is unavailable.');
+    const groups = [...view.querySelectorAll('.connection-group')];
+    const lines = groups
+      .map((group) => group.querySelector('.connection-line'))
+      .filter((line) => line instanceof SVGPathElement);
+    const selected = groups.find((group) => group.getAttribute('data-selected') === 'true');
+    const selectedLine = selected?.querySelector('.connection-line');
+    return {
+      connectionCount: groups.length,
+      selectedCount: groups.filter((group) => group.getAttribute('data-selected') === 'true').length,
+      maximumLineOpacity: Math.max(
+        0,
+        ...lines.map((line) => Number(line.getAttribute('stroke-opacity') ?? 0)),
+      ),
+      selectedLineOpacity:
+        selectedLine instanceof SVGPathElement
+          ? Number(selectedLine.getAttribute('stroke-opacity') ?? 0)
+          : 0,
+      flowDotCount: view.querySelectorAll('.connection-flow-dot').length,
+    };
+  })()`);
 }
 
 function inspectCanvasSelectionActions(evaluate, viewId) {

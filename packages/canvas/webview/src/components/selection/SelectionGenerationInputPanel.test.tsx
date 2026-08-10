@@ -10,17 +10,27 @@ import type {
   MarkdownCanvasNode,
 } from '@neko/canvas-domain';
 import { createEmptyCanvasData } from '@neko/canvas-domain';
+import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 import { setLocale } from '../../i18n';
 import {
+  resolveGenerationInputPanelPosition,
   resolveGenerationSelectionSafePan,
+  resolveUntouchedRecipeConfiguredDefault,
   SelectionGenerationInputPanel,
 } from './SelectionGenerationInputPanel';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, {
+  ResizeObserver: class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  },
+});
 
 describe('SelectionGenerationInputPanel', () => {
   let container: HTMLDivElement;
@@ -57,7 +67,8 @@ describe('SelectionGenerationInputPanel', () => {
     );
 
     expect(container.querySelector('[data-canvas-generation-input="true"]')).not.toBeNull();
-    expect(container.querySelector('[data-placement="viewport-bottom"]')).not.toBeNull();
+    expect(container.querySelector('[data-placement="node-below"]')).not.toBeNull();
+    expect(container.querySelector('[data-surface="editor"]')).not.toBeNull();
     expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Prompt"]')?.value).toBe(
       'Write a quiet scene',
     );
@@ -77,8 +88,80 @@ describe('SelectionGenerationInputPanel', () => {
     expect(container.innerHTML).toBe('');
   });
 
+  it('adds an authorized reference to the exact generation node', async () => {
+    const attachGenerationReference = vi.fn(async () => snapshot());
+    const node = generationNode({ kind: 'image', prompt: '' });
+    render([node], [], [node.id], createHost(undefined, { attachGenerationReference }));
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-canvas-generation-reference-add="true"]')
+        ?.click();
+    });
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-canvas-generation-reference-source="workspace"]')
+        ?.click();
+    });
+
+    expect(attachGenerationReference).toHaveBeenCalledWith(node.id, 'image', 'reference');
+  });
+
+  it('offers an explicit external import route for reference material', async () => {
+    const attachGenerationReference = vi.fn(async () => snapshot());
+    const node = generationNode({ kind: 'audio', prompt: '' });
+    render([node], [], [node.id], createHost(undefined, { attachGenerationReference }));
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-canvas-generation-reference-add="true"]')
+        ?.click();
+    });
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-canvas-generation-reference-source="import"]')
+        ?.click();
+    });
+
+    expect(attachGenerationReference).toHaveBeenCalledWith(node.id, 'audio', 'import');
+  });
+
+  it('attaches a compatible dragged Workspace locator to the exact node', async () => {
+    const attachGenerationReferenceMaterial = vi.fn(async () => snapshot());
+    const node = generationNode({ kind: 'image', prompt: '' });
+    render([node], [], [node.id], createHost(undefined, { attachGenerationReferenceMaterial }));
+    const payload = JSON.stringify(
+      createContentLocatorDragData({
+        locator: { kind: 'workspace-file', path: 'media/reference.png' },
+        name: 'reference.png',
+      }),
+    );
+    const dataTransfer = {
+      types: [CONTENT_LOCATOR_DRAG_MIME],
+      dropEffect: 'none',
+      getData: (type: string) => (type === CONTENT_LOCATOR_DRAG_MIME ? payload : ''),
+    };
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[data-canvas-generation-reference-zone="true"]')
+        ?.dispatchEvent(drop);
+      await Promise.resolve();
+    });
+
+    expect(attachGenerationReferenceMaterial).toHaveBeenCalledWith(node.id, {
+      locator: { kind: 'workspace-file', path: 'media/reference.png' },
+      mediaKind: 'image',
+      title: 'reference.png',
+    });
+  });
+
   it('persists the current Recipe before explicitly running the exact node', async () => {
-    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
+      snapshot(),
+    );
     const runGenerationNode = vi.fn(async () => snapshot());
     const node = nodeWithHistory();
     render(
@@ -137,51 +220,242 @@ describe('SelectionGenerationInputPanel', () => {
   });
 
   it.each([
-    [{ kind: 'prompt', prompt: '' } satisfies CanvasGenerationRecipe, 'Temperature'],
-    [{ kind: 'image', prompt: '' } satisfies CanvasGenerationRecipe, 'Aspect ratio'],
-    [{ kind: 'audio', prompt: '' } satisfies CanvasGenerationRecipe, 'Duration'],
-    [{ kind: 'video', prompt: '' } satisfies CanvasGenerationRecipe, 'Resolution'],
-  ])('renders the legal controls for %s', (recipe, expectedControl) => {
+    { kind: 'prompt', prompt: '' } satisfies CanvasGenerationRecipe,
+    { kind: 'image', prompt: '' } satisfies CanvasGenerationRecipe,
+    { kind: 'audio', prompt: '' } satisfies CanvasGenerationRecipe,
+    { kind: 'video', prompt: '' } satisfies CanvasGenerationRecipe,
+  ])('renders the typed parameter selector for %s', async (recipe) => {
     const node = generationNode(recipe);
     render([node], [], [node.id], createHost());
+    await act(async () => Promise.resolve());
 
-    expect(container.querySelector(`[aria-label="${expectedControl}"]`)).not.toBeNull();
+    expect(container.querySelector('[aria-label="Parameters"]')).not.toBeNull();
   });
 
-  it('keeps the detached panel within a compact viewport width', () => {
+  it('selects only a configured model for the exact image purpose', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const node = generationNode({ kind: 'image', prompt: 'A quiet lake' });
+    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Model"]')?.click();
+    });
+    const selectedOption = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+    ).find((button) => button.textContent?.includes('Image Model'));
+    expect(selectedOption?.querySelector('span')?.children).toHaveLength(2);
+    expect(selectedOption?.querySelector('strong')?.textContent).toBe('Image Model');
+    expect(selectedOption?.querySelector('small')?.textContent).toBe('Provider One');
+    expect(document.body.textContent).toContain('Image Model');
+    expect(document.body.textContent).not.toContain('Video Model');
+    await act(async () => {
+      selectedOption?.click();
+    });
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(
+      node.id,
+      expect.objectContaining({
+        model: {
+          purpose: 'image.generate',
+          providerId: 'provider-1',
+          modelId: 'image-model-1',
+        },
+      }),
+    );
+  });
+
+  it('adopts the exact configured default and canonical parameters for an untouched unset Recipe', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const node = generationNode({ kind: 'image', prompt: '' });
+
+    expect(resolveUntouchedRecipeConfiguredDefault(node, [], GENERATION_MODELS)).toEqual({
+      kind: 'image',
+      prompt: '',
+      model: {
+        purpose: 'image.generate',
+        providerId: 'provider-1',
+        modelId: 'image-model-1',
+      },
+      aspectRatio: '1:1',
+      width: 1024,
+      height: 1024,
+      count: 1,
+      quality: 'standard',
+    });
+
+    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
+    await act(async () => Promise.resolve());
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(
+      node.id,
+      expect.objectContaining({
+        model: {
+          purpose: 'image.generate',
+          providerId: 'provider-1',
+          modelId: 'image-model-1',
+        },
+        aspectRatio: '1:1',
+        width: 1024,
+        height: 1024,
+        quality: 'standard',
+        count: 1,
+      }),
+    );
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Model"]')?.textContent,
+    ).toContain('Image Model');
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.textContent,
+    ).toContain('1:1 · 1K · Medium');
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Count"]')?.textContent,
+    ).toContain('× 1');
+  });
+
+  it('does not replace an authored unset Recipe with the configured default', () => {
+    const node = generationNode({ kind: 'image', prompt: 'Keep my authored prompt' });
+    expect(resolveUntouchedRecipeConfiguredDefault(node, [], GENERATION_MODELS)).toBeUndefined();
+  });
+
+  it('edits bounded image parameters from the parameter popover', async () => {
+    const updateGenerationRecipe = vi.fn(async () => snapshot());
+    const node = generationNode({ kind: 'image', prompt: '' });
+    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Parameters"]')?.click();
+    });
+    const parameterMenu = document.querySelector<HTMLElement>(
+      '.selection-generation-input-panel__parameter-menu',
+    );
+    expect(parameterMenu?.style.getPropertyValue('--generation-input-panel-width')).toBe('620px');
+    expect(
+      parameterMenu?.querySelectorAll('.selection-generation-input-panel__option-group'),
+    ).toHaveLength(3);
+    expect(
+      parameterMenu?.querySelectorAll(
+        '.selection-generation-input-panel__option-group[data-option-layout="ratio"] button',
+      ),
+    ).toHaveLength(14);
+    expect(
+      parameterMenu?.querySelectorAll(
+        '.selection-generation-input-panel__option-group[data-option-layout="equal"] button',
+      ),
+    ).toHaveLength(3);
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Aspect ratio: 16:9"]')?.click();
+      document.querySelector<HTMLButtonElement>('[aria-label="Resolution: 4K"]')?.click();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Count"]')?.click();
+    });
+    const countMenu = document.querySelector<HTMLElement>(
+      '.selection-generation-input-panel__count-menu',
+    );
+    expect(countMenu?.querySelectorAll('[role="menuitemradio"]')).toHaveLength(4);
+    await act(async () => {
+      Array.from(countMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])
+        .find((button) => button.textContent?.trim() === '× 2')
+        ?.click();
+    });
+
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(
+      node.id,
+      expect.objectContaining({ kind: 'image', count: 2, width: 4096 }),
+    );
+  });
+
+  it('switches one Audio node to music mode and filters the model purpose', async () => {
+    const updateGenerationRecipe = vi.fn(async (_nodeId: string, _recipe: CanvasGenerationRecipe) =>
+      snapshot(),
+    );
+    const node = generationNode({
+      kind: 'audio',
+      prompt: '',
+      model: {
+        purpose: 'audio.generate',
+        providerId: 'provider-1',
+        modelId: 'audio-model-1',
+      },
+    });
+    render([node], [], [node.id], createHost(undefined, { updateGenerationRecipe }));
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+        .find((button) => button.textContent === 'Music generation')
+        ?.click();
+    });
+    expect(updateGenerationRecipe).toHaveBeenCalledWith(
+      node.id,
+      expect.objectContaining({
+        kind: 'audio',
+        isMusic: true,
+        model: {
+          purpose: 'audio.music.generate',
+          providerId: 'provider-1',
+          modelId: 'music-model-1',
+        },
+      }),
+    );
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Model"]')?.click();
+    });
+    expect(document.body.textContent).toContain('Music Model');
+    expect(document.body.textContent).not.toContain('Audio Model');
+  });
+
+  it('keeps the node-anchored panel compact at a fixed gap in a narrow viewport', () => {
     const node = nodeWithHistory();
     render([node], [], [node.id], createHost(), { width: 320, height: 640 });
 
     expect(
       container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style.width,
-    ).toBe('296px');
+    ).toBe('288px');
     expect(
-      container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style.bottom,
-    ).toBe('16px');
+      container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style.top,
+    ).toBe('416px');
     expect(
       container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style
         .minHeight,
     ).toBe('246px');
-    expect(
-      container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]')?.style.top,
-    ).toBe('');
   });
 
-  it('uses a wide viewport-bottom composer on desktop', () => {
+  it('uses a compact node-following composer on desktop', () => {
     const node = nodeWithHistory();
     render([node], [], [node.id], createHost(), { width: 1000, height: 700 });
 
     const panel = container.querySelector<HTMLElement>('[data-canvas-generation-input="true"]');
-    expect(panel?.style.width).toBe('760px');
-    expect(panel?.style.left).toBe('500px');
-    expect(panel?.style.minHeight).toBe('214px');
+    expect(panel?.style.width).toBe('620px');
+    expect(panel?.style.left).toBe('400px');
+    expect(panel?.style.top).toBe('416px');
+    expect(panel?.style.minHeight).toBe('246px');
     expect(
       panel?.querySelector('.selection-generation-input-panel__reference-slot'),
     ).not.toBeNull();
     expect(panel?.querySelector('.selection-generation-input-panel__controls')).not.toBeNull();
   });
 
-  it('moves a selected generation node above the compact composer safe area', () => {
+  it('follows the exact node through viewport pan and zoom without independently flipping', () => {
+    const node = generationNode({ kind: 'prompt', prompt: '' });
+
+    expect(
+      resolveGenerationInputPanelPosition(
+        node,
+        { pan: { x: 100, y: 50 }, zoom: 0.5 },
+        { width: 1000, height: 700 },
+      ),
+    ).toMatchObject({ x: 300, top: 266, width: 620, placement: 'node-below' });
+    expect(
+      resolveGenerationInputPanelPosition(
+        { ...node, position: { x: 240, y: 430 } },
+        { pan: { x: 0, y: 0 }, zoom: 1 },
+        { width: 1000, height: 700 },
+      ),
+    ).toMatchObject({ x: 400, top: 686, placement: 'node-below' });
+  });
+
+  it('pans only as needed to keep the toolbar-node-composer stack visible', () => {
     const node = generationNode({ kind: 'prompt', prompt: '' });
 
     expect(
@@ -190,7 +464,7 @@ describe('SelectionGenerationInputPanel', () => {
         { pan: { x: 12, y: 0 }, zoom: 1 },
         { width: 500, height: 640 },
       ),
-    ).toEqual({ x: 12, y: -38 });
+    ).toEqual({ x: -150, y: -38 });
     expect(
       resolveGenerationSelectionSafePan(
         node,
@@ -198,6 +472,14 @@ describe('SelectionGenerationInputPanel', () => {
         { width: 1000, height: 700 },
       ),
     ).toBeUndefined();
+    expect(
+      resolveGenerationSelectionSafePan(
+        node,
+        { pan: { x: 12, y: 0 }, zoom: 1 },
+        { width: 500, height: 640 },
+        360,
+      ),
+    ).toEqual({ x: -150, y: 0 });
   });
 
   function render(
@@ -206,6 +488,7 @@ describe('SelectionGenerationInputPanel', () => {
     selectedNodeIds: readonly string[],
     host: CanvasWebviewHostPort,
     viewportSize = { width: 800, height: 700 },
+    viewport = { pan: { x: 0, y: 0 }, zoom: 1 },
   ): void {
     act(() => {
       root.render(
@@ -214,6 +497,7 @@ describe('SelectionGenerationInputPanel', () => {
             nodes={nodes}
             connections={connections}
             selectedNodeIds={selectedNodeIds}
+            viewport={viewport}
             viewportSize={viewportSize}
           />
         </CanvasHostProvider>,
@@ -313,6 +597,8 @@ function createHost(
       throw new Error('Source selection is not used by this test.');
     },
     createGenerationNode: async () => snapshot(),
+    attachGenerationReference: async () => snapshot(),
+    attachGenerationReferenceMaterial: async () => snapshot(),
     updateGenerationRecipe: async () => snapshot(),
     runGenerationNode: async () => snapshot(),
     cancelGenerationNode: async () => snapshot(),
@@ -322,7 +608,11 @@ function createHost(
     projectContent: async () => snapshot(),
     previewResource: async () => undefined,
     revealResource: async () => undefined,
-    getAuthoringCapabilities: () => ({ sourceModes: [], generationKinds: [] }),
+    getAuthoringCapabilities: () => ({
+      sourceModes: [],
+      generationKinds: ['prompt', 'image', 'audio', 'video'],
+      generationModels: GENERATION_MODELS,
+    }),
     resolveMaterialActions: async () => [],
     executeMaterialAction: async () => snapshot(),
     dispose: () => undefined,
@@ -348,7 +638,64 @@ function snapshot(): CanvasHostSnapshot {
       viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
       selectedNodeIds: [],
     },
-    authoringCapabilities: { sourceModes: [], generationKinds: [] },
+    authoringCapabilities: {
+      sourceModes: [],
+      generationKinds: ['prompt', 'image', 'audio', 'video'],
+      generationModels: GENERATION_MODELS,
+    },
     generationNodes: [],
   };
 }
+
+const GENERATION_MODELS = [
+  {
+    binding: {
+      purpose: 'canvas.prompt' as const,
+      providerId: 'provider-1',
+      modelId: 'text-model-1',
+    },
+    label: 'Text Model',
+    providerLabel: 'Provider One',
+    isDefault: true,
+  },
+  {
+    binding: {
+      purpose: 'image.generate' as const,
+      providerId: 'provider-1',
+      modelId: 'image-model-1',
+    },
+    label: 'Image Model',
+    providerLabel: 'Provider One',
+    isDefault: true,
+  },
+  {
+    binding: {
+      purpose: 'video.generate' as const,
+      providerId: 'provider-1',
+      modelId: 'video-model-1',
+    },
+    label: 'Video Model',
+    providerLabel: 'Provider One',
+    isDefault: true,
+  },
+  {
+    binding: {
+      purpose: 'audio.generate' as const,
+      providerId: 'provider-1',
+      modelId: 'audio-model-1',
+    },
+    label: 'Audio Model',
+    providerLabel: 'Provider One',
+    isDefault: true,
+  },
+  {
+    binding: {
+      purpose: 'audio.music.generate' as const,
+      providerId: 'provider-1',
+      modelId: 'music-model-1',
+    },
+    label: 'Music Model',
+    providerLabel: 'Provider One',
+    isDefault: true,
+  },
+] as const;

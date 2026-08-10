@@ -7,10 +7,11 @@ import {
   type CanvasGenerationWorkspace,
   type CanvasHostRuntimeIdentity,
 } from '@neko/canvas-domain';
-import type {
-  GenerationJobPort,
-  GenerationJobSnapshot,
-  SubmitGenerationJobInput,
+import {
+  GenerationJobError,
+  type GenerationJobPort,
+  type GenerationJobSnapshot,
+  type SubmitGenerationJobInput,
 } from '@neko/generation';
 import { describe, expect, it, vi } from 'vitest';
 import { CanvasGenerationNodeRuntime } from './canvas-generation-node-runtime';
@@ -131,6 +132,43 @@ describe('CanvasGenerationNodeRuntime', () => {
       phase: 'pending',
       jobRef: { kind: 'generation', jobId: 'job-1' },
     });
+  });
+
+  it('projects an exact persistence diagnostic when the Workspace Job owner cannot initialize', async () => {
+    const persisted: CanvasData[] = [];
+    const getWorkspaceJobs = vi
+      .fn()
+      .mockRejectedValue(
+        new GenerationJobError(
+          'generation-job-persistence-invalid',
+          'Generation Job persistence contains non-canonical records.',
+        ),
+      );
+    const runtime = new CanvasGenerationNodeRuntime({
+      generation: { getWorkspaceJobs, validateBinding: vi.fn() },
+      createSubmissionId: () => 'submission-1',
+    });
+
+    await expect(
+      runtime.startNode({
+        identity,
+        workspace,
+        canvas: configuredCanvas(),
+        nodeId: 'generation-1',
+        persistCanvas: async (canvas) => {
+          persisted.push(canvas);
+        },
+      }),
+    ).resolves.toMatchObject({
+      projection: {
+        phase: 'outcome-unknown',
+        diagnostic: {
+          code: 'generation-job-persistence-invalid',
+          message: 'Generation Job persistence contains non-canonical records.',
+        },
+      },
+    });
+    expect(persisted).toHaveLength(1);
   });
 
   it('does not submit an unbound run when its Recipe or input fingerprint changed', async () => {

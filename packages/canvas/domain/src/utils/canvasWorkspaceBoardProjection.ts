@@ -18,6 +18,12 @@ import {
   applyCanvasHeadlessAuthoringOperations,
   assertNoRuntimeResourceIdentity,
 } from './canvasHeadlessAuthoring';
+import {
+  CANVAS_AUDIO_NODE_DEFAULT_SIZE,
+  CANVAS_IMAGE_PROJECTION_DEFAULT_WIDTH,
+  CANVAS_IMAGE_PROJECTION_MIN_HEIGHT,
+  resolveCanvasNodeDefaultSize,
+} from '../canvas-node-sizing';
 
 /** Existing Board inbox identity retained for rendering; new projections never create it. */
 export const CANVAS_WORKSPACE_INBOX_NODE_ID = 'workspace-inbox' as const;
@@ -25,7 +31,7 @@ export const CANVAS_WORKSPACE_INBOX_NODE_ID = 'workspace-inbox' as const;
 const CONTENT_ORIGIN = { x: 40, y: 40 } as const;
 const CONTENT_HORIZONTAL_GAP = 48;
 const CONTENT_VERTICAL_GAP = 24;
-const CONTENT_LANE_WIDTH = 316;
+const CONTENT_LANE_WIDTH = 288;
 const CONTENT_GRID_COLUMNS = 3;
 const GROUP_PADDING = 24;
 const GROUP_HEADER = 56;
@@ -546,16 +552,26 @@ function createArtifactNode(
 function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNode['size'] {
   const imageAspectRatio = artifactImageAspectRatio(artifact);
   if (imageAspectRatio !== undefined) {
-    const defaultWidth = 268;
-    const minimumHeight = 120;
+    const defaultWidth = CANVAS_IMAGE_PROJECTION_DEFAULT_WIDTH;
+    const minimumHeight = CANVAS_IMAGE_PROJECTION_MIN_HEIGHT;
     const heightAtDefaultWidth = defaultWidth / imageAspectRatio;
     return heightAtDefaultWidth >= minimumHeight
       ? { width: defaultWidth, height: heightAtDefaultWidth }
       : { width: minimumHeight * imageAspectRatio, height: minimumHeight };
   }
-  return artifact.kind === 'file-reference' || artifact.kind === 'file'
-    ? { width: 220, height: 180 }
-    : { width: 268, height: 180 };
+  switch (artifact.kind) {
+    case 'markdown':
+      return resolveCanvasNodeDefaultSize('markdown');
+    case 'file-reference':
+    case 'file':
+    case 'storyboard':
+      return resolveCanvasNodeDefaultSize('file');
+    case 'audio':
+      return { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE };
+    case 'image':
+    case 'video':
+      return resolveCanvasNodeDefaultSize('media');
+  }
 }
 
 function artifactImageAspectRatio(artifact: CanvasWorkspaceProjectionArtifact): number | undefined {

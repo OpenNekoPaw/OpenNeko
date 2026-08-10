@@ -77,6 +77,11 @@ describe('GenerationNode', () => {
       render(node, createHost());
 
       expect(container.querySelector(`[data-canvas-content-kind="${contentKind}"]`)).not.toBeNull();
+      expect(container.querySelector('.canvas-generation-node-frame')).not.toBeNull();
+      expect(container.querySelector('.node-card--opaque')).not.toBeNull();
+      const externalLabel = container.querySelector('[data-canvas-node-label]');
+      expect(externalLabel?.textContent).toBe(label);
+      expect(externalLabel?.closest('.node-card')).toBeNull();
       const empty = container.querySelector('.canvas-generation-node__empty');
       expect(empty).not.toBeNull();
       expect(empty?.querySelector(`.${iconClass}`)).not.toBeNull();
@@ -161,6 +166,8 @@ function createHost(
       throw new Error('Source selection is not used by this test.');
     },
     createGenerationNode: async () => snapshot(),
+    attachGenerationReference: async () => snapshot(),
+    attachGenerationReferenceMaterial: async () => snapshot(),
     updateGenerationRecipe: async () => snapshot(),
     runGenerationNode: async () => snapshot(),
     cancelGenerationNode: async () => snapshot(),
@@ -170,7 +177,11 @@ function createHost(
     projectContent: async () => snapshot(),
     previewResource: async () => undefined,
     revealResource: async () => undefined,
-    getAuthoringCapabilities: () => ({ sourceModes: [], generationKinds: [] }),
+    getAuthoringCapabilities: () => ({
+      sourceModes: [],
+      generationKinds: [],
+      generationModels: [],
+    }),
     resolveMaterialActions: async () => [],
     executeMaterialAction: async () => snapshot(),
     dispose: () => undefined,
@@ -196,7 +207,7 @@ function snapshot(): CanvasHostSnapshot {
       viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
       selectedNodeIds: [],
     },
-    authoringCapabilities: { sourceModes: [], generationKinds: [] },
+    authoringCapabilities: { sourceModes: [], generationKinds: [], generationModels: [] },
     generationNodes: [],
   };
 }

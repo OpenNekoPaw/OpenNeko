@@ -98,6 +98,38 @@ admitted non-Markdown text mode.
 - **THEN** the document uses the canonical CodeMirror source surface
 - **AND** Milkdown and Agent presentation do not mount for that editing intent
 
+### Requirement: Browser Rich presentation is reusable without sharing authority
+
+OpenNeko SHALL expose one controlled browser-only Milkdown Rich Surface for callers that own Markdown
+source. The Surface SHALL own only disposable browser presentation state and SHALL NOT own a Text
+Document session, Canvas document, Host runtime, media lease or persisted buffer. Text Editor and
+Canvas SHALL apply emitted source through their separate exact owning commands.
+
+#### Scenario: User selects a Canvas Markdown node
+
+- **WHEN** a Canvas Markdown node becomes selected but has not been explicitly activated for editing
+- **THEN** it remains a compact read-only WYSIWYG Markdown projection
+- **AND** selection does not replace it with a raw textarea or mount a mutable Milkdown editor
+
+#### Scenario: User explicitly edits a Canvas Markdown node
+
+- **WHEN** the user double-activates a selected Markdown node whose source passes Rich round-trip gating
+- **THEN** Canvas lazily mounts the shared Milkdown Surface and applies each emitted source to that exact node
+- **AND** Text Document session, edit sequence and Host media authority do not participate
+- **AND** pressing Escape or leaving node selection returns to the compact read-only projection
+
+#### Scenario: Canvas Markdown cannot round-trip safely
+
+- **WHEN** a Canvas Markdown node contains a construct that cannot round-trip through the declared schema
+- **THEN** the shared Surface keeps a read-only projection visible and reports a node-local Rich diagnostic
+- **AND** the original Canvas node source remains unchanged without textarea fallback or silent normalization
+
+#### Scenario: Text Editor mounts the shared Rich Surface
+
+- **WHEN** a Markdown Text Document enters Rich or Split presentation
+- **THEN** the Text Editor adapter supplies the accepted session source and its authorized media extension
+- **AND** ordered edit acceptance, conflict handling and media leases remain owned by Text Editor rather than the shared Surface
+
 ### Requirement: Agent text uses one renderer from partial delta through finalization
 
 The Agent Webview SHALL render an exact Timeline text content block through one package-owned

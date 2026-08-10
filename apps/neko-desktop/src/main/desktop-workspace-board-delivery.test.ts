@@ -52,6 +52,7 @@ describe('DesktopWorkspaceBoardDelivery', () => {
         }),
       },
       host: { files: createFilePort() },
+      coordinateCanvasMutation: (_workspaceId, operation) => operation(),
       createIdentity: () => `identity-${++identity}`,
     });
     const input = {
@@ -108,6 +109,7 @@ describe('DesktopWorkspaceBoardDelivery', () => {
         files: createFilePort(),
         diagnostics: { report: (diagnostic) => diagnostics.push(diagnostic.code) },
       },
+      coordinateCanvasMutation: (_workspaceId, operation) => operation(),
     });
 
     await expect(
@@ -139,6 +141,67 @@ describe('DesktopWorkspaceBoardDelivery', () => {
         code: 'ENOENT',
       },
     );
+    await metadataStore.dispose();
+  });
+
+  it('returns an explicit conflict before writing when the open Workspace Board is dirty', async () => {
+    const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await metadataStore.open({
+      databasePath: resolveGlobalStorageLayout(root).database,
+      busyTimeoutMs: 2_000,
+    });
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeAgentStateTables(metadataStore);
+    const diagnostics: string[] = [];
+    const delivery = new DesktopWorkspaceBoardDelivery({
+      applicationInstanceId: 'desktop-instance',
+      metadataStore,
+      workspaceRegistry: {
+        restore: async (workspaceId) => ({
+          workspaceId,
+          workspacePath: root,
+          displayName: 'Project',
+          locator: { kind: 'relative', value: '.' },
+        }),
+      },
+      host: {
+        files: createFilePort(),
+        diagnostics: { report: (diagnostic) => diagnostics.push(diagnostic.code) },
+      },
+      coordinateCanvasMutation: async () => {
+        throw new Error(
+          'workspace-board-open-session-dirty: Save or discard the open Workspace Board changes.',
+        );
+      },
+    });
+
+    await expect(
+      delivery.deliver({
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        completedAt: Date.now(),
+        artifacts: [
+          {
+            artifactId: 'output-1',
+            contentFingerprint: 'output-1',
+            role: 'output',
+            kind: 'file-reference',
+            title: 'Output',
+            sourceId: 'output-1',
+            contentLocator: { kind: 'workspace-file', path: 'output.txt' },
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      status: 'blocked',
+      diagnostic: { code: 'workspace-board-open-session-dirty' },
+    });
+    expect(diagnostics).toEqual(['workspace-board-open-session-dirty']);
+    await expect(
+      fs.stat(path.join(root, ...CANVAS_WORKSPACE_BOARD_PATH.split('/'))),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
     await metadataStore.dispose();
   });
 });

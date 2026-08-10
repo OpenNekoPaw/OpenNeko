@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createCanvasGenerationNodeData,
   createEmptyCanvasData,
   type CanvasMaterialActionDescriptor,
   type CanvasNode,
@@ -31,6 +32,58 @@ const regenerateImage: CanvasMaterialActionDescriptor = {
 };
 
 describe('Canvas material action catalog', () => {
+  it('resolves the exact selected Generation media output as a material target', () => {
+    const locator = {
+      kind: 'generated-output' as const,
+      outputId: 'video-output-1',
+      digest: 'sha256:video-output-1',
+      path: 'neko/generated/video-output-1.mp4',
+    };
+    const data = createCanvasGenerationNodeData('video');
+    const node: CanvasNode = {
+      id: 'video-generation',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 240, height: 160 },
+      zIndex: 0,
+      data: {
+        ...data,
+        outputs: [
+          {
+            outputId: 'video-output-1',
+            jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+            locator,
+            kind: 'video',
+            recipeInputFingerprint: 'recipe-fingerprint-1',
+          },
+        ],
+        selectedOutputId: 'video-output-1',
+      },
+    };
+
+    expect(resolveCanvasMaterialActionTargets([node], [node.id])).toEqual([
+      {
+        nodeId: node.id,
+        mediaKind: 'video',
+        origin: 'generated',
+        locator,
+      },
+    ]);
+  });
+
+  it('does not invent a material target for an empty Generation node', () => {
+    const node: CanvasNode = {
+      id: 'empty-video-generation',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 240, height: 160 },
+      zIndex: 0,
+      data: createCanvasGenerationNodeData('video'),
+    };
+
+    expect(resolveCanvasMaterialActionTargets([node], [node.id])).toEqual([]);
+  });
+
   it('projects owner actions from canonical kind and origin', () => {
     const referenced = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),

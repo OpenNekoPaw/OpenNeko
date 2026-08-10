@@ -62,6 +62,10 @@ part of acceptance for the production Milkdown path and current canonical Agent 
   reference and extension safety policy plus one shared conformance corpus.
 - Replace Markdown `Edit | Preview | Split` with `Rich | Source | Split`: Milkdown owns Rich/WYSIWYG,
   CodeMirror 6 remains the full source editor and remains the editor for other admitted text formats.
+- Extract the browser-only controlled Milkdown Rich surface behind an explicit `@neko/markdown`
+  browser entry. Text Editor and Canvas reuse that presentation engine while retaining separate
+  authoritative mutation owners: the exact Text Document session for Workspace files and the exact
+  Canvas Markdown node for inline `.nkc` content.
 - Keep Milkdown's CodeMirror-backed code-block component scoped to fenced code blocks; it does not
   replace the Text Editor CodeMirror Root.
 - Project one Assistant turn into a readable answer document, typed deliverables and one bounded
@@ -112,8 +116,13 @@ None.
 
 - `@neko/markdown` owns `OpenNekoGfmProfile`, conformance fixtures, source-backed semantic
   projections and extension contracts without React, DOM, Milkdown, CodeMirror or Streamdown.
-- `@neko/text-editor-webview` adds a lazy Milkdown Rich surface while retaining its existing
-  CodeMirror 6 Source surface. Both submit to the same `@neko/text-editor-domain` document session.
+- `@neko/markdown` keeps its default entry host-neutral and adds an explicit browser-only Rich-surface
+  entry that owns Milkdown/ProseMirror lifecycle, GFM round-trip gating and disposable editor actions.
+- `@neko/text-editor-webview` lazily mounts that Rich surface while retaining its existing CodeMirror 6
+  Source surface. Both submit to the same `@neko/text-editor-domain` document session.
+- `@neko/canvas-webview` uses the same Rich surface only after explicit Markdown-node activation;
+  ordinary selection remains a compact read-only WYSIWYG projection and accepted changes update only
+  the exact Canvas node.
 - `@neko/agent-webview` owns the turn-level read model, the single activity disclosure, semantic Agent
   Markdown components and typed result placement. It may replace the current text presenter with a
   package-local Streamdown adapter only after the renewed atomic gate passes.

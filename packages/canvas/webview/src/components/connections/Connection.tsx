@@ -57,9 +57,8 @@ function resolveConnectionColor(
     connection.sourceEndpoint.scope === 'port' ? connection.sourceEndpoint.portId : undefined;
   if (sourcePortId) {
     const port = findCanvasNodePort(sourceNode, sourcePortId);
-    if (port?.dataType && DATA_TYPE_COLORS[port.dataType]) {
-      return DATA_TYPE_COLORS[port.dataType]!;
-    }
+    const portColor = port?.dataType ? DATA_TYPE_COLORS[port.dataType] : undefined;
+    if (portColor) return portColor;
   }
 
   // Fall back to connection type
@@ -96,7 +95,7 @@ export function Connection({
   );
 
   const strokeColor = resolveConnectionColor(connection, sourceNode, targetNode);
-  const strokeWidth = isSelected ? 2.5 : 1.8;
+  const strokeWidth = isSelected ? 2 : 1.25;
   const title = resolveConnectionTitle(connection, sourceNode, targetNode);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -105,7 +104,12 @@ export function Connection({
   };
 
   return (
-    <g className="connection-group" role="img" aria-label={title}>
+    <g
+      className="connection-group"
+      data-selected={isSelected ? 'true' : 'false'}
+      role="img"
+      aria-label={title}
+    >
       <title>{title}</title>
       {/* Arrow marker definition */}
       <defs>
@@ -118,7 +122,12 @@ export function Connection({
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path d="M 0 0 L 8 3 L 0 6 Z" fill={strokeColor} opacity={isSelected ? 1 : 0.8} />
+          <path
+            className="connection-arrow"
+            d="M 0 0 L 8 3 L 0 6 Z"
+            fill={strokeColor}
+            opacity={isSelected ? 0.88 : 0.28}
+          />
         </marker>
       </defs>
 
@@ -138,28 +147,31 @@ export function Connection({
           d={pathData.pathD}
           fill="none"
           stroke={strokeColor}
-          strokeWidth={strokeWidth + 4}
-          strokeOpacity={0.15}
+          strokeWidth={strokeWidth + 3}
+          strokeOpacity={0.1}
           style={{ pointerEvents: 'none' }}
         />
       )}
 
       {/* Visible connection path with arrow */}
       <path
+        className="connection-line"
         d={pathData.pathD}
         fill="none"
         stroke={strokeColor}
         strokeWidth={strokeWidth}
         strokeDasharray={connection.type === 'reference' ? '6,4' : undefined}
-        strokeOpacity={isSelected ? 1 : 0.7}
+        strokeOpacity={isSelected ? 0.88 : 0.26}
         markerEnd={`url(#${markerId})`}
         style={{ pointerEvents: 'none' }}
       />
 
-      {/* Animated flow dots (visible when selected or hovered) */}
-      <circle r={3} fill={strokeColor} opacity={0.9}>
-        <animateMotion dur="2s" repeatCount="indefinite" path={pathData.pathD} />
-      </circle>
+      {/* Motion is reserved for explicit selection so dense graphs remain visually quiet. */}
+      {isSelected && (
+        <circle className="connection-flow-dot" r={2.5} fill={strokeColor} opacity={0.72}>
+          <animateMotion dur="2s" repeatCount="indefinite" path={pathData.pathD} />
+        </circle>
+      )}
 
       {/* Connection label */}
       {connection.label && (
@@ -191,19 +203,21 @@ export function Connection({
 
       {/* Source/target port dots */}
       <circle
+        className="connection-endpoint"
         cx={pathData.sourcePoint.x}
         cy={pathData.sourcePoint.y}
-        r={isSelected ? 4 : 3}
+        r={isSelected ? 3.5 : 2.5}
         fill={strokeColor}
-        opacity={0.8}
+        opacity={isSelected ? 0.82 : 0.32}
         style={{ pointerEvents: 'none' }}
       />
       <circle
+        className="connection-endpoint"
         cx={pathData.targetPoint.x}
         cy={pathData.targetPoint.y}
-        r={isSelected ? 4 : 3}
+        r={isSelected ? 3.5 : 2.5}
         fill={strokeColor}
-        opacity={0.8}
+        opacity={isSelected ? 0.82 : 0.32}
         style={{ pointerEvents: 'none' }}
       />
     </g>

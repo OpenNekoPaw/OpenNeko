@@ -24,6 +24,24 @@ export const CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID = 'media-library:cop
 export const CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID = 'media-library:copy-to-global';
 export const CANVAS_REGENERATE_ACTION_ID = 'generation:regenerate';
 export const CANVAS_EDIT_AND_GENERATE_ACTION_ID = 'generation:edit-and-generate';
+export const CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID = 'audio:voice-denoise';
+export const CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID = 'video:separate-audio';
+export const CANVAS_VIDEO_ENHANCE_ACTION_ID = 'video:enhance';
+export const CANVAS_VIDEO_EXTRACT_FRAME_ACTION_ID = 'video:extract-frame';
+export const CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID = 'video:remove-subtitles';
+export const CANVAS_VIDEO_GENERATE_SUBTITLES_ACTION_ID = 'video:generate-subtitles';
+export const CANVAS_VIDEO_COLOR_GRADE_ACTION_ID = 'video:color-grade';
+export const CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID = 'video:open-editor-tools';
+export const CANVAS_IMAGE_CROP_ACTION_ID = 'image:crop';
+export const CANVAS_IMAGE_UPSCALE_ACTION_ID = 'image:upscale';
+export const CANVAS_IMAGE_REDRAW_ACTION_ID = 'image:redraw';
+export const CANVAS_IMAGE_ERASE_ACTION_ID = 'image:erase';
+export const CANVAS_IMAGE_OUTPAINT_ACTION_ID = 'image:outpaint';
+export const CANVAS_IMAGE_REMOVE_BACKGROUND_ACTION_ID = 'image:remove-background';
+export const CANVAS_IMAGE_COLOR_GRADE_ACTION_ID = 'image:color-grade';
+export const CANVAS_IMAGE_ROTATE_ACTION_ID = 'image:rotate';
+export const CANVAS_IMAGE_GRID_SPLIT_ACTION_ID = 'image:grid-split';
+export const CANVAS_IMAGE_OPEN_EDITOR_TOOLS_ACTION_ID = 'image:open-editor-tools';
 
 export interface CanvasMaterialActionExecutionResult {
   readonly generationProjection?: CanvasGenerationProjectionSnapshot;
@@ -77,6 +95,11 @@ export function createCanvasMaterialActionOwner(options: {
     readonly target: CanvasMaterialActionTarget;
     readonly executionPayload: Readonly<Record<string, unknown>>;
   }) => Promise<void>;
+  readonly separateAudioInCut?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly target: CanvasMaterialActionTarget;
+    readonly executionPayload: Readonly<Record<string, unknown>>;
+  }) => Promise<void>;
   readonly resolveMediaLibraryCopy?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
@@ -109,6 +132,7 @@ export function createCanvasMaterialActionOwner(options: {
     readonly reveal?: string;
     readonly openInCut?: string;
     readonly addToCut?: string;
+    readonly separateAudio?: string;
     readonly copyToProjectMediaLibrary?: string;
     readonly copyToGlobalMediaLibrary?: string;
     readonly regenerate?: string;
@@ -177,6 +201,18 @@ export function createCanvasMaterialActionOwner(options: {
             effect: 'handoff',
             executionPayload,
           });
+          if (target.mediaKind === 'video' && options.separateAudioInCut) {
+            descriptors.push({
+              id: CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+              ownerId: 'cut',
+              label: options.labels?.separateAudio ?? 'Separate audio',
+              mediaKinds: ['video'],
+              origins: ['referenced', 'generated'],
+              selection: { minimum: 1, maximum: 1 },
+              effect: 'derive',
+              executionPayload,
+            });
+          }
         }
       }
       if (target && options.resolveMediaLibraryCopy) {
@@ -250,6 +286,14 @@ export function createCanvasMaterialActionOwner(options: {
       }
       if (action.actionId === CANVAS_ADD_TO_CUT_ACTION_ID && options.addToCut) {
         await options.addToCut({
+          identity,
+          target,
+          executionPayload: descriptor.executionPayload ?? {},
+        });
+        return {};
+      }
+      if (action.actionId === CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID && options.separateAudioInCut) {
+        await options.separateAudioInCut({
           identity,
           target,
           executionPayload: descriptor.executionPayload ?? {},

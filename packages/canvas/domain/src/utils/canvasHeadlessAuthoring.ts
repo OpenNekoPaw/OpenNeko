@@ -39,6 +39,11 @@ import { isJobRef } from '@neko/shared/job-lifecycle';
 import { validateContentLocator } from '@neko/content';
 import { isJsonPointerPath, writeJsonPointer } from './fieldBinding';
 import { assertNoRuntimeResourceIdentity } from './canvasDurableResourceIdentity';
+import {
+  CANVAS_AUDIO_NODE_DEFAULT_SIZE,
+  resolveCanvasGenerationNodeDefaultSize,
+  resolveCanvasNodeDefaultSize,
+} from '../canvas-node-sizing';
 
 export {
   assertNoRuntimeResourceIdentity,
@@ -58,16 +63,6 @@ export interface CanvasHeadlessAuthoringIdFactoryOptions {
 }
 
 const DEFAULT_INSERT_POSITION = { x: 100, y: 100 };
-const DEFAULT_NODE_SIZES = {
-  markdown: { width: 280, height: 180 },
-  media: { width: 280, height: 200 },
-  group: { width: 320, height: 220 },
-  job: { width: 300, height: 180 },
-  file: { width: 260, height: 180 },
-  'canvas-embed': { width: 260, height: 180 },
-  generation: { width: 320, height: 240 },
-} satisfies Readonly<Record<CanonicalCanvasNodeType, { width: number; height: number }>>;
-
 const TARGETABLE_FIELD_PATHS = {
   markdown: ['/content', '/title'],
   media: ['/title', '/assetPath'],
@@ -514,7 +509,7 @@ function createNodeFromSpec(
   const base = {
     id,
     position: spec.position ?? DEFAULT_INSERT_POSITION,
-    size: DEFAULT_NODE_SIZES[type],
+    size: resolveCanvasNodeDefaultSize(type),
     zIndex,
   };
   switch (type) {
@@ -537,6 +532,7 @@ function createNodeFromSpec(
       return {
         ...base,
         type,
+        size: input['mediaType'] === 'audio' ? { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE } : base.size,
         data: {
           assetPath,
           ...readOptionalStringField(input, 'thumbnailPath'),
@@ -630,6 +626,7 @@ function createNodeFromSpec(
       return {
         ...base,
         type,
+        size: resolveCanvasGenerationNodeDefaultSize(input.recipe.kind),
         data: input,
       };
   }

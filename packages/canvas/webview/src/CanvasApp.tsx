@@ -179,6 +179,12 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     [],
   );
   const selectInteractionTool = useCallback(() => setInteractionTool('select'), []);
+  const handleZoomIn = useCallback(() => {
+    zoomCanvas(Math.min(viewport.zoom * 1.2, MAX_ZOOM));
+  }, [viewport.zoom, zoomCanvas]);
+  const handleZoomOut = useCallback(() => {
+    zoomCanvas(Math.max(viewport.zoom / 1.2, MIN_ZOOM));
+  }, [viewport.zoom, zoomCanvas]);
   const nodeTypeSummary = useMemo(
     () =>
       nodes.reduce<Record<string, number>>((summary, node) => {
@@ -637,7 +643,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     nodes,
     screenToCanvas,
     addActionAt,
-    deleteSelected,
     handleFitContent,
     handleResetViewport,
     handleCopy,
@@ -683,11 +688,15 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
 
   const keyboardState = useMemo<CanvasKeyboardState>(
     () => ({
+      canGroupSelection: selectedNodeIds.length >= 2,
+      canUngroupSelection:
+        selectedNodeIds.length === 1 &&
+        nodes.some((node) => node.id === selectedNodeIds[0] && node.type === 'group'),
       canDeleteSelection: selectedNodeIds.length > 0 || selectedConnectionIds.length > 0,
       hasNodes: nodes.length > 0,
       isKeyboardFocused,
     }),
-    [isKeyboardFocused, nodes.length, selectedConnectionIds.length, selectedNodeIds.length],
+    [isKeyboardFocused, nodes, selectedConnectionIds, selectedNodeIds],
   );
 
   useCanvasKeyboardController({
@@ -703,9 +712,14 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     onPaste: () => handleKeyboardAction('paste'),
     onPasteInPlace: () => handleKeyboardAction('pasteInPlace'),
     onDuplicate: () => handleKeyboardAction('duplicate'),
+    onGroup: handleGroup,
+    onSelectMode: selectInteractionTool,
     onSpacePanStart: () => setIsSpacePanActive(true),
     onSpacePanEnd: () => setIsSpacePanActive(false),
     onTogglePanMode: togglePanMode,
+    onUngroup: handleUngroup,
+    onZoomIn: handleZoomIn,
+    onZoomOut: handleZoomOut,
   });
 
   // Keep ref in sync with latest handler (for Host message dispatch)
@@ -895,14 +909,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // =========================================================================
   // Zoom handlers
   // =========================================================================
-
-  const handleZoomIn = useCallback(() => {
-    zoomCanvas(Math.min(viewport.zoom * 1.2, MAX_ZOOM));
-  }, [viewport.zoom, zoomCanvas]);
-
-  const handleZoomOut = useCallback(() => {
-    zoomCanvas(Math.max(viewport.zoom / 1.2, MIN_ZOOM));
-  }, [viewport.zoom, zoomCanvas]);
 
   const handleZoomTo = useCallback((zoom: number) => zoomCanvas(zoom), [zoomCanvas]);
 

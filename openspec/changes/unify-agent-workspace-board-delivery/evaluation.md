@@ -1,5 +1,22 @@
 # Agent Evaluation
 
+## 2026-08-10 live Board session follow-up
+
+- Decision: `update`/reuse `agent-runtime.workflow-controller`; no new suite or product Evaluation path is
+  warranted. The affected canonical path remains completed Agent Turn -> typed terminal artifact delivery ->
+  exact Workspace Board coordinator -> committed Canvas document -> attached exact Canvas session projection.
+- Prompt/Skill disposition: unchanged. This repair changes Desktop/Canvas session coordination and keyboard
+  focus dispatch, not Agent instructions, capability routing or provider/model selection.
+- Required evidence: the existing `workspace-board-delivery-resume` case continues to own durable/fenced
+  recovery. Visible Desktop acceptance must additionally keep a clean Board open during delivery and observe
+  the new node without reopen; a dirty Board must return the typed prewrite conflict without modifying disk.
+- Deterministic evidence: focused Main/domain/Webview tests prove clean live projection, two exact attached
+  Views, dirty prewrite rejection, save/detach/reopen preservation, delayed Root focus and shortcut mappings.
+  Key-free Evaluation passed 44 files / 294 tests and strict discovery passed 24 suites / 64 cases.
+- Visible/provider evidence: the isolated visible Canvas scenario was attempted but CDP startup failed with
+  `fetch failed` before the target became ready. A real provider case was not run because provider/model/cost
+  authorization was not supplied. Neither missing lane is represented as passed.
+
 Date: 2026-08-09
 
 ## Evaluation Scope

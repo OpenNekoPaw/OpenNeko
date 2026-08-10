@@ -87,3 +87,13 @@
 - [x] 10.5 Add deterministic runtime/presenter/component tests for timing arithmetic, overlap, original order, live/reopen parity, actionable placement, evidence nesting and thumbnail actions; run focused package validation.
 - [x] 10.6 Replace the legacy execution-status row once a canonical running Turn exists, and compact repeated completed failures for one exact target without hiding their diagnostics.
 - [x] 10.7 Run `neko-ui-validation`, reuse the existing `agent-runtime.stream-delivery` and persistence/resume Agent Evaluation dispositions, run `neko-quality-review`, and record visible-runtime evidence or exact blockers.
+
+## 11. Reusable Rich Surface And Canvas Markdown Nodes
+
+- [x] 11.1 Define the browser-only controlled Milkdown Surface boundary and separate Text Document, Canvas node and media-authority ownership before implementation.
+- [x] 11.2 Extract Milkdown lifecycle, GFM round-trip gating, composition, history and reconciliation into the explicit shared browser entry; keep Text Editor session queue and media projection in its adapter.
+- [x] 11.3 Replace Canvas selection-driven raw textarea editing with compact read-only WYSIWYG presentation and explicit lazy Rich activation for the exact Markdown node.
+- [x] 11.4 Add deterministic shared-surface, Text Editor adapter and Canvas interaction tests, then run focused typechecks and package-boundary gates.
+- [x] 11.5 Run `neko-ui-validation` and `neko-quality-review`; record authoritative visible Desktop evidence or exact blockers without substituting unit tests for visual acceptance.
+  - Visible development Electron evidence: `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-09T23-31-50.567Z-canvas-openneko-consumer-development/report.json` records the passing `canvas-markdown-node-rich-surface` checkpoint and compact/Rich screenshots. The broader scenario later failed in the pre-existing Generation model-menu assertion because the single model option did not expose an inline provider row; this occurred after the Markdown checkpoint and is not treated as a passing full Canvas scenario.
+  - Quality review found no blocking issue in the shared Surface, Text Editor adapter or Canvas Markdown activation scope; focused lint, tests, typecheck, package roles/boundaries, strict OpenSpec validation and diff hygiene passed.

@@ -20,6 +20,10 @@ export interface DesktopWorkspaceBoardDeliveryOptions {
   readonly metadataStore: LocalMetadataStore;
   readonly workspaceRegistry: Pick<DesktopWorkspaceRegistry, 'restore'>;
   readonly host: Pick<NekoHostPorts, 'files' | 'diagnostics'>;
+  readonly coordinateCanvasMutation: <TResult>(
+    workspaceId: string,
+    operation: () => Promise<TResult>,
+  ) => Promise<TResult>;
   readonly createIdentity?: () => string;
 }
 
@@ -42,8 +46,8 @@ export class DesktopWorkspaceBoardDelivery implements AgentCreatorVisibleArtifac
     try {
       const workspace = await this.restoreExactWorkspace(input.workspaceId);
       const coordinator = this.coordinatorFor(workspace);
-      const results = await coordinator.enqueue(
-        createAgentBoardProjectionRequest(input, workspace),
+      const results = await this.options.coordinateCanvasMutation(workspace.workspaceId, () =>
+        coordinator.enqueue(createAgentBoardProjectionRequest(input, workspace)),
       );
       const blocked = results.find(
         (result) => result.status === 'blocked' || result.status === 'conflict',
@@ -52,17 +56,22 @@ export class DesktopWorkspaceBoardDelivery implements AgentCreatorVisibleArtifac
       return { status: 'accepted' };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.reportBlocked(input.workspaceId, 'desktop-workspace-board-delivery-failed', message);
+      const code = message.startsWith('workspace-board-open-session-dirty:')
+        ? 'workspace-board-open-session-dirty'
+        : 'desktop-workspace-board-delivery-failed';
+      this.reportBlocked(input.workspaceId, code, message);
       return {
         status: 'blocked',
-        diagnostic: { code: 'desktop-workspace-board-delivery-failed', message },
+        diagnostic: { code, message },
       };
     }
   }
 
   async flushWorkspace(workspace: AssetWorkspaceResolution): Promise<void> {
     try {
-      const results = await this.coordinatorFor(workspace).flush();
+      const results = await this.options.coordinateCanvasMutation(workspace.workspaceId, () =>
+        this.coordinatorFor(workspace).flush(),
+      );
       for (const result of results) {
         if (result.status === 'blocked' || result.status === 'conflict') {
           this.blockedOutcome(workspace.workspaceId, result);

@@ -5,9 +5,10 @@ import type {
   MarkdownCanvasNode,
   MediaCanvasNode,
 } from '@neko/canvas-domain';
-import { FileIcon } from '@neko/ui/icons';
+import { FileIcon, toCodiconClassName, type CodiconName } from '@neko/ui/icons';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
-import { useMemo, useRef, useState } from 'react';
+import type { MilkdownRichSurfaceState } from '@neko/markdown/rich-surface';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
@@ -28,6 +29,11 @@ type CanvasMediaType = NonNullable<MediaCanvasNode['data']['mediaType']>;
 export type MediaPlaybackOwner = 'idle' | 'hover' | 'manual-playing' | 'manual-paused';
 export type MediaPlaybackInteraction =
   'pointer-enter' | 'pointer-leave' | PreviewPlaybackInteractionState;
+
+const CanvasMilkdownRichSurface = lazy(async () => {
+  const module = await import('@neko/markdown/rich-surface');
+  return { default: module.MilkdownRichSurface };
+});
 
 export function transitionMediaPlaybackOwner(
   owner: MediaPlaybackOwner,
@@ -53,6 +59,15 @@ export function MarkdownNode({
   onUpdateData,
   ...baseProps
 }: CanonicalNodeProps<MarkdownCanvasNode>) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [richState, setRichState] = useState<MilkdownRichSurfaceState>('loading');
+  const [richFailure, setRichFailure] = useState<string>();
+
+  useEffect(() => {
+    if (!isSelected) setIsEditing(false);
+  }, [isSelected]);
+
+  const editActive = isSelected && isEditing;
   return (
     <BaseNode
       node={node}
@@ -60,26 +75,67 @@ export function MarkdownNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      onActivate={() => setIsEditing(true)}
     >
-      <div className="flex h-full min-h-0 flex-col gap-2 p-2">
+      <div
+        className="canvas-markdown-node"
+        data-editing={editActive ? 'true' : 'false'}
+        onMouseDown={editActive ? (event) => event.stopPropagation() : undefined}
+        onClick={editActive ? (event) => event.stopPropagation() : undefined}
+        onDoubleClick={editActive ? (event) => event.stopPropagation() : undefined}
+        onKeyDownCapture={
+          editActive
+            ? (event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                event.stopPropagation();
+                setIsEditing(false);
+              }
+            : undefined
+        }
+      >
         {node.data.title ? (
-          <div className="truncate text-xs font-semibold" style={{ color: 'var(--node-fg)' }}>
+          <div className="canvas-markdown-node__title" title={node.data.title}>
             {node.data.title}
           </div>
         ) : null}
-        {isSelected ? (
-          <textarea
-            className="min-h-0 flex-1 resize-none rounded border bg-transparent p-2 text-xs outline-none"
-            style={{ borderColor: 'var(--node-divider)', color: 'var(--node-fg)' }}
-            value={node.data.content}
-            aria-label={t('node.markdownInput')}
-            onChange={(event) =>
-              onUpdateData?.(node.id, { ...node.data, content: event.currentTarget.value })
-            }
-          />
+        {editActive ? (
+          <div className="canvas-markdown-node__editor">
+            <Suspense
+              fallback={
+                <div className="canvas-markdown-node__status" role="status">
+                  {t('node.markdownRichLoading')}
+                </div>
+              }
+            >
+              <CanvasMilkdownRichSurface
+                value={node.data.content}
+                ariaLabel={t('node.markdownInput')}
+                readOnly={false}
+                className="canvas-markdown-rich-surface"
+                mountClassName="canvas-markdown-rich-surface__mount"
+                onChange={(content) => onUpdateData?.(node.id, { ...node.data, content })}
+                onActions={(actions) => actions?.focus()}
+                onStateChange={(nextState, failure) => {
+                  setRichState(nextState);
+                  setRichFailure(failure);
+                }}
+              />
+            </Suspense>
+            {richState === 'unavailable' || richState === 'error' ? (
+              <div className="canvas-markdown-node__status" role="alert" title={richFailure}>
+                {richState === 'unavailable'
+                  ? t('node.markdownRichUnavailable')
+                  : t('node.markdownRichFailed')}
+              </div>
+            ) : null}
+          </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-auto text-sm leading-6">
-            <MarkdownDocumentView value={node.data.content} />
+          <div className="canvas-markdown-node__preview">
+            <MarkdownDocumentView
+              value={node.data.content}
+              className="canvas-markdown-node__document"
+            />
           </div>
         )}
       </div>
@@ -103,7 +159,8 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
           ? 'video-poster'
           : 'unavailable';
   const title =
-    node.data.title || node.data.assetPath.split('/').pop() || resolveMediaTypeLabel(mediaType);
+    resolveCanvasNodeName([node.data.title, node.data.assetPath]) ||
+    resolveMediaTypeLabel(mediaType);
   const hoverSequence = useRef(0);
   const [hoverRequestId, setHoverRequestId] = useState<string>();
   const [playbackOwner, setPlaybackOwner] = useState<MediaPlaybackOwner>('idle');
@@ -155,6 +212,15 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      nodeLabel={{
+        icon: (
+          <span
+            aria-hidden="true"
+            className={toCodiconClassName(resolveMediaTypeIcon(mediaType))}
+          />
+        ),
+        text: title,
+      }}
     >
       <div
         data-testid="canvas-media-node"
@@ -186,14 +252,6 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
           setPlaybackOwner((owner) => transitionMediaPlaybackOwner(owner, 'pointer-leave'));
         }}
       >
-        {mediaType === 'audio' ? (
-          <div className="canvas-audio-node-title" data-testid="canvas-audio-node-title">
-            <span className="canvas-audio-node-title-icon" aria-hidden="true">
-              ♪
-            </span>
-            <span className="truncate">{title}</span>
-          </div>
-        ) : null}
         <div
           className="min-h-0 flex-1 overflow-hidden"
           style={{ background: 'var(--node-surface)' }}
@@ -220,14 +278,6 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
             />
           )}
         </div>
-        {mediaType === 'audio' ? null : (
-          <div
-            className="truncate border-t px-2 py-1.5 text-xs"
-            style={{ borderColor: 'var(--node-divider)', color: 'var(--node-fg)' }}
-          >
-            {title}
-          </div>
-        )}
       </div>
     </BaseNode>
   );
@@ -286,6 +336,17 @@ function resolveMediaTypeLabel(mediaType: CanvasMediaType): string {
   }
 }
 
+function resolveMediaTypeIcon(mediaType: CanvasMediaType): CodiconName {
+  switch (mediaType) {
+    case 'image':
+      return 'file-media';
+    case 'audio':
+      return 'music';
+    case 'video':
+      return 'play';
+  }
+}
+
 function resolveJobStatusLabel(status: JobCanvasNode['data']['status']): string {
   switch (status) {
     case 'draft':
@@ -311,7 +372,7 @@ export function FileNode({
   onOpen,
   ...baseProps
 }: CanonicalNodeProps<FileCanvasNode>) {
-  const fileName = node.data.path.split('/').pop() || node.data.title;
+  const fileName = resolveCanvasFileName(node.data);
   const contentLocator = node.data.contentLocator;
   return (
     <BaseNode
@@ -321,27 +382,44 @@ export function FileNode({
       presentation="foundational"
       opaqueSurface
       onActivate={contentLocator && onOpen ? () => onOpen(contentLocator) : undefined}
+      nodeLabel={{
+        icon: <FileIcon size={13} strokeWidth={1.6} aria-hidden="true" />,
+        text: fileName,
+      }}
     >
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-3 text-center">
-        <span style={{ color: 'var(--node-fg-secondary)' }}>
-          <FileIcon size={36} strokeWidth={1.4} />
-        </span>
-        <div className="w-full truncate text-sm font-medium" style={{ color: 'var(--node-fg)' }}>
-          {node.data.title || fileName}
+      <div className="canvas-file-node" data-canvas-content-kind="file">
+        <div className="canvas-file-node__content">
+          <span style={{ color: 'var(--node-fg-secondary)' }}>
+            <FileIcon size={36} strokeWidth={1.4} />
+          </span>
+          {!contentLocator ? (
+            <div
+              className="text-xs"
+              style={{ color: 'var(--hostPort-errorForeground)' }}
+              role="status"
+            >
+              {t('node.contentUnavailable')}
+            </div>
+          ) : null}
         </div>
-        <div className="w-full truncate text-xs" style={{ color: 'var(--node-fg-secondary)' }}>
-          {node.data.mediaType || fileName}
-        </div>
-        {!contentLocator ? (
-          <div
-            className="text-xs"
-            style={{ color: 'var(--hostPort-errorForeground)' }}
-            role="status"
-          >
-            {t('node.contentUnavailable')}
-          </div>
-        ) : null}
       </div>
     </BaseNode>
   );
+}
+
+export function resolveCanvasFileName(
+  data: Pick<FileCanvasNode['data'], 'path' | 'title'>,
+): string {
+  return resolveCanvasNodeName([data.path, data.title]) || t('node.file');
+}
+
+export function resolveCanvasNodeName(candidates: readonly (string | undefined)[]): string {
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+    const segments = value.replaceAll('\\', '/').split('/').filter(Boolean);
+    const name = segments.at(-1);
+    if (name) return name;
+  }
+  return '';
 }

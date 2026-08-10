@@ -18,6 +18,7 @@
     "@neko/assets-domain": "workspace:*",
     "@neko/canvas-domain": "workspace:*",
     "@neko/media": "workspace:*",
+    "@neko/markdown": "workspace:*",
     "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",

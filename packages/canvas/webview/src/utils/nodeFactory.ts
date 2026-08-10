@@ -8,13 +8,15 @@ import type {
 } from '@neko/canvas-domain';
 import { isContentLocator } from '@neko/content';
 import {
+  CANVAS_AUDIO_NODE_DEFAULT_SIZE,
+  CANVAS_NODE_DEFAULT_SIZES,
   isCanvasGenerationNodeData,
   isCanvasMaterialMediaKind,
   isCanvasNodeType,
   parseDocumentResourceStatus,
+  resolveCanvasGenerationNodeDefaultSize,
 } from '@neko/canvas-domain';
 import { isJobRef } from '@neko/shared/job-lifecycle';
-import { createBuiltInNodeTypeDescriptors } from '../components/nodes/nodeTypeDescriptors';
 
 type CanvasNodeDraft = CanvasNode extends infer TNode
   ? TNode extends CanvasNode
@@ -32,13 +34,18 @@ interface BuildCanvasNodeOptions {
 
 type NodeDefaultSize = { width: number; height: number };
 
-export const NODE_DEFAULT_SIZES: Partial<Record<CanvasNodeType, NodeDefaultSize>> =
-  Object.fromEntries(
-    Object.entries(createBuiltInNodeTypeDescriptors()).map(([type, descriptor]) => [
-      type,
-      descriptor.defaultSize,
-    ]),
-  ) as Partial<Record<CanvasNodeType, NodeDefaultSize>>;
+export const NODE_DEFAULT_SIZES: Readonly<Record<CanvasNodeType, NodeDefaultSize>> =
+  CANVAS_NODE_DEFAULT_SIZES;
+
+export function resolveAuthoredNodeDefaultSize(node: CanvasNode): NodeDefaultSize {
+  if (node.type === 'generation') {
+    return resolveCanvasGenerationNodeDefaultSize(node.data.recipe.kind);
+  }
+  if (node.type === 'media' && node.data.mediaType === 'audio') {
+    return { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE };
+  }
+  return getNodeDefaultSize(node.type);
+}
 
 export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraft {
   const { position, data, zIndex } = options;
@@ -79,10 +86,7 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       return {
         ...base,
         type,
-        size: {
-          width: base.size.width,
-          height: mediaType === 'audio' ? 120 : base.size.height,
-        },
+        size: mediaType === 'audio' ? { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE } : base.size,
         data: {
           assetPath,
           contentLocator,
@@ -170,7 +174,12 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       if (!isCanvasGenerationNodeData(data)) {
         throw new Error('Canvas Generation creation requires canonical Recipe data');
       }
-      return { ...base, type, data };
+      return {
+        ...base,
+        type,
+        size: resolveCanvasGenerationNodeDefaultSize(data.recipe.kind),
+        data,
+      };
   }
 
   throw new Error(`Unsupported Canvas node type "${String(type)}"`);
@@ -178,10 +187,7 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
 
 function getNodeDefaultSize(type: CanonicalCanvasNodeType): NodeDefaultSize {
   const size = NODE_DEFAULT_SIZES[type];
-  if (!size) {
-    throw new Error(`Missing default size for Canvas node type "${type}"`);
-  }
-  return size;
+  return { ...size };
 }
 
 function asString(value: unknown): string {

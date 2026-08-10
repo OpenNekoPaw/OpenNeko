@@ -34,7 +34,7 @@ import {
   translateContainerSubtree,
 } from '../utils/containerActions';
 import { autoArrangeContainer } from '../utils/containerLayout';
-import { NODE_DEFAULT_SIZES } from '../utils/nodeFactory';
+import { resolveAuthoredNodeDefaultSize } from '../utils/nodeFactory';
 import {
   createCanvasComposite,
   deriveCanvasNode,
@@ -281,10 +281,8 @@ function syncNodeContainerMembership(nodes: CanvasNode[], movedNodeId: string): 
     const currentParentId = getNodeParentId(movedNode);
     if (currentParentId) {
       nextNodes = removeContainerChild(nextNodes, currentParentId, movedNodeId).nodes;
-      const defaultSize = NODE_DEFAULT_SIZES[movedNode.type];
-      if (defaultSize) {
-        nextNodes = nextNodes.map((n) => (n.id === movedNodeId ? { ...n, size: defaultSize } : n));
-      }
+      const defaultSize = resolveAuthoredNodeDefaultSize(movedNode);
+      nextNodes = nextNodes.map((n) => (n.id === movedNodeId ? { ...n, size: defaultSize } : n));
     }
   }
 

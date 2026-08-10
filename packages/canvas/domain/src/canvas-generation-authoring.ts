@@ -1,4 +1,4 @@
-import type { CanvasData, GenerationCanvasNode } from './types/canvas';
+import type { CanvasConnection, CanvasData, GenerationCanvasNode } from './types/canvas';
 import {
   applyCanvasGenerationOutputs,
   authorCanvasGeneratedText,
@@ -7,29 +7,20 @@ import {
   selectCanvasGenerationOutput,
   updateCanvasGenerationRecipe,
   type CanvasGenerationKind,
+  type CanvasGenerationModelBinding,
   type CanvasGenerationOutputBinding,
   type CanvasGenerationRecipe,
 } from './types/canvas-generation-node';
+import { resolveCanvasGenerationNodeDefaultSize } from './canvas-node-sizing';
 
-const CANVAS_GENERATION_NODE_DEFAULT_SIZES = {
-  prompt: { width: 320, height: 220 },
-  image: { width: 300, height: 220 },
-  audio: { width: 300, height: 120 },
-  video: { width: 300, height: 220 },
-} satisfies Record<CanvasGenerationKind, { readonly width: number; readonly height: number }>;
-
-export function resolveCanvasGenerationNodeDefaultSize(kind: CanvasGenerationKind): {
-  readonly width: number;
-  readonly height: number;
-} {
-  return { ...CANVAS_GENERATION_NODE_DEFAULT_SIZES[kind] };
-}
+export { resolveCanvasGenerationNodeDefaultSize } from './canvas-node-sizing';
 
 export function createCanvasGenerationNode(input: {
   readonly canvas: CanvasData;
   readonly nodeId: string;
   readonly kind: CanvasGenerationKind;
   readonly position: { readonly x: number; readonly y: number };
+  readonly defaultModel?: CanvasGenerationModelBinding;
 }): CanvasData {
   if (input.canvas.nodes.some((node) => node.id === input.nodeId)) {
     throw new Error(`Canvas node identity "${input.nodeId}" already exists.`);
@@ -42,7 +33,7 @@ export function createCanvasGenerationNode(input: {
     zIndex:
       input.canvas.nodes.reduce((highest, candidate) => Math.max(highest, candidate.zIndex), -1) +
       1,
-    data: createCanvasGenerationNodeData(input.kind),
+    data: createCanvasGenerationNodeData(input.kind, input.defaultModel),
   };
   return { ...input.canvas, nodes: [...input.canvas.nodes, node] };
 }
@@ -107,6 +98,29 @@ export function authorCanvasGenerationNodeText(input: {
     ...node,
     data: authorCanvasGeneratedText(node.data, input.text),
   }));
+}
+
+export function attachCanvasGenerationReference(input: {
+  readonly canvas: CanvasData;
+  readonly nodeId: string;
+  readonly sourceNodeId: string;
+}): CanvasData {
+  requireCanvasGenerationNode(input.canvas, input.nodeId);
+  if (!input.canvas.nodes.some((node) => node.id === input.sourceNodeId)) {
+    throw new Error(`Canvas Generation reference source "${input.sourceNodeId}" does not exist.`);
+  }
+  const connection: CanvasConnection = {
+    id: `generation-reference:${encodeURIComponent(input.sourceNodeId)}:${encodeURIComponent(input.nodeId)}`,
+    sourceId: input.sourceNodeId,
+    targetId: input.nodeId,
+    type: 'reference',
+    sourceEndpoint: { nodeId: input.sourceNodeId, scope: 'node' },
+    targetEndpoint: { nodeId: input.nodeId, scope: 'port', portId: 'reference' },
+  };
+  if (input.canvas.connections.some((candidate) => candidate.id === connection.id)) {
+    throw new Error(`Canvas Generation reference "${connection.id}" already exists.`);
+  }
+  return { ...input.canvas, connections: [...input.canvas.connections, connection] };
 }
 
 export function requireCanvasGenerationNode(

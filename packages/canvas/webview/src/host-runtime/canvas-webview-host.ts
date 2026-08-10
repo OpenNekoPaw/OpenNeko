@@ -43,6 +43,25 @@ export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
     kind: CanvasGenerationKind,
     position?: { readonly x: number; readonly y: number },
   ): Promise<CanvasHostSnapshot>;
+  attachGenerationReference(
+    nodeId: string,
+    sourceKind: Extract<
+      CanvasHostIntent,
+      { readonly type: 'attach-generation-reference' }
+    >['sourceKind'],
+    sourceMode: Extract<
+      CanvasHostIntent,
+      { readonly type: 'attach-generation-reference' }
+    >['sourceMode'],
+  ): Promise<CanvasHostSnapshot>;
+  attachGenerationReferenceMaterial(
+    nodeId: string,
+    input: {
+      readonly locator: CanvasReferencedContentLocator;
+      readonly mediaKind: CanvasMaterialMediaKind;
+      readonly title: string;
+    },
+  ): Promise<CanvasHostSnapshot>;
   updateGenerationRecipe(
     nodeId: string,
     recipe: CanvasGenerationRecipe,
@@ -365,6 +384,7 @@ export function createCanvasWebviewHost(
         snapshot?.authoringCapabilities ?? {
           sourceModes: [],
           generationKinds: [],
+          generationModels: [],
         },
       ),
     async executeMaterialAction(actionId, selectedNodeIds, payload = {}) {
@@ -386,6 +406,40 @@ export function createCanvasWebviewHost(
           type: 'create-generation-node',
           kind,
           ...(position ? { position } : {}),
+        });
+        publishSnapshot(next);
+        return next;
+      });
+    },
+    async attachGenerationReference(nodeId, sourceKind, sourceMode) {
+      return queueOperation(async () => {
+        const next = await executeIntent({
+          type: 'attach-generation-reference',
+          nodeId,
+          sourceKind,
+          sourceMode,
+        });
+        publishSnapshot(next);
+        return next;
+      });
+    },
+    async attachGenerationReferenceMaterial(nodeId, input) {
+      return queueOperation(async () => {
+        const current = snapshot ?? (await runtime.getSnapshot());
+        const next = await executeIntent({
+          type: 'attach-generation-reference-material',
+          nodeId,
+          request: {
+            kind: 'direct-reference',
+            identity: {
+              projectId: current.identity.projectId,
+              canvasId: current.identity.documentId,
+              canvasSessionId: current.identity.sessionId,
+            },
+            locator: input.locator,
+            mediaKind: input.mediaKind,
+            title: input.title,
+          },
         });
         publishSnapshot(next);
         return next;

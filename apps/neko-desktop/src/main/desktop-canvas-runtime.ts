@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  CANVAS_WORKSPACE_BOARD_PATH,
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
   parseCanvasMaterialActionResolutionRequest,
@@ -12,6 +13,7 @@ import {
   type CanvasMaterialActionResolution,
   type CanvasMaterialActionTarget,
   type CanvasGenerationApplicationPort,
+  type CanvasGenerationModelOption,
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
@@ -108,6 +110,7 @@ export interface DesktopCanvasGlobalMediaLibraryCopySelection {
 
 export class DesktopCanvasRuntime {
   private readonly sessions = new Map<string, DesktopCanvasSessionEntry>();
+  private readonly workspaceBoardOperationTails = new Map<string, Promise<void>>();
   private readonly previewLeases = new Map<string, DesktopCanvasPreviewLeaseEntry>();
   private readonly presentationSnapshots = createCanvasHostPresentationSnapshotStore();
   private readonly materialAuthoring: CanvasMaterialAuthoringService;
@@ -155,6 +158,11 @@ export class DesktopCanvasRuntime {
         readonly target: CanvasMaterialActionTarget;
         readonly executionPayload: Readonly<Record<string, unknown>>;
       }) => Promise<void>;
+      readonly separateAudioInCut?: (input: {
+        readonly identity: CanvasHostRuntimeIdentity;
+        readonly target: CanvasMaterialActionTarget;
+        readonly executionPayload: Readonly<Record<string, unknown>>;
+      }) => Promise<void>;
       readonly requestProjectMediaLibraryCopy?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly workspace: DesktopCanvasViewGrant['workspace'];
@@ -172,6 +180,7 @@ export class DesktopCanvasRuntime {
         readonly reveal: string;
         readonly openInCut?: string;
         readonly addToCut?: string;
+        readonly separateAudio?: string;
         readonly copyToProjectMediaLibrary?: string;
         readonly copyToGlobalMediaLibrary?: string;
         readonly regenerate?: string;
@@ -179,6 +188,9 @@ export class DesktopCanvasRuntime {
       };
       readonly media?: DesktopCanvasMediaPort;
       readonly generation?: CanvasGenerationApplicationPort;
+      readonly resolveGenerationModels?: (input: {
+        readonly workspace: DesktopCanvasViewGrant['workspace'];
+      }) => readonly CanvasGenerationModelOption[];
     },
   ) {
     this.materialAuthoring = new CanvasMaterialAuthoringService({
@@ -272,6 +284,41 @@ export class DesktopCanvasRuntime {
     return (await this.requireSession(windowId, identity)).session.subscribe(listener);
   }
 
+  async coordinateWorkspaceBoardMutation<TResult>(
+    workspaceId: string,
+    operation: () => Promise<TResult>,
+  ): Promise<TResult> {
+    return this.enqueueWorkspaceBoardOperation(workspaceId, async () => {
+      this.requireActive();
+      const entries = [...this.sessions.values()]
+        .filter(
+          (entry) =>
+            entry.workspace.workspaceId === workspaceId &&
+            entry.identity.documentId === CANVAS_WORKSPACE_BOARD_PATH,
+        )
+        .sort((left, right) => sessionKey(left.identity).localeCompare(sessionKey(right.identity)));
+      if (entries.length === 0) return operation();
+
+      const coordinate = async (
+        index: number,
+      ): Promise<{ readonly value: TResult; readonly canvas: CanvasData }> => {
+        const entry = entries[index];
+        if (!entry) {
+          const value = await operation();
+          const first = entries[0];
+          if (!first) throw new Error('Workspace Board session coordination lost its target.');
+          return {
+            value,
+            canvas: await this.loadDocument(first.documentPath, first.workspace.displayName),
+          };
+        }
+        return entry.session.coordinateAuthoritativeDocumentChange(() => coordinate(index + 1));
+      };
+
+      return (await coordinate(0)).value;
+    });
+  }
+
   detachWindow(windowId: string): void {
     for (const [key, entry] of this.sessions) {
       if (entry.windowId !== windowId) continue;
@@ -338,12 +385,28 @@ export class DesktopCanvasRuntime {
     identity: CanvasHostRuntimeIdentity,
   ): Promise<DesktopCanvasSessionEntry> {
     this.requireActive();
+    // Grant resolution may flush pending Agent deliveries through the Workspace Board
+    // coordinator. Resolve it before entering the Board queue so that opening the
+    // Canvas never waits on a nested mutation scheduled behind itself.
     const grant = await this.options.shell.resolveCanvasViewGrant(windowId, identity);
+    if (identity.documentId === CANVAS_WORKSPACE_BOARD_PATH) {
+      return this.enqueueWorkspaceBoardOperation(identity.workspaceId, () =>
+        this.requireSessionSerial(windowId, identity, grant),
+      );
+    }
+    return this.requireSessionSerial(windowId, identity, grant);
+  }
+
+  private async requireSessionSerial(
+    windowId: string,
+    identity: CanvasHostRuntimeIdentity,
+    grant: DesktopCanvasViewGrant,
+  ): Promise<DesktopCanvasSessionEntry> {
     const key = sessionKey(identity);
     const existing = this.sessions.get(key);
     if (existing) return existing;
     const documentPath =
-      identity.documentId === 'neko/boards/workspace.nkc'
+      identity.documentId === CANVAS_WORKSPACE_BOARD_PATH
         ? this.options.host.paths.join(grant.workspace.workspacePath, identity.documentId)
         : await resolveWorkspaceContentLocator(grant.workspace, {
             kind: 'workspace-file',
@@ -356,6 +419,7 @@ export class DesktopCanvasRuntime {
     const openInCut = this.options.openInCut;
     const resolveAddToCut = this.options.resolveAddToCut;
     const addToCut = this.options.addToCut;
+    const separateAudioInCut = this.options.separateAudioInCut;
     const requestProjectMediaLibraryCopy = this.options.requestProjectMediaLibraryCopy;
     const requestGlobalMediaLibraryCopy = this.options.requestGlobalMediaLibraryCopy;
     const generation = this.options.generation;
@@ -440,6 +504,24 @@ export class DesktopCanvasRuntime {
               readonly target: CanvasMaterialActionTarget;
               readonly executionPayload: Readonly<Record<string, unknown>>;
             }) => addToCut({ identity: requestIdentity, target, executionPayload }),
+            ...(separateAudioInCut
+              ? {
+                  separateAudioInCut: ({
+                    identity: requestIdentity,
+                    target,
+                    executionPayload,
+                  }: {
+                    readonly identity: CanvasHostRuntimeIdentity;
+                    readonly target: CanvasMaterialActionTarget;
+                    readonly executionPayload: Readonly<Record<string, unknown>>;
+                  }) =>
+                    separateAudioInCut({
+                      identity: requestIdentity,
+                      target,
+                      executionPayload,
+                    }),
+                }
+              : {}),
           }
         : {}),
       ...(requestProjectMediaLibraryCopy || requestGlobalMediaLibraryCopy
@@ -521,6 +603,8 @@ export class DesktopCanvasRuntime {
       identity,
       initialCanvas,
       presentationSnapshots: this.presentationSnapshots,
+      resolveGenerationModels: () =>
+        this.options.resolveGenerationModels?.({ workspace: grant.workspace }) ?? [],
       effects: {
         resolveMaterialActions: ({ identity: requestIdentity, targets }) =>
           materialActionOwner.resolve({
@@ -636,6 +720,25 @@ export class DesktopCanvasRuntime {
     this.sessions.set(key, entry);
     await session.reattachGenerationNodes();
     return entry;
+  }
+
+  private enqueueWorkspaceBoardOperation<TResult>(
+    workspaceId: string,
+    operation: () => Promise<TResult>,
+  ): Promise<TResult> {
+    const previous = this.workspaceBoardOperationTails.get(workspaceId) ?? Promise.resolve();
+    const result = previous.then(operation);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.workspaceBoardOperationTails.set(workspaceId, tail);
+    void tail.then(() => {
+      if (this.workspaceBoardOperationTails.get(workspaceId) === tail) {
+        this.workspaceBoardOperationTails.delete(workspaceId);
+      }
+    });
+    return result;
   }
 
   private async loadDocument(documentPath: string, workspaceName: string): Promise<CanvasData> {

@@ -23,9 +23,10 @@ owning surface.
   projection owns exact Timeline block roles; Agent Webview owns turn presentation and disclosure
   state plus browser presentation scheduling; Desktop Shell owns command-scoped pending presentation;
   Content owns authorized Workspace bytes.
-- **Dependencies:** Markdown core remains host-neutral. Milkdown and CodeMirror are browser-only Text
-  Editor dependencies. Streamdown is a dev-only Agent Webview spike dependency. Desktop imports only
-  package public Roots and typed ports.
+- **Dependencies:** Markdown core remains host-neutral. Milkdown is isolated behind an explicit
+  browser-only `@neko/markdown` entry consumed by Text Editor and Canvas; CodeMirror remains a
+  browser-only Text Editor dependency. Streamdown is a dev-only Agent Webview spike dependency.
+  Desktop imports only package public Roots and typed ports.
 - **Interfaces:** one GFM profile and corpus constrain each surface. Rich and Source submit ordered
   changes to one exact Text Document session. Agent text, process evidence, deliverables, diagnostics
   and approvals retain exact Timeline content-block identity while a disposable turn projection
@@ -71,7 +72,9 @@ owning surface.
 
 | Intent                 | Owner / engine                                 | Input authority                        | Lifecycle                          |
 | ---------------------- | ---------------------------------------------- | -------------------------------------- | ---------------------------------- |
-| Markdown Rich edit     | `@neko/text-editor-webview` / Milkdown         | exact Text Document session projection | mounted visible editor View        |
+| Markdown Rich engine   | `@neko/markdown` browser entry / Milkdown      | caller-owned controlled source         | mounted visible browser Surface    |
+| Markdown file edit     | `@neko/text-editor-webview` Rich adapter       | exact Text Document session projection | mounted visible editor View        |
+| Canvas Markdown edit   | `@neko/canvas-webview` node adapter            | exact Canvas Markdown node             | explicitly activated node Surface  |
 | Markdown Source edit   | `@neko/text-editor-webview` / CodeMirror 6     | same exact session projection          | mounted visible editor View        |
 | Other text edit        | `@neko/text-editor-webview` / CodeMirror 6     | same session contract                  | mounted visible editor View        |
 | Agent text message     | `@neko/agent-webview` / canonical text adapter | exact Timeline content block           | partial delta through final state  |
@@ -161,6 +164,20 @@ Outline, heading navigation and reference inventory come from `@neko/markdown` s
 projections. Milkdown may highlight the selected node, but its DOM is not the Search/Agent outline
 authority.
 
+The common controlled Milkdown Surface is exported only from an explicit browser entry. It owns
+Milkdown creation/destruction, GFM parser/serializer registration, composition handling, history,
+round-trip mutation gating, reconciliation and disposable focus/undo/redo/heading actions. It does
+not own a file session, Canvas document, edit sequence, Host port, media lease or persisted buffer.
+Callers provide the accepted source and apply emitted source through their exact owning command.
+
+Text Editor wraps the Surface with its existing ordered edit queue, Text Document projection and
+authorized media presentation extension. Canvas wraps the same Surface with an exact-node update and
+does not import Text Editor contracts or runtime. A Canvas Markdown node renders a compact, read-only
+WYSIWYG projection by default. Selection only exposes node operations; explicit double activation
+enters Rich mutation, and leaving selection or pressing Escape exits editing. Unsupported constructs
+remain readable and disable only Rich mutation with a node-local diagnostic. Raw Markdown textarea
+editing is not selected implicitly and Canvas does not gain a second Text Document session.
+
 ### 4. Narrow Agent Markdown responsibility and reopen the atomic Streamdown gate
 
 Streamdown 2.5.0 was evaluated as a sole Agent text-content renderer because it includes `remend`,
@@ -249,8 +266,9 @@ not promoted into the editor by copying renderer DOM or a Milkdown transaction.
 
 ### 7. Keep dependencies lazy and package-owned
 
-Milkdown enters only the Text Editor Webview lazy Rich chunk. Streamdown is dev-only and enters no
-production chunk. CodeMirror remains absent from unrelated Canvas/Cut/Preview startup chunks;
+Milkdown enters only lazy Rich chunks in Text Editor and explicitly activated Canvas Markdown nodes.
+It is not part of the ordinary Canvas node-reading path. Streamdown is dev-only and enters no
+production chunk. CodeMirror remains absent from Canvas/Cut/Preview startup chunks;
 optional code highlighting and Mermaid dependencies must not be duplicated when an existing
 package-owned component can be reused without creating a second renderer path.
 

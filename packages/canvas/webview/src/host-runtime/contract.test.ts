@@ -46,6 +46,18 @@ describe('Canvas Host runtime contract', () => {
 
     expect(request.identity.documentId).toBe('canvas-document-1');
     expect(snapshot.canvas.name).toBe(DEFAULT_CANVAS_DATA.name);
+    expect(snapshot.authoringCapabilities.generationModels).toEqual([
+      {
+        binding: {
+          purpose: 'image.generate',
+          providerId: 'provider-1',
+          modelId: 'image-model-1',
+        },
+        label: 'Image Model',
+        providerLabel: 'Provider One',
+        isDefault: true,
+      },
+    ]);
   });
 
   it('requires explicit source semantics and typed Generation Node creation', () => {
@@ -176,6 +188,18 @@ function validSnapshot() {
     authoringCapabilities: {
       sourceModes: ['import', 'reference'],
       generationKinds: ['prompt', 'image', 'audio', 'video'],
+      generationModels: [
+        {
+          binding: {
+            purpose: 'image.generate',
+            providerId: 'provider-1',
+            modelId: 'image-model-1',
+          },
+          label: 'Image Model',
+          providerLabel: 'Provider One',
+          isDefault: true,
+        },
+      ],
     },
     generationNodes: [],
   };

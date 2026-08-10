@@ -41,6 +41,57 @@ describe('nodeRendererRegistry', () => {
     expect(markup).not.toContain('UNSUPPORTED');
   });
 
+  it('renders media and File names through the external label above the card', () => {
+    const renderers = createCoreNodeRendererRegistry();
+    const video = {
+      ...buildCanvasNode({
+        type: 'media',
+        position: { x: 40, y: 40 },
+        data: {
+          assetPath: 'media/Cut Basic Functional Fixture.mp4',
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'media/Cut Basic Functional Fixture.mp4',
+          },
+          mediaType: 'video',
+        },
+        zIndex: 1,
+      }),
+      id: 'video-1',
+    } as CanvasNode;
+    const file = {
+      ...buildCanvasNode({
+        type: 'file',
+        position: { x: 320, y: 40 },
+        data: {
+          path: 'neko/assets/Assets/epub/animation/Blame/volume-01.epub',
+          title: 'ignored/path/title.epub',
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Assets/epub/animation/Blame/volume-01.epub',
+          },
+        },
+        zIndex: 2,
+      }),
+      id: 'file-1',
+    } as CanvasNode;
+
+    const videoMarkup = renderNode(renderers, video);
+    const fileMarkup = renderNode(renderers, file);
+
+    expect(videoMarkup).toContain('data-canvas-node-label="true"');
+    expect(videoMarkup).toContain('Cut Basic Functional Fixture.mp4');
+    expect(videoMarkup.indexOf('data-canvas-node-label')).toBeLessThan(
+      videoMarkup.indexOf('node-card'),
+    );
+    expect(fileMarkup).toContain('data-canvas-node-label="true"');
+    expect(fileMarkup).toContain('volume-01.epub');
+    expect(fileMarkup).not.toContain('title.epub');
+    expect(fileMarkup.indexOf('data-canvas-node-label')).toBeLessThan(
+      fileMarkup.indexOf('node-card'),
+    );
+  });
+
   it('renders unknown loaded nodes as unsupported instead of falling back', () => {
     const markup = renderToStaticMarkup(
       renderCanvasNode(
@@ -67,3 +118,19 @@ describe('nodeRendererRegistry', () => {
     expect(markup).toContain('future-node');
   });
 });
+
+function renderNode(
+  renderers: ReturnType<typeof createCoreNodeRendererRegistry>,
+  node: CanvasNode,
+): string {
+  return renderToStaticMarkup(
+    renderCanvasNode(renderers, {
+      node,
+      allNodes: [node],
+      selectedNodeIds: [],
+      viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+      isSelected: false,
+      containerRef: { current: null },
+    }),
+  );
+}

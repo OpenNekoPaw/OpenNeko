@@ -10,9 +10,12 @@ import {
 import { isValidNkc } from './nkc/codec';
 import { type CanvasData } from './types/canvas';
 import {
+  CANVAS_GENERATION_PURPOSES,
   isCanvasGenerationKind,
   isCanvasGenerationRecipe,
   type CanvasGenerationKind,
+  type CanvasGenerationModelBinding,
+  type CanvasGenerationPurpose,
   type CanvasGenerationRecipe,
 } from './types/canvas-generation-node';
 import type { CanvasGenerationRuntimeProjection } from './canvas-generation-application-port';
@@ -55,6 +58,14 @@ export interface CanvasHostPresentationState {
 export interface CanvasHostAuthoringCapabilities {
   readonly sourceModes: readonly ('import' | 'reference')[];
   readonly generationKinds: readonly CanvasGenerationKind[];
+  readonly generationModels: readonly CanvasGenerationModelOption[];
+}
+
+export interface CanvasGenerationModelOption {
+  readonly binding: CanvasGenerationModelBinding;
+  readonly label: string;
+  readonly providerLabel: string;
+  readonly isDefault: boolean;
 }
 
 export interface CanvasHostSnapshot {
@@ -103,6 +114,20 @@ export type CanvasHostIntent =
       readonly type: 'create-generation-node';
       readonly kind: CanvasGenerationKind;
       readonly position?: { readonly x: number; readonly y: number };
+    }
+  | {
+      readonly type: 'attach-generation-reference';
+      readonly nodeId: string;
+      readonly sourceKind: 'image' | 'video' | 'audio' | 'document';
+      readonly sourceMode: 'import' | 'reference';
+    }
+  | {
+      readonly type: 'attach-generation-reference-material';
+      readonly nodeId: string;
+      readonly request: Extract<
+        CanvasMaterialAuthoringRequest,
+        { readonly kind: 'direct-reference' }
+      >;
     }
   | {
       readonly type: 'update-generation-recipe';
@@ -446,6 +471,37 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
       ...readOptionalPosition(record['position']),
     };
   }
+  if (type === 'attach-generation-reference') {
+    requireExactKeys(record, ['type', 'nodeId', 'sourceKind', 'sourceMode']);
+    const sourceKind = requireSourceKind(record['sourceKind']);
+    if (sourceKind === 'model' || sourceKind === 'canvas') {
+      throw invalidPayload('Canvas Generation reference source kind is invalid.');
+    }
+    return {
+      type,
+      nodeId: requireOpaqueIdentity(
+        record['nodeId'],
+        'Canvas Generation node identity is invalid.',
+      ),
+      sourceKind,
+      sourceMode: requireSourceMode(record['sourceMode']),
+    };
+  }
+  if (type === 'attach-generation-reference-material') {
+    requireExactKeys(record, ['type', 'nodeId', 'request']);
+    const materialRequest = requireCanvasMaterialAuthoringRequest(record['request']);
+    if (materialRequest.kind !== 'direct-reference') {
+      throw invalidPayload('Dropped Canvas Generation references require a direct reference.');
+    }
+    return {
+      type,
+      nodeId: requireOpaqueIdentity(
+        record['nodeId'],
+        'Canvas Generation node identity is invalid.',
+      ),
+      request: materialRequest,
+    };
+  }
   if (type === 'update-generation-recipe') {
     requireExactKeys(record, ['type', 'nodeId', 'recipe']);
     if (!isCanvasGenerationRecipe(record['recipe'])) {
@@ -560,6 +616,17 @@ function parseSelectedNodeIds(value: unknown): readonly string[] {
 
 function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthoringCapabilities {
   const record = requireRecord(value, 'Canvas Host authoring capabilities are required.');
+  requireExactKeys(record, ['sourceModes', 'generationKinds', 'generationModels']);
+  const generationModels = requireArray(
+    record['generationModels'],
+    'Canvas Host Generation model options must be an array.',
+  ).map(parseCanvasGenerationModelOption);
+  const modelKeys = generationModels.map(({ binding }) =>
+    [binding.purpose, binding.providerId, binding.modelId].join('\u0000'),
+  );
+  if (new Set(modelKeys).size !== modelKeys.length) {
+    throw invalidPayload('Canvas Host Generation model options must be unique.');
+  }
   return {
     sourceModes: requireUniqueEnumArray(
       record['sourceModes'],
@@ -571,7 +638,49 @@ function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthori
       ['prompt', 'image', 'audio', 'video'] as const,
       'Canvas Host Generation kind capability',
     ),
+    generationModels,
   };
+}
+
+function parseCanvasGenerationModelOption(value: unknown): CanvasGenerationModelOption {
+  const record = requireRecord(value, 'Canvas Host Generation model option must be an object.');
+  requireExactKeys(record, ['binding', 'label', 'providerLabel', 'isDefault']);
+  const binding = requireRecord(
+    record['binding'],
+    'Canvas Host Generation model binding must be an object.',
+  );
+  requireExactKeys(binding, ['purpose', 'providerId', 'modelId']);
+  return {
+    binding: {
+      purpose: requireCanvasGenerationPurpose(binding['purpose']),
+      providerId: requireNonEmptyString(
+        binding['providerId'],
+        'Canvas Host Generation provider identity is required.',
+      ),
+      modelId: requireNonEmptyString(
+        binding['modelId'],
+        'Canvas Host Generation model identity is required.',
+      ),
+    },
+    label: requireNonEmptyString(
+      record['label'],
+      'Canvas Host Generation model label is required.',
+    ),
+    providerLabel: requireNonEmptyString(
+      record['providerLabel'],
+      'Canvas Host Generation provider label is required.',
+    ),
+    isDefault: requireBoolean(
+      record['isDefault'],
+      'Canvas Host Generation default-model marker is required.',
+    ),
+  };
+}
+
+function requireCanvasGenerationPurpose(value: unknown): CanvasGenerationPurpose {
+  const purpose = CANVAS_GENERATION_PURPOSES.find((candidate) => candidate === value);
+  if (!purpose) throw invalidPayload('Canvas Host Generation model purpose is invalid.');
+  return purpose;
 }
 
 function requireContentLocator(value: unknown): ContentLocator {

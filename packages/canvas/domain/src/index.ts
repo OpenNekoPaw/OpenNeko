@@ -2,6 +2,7 @@ export * from './canvas-cut-draft';
 export * from './canvas-generation-application-port';
 export * from './canvas-generation-authoring';
 export * from './canvas-generation-inputs';
+export * from './canvas-node-sizing';
 export * from './canvas-drop';
 export * from './canvas-markdown-capabilities';
 export * from './canvas-projection';
@@ -50,6 +51,7 @@ export {
 } from './canvas-host-presentation-snapshot';
 export type {
   CanvasHostAuthoringCapabilities,
+  CanvasGenerationModelOption,
   CanvasHostIntent,
   CanvasHostIntentRequest,
   CanvasHostIntentResult,
@@ -69,12 +71,30 @@ export {
 export {
   CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+  CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID,
   CANVAS_ADD_TO_CUT_ACTION_ID,
   CANVAS_EDIT_AND_GENERATE_ACTION_ID,
+  CANVAS_IMAGE_COLOR_GRADE_ACTION_ID,
+  CANVAS_IMAGE_CROP_ACTION_ID,
+  CANVAS_IMAGE_ERASE_ACTION_ID,
+  CANVAS_IMAGE_GRID_SPLIT_ACTION_ID,
+  CANVAS_IMAGE_OPEN_EDITOR_TOOLS_ACTION_ID,
+  CANVAS_IMAGE_OUTPAINT_ACTION_ID,
+  CANVAS_IMAGE_REDRAW_ACTION_ID,
+  CANVAS_IMAGE_REMOVE_BACKGROUND_ACTION_ID,
+  CANVAS_IMAGE_ROTATE_ACTION_ID,
+  CANVAS_IMAGE_UPSCALE_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
   CANVAS_REVEAL_ACTION_ID,
+  CANVAS_VIDEO_COLOR_GRADE_ACTION_ID,
+  CANVAS_VIDEO_ENHANCE_ACTION_ID,
+  CANVAS_VIDEO_EXTRACT_FRAME_ACTION_ID,
+  CANVAS_VIDEO_GENERATE_SUBTITLES_ACTION_ID,
+  CANVAS_VIDEO_OPEN_EDITOR_TOOLS_ACTION_ID,
+  CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID,
+  CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
   createCanvasMaterialActionOwner,
   type CanvasGenerationActionAvailability,
   type CanvasMaterialActionExecutionResult,

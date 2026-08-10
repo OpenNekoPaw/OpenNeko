@@ -121,6 +121,10 @@ export function InfiniteCanvas({
   onCanvasEmbedOpen,
   isGridVisible = true,
 }: InfiniteCanvasProps) {
+  const [generationInputLayout, setGenerationInputLayout] = useState<{
+    readonly nodeId: string;
+    readonly height: number;
+  }>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
@@ -181,10 +185,16 @@ export function InfiniteCanvas({
         : undefined;
     if (!selectedNode) return;
 
-    const safePan = resolveGenerationSelectionSafePan(selectedNode, viewport, containerSize);
+    const safePan = resolveGenerationSelectionSafePan(
+      selectedNode,
+      viewport,
+      containerSize,
+      generationInputLayout?.nodeId === selectedNode.id ? generationInputLayout.height : undefined,
+    );
     if (safePan) onViewportChange({ pan: safePan });
   }, [
     containerSize,
+    generationInputLayout,
     isMarqueeSelecting,
     nodes,
     onViewportChange,
@@ -260,6 +270,16 @@ export function InfiniteCanvas({
     [],
   );
 
+  const interactionNodes = useMemo(
+    () =>
+      dragPreview
+        ? nodes.map((node) =>
+            node.id === dragPreview.nodeId ? { ...node, position: dragPreview.position } : node,
+          )
+        : nodes,
+    [dragPreview, nodes],
+  );
+
   const dropTargetPreview = useMemo(() => {
     if (!dragPreview) return undefined;
     const movedNodes = nodes.map((node) =>
@@ -309,9 +329,10 @@ export function InfiniteCanvas({
     if (!container) return;
 
     const updateSize = () => {
+      const bounds = container.getBoundingClientRect();
       setContainerSize({
-        width: container.clientWidth,
-        height: container.clientHeight,
+        width: bounds.width || container.clientWidth,
+        height: bounds.height || container.clientHeight,
       });
     };
 
@@ -319,9 +340,20 @@ export function InfiniteCanvas({
 
     const resizeObserver = new ResizeObserver(updateSize);
     resizeObserver.observe(container);
+    let resizeFrame: number | undefined;
+    const updateSizeAfterWindowResize = (): void => {
+      if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = undefined;
+        updateSize();
+      });
+    };
+    window.addEventListener('resize', updateSizeAfterWindowResize);
 
     return () => {
       resizeObserver.disconnect();
+      window.removeEventListener('resize', updateSizeAfterWindowResize);
+      if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
     };
   }, []);
 
@@ -464,18 +496,20 @@ export function InfiniteCanvas({
       </CanvasViewport>
 
       <SelectionContextToolbar
-        nodes={nodes}
+        nodes={interactionNodes}
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
-        hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
+        hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
       />
       <SelectionGenerationInputPanel
-        nodes={nodes}
+        nodes={interactionNodes}
         connections={connections}
         selectedNodeIds={selectedNodeIds}
+        viewport={viewport}
         viewportSize={containerSize}
-        hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
+        hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
+        onLayoutMeasure={setGenerationInputLayout}
       />
       <SelectionMaterialGenerationBar
         nodes={nodes}

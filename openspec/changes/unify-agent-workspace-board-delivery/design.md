@@ -38,6 +38,22 @@ Desktop Main validates renderer save snapshots against the current authoritative
 claim and source content fingerprint. Missing explicit removal evidence cannot erase Host-authored nodes.
 A stale writer claim, source fingerprint or sender identity fails without modifying `.nkc`.
 
+An opened Workspace Board remains a projection of that same authority rather than a second document owner.
+Desktop Main coordinates the existing exact Board sessions around the coordinator operation. Every matching
+session enters its existing serial operation tail before the coordinator loads or writes the document. A dirty
+session rejects the delivery before mutation; a clean session receives the committed Canvas document and emits
+one projection event after the atomic save. The refresh clears stale document undo/redo snapshots so an undo or
+later save cannot remove newly authoritative Agent artifacts. No filesystem watcher, polling reload, active/recent
+Canvas lookup or renderer merge becomes another successful path.
+
+### Canvas keyboard ownership after asynchronous mount
+
+Canvas initially renders loading state before its focus-owning editor Root exists. The shared focus hook therefore
+must bind to the actual HTMLElement identity rather than assuming a stable Ref object implies a mounted element.
+Canvas starts keyboard-disabled while hosted, becomes enabled when the delayed Root receives pointer/focus ownership,
+and stops again on Window blur or editable boundaries. Shortcut labels and dispatcher registrations must describe the
+same supported actions; Select, Hand, Group, Ungroup and advertised zoom operations cannot be presentation-only text.
+
 ### Recoverable single-writer delivery
 
 Each target uses one exact fenced writer claim. A new Desktop process may atomically replace an eligible
@@ -84,3 +100,9 @@ successful display path.
 Use isolated Electron fixtures to prove process takeover, one Canvas effect, visible flat content graph,
 user layout preservation, conflict diagnostics, authoritative save protection and a subsequent
 Generation delivery. Browser-only and direct codec tests do not replace Main/renderer path evidence.
+
+Agent Evaluation disposition is `update`: reuse `agent-runtime.workflow-controller` for the canonical Agent Turn ->
+typed artifact -> exact Workspace Board path, and extend the visible Desktop case to prove an already-open clean Board
+updates without reopen while a dirty Board blocks before durable mutation. Keyboard behavior is deterministic Canvas
+UI coverage plus the same visible Desktop fixture; it does not alter Agent prompts, Skills, model selection or Tool
+routing.

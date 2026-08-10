@@ -8,6 +8,8 @@ import {
   bindCanvasGenerationJob,
   createCanvasGenerationNodeData,
   isCanvasGenerationNodeData,
+  isCanvasGenerationRecipe,
+  purposeForCanvasGenerationRecipe,
   selectCanvasGenerationOutput,
   updateCanvasGenerationRecipe,
 } from '../canvas-generation-node';
@@ -145,6 +147,28 @@ describe('Canvas Generation Node contract', () => {
     });
     expect(authored.outputs).toEqual(initial.outputs);
     expect(selectCanvasGenerationOutput(authored, 'text-output').authoredText).toBeUndefined();
+  });
+
+  it('requires the distinct music purpose without introducing another node kind', () => {
+    const musicRecipe = {
+      kind: 'audio' as const,
+      prompt: 'slow ambient score',
+      isMusic: true,
+      model: {
+        purpose: 'audio.music.generate' as const,
+        providerId: 'provider-1',
+        modelId: 'music-model',
+      },
+    };
+
+    expect(purposeForCanvasGenerationRecipe(musicRecipe)).toBe('audio.music.generate');
+    expect(isCanvasGenerationRecipe(musicRecipe)).toBe(true);
+    expect(
+      isCanvasGenerationRecipe({
+        ...musicRecipe,
+        model: { ...musicRecipe.model, purpose: 'audio.generate' },
+      }),
+    ).toBe(false);
   });
 });
 

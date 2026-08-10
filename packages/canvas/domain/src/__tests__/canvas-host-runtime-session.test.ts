@@ -248,6 +248,149 @@ describe('CanvasHostRuntimeSession', () => {
     });
   });
 
+  it('atomically authors and connects a reference to the exact Generation node', async () => {
+    const generationCanvas = createCanvasGenerationNode({
+      canvas: createEmptyCanvasData('Initial'),
+      nodeId: 'generation-image',
+      kind: 'image',
+      position: { x: 400, y: 160 },
+    });
+    const source = referencedImageNode();
+    const requestSource = vi.fn(async () => directReference('media/cat.png', 'image'));
+    const authorMaterial = vi.fn(async ({ canvas }) => ({
+      ...canvas,
+      nodes: [...canvas.nodes, source],
+    }));
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: generationCanvas,
+      effects: { authorMaterial, requestSource },
+    });
+
+    const result = await runtime.executeIntent(
+      request('attach-generation-reference', {
+        type: 'attach-generation-reference',
+        nodeId: 'generation-image',
+        sourceKind: 'image',
+        sourceMode: 'reference',
+      }),
+    );
+
+    expect(result.status).toBe('accepted');
+    if (result.status !== 'accepted') throw new Error('Expected reference attach to succeed.');
+    expect(requestSource).toHaveBeenCalledWith({
+      identity,
+      sourceKind: 'image',
+      sourceMode: 'reference',
+    });
+    expect(authorMaterial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({ position: { x: 40, y: 160 } }),
+      }),
+    );
+    expect(result.snapshot.canvas.connections).toEqual([
+      {
+        id: 'generation-reference:media-image:generation-image',
+        sourceId: 'media-image',
+        targetId: 'generation-image',
+        type: 'reference',
+        sourceEndpoint: { nodeId: 'media-image', scope: 'node' },
+        targetEndpoint: { nodeId: 'generation-image', scope: 'port', portId: 'reference' },
+      },
+    ]);
+  });
+
+  it('authors a dropped Workspace material without reopening a picker', async () => {
+    const generationCanvas = createCanvasGenerationNode({
+      canvas: createEmptyCanvasData('Initial'),
+      nodeId: 'generation-image',
+      kind: 'image',
+      position: { x: 400, y: 160 },
+    });
+    const source = referencedImageNode();
+    const requestSource = vi.fn();
+    const authorMaterial = vi.fn(async ({ canvas }) => ({
+      ...canvas,
+      nodes: [...canvas.nodes, source],
+    }));
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: generationCanvas,
+      effects: { authorMaterial, requestSource },
+    });
+
+    const result = await runtime.executeIntent(
+      request('attach-dropped-generation-reference', {
+        type: 'attach-generation-reference-material',
+        nodeId: 'generation-image',
+        request: directReference('media/cat.png', 'image'),
+      }),
+    );
+
+    expect(result.status).toBe('accepted');
+    if (result.status !== 'accepted') throw new Error('Expected dropped reference to succeed.');
+    expect(requestSource).not.toHaveBeenCalled();
+    expect(authorMaterial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity,
+        request: expect.objectContaining({
+          kind: 'direct-reference',
+          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          mediaKind: 'image',
+        }),
+      }),
+    );
+    expect(result.snapshot.canvas.connections).toEqual([
+      expect.objectContaining({
+        sourceId: 'media-image',
+        targetId: 'generation-image',
+        type: 'reference',
+      }),
+    ]);
+  });
+
+  it('leaves the Generation document unchanged when reference selection is cancelled', async () => {
+    const generationCanvas = createCanvasGenerationNode({
+      canvas: createEmptyCanvasData('Initial'),
+      nodeId: 'generation-image',
+      kind: 'image',
+      position: { x: 400, y: 160 },
+    });
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: generationCanvas,
+      effects: { requestSource: async () => undefined },
+    });
+
+    const result = await runtime.executeIntent(
+      request('cancel-generation-reference', {
+        type: 'attach-generation-reference',
+        nodeId: 'generation-image',
+        sourceKind: 'image',
+        sourceMode: 'reference',
+      }),
+    );
+
+    expect(result).toMatchObject({ status: 'accepted', snapshot: { dirty: false } });
+    expect((await runtime.getSnapshot()).canvas).toEqual(generationCanvas);
+  });
+
+  it('rejects unsupported Generation reference source kinds at the contract boundary', () => {
+    expect(() =>
+      createCanvasHostIntentRequest({
+        requestId: 'request-invalid-reference-kind',
+        commandId: 'invalid-reference-kind',
+        identity,
+        intent: {
+          type: 'attach-generation-reference',
+          nodeId: 'generation-image',
+          sourceKind: 'model' as never,
+          sourceMode: 'reference',
+        },
+      }),
+    ).toThrow('reference source kind is invalid');
+  });
+
   it('preserves the model source kind for the shared 3D Director action', async () => {
     const requestSource = vi.fn(async () => directReference('models/character.glb', 'model'));
     const authorMaterial = vi.fn(async ({ canvas }) => canvas);
@@ -279,10 +422,10 @@ describe('CanvasHostRuntimeSession', () => {
   });
 
   it.each([
-    ['prompt', { width: 320, height: 220 }],
-    ['image', { width: 300, height: 220 }],
-    ['audio', { width: 300, height: 120 }],
-    ['video', { width: 300, height: 220 }],
+    ['prompt', { width: 240, height: 160 }],
+    ['image', { width: 240, height: 180 }],
+    ['audio', { width: 240, height: 120 }],
+    ['video', { width: 240, height: 180 }],
   ] as const)(
     'creates an empty canonical %s Generation Node with the matching content size',
     async (kind, size) => {
@@ -400,6 +543,18 @@ describe('CanvasHostRuntimeSession', () => {
     const available = new CanvasHostRuntimeSession({
       identity: { ...identity, sessionId: 'session-capabilities' },
       initialCanvas: createEmptyCanvasData('Available'),
+      resolveGenerationModels: () => [
+        {
+          binding: {
+            purpose: 'image.generate',
+            providerId: 'provider-1',
+            modelId: 'image-model-1',
+          },
+          label: 'Image Model',
+          providerLabel: 'Provider One',
+          isDefault: true,
+        },
+      ],
       effects: {
         requestSource: async () => undefined,
         generation: unusedGenerationEffects(),
@@ -409,10 +564,84 @@ describe('CanvasHostRuntimeSession', () => {
     expect((await unavailable.getSnapshot()).authoringCapabilities).toEqual({
       sourceModes: [],
       generationKinds: [],
+      generationModels: [],
     });
     expect((await available.getSnapshot()).authoringCapabilities).toEqual({
       sourceModes: ['import', 'reference'],
       generationKinds: ['prompt', 'image', 'audio', 'video'],
+      generationModels: [
+        {
+          binding: {
+            purpose: 'image.generate',
+            providerId: 'provider-1',
+            modelId: 'image-model-1',
+          },
+          label: 'Image Model',
+          providerLabel: 'Provider One',
+          isDefault: true,
+        },
+      ],
+    });
+  });
+
+  it('initializes a new Generation node from the exact configured default model and typed parameters', async () => {
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: createEmptyCanvasData('Defaults'),
+      resolveGenerationModels: () => [
+        {
+          binding: {
+            purpose: 'image.generate',
+            providerId: 'provider-1',
+            modelId: 'image-model-1',
+          },
+          label: 'Image Model',
+          providerLabel: 'Provider One',
+          isDefault: true,
+        },
+        {
+          binding: {
+            purpose: 'image.generate',
+            providerId: 'provider-2',
+            modelId: 'image-model-2',
+          },
+          label: 'Alternate Image Model',
+          providerLabel: 'Provider Two',
+          isDefault: false,
+        },
+      ],
+      effects: { generation: unusedGenerationEffects() },
+    });
+
+    const result = await runtime.executeIntent(
+      request('create-default-generation', {
+        type: 'create-generation-node',
+        kind: 'image',
+        position: { x: 40, y: 60 },
+      }),
+    );
+
+    expect(result.status).toBe('accepted');
+    if (result.status !== 'accepted') throw new Error('Expected Generation creation to succeed.');
+    expect(result.snapshot.canvas.nodes[0]).toMatchObject({
+      type: 'generation',
+      data: {
+        recipe: {
+          kind: 'image',
+          prompt: '',
+          model: {
+            purpose: 'image.generate',
+            providerId: 'provider-1',
+            modelId: 'image-model-1',
+          },
+          aspectRatio: '1:1',
+          width: 1024,
+          height: 1024,
+          count: 1,
+          quality: 'standard',
+        },
+        outputs: [],
+      },
     });
   });
 

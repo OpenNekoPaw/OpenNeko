@@ -247,11 +247,19 @@ export function useFocusedWebviewRoot<T extends HTMLElement>(
   };
 
   useEffect(() => {
-    const root = rootRef.current;
-
     const markFocused = (): void => setKeyboardFocused(true);
     const markBlurred = (): void => setKeyboardFocused(false);
+    const handleFocusIn = (event: FocusEvent): void => {
+      const root = rootRef.current;
+      if (root && event.target instanceof Node && root.contains(event.target)) {
+        markFocused();
+      }
+    };
     const handlePointerDown = (event: PointerEvent): void => {
+      const root = rootRef.current;
+      if (!root || !(event.target instanceof Node) || !root.contains(event.target)) {
+        return;
+      }
       markFocused();
       releaseEditableFocusFromPointerTarget(getPointerTargetElement(event.target), root);
     };
@@ -266,16 +274,16 @@ export function useFocusedWebviewRoot<T extends HTMLElement>(
       }
     };
 
-    root?.addEventListener('focusin', markFocused);
-    root?.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('pointerdown', handlePointerDown, { capture: true });
     window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('blur', markBlurred);
     window.addEventListener('pagehide', markBlurred);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      root?.removeEventListener('focusin', markFocused);
-      root?.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('pointerdown', handlePointerDown, { capture: true });
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('blur', markBlurred);
       window.removeEventListener('pagehide', markBlurred);

@@ -7,7 +7,15 @@ Canvas 当前的添加菜单直接创建 Markdown/Media/File 内容节点，而�
 - **BREAKING** Canvas 添加入口只保留 Text、Image、Audio、Video，并原子切换为一种 canonical Generation Node 的不同 `kind`；Table 与 3D Director 不再作为本次 Canvas 基础节点目录入口，历史 Markdown/File 内容保持可读。
 - Generation Node 在 `.nkc` 中持久保存严格 typed Recipe、稳定输入引用、运行关联和可选择的输出引用；Job、provider task、生成文件与资产版本仍由 `@neko/generation`/内容资产 owner 持有。
 - 选中 Generation Node 后由 Canvas package-owned 编辑器提供提示词、参考信息、purpose-qualified 模型和类型专用参数；显式运行创建一个不可变 GenerationJob request，成功结果回填原节点而不创建默认 Job/Media sibling 节点。
-- Canvas 选中态拆分为悬浮操作栏、内容节点和独立生成输入 composer：普通/引用节点只显示带节点类型和直接操作的工具栏与内容节点，Generation Node 额外显示 viewport 底部宽幅 composer；Generation Node 按 Text/Image/Audio/Video 对应内容节点样式渲染，空态与结果态不显示“生成节点”任务卡标题，composer 不重复节点标题/状态，是可重建 presentation，不是第二个 Canvas 节点或事实来源。
+- Canvas Host 从当前 Workspace Neko 配置投影无密钥、purpose-qualified 的可用生成模型目录；composer 以模型选择器和 typed 参数面板替代 provider/model/比例/分辨率等自由文本输入，只采用显式用途/类型默认绑定，不从列表顺序推断 provider 或模型。
+- Audio Generation Node 在同一 canonical Recipe/Job 路径内明确区分“音频生成”和“音乐生成”模式；模式切换改变所需 purpose、可选模型和参数表面，但不新增第五种节点、第二套提交协议或 fallback。
+- Canvas 选中态拆分为悬浮操作栏、内容节点和独立生成输入 composer：普通/引用节点只显示带节点类型和直接操作的工具栏与内容节点，Generation Node 额外显示跟随精确选中节点的紧凑 composer；三者形成固定附件栈，操作栏始终位于节点上方、composer 始终位于节点下方，空间不足时平移 Canvas 视口容纳整组而不独立夹取或翻转附件。Generation Node 按 Text/Image/Audio/Video 对应内容节点样式渲染并使用白色或轻玻璃不透明度的中性节点表面、统一细边框和克制阴影，空态与结果态不显示“生成节点”任务卡标题。composer、操作栏和弹层使用同一白色玻璃 surface 家族，按钮默认不叠加独立背景，仅在 hover/selected/focus 时显示轻量状态；composer 不重复节点标题/状态、不复用 Canvas 灰色背景，也不再以独立灰色 footer 或饱和危险色块制造第四套背景，是可重建 presentation，不是第二个 Canvas 节点或事实来源。
+- composer 的 `+` 通过 Canvas Host 授权选择 Workspace 参考素材并以同一串行命令原子创建素材节点和指向精确 Generation Node 的 `reference` 连接；Renderer 不读取本地路径。模型选择项将模型和 provider 在同一行展示，typed 参数弹层继承 composer 宽度上下文并限制在 Canvas 可视边界内，以分组网格和内部滚动呈现，禁止收缩为跨越画布的单列长条。
+- Canvas Domain 统一拥有新建节点的紧凑默认尺寸和最小缩放尺寸；Webview、Headless authoring、Generation authoring 与 Workspace Board 投影复用同一密度契约。新建文本、媒体、生成与投影节点减少画布占用，图片仍保持原始宽高比；已有 `.nkc` 节点的用户尺寸不因默认值变化而被改写。
+- Canvas 素材节点操作栏按 Image、Video、Audio 使用稳定 action identity 和参考图一致的主操作/更多操作分组；只有已组合真实执行 owner 的能力才出现。现有剪辑、预览和媒体库写入能力直接复用原 canonical action，去噪、音频分离、擦除、扩图、去背景等能力不得以 no-op 按钮伪装可用。节点删除不再出现在操作栏或更多菜单，只由 Canvas 焦点边界内的 Delete/Backspace 快捷键处理。
+- 工作区资源浏览器的 `ContentLocator` 可直接拖入 composer 参考区，保留 Workspace 引用而不复制；其他目录素材必须通过显式“导入到工作区”操作获得 durable locator 后再连接，不得将绝对路径作为参考事实。
+- 新 Generation Node 从精确 Workspace ConfigManager 的 purpose-qualified 默认绑定初始化模型，并按 kind 写入 canonical typed 默认参数；只有默认绑定缺失或已失效时才要求用户选择，不允许当前选择器推测 provider 或回退到列表首项。
+- Image composer 收敛为参考图一致的紧凑编辑卡：参考区位于左上，提示词区域吸收剩余高度，模型、比例/分辨率/画质摘要、独立生成数量和运行操作固定在单行底栏。图片参数弹层使用五列比例卡片和 1K/2K/4K、低/中/高分组；生成数量从综合参数中拆为窄型纵向弹层，但仍写回同一 typed Recipe `count` 字段。
 - Webview 发起的文档替换、删除后续状态提交与 Host-owned 节点创建必须经过同一串行命令队列；后续新增不得基于陈旧 Host snapshot 恢复已删除节点或连接。
 - 每次运行创建新的 Job 与输出；节点保留历史输出引用并选择当前输出，失败保留上次成功结果并显示局部 diagnostic。第一阶段每节点只允许一个 active Job，且不因上游变化自动执行下游节点。
 - 输入连接在运行时由 Canvas owner 解析为稳定文本或授权 `ContentLocator`，输出连接只暴露节点当前选择的结果；缺失、类型不匹配、过期或未授权输入仅阻塞当前运行。
