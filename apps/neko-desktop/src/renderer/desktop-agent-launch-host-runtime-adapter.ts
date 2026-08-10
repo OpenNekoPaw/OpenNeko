@@ -4,7 +4,6 @@ import {
   type AgentDraftHostRuntimeAdapter,
   type AgentHostToWebviewMessage,
   type AgentLaunchCatalogProjection,
-  type ProjectMentionExtra,
 } from '@neko/agent-contracts';
 import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
 import {
@@ -22,7 +21,6 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
   readonly bridge: OpenNekoAgentLaunchBridge;
   readonly catalog: AgentLaunchCatalogProjection;
   readonly draftId: string;
-  readonly searchCharacterMentions: (filter: string) => Promise<readonly ProjectMentionExtra[]>;
   readonly storage?: DesktopAgentPresentationStorage;
 }): ElectronAgentLaunchHostRuntimeAdapter {
   const { connection } = input.catalog;
@@ -34,7 +32,6 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     connection.viewId,
   );
   let disposed = false;
-  let characterSearchSequence = 0;
   const emit = (message: AgentHostToWebviewMessage): void => {
     if (disposed) throw new Error('Agent launch adapter is disposed.');
     for (const listener of listeners) listener(message);
@@ -72,26 +69,11 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       if (message.type === 'searchProjectFiles') {
         if (message.purpose === 'roleplay') {
-          const searchSequence = (characterSearchSequence += 1);
-          void input
-            .searchCharacterMentions(message.filter)
-            .then((mentionExtras) => {
-              if (disposed || searchSequence !== characterSearchSequence) return;
-              emit({
-                type: 'projectFiles',
-                filter: message.filter,
-                purpose: 'roleplay',
-                files: [],
-                mentionExtras: [...mentionExtras],
-              });
-            })
-            .catch((error: unknown) => {
-              if (disposed || searchSequence !== characterSearchSequence) return;
-              emit({
-                type: 'globalError',
-                message: error instanceof Error ? error.message : String(error),
-              });
-            });
+          emit({
+            type: 'globalError',
+            message:
+              'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+          });
           return;
         }
         const receipt = catalog.interaction.bindingReceipt;
@@ -257,7 +239,6 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     async dispose(): Promise<void> {
       if (disposed) return;
       disposed = true;
-      characterSearchSequence += 1;
       listeners.clear();
       await input.bridge.agentLaunch.detach(connection);
     },

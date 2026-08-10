@@ -1,11 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, RefreshIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import type {
-  AgentInteractionProjection,
-  AgentLaunchHostResult,
-  ProjectMentionExtra,
-} from '@neko/agent-contracts';
+import type { AgentInteractionProjection, AgentLaunchHostResult } from '@neko/agent-contracts';
 import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
 import type { DesktopProjectTabProjection } from '@neko/host/desktop-shell-contract';
 import {
@@ -167,8 +163,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             bridge: window.openNekoDesktop,
             catalog,
             draftId: agentPresentation.draftId,
-            searchCharacterMentions: (filter) =>
-              searchPublishedCharacterMentions(window.openNekoDesktop, filter),
           });
           setState({
             kind: 'ready',
@@ -211,12 +205,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   }, [binding, connectionKey, projectId, retryAttempt, viewId]);
 
   const activeAdapter = state.kind === 'ready' ? state.adapter : undefined;
-  const characterLaunchDraft =
-    props.binding === 'launch' &&
-    state.kind === 'ready' &&
-    state.agentPresentation?.phase === 'draft'
-      ? state.agentPresentation
-      : undefined;
   const withAuthoritativeFeed = (status: JSX.Element): JSX.Element =>
     props.conversationFeed ? (
       <div className="desktop-agent-conversation-fallback">
@@ -280,31 +268,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
               }
               initialInput={state.initialInput}
               locale={locale}
-              onSubmitCharacterLaunch={
-                props.binding === 'launch' && characterLaunchDraft
-                  ? async (input) => {
-                      await window.openNekoDesktop.characterConversations.launch({
-                        workbenchInstanceId: props.workbenchInstanceId,
-                        agentSurfaceId: props.agentSurfaceId,
-                        agentViewId: props.viewId,
-                        draftId: characterLaunchDraft.draftId,
-                        message: input.message,
-                        selection: {
-                          runtimeKind: 'companion',
-                          characters: input.characters.map((character) => ({
-                            characterVersionId: character.characterVersionId,
-                            ...(character.characterStorylineVersionId === undefined
-                              ? {}
-                              : {
-                                  characterStorylineVersionId:
-                                    character.characterStorylineVersionId,
-                                }),
-                          })),
-                        },
-                      });
-                    }
-                  : undefined
-              }
               presentation="desktop-dock"
               conversationFeed={
                 props.conversationFeed && state.agentPresentation?.phase === 'session'
@@ -327,61 +290,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
       <DesktopAgentAdapterDisposer adapter={activeAdapter} />
     </>
   );
-}
-
-async function searchPublishedCharacterMentions(
-  bridge: Pick<typeof window.openNekoDesktop, 'characterFoundation'>,
-  filter: string,
-): Promise<readonly ProjectMentionExtra[]> {
-  const snapshot = await bridge.characterFoundation.getSnapshot();
-  const projects = new Map(
-    snapshot.character.projects.map((project) => [project.characterProjectId, project] as const),
-  );
-  const normalized = filter.trim().toLocaleLowerCase();
-  return snapshot.character.versions.flatMap((publication) => {
-    const project = projects.get(publication.characterProjectId);
-    if (!project) return [];
-    const storylines = snapshot.character.storylineVersions.filter(
-      (storyline) => storyline.characterVersionId === publication.characterVersionId,
-    );
-    const variants = storylines.length === 0 ? [undefined] : storylines;
-    return variants.flatMap((storyline) => {
-      const label = [project.displayName, publication.label, storyline?.label]
-        .filter((part): part is string => part !== undefined)
-        .join(' · ');
-      const searchText = [
-        label,
-        publication.definition.summary,
-        storyline?.premise,
-        storyline?.desire,
-      ]
-        .filter((part): part is string => part !== undefined)
-        .join(' ')
-        .toLocaleLowerCase();
-      if (normalized && !searchText.includes(normalized)) return [];
-      return [
-        {
-          type: 'character' as const,
-          id:
-            storyline === undefined
-              ? publication.characterVersionId
-              : `${publication.characterVersionId}:${storyline.characterStorylineVersionId}`,
-          label,
-          summary: publication.definition.summary,
-          searchText,
-          source: 'entity-graph' as const,
-          entityType: 'character-version',
-          characterLaunchSelection: {
-            characterProjectId: project.characterProjectId,
-            characterVersionId: publication.characterVersionId,
-            ...(storyline === undefined
-              ? {}
-              : { characterStorylineVersionId: storyline.characterStorylineVersionId }),
-          },
-        },
-      ];
-    });
-  });
 }
 
 function DesktopAgentAdapterDisposer({

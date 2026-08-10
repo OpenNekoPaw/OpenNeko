@@ -672,7 +672,7 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('submits exact CharacterVersion selections through the Character launch port', async () => {
+  it('rejects restored Character selections before the Character launch port', () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-character-launch', { kind: 'unbound' });
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
@@ -711,20 +711,10 @@ describe('ConversationController entry state', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Speak together' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await waitFor(() => expect(onSubmitCharacterLaunch).toHaveBeenCalledOnce());
-    expect(onSubmitCharacterLaunch).toHaveBeenCalledWith({
-      message: 'Speak together',
-      characters: [
-        {
-          characterProjectId: 'character-project-a',
-          characterVersionId: 'character-version-a',
-        },
-        {
-          characterProjectId: 'character-project-b',
-          characterVersionId: 'character-version-b',
-        },
-      ],
-    });
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room capabilities remain experimental',
+    );
+    expect(onSubmitCharacterLaunch).not.toHaveBeenCalled();
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
     expect(hostMocks.bindTarget).not.toHaveBeenCalled();
   });
@@ -992,7 +982,7 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('opens exact Character roleplay selection from an unbound Entry Draft', () => {
+  it('keeps Character roleplay unavailable from an unbound Entry Draft', () => {
     vi.clearAllMocks();
     render(
       <ConversationController
@@ -1004,11 +994,11 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Roleplay/ }));
 
-    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
-      purpose: 'roleplay',
-    });
-    expect(screen.getByTestId('entry-page-menu').textContent).toBe('roleplay');
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room capabilities remain experimental',
+    );
   });
 
   it('removes Entry Draft owner choices after Workspace activation', () => {
@@ -1411,18 +1401,19 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.getSettings).toHaveBeenCalledWith('conv-new');
   });
 
-  it('opens roleplay prompts from the entry button', () => {
+  it('keeps roleplay prompts unavailable from the entry button', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Roleplay/ }));
 
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
-      purpose: 'roleplay',
-    });
+    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
-    expect(screen.getByTestId('entry-page-menu').textContent).toBe('roleplay');
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room capabilities remain experimental',
+    );
   });
 
   it('starts a new tab and sends entry text in chat mode', () => {

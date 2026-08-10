@@ -376,7 +376,7 @@ describe('DesktopAgentSurface', () => {
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
   });
 
-  it('submits Character selections through the exact Desktop launch surface identity', async () => {
+  it('does not expose the experimental Character launch producer', async () => {
     const attach = vi.fn(async () => launchReady('assistant:1', 'launch-character'));
     const launchCharacters = vi.fn(async () => ({
       topology: 'chatroom' as const,
@@ -396,26 +396,8 @@ describe('DesktopAgentSurface', () => {
       root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />);
     });
     await act(async () => undefined);
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('[data-testid="submit-character-launch"]')
-        ?.click();
-    });
-
-    expect(launchCharacters).toHaveBeenCalledWith({
-      workbenchInstanceId: 'workbench-assistant-1',
-      agentSurfaceId: 'agent-surface-assistant-1',
-      agentViewId: 'agent-view:window-1',
-      draftId: 'draft-launch-1',
-      message: 'Meet at the archive.',
-      selection: {
-        runtimeKind: 'companion',
-        characters: [
-          { characterVersionId: 'character-version-a' },
-          { characterVersionId: 'character-version-b' },
-        ],
-      },
-    });
+    expect(container.querySelector('[data-testid="submit-character-launch"]')).toBeNull();
+    expect(launchCharacters).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 

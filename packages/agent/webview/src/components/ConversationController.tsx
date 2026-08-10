@@ -208,7 +208,6 @@ export function ConversationController({
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
-  onSubmitCharacterLaunch,
   settings,
   hasConfigSnapshot,
   setSettings,
@@ -1086,12 +1085,6 @@ export function ConversationController({
     startNewForegroundConversation();
   }, [conversationKind, startNewForegroundConversation]);
 
-  const handleRequestRoleplayItems = useCallback(() => {
-    setMentionItems([]);
-    updateMentionSearchFilter('');
-    agentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
-  }, [agentHostMessages, setMentionItems, updateMentionSearchFilter]);
-
   const handleEntryAction = useCallback(
     (action: EmptyStateEntryAction) => {
       setEntryAction(action);
@@ -1111,25 +1104,14 @@ export function ConversationController({
           setPendingSendRequest(null);
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
-          if (
-            agentPresentation?.phase === 'draft' &&
-            agentPresentation.binding.kind !== 'unbound'
-          ) {
-            setEntryPromptMenu(null);
-            setGlobalError('Character and Room scope is not available.');
-            return;
-          }
-          setEntryPromptMenu('roleplay');
-          handleRequestRoleplayItems();
+          setEntryPromptMenu(null);
+          setGlobalError(
+            'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+          );
           return;
       }
     },
-    [
-      agentPresentation,
-      handleRequestRoleplayItems,
-      startNewForegroundConversation,
-      updateEntryInputValue,
-    ],
+    [agentPresentation?.phase, startNewForegroundConversation, updateEntryInputValue],
   );
 
   const handleSendWithoutConversation = useCallback(
@@ -1156,6 +1138,12 @@ export function ConversationController({
         if (!agentPresentation) throw new Error('Agent Draft presentation is unavailable.');
         const launchCatalog = draftHostRuntimeAdapter.readLaunchCatalog();
         const authoritativeDraft = launchCatalog.interaction;
+        if (entryCharacterLaunches.length > 0) {
+          setGlobalError(
+            'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+          );
+          return;
+        }
         if (
           entryWorkspaceTarget &&
           (authoritativeDraft.binding.kind !== 'workspace' ||
@@ -1172,36 +1160,6 @@ export function ConversationController({
           launchCatalog.configuration.fields.model.policy.status === 'unavailable'
         ) {
           setGlobalError('Choose a configured provider and model before sending.');
-          return;
-        }
-        if (entryCharacterLaunches.length > 0) {
-          if (authoritativeDraft.binding.kind !== 'unbound') {
-            setGlobalError('Character launch requires the unbound Agent Entry Draft.');
-            return;
-          }
-          if (!onSubmitCharacterLaunch) {
-            setGlobalError('Character conversation launch is unavailable.');
-            return;
-          }
-          setIsForegroundConversationActivationPending(true);
-          void onSubmitCharacterLaunch({
-            message: messageText,
-            characters: entryCharacterLaunches.map((selection) => ({
-              characterProjectId: selection.characterProjectId,
-              characterVersionId: selection.characterVersionId,
-              ...(selection.characterStorylineVersionId === undefined
-                ? {}
-                : { characterStorylineVersionId: selection.characterStorylineVersionId }),
-            })),
-          })
-            .then(() => {
-              committedEntryDraftIdRef.current = agentPresentation.draftId;
-              writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
-              updateEntryInputValue('');
-              setEntryCharacterLaunches([]);
-            })
-            .catch((error: unknown) => setGlobalError(describeError(error)))
-            .finally(() => setIsForegroundConversationActivationPending(false));
           return;
         }
         let references: readonly AgentInputReferenceReceipt[];
@@ -1266,24 +1224,22 @@ export function ConversationController({
           setPendingSendRequest(null);
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
-          setEntryPromptMenu('roleplay');
-          handleRequestRoleplayItems();
+          setEntryPromptMenu(null);
+          setGlobalError(
+            'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+          );
           return;
       }
     },
     [
       entryAction,
-      activeSettings.chatModelOptions,
       agentPresentation,
+      entryCharacterLaunches,
       entryContextReferences,
-      entryGenParams,
       entryInputValue,
       entrySessionMode,
-      entrySelectedModel,
-      entryExecutionMode,
       entryWorkspaceTarget,
       handleSendWithoutConversation,
-      handleRequestRoleplayItems,
       hostRuntimeAdapter,
       isDraftPresentation,
       updateEntryInputValue,

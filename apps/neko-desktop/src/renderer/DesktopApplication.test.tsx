@@ -467,12 +467,21 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('routes Character navigation to its singleton Management scene', async () => {
+  it('shows Character navigation as unavailable without replacing the current Scene', async () => {
     const projection = createProjection();
     const transition = vi.fn(async () => ({
-      status: 'transitioned' as const,
+      status: 'unavailable' as const,
       requestId: 'character-management-1',
-      scene: characterManagementScene(),
+      diagnostic: {
+        code: 'desktop-scene-owner-unavailable' as const,
+        severity: 'error' as const,
+        message:
+          'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+        metadata: {
+          owner: 'character-product' as const,
+          intentKind: 'open-character-management' as const,
+        },
+      },
     }));
     installBridge({ projection, transition });
     const { container, root } = await renderApplication();
@@ -482,22 +491,34 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!characters) throw new Error('Desktop fixture requires Character navigation.');
 
     await act(async () => characters.click());
-    await waitFor(() => transition.mock.calls.length === 1);
+    await waitFor(() =>
+      container.textContent?.includes('Character and Room capabilities remain experimental'),
+    );
 
     expect(transition).toHaveBeenCalledWith(
       'window-1',
       { kind: 'open-character-management' },
       activeScene(projection).sceneId,
     );
+    expect(container.querySelector('[data-character-management-catalog="true"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
-  it('routes World navigation to its singleton Foundation scene', async () => {
+  it('shows World navigation as unavailable without replacing the current Scene', async () => {
     const projection = createProjection();
     const transition = vi.fn(async () => ({
-      status: 'transitioned' as const,
+      status: 'unavailable' as const,
       requestId: 'world-management-1',
-      scene: worldManagementScene(),
+      diagnostic: {
+        code: 'desktop-scene-owner-unavailable' as const,
+        severity: 'error' as const,
+        message:
+          'Interactive World capabilities remain experimental and are not available in the production Desktop.',
+        metadata: {
+          owner: 'world-product' as const,
+          intentKind: 'open-world-management' as const,
+        },
+      },
     }));
     installBridge({ projection, transition });
     const { container, root } = await renderApplication();
@@ -507,13 +528,16 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!worlds) throw new Error('Desktop fixture requires World navigation.');
 
     await act(async () => worlds.click());
-    await waitFor(() => transition.mock.calls.length === 1);
+    await waitFor(() =>
+      container.textContent?.includes('Interactive World capabilities remain experimental'),
+    );
 
     expect(transition).toHaveBeenCalledWith(
       'window-1',
       { kind: 'open-world-management' },
       activeScene(projection).sceneId,
     );
+    expect(container.querySelector('[data-world-foundation="true"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
