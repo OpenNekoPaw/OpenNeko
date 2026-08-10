@@ -14,6 +14,8 @@ import {
   type WorldJsonValue,
 } from './codec';
 
+export type { WorldJsonValue } from './codec';
+
 export const WORLD_REVIEW_STATUSES = ['draft', 'ready', 'blocked'] as const;
 export const WORLD_VISIBILITY_KINDS = ['public', 'actors', 'hidden'] as const;
 export const WORLD_FACT_MUTATION_KINDS = ['set', 'delete'] as const;
@@ -675,7 +677,7 @@ function parseWorldRule(value: unknown): WorldRule {
   };
 }
 
-function parseWorldFact(value: unknown): WorldFact {
+export function parseWorldFact(value: unknown): WorldFact {
   const record = requireExactRecord(
     value,
     ['factId', 'key', 'value', 'visibility', 'knownByActorIds'],
