@@ -1868,7 +1868,6 @@ describe('DesktopCanvasRuntime', () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-open-'));
     roots.push(workspacePath);
     const identity = createIdentity();
-    let runtime: DesktopCanvasRuntime;
     const resolveCanvasViewGrant = vi.fn(async (): Promise<DesktopCanvasViewGrant> => {
       await runtime.coordinateWorkspaceBoardMutation(identity.workspaceId, async () => undefined);
       return {
@@ -1881,7 +1880,7 @@ describe('DesktopCanvasRuntime', () => {
         },
       };
     });
-    runtime = new DesktopCanvasRuntime({
+    const runtime = new DesktopCanvasRuntime({
       shell: { resolveCanvasViewGrant },
       host: createElectronNekoHostPorts({
         homedir: workspacePath,

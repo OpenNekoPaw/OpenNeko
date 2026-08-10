@@ -1301,6 +1301,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.2.17
         version: 18.3.7(@types/react@18.3.31)
+      jsdom:
+        specifier: ^27.0.1
+        version: 27.4.0
       react:
         specifier: ^18.2.0
         version: 18.3.1

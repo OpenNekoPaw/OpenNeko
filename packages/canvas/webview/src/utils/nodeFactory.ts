@@ -34,7 +34,7 @@ interface BuildCanvasNodeOptions {
 
 type NodeDefaultSize = { width: number; height: number };
 
-export const NODE_DEFAULT_SIZES: Readonly<Record<CanvasNodeType, NodeDefaultSize>> =
+const NODE_DEFAULT_SIZES: Readonly<Record<CanvasNodeType, NodeDefaultSize>> =
   CANVAS_NODE_DEFAULT_SIZES;
 
 export function resolveAuthoredNodeDefaultSize(node: CanvasNode): NodeDefaultSize {
