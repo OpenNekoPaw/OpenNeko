@@ -25,9 +25,6 @@
     "@codemirror/state": "6.7.1",
     "@codemirror/view": "6.43.8",
     "@lezer/highlight": "1.2.3",
-    "@milkdown/core": "7.22.0",
-    "@milkdown/preset-commonmark": "7.22.0",
-    "@milkdown/preset-gfm": "7.22.0",
     "@milkdown/prose": "7.22.0",
     "@neko/markdown": "workspace:*",
     "@neko/text-editor-domain": "workspace:*",
@@ -36,6 +33,9 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@milkdown/core": "7.22.0",
+    "@milkdown/preset-commonmark": "7.22.0",
+    "@milkdown/preset-gfm": "7.22.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "jsdom": "^27.0.1",
