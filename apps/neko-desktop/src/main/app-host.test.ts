@@ -73,96 +73,31 @@ import { WorldFoundationService } from '@neko/world/application';
 import type { RoomRun, RoomView } from '@neko/chara/contracts';
 
 describe('DesktopAppHost', () => {
-  it('delegates World Foundation commands to the package owner and returns its canonical snapshot', async () => {
+  it('rejects World Foundation commands before the package owner is called', async () => {
     const commands = { execute: vi.fn(async () => undefined) };
     const fixture = await createShellAppHost({ worldFoundationCommands: commands });
-    const result = await fixture.appHost.executeWorldFoundationRequest(fixture.sender, {
-      requestId: 'world-request-1',
-      operation: 'world-project-create',
-      input: {
-        worldProjectId: 'world-project:a',
-        title: 'Archive City',
-        draft: {
-          background: 'A city of archives.',
-          worldBook: [],
-          locations: [],
-          organizations: [],
-          rules: [],
-          initialFacts: [],
-        },
-      },
-    });
-
-    expect(commands.execute).toHaveBeenCalledWith({
-      operation: 'world-project-create',
-      input: {
-        worldProjectId: 'world-project:a',
-        title: 'Archive City',
-        draft: {
-          background: 'A city of archives.',
-          worldBook: [],
-          locations: [],
-          organizations: [],
-          rules: [],
-          initialFacts: [],
-        },
-      },
-    });
-    expect(result).toEqual({
-      requestId: 'world-request-1',
-      snapshot: { world: { projects: [], versions: [], runtimes: [] }, diagnostics: [] },
-    });
-
-    await fixture.appHost.executeWorldFoundationRequest(fixture.sender, {
-      requestId: 'world-request-2',
-      operation: 'world-transformation-state-commit',
-      input: {
-        worldTransformationCandidateId: 'candidate-weather',
-        category: 'world-state',
-        owner: 'world-runtime',
-        requester: { actorId: 'foundation-author', authority: 'author' },
-        base: {
-          kind: 'runtime',
-          worldVersionId: 'world-version:a',
-          worldRunId: 'world-run:a',
-          worldSaveId: 'world-save:a',
-          branchId: 'branch-main',
-          worldStateRevision: 0,
-          timepoint: 0,
-        },
-        source: { intent: 'Make the city rainy.', sourceRefIds: [] },
-        diff: [
-          {
-            operation: 'add',
-            semanticRef: 'world-fact:weather',
-            after: {
-              factId: 'weather',
-              key: 'city.weather',
-              value: 'rain',
-              visibility: { kind: 'public' },
-              knownByActorIds: ['foundation-author'],
-            },
+    await expect(
+      fixture.appHost.executeWorldFoundationRequest(fixture.sender, {
+        requestId: 'world-request-1',
+        operation: 'world-project-create',
+        input: {
+          worldProjectId: 'world-project:a',
+          title: 'Archive City',
+          draft: {
+            background: 'A city of archives.',
+            worldBook: [],
+            locations: [],
+            organizations: [],
+            rules: [],
+            initialFacts: [],
           },
-        ],
-        requirements: [
-          {
-            capabilityKind: 'world-action',
-            capabilityId: 'world.foundation.fact.set',
-            mode: 'required',
-          },
-        ],
-        createdAt: '2026-08-10T10:00:00.000Z',
-      },
-    });
-
-    expect(commands.execute).toHaveBeenNthCalledWith(2, {
-      operation: 'world-transformation-state-commit',
-      input: expect.objectContaining({
-        worldTransformationCandidateId: 'candidate-weather',
-        category: 'world-state',
-        owner: 'world-runtime',
+        },
       }),
-    });
+    ).rejects.toThrow(
+      'Interactive World capabilities remain experimental and are not available in the production Desktop.',
+    );
+    expect(commands.execute).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
   });
 
   it('maps only Main View capacity failures to an owner-bound Resource Browser rejection', async () => {
@@ -1027,7 +962,7 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('launches one published Character through the exact Entry Draft without generic first-submit', async () => {
+  it('rejects one published Character before domain creation or first submit', async () => {
     const launchResult = {
       topology: 'dialogue' as const,
       runtimeKind: 'companion' as const,
@@ -1070,45 +1005,17 @@ describe('DesktopAppHost', () => {
           characters: [{ characterVersionId: 'character-version-a' }],
         },
       }),
-    ).resolves.toEqual({
-      requestId: 'character-launch-request-a',
-      launch: launchResult,
-    });
-    expect(launch).toHaveBeenCalledWith({
-      requestId: 'character-launch-request-a',
-      userId: 'user:local',
-      userDisplayName: 'User',
-      selection: {
-        runtimeKind: 'companion',
-        characters: [{ characterVersionId: 'character-version-a' }],
-      },
-    });
-    expect(submitTurn).toHaveBeenCalledWith({
-      topology: 'dialogue',
-      dialogueRunId: 'dialogue-run-a',
-      characterRunId: 'character-run-a',
-      message: 'Do you remember the rain?',
-    });
+    ).rejects.toThrow(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
+    expect(launch).not.toHaveBeenCalled();
+    expect(submitTurn).not.toHaveBeenCalled();
     expect(genericSubmit).not.toHaveBeenCalled();
-    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
-      context: {
-        kind: 'character-interaction',
-        owner: {
-          kind: 'character',
-          characterId: 'character-project-a',
-          characterRunId: 'character-run-a',
-          dialogueRunId: 'dialogue-run-a',
-        },
-        scope: {
-          conversationId: 'conversation:character:character-run-a',
-        },
-      },
-      slots: { interaction: { phase: 'session' } },
-    });
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(scene);
     await fixture.appHost.dispose();
   });
 
-  it('launches multiple published Characters into one Room and dispatches the first message once', async () => {
+  it('rejects multiple published Characters before Room creation or first message', async () => {
     const launchResult = {
       topology: 'chatroom' as const,
       runtimeKind: 'companion' as const,
@@ -1168,22 +1075,12 @@ describe('DesktopAppHost', () => {
           ],
         },
       }),
-    ).resolves.toEqual({ requestId: 'character-room-launch-request-a', launch: launchResult });
-    expect(submitUserMessage).toHaveBeenCalledOnce();
-    expect(submitUserMessage).toHaveBeenCalledWith({
-      submissionId: 'character-room-launch-request-a',
-      roomRunId: 'room-run-a',
-      userId: 'user:local',
-      message: 'Meet at the archive.',
-    });
-    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
-      context: {
-        kind: 'character-interaction',
-        owner: { kind: 'room', roomId: 'character-room-a', roomRunId: 'room-run-a' },
-        scope: { conversationId: 'conversation:room:room-run-a' },
-      },
-      slots: { interaction: { phase: 'session' } },
-    });
+    ).rejects.toThrow(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
+    expect(launch).not.toHaveBeenCalled();
+    expect(submitUserMessage).not.toHaveBeenCalled();
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(scene);
     await fixture.appHost.dispose();
   });
 
@@ -1215,7 +1112,9 @@ describe('DesktopAppHost', () => {
           characters: [{ characterVersionId: 'character-version-a' }],
         },
       }),
-    ).rejects.toThrow(/exact active Agent Draft/u);
+    ).rejects.toThrow(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
     expect(launch).not.toHaveBeenCalled();
     await fixture.appHost.dispose();
   });
@@ -1761,7 +1660,7 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('reopens a Character conversation from its exact persisted owner context', async () => {
+  it('keeps a persisted Character conversation unavailable without stopping its owner', async () => {
     const conversationLifecycle = createConversationLifecycle();
     const submitTurn = vi.fn(async () => ({ turnId: 'turn-character-restored', content: 'Reply' }));
     const readConversationContext = vi
@@ -1801,82 +1700,22 @@ describe('DesktopAppHost', () => {
     );
 
     expect(result).toMatchObject({
-      status: 'transitioned',
-      scene: {
-        context: {
-          kind: 'character-interaction',
-          owner: {
-            kind: 'character',
-            characterId: 'character-1',
-            characterRunId: 'character-run-1',
-            dialogueRunId: 'dialogue-run-1',
-          },
-          scope: { conversationId: 'conversation-character-1' },
-        },
-        slots: { interaction: { phase: 'session' } },
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-scene-owner-unavailable',
+        message:
+          'Character and Room capabilities remain experimental and are not available in the production Desktop.',
       },
     });
     expect(readConversationContext).toHaveBeenCalledWith('conversation-character-1');
-    if (result.status !== 'transitioned' || result.scene.context.kind !== 'character-interaction') {
-      throw new Error('Expected Character restore.');
-    }
-    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
-      createAgentWorkspaceRuntime('assistant-space:local-user'),
+    expect(submitTurn).not.toHaveBeenCalled();
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(
+      activeScene(projection),
     );
-    const restoredProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
-    const restoredWorkbench = activeWorkbench(restoredProjection);
-    const restoredConnection = {
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: restoredWorkbench.workbenchInstanceId,
-      agentSurfaceId: currentAgentSurfaceId(restoredProjection),
-      assistantSpaceId: 'assistant-space:local-user',
-      workspaceId: 'assistant-space:local-user',
-      viewId: result.scene.context.agentViewId,
-      connectionId: 'connection-character-restored',
-    };
-    vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap').mockReturnValue({
-      requestId: 'bootstrap-character-restored',
-      status: 'ready',
-      connection: restoredConnection,
-    });
-    vi.spyOn(fixture.appHost.agentBridge, 'assertConnection').mockReturnValue(undefined);
-    const bootstrap = await fixture.appHost.createAgentBootstrap(
-      fixture.sender,
-      createDesktopAssistantAgentBootstrapRequest(
-        'bootstrap-character-restored',
-        restoredWorkbench.workbenchInstanceId,
-        restoredConnection.agentSurfaceId,
-        'assistant-space:local-user',
-        navigation.conversationId,
-        result.scene.context.agentViewId,
-      ),
-      vi.fn(),
-    );
-    if (bootstrap.status !== 'ready') {
-      throw new Error(`Expected Character Agent bootstrap: ${JSON.stringify(bootstrap)}`);
-    }
-    await expect(
-      fixture.appHost.sendAgentMessage(
-        fixture.sender,
-        createDesktopAgentMessageRequest('send-character-restored', bootstrap.connection, {
-          type: 'sendMessage',
-          conversationId: navigation.conversationId,
-          message: 'Continue the dialogue.',
-          sessionMode: 'agent',
-        }),
-      ),
-    ).resolves.toEqual({ requestId: 'send-character-restored', status: 'accepted' });
-    expect(submitTurn).toHaveBeenCalledWith({
-      topology: 'dialogue',
-      dialogueRunId: 'dialogue-run-1',
-      characterRunId: 'character-run-1',
-      message: 'Continue the dialogue.',
-    });
     await fixture.appHost.dispose();
   });
 
-  it('reopens a Room conversation and routes the next message through its exact RoomRun', async () => {
+  it('keeps a persisted Room conversation unavailable without dispatching a message', async () => {
     const conversationLifecycle = createConversationLifecycle();
     vi.spyOn(conversationLifecycle, 'readConversationContext').mockResolvedValue({
       kind: 'room',
@@ -1904,72 +1743,18 @@ describe('DesktopAppHost', () => {
         intent: { kind: 'restore-conversation', navigation },
       }),
     );
-    if (
-      restored.status !== 'transitioned' ||
-      restored.scene.context.kind !== 'character-interaction'
-    ) {
-      throw new Error('Expected Room restore.');
-    }
-    expect(restored.scene).toMatchObject({
-      context: {
-        kind: 'character-interaction',
-        owner: { kind: 'room', roomId: 'character-room-1', roomRunId: 'room-run-1' },
-        scope: { conversationId: 'conversation-room-1' },
-      },
-      slots: {
-        interaction: { phase: 'session' },
-        cutPanel: { kind: 'character-room-timeline' },
+    expect(restored).toMatchObject({
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-scene-owner-unavailable',
+        message:
+          'Character and Room capabilities remain experimental and are not available in the production Desktop.',
       },
     });
-    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
-      createAgentWorkspaceRuntime('assistant-space:local-user'),
+    expect(submitUserMessage).not.toHaveBeenCalled();
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(
+      activeScene(projection),
     );
-    const restoredProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
-    const workbench = activeWorkbench(restoredProjection);
-    const connection = {
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: workbench.workbenchInstanceId,
-      agentSurfaceId: currentAgentSurfaceId(restoredProjection),
-      assistantSpaceId: 'assistant-space:local-user',
-      workspaceId: 'assistant-space:local-user',
-      viewId: restored.scene.context.agentViewId,
-      connectionId: 'connection-room-restored',
-    };
-    vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap').mockReturnValue({
-      requestId: 'bootstrap-room-restored',
-      status: 'ready',
-      connection,
-    });
-    vi.spyOn(fixture.appHost.agentBridge, 'assertConnection').mockReturnValue(undefined);
-    const bootstrap = await fixture.appHost.createAgentBootstrap(
-      fixture.sender,
-      createDesktopAssistantAgentBootstrapRequest(
-        'bootstrap-room-restored',
-        workbench.workbenchInstanceId,
-        connection.agentSurfaceId,
-        'assistant-space:local-user',
-        navigation.conversationId,
-        restored.scene.context.agentViewId,
-      ),
-      vi.fn(),
-    );
-    if (bootstrap.status !== 'ready') throw new Error('Expected Room Agent bootstrap.');
-    await fixture.appHost.sendAgentMessage(
-      fixture.sender,
-      createDesktopAgentMessageRequest('send-room-restored', bootstrap.connection, {
-        type: 'sendMessage',
-        conversationId: navigation.conversationId,
-        message: 'Continue the room.',
-        sessionMode: 'agent',
-      }),
-    );
-    expect(submitUserMessage).toHaveBeenCalledWith({
-      submissionId: 'send-room-restored',
-      roomRunId: 'room-run-1',
-      userId: 'user:local',
-      message: 'Continue the room.',
-    });
     await fixture.appHost.dispose();
   });
 

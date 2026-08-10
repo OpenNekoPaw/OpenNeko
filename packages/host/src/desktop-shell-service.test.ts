@@ -8,11 +8,13 @@ import {
   type InMemoryDesktopShellStateRepository,
 } from './testing/in-memory-desktop-shell-state-repository';
 import {
+  createDefaultDesktopWorkbenchLayout,
   closeMainView,
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
   openOrFocusCutView,
 } from './desktop-workbench-contract';
 import {
+  createDefaultDesktopApplicationSidebar,
   createDesktopApplicationSidebarMutationRequest,
   createDesktopSceneTransitionRequest,
   parseDesktopWorkbenchSceneProjection,
@@ -668,7 +670,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('transitions to Character Management and selects an exact detail without a business session', async () => {
+  it('keeps Character Management unavailable without changing the active Scene', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -684,46 +686,24 @@ describe('DesktopShellService', () => {
       }),
     );
 
-    expect(transitioned).toMatchObject({
-      status: 'transitioned',
-      scene: {
-        sceneId: `scene:${windowId}:character-management`,
-        context: { kind: 'character-management' },
-        slots: { main: { kind: 'character-management' } },
-      },
-    });
-    if (transitioned.status !== 'transitioned') throw new Error('Expected management scene.');
-    const detail = await fixture.service.transitionScene(
-      createDesktopSceneTransitionRequest({
-        requestId: 'character-detail-1',
-        rendererSessionId: projection.rendererSessionId,
-        windowId,
-        sceneId: transitioned.scene.sceneId,
-        intent: {
-          kind: 'select-character-detail',
-          selection: { kind: 'project', characterProjectId: 'character-project:lin' },
-        },
-      }),
-    );
-    expect(detail).toMatchObject({
-      status: 'transitioned',
-      scene: {
-        context: {
-          kind: 'character-management',
-          detail: { kind: 'project', characterProjectId: 'character-project:lin' },
-        },
-        slots: {
-          main: { kind: 'character-management' },
-          secondaryMain: {
-            kind: 'character-detail',
-            selection: { kind: 'project', characterProjectId: 'character-project:lin' },
-          },
+    expect(transitioned).toEqual({
+      status: 'unavailable',
+      requestId: 'character-management-1',
+      diagnostic: {
+        code: 'desktop-scene-owner-unavailable',
+        severity: 'error',
+        message:
+          'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+        metadata: {
+          owner: 'character-product',
+          intentKind: 'open-character-management',
         },
       },
     });
+    expect(await fixture.service.getProjection(windowId)).toEqual(projection);
   });
 
-  it('transitions to one World Foundation management scene without creating a business session', async () => {
+  it('keeps World Management unavailable without changing the active Scene', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -739,14 +719,169 @@ describe('DesktopShellService', () => {
       }),
     );
 
-    expect(transitioned).toMatchObject({
-      status: 'transitioned',
-      scene: {
-        sceneId: `scene:${windowId}:world-management`,
-        context: { kind: 'world-management' },
-        slots: { main: { kind: 'world-management' } },
+    expect(transitioned).toEqual({
+      status: 'unavailable',
+      requestId: 'world-management-1',
+      diagnostic: {
+        code: 'desktop-scene-owner-unavailable',
+        severity: 'error',
+        message:
+          'Interactive World capabilities remain experimental and are not available in the production Desktop.',
+        metadata: {
+          owner: 'world-product',
+          intentKind: 'open-world-management',
+        },
       },
     });
+    expect(await fixture.service.getProjection(windowId)).toEqual(projection);
+  });
+
+  it('resets persisted experimental scenes without changing durable Project records', async () => {
+    const windowId = 'window-experimental';
+    const cases = [
+      {
+        owner: 'character' as const,
+        scene: parseDesktopWorkbenchSceneProjection({
+          sceneId: `scene:${windowId}:character-management`,
+          windowId,
+          context: { kind: 'character-management' },
+          slots: {
+            main: { kind: 'character-management' },
+            status: {
+              kind: 'scene-status',
+              sceneId: `scene:${windowId}:character-management`,
+            },
+          },
+        }),
+      },
+      {
+        owner: 'character' as const,
+        scene: parseDesktopWorkbenchSceneProjection({
+          sceneId: `scene:${windowId}:character-interaction:conversation-a`,
+          windowId,
+          context: {
+            kind: 'character-interaction',
+            agentViewId: 'agent-view-character-a',
+            owner: {
+              kind: 'character',
+              characterId: 'character-project-a',
+              characterRunId: 'character-run-a',
+              dialogueRunId: 'dialogue-run-a',
+            },
+            scope: {
+              kind: 'assistant',
+              draftId: 'draft-character-a',
+              assistantSpaceId: 'assistant-space:local-user',
+              conversationId: 'conversation-a',
+            },
+          },
+          slots: {
+            interaction: {
+              kind: 'agent',
+              agentSurfaceId: 'agent-surface-character-a',
+              agentViewId: 'agent-view-character-a',
+              phase: 'session',
+              scope: {
+                kind: 'assistant',
+                draftId: 'draft-character-a',
+                assistantSpaceId: 'assistant-space:local-user',
+                conversationId: 'conversation-a',
+              },
+            },
+            main: {
+              kind: 'character-avatar',
+              owner: {
+                kind: 'character',
+                characterId: 'character-project-a',
+                characterRunId: 'character-run-a',
+                dialogueRunId: 'dialogue-run-a',
+              },
+            },
+            rightManager: {
+              kind: 'character-runtime-manager',
+              owner: {
+                kind: 'character',
+                characterId: 'character-project-a',
+                characterRunId: 'character-run-a',
+                dialogueRunId: 'dialogue-run-a',
+              },
+            },
+            status: {
+              kind: 'scene-status',
+              sceneId: `scene:${windowId}:character-interaction:conversation-a`,
+            },
+          },
+        }),
+      },
+      {
+        owner: 'world' as const,
+        scene: parseDesktopWorkbenchSceneProjection({
+          sceneId: `scene:${windowId}:world-management`,
+          windowId,
+          context: { kind: 'world-management' },
+          slots: {
+            main: { kind: 'world-management' },
+            status: {
+              kind: 'scene-status',
+              sceneId: `scene:${windowId}:world-management`,
+            },
+          },
+        }),
+      },
+    ];
+
+    for (const testCase of cases) {
+      const repository = createInMemoryDesktopShellStateRepository({
+        primaryWindowId: windowId,
+        projects: [
+          {
+            projectId: 'content:project-a',
+            workspaceId: 'workspace-a',
+            profile: 'content',
+            displayName: 'Preserved project',
+            workspacePath: '/workspace/preserved',
+            workspaceLocator: { kind: 'variable', value: '${HOME}/workspace/preserved' },
+            createdAt: '2026-08-10T00:00:00.000Z',
+            updatedAt: '2026-08-10T00:00:00.000Z',
+          },
+        ],
+        windows: [
+          {
+            windowId,
+            activeTarget: { kind: 'home' },
+            tabs: [],
+            workbench: createDesktopWindowComposition({
+              workbenchInstanceId: 'workbench-experimental',
+              layout: createDefaultDesktopWorkbenchLayout(windowId),
+              scene: testCase.scene,
+            }),
+            applicationSidebar: createDefaultDesktopApplicationSidebar(windowId),
+          },
+        ],
+      });
+      const fixture = createFixture(repository, 'restore');
+      const claimedWindowId = await fixture.service.claimWindowId();
+      fixture.service.setRendererSessionId(claimedWindowId, 'renderer-session-restored');
+      const projection = await fixture.service.getProjection(claimedWindowId);
+
+      expect(activeScene(projection.window).context).toMatchObject({
+        kind: 'agent',
+        scope: { kind: 'unbound' },
+      });
+      expect(projection.catalog.projects).toHaveLength(1);
+      expect(projection.stateDiagnostics).toContainEqual({
+        code: 'desktop-presentation-reset',
+        severity: 'warning',
+        windowId,
+        owner: testCase.owner,
+        resetSceneId: testCase.scene.sceneId,
+        message: expect.stringContaining(
+          'Durable records and protected background runtime were preserved',
+        ),
+      });
+      expect((await repository.read()).projects).toHaveLength(1);
+      await fixture.service.dispose();
+    }
   });
 
   it('allocates a fresh unbound draft for every Start Creating transition', async () => {

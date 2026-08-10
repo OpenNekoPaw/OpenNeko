@@ -183,8 +183,6 @@ import {
   type CharacterConversationLaunchInput,
   type CharacterConversationLaunchResult,
   type CharacterAvatarHostResult,
-  type CharacterFoundationCommand,
-  type CharacterFoundationCommandHostRequest,
   type CharacterFoundationHostResult,
   type CharacterRoomWorkbenchProjectionEvent,
   type CharacterRoomWorkbenchSnapshotResult,
@@ -199,8 +197,6 @@ import type {
 } from '@neko/chara/application';
 import {
   parseWorldFoundationAnyHostRequest,
-  type WorldFoundationCommand,
-  type WorldFoundationCommandHostRequest,
   type WorldFoundationHostResult,
 } from '@neko/world/contracts';
 import type { WorldFoundationCommandPort, WorldFoundationService } from '@neko/world/application';
@@ -381,12 +377,11 @@ export class DesktopAppHost {
     payload: unknown,
   ): Promise<CharacterFoundationHostResult> {
     this.requireActive();
-    const request = parseCharacterFoundationHostRequest(payload);
+    parseCharacterFoundationHostRequest(payload);
     this.windows.resolveSender(sender);
-    return {
-      requestId: request.requestId,
-      snapshot: await this.characterFoundation.getSnapshot(),
-    };
+    throw new Error(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
   }
 
   async executeCharacterFoundationRequest(
@@ -394,15 +389,11 @@ export class DesktopAppHost {
     payload: unknown,
   ): Promise<CharacterFoundationHostResult> {
     this.requireActive();
-    const request = parseCharacterFoundationAnyHostRequest(payload);
+    parseCharacterFoundationAnyHostRequest(payload);
     this.windows.resolveSender(sender);
-    if (request.operation !== 'snapshot-get') {
-      await this.characterFoundationCommands.execute(stripCommandRequestId(request));
-    }
-    return {
-      requestId: request.requestId,
-      snapshot: await this.characterFoundation.getSnapshot(),
-    };
+    throw new Error(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
   }
 
   async executeWorldFoundationRequest(
@@ -410,15 +401,11 @@ export class DesktopAppHost {
     payload: unknown,
   ): Promise<WorldFoundationHostResult> {
     this.requireActive();
-    const request = parseWorldFoundationAnyHostRequest(payload);
+    parseWorldFoundationAnyHostRequest(payload);
     this.windows.resolveSender(sender);
-    if (request.operation !== 'snapshot-get') {
-      await this.worldFoundationCommands.execute(stripWorldCommandRequestId(request));
-    }
-    return {
-      requestId: request.requestId,
-      snapshot: await this.worldFoundation.getSnapshot(),
-    };
+    throw new Error(
+      'Interactive World capabilities remain experimental and are not available in the production Desktop.',
+    );
   }
 
   async executeCharacterConversationLaunchRequest(
@@ -426,80 +413,11 @@ export class DesktopAppHost {
     payload: unknown,
   ): Promise<{ readonly requestId: string; readonly launch: CharacterConversationLaunchResult }> {
     this.requireActive();
-    const request = parseCharacterConversationLaunchHostRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
-    const projection = await this.shell.getProjection(window.windowId);
-    const composition = resolveActiveDesktopWindowWorkbench(projection.window);
-    const interaction = composition.scene.slots.interaction;
-    if (
-      composition.workbenchInstanceId !== request.workbenchInstanceId ||
-      composition.scene.context.kind !== 'agent' ||
-      composition.scene.context.agentViewId !== request.agentViewId ||
-      composition.scene.context.scope.kind !== 'unbound' ||
-      composition.scene.context.scope.draftId !== request.draftId ||
-      interaction?.kind !== 'agent' ||
-      interaction.agentSurfaceId !== request.agentSurfaceId ||
-      interaction.agentViewId !== request.agentViewId ||
-      interaction.phase !== 'draft' ||
-      interaction.scope.kind !== 'unbound' ||
-      interaction.scope.draftId !== request.draftId
-    ) {
-      throw new Error('Character conversation launch does not match the exact active Agent Draft.');
-    }
-
-    const launch = await this.characterConversations.launch({
-      requestId: request.requestId,
-      userId: 'user:local',
-      userDisplayName: 'User',
-      selection: request.selection,
-    });
-    const context: AgentBoundDomainBinding =
-      launch.topology === 'dialogue'
-        ? {
-            kind: 'character',
-            characterId: launch.characterProjectId,
-            characterVersionId: launch.characterVersionId,
-            characterRunId: launch.characterRunId,
-            dialogueRunId: launch.dialogueRunId,
-          }
-        : {
-            kind: 'room',
-            roomId: launch.characterRoomId,
-            roomRunId: launch.roomRunId,
-          };
-    const conversationId =
-      launch.topology === 'dialogue'
-        ? launch.primaryAgentSessionId
-        : launch.interactionAgentSessionId;
-    await this.shell.attachAgentConversation({
-      windowId: window.windowId,
-      rendererSessionId: request.rendererSessionId,
-      agentViewId: request.agentViewId,
-      draftId: request.draftId,
-      context,
-      conversationId,
-    });
-    if (launch.topology === 'dialogue') {
-      await this.characterInteractions.submitTurn({
-        topology: 'dialogue',
-        dialogueRunId: launch.dialogueRunId,
-        characterRunId: launch.characterRunId,
-        message: request.message,
-      });
-    } else {
-      const result = await this.characterRoomConversations.submitUserMessage({
-        submissionId: request.requestId,
-        roomRunId: launch.roomRunId,
-        userId: 'user:local',
-        message: request.message,
-      });
-      const rejected = result.outcomes.filter((outcome) => outcome.status === 'rejected');
-      if (result.outcomes.length > 0 && rejected.length === result.outcomes.length) {
-        throw new Error('Every scheduled Room participant response was rejected.');
-      }
-    }
-    return { requestId: request.requestId, launch };
+    parseCharacterConversationLaunchHostRequest(payload);
+    this.windows.resolveSender(sender);
+    throw new Error(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
   }
 
   async executeCharacterAvatarRequest(
@@ -2813,18 +2731,4 @@ function textEditorSubscriptionKey(identity: TextEditorRuntimeIdentity): string 
     identity.documentId,
     identity.sessionId,
   ].join(':');
-}
-
-function stripCommandRequestId(
-  request: CharacterFoundationCommandHostRequest,
-): CharacterFoundationCommand {
-  const { requestId: _requestId, ...command } = request;
-  return command;
-}
-
-function stripWorldCommandRequestId(
-  request: WorldFoundationCommandHostRequest,
-): WorldFoundationCommand {
-  const { requestId: _requestId, ...command } = request;
-  return command;
 }

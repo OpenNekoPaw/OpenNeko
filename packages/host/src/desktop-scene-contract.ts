@@ -166,8 +166,17 @@ export interface DesktopSceneUnavailableDiagnostic {
   readonly severity: 'error';
   readonly message: string;
   readonly metadata: {
-    readonly owner: 'workspace-authority' | 'agent-conversation-authority';
-    readonly intentKind: 'open-workspace' | 'open-project-workspace' | 'restore-conversation';
+    readonly owner:
+      | 'workspace-authority'
+      | 'agent-conversation-authority'
+      | 'character-product'
+      | 'world-product';
+    readonly intentKind:
+      | 'open-workspace'
+      | 'open-project-workspace'
+      | 'restore-conversation'
+      | 'open-character-management'
+      | 'open-world-management';
     readonly conversationOwnerKind?: AgentConversationOwnerRef['kind'] | 'world';
   };
 }
@@ -245,13 +254,20 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
     const owner = metadata['owner'];
     const intentKind = metadata['intentKind'];
     const conversationOwnerKind = metadata['conversationOwnerKind'];
-    if (owner !== 'workspace-authority' && owner !== 'agent-conversation-authority') {
+    if (
+      owner !== 'workspace-authority' &&
+      owner !== 'agent-conversation-authority' &&
+      owner !== 'character-product' &&
+      owner !== 'world-product'
+    ) {
       throw invalid(`Unknown Desktop Scene unavailable owner '${String(owner)}'.`);
     }
     if (
       intentKind !== 'open-workspace' &&
       intentKind !== 'open-project-workspace' &&
-      intentKind !== 'restore-conversation'
+      intentKind !== 'restore-conversation' &&
+      intentKind !== 'open-character-management' &&
+      intentKind !== 'open-world-management'
     ) {
       throw invalid(`Unknown Desktop Scene unavailable intent '${String(intentKind)}'.`);
     }

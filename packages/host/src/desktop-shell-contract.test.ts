@@ -445,6 +445,24 @@ describe('Desktop Shell contract', () => {
     ).toEqual([diagnostic]);
   });
 
+  it('parses an exact experimental Scene reset diagnostic', () => {
+    const diagnostic = {
+      code: 'desktop-presentation-reset' as const,
+      severity: 'warning' as const,
+      windowId: 'window-1',
+      owner: 'character' as const,
+      resetSceneId: 'scene:window-1:character-management',
+      message: 'Character experimental presentation was reset.',
+    };
+
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [diagnostic],
+      }).stateDiagnostics,
+    ).toEqual([diagnostic]);
+  });
+
   it('parses exact retained Shell metadata without changing sibling projections', () => {
     const canonical = validProjection();
     const parsed = parseDesktopShellProjection({

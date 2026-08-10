@@ -264,7 +264,7 @@ export interface DesktopStoredStateMetadataRetainedDiagnosticProjection {
   readonly message: string;
 }
 
-export interface DesktopPresentationResetDiagnosticProjection {
+interface DesktopCutPresentationResetDiagnosticProjection {
   readonly code: 'desktop-presentation-reset';
   readonly severity: 'warning';
   readonly windowId: string;
@@ -272,6 +272,19 @@ export interface DesktopPresentationResetDiagnosticProjection {
   readonly removedViewIds: readonly string[];
   readonly message: string;
 }
+
+interface DesktopExperimentalSceneResetDiagnosticProjection {
+  readonly code: 'desktop-presentation-reset';
+  readonly severity: 'warning';
+  readonly windowId: string;
+  readonly owner: 'character' | 'world';
+  readonly resetSceneId: string;
+  readonly message: string;
+}
+
+export type DesktopPresentationResetDiagnosticProjection =
+  | DesktopCutPresentationResetDiagnosticProjection
+  | DesktopExperimentalSceneResetDiagnosticProjection;
 
 export type DesktopShellStateDiagnosticProjection =
   | DesktopStoredWindowInvalidDiagnosticProjection
@@ -995,6 +1008,33 @@ function parseDesktopShellStateDiagnosticProjection(
 ): DesktopShellStateDiagnosticProjection {
   const record = requireRecord(value, 'Desktop Shell state diagnostic must be an object.');
   if (record['code'] === 'desktop-presentation-reset') {
+    if (record['owner'] === 'character' || record['owner'] === 'world') {
+      requireExactKeys(
+        record,
+        ['code', 'severity', 'windowId', 'owner', 'resetSceneId', 'message'],
+        'Desktop Shell state diagnostic',
+      );
+      if (record['severity'] !== 'warning') {
+        throw invalidPayload('Desktop presentation reset diagnostic identity is invalid.');
+      }
+      return {
+        code: 'desktop-presentation-reset',
+        severity: 'warning',
+        windowId: requireNonEmptyString(
+          record['windowId'],
+          'Desktop presentation reset Window identity is required.',
+        ),
+        owner: record['owner'],
+        resetSceneId: requireNonEmptyString(
+          record['resetSceneId'],
+          'Desktop presentation reset Scene identity is required.',
+        ),
+        message: requireNonEmptyString(
+          record['message'],
+          'Desktop presentation reset message is required.',
+        ),
+      };
+    }
     requireExactKeys(
       record,
       ['code', 'severity', 'windowId', 'owner', 'removedViewIds', 'message'],

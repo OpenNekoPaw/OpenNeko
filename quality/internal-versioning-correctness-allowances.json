@@ -2719,19 +2719,6 @@
     },
     {
       "category": "data-generation-alias",
-      "consumer": "Desktop World Host delegation test and package-owned transformation planner",
-      "correctnessInvariant": "The typed Desktop boundary must preserve the exact WorldState observed by a transformation candidate before package-owned planning and commit.",
-      "fieldScope": "Desktop transformation candidate runtime-base fixture",
-      "id": "52bd2684bee453311e07",
-      "isolationRule": "A mismatch rejects only the affected Host request or candidate and cannot select schemas, migrations, handlers, caches, versions, or alternate World authorities.",
-      "owner": "@neko/world transformation contract consumed by Desktop Host",
-      "path": "apps/neko-desktop/src/main/app-host.test.ts",
-      "removalCondition": "Remove when runtime transformation candidates no longer cross the typed Desktop Host boundary.",
-      "token": "worldStateRevision",
-      "versionFreeAnalysis": "The value is a caller-observed CAS precondition forwarded unchanged to the canonical World planner; it never dispatches an internal format or implementation."
-    },
-    {
-      "category": "data-generation-alias",
       "consumer": "World transformation Webview tests and package-owned stale-base validator",
       "correctnessInvariant": "The rendered active branch must expose the exact committed state position from which the user prepares a candidate.",
       "fieldScope": "World Webview active-branch state fixture",
