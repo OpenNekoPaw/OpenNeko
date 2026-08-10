@@ -561,7 +561,7 @@ describe('InputArea composer controls', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
-  it('resets the textarea height when a sent draft is cleared programmatically', () => {
+  it('grows the textarea with content and marks only capped content as overflowing', () => {
     const props = {
       isThinking: false,
       onInputChange: vi.fn(),
@@ -573,9 +573,34 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
-    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 180 });
+    let scrollHeight = 88;
+    let clientHeight = 88;
+    Object.defineProperty(textarea, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+    Object.defineProperty(textarea, 'clientHeight', {
+      configurable: true,
+      get: () => clientHeight,
+    });
+
     fireEvent.change(textarea, { target: { value: 'line one\nline two\nline three' } });
-    expect(textarea.style.height).toBe('120px');
+    expect(textarea.style.height).toBe('88px');
+    expect(textarea.dataset.overflowing).toBeUndefined();
+
+    scrollHeight = 360;
+    clientHeight = 240;
+    fireEvent.change(textarea, {
+      target: { value: Array.from({ length: 20 }, () => 'line').join('\n') },
+    });
+    expect(textarea.style.height).toBe('360px');
+    expect(textarea.dataset.overflowing).toBe('true');
+
+    scrollHeight = 68;
+    clientHeight = 68;
+    fireEvent.change(textarea, { target: { value: 'short again' } });
+    expect(textarea.style.height).toBe('68px');
+    expect(textarea.dataset.overflowing).toBeUndefined();
 
     rerender(
       <Harness>
@@ -584,6 +609,31 @@ describe('InputArea composer controls', () => {
     );
 
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('auto');
+  });
+
+  it('applies the same bounded measurement when a controlled long draft is restored', () => {
+    const props = {
+      isThinking: false,
+      onInputChange: vi.fn(),
+      onSend: vi.fn(),
+    };
+    const { rerender } = render(
+      <Harness>
+        <InputArea {...props} inputValue="" />
+      </Harness>,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 320 });
+    Object.defineProperty(textarea, 'clientHeight', { configurable: true, value: 240 });
+
+    rerender(
+      <Harness>
+        <InputArea {...props} inputValue="restored long draft" />
+      </Harness>,
+    );
+
+    expect(textarea.style.height).toBe('320px');
+    expect(textarea.dataset.overflowing).toBe('true');
   });
 
   it('focuses only when the owning Tab focus request changes', () => {

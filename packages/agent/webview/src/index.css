@@ -109,14 +109,12 @@
   --agent-empty-action-hover-border: color-mix(in srgb, var(--agent-accent) 38%, transparent);
   --agent-bubble-assistant-bg: color-mix(in srgb, var(--agent-elevated) 58%, var(--agent-bg) 42%);
   --agent-bubble-assistant-border: color-mix(in srgb, var(--agent-fg) 10%, transparent);
-  --agent-bubble-user-bg: color-mix(in srgb, var(--agent-accent) 12%, var(--agent-elevated) 88%);
-  --agent-bubble-user-border: color-mix(in srgb, var(--agent-accent) 28%, var(--agent-fg) 6%);
+  --agent-bubble-user-bg: color-mix(in srgb, var(--agent-fg) 6%, var(--agent-elevated) 94%);
+  --agent-bubble-user-border: color-mix(in srgb, var(--agent-fg) 7%, transparent);
   --agent-bubble-user-fg: var(--agent-fg);
   --agent-bubble-shadow:
     0 1px 2px rgba(0, 0, 0, 0.12), inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 4%, transparent);
-  --agent-bubble-user-shadow:
-    0 1px 4px color-mix(in srgb, var(--agent-accent) 12%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 5%, transparent);
+  --agent-bubble-user-shadow: none;
   --agent-composer-rail-bg: color-mix(in srgb, var(--agent-bg) 92%, var(--agent-elevated) 8%);
   --agent-composer-rail-border: color-mix(in srgb, var(--agent-fg) 8%, transparent);
   --agent-composer-bg: color-mix(in srgb, var(--agent-elevated) 64%, var(--agent-bg) 36%);
@@ -639,6 +637,54 @@ body {
 
 .agent-assistant-turn-row:hover {
   background: transparent;
+}
+
+.agent-user-prompt {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px 13px;
+  border-radius: 16px 16px 5px 16px;
+  background: var(--agent-bubble-user-bg);
+  color: var(--agent-bubble-user-fg);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.agent-inline-diagnostic {
+  display: grid;
+  width: min(100%, 760px);
+  min-width: 0;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px 0;
+  color: var(--neko-errorForeground, #f14c4c);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.agent-inline-diagnostic__icon {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+}
+
+.agent-inline-diagnostic__content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-inline-diagnostic__content strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-inline-diagnostic__content span {
+  color: color-mix(in srgb, var(--neko-errorForeground, #f14c4c) 78%, var(--agent-fg) 22%);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .agent-assistant-turn {
@@ -1291,8 +1337,10 @@ body {
 .agent-composer-textarea {
   flex: 1 1 auto;
   min-height: 48px;
-  max-height: 120px;
+  max-height: min(240px, 35vh);
   min-width: 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
   padding: 5px 4px;
   border: 0;
   outline: none;
@@ -1301,6 +1349,26 @@ body {
   font-size: 13px;
   line-height: 20px;
   resize: none;
+  scrollbar-color: color-mix(in srgb, var(--agent-fg-secondary) 48%, transparent) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.agent-composer-textarea[data-overflowing='true'] {
+  overflow-y: auto;
+}
+
+.agent-composer-textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.agent-composer-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-composer-textarea::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--agent-fg-secondary) 48%, transparent);
 }
 
 .agent-composer-textarea::placeholder {

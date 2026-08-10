@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@neko/agent-contracts';
@@ -618,6 +618,129 @@ describe('MessageList auto-scroll lifecycle', () => {
     ).toBe(true);
   });
 
+  it('uses a neutral user prompt and unframed Agent content while preserving avatar chrome', () => {
+    virtualItems = [
+      { index: 0, key: 'user', start: 0 },
+      { index: 1, key: 'assistant', start: 80 },
+    ];
+    const { container } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[
+            { ...createMessage('user-message'), role: 'user', content: 'User prompt' },
+            createMessage('assistant-message'),
+          ]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(container.querySelector('.agent-user-prompt')?.textContent).toBe('User prompt');
+    expect(container.querySelector('.agent-turn-answer')).toBeTruthy();
+    expect(container.querySelector('.agent-bubble-assistant')).toBeNull();
+    expect(container.querySelector('[title="You"]')).toBeTruthy();
+    expect(container.querySelector('[title="Assistant"]')).toBeTruthy();
+  });
+
+  it('keeps system activity unchanged and renders errors as localized inline alerts', () => {
+    virtualItems = [
+      { index: 0, key: 'system', start: 0 },
+      { index: 1, key: 'error', start: 60 },
+    ];
+    const { container } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[
+            { ...createMessage('system-message'), role: 'system', content: 'Queued request' },
+            {
+              ...createMessage('error-message'),
+              content: 'Configured provider has no usable credential.',
+              isError: true,
+            },
+          ]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.getByText('Queued request')).toBeTruthy();
+    expect(container.querySelector('.agent-system-notice')).toBeNull();
+    const alert = screen.getByRole('alert');
+    expect(alert.classList.contains('agent-inline-diagnostic')).toBe(true);
+    expect(alert.textContent).toContain('Error');
+    expect(alert.textContent).toContain('Configured provider has no usable credential.');
+  });
+
+  it('copies the visible final answer from structured content blocks', async () => {
+    virtualItems = [{ index: 0, key: 'structured-answer', start: 0 }];
+    renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createStructuredCopyMessage()]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy message' }));
+
+    await waitFor(() => {
+      expect(clipboardWriteTextMock).toHaveBeenCalledWith('Visible final answer.');
+      expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy();
+    });
+  });
+
+  it('hides message-level Copy when a structured item has no visible text answer', () => {
+    virtualItems = [{ index: 0, key: 'activity-only', start: 0 }];
+    renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[
+            {
+              ...createMessage('activity-only'),
+              content: 'Hidden fallback content',
+              contentBlocks: [
+                { id: 'thinking', type: 'thinking', timestamp: 1, thinking: 'Working' },
+              ],
+            },
+          ]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull();
+  });
+
+  it('shows a fail-visible state when the clipboard boundary rejects the write', async () => {
+    clipboardWriteTextMock.mockRejectedValueOnce(new Error('clipboard denied'));
+    virtualItems = [{ index: 0, key: 'copy-failure', start: 0 }];
+    renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createMessage('copy-failure')]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy message' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copy failed' })).toBeTruthy();
+    });
+  });
+
   it('does not render activation progress as a standalone row above messages', () => {
     virtualItems = [];
 
@@ -696,6 +819,28 @@ function createMessage(id: string): Message {
     role: 'assistant',
     content: 'Hello',
     timestamp: 1_717_200_000_000,
+  };
+}
+
+function createStructuredCopyMessage(): Message {
+  return {
+    ...createMessage('structured-copy'),
+    content: 'Hidden fallback content.',
+    contentBlocks: [
+      { id: 'thinking', type: 'thinking', timestamp: 1, thinking: 'Hidden activity.' },
+      {
+        id: 'tool',
+        type: 'tool_call',
+        timestamp: 2,
+        toolCall: {
+          id: 'tool-call',
+          name: 'ReadDocument',
+          arguments: { path: 'notes.md' },
+          result: { success: true, data: 'Hidden tool result.' },
+        },
+      },
+      { id: 'answer', type: 'text', timestamp: 3, content: 'Visible final answer.' },
+    ],
   };
 }
 

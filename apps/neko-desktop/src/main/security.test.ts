@@ -82,6 +82,50 @@ describe('Desktop security policy', () => {
     });
   });
 
+  it('grants only same-origin sanitized clipboard writes to the Desktop renderer', () => {
+    const setPermissionRequestHandler = vi.fn();
+    const webContents = {
+      session: {
+        setPermissionRequestHandler,
+        webRequest: { onHeadersReceived: vi.fn() },
+      },
+      isDestroyed: () => false,
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+    };
+    configureDesktopWindowSecurity(
+      { webContents } satisfies DesktopWindowSecurityTarget,
+      DESKTOP_APP_ORIGIN,
+    );
+    const handler = setPermissionRequestHandler.mock.calls[0]?.[0] as unknown as (
+      requestingWebContents: unknown,
+      permission: string,
+      callback: (allowed: boolean) => void,
+      details: { requestingUrl: string },
+    ) => void;
+    if (!handler) throw new Error('Expected a Desktop permission request handler.');
+
+    const allowed = vi.fn();
+    handler(webContents, 'clipboard-sanitized-write', allowed, {
+      requestingUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+    });
+    expect(allowed).toHaveBeenLastCalledWith(true);
+
+    handler(webContents, 'clipboard-read', allowed, {
+      requestingUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+    });
+    expect(allowed).toHaveBeenLastCalledWith(false);
+    handler(webContents, 'clipboard-sanitized-write', allowed, {
+      requestingUrl: 'https://example.com/',
+    });
+    expect(allowed).toHaveBeenLastCalledWith(false);
+    handler({}, 'clipboard-sanitized-write', allowed, {
+      requestingUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
+    });
+    expect(allowed).toHaveBeenLastCalledWith(false);
+  });
+
   it('disposes navigation security after Electron destroys the WebContents', () => {
     let destroyed = false;
     let webContentsAccessible = true;

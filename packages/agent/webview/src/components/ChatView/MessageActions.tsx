@@ -3,10 +3,12 @@
  * P2: 支持复制、反馈、编辑、重发
  */
 
-import { useState, useCallback, memo } from 'react';
-import { Message } from '@neko/agent-contracts';
+import { useState, useCallback, useEffect, useRef, memo } from 'react';
+import type { Message } from '@neko/agent-contracts';
 import { getLogger } from '../../utils/logger';
-import { CopyIcon, CheckIcon, EditIcon, RefreshIcon } from '@neko/ui/icons';
+import { CopyIcon, CheckIcon, EditIcon, ErrorIcon, RefreshIcon } from '@neko/ui/icons';
+import { useTranslation } from '../../i18n/I18nContext';
+import { projectMessageCopyText } from '../../presenters/message-copy-presenter';
 
 const logger = getLogger('MessageActions');
 
@@ -25,22 +27,44 @@ export const MessageActions = memo(function MessageActions({
   onEdit,
   onResend,
 }: MessageActionsProps) {
-  const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [feedback, setFeedback] = useState<'positive' | 'negative' | null>(
     message.feedback ?? null,
   );
+  const resetCopyStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyText = projectMessageCopyText(message);
 
-  // Copy message content
+  useEffect(
+    () => () => {
+      if (resetCopyStatusTimer.current) clearTimeout(resetCopyStatusTimer.current);
+    },
+    [],
+  );
+
+  const showCopyStatus = useCallback((status: 'copied' | 'failed') => {
+    if (resetCopyStatusTimer.current) clearTimeout(resetCopyStatusTimer.current);
+    setCopyStatus(status);
+    resetCopyStatusTimer.current = setTimeout(() => {
+      setCopyStatus('idle');
+      resetCopyStatusTimer.current = null;
+    }, 2000);
+  }, []);
+
   const handleCopy = useCallback(async () => {
+    if (!copyText) return;
     try {
-      await navigator.clipboard.writeText(message.content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Browser clipboard write is unavailable.');
+      }
+      await navigator.clipboard.writeText(copyText);
+      showCopyStatus('copied');
       onCopy?.();
     } catch (err) {
       logger.error('Failed to copy:', err);
+      showCopyStatus('failed');
     }
-  }, [message.content, onCopy]);
+  }, [copyText, onCopy, showCopyStatus]);
 
   // Handle feedback
   const handleFeedback = useCallback(
@@ -58,14 +82,27 @@ export const MessageActions = memo(function MessageActions({
 
   return (
     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-      {/* Copy button */}
-      <ActionButton onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'} active={copied}>
-        {copied ? (
-          <CheckIcon className="w-3.5 h-3.5 text-[var(--neko-charts-green)]" />
-        ) : (
-          <CopyIcon className="w-3.5 h-3.5" />
-        )}
-      </ActionButton>
+      {copyText && (
+        <ActionButton
+          onClick={handleCopy}
+          title={
+            copyStatus === 'copied'
+              ? t('chat.message.copied')
+              : copyStatus === 'failed'
+                ? t('chat.message.copyFailed')
+                : t('chat.message.copy')
+          }
+          active={copyStatus !== 'idle'}
+        >
+          {copyStatus === 'copied' ? (
+            <CheckIcon className="w-3.5 h-3.5 text-[var(--neko-charts-green)]" />
+          ) : copyStatus === 'failed' ? (
+            <ErrorIcon className="w-3.5 h-3.5 text-[var(--neko-errorForeground)]" />
+          ) : (
+            <CopyIcon className="w-3.5 h-3.5" />
+          )}
+        </ActionButton>
+      )}
 
       {/* Feedback buttons (only for assistant messages) */}
       {isAssistant && (
@@ -115,8 +152,10 @@ interface ActionButtonProps {
 function ActionButton({ children, onClick, title, active }: ActionButtonProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
       title={title}
+      aria-label={title}
       className={`p-1 rounded transition-colors ${
         active
           ? 'text-[var(--neko-button-foreground)] bg-[var(--neko-button-background)]'

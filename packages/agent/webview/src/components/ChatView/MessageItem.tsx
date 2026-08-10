@@ -27,6 +27,8 @@ import { selectMessageIdentity, type MessageIdentityMap } from './message-identi
 import { ReferenceToken } from './InputArea/ReferenceToken';
 import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 import { AssistantTurnActivity } from './AssistantTurnActivity';
+import { useTranslation } from '../../i18n/I18nContext';
+import { ErrorIcon } from '@neko/ui/icons';
 
 type MessageContextReference = NonNullable<Message['contextReferences']>[number];
 
@@ -208,24 +210,15 @@ function AssistantContentBlocks({
   return null;
 }
 
-// Error message card — prominent red styling for API errors, timeouts, etc.
-function ErrorMessageCard({ content }: { content: string }) {
+function InlineErrorMessage({ content, label }: { content: string; label: string }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-[var(--neko-inputValidation-errorBorder,#be1100)] bg-[var(--neko-inputValidation-errorBackground,rgba(190,17,0,0.1))] text-[13px] leading-relaxed max-w-full">
-      <svg
-        className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--neko-errorForeground,#f14c4c)]"
-        fill="currentColor"
-        viewBox="0 0 16 16"
-      >
-        <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zM7.25 5v4h1.5V5h-1.5zm0 5v1.5h1.5V10h-1.5z" />
-      </svg>
-      <div className="min-w-0">
-        <div className="text-[var(--neko-errorForeground,#f14c4c)] font-medium text-[12px] mb-0.5">
-          Error
-        </div>
-        <div className="text-[var(--neko-foreground)] whitespace-pre-wrap break-words text-[12px] opacity-90">
-          {content}
-        </div>
+    <div className="agent-inline-diagnostic" role="alert">
+      <span aria-hidden="true">
+        <ErrorIcon className="agent-inline-diagnostic__icon" />
+      </span>
+      <div className="agent-inline-diagnostic__content">
+        <strong>{label}</strong>
+        <span>{content}</span>
       </div>
     </div>
   );
@@ -242,6 +235,7 @@ export const MessageItem = memo(function MessageItem({
   isGrouped = false,
   ambientToolCalls,
 }: MessageItemProps) {
+  const { t } = useTranslation();
   const { pluginsAvailable, workItems } = useMessageActions();
   // 找出与这条消息关联的工作项
   const relatedSubAgents = selectMessageLevelSubAgentWorkItems({ message, workItems });
@@ -268,12 +262,9 @@ export const MessageItem = memo(function MessageItem({
     );
   }
 
-  // User messages: right-aligned with avatar on right
-  // Assistant messages: left-aligned with avatar on left
   return (
     <div className={`agent-message-row group ${isUser ? '' : 'agent-assistant-turn-row'}`}>
       <div className={`flex gap-2 px-2 py-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-        {/* Avatar - compact 20px */}
         <div className="flex-shrink-0 w-5 pt-0.5">
           {showAvatar && !isGrouped ? (
             <MessageAvatar
@@ -287,21 +278,17 @@ export const MessageItem = memo(function MessageItem({
           )}
         </div>
 
-        {/* Content */}
         <div
           className={`flex-1 min-w-0 ${
             isUser ? 'flex max-w-[85%] flex-col items-end' : 'max-w-none'
           }`}
         >
-          {/* Header: Role name + timestamp */}
           {!isGrouped && isUser && (
-            <div className={`flex items-center gap-2 mb-0.5 ${isUser ? 'flex-row-reverse' : ''}`}>
-              <span
-                className={`text-[11px] font-medium ${isUser ? 'text-[var(--neko-foreground)]' : 'text-[var(--neko-textLink-foreground)]'}`}
-              >
+            <div className="mb-0.5 flex flex-row-reverse items-center gap-2">
+              <span className="text-[11px] font-medium text-[var(--neko-foreground)]">
                 {identity.displayName}
               </span>
-              <span className="text-[10px] text-[var(--neko-descriptionForeground)] opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-[10px] text-[var(--neko-descriptionForeground)] opacity-0 transition-opacity group-hover:opacity-100">
                 {formatTime(message.timestamp)}
               </span>
               {message.editedAt && (
@@ -312,10 +299,8 @@ export const MessageItem = memo(function MessageItem({
             </div>
           )}
 
-          {/* User message content - compact bubble */}
           {isUser ? (
-            <div className="agent-bubble agent-bubble-user agent-user-prompt block w-fit max-w-full min-w-0 rounded-2xl rounded-tr-md px-2.5 py-1.5 text-[13px] leading-relaxed">
-              {/* Context references for user messages */}
+            <div className="agent-user-prompt block w-fit max-w-full min-w-0">
               {message.contextReferences && message.contextReferences.length > 0 && (
                 <div className="mb-1.5 flex flex-wrap gap-1">
                   {message.contextReferences.map((ref) => (
@@ -323,7 +308,6 @@ export const MessageItem = memo(function MessageItem({
                   ))}
                 </div>
               )}
-              {/* Attachments for user messages */}
               {attachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-1">
                   {attachments.map((attachmentProjection) => (
@@ -337,10 +321,8 @@ export const MessageItem = memo(function MessageItem({
               <div className="min-w-0 whitespace-pre-wrap break-words">{message.content}</div>
             </div>
           ) : message.isError ? (
-            /* Error message: prominent red card */
-            <ErrorMessageCard content={message.content} />
+            <InlineErrorMessage content={message.content} label={t('chat.message.error')} />
           ) : (
-            /* Assistant message: render content blocks in chronological order */
             <AssistantContentBlocks
               message={message}
               isStreaming={isStreaming}
@@ -356,7 +338,6 @@ export const MessageItem = memo(function MessageItem({
             </div>
           ))}
 
-          {/* Message actions */}
           {!isStreaming && (
             <div
               className={`mt-1 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 ${isUser ? 'self-end' : ''}`}

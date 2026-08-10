@@ -1305,8 +1305,12 @@ export function InputArea({
 
 function resizeTextarea(textarea: HTMLTextAreaElement, value: string): void {
   textarea.style.height = 'auto';
-  if (value.length > 0) {
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+  delete textarea.dataset.overflowing;
+  if (value.length === 0) return;
+
+  textarea.style.height = `${textarea.scrollHeight}px`;
+  if (textarea.scrollHeight > textarea.clientHeight) {
+    textarea.dataset.overflowing = 'true';
   }
 }
 
