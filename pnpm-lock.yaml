@@ -86,6 +86,9 @@ importers:
       smol-toml:
         specifier: 1.6.1
         version: 1.6.1
+      spdx-expression-parse:
+        specifier: 3.0.1
+        version: 3.0.1
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -131,6 +134,9 @@ importers:
       '@neko/automation-node':
         specifier: workspace:*
         version: link:../../packages/automation/node
+      '@neko/automation-webview':
+        specifier: workspace:*
+        version: link:../../packages/automation/webview
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../packages/canvas/domain
@@ -666,6 +672,40 @@ importers:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
+  packages/automation/webview:
+    dependencies:
+      '@neko/automation-contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@neko/ui':
+        specifier: workspace:*
+        version: link:../../ui
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/react':
+        specifier: 18.3.31
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: 18.3.7
+        version: 18.3.7(@types/react@18.3.31)
+      jsdom:
+        specifier: ^27.0.1
+        version: 27.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+
   packages/canvas/domain:
     dependencies:
       '@neko/content':
@@ -739,6 +779,9 @@ importers:
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
+      '@neko/markdown':
+        specifier: workspace:*
+        version: link:../../markdown
       '@neko/media':
         specifier: workspace:*
         version: link:../../media
@@ -1227,6 +1270,18 @@ importers:
 
   packages/markdown:
     dependencies:
+      '@milkdown/core':
+        specifier: 7.22.0
+        version: 7.22.0
+      '@milkdown/preset-commonmark':
+        specifier: 7.22.0
+        version: 7.22.0
+      '@milkdown/preset-gfm':
+        specifier: 7.22.0
+        version: 7.22.0
+      '@milkdown/prose':
+        specifier: 7.22.0
+        version: 7.22.0
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
@@ -1240,6 +1295,18 @@ importers:
         specifier: ^11.0.5
         version: 11.0.5
     devDependencies:
+      '@types/react':
+        specifier: ^18.2.43
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.2.17
+        version: 18.3.7(@types/react@18.3.31)
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
       vitest:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
@@ -1552,15 +1619,6 @@ importers:
       '@lezer/highlight':
         specifier: 1.2.3
         version: 1.2.3
-      '@milkdown/core':
-        specifier: 7.22.0
-        version: 7.22.0
-      '@milkdown/preset-commonmark':
-        specifier: 7.22.0
-        version: 7.22.0
-      '@milkdown/preset-gfm':
-        specifier: 7.22.0
-        version: 7.22.0
       '@milkdown/prose':
         specifier: 7.22.0
         version: 7.22.0
@@ -1580,6 +1638,15 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
     devDependencies:
+      '@milkdown/core':
+        specifier: 7.22.0
+        version: 7.22.0
+      '@milkdown/preset-commonmark':
+        specifier: 7.22.0
+        version: 7.22.0
+      '@milkdown/preset-gfm':
+        specifier: 7.22.0
+        version: 7.22.0
       '@types/react':
         specifier: ^18.2.0
         version: 18.3.31
