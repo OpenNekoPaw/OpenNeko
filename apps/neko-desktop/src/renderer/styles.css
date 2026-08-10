@@ -1877,7 +1877,7 @@ code {
 }
 
 .management-surface-list.is-grid {
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
 
 .management-surface-list[data-empty='true'] {
@@ -1885,55 +1885,6 @@ code {
   grid-template-columns: minmax(0, 1fr);
   min-height: 192px;
   flex: 1;
-}
-
-.project-management-batch-toolbar {
-  display: flex;
-  min-height: 42px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  margin: -4px 0 10px;
-  padding: 6px 0;
-  border-block: 1px solid var(--neko-desktop-border);
-}
-
-.project-management-batch-toolbar strong {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.project-management-batch-toolbar__spacer {
-  flex: 1;
-}
-
-.project-management-batch-toolbar button {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 9px;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: 6px;
-  color: var(--neko-fg-secondary);
-  background: var(--neko-desktop-surface-raised);
-}
-
-.project-management-batch-toolbar button:last-child {
-  width: 30px;
-  min-width: 30px;
-  padding: 0;
-}
-
-.project-management-batch-toolbar button:hover:not(:disabled) {
-  color: var(--neko-fg);
-  background: var(--neko-desktop-control-hover);
-}
-
-.project-management-batch-toolbar button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
 }
 
 .management-surface-row {
@@ -1950,6 +1901,14 @@ code {
   text-align: left;
 }
 
+.management-surface-list.is-grid .management-surface-row {
+  min-height: 132px;
+  align-items: stretch;
+  flex-direction: column;
+  padding: 14px;
+}
+
+.management-surface-row__open,
 .management-surface-row__select {
   display: grid;
   min-width: 0;
@@ -1965,14 +1924,38 @@ code {
   cursor: pointer;
 }
 
-.management-surface-row:hover,
-.management-surface-row[data-selected='true'] {
+.management-surface-row:hover {
   border-color: color-mix(in srgb, var(--neko-accent) 30%, var(--neko-border));
   background: var(--neko-hover, #f4f6f7);
 }
 
+.management-surface-row__open:disabled,
 .management-surface-row__select:disabled {
   cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.management-surface-row__open:focus-visible,
+.management-surface-row__select:focus-visible,
+.management-surface-row-actions button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--neko-accent) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.management-surface-list.is-grid .management-surface-row__open {
+  flex: 1;
+  align-items: start;
+}
+
+.management-surface-project-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--neko-accent-strong);
+  background: var(--neko-accent-soft);
 }
 
 .management-surface-icon {
@@ -2047,6 +2030,10 @@ code {
   gap: 5px;
 }
 
+.management-surface-list.is-grid .management-surface-row-actions {
+  padding-top: 10px;
+}
+
 .management-surface-row-actions button {
   display: inline-grid;
   width: 28px;
@@ -2115,14 +2102,6 @@ code {
   .management-surface-actions {
     align-items: stretch;
     flex-wrap: wrap;
-  }
-
-  .project-management-batch-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .project-management-batch-toolbar__spacer {
-    display: none;
   }
 
   .management-search-field {

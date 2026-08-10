@@ -408,34 +408,27 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await waitForSelector(
         `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row`,
       );
-      await click(
-        `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row__select`,
-      );
-      await waitForSelector(
-        `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row[data-selected="true"]`,
-      );
-      const projectSelection = await inspectWorkbench(evaluate, 'management', 'project-management');
-      assertSharedManagementPanel(projectSelection, 'project-management');
+      const projectCatalog = await inspectWorkbench(evaluate, 'management', 'project-management');
+      assertSharedManagementPanel(projectCatalog, 'project-management');
       if (
-        projectSelection.projectDetailInSecondary ||
-        projectSelection.mainPanelIds.includes('project-detail') ||
-        projectSelection.projectRowActionCount !== 2 ||
-        !projectSelection.projectDoubleClickTargetVisible
+        projectCatalog.projectDetailInSecondary ||
+        projectCatalog.mainPanelIds.includes('project-detail') ||
+        projectCatalog.projectRowActionCount !== 2 ||
+        !projectCatalog.projectOpenTargetVisible ||
+        projectCatalog.projectCatalogViewMode !== 'grid'
       ) {
-        throw new Error(
-          'Project selection reserved a sparse Detail shell or lost double-click open.',
-        );
+        throw new Error('Project catalog lost its direct-open grid presentation.');
       }
-      const projectSelectionScreenshot = await screenshot('project-management-selected-large');
-      checkpoint('project-management-selected-large', projectSelection);
+      const projectCatalogScreenshot = await screenshot('project-management-grid-large');
+      checkpoint('project-management-grid-large', projectCatalog);
 
-      await doubleClickProjectCatalogItem(evaluate, workspaceActivation.projectId);
+      await openProjectCatalogItem(evaluate, workspaceActivation.projectId);
       await waitForSelector('.desktop-scene-workbench--workspace');
-      const catalogDoubleClickRestore = await inspectExactWorkspace(
+      const catalogDirectRestore = await inspectExactWorkspace(
         evaluate,
         workspaceActivation.workspaceId,
       );
-      checkpoint('project-management-double-click-exact-restore', catalogDoubleClickRestore);
+      checkpoint('project-management-direct-open-exact-restore', catalogDirectRestore);
 
       await waitForNavigationButton(evaluate, 1);
       await clickApplicationNavigation(evaluate, click, 1);
@@ -617,7 +610,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           assets,
           extensions,
           projects,
-          projectSelection,
+          projectCatalog,
           settings,
           workspace,
           workspacePreview,
@@ -637,7 +630,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           extensionsScreenshot,
           projectsScreenshot,
           settingsScreenshot,
-          projectSelectionScreenshot,
+          projectCatalogScreenshot,
           workspaceScreenshot,
           workspaceMention.screenshot,
           workspacePreviewScreenshot,
@@ -2171,9 +2164,7 @@ async function exerciseProjectConversationGroups({
       const root = document.querySelector('.project-management-catalog');
       const rows = [...(root?.querySelectorAll('.management-surface-row') ?? [])];
       const retainedProject = rows.find((row) =>
-        row.querySelector('.management-surface-row__select')?.getAttribute('aria-label')?.includes(
-          ${JSON.stringify(cleanup.projectId)},
-        ),
+        row.getAttribute('data-project-id') === ${JSON.stringify(cleanup.projectId)},
       ) ?? rows[0];
       const actions = retainedProject?.querySelectorAll(
         '.management-surface-row-actions button',
@@ -2441,21 +2432,16 @@ async function openProjectWorkspace(evaluate, projectId) {
   );
 }
 
-async function doubleClickProjectCatalogItem(evaluate, projectId) {
+async function openProjectCatalogItem(evaluate, projectId) {
   await evaluate(`(() => {
     const row = [...document.querySelectorAll('.project-management-catalog .management-surface-row')]
       .find((candidate) => candidate instanceof HTMLElement &&
         candidate.dataset.projectId === ${JSON.stringify(projectId)});
-    const target = row?.querySelector('.management-surface-row__select');
+    const target = row?.querySelector('.management-surface-row__open');
     if (!(target instanceof HTMLButtonElement) || target.disabled) {
-      throw new Error('Exact Project catalog item is unavailable for double-click open.');
+      throw new Error('Exact Project catalog item is unavailable for direct open.');
     }
-    target.dispatchEvent(new MouseEvent('dblclick', {
-      bubbles: true,
-      button: 0,
-      detail: 2,
-      view: window,
-    }));
+    target.click();
     return true;
   })()`);
 }
@@ -4810,11 +4796,15 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
         activeMainTarget?.querySelector(
           '.project-management-catalog .management-surface-row-actions',
         )?.querySelectorAll('button').length ?? -1,
-      projectDoubleClickTargetVisible: Boolean(
+      projectOpenTargetVisible: Boolean(
         activeMainTarget?.querySelector(
-          '.project-management-catalog .management-surface-row__select',
+          '.project-management-catalog .management-surface-row__open',
         ),
       ),
+      projectCatalogViewMode:
+        activeMainTarget
+          ?.querySelector('.project-management-catalog .management-surface-list')
+          ?.getAttribute('data-view-mode') ?? null,
       mainPanelIds: [
         ...(activeMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),
         ...(activeSecondaryMainTarget?.querySelectorAll('[data-workbench-main-panel]') ?? []),

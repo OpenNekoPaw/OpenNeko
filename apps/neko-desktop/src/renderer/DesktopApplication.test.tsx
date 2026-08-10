@@ -1279,7 +1279,7 @@ describe('DesktopApplication scene lifecycle', () => {
     ]);
   });
 
-  it('keeps low-information Project selection in the full management Main', async () => {
+  it('opens a Project Management card directly through the exact scene intent', async () => {
     const base = createProjection();
     const project = {
       projectId: 'content:workspace-1',
@@ -1296,15 +1296,25 @@ describe('DesktopApplication scene lifecycle', () => {
       },
       projectManagementScene(),
     );
-    installBridge({ projection });
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'project-management-open',
+      scene: activeScene(projection),
+    }));
+    installBridge({ projection, transition });
 
     const { container, root } = await renderApplication();
     const projectButton = container.querySelector<HTMLButtonElement>(
-      '.management-surface-row__select',
+      '.management-surface-row__open',
     );
     if (!projectButton) throw new Error('Project management fixture requires a Project row.');
     await act(async () => projectButton.click());
-    await waitFor(() => projectButton.getAttribute('aria-pressed') === 'true');
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenCalledWith(
+      projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      activeScene(projection).sceneId,
+    );
 
     const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
     expect(shell?.dataset.mainSplit).toBe('none');
@@ -1315,6 +1325,8 @@ describe('DesktopApplication scene lifecycle', () => {
     ).toBe(true);
     expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
     expect(container.querySelector('[aria-label="Open project: Project one"]')).toBeNull();
+    expect(container.querySelector('.project-management-batch-toolbar')).toBeNull();
+    expect(projectButton.hasAttribute('aria-pressed')).toBe(false);
     expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
     expect(projectButton.closest('[data-project-id="content:workspace-1"]')).not.toBeNull();
     expect(container.textContent).toContain('Project one');
@@ -2082,7 +2094,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('confirms and delegates the complete Project Management selection as one batch', async () => {
+  it('confirms and delegates one exact Project Management item removal', async () => {
     const base = createProjection();
     const projects = [
       {
@@ -2115,27 +2127,19 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, removeProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { container, root } = await renderApplication();
-    await waitFor(() => container.querySelector('.management-surface-row__select') !== null);
-    const selectionButtons = container.querySelectorAll<HTMLButtonElement>(
-      '.management-surface-row__select',
+    await waitFor(() => container.querySelector('[aria-label="Remove First Project"]') !== null);
+    const removeProject = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Remove First Project"]',
     );
-    const first = selectionButtons[0];
-    const second = selectionButtons[1];
-    if (!first || !second) throw new Error('Project Management batch fixture is incomplete.');
-    await act(async () => first.click());
-    await act(async () =>
-      second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })),
-    );
-    const removeSelected = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Remove selected',
-    );
-    if (!removeSelected) throw new Error('Project Management batch action is unavailable.');
+    if (!removeProject) throw new Error('Project Management item removal is unavailable.');
+    expect(container.querySelector('.project-management-batch-toolbar')).toBeNull();
+    expect(container.querySelector('[data-selected]')).toBeNull();
 
-    await act(async () => removeSelected.click());
+    await act(async () => removeProject.click());
     expect(removeProjects).not.toHaveBeenCalled();
-    await act(async () => removeSelected.click());
+    await act(async () => removeProject.click());
     await waitFor(() => removeProjects.mock.calls.length === 1);
-    expect(removeProjects).toHaveBeenCalledWith(['content:workspace-1', 'content:workspace-2']);
+    expect(removeProjects).toHaveBeenCalledWith(['content:workspace-1']);
     await act(async () => root.unmount());
   });
 
