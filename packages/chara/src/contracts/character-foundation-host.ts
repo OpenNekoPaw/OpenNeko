@@ -11,29 +11,30 @@ import {
   type UserCharacterRelationship,
 } from './character';
 import {
+  parseCharacterMemoryCandidate,
+  parseCharacterMemoryScope,
+  parseCharacterStorylineObservationCandidate,
+  parseCharacterStorylineRun,
+  parseCharacterStorylineVersion,
+  type CharacterMemoryScope,
+  type CharacterStorylineObservationCandidate,
+  type CharacterStorylineRun,
+  type CharacterStorylineVersion,
+} from './character-lore-storyline-memory';
+import {
+  parseCharacterRunPresentationConfiguration,
+  type CharacterRunPresentationConfiguration,
+} from './character-presentation';
+import {
   parseCharacterRoom,
   parseCreateCharacterRoomRunInput,
   parseDialogueRun,
   parseRoomRun,
   type CharacterRoom,
-  type CompanionWorldBinding,
   type DialogueRun,
-  type NarrativeWorldBinding,
   type CreateCharacterRoomRunInput,
   type RoomRun,
 } from './room';
-import {
-  parseWorldProject,
-  parseWorldDefinition,
-  parseWorldRun,
-  parseWorldSave,
-  parseWorldVersion,
-  type WorldProject,
-  type WorldDefinition,
-  type WorldRun,
-  type WorldSave,
-  type WorldVersion,
-} from '@neko/world/contracts';
 export const CHARACTER_FOUNDATION_HOST_CHANNEL = 'neko:character:foundation' as const;
 
 export interface CharacterFoundationHostRequest {
@@ -53,17 +54,10 @@ type CharacterFoundationDialogueCreateBase = {
   readonly controller: CharacterFoundationDialogueController;
 };
 
-export type CharacterFoundationDialogueCreateInput =
-  | (CharacterFoundationDialogueCreateBase & {
-      readonly runtimeKind: 'companion';
-      readonly relationshipId: string;
-      readonly worldBinding?: CompanionWorldBinding;
-    })
-  | (CharacterFoundationDialogueCreateBase & {
-      readonly runtimeKind: 'narrative';
-      readonly worldBinding: NarrativeWorldBinding;
-      readonly actorId: string;
-    });
+export type CharacterFoundationDialogueCreateInput = CharacterFoundationDialogueCreateBase & {
+  readonly runtimeKind: 'companion';
+  readonly relationshipId: string;
+};
 
 export type CharacterFoundationCommand =
   | {
@@ -102,46 +96,140 @@ export type CharacterFoundationCommand =
       };
     }
   | {
+      readonly operation: 'relationship-memory-candidate-propose';
+      readonly input: {
+        readonly relationshipId: string;
+        readonly candidateId: string;
+        readonly content: string;
+        readonly sourceRef: string;
+      };
+    }
+  | {
+      readonly operation: 'relationship-memory-candidate-accept';
+      readonly input: {
+        readonly relationshipId: string;
+        readonly candidateId: string;
+        readonly memoryId: string;
+      };
+    }
+  | {
+      readonly operation: 'relationship-memory-candidate-reject';
+      readonly input: { readonly relationshipId: string; readonly candidateId: string };
+    }
+  | {
+      readonly operation: 'relationship-memory-correct';
+      readonly input: {
+        readonly relationshipId: string;
+        readonly memoryId: string;
+        readonly content: string;
+      };
+    }
+  | {
+      readonly operation: 'relationship-memory-delete';
+      readonly input: { readonly relationshipId: string; readonly memoryId: string };
+    }
+  | {
       readonly operation: 'dialogue-create';
       readonly input: CharacterFoundationDialogueCreateInput;
     }
   | { readonly operation: 'character-room-create'; readonly input: CharacterRoom }
   | { readonly operation: 'room-run-create'; readonly input: CreateCharacterRoomRunInput }
   | {
-      readonly operation: 'world-project-create';
+      readonly operation: 'character-presentation-configure';
+      readonly input: CharacterRunPresentationConfiguration;
+    }
+  | {
+      readonly operation: 'character-storyline-publish';
+      readonly input: Omit<CharacterStorylineVersion, 'publishedAt'>;
+    }
+  | {
+      readonly operation: 'character-storyline-run-create';
       readonly input: {
-        readonly worldProjectId: string;
-        readonly title: string;
-        readonly draft: WorldDefinition;
+        readonly characterStorylineRunId: string;
+        readonly characterStorylineVersionId: string;
+        readonly characterRunId: string;
+        readonly initialStageId: string;
       };
     }
   | {
-      readonly operation: 'world-project-update-draft';
-      readonly input: { readonly worldProjectId: string; readonly draft: WorldDefinition };
+      readonly operation: 'character-storyline-observation-propose';
+      readonly input: Omit<
+        CharacterStorylineObservationCandidate,
+        'status' | 'reviewedAt' | 'acceptedTransitionId'
+      >;
     }
   | {
-      readonly operation: 'world-project-set-review';
+      readonly operation: 'character-storyline-observation-accept';
       readonly input: {
-        readonly worldProjectId: string;
-        readonly reviewStatus: 'draft' | 'ready' | 'blocked';
+        readonly observationCandidateId: string;
+        readonly characterStorylineRunId: string;
+        readonly transitionId: string;
+        readonly expectedStorylineRevision: number;
       };
     }
   | {
-      readonly operation: 'world-version-publish';
+      readonly operation: 'character-storyline-observation-reject';
       readonly input: {
-        readonly worldProjectId: string;
-        readonly worldVersionId: string;
-        readonly label: string;
+        readonly observationCandidateId: string;
+        readonly characterStorylineRunId: string;
+        readonly expectedStorylineRevision: number;
       };
     }
   | {
-      readonly operation: 'world-run-create';
+      readonly operation: 'character-memory-scope-create';
       readonly input: {
-        readonly worldVersionId: string;
-        readonly worldRunId: string;
-        readonly worldSaveId: string;
-        readonly branchId: string;
-        readonly saveLabel: string;
+        readonly characterMemoryScopeId: string;
+        readonly characterRunId: string;
+        readonly characterStorylineRunId?: string;
+      };
+    }
+  | {
+      readonly operation: 'character-memory-candidate-propose';
+      readonly input: {
+        readonly characterMemoryScopeId: string;
+        readonly characterMemoryCandidateId: string;
+        readonly content: string;
+        readonly sourceRef: string;
+        readonly observerParticipantId?: string;
+        readonly observedAt: string;
+        readonly sensitivityTraits: readonly string[];
+        readonly retentionTraits: readonly string[];
+        readonly expectedMemoryRevision: number;
+      };
+    }
+  | {
+      readonly operation: 'character-memory-candidate-accept';
+      readonly input: {
+        readonly characterMemoryScopeId: string;
+        readonly characterMemoryCandidateId: string;
+        readonly characterMemoryEntryId: string;
+        readonly expectedMemoryRevision: number;
+      };
+    }
+  | {
+      readonly operation: 'character-memory-candidate-reject';
+      readonly input: {
+        readonly characterMemoryScopeId: string;
+        readonly characterMemoryCandidateId: string;
+        readonly expectedMemoryRevision: number;
+      };
+    }
+  | {
+      readonly operation: 'character-memory-candidate-correct';
+      readonly input: {
+        readonly characterMemoryScopeId: string;
+        readonly characterMemoryCandidateId: string;
+        readonly correctedMemoryEntryId: string;
+        readonly replacementMemoryEntryId: string;
+        readonly expectedMemoryRevision: number;
+      };
+    }
+  | {
+      readonly operation: 'character-memory-entry-delete';
+      readonly input: {
+        readonly characterMemoryScopeId: string;
+        readonly characterMemoryEntryId: string;
+        readonly expectedMemoryRevision: number;
       };
     };
 
@@ -153,7 +241,7 @@ export type CharacterFoundationAnyHostRequest =
   CharacterFoundationHostRequest | CharacterFoundationCommandHostRequest;
 
 export interface CharacterFoundationDiagnostic {
-  readonly owner: 'character' | 'world';
+  readonly owner: 'character';
   readonly recordKind: string;
   readonly recordId: string;
   readonly message: string;
@@ -168,11 +256,11 @@ export interface CharacterFoundationSnapshot {
     readonly dialogueRuns: readonly DialogueRun[];
     readonly rooms: readonly CharacterRoom[];
     readonly roomRuns: readonly RoomRun[];
-  };
-  readonly world: {
-    readonly projects: readonly WorldProject[];
-    readonly versions: readonly WorldVersion[];
-    readonly runtimes: readonly { readonly run: WorldRun; readonly save: WorldSave }[];
+    readonly storylineVersions: readonly CharacterStorylineVersion[];
+    readonly storylineRuns: readonly CharacterStorylineRun[];
+    readonly storylineObservationCandidates: readonly CharacterStorylineObservationCandidate[];
+    readonly memoryScopes: readonly CharacterMemoryScope[];
+    readonly presentationConfigurations: readonly CharacterRunPresentationConfiguration[];
   };
   readonly diagnostics: readonly CharacterFoundationDiagnostic[];
 }
@@ -281,7 +369,7 @@ export function parseCharacterFoundationCommandHostRequest(
       };
     }
     case 'character-version-publish': {
-      const input = parsePublicationInput(record['input'], 'Character');
+      const input = parsePublicationInput(record['input']);
       return {
         requestId,
         operation,
@@ -308,88 +396,54 @@ export function parseCharacterFoundationCommandHostRequest(
         },
       };
     }
+    case 'relationship-memory-candidate-propose':
+      return { requestId, operation, input: parseRelationshipMemoryProposeInput(record['input']) };
+    case 'relationship-memory-candidate-accept':
+      return { requestId, operation, input: parseRelationshipMemoryAcceptInput(record['input']) };
+    case 'relationship-memory-candidate-reject':
+      return { requestId, operation, input: parseRelationshipMemoryRejectInput(record['input']) };
+    case 'relationship-memory-correct':
+      return { requestId, operation, input: parseRelationshipMemoryCorrectInput(record['input']) };
+    case 'relationship-memory-delete':
+      return { requestId, operation, input: parseRelationshipMemoryDeleteInput(record['input']) };
     case 'dialogue-create':
       return { requestId, operation, input: parseDialogueCreateInput(record['input']) };
     case 'character-room-create':
       return { requestId, operation, input: parseCharacterRoom(record['input']) };
     case 'room-run-create':
       return { requestId, operation, input: parseCreateCharacterRoomRunInput(record['input']) };
-    case 'world-project-create': {
-      const input = exactRecord(
-        record['input'],
-        ['worldProjectId', 'title', 'draft'],
-        'World project create input',
-      );
+    case 'character-presentation-configure':
       return {
         requestId,
         operation,
-        input: {
-          worldProjectId: requireIdentity(input['worldProjectId'], 'WorldProject'),
-          title: requireIdentity(input['title'], 'World title'),
-          draft: parseWorldDefinition(input['draft']),
-        },
+        input: parseCharacterRunPresentationConfiguration(record['input']),
       };
-    }
-    case 'world-project-update-draft': {
-      const input = exactRecord(
-        record['input'],
-        ['worldProjectId', 'draft'],
-        'World project draft input',
-      );
+    case 'character-storyline-publish':
+      return { requestId, operation, input: parseStorylinePublishInput(record['input']) };
+    case 'character-storyline-run-create':
+      return { requestId, operation, input: parseStorylineRunCreateInput(record['input']) };
+    case 'character-storyline-observation-propose':
       return {
         requestId,
         operation,
-        input: {
-          worldProjectId: requireIdentity(input['worldProjectId'], 'WorldProject'),
-          draft: parseWorldDefinition(input['draft']),
-        },
+        input: parseStorylineObservationProposeInput(record['input']),
       };
-    }
-    case 'world-project-set-review': {
-      const input = exactRecord(
-        record['input'],
-        ['worldProjectId', 'reviewStatus'],
-        'World project review input',
-      );
-      return {
-        requestId,
-        operation,
-        input: {
-          worldProjectId: requireIdentity(input['worldProjectId'], 'WorldProject'),
-          reviewStatus: parseReviewStatus(input['reviewStatus'], 'World'),
-        },
-      };
-    }
-    case 'world-version-publish': {
-      const input = parsePublicationInput(record['input'], 'World');
-      return {
-        requestId,
-        operation,
-        input: {
-          worldProjectId: input.projectId,
-          worldVersionId: input.versionId,
-          label: input.label,
-        },
-      };
-    }
-    case 'world-run-create': {
-      const input = exactRecord(
-        record['input'],
-        ['worldVersionId', 'worldRunId', 'worldSaveId', 'branchId', 'saveLabel'],
-        'World run create input',
-      );
-      return {
-        requestId,
-        operation,
-        input: {
-          worldVersionId: requireIdentity(input['worldVersionId'], 'WorldVersion'),
-          worldRunId: requireIdentity(input['worldRunId'], 'WorldRun'),
-          worldSaveId: requireIdentity(input['worldSaveId'], 'WorldSave'),
-          branchId: requireIdentity(input['branchId'], 'World branch'),
-          saveLabel: requireIdentity(input['saveLabel'], 'World save label'),
-        },
-      };
-    }
+    case 'character-storyline-observation-accept':
+      return { requestId, operation, input: parseStorylineObservationAcceptInput(record['input']) };
+    case 'character-storyline-observation-reject':
+      return { requestId, operation, input: parseStorylineObservationRejectInput(record['input']) };
+    case 'character-memory-scope-create':
+      return { requestId, operation, input: parseMemoryScopeCreateInput(record['input']) };
+    case 'character-memory-candidate-propose':
+      return { requestId, operation, input: parseMemoryCandidateProposeInput(record['input']) };
+    case 'character-memory-candidate-accept':
+      return { requestId, operation, input: parseMemoryCandidateAcceptInput(record['input']) };
+    case 'character-memory-candidate-reject':
+      return { requestId, operation, input: parseMemoryCandidateRejectInput(record['input']) };
+    case 'character-memory-candidate-correct':
+      return { requestId, operation, input: parseMemoryCandidateCorrectInput(record['input']) };
+    case 'character-memory-entry-delete':
+      return { requestId, operation, input: parseMemoryEntryDeleteInput(record['input']) };
     default:
       throw new Error(`Unknown Character Foundation operation '${String(operation)}'.`);
   }
@@ -408,17 +462,25 @@ export function parseCharacterFoundationHostResult(
 }
 
 export function parseCharacterFoundationSnapshot(value: unknown): CharacterFoundationSnapshot {
-  const record = exactRecord(
-    value,
-    ['character', 'world', 'diagnostics'],
-    'Character Foundation snapshot',
-  );
+  const record = exactRecord(value, ['character', 'diagnostics'], 'Character Foundation snapshot');
   const character = exactRecord(
     record['character'],
-    ['projects', 'versions', 'relationships', 'characterRuns', 'dialogueRuns', 'rooms', 'roomRuns'],
+    [
+      'projects',
+      'versions',
+      'relationships',
+      'characterRuns',
+      'dialogueRuns',
+      'rooms',
+      'roomRuns',
+      'storylineVersions',
+      'storylineRuns',
+      'storylineObservationCandidates',
+      'memoryScopes',
+      'presentationConfigurations',
+    ],
     'Character catalog',
   );
-  const world = exactRecord(record['world'], ['projects', 'versions', 'runtimes'], 'World catalog');
   return Object.freeze({
     character: Object.freeze({
       projects: parseArray(character['projects'], parseCharacterProject, 'Character projects'),
@@ -432,27 +494,34 @@ export function parseCharacterFoundationSnapshot(value: unknown): CharacterFound
       dialogueRuns: parseArray(character['dialogueRuns'], parseDialogueRun, 'Dialogue runs'),
       rooms: parseArray(character['rooms'], parseCharacterRoom, 'Character rooms'),
       roomRuns: parseArray(character['roomRuns'], parseRoomRun, 'Room runs'),
-    }),
-    world: Object.freeze({
-      projects: parseArray(world['projects'], parseWorldProject, 'World projects'),
-      versions: parseArray(world['versions'], parseWorldVersion, 'World versions'),
-      runtimes: parseArray(world['runtimes'], parseWorldRuntimeProjection, 'World runtimes'),
+      storylineVersions: parseArray(
+        character['storylineVersions'],
+        parseCharacterStorylineVersion,
+        'Character storyline versions',
+      ),
+      storylineRuns: parseArray(
+        character['storylineRuns'],
+        parseCharacterStorylineRun,
+        'Character storyline runs',
+      ),
+      storylineObservationCandidates: parseArray(
+        character['storylineObservationCandidates'],
+        parseCharacterStorylineObservationCandidate,
+        'Character storyline observation candidates',
+      ),
+      memoryScopes: parseArray(
+        character['memoryScopes'],
+        parseCharacterMemoryScope,
+        'Character memory scopes',
+      ),
+      presentationConfigurations: parseArray(
+        character['presentationConfigurations'],
+        parseCharacterRunPresentationConfiguration,
+        'Character presentation configurations',
+      ),
     }),
     diagnostics: parseArray(record['diagnostics'], parseDiagnostic, 'Foundation diagnostics'),
   });
-}
-
-function parseWorldRuntimeProjection(value: unknown): {
-  readonly run: WorldRun;
-  readonly save: WorldSave;
-} {
-  const record = exactRecord(value, ['run', 'save'], 'World runtime projection');
-  const run = parseWorldRun(record['run']);
-  const save = parseWorldSave(record['save']);
-  if (run.worldRunId !== save.worldRunId || run.worldSaveId !== save.worldSaveId) {
-    throw new Error('World runtime projection authority does not match.');
-  }
-  return Object.freeze({ run, save });
 }
 
 function parseDiagnostic(value: unknown): CharacterFoundationDiagnostic {
@@ -462,7 +531,7 @@ function parseDiagnostic(value: unknown): CharacterFoundationDiagnostic {
     'Character Foundation diagnostic',
   );
   const owner = record['owner'];
-  if (owner !== 'character' && owner !== 'world') {
+  if (owner !== 'character') {
     throw new Error(`Unknown Character Foundation diagnostic owner '${String(owner)}'.`);
   }
   return Object.freeze({
@@ -508,17 +577,20 @@ function parseReviewStatus(value: unknown, owner: string): 'draft' | 'ready' | '
   return value;
 }
 
-function parsePublicationInput(
-  value: unknown,
-  owner: 'Character' | 'World',
-): { readonly projectId: string; readonly versionId: string; readonly label: string } {
-  const projectKey = owner === 'Character' ? 'characterProjectId' : 'worldProjectId';
-  const versionKey = owner === 'Character' ? 'characterVersionId' : 'worldVersionId';
-  const input = exactRecord(value, [projectKey, versionKey, 'label'], `${owner} publication input`);
+function parsePublicationInput(value: unknown): {
+  readonly projectId: string;
+  readonly versionId: string;
+  readonly label: string;
+} {
+  const input = exactRecord(
+    value,
+    ['characterProjectId', 'characterVersionId', 'label'],
+    'Character publication input',
+  );
   return {
-    projectId: requireIdentity(input[projectKey], `${owner}Project`),
-    versionId: requireIdentity(input[versionKey], `${owner}Version`),
-    label: requireIdentity(input['label'], `${owner} version label`),
+    projectId: requireIdentity(input['characterProjectId'], 'CharacterProject'),
+    versionId: requireIdentity(input['characterVersionId'], 'CharacterVersion'),
+    label: requireIdentity(input['label'], 'Character version label'),
   };
 }
 
@@ -534,7 +606,7 @@ function parseDialogueCreateInput(value: unknown): CharacterFoundationDialogueCr
       'controller',
       'runtimeKind',
     ],
-    ['relationshipId', 'worldBinding', 'actorId'],
+    ['relationshipId'],
     'Dialogue create input',
   );
   const controllerRecord = recordValue(input['controller'], 'Dialogue controller');
@@ -550,46 +622,383 @@ function parseDialogueCreateInput(value: unknown): CharacterFoundationDialogueCr
     ),
     controller,
   };
-  const runtimeKind = input['runtimeKind'];
   const parsedBinding = parseDialogueRun({
     topology: 'dialogue',
     dialogueRunId: base.dialogueRunId,
     userParticipantId: base.userParticipantId,
     characterParticipantId: base.characterParticipantId,
     characterRunId: base.characterRunId,
-    runtimeKind,
-    ...(runtimeKind === 'companion'
-      ? {
-          relationshipIds: [requireIdentity(input['relationshipId'], 'relationship')],
-          ...(input['worldBinding'] === undefined ? {} : { worldBinding: input['worldBinding'] }),
-        }
-      : {
-          worldBinding: input['worldBinding'],
-        }),
+    runtimeKind: input['runtimeKind'],
+    relationshipIds: [requireIdentity(input['relationshipId'], 'relationship')],
     createdAt: '2000-01-01T00:00:00.000Z',
   });
-  if (parsedBinding.runtimeKind === 'companion') {
-    if (input['actorId'] !== undefined) {
-      throw new Error('Companion Dialogue input cannot declare a narrative actor.');
-    }
-    return {
-      ...base,
-      runtimeKind: 'companion',
-      relationshipId: parsedBinding.relationshipIds[0]!,
-      ...(parsedBinding.worldBinding === undefined
-        ? {}
-        : { worldBinding: parsedBinding.worldBinding }),
-    };
-  }
-  if (input['relationshipId'] !== undefined) {
-    throw new Error('Narrative Dialogue input cannot declare relationship memory.');
-  }
   return {
     ...base,
-    runtimeKind: 'narrative',
-    worldBinding: parsedBinding.worldBinding,
-    actorId: requireIdentity(input['actorId'], 'narrative actor'),
+    runtimeKind: 'companion',
+    relationshipId: parsedBinding.relationshipIds[0]!,
   };
+}
+
+function parseRelationshipMemoryProposeInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'relationship-memory-candidate-propose' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    ['relationshipId', 'candidateId', 'content', 'sourceRef'],
+    'Relationship memory candidate propose input',
+  );
+  return {
+    relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
+    candidateId: requireIdentity(input['candidateId'], 'relationship memory candidate'),
+    content: requireIdentity(input['content'], 'relationship memory content'),
+    sourceRef: requireOpaqueCommandRef(input['sourceRef'], 'relationship memory source'),
+  };
+}
+
+function parseRelationshipMemoryAcceptInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'relationship-memory-candidate-accept' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    ['relationshipId', 'candidateId', 'memoryId'],
+    'Relationship memory candidate accept input',
+  );
+  return {
+    relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
+    candidateId: requireIdentity(input['candidateId'], 'relationship memory candidate'),
+    memoryId: requireIdentity(input['memoryId'], 'relationship memory'),
+  };
+}
+
+function parseRelationshipMemoryRejectInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'relationship-memory-candidate-reject' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    ['relationshipId', 'candidateId'],
+    'Relationship memory candidate reject input',
+  );
+  return {
+    relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
+    candidateId: requireIdentity(input['candidateId'], 'relationship memory candidate'),
+  };
+}
+
+function parseRelationshipMemoryCorrectInput(
+  value: unknown,
+): Extract<CharacterFoundationCommand, { operation: 'relationship-memory-correct' }>['input'] {
+  const input = exactRecord(
+    value,
+    ['relationshipId', 'memoryId', 'content'],
+    'Relationship memory correction input',
+  );
+  return {
+    relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
+    memoryId: requireIdentity(input['memoryId'], 'relationship memory'),
+    content: requireIdentity(input['content'], 'relationship memory content'),
+  };
+}
+
+function parseRelationshipMemoryDeleteInput(
+  value: unknown,
+): Extract<CharacterFoundationCommand, { operation: 'relationship-memory-delete' }>['input'] {
+  const input = exactRecord(
+    value,
+    ['relationshipId', 'memoryId'],
+    'Relationship memory delete input',
+  );
+  return {
+    relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
+    memoryId: requireIdentity(input['memoryId'], 'relationship memory'),
+  };
+}
+
+function parseStorylinePublishInput(
+  value: unknown,
+): Extract<CharacterFoundationCommand, { operation: 'character-storyline-publish' }>['input'] {
+  const publication = parseCharacterStorylineVersion({
+    ...recordValue(value, 'Character storyline publication input'),
+    publishedAt: '2000-01-01T00:00:00.000Z',
+  });
+  const { publishedAt: _publishedAt, ...input } = publication;
+  return input;
+}
+
+function parseStorylineRunCreateInput(
+  value: unknown,
+): Extract<CharacterFoundationCommand, { operation: 'character-storyline-run-create' }>['input'] {
+  const input = exactRecord(
+    value,
+    ['characterStorylineRunId', 'characterStorylineVersionId', 'characterRunId', 'initialStageId'],
+    'Character storyline run create input',
+  );
+  return {
+    characterStorylineRunId: requireIdentity(
+      input['characterStorylineRunId'],
+      'CharacterStorylineRun',
+    ),
+    characterStorylineVersionId: requireIdentity(
+      input['characterStorylineVersionId'],
+      'CharacterStorylineVersion',
+    ),
+    characterRunId: requireIdentity(input['characterRunId'], 'CharacterRun'),
+    initialStageId: requireIdentity(input['initialStageId'], 'storyline initial stage'),
+  };
+}
+
+function parseStorylineObservationProposeInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-storyline-observation-propose' }
+>['input'] {
+  const candidate = parseCharacterStorylineObservationCandidate({
+    ...recordValue(value, 'Character storyline observation propose input'),
+    status: 'pending',
+  });
+  const { status: _status, ...input } = candidate;
+  return input;
+}
+
+function parseStorylineObservationAcceptInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-storyline-observation-accept' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    [
+      'observationCandidateId',
+      'characterStorylineRunId',
+      'transitionId',
+      'expectedStorylineRevision',
+    ],
+    'Character storyline observation accept input',
+  );
+  return {
+    observationCandidateId: requireIdentity(
+      input['observationCandidateId'],
+      'storyline observation candidate',
+    ),
+    characterStorylineRunId: requireIdentity(
+      input['characterStorylineRunId'],
+      'CharacterStorylineRun',
+    ),
+    transitionId: requireIdentity(input['transitionId'], 'storyline transition'),
+    expectedStorylineRevision: requireExpectedPosition(
+      input['expectedStorylineRevision'],
+      'storyline',
+    ),
+  };
+}
+
+function parseStorylineObservationRejectInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-storyline-observation-reject' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    ['observationCandidateId', 'characterStorylineRunId', 'expectedStorylineRevision'],
+    'Character storyline observation reject input',
+  );
+  return {
+    observationCandidateId: requireIdentity(
+      input['observationCandidateId'],
+      'storyline observation candidate',
+    ),
+    characterStorylineRunId: requireIdentity(
+      input['characterStorylineRunId'],
+      'CharacterStorylineRun',
+    ),
+    expectedStorylineRevision: requireExpectedPosition(
+      input['expectedStorylineRevision'],
+      'storyline',
+    ),
+  };
+}
+
+function parseMemoryScopeCreateInput(
+  value: unknown,
+): Extract<CharacterFoundationCommand, { operation: 'character-memory-scope-create' }>['input'] {
+  const input = exactRecordWithOptional(
+    value,
+    ['characterMemoryScopeId', 'characterRunId'],
+    ['characterStorylineRunId'],
+    'Character memory scope create input',
+  );
+  const characterStorylineRunId = optionalCommandIdentity(
+    input['characterStorylineRunId'],
+    'CharacterStorylineRun',
+  );
+  return {
+    characterMemoryScopeId: requireIdentity(
+      input['characterMemoryScopeId'],
+      'CharacterMemoryScope',
+    ),
+    characterRunId: requireIdentity(input['characterRunId'], 'CharacterRun'),
+    ...(characterStorylineRunId === undefined ? {} : { characterStorylineRunId }),
+  };
+}
+
+function parseMemoryCandidateProposeInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-memory-candidate-propose' }
+>['input'] {
+  const candidate = parseCharacterMemoryCandidate({
+    ...recordValue(value, 'Character memory candidate propose input'),
+    status: 'pending',
+  });
+  const { characterMemoryCandidateId, status: _status, ...input } = candidate;
+  return { characterMemoryCandidateId, ...input };
+}
+
+function parseMemoryCandidateAcceptInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-memory-candidate-accept' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    [
+      'characterMemoryScopeId',
+      'characterMemoryCandidateId',
+      'characterMemoryEntryId',
+      'expectedMemoryRevision',
+    ],
+    'Character memory candidate accept input',
+  );
+  return {
+    characterMemoryScopeId: requireIdentity(
+      input['characterMemoryScopeId'],
+      'CharacterMemoryScope',
+    ),
+    characterMemoryCandidateId: requireIdentity(
+      input['characterMemoryCandidateId'],
+      'CharacterMemoryCandidate',
+    ),
+    characterMemoryEntryId: requireIdentity(
+      input['characterMemoryEntryId'],
+      'CharacterMemoryEntry',
+    ),
+    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+  };
+}
+
+function parseMemoryCandidateRejectInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-memory-candidate-reject' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    ['characterMemoryScopeId', 'characterMemoryCandidateId', 'expectedMemoryRevision'],
+    'Character memory candidate reject input',
+  );
+  return {
+    characterMemoryScopeId: requireIdentity(
+      input['characterMemoryScopeId'],
+      'CharacterMemoryScope',
+    ),
+    characterMemoryCandidateId: requireIdentity(
+      input['characterMemoryCandidateId'],
+      'CharacterMemoryCandidate',
+    ),
+    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+  };
+}
+
+function parseMemoryCandidateCorrectInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-memory-candidate-correct' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    [
+      'characterMemoryScopeId',
+      'characterMemoryCandidateId',
+      'correctedMemoryEntryId',
+      'replacementMemoryEntryId',
+      'expectedMemoryRevision',
+    ],
+    'Character memory candidate correct input',
+  );
+  return {
+    characterMemoryScopeId: requireIdentity(
+      input['characterMemoryScopeId'],
+      'CharacterMemoryScope',
+    ),
+    characterMemoryCandidateId: requireIdentity(
+      input['characterMemoryCandidateId'],
+      'CharacterMemoryCandidate',
+    ),
+    correctedMemoryEntryId: requireIdentity(
+      input['correctedMemoryEntryId'],
+      'corrected CharacterMemoryEntry',
+    ),
+    replacementMemoryEntryId: requireIdentity(
+      input['replacementMemoryEntryId'],
+      'replacement CharacterMemoryEntry',
+    ),
+    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+  };
+}
+
+function parseMemoryEntryDeleteInput(
+  value: unknown,
+): Extract<CharacterFoundationCommand, { operation: 'character-memory-entry-delete' }>['input'] {
+  const input = exactRecord(
+    value,
+    ['characterMemoryScopeId', 'characterMemoryEntryId', 'expectedMemoryRevision'],
+    'Character memory entry delete input',
+  );
+  return {
+    characterMemoryScopeId: requireIdentity(
+      input['characterMemoryScopeId'],
+      'CharacterMemoryScope',
+    ),
+    characterMemoryEntryId: requireIdentity(
+      input['characterMemoryEntryId'],
+      'CharacterMemoryEntry',
+    ),
+    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+  };
+}
+
+function optionalCommandIdentity(value: unknown, label: string): string | undefined {
+  return value === undefined ? undefined : requireIdentity(value, label);
+}
+
+function requireExpectedPosition(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Character Foundation ${label} revision must be a non-negative integer.`);
+  }
+  return value;
+}
+
+function requireOpaqueCommandRef(value: unknown, label: string): string {
+  const ref = requireIdentity(value, label);
+  if (!/^[a-z][a-z0-9+.-]*:[^\s]+$/u.test(ref) || /^file:/u.test(ref)) {
+    throw new Error(`Character Foundation ${label} must be an opaque non-file reference.`);
+  }
+  return ref;
 }
 
 function parseDialogueController(

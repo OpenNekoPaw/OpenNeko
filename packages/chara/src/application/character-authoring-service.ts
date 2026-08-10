@@ -2,6 +2,7 @@ import {
   parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
   parseCharacterVersion,
+  collectCharacterLoreEvidenceIds,
   type CharacterAuthoringTestSnapshot,
   type CharacterCanonCandidate,
   type CharacterDefinition,
@@ -343,11 +344,12 @@ export class CharacterAuthoringService {
         project.characterProjectId,
       );
     }
-    const acceptedEvidenceIds = new Set(
-      project.candidates
+    const acceptedEvidenceIds = new Set([
+      ...project.candidates
         .filter((candidate) => candidate.status === 'accepted')
         .flatMap((candidate) => candidate.evidenceIds),
-    );
+      ...collectCharacterLoreEvidenceIds(project.draft),
+    ]);
     const published = deepFreeze(
       parseCharacterVersion({
         characterVersionId: input.characterVersionId,

@@ -8,9 +8,7 @@ import {
   type CharacterRoom,
   type CharacterRun,
   type CharacterVersion,
-  type CompanionWorldBinding,
   type CreateCharacterRoomRunInput,
-  type NarrativeWorldBinding,
   type RoomParticipant,
   type RoomRun,
   type UserCharacterRelationship,
@@ -36,20 +34,11 @@ export interface CharacterPreparedRoomRunPort {
   ): Promise<RoomRun>;
 }
 
-export interface CharacterRoomInteractionWorldPort {
-  validateBinding(
-    binding: CompanionWorldBinding | NarrativeWorldBinding,
-    signal?: AbortSignal,
-  ): Promise<void>;
-}
-
 export type CharacterRoomInteractionDiagnosticCode =
   | 'character-room-unavailable'
-  | 'character-room-runtime-mismatch'
   | 'character-room-binding-invalid'
   | 'character-version-unavailable'
-  | 'relationship-unavailable'
-  | 'narrative-world-unavailable';
+  | 'relationship-unavailable';
 
 export class CharacterRoomInteractionError extends Error {
   constructor(
@@ -71,7 +60,6 @@ export class CharacterRoomInteractionService {
       readonly repository: CharacterRoomInteractionRepository;
       readonly roomRuns: CharacterPreparedRoomRunPort;
       readonly agentSessions: CharacterPrimaryAgentSessionPort;
-      readonly worldBindings: CharacterRoomInteractionWorldPort;
       readonly now?: () => string;
       readonly createCharacterRunId?: (roomRunId: string, participantId: string) => string;
     },
@@ -93,28 +81,6 @@ export class CharacterRoomInteractionService {
       );
     }
     const room = parseCharacterRoom(storedRoom);
-    if (room.defaultRuntimeKind !== command.runtimeKind) {
-      throw roomInteractionError(
-        'character-room-runtime-mismatch',
-        'RoomRun runtime kind does not match its CharacterRoom template.',
-        command.roomRunId,
-      );
-    }
-    validateTemplateWorldBinding(room, command);
-    if (command.worldBinding) {
-      try {
-        await this.options.worldBindings.validateBinding(command.worldBinding, signal);
-      } catch (error) {
-        throw roomInteractionError(
-          command.runtimeKind === 'narrative'
-            ? 'narrative-world-unavailable'
-            : 'character-room-binding-invalid',
-          error instanceof Error ? error.message : 'Room World authority is unavailable.',
-          command.roomRunId,
-        );
-      }
-    }
-
     const agentTemplates = room.participantTemplates.filter(
       (template) => template.controllerKind === 'agent',
     );
@@ -136,30 +102,24 @@ export class CharacterRoomInteractionService {
           );
         }
         const publication = parseCharacterVersion(storedPublication);
-        if (command.runtimeKind === 'companion') {
-          const binding = command.relationshipBindings.find(
-            (candidate) => candidate.participantId === template.participantTemplateId,
-          )!;
-          const storedRelationship = await this.options.repository.readRelationship(
-            binding.relationshipId,
-            signal,
-          );
-          const relationship = storedRelationship
-            ? parseUserCharacterRelationship(storedRelationship)
-            : undefined;
-          if (!relationship || relationship.characterVersionId !== publication.characterVersionId) {
-            throw roomInteractionError(
-              'relationship-unavailable',
-              `Relationship '${binding.relationshipId}' does not bind CharacterVersion '${publication.characterVersionId}'.`,
-              command.roomRunId,
-            );
-          }
-          return { template, publication, relationshipId: relationship.relationshipId };
-        }
-        const actor = command.actorBindings.find(
+        const binding = command.relationshipBindings.find(
           (candidate) => candidate.participantId === template.participantTemplateId,
         )!;
-        return { template, publication, actorId: actor.actorId };
+        const storedRelationship = await this.options.repository.readRelationship(
+          binding.relationshipId,
+          signal,
+        );
+        const relationship = storedRelationship
+          ? parseUserCharacterRelationship(storedRelationship)
+          : undefined;
+        if (!relationship || relationship.characterVersionId !== publication.characterVersionId) {
+          throw roomInteractionError(
+            'relationship-unavailable',
+            `Relationship '${binding.relationshipId}' does not bind CharacterVersion '${publication.characterVersionId}'.`,
+            command.roomRunId,
+          );
+        }
+        return { template, publication, relationshipId: relationship.relationshipId };
       }),
     );
 
@@ -192,10 +152,7 @@ export class CharacterRoomInteractionService {
           characterVersionId: authority.publication.characterVersionId,
           participantId: authority.template.participantTemplateId,
           controller: { kind: 'agent', primaryAgentSessionId: session.primaryAgentSessionId },
-          runtimeBinding:
-            command.runtimeKind === 'companion'
-              ? { kind: 'companion', relationshipId: authority.relationshipId }
-              : { kind: 'narrative', ...command.worldBinding, actorId: authority.actorId },
+          runtimeBinding: { kind: 'companion', relationshipId: authority.relationshipId },
           createdAt: this.now(),
         });
         characterRuns.push(characterRun);
@@ -236,15 +193,8 @@ export class CharacterRoomInteractionService {
         }),
         schedulingPolicy: room.schedulingPolicy,
         events: [],
-        runtimeKind: command.runtimeKind,
-        ...(command.runtimeKind === 'companion'
-          ? {
-              relationshipIds: command.relationshipBindings.map(
-                (binding) => binding.relationshipId,
-              ),
-              ...(command.worldBinding === undefined ? {} : { worldBinding: command.worldBinding }),
-            }
-          : { worldBinding: command.worldBinding }),
+        runtimeKind: 'companion',
+        relationshipIds: command.relationshipBindings.map((binding) => binding.relationshipId),
         createdAt: this.now(),
       });
       return await this.options.roomRuns.createPreparedRun({ run, characterRuns }, signal);
@@ -263,34 +213,14 @@ function validateParticipantBindings(
   agentParticipantIds: readonly string[],
   input: CreateCharacterRoomRunInput,
 ): void {
-  const supplied = new Set(
-    (input.runtimeKind === 'companion' ? input.relationshipBindings : input.actorBindings).map(
-      (binding) => binding.participantId,
-    ),
-  );
+  const supplied = new Set(input.relationshipBindings.map((binding) => binding.participantId));
   if (
     supplied.size !== agentParticipantIds.length ||
     agentParticipantIds.some((participantId) => !supplied.has(participantId))
   ) {
     throw roomInteractionError(
       'character-room-binding-invalid',
-      'RoomRun must bind relationship or actor authority for every exact agent participant.',
-      input.roomRunId,
-    );
-  }
-}
-
-function validateTemplateWorldBinding(
-  room: CharacterRoom,
-  input: CreateCharacterRoomRunInput,
-): void {
-  if (
-    room.worldVersionId !== undefined &&
-    input.worldBinding?.worldVersionId !== room.worldVersionId
-  ) {
-    throw roomInteractionError(
-      'character-room-binding-invalid',
-      `CharacterRoom '${room.characterRoomId}' requires WorldVersion '${room.worldVersionId}'.`,
+      'RoomRun must bind relationship authority for every exact agent participant.',
       input.roomRunId,
     );
   }

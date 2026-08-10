@@ -1,20 +1,24 @@
 import {
+  parseCharacterMemoryScope,
   parseCharacterRun,
+  parseCharacterStorylineRun,
+  parseCharacterStorylineVersion,
   parseCharacterVersion,
   parseDialogueRun,
   parseRoomRun,
   parseRoomView,
   parseUserCharacterRelationship,
+  type CharacterMemoryScope,
   type CharacterRun,
+  type CharacterRunPresentationConfiguration,
+  type CharacterStorylineRun,
+  type CharacterStorylineVersion,
   type CharacterVersion,
-  type CompanionWorldBinding,
   type DialogueRun,
-  type NarrativeWorldBinding,
   type RoomRun,
   type RoomView,
   type UserCharacterRelationship,
 } from '@neko/chara/contracts';
-import { parseWorldView, type WorldView } from '@neko/world/contracts';
 
 export interface CharacterInteractionRepository {
   readPublication(
@@ -32,6 +36,18 @@ export interface CharacterInteractionRepository {
   readCharacterRun(characterRunId: string, signal?: AbortSignal): Promise<CharacterRun | undefined>;
   readDialogueRun(dialogueRunId: string, signal?: AbortSignal): Promise<DialogueRun | undefined>;
   readRoomRun(roomRunId: string, signal?: AbortSignal): Promise<RoomRun | undefined>;
+  readStorylineRun(
+    characterStorylineRunId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterStorylineRun | undefined>;
+  readStorylineVersion(
+    characterStorylineVersionId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterStorylineVersion | undefined>;
+  readMemoryScope(
+    characterMemoryScopeId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterMemoryScope | undefined>;
 }
 
 export interface CharacterPrimaryAgentSessionPort {
@@ -62,6 +78,7 @@ export interface CharacterPrimaryAgentSessionPort {
       readonly characterRunId: string;
       readonly message: string;
       readonly context: CharacterAgentTurnContext;
+      readonly onTurnStarted?: (turnId: string) => Promise<void>;
     },
     signal?: AbortSignal,
   ): Promise<CharacterAgentTurnResult>;
@@ -75,26 +92,13 @@ export interface CharacterRoomViewPort {
   ): Promise<RoomView>;
 }
 
-export interface CharacterWorldViewPort {
-  validateBinding(
-    binding: CompanionWorldBinding | NarrativeWorldBinding,
-    signal?: AbortSignal,
-  ): Promise<void>;
-  materializeWorldView(
-    input: {
-      readonly binding: CompanionWorldBinding | NarrativeWorldBinding;
-      readonly participantId: string;
-      readonly actorId?: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<WorldView>;
-}
-
 export interface CharacterAgentTurnContext {
   readonly characterVersion: CharacterVersion;
+  readonly characterStorylineRun?: CharacterStorylineRun;
+  readonly characterMemoryScope?: CharacterMemoryScope;
   readonly relationship?: UserCharacterRelationship;
   readonly roomView?: RoomView;
-  readonly worldView?: WorldView;
+  readonly presentationConfiguration?: CharacterRunPresentationConfiguration;
 }
 
 export interface CharacterAgentTurnResult {
@@ -106,7 +110,19 @@ export interface CharacterInteractionServiceOptions {
   readonly repository: CharacterInteractionRepository;
   readonly agentSessions: CharacterPrimaryAgentSessionPort;
   readonly roomViews: CharacterRoomViewPort;
-  readonly worldViews: CharacterWorldViewPort;
+  readonly presentationTurns?: {
+    prepareNextTurn(
+      characterRunId: string,
+      signal?: AbortSignal,
+    ): Promise<CharacterRunPresentationConfiguration | undefined>;
+    freezePreparedTurn(
+      input: {
+        readonly turnId: string;
+        readonly configuration: CharacterRunPresentationConfiguration;
+      },
+      signal?: AbortSignal,
+    ): Promise<unknown>;
+  };
   readonly now?: () => string;
 }
 
@@ -116,8 +132,9 @@ export type CharacterInteractionDiagnosticCode =
   | 'dialogue-run-unavailable'
   | 'room-run-unavailable'
   | 'relationship-unavailable'
+  | 'character-storyline-run-unavailable'
+  | 'character-memory-scope-unavailable'
   | 'character-run-authority-mismatch'
-  | 'narrative-world-unavailable'
   | 'agent-session-invalid'
   | 'human-character-has-no-agent-session';
 
@@ -144,17 +161,10 @@ type CreateDialogueInputBase = {
   readonly controller: DialogueControllerInput;
 };
 
-export type CreateDialogueInput =
-  | (CreateDialogueInputBase & {
-      readonly runtimeKind: 'companion';
-      readonly relationshipId: string;
-      readonly worldBinding?: CompanionWorldBinding;
-    })
-  | (CreateDialogueInputBase & {
-      readonly runtimeKind: 'narrative';
-      readonly worldBinding: NarrativeWorldBinding;
-      readonly actorId: string;
-    });
+export type CreateDialogueInput = CreateDialogueInputBase & {
+  readonly runtimeKind: 'companion';
+  readonly relationshipId: string;
+};
 
 export type CharacterTurnOwnerInput =
   | {
@@ -201,34 +211,19 @@ export class CharacterInteractionService {
       );
     }
     const publication = parseCharacterVersion(storedPublication);
-    if (input.runtimeKind === 'companion') {
-      const storedRelationship = await this.options.repository.readRelationship(
-        input.relationshipId,
-        signal,
+    const storedRelationship = await this.options.repository.readRelationship(
+      input.relationshipId,
+      signal,
+    );
+    const relationship = storedRelationship
+      ? parseUserCharacterRelationship(storedRelationship)
+      : undefined;
+    if (!relationship || relationship.characterVersionId !== publication.characterVersionId) {
+      throw interactionError(
+        'relationship-unavailable',
+        `Relationship '${input.relationshipId}' does not bind the selected CharacterVersion.`,
+        input.characterRunId,
       );
-      const relationship = storedRelationship
-        ? parseUserCharacterRelationship(storedRelationship)
-        : undefined;
-      if (!relationship || relationship.characterVersionId !== publication.characterVersionId) {
-        throw interactionError(
-          'relationship-unavailable',
-          `Relationship '${input.relationshipId}' does not bind the selected CharacterVersion.`,
-          input.characterRunId,
-        );
-      }
-      if (input.worldBinding) {
-        await this.options.worldViews.validateBinding(input.worldBinding, signal);
-      }
-    } else {
-      try {
-        await this.options.worldViews.validateBinding(input.worldBinding, signal);
-      } catch (error) {
-        throw interactionError(
-          'narrative-world-unavailable',
-          error instanceof Error ? error.message : 'Narrative World authority is unavailable.',
-          input.characterRunId,
-        );
-      }
     }
 
     let primaryAgentSessionId: string | undefined;
@@ -258,10 +253,7 @@ export class CharacterInteractionService {
           input.controller.kind === 'agent'
             ? { kind: 'agent', primaryAgentSessionId }
             : { kind: 'human', userId: input.controller.userId },
-        runtimeBinding:
-          input.runtimeKind === 'companion'
-            ? { kind: 'companion', relationshipId: input.relationshipId }
-            : { kind: 'narrative', ...input.worldBinding, actorId: input.actorId },
+        runtimeBinding: { kind: 'companion', relationshipId: input.relationshipId },
         createdAt: this.now(),
       });
       const dialogueRun = parseDialogueRun({
@@ -270,13 +262,8 @@ export class CharacterInteractionService {
         userParticipantId: input.userParticipantId,
         characterParticipantId: input.characterParticipantId,
         characterRunId: input.characterRunId,
-        runtimeKind: input.runtimeKind,
-        ...(input.runtimeKind === 'companion'
-          ? {
-              relationshipIds: [input.relationshipId],
-              ...(input.worldBinding ? { worldBinding: input.worldBinding } : {}),
-            }
-          : { worldBinding: input.worldBinding }),
+        runtimeKind: 'companion',
+        relationshipIds: [input.relationshipId],
         createdAt: this.now(),
       });
       await this.options.repository.createDialogue({ characterRun, dialogueRun }, signal);
@@ -300,6 +287,7 @@ export class CharacterInteractionService {
         characterRunId: prepared.characterRunId,
         message: input.message,
         context: prepared.context,
+        ...this.presentationTurnHook(prepared, signal),
       },
       signal,
     );
@@ -316,6 +304,7 @@ export class CharacterInteractionService {
         characterRunId: prepared.characterRunId,
         message,
         context: prepared.context,
+        ...this.presentationTurnHook(prepared, signal),
       },
       signal,
     );
@@ -366,10 +355,31 @@ export class CharacterInteractionService {
       publication,
       signal,
     );
+    const presentationConfiguration = await this.options.presentationTurns?.prepareNextTurn(
+      agentCharacterRun.characterRunId,
+      signal,
+    );
     return {
       primaryAgentSessionId: agentCharacterRun.controller.primaryAgentSessionId,
       characterRunId: agentCharacterRun.characterRunId,
-      context: deepFreeze(context),
+      context: deepFreeze({
+        ...context,
+        ...(presentationConfiguration === undefined ? {} : { presentationConfiguration }),
+      }),
+    };
+  }
+
+  private presentationTurnHook(
+    prepared: PreparedCharacterAgentTurn,
+    signal?: AbortSignal,
+  ): { readonly onTurnStarted?: (turnId: string) => Promise<void> } {
+    const configuration = prepared.context.presentationConfiguration;
+    const presentationTurns = this.options.presentationTurns;
+    if (configuration === undefined || presentationTurns === undefined) return {};
+    return {
+      onTurnStarted: async (turnId) => {
+        await presentationTurns.freezePreparedTurn({ turnId, configuration }, signal);
+      },
     };
   }
 
@@ -389,7 +399,6 @@ export class CharacterInteractionService {
     signal?: AbortSignal,
   ): Promise<CharacterAgentTurnContext> {
     let roomView: RoomView | undefined;
-    let interactionWorldBinding: CompanionWorldBinding | NarrativeWorldBinding | undefined;
     if (input.topology === 'dialogue') {
       const dialogue = await this.options.repository.readDialogueRun(input.dialogueRunId, signal);
       if (!dialogue) {
@@ -406,7 +415,6 @@ export class CharacterInteractionService {
           characterRun.characterRunId,
         );
       }
-      interactionWorldBinding = dialogue.worldBinding;
     } else {
       const room = await this.options.repository.readRoomRun(input.roomRunId, signal);
       if (!room) {
@@ -439,62 +447,94 @@ export class CharacterInteractionService {
           signal,
         ),
       );
-      interactionWorldBinding = room.worldBinding;
     }
 
-    let relationship: UserCharacterRelationship | undefined;
-    let actorId: string | undefined;
-    if (characterRun.runtimeBinding.kind === 'companion') {
-      const storedRelationship = await this.options.repository.readRelationship(
-        characterRun.runtimeBinding.relationshipId,
-        signal,
+    const storedRelationship = await this.options.repository.readRelationship(
+      characterRun.runtimeBinding.relationshipId,
+      signal,
+    );
+    const relationship = storedRelationship
+      ? parseUserCharacterRelationship(storedRelationship)
+      : undefined;
+    if (!relationship || relationship.characterVersionId !== characterRun.characterVersionId) {
+      throw interactionError(
+        'relationship-unavailable',
+        'CharacterRun relationship memory authority is unavailable.',
+        characterRun.characterRunId,
       );
-      relationship = storedRelationship
-        ? parseUserCharacterRelationship(storedRelationship)
-        : undefined;
-      if (!relationship || relationship.characterVersionId !== characterRun.characterVersionId) {
-        throw interactionError(
-          'relationship-unavailable',
-          'CharacterRun relationship memory authority is unavailable.',
-          characterRun.characterRunId,
-        );
-      }
-    } else {
-      actorId = characterRun.runtimeBinding.actorId;
-      const narrativeBinding = characterRun.runtimeBinding;
-      if (
-        !interactionWorldBinding ||
-        !('worldSaveId' in interactionWorldBinding) ||
-        narrativeBinding.worldVersionId !== interactionWorldBinding.worldVersionId ||
-        narrativeBinding.worldRunId !== interactionWorldBinding.worldRunId ||
-        narrativeBinding.worldSaveId !== interactionWorldBinding.worldSaveId ||
-        narrativeBinding.branchId !== interactionWorldBinding.branchId
-      ) {
-        throw interactionError(
-          'narrative-world-unavailable',
-          'CharacterRun narrative authority does not match its interaction run.',
-          characterRun.characterRunId,
-        );
-      }
     }
-    const worldView = interactionWorldBinding
-      ? parseWorldView(
-          await this.options.worldViews.materializeWorldView(
-            {
-              binding: interactionWorldBinding,
-              participantId: characterRun.participantId,
-              ...(actorId === undefined ? {} : { actorId }),
-            },
-            signal,
-          ),
-        )
+    const characterStorylineRun = characterRun.characterStorylineRunId
+      ? await this.requireStorylineRun(characterRun, publication, signal)
+      : undefined;
+    const characterMemoryScope = characterRun.characterMemoryScopeId
+      ? await this.requireMemoryScope(characterRun, characterStorylineRun, signal)
       : undefined;
     return {
       characterVersion: structuredClone(publication),
-      ...(relationship === undefined ? {} : { relationship: structuredClone(relationship) }),
+      ...(characterStorylineRun === undefined
+        ? {}
+        : { characterStorylineRun: structuredClone(characterStorylineRun) }),
+      ...(characterMemoryScope === undefined
+        ? {}
+        : { characterMemoryScope: structuredClone(characterMemoryScope) }),
+      relationship: structuredClone(relationship),
       ...(roomView === undefined ? {} : { roomView: structuredClone(roomView) }),
-      ...(worldView === undefined ? {} : { worldView: structuredClone(worldView) }),
     };
+  }
+
+  private async requireStorylineRun(
+    characterRun: CharacterRun,
+    publication: CharacterVersion,
+    signal?: AbortSignal,
+  ): Promise<CharacterStorylineRun> {
+    const storylineRunId = characterRun.characterStorylineRunId!;
+    const stored = await this.options.repository.readStorylineRun(storylineRunId, signal);
+    const storylineRun = stored ? parseCharacterStorylineRun(stored) : undefined;
+    const storedVersion = storylineRun
+      ? await this.options.repository.readStorylineVersion(
+          storylineRun.characterStorylineVersionId,
+          signal,
+        )
+      : undefined;
+    const storylineVersion = storedVersion
+      ? parseCharacterStorylineVersion(storedVersion)
+      : undefined;
+    if (
+      !storylineRun ||
+      storylineRun.characterRunId !== characterRun.characterRunId ||
+      !storylineVersion ||
+      storylineVersion.characterVersionId !== publication.characterVersionId
+    ) {
+      throw interactionError(
+        'character-storyline-run-unavailable',
+        `CharacterStorylineRun '${storylineRunId}' does not bind the exact CharacterRun.`,
+        characterRun.characterRunId,
+      );
+    }
+    return storylineRun;
+  }
+
+  private async requireMemoryScope(
+    characterRun: CharacterRun,
+    storylineRun: CharacterStorylineRun | undefined,
+    signal?: AbortSignal,
+  ): Promise<CharacterMemoryScope> {
+    const memoryScopeId = characterRun.characterMemoryScopeId!;
+    const stored = await this.options.repository.readMemoryScope(memoryScopeId, signal);
+    const memoryScope = stored ? parseCharacterMemoryScope(stored) : undefined;
+    if (
+      !memoryScope ||
+      memoryScope.characterRunId !== characterRun.characterRunId ||
+      (memoryScope.characterStorylineRunId !== undefined &&
+        memoryScope.characterStorylineRunId !== storylineRun?.characterStorylineRunId)
+    ) {
+      throw interactionError(
+        'character-memory-scope-unavailable',
+        `CharacterMemoryScope '${memoryScopeId}' does not bind the exact CharacterRun context.`,
+        characterRun.characterRunId,
+      );
+    }
+    return memoryScope;
   }
 
   private async resolveRoomTurnOwner(

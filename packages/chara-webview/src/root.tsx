@@ -22,7 +22,9 @@ import { foundationLabel } from './labels';
 export {
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface,
+  projectCharacterRoomIdentity,
   useCharacterRoomWorkbenchRuntime,
+  type CharacterRoomIdentityProjection,
   type CharacterRoomWorkbenchLoadState,
 } from './room-workbench';
 

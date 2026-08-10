@@ -56,6 +56,21 @@ describe('neko-chara architecture boundaries', () => {
     );
   });
 
+  it('keeps lore, storyline, memory, and composition refs inside Chara ownership', () => {
+    const source = readFileSync(
+      resolve(packageRoot, 'src/contracts/character-lore-storyline-memory.ts'),
+      'utf8',
+    );
+
+    expect(source).not.toMatch(/from ['"]@neko\/world/u);
+    expect(source).not.toMatch(
+      /worldProjectId|worldVersionId|worldRunId|worldSaveId|branchId|activeCharacter|latestCharacter/u,
+    );
+    expect(source).toContain('CharacterVersionRef');
+    expect(source).toContain('CharacterStorylineRunRef');
+    expect(source).toContain('CharacterMemoryScopeRef');
+  });
+
   it('keeps product interaction composition on the primary AgentSession port', () => {
     const source = readFileSync(
       resolve(packageRoot, 'src/application/character-interaction-service.ts'),

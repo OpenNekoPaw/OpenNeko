@@ -9,3 +9,6 @@ export * from './character-durable-catalog';
 export * from './character-foundation-service';
 export * from './character-foundation-command-service';
 export * from './character-conversation-launch-service';
+export * from './character-storyline-service';
+export * from './character-memory-service';
+export * from './character-presentation-service';

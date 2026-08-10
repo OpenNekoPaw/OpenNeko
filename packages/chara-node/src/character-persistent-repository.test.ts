@@ -1,10 +1,23 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { CharacterRoom, CharacterRun, RoomRun } from '@neko/chara/contracts';
+import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+  type CharacterRoom,
+  type CharacterRun,
+  type RoomRun,
+} from '@neko/chara/contracts';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
-import { afterEach, describe, expect, it } from 'vitest';
-import { CharacterAuthoringService, CharacterRoomService } from '@neko/chara/application';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  CharacterAuthoringService,
+  CharacterConversationLaunchService,
+  CharacterMemoryService,
+  CharacterPresentationService,
+  CharacterRoomService,
+  CharacterStorylineService,
+} from '@neko/chara/application';
 import {
   createPersistentCharacterRepository,
   initializeCharacterPersistenceTables,
@@ -18,6 +31,88 @@ afterEach(async () => {
 });
 
 describe('persistent Character repository', () => {
+  it('atomically persists launch StorylineRun and MemoryScope with their exact CharacterRun', async () => {
+    const fixture = await createFixture();
+    const authoring = new CharacterAuthoringService({
+      repository: fixture.repository,
+      now: () => NOW,
+    });
+    await authoring.createProject({
+      characterProjectId: 'character-project-launch',
+      displayName: 'Lin',
+      draft: definition(),
+    });
+    await authoring.setReviewStatus({
+      characterProjectId: 'character-project-launch',
+      reviewStatus: 'ready',
+    });
+    await authoring.publish({
+      characterProjectId: 'character-project-launch',
+      characterVersionId: 'character-version-launch',
+      label: 'Published Lin',
+    });
+    const storylines = new CharacterStorylineService(fixture.repository, { now: () => NOW });
+    await storylines.publish({
+      characterStorylineVersionId: 'character-storyline-version-launch',
+      characterVersionId: 'character-version-launch',
+      label: 'Trust arc',
+      premise: 'A sealed archive opens.',
+      desire: 'Protect the record.',
+      conflict: 'The record must be shared.',
+      growthArc: 'Learn to trust a witness.',
+      stages: [{ stageId: 'stage-guarded', title: 'Guarded', description: 'Keeps distance.' }],
+      turningPoints: [],
+      constraints: [],
+      acceptedEvidenceIds: [],
+    });
+    const launch = new CharacterConversationLaunchService({
+      repository: fixture.repository,
+      agentSessions: {
+        createPrimarySession: vi.fn(async ({ characterRunId }) => ({
+          primaryAgentSessionId: `conversation:character:${characterRunId}`,
+        })),
+        releaseUnboundSession: vi.fn(async () => undefined),
+        submitTurn: vi.fn(async () => ({ turnId: 'unused', content: 'unused' })),
+      },
+      now: () => NOW,
+    });
+    await launch.launch({
+      requestId: 'persistent-launch',
+      userId: 'user:local',
+      userDisplayName: 'User',
+      selection: {
+        runtimeKind: 'companion',
+        characters: [
+          {
+            characterVersionId: 'character-version-launch',
+            characterStorylineVersionId: 'character-storyline-version-launch',
+          },
+        ],
+      },
+    });
+
+    const reopened = createPersistentCharacterRepository({ metadataStore: fixture.store });
+    await expect(
+      reopened.readCharacterRun('character-run:launch:persistent-launch:1'),
+    ).resolves.toMatchObject({
+      characterStorylineRunId: 'character-storyline-run:launch:persistent-launch:1',
+      characterMemoryScopeId: 'character-memory-scope:launch:persistent-launch:1',
+    });
+    await expect(
+      reopened.readStorylineRun('character-storyline-run:launch:persistent-launch:1'),
+    ).resolves.toMatchObject({
+      characterStorylineVersionId: 'character-storyline-version-launch',
+      currentStageId: 'stage-guarded',
+    });
+    await expect(
+      reopened.readMemoryScope('character-memory-scope:launch:persistent-launch:1'),
+    ).resolves.toMatchObject({
+      characterRunId: 'character-run:launch:persistent-launch:1',
+      characterStorylineRunId: 'character-storyline-run:launch:persistent-launch:1',
+    });
+    await fixture.store.dispose();
+  });
+
   it('reopens exact Character publication and Room timeline with repository CAS', async () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
@@ -155,6 +250,173 @@ describe('persistent Character repository', () => {
     ]);
     await fixture.store.dispose();
   });
+
+  it('persists Storyline and Memory CAS authorities across repository reopen', async () => {
+    const fixture = await createFixture();
+    const authoring = new CharacterAuthoringService({
+      repository: fixture.repository,
+      now: () => NOW,
+    });
+    await authoring.createProject({
+      characterProjectId: 'character-project-a',
+      displayName: 'Lin',
+      draft: definition(),
+    });
+    await authoring.addEvidence({
+      characterProjectId: 'character-project-a',
+      evidence: {
+        evidenceId: 'evidence-a',
+        sourceRef: 'document:lin-notes',
+        observedAt: NOW,
+      },
+    });
+    await authoring.setReviewStatus({
+      characterProjectId: 'character-project-a',
+      reviewStatus: 'ready',
+    });
+    await authoring.publish({
+      characterProjectId: 'character-project-a',
+      characterVersionId: 'character-version-a',
+      label: 'Published Lin',
+    });
+    const rooms = new CharacterRoomService(fixture.repository, { now: () => NOW });
+    await rooms.createRoom(room());
+    await rooms.createPreparedRun({ run: roomRun(), characterRuns: [characterRun()] });
+
+    const storylines = new CharacterStorylineService(fixture.repository, { now: () => NOW });
+    await storylines.publish({
+      characterStorylineVersionId: 'storyline-version-a',
+      characterVersionId: 'character-version-a',
+      label: 'Trust arc',
+      premise: 'Lin must share responsibility.',
+      desire: 'Protect the archive alone.',
+      conflict: 'One keeper cannot preserve everything.',
+      growthArc: 'From control to reviewed trust.',
+      stages: [
+        { stageId: 'guarded', title: 'Guarded', description: 'Refuses assistance.' },
+        { stageId: 'trusting', title: 'Trusting', description: 'Delegates safely.' },
+      ],
+      turningPoints: [],
+      constraints: [],
+      acceptedEvidenceIds: [],
+    });
+    await storylines.createRun({
+      characterStorylineRunId: 'storyline-run-a',
+      characterStorylineVersionId: 'storyline-version-a',
+      characterRunId: 'character-run-a',
+      initialStageId: 'guarded',
+    });
+    await storylines.proposeObservation({
+      observationCandidateId: 'observation-a',
+      characterStorylineRunId: 'storyline-run-a',
+      sourceRef: 'room-event:event-a',
+      observedAt: NOW,
+      fromStageId: 'guarded',
+      toStageId: 'trusting',
+      expectedStorylineRevision: 0,
+    });
+    await storylines.acceptObservation({
+      observationCandidateId: 'observation-a',
+      characterStorylineRunId: 'storyline-run-a',
+      transitionId: 'transition-a',
+      expectedStorylineRevision: 0,
+    });
+
+    const memories = new CharacterMemoryService(fixture.repository, { now: () => NOW });
+    await memories.createScope({
+      characterMemoryScopeId: 'memory-scope-a',
+      characterRunId: 'character-run-a',
+      characterStorylineRunId: 'storyline-run-a',
+    });
+    const proposed = await memories.propose({
+      characterMemoryScopeId: 'memory-scope-a',
+      characterMemoryCandidateId: 'memory-candidate-a',
+      content: 'Lin remembers trusting the user.',
+      sourceRef: 'room-event:event-a',
+      observedAt: NOW,
+      sensitivityTraits: [],
+      retentionTraits: ['milestone'],
+      expectedMemoryRevision: 0,
+    });
+    await memories.accept({
+      characterMemoryScopeId: 'memory-scope-a',
+      characterMemoryCandidateId: 'memory-candidate-a',
+      characterMemoryEntryId: 'memory-entry-a',
+      expectedMemoryRevision: proposed.memoryRevision,
+    });
+
+    const reopened = createPersistentCharacterRepository({ metadataStore: fixture.store });
+    await expect(reopened.readStorylineRun('storyline-run-a')).resolves.toMatchObject({
+      currentStageId: 'trusting',
+      storylineRevision: 1,
+    });
+    await expect(reopened.readMemoryScope('memory-scope-a')).resolves.toMatchObject({
+      memoryRevision: 2,
+      entries: [{ characterMemoryEntryId: 'memory-entry-a', status: 'active' }],
+    });
+    await expect(reopened.mutateMemoryScope('memory-scope-a', 0, (scope) => scope)).rejects.toThrow(
+      'changed concurrently',
+    );
+    await fixture.store.dispose();
+  });
+
+  it('persists immutable turn presentation receipts independently from later config updates', async () => {
+    const fixture = await createFixture();
+    const authoring = new CharacterAuthoringService({
+      repository: fixture.repository,
+      now: () => NOW,
+    });
+    await authoring.createProject({
+      characterProjectId: 'character-project-a',
+      displayName: 'Lin',
+      draft: {
+        ...definition(),
+        representationRefs: [
+          { representationId: 'voice-a', kind: 'voice', resourceRef: 'voice:lin' },
+        ],
+        voiceDefaults: {
+          providerRef: 'provider:tts-a',
+          voiceRepresentationId: 'voice-a',
+          speed: 1,
+          autoRead: true,
+        },
+      },
+    });
+    await authoring.setReviewStatus({
+      characterProjectId: 'character-project-a',
+      reviewStatus: 'ready',
+    });
+    await authoring.publish({
+      characterProjectId: 'character-project-a',
+      characterVersionId: 'character-version-a',
+      label: 'Published Lin',
+    });
+    const rooms = new CharacterRoomService(fixture.repository, { now: () => NOW });
+    await rooms.createRoom(room());
+    await rooms.createPreparedRun({ run: roomRun(), characterRuns: [characterRun()] });
+    const presentation = new CharacterPresentationService(fixture.repository, {
+      now: () => NOW,
+    });
+    const initial = await presentation.initializeConfiguration({
+      characterRunId: 'character-run-a',
+      participantId: 'participant-lin',
+      chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
+    });
+    await presentation.startTurn({ turnId: 'turn-a', characterRunId: 'character-run-a' });
+    await presentation.updateConfigurations([
+      { ...initial, chat: { providerRef: 'provider:chat-b', modelRef: 'model:chat-b' } },
+    ]);
+
+    const reopened = createPersistentCharacterRepository({ metadataStore: fixture.store });
+    await expect(reopened.readPresentationConfiguration('character-run-a')).resolves.toMatchObject({
+      chat: { modelRef: 'model:chat-b' },
+    });
+    await expect(reopened.readPresentationTurnReceipt('turn-a')).resolves.toMatchObject({
+      chat: { modelRef: 'model:chat-a' },
+      tts: { voiceRepresentationId: 'voice-a' },
+    });
+    await fixture.store.dispose();
+  });
 });
 
 async function createFixture() {
@@ -169,6 +431,8 @@ async function createFixture() {
 function definition() {
   return {
     summary: 'A careful archivist.',
+    backgroundStory: createEmptyCharacterBackgroundStory(),
+    originSetting: createEmptyCharacterOriginSetting(),
     canon: ['Keeps promises.'],
     knowledgeBoundary: ['Does not know the sealed archive.'],
     behaviorPolicy: ['Ask before changing a record.'],
@@ -181,7 +445,6 @@ function room(): CharacterRoom {
   return {
     characterRoomId: 'room-a',
     title: 'Archive room',
-    defaultRuntimeKind: 'companion',
     participantTemplates: [
       {
         participantTemplateId: 'participant-user',

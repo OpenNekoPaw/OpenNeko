@@ -1,4 +1,3 @@
-import type { CharacterRuntimeKind } from './character';
 import {
   optionalIdentity,
   readDiagnosticIdentity,
@@ -21,7 +20,7 @@ export const ROOM_EVENT_KINDS = [
   'membership',
   'moderation',
   'scheduling',
-  'world-event-reference',
+  'external-event-reference',
 ] as const;
 
 export type InteractionTopology = (typeof INTERACTION_TOPOLOGIES)[number];
@@ -29,54 +28,24 @@ export type RoomControllerKind = (typeof ROOM_CONTROLLER_KINDS)[number];
 export type RoomSchedulingKind = (typeof ROOM_SCHEDULING_KINDS)[number];
 export type RoomEventKind = (typeof ROOM_EVENT_KINDS)[number];
 
-export interface CompanionWorldBinding {
-  readonly worldVersionId: string;
-  readonly worldRunId: string;
-}
-
-export interface NarrativeWorldBinding extends CompanionWorldBinding {
-  readonly worldSaveId: string;
-  readonly branchId: string;
-}
-
 export interface CharacterRoomRelationshipBinding {
   readonly participantId: string;
   readonly relationshipId: string;
 }
 
-export interface CharacterRoomActorBinding {
-  readonly participantId: string;
-  readonly actorId: string;
+export interface CreateCharacterRoomRunInput {
+  readonly roomRunId: string;
+  readonly characterRoomId: string;
+  readonly runtimeKind: 'companion';
+  readonly relationshipBindings: readonly CharacterRoomRelationshipBinding[];
 }
-
-export type CreateCharacterRoomRunInput =
-  | {
-      readonly roomRunId: string;
-      readonly characterRoomId: string;
-      readonly runtimeKind: 'companion';
-      readonly relationshipBindings: readonly CharacterRoomRelationshipBinding[];
-      readonly worldBinding?: CompanionWorldBinding;
-    }
-  | {
-      readonly roomRunId: string;
-      readonly characterRoomId: string;
-      readonly runtimeKind: 'narrative';
-      readonly actorBindings: readonly CharacterRoomActorBinding[];
-      readonly worldBinding: NarrativeWorldBinding;
-    };
 
 export interface CompanionRunBinding {
   readonly runtimeKind: 'companion';
   readonly relationshipIds: readonly string[];
-  readonly worldBinding?: CompanionWorldBinding;
 }
 
-export interface NarrativeRunBinding {
-  readonly runtimeKind: 'narrative';
-  readonly worldBinding: NarrativeWorldBinding;
-}
-
-export type InteractionRunBinding = CompanionRunBinding | NarrativeRunBinding;
+export type InteractionRunBinding = CompanionRunBinding;
 
 export interface DialogueRunBase {
   readonly topology: 'dialogue';
@@ -122,10 +91,9 @@ export type RoomSchedulingPolicy =
 export interface CharacterRoom {
   readonly characterRoomId: string;
   readonly title: string;
-  readonly defaultRuntimeKind: CharacterRuntimeKind;
+  readonly coverResourceRef?: string;
   readonly participantTemplates: readonly CharacterRoomParticipantTemplate[];
   readonly schedulingPolicy: RoomSchedulingPolicy;
-  readonly worldVersionId?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -186,9 +154,9 @@ export interface RoomSchedulingEvent extends RoomEventBase {
   readonly reason: 'mention' | 'turn' | 'autonomous';
 }
 
-export interface RoomWorldEventReference extends RoomEventBase {
-  readonly kind: 'world-event-reference';
-  readonly worldEventId: string;
+export interface RoomExternalEventReference extends RoomEventBase {
+  readonly kind: 'external-event-reference';
+  readonly sourceRef: string;
 }
 
 export type RoomEvent =
@@ -196,7 +164,7 @@ export type RoomEvent =
   | RoomMembershipEvent
   | RoomModerationEvent
   | RoomSchedulingEvent
-  | RoomWorldEventReference;
+  | RoomExternalEventReference;
 
 export interface RoomRunBase {
   readonly topology: 'chatroom';
@@ -242,7 +210,6 @@ export function parseDialogueRun(value: unknown): DialogueRun {
       'characterRunId',
       'runtimeKind',
       'relationshipIds',
-      'worldBinding',
       'createdAt',
     ],
     'DialogueRun',
@@ -271,10 +238,9 @@ export function parseCharacterRoom(value: unknown): CharacterRoom {
     [
       'characterRoomId',
       'title',
-      'defaultRuntimeKind',
+      'coverResourceRef',
       'participantTemplates',
       'schedulingPolicy',
-      'worldVersionId',
       'createdAt',
       'updatedAt',
     ],
@@ -295,18 +261,22 @@ export function parseCharacterRoom(value: unknown): CharacterRoom {
     new Set(participants.map((item) => item.participantTemplateId)),
     'CharacterRoom',
   );
-  const worldVersionId = optionalIdentity(record['worldVersionId'], 'CharacterRoom worldVersionId');
+  const coverResourceRef = optionalIdentity(
+    record['coverResourceRef'],
+    'CharacterRoom cover resource',
+  );
+  if (
+    coverResourceRef !== undefined &&
+    (!/^[a-z][a-z0-9+.-]*:[^\s]+$/u.test(coverResourceRef) || /^file:/u.test(coverResourceRef))
+  ) {
+    throw new Error('CharacterRoom coverResourceRef must be an opaque non-file reference.');
+  }
   return {
     characterRoomId: requireIdentity(record['characterRoomId'], 'CharacterRoom characterRoomId'),
     title: requireIdentity(record['title'], 'CharacterRoom title'),
-    defaultRuntimeKind: requireOneOf(
-      record['defaultRuntimeKind'],
-      ['companion', 'narrative'] as const,
-      'CharacterRoom defaultRuntimeKind',
-    ),
+    ...(coverResourceRef === undefined ? {} : { coverResourceRef }),
     participantTemplates: participants,
     schedulingPolicy,
-    ...(worldVersionId === undefined ? {} : { worldVersionId }),
     createdAt: requireIsoDate(record['createdAt'], 'CharacterRoom createdAt'),
     updatedAt: requireIsoDate(record['updatedAt'], 'CharacterRoom updatedAt'),
   };
@@ -325,7 +295,6 @@ export function parseRoomRun(value: unknown): RoomRun {
       'events',
       'runtimeKind',
       'relationshipIds',
-      'worldBinding',
       'createdAt',
     ],
     'RoomRun',
@@ -414,14 +383,7 @@ export function parseRoomView(value: unknown): RoomView {
 export function parseCreateCharacterRoomRunInput(value: unknown): CreateCharacterRoomRunInput {
   const record = requireExactRecord(
     value,
-    [
-      'roomRunId',
-      'characterRoomId',
-      'runtimeKind',
-      'relationshipBindings',
-      'actorBindings',
-      'worldBinding',
-    ],
+    ['roomRunId', 'characterRoomId', 'runtimeKind', 'relationshipBindings'],
     'Create CharacterRoom run input',
   );
   const base = {
@@ -430,50 +392,25 @@ export function parseCreateCharacterRoomRunInput(value: unknown): CreateCharacte
   };
   const runtimeKind = requireOneOf(
     record['runtimeKind'],
-    ['companion', 'narrative'] as const,
+    ['companion'] as const,
     'Create RoomRun runtimeKind',
   );
-  if (runtimeKind === 'companion') {
-    if (record['actorBindings'] !== undefined) {
-      throw new Error('Companion RoomRun cannot declare narrative actor bindings.');
-    }
-    const relationshipBindings = requireUniqueIdentities(
-      requireArray(
-        record['relationshipBindings'],
-        parseCharacterRoomRelationshipBinding,
-        'RoomRun relationship bindings',
-      ),
-      (binding) => binding.participantId,
+  const relationshipBindings = requireUniqueIdentities(
+    requireArray(
+      record['relationshipBindings'],
+      parseCharacterRoomRelationshipBinding,
       'RoomRun relationship bindings',
-    );
-    if (relationshipBindings.length === 0) {
-      throw new Error('Companion RoomRun requires relationship bindings.');
-    }
-    return {
-      ...base,
-      runtimeKind,
-      relationshipBindings,
-      ...(record['worldBinding'] === undefined
-        ? {}
-        : { worldBinding: parseCompanionWorldBinding(record['worldBinding']) }),
-    };
-  }
-  if (record['relationshipBindings'] !== undefined) {
-    throw new Error('Narrative RoomRun cannot declare companion relationship bindings.');
+    ),
+    (binding) => binding.participantId,
+    'RoomRun relationship bindings',
+  );
+  if (relationshipBindings.length === 0) {
+    throw new Error('Companion RoomRun requires relationship bindings.');
   }
   return {
     ...base,
     runtimeKind,
-    actorBindings: requireUniqueIdentities(
-      requireArray(
-        record['actorBindings'],
-        parseCharacterRoomActorBinding,
-        'RoomRun actor bindings',
-      ),
-      (binding) => binding.participantId,
-      'RoomRun actor bindings',
-    ),
-    worldBinding: parseNarrativeWorldBinding(record['worldBinding']),
+    relationshipBindings,
   };
 }
 
@@ -506,60 +443,17 @@ function parseInteractionRunBinding(
 ): InteractionRunBinding {
   const runtimeKind = requireOneOf(
     record['runtimeKind'],
-    ['companion', 'narrative'] as const,
+    ['companion'] as const,
     'Interaction runtimeKind',
   );
-  if (runtimeKind === 'companion') {
-    const relationshipIds = requireUniqueStringArray(
-      record['relationshipIds'],
-      'Companion relationshipIds',
-    );
-    if (relationshipIds.length === 0) {
-      throw new Error('Companion run requires at least one relationship identity.');
-    }
-    const worldBinding =
-      record['worldBinding'] === undefined
-        ? undefined
-        : parseCompanionWorldBinding(record['worldBinding']);
-    return {
-      runtimeKind,
-      relationshipIds,
-      ...(worldBinding === undefined ? {} : { worldBinding }),
-    };
-  }
-  if (record['relationshipIds'] !== undefined) {
-    throw new Error('Narrative run cannot bind companion relationship identities.');
-  }
-  return {
-    runtimeKind,
-    worldBinding: parseNarrativeWorldBinding(record['worldBinding']),
-  };
-}
-
-export function parseCompanionWorldBinding(value: unknown): CompanionWorldBinding {
-  const record = requireExactRecord(
-    value,
-    ['worldVersionId', 'worldRunId'],
-    'Companion World binding',
+  const relationshipIds = requireUniqueStringArray(
+    record['relationshipIds'],
+    'Companion relationshipIds',
   );
-  return {
-    worldVersionId: requireIdentity(record['worldVersionId'], 'Companion WorldVersion identity'),
-    worldRunId: requireIdentity(record['worldRunId'], 'Companion WorldRun identity'),
-  };
-}
-
-export function parseNarrativeWorldBinding(value: unknown): NarrativeWorldBinding {
-  const record = requireExactRecord(
-    value,
-    ['worldVersionId', 'worldRunId', 'worldSaveId', 'branchId'],
-    'Narrative World binding',
-  );
-  return {
-    worldVersionId: requireIdentity(record['worldVersionId'], 'Narrative WorldVersion identity'),
-    worldRunId: requireIdentity(record['worldRunId'], 'Narrative WorldRun identity'),
-    worldSaveId: requireIdentity(record['worldSaveId'], 'Narrative WorldSave identity'),
-    branchId: requireIdentity(record['branchId'], 'Narrative World branch identity'),
-  };
+  if (relationshipIds.length === 0) {
+    throw new Error('Companion run requires at least one relationship identity.');
+  }
+  return { runtimeKind, relationshipIds };
 }
 
 function parseCharacterRoomRelationshipBinding(value: unknown): CharacterRoomRelationshipBinding {
@@ -571,18 +465,6 @@ function parseCharacterRoomRelationshipBinding(value: unknown): CharacterRoomRel
   return {
     participantId: requireIdentity(record['participantId'], 'Relationship participant'),
     relationshipId: requireIdentity(record['relationshipId'], 'Relationship identity'),
-  };
-}
-
-function parseCharacterRoomActorBinding(value: unknown): CharacterRoomActorBinding {
-  const record = requireExactRecord(
-    value,
-    ['participantId', 'actorId'],
-    'CharacterRoom actor binding',
-  );
-  return {
-    participantId: requireIdentity(record['participantId'], 'Actor participant'),
-    actorId: requireIdentity(record['actorId'], 'World actor identity'),
   };
 }
 
@@ -759,7 +641,7 @@ function parseRoomEvent(value: unknown): RoomEvent {
       'targetEventId',
       'reason',
       'eligibleParticipantIds',
-      'worldEventId',
+      'sourceRef',
     ],
     'RoomEvent',
   );
@@ -779,7 +661,7 @@ function parseRoomEvent(value: unknown): RoomEvent {
       'targetEventId',
       'reason',
       'eligibleParticipantIds',
-      'worldEventId',
+      'sourceRef',
     ]);
     return {
       ...base,
@@ -801,7 +683,7 @@ function parseRoomEvent(value: unknown): RoomEvent {
       'targetEventId',
       'reason',
       'eligibleParticipantIds',
-      'worldEventId',
+      'sourceRef',
     ]);
     return {
       ...base,
@@ -817,7 +699,7 @@ function parseRoomEvent(value: unknown): RoomEvent {
       'mentionedParticipantIds',
       'participantId',
       'eligibleParticipantIds',
-      'worldEventId',
+      'sourceRef',
     ]);
     return {
       ...base,
@@ -840,7 +722,7 @@ function parseRoomEvent(value: unknown): RoomEvent {
       'action',
       'moderatorParticipantId',
       'targetEventId',
-      'worldEventId',
+      'sourceRef',
     ]);
     return {
       ...base,
@@ -870,7 +752,7 @@ function parseRoomEvent(value: unknown): RoomEvent {
   return {
     ...base,
     kind,
-    worldEventId: requireIdentity(record['worldEventId'], 'Room WorldEvent reference'),
+    sourceRef: requireOpaqueRef(record['sourceRef'], 'Room external event reference'),
   };
 }
 
@@ -996,6 +878,14 @@ function requireUniqueStringArray(value: unknown, label: string): readonly strin
     (item) => item,
     label,
   );
+}
+
+function requireOpaqueRef(value: unknown, label: string): string {
+  const ref = requireIdentity(value, label);
+  if (!/^[a-z][a-z0-9+.-]*:[^\s]+$/u.test(ref) || /^file:/u.test(ref)) {
+    throw new Error(`${label} must be an opaque non-file reference.`);
+  }
+  return ref;
 }
 
 function requireUndefined(

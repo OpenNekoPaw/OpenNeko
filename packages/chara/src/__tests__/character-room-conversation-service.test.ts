@@ -1,4 +1,11 @@
-import type { CharacterRoom, CharacterRun, RoomParticipant, RoomRun } from '@neko/chara/contracts';
+import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+  type CharacterRoom,
+  type CharacterRun,
+  type RoomParticipant,
+  type RoomRun,
+} from '@neko/chara/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   CharacterRoomConversationService,
@@ -167,6 +174,8 @@ function preparedTurn(participant: RoomParticipant, run: RoomRun): PreparedChara
         label: participant.displayName,
         definition: {
           summary: participant.displayName,
+          backgroundStory: createEmptyCharacterBackgroundStory(),
+          originSetting: createEmptyCharacterOriginSetting(),
           canon: [],
           knowledgeBoundary: [],
           behaviorPolicy: [],
@@ -227,7 +236,6 @@ function room(): CharacterRoom {
   return {
     characterRoomId: 'room-a',
     title: 'Room A',
-    defaultRuntimeKind: 'companion',
     participantTemplates: [
       {
         participantTemplateId: 'participant-human',

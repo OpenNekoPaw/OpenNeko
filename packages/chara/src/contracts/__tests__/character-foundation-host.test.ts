@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+} from '../character-lore-storyline-memory';
+import {
   createCharacterFoundationHostRequest,
   createCharacterFoundationCommandHostRequest,
   parseCharacterFoundationAnyHostRequest,
@@ -18,8 +22,12 @@ function emptySnapshot() {
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylineVersions: [],
+      storylineRuns: [],
+      storylineObservationCandidates: [],
+      memoryScopes: [],
+      presentationConfigurations: [],
     },
-    world: { projects: [], versions: [], runtimes: [] },
     diagnostics: [],
   };
 }
@@ -57,6 +65,8 @@ describe('Character Foundation host contract', () => {
         displayName: 'Lin',
         draft: {
           summary: 'An archivist.',
+          backgroundStory: createEmptyCharacterBackgroundStory(),
+          originSetting: createEmptyCharacterOriginSetting(),
           canon: [],
           knowledgeBoundary: [],
           behaviorPolicy: [],
@@ -81,6 +91,19 @@ describe('Character Foundation host contract', () => {
         input: {},
       }),
     ).toThrow(/Unknown Character Foundation operation 'play-use'/u);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        requestId: 'foundation-command-removed-world',
+        operation: 'world-project-create',
+        input: {},
+      }),
+    ).toThrow(/Unknown Character Foundation operation 'world-project-create'/u);
+    expect(() =>
+      parseCharacterFoundationSnapshot({
+        ...emptySnapshot(),
+        world: { projects: [], versions: [], runtimes: [] },
+      }),
+    ).toThrow(/unsupported fields/u);
   });
 
   it('strictly parses the canonical RoomRun aggregate command', () => {
@@ -103,5 +126,88 @@ describe('Character Foundation host contract', () => {
         input: { ...request.input, activeWorldRunId: 'world-run-recent' },
       }),
     ).toThrow(/unsupported fields/u);
+  });
+
+  it('strictly parses per-CharacterRun presentation configuration', () => {
+    const request = createCharacterFoundationCommandHostRequest('foundation-presentation-1', {
+      operation: 'character-presentation-configure',
+      input: {
+        characterRunId: 'character-run-a',
+        participantId: 'participant-a',
+        chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
+        tts: {
+          providerRef: 'provider:tts-a',
+          voiceRepresentationId: 'voice-a',
+          speed: 1,
+          autoRead: true,
+        },
+        updatedAt: '2026-08-10T00:00:00.000Z',
+      },
+    });
+
+    expect(parseCharacterFoundationAnyHostRequest(request)).toEqual(request);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        ...request,
+        input: { ...request.input, fallbackModelRef: 'model:other' },
+      }),
+    ).toThrow(/unsupported fields/u);
+  });
+
+  it('strictly parses storyline publication and memory review commands', () => {
+    const storyline = createCharacterFoundationCommandHostRequest('foundation-storyline-1', {
+      operation: 'character-storyline-publish',
+      input: {
+        characterStorylineVersionId: 'character-storyline-version-a',
+        characterVersionId: 'character-version-a',
+        label: 'Trust arc',
+        premise: 'The sealed archive opens.',
+        desire: 'Protect its record.',
+        conflict: 'The record must be shared.',
+        growthArc: 'Learn to trust a witness.',
+        stages: [{ stageId: 'guarded', title: 'Guarded', description: 'Keeps distance.' }],
+        turningPoints: [],
+        constraints: [],
+        acceptedEvidenceIds: [],
+      },
+    });
+    const memory = createCharacterFoundationCommandHostRequest('foundation-memory-1', {
+      operation: 'character-memory-candidate-accept',
+      input: {
+        characterMemoryScopeId: 'character-memory-scope-a',
+        characterMemoryCandidateId: 'character-memory-candidate-a',
+        characterMemoryEntryId: 'character-memory-entry-a',
+        expectedMemoryRevision: 2,
+      },
+    });
+
+    expect(parseCharacterFoundationAnyHostRequest(storyline)).toEqual(storyline);
+    expect(parseCharacterFoundationAnyHostRequest(memory)).toEqual(memory);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        ...memory,
+        input: { ...memory.input, expectedMemoryRevision: -1 },
+      }),
+    ).toThrow(/non-negative integer/u);
+
+    const relationship = createCharacterFoundationCommandHostRequest(
+      'foundation-relationship-memory-1',
+      {
+        operation: 'relationship-memory-candidate-propose',
+        input: {
+          relationshipId: 'relationship-a',
+          candidateId: 'relationship-memory-candidate-a',
+          content: 'The user waited in the rain.',
+          sourceRef: 'room-event:rain',
+        },
+      },
+    );
+    expect(parseCharacterFoundationAnyHostRequest(relationship)).toEqual(relationship);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        ...relationship,
+        input: { ...relationship.input, sourceRef: 'file:/private/transcript.json' },
+      }),
+    ).toThrow(/opaque non-file reference/u);
   });
 });

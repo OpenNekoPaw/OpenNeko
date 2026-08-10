@@ -2,6 +2,11 @@ import type {
   CharacterProject,
   CharacterRoom,
   CharacterRun,
+  CharacterMemoryScope,
+  CharacterStorylineObservationCandidate,
+  CharacterStorylineRun,
+  CharacterStorylineVersion,
+  CharacterRunPresentationConfiguration,
   CharacterVersion,
   DialogueRun,
   RoomRun,
@@ -16,7 +21,12 @@ export interface CharacterDurableRecordDiagnostic {
     | 'character-run'
     | 'dialogue-run'
     | 'character-room'
-    | 'room-run';
+    | 'room-run'
+    | 'character-storyline-version'
+    | 'character-storyline-run'
+    | 'character-storyline-observation-candidate'
+    | 'character-memory-scope'
+    | 'character-presentation-configuration';
   readonly recordId: string;
   readonly message: string;
 }
@@ -29,6 +39,11 @@ export interface CharacterDurableCatalog {
   readonly dialogueRuns: readonly DialogueRun[];
   readonly rooms: readonly CharacterRoom[];
   readonly roomRuns: readonly RoomRun[];
+  readonly storylineVersions: readonly CharacterStorylineVersion[];
+  readonly storylineRuns: readonly CharacterStorylineRun[];
+  readonly storylineObservationCandidates: readonly CharacterStorylineObservationCandidate[];
+  readonly memoryScopes: readonly CharacterMemoryScope[];
+  readonly presentationConfigurations: readonly CharacterRunPresentationConfiguration[];
   readonly diagnostics: readonly CharacterDurableRecordDiagnostic[];
 }
 

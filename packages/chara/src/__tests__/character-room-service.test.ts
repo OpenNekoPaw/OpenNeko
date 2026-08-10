@@ -50,12 +50,10 @@ function roomRun(schedulingPolicy: RoomRun['schedulingPolicy'] = { kind: 'mentio
 
 function room(
   schedulingPolicy: CharacterRoom['schedulingPolicy'] = { kind: 'mentioned' },
-  defaultRuntimeKind: CharacterRoom['defaultRuntimeKind'] = 'companion',
 ): CharacterRoom {
   return {
     characterRoomId: 'room-a',
     title: 'Archive room',
-    defaultRuntimeKind,
     participantTemplates: [
       {
         participantTemplateId: 'participant-human',
@@ -278,44 +276,7 @@ describe('CharacterRoomService', () => {
       expect.objectContaining({ kind: 'message', roomEventId: 'claim-door-open' }),
     ]);
     expect(updated.events).not.toEqual([
-      expect.objectContaining({ kind: 'world-event-reference' }),
+      expect.objectContaining({ kind: 'external-event-reference' }),
     ]);
-  });
-
-  it('validates narrative World authority before persisting a RoomRun', async () => {
-    const repository = new MemoryRoomRepository();
-    const service = new CharacterRoomService(repository, {
-      now: () => now,
-      worldBindings: {
-        validateBinding: async () => {
-          throw new Error('Exact WorldSave branch is unavailable.');
-        },
-      },
-    });
-    const companion = roomRun();
-    const narrative: RoomRun = {
-      topology: 'chatroom',
-      roomRunId: 'room-run-narrative',
-      characterRoomId: companion.characterRoomId,
-      roomRevision: companion.roomRevision,
-      participants: companion.participants,
-      schedulingPolicy: companion.schedulingPolicy,
-      events: companion.events,
-      runtimeKind: 'narrative',
-      worldBinding: {
-        worldVersionId: 'world-version-a',
-        worldRunId: 'world-run-a',
-        worldSaveId: 'world-save-a',
-        branchId: 'branch-main',
-      },
-      createdAt: companion.createdAt,
-    };
-    await service.createRoom(room({ kind: 'mentioned' }, 'narrative'));
-
-    await expect(service.createRun(narrative)).rejects.toMatchObject({
-      code: 'narrative-world-unavailable',
-      roomRunId: 'room-run-narrative',
-    });
-    expect(repository.runs.size).toBe(0);
   });
 });
