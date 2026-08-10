@@ -58,6 +58,26 @@ describe('Electron Agent launch Host runtime adapter', () => {
     });
   });
 
+  it('rejects roleplay search before Character authority is called', () => {
+    const bridge = createBridge();
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
+    const messages: AgentHostToWebviewMessage[] = [];
+    adapter.subscribe((message) => messages.push(message));
+
+    adapter.send({ type: 'searchProjectFiles', filter: 'lin', purpose: 'roleplay' });
+
+    expect(bridge.agentLaunch.searchWorkspaceMentions).not.toHaveBeenCalled();
+    expect(messages[0]).toEqual({
+      type: 'globalError',
+      message:
+        'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    });
+  });
+
   it('projects exact Workspace mention results and ignores a late result after rebinding', async () => {
     const bridge = createBridge();
     const workspaceBinding = {

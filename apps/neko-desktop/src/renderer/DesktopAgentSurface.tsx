@@ -255,14 +255,23 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   );
 
   const activeAdapter = state.kind === 'ready' ? state.adapter : undefined;
+  const withAuthoritativeFeed = (status: JSX.Element): JSX.Element =>
+    props.conversationFeed ? (
+      <div className="desktop-agent-conversation-fallback">
+        {props.conversationFeed}
+        {status}
+      </div>
+    ) : (
+      status
+    );
   let content: JSX.Element;
   if (state.kind === 'loading') {
-    content = <AgentSurfaceStatus message={t('agent.connecting')} />;
+    content = withAuthoritativeFeed(<AgentSurfaceStatus message={t('agent.connecting')} />);
   } else if (
     state.connectionKey === connectionKey &&
     (state.kind === 'unavailable' || state.kind === 'error')
   ) {
-    content = (
+    content = withAuthoritativeFeed(
       <AgentSurfaceFailure
         detail={
           state.kind === 'unavailable'
@@ -283,10 +292,10 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
                 setRetryAttempt((attempt) => attempt + 1);
               },
             })}
-      />
+      />,
     );
   } else if (state.kind !== 'ready') {
-    content = <AgentSurfaceStatus message={t('agent.connecting')} />;
+    content = withAuthoritativeFeed(<AgentSurfaceStatus message={t('agent.connecting')} />);
   } else {
     const connectionReady = state.connectionKey === connectionKey;
     content = (

@@ -20,8 +20,11 @@ import type { OpenNekoAssistantResourceBridge } from '@neko/agent-contracts/assi
 import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-workspace-grant-contract';
 import type {
   OpenNekoDesktopCharacterBridge,
+  OpenNekoDesktopCharacterConversationBridge,
+  OpenNekoDesktopCharacterAvatarBridge,
   OpenNekoDesktopCharacterRoomWorkbenchBridge,
 } from '@neko/chara/contracts';
+import type { OpenNekoDesktopWorldBridge } from '@neko/world/contracts';
 
 declare global {
   interface Window {
@@ -46,6 +49,9 @@ declare global {
       OpenNekoDesktopApplicationSettingsBridge &
       OpenNekoDesktopProjectPortabilityBridge &
       OpenNekoDesktopCharacterBridge &
+      OpenNekoDesktopWorldBridge &
+      OpenNekoDesktopCharacterConversationBridge &
+      OpenNekoDesktopCharacterAvatarBridge &
       OpenNekoDesktopCharacterRoomWorkbenchBridge;
   }
 }

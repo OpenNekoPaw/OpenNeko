@@ -1,12 +1,17 @@
-import type {
-  CharacterRun,
-  CharacterVersion,
-  DialogueRun,
-  RoomRun,
-  RoomView,
-  UserCharacterRelationship,
+import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+  type CharacterRun,
+  type CharacterRunPresentationConfiguration,
+  type CharacterMemoryScope,
+  type CharacterStorylineRun,
+  type CharacterStorylineVersion,
+  type CharacterVersion,
+  type DialogueRun,
+  type RoomRun,
+  type RoomView,
+  type UserCharacterRelationship,
 } from '@neko/chara/contracts';
-import type { WorldView } from '@neko/world/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   CharacterInteractionService,
@@ -14,7 +19,6 @@ import {
   type CharacterInteractionRepository,
   type CharacterPrimaryAgentSessionPort,
   type CharacterRoomViewPort,
-  type CharacterWorldViewPort,
 } from '../application/character-interaction-service';
 
 const now = '2026-08-09T10:00:00.000Z';
@@ -26,6 +30,8 @@ function publication(characterVersionId = 'character-version-a'): CharacterVersi
     label: characterVersionId,
     definition: {
       summary: `Profile ${characterVersionId}`,
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
       canon: [],
       knowledgeBoundary: [],
       behaviorPolicy: [],
@@ -58,6 +64,9 @@ class MemoryInteractionRepository implements CharacterInteractionRepository {
   readonly characterRuns = new Map<string, CharacterRun>();
   readonly dialogues = new Map<string, DialogueRun>();
   readonly rooms = new Map<string, RoomRun>();
+  readonly storylineVersions = new Map<string, CharacterStorylineVersion>();
+  readonly storylineRuns = new Map<string, CharacterStorylineRun>();
+  readonly memoryScopes = new Map<string, CharacterMemoryScope>();
 
   async readPublication(characterVersionId: string): Promise<CharacterVersion | undefined> {
     return cloneOptional(this.versions.get(characterVersionId));
@@ -86,6 +95,18 @@ class MemoryInteractionRepository implements CharacterInteractionRepository {
   async readRoomRun(roomRunId: string): Promise<RoomRun | undefined> {
     return cloneOptional(this.rooms.get(roomRunId));
   }
+
+  async readStorylineVersion(id: string): Promise<CharacterStorylineVersion | undefined> {
+    return cloneOptional(this.storylineVersions.get(id));
+  }
+
+  async readStorylineRun(id: string): Promise<CharacterStorylineRun | undefined> {
+    return cloneOptional(this.storylineRuns.get(id));
+  }
+
+  async readMemoryScope(id: string): Promise<CharacterMemoryScope | undefined> {
+    return cloneOptional(this.memoryScopes.get(id));
+  }
 }
 
 class RecordingAgentSessions implements CharacterPrimaryAgentSessionPort {
@@ -113,13 +134,16 @@ class RecordingAgentSessions implements CharacterPrimaryAgentSessionPort {
     readonly characterRunId: string;
     readonly message: string;
     readonly context: CharacterAgentTurnContext;
+    readonly onTurnStarted?: (turnId: string) => Promise<void>;
   }): Promise<{ readonly turnId: string; readonly content: string }> {
     this.turns.push({
       primaryAgentSessionId: input.primaryAgentSessionId,
       characterRunId: input.characterRunId,
       context: input.context,
     });
-    return { turnId: `turn:${input.characterRunId}`, content: `Response to ${input.message}` };
+    const turnId = `turn:${input.characterRunId}`;
+    await input.onTurnStarted?.(turnId);
+    return { turnId, content: `Response to ${input.message}` };
   }
 }
 
@@ -158,55 +182,26 @@ class StubRoomViews implements CharacterRoomViewPort {
   }
 }
 
-class StubWorldViews implements CharacterWorldViewPort {
-  failValidation = false;
-  readonly bindings: unknown[] = [];
-
-  async validateBinding(binding: unknown): Promise<void> {
-    this.bindings.push(binding);
-    if (this.failValidation) throw new Error('Exact World binding is unavailable.');
-  }
-
-  async materializeWorldView(input: {
-    readonly binding: {
-      readonly worldVersionId: string;
-      readonly worldRunId: string;
-      readonly worldSaveId?: string;
-      readonly branchId?: string;
-    };
-    readonly participantId: string;
-    readonly actorId?: string;
-  }): Promise<WorldView> {
-    return {
-      worldVersionId: input.binding.worldVersionId,
-      worldRunId: input.binding.worldRunId,
-      worldSaveId: input.binding.worldSaveId ?? 'companion-world-save',
-      branchId: input.binding.branchId ?? 'companion-branch',
-      participantId: input.participantId,
-      ...(input.actorId === undefined ? {} : { actorId: input.actorId }),
-      worldStateRevision: 0,
-      timepoint: 0,
-      background: '',
-      worldBook: [],
-      facts: [],
-      events: [],
-    };
-  }
-}
-
-function serviceFixture() {
+function serviceFixture(presentationTurns?: {
+  prepareNextTurn(
+    characterRunId: string,
+  ): Promise<CharacterRunPresentationConfiguration | undefined>;
+  freezePreparedTurn(input: {
+    readonly turnId: string;
+    readonly configuration: CharacterRunPresentationConfiguration;
+  }): Promise<unknown>;
+}) {
   const repository = new MemoryInteractionRepository();
   const agentSessions = new RecordingAgentSessions();
   const roomViews = new StubRoomViews();
-  const worldViews = new StubWorldViews();
   const service = new CharacterInteractionService({
     repository,
     agentSessions,
     roomViews,
-    worldViews,
+    ...(presentationTurns === undefined ? {} : { presentationTurns }),
     now: () => now,
   });
-  return { repository, agentSessions, roomViews, worldViews, service };
+  return { repository, agentSessions, roomViews, service };
 }
 
 describe('CharacterInteractionService', () => {
@@ -249,6 +244,143 @@ describe('CharacterInteractionService', () => {
     expect(result.turnId).toBe('turn:character-run-a');
   });
 
+  it('materializes only the exact frozen StorylineRun and MemoryScope into a turn', async () => {
+    const fixture = serviceFixture();
+    fixture.repository.versions.set('character-version-a', publication());
+    fixture.repository.relationships.set(
+      'relationship-a',
+      relationship('relationship-a', 'character-version-a'),
+    );
+    await fixture.service.createDialogue({
+      dialogueRunId: 'dialogue-a',
+      characterRunId: 'character-run-a',
+      characterVersionId: 'character-version-a',
+      userParticipantId: 'participant-user',
+      characterParticipantId: 'participant-character',
+      controller: { kind: 'agent' },
+      runtimeKind: 'companion',
+      relationshipId: 'relationship-a',
+    });
+    fixture.repository.characterRuns.set('character-run-a', {
+      ...fixture.repository.characterRuns.get('character-run-a')!,
+      characterStorylineRunId: 'storyline-run-a',
+      characterMemoryScopeId: 'memory-scope-a',
+    });
+    fixture.repository.storylineVersions.set('storyline-version-a', {
+      characterStorylineVersionId: 'storyline-version-a',
+      characterVersionId: 'character-version-a',
+      label: 'Arc A',
+      premise: 'Learn to trust.',
+      desire: 'Belonging',
+      conflict: 'Suspicion',
+      growthArc: 'From guarded to open.',
+      stages: [{ stageId: 'guarded', title: 'Guarded', description: 'Keeps distance.' }],
+      turningPoints: [],
+      constraints: [],
+      acceptedEvidenceIds: [],
+      publishedAt: now,
+    });
+    fixture.repository.storylineRuns.set('storyline-run-a', {
+      characterStorylineRunId: 'storyline-run-a',
+      characterStorylineVersionId: 'storyline-version-a',
+      characterRunId: 'character-run-a',
+      currentStageId: 'guarded',
+      acceptedTransitions: [],
+      storylineRevision: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    fixture.repository.memoryScopes.set('memory-scope-a', {
+      characterMemoryScopeId: 'memory-scope-a',
+      characterRunId: 'character-run-a',
+      characterStorylineRunId: 'storyline-run-a',
+      memoryRevision: 0,
+      candidates: [],
+      entries: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await fixture.service.submitTurn({
+      topology: 'dialogue',
+      dialogueRunId: 'dialogue-a',
+      characterRunId: 'character-run-a',
+      message: 'Remember this exact context.',
+    });
+
+    const context = fixture.agentSessions.turns[0]?.context;
+    expect(context?.characterStorylineRun?.characterStorylineRunId).toBe('storyline-run-a');
+    expect(context?.characterMemoryScope?.characterMemoryScopeId).toBe('memory-scope-a');
+    expect(Object.isFrozen(context)).toBe(true);
+    expect(Object.isFrozen(context?.characterStorylineRun)).toBe(true);
+
+    fixture.repository.storylineRuns.set('storyline-run-a', {
+      ...fixture.repository.storylineRuns.get('storyline-run-a')!,
+      characterRunId: 'character-run-other',
+    });
+    await expect(
+      fixture.service.submitTurn({
+        topology: 'dialogue',
+        dialogueRunId: 'dialogue-a',
+        characterRunId: 'character-run-a',
+        message: 'Do not cross run authority.',
+      }),
+    ).rejects.toMatchObject({ code: 'character-storyline-run-unavailable' });
+  });
+
+  it('freezes the presentation configuration prepared before the Agent turn starts', async () => {
+    const frozen: { readonly turnId: string; readonly modelRef: string }[] = [];
+    let configuration: CharacterRunPresentationConfiguration = {
+      characterRunId: 'character-run-a',
+      participantId: 'participant-character',
+      chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
+      tts: {
+        providerRef: 'provider:tts-a',
+        voiceRepresentationId: 'voice-a',
+        speed: 1,
+        autoRead: true,
+      },
+      updatedAt: now,
+    };
+    const fixture = serviceFixture({
+      async prepareNextTurn() {
+        return structuredClone(configuration);
+      },
+      async freezePreparedTurn(input) {
+        frozen.push({ turnId: input.turnId, modelRef: input.configuration.chat.modelRef });
+      },
+    });
+    fixture.repository.versions.set('character-version-a', publication());
+    fixture.repository.relationships.set(
+      'relationship-a',
+      relationship('relationship-a', 'character-version-a'),
+    );
+    await fixture.service.createDialogue({
+      dialogueRunId: 'dialogue-a',
+      characterRunId: 'character-run-a',
+      characterVersionId: 'character-version-a',
+      userParticipantId: 'participant-user',
+      characterParticipantId: 'participant-character',
+      controller: { kind: 'agent' },
+      runtimeKind: 'companion',
+      relationshipId: 'relationship-a',
+    });
+
+    const prepared = await fixture.service.prepareTurn({
+      topology: 'dialogue',
+      dialogueRunId: 'dialogue-a',
+      characterRunId: 'character-run-a',
+    });
+    configuration = {
+      ...configuration,
+      chat: { providerRef: 'provider:chat-next', modelRef: 'model:chat-next' },
+    };
+    await fixture.service.submitPreparedTurn(prepared, 'Use the prepared model.');
+
+    expect(prepared.context.presentationConfiguration?.chat.modelRef).toBe('model:chat-a');
+    expect(frozen).toEqual([{ turnId: 'turn:character-run-a', modelRef: 'model:chat-a' }]);
+  });
+
   it('does not create a hidden AgentSession for a human-controlled Character', async () => {
     const fixture = serviceFixture();
     fixture.repository.versions.set('character-version-a', publication());
@@ -276,33 +408,6 @@ describe('CharacterInteractionService', () => {
         message: 'Hidden turn?',
       }),
     ).rejects.toMatchObject({ code: 'human-character-has-no-agent-session' });
-  });
-
-  it('fails narrative creation before AgentSession creation when World authority is invalid', async () => {
-    const fixture = serviceFixture();
-    fixture.repository.versions.set('character-version-a', publication());
-    fixture.worldViews.failValidation = true;
-
-    await expect(
-      fixture.service.createDialogue({
-        dialogueRunId: 'dialogue-narrative',
-        characterRunId: 'character-run-a',
-        characterVersionId: 'character-version-a',
-        userParticipantId: 'participant-user',
-        characterParticipantId: 'participant-character',
-        controller: { kind: 'agent' },
-        runtimeKind: 'narrative',
-        worldBinding: {
-          worldVersionId: 'world-version-a',
-          worldRunId: 'world-run-a',
-          worldSaveId: 'world-save-a',
-          branchId: 'branch-main',
-        },
-        actorId: 'actor-a',
-      }),
-    ).rejects.toMatchObject({ code: 'narrative-world-unavailable' });
-    expect(fixture.agentSessions.created).toEqual([]);
-    expect(fixture.repository.characterRuns.size).toBe(0);
   });
 
   it('keeps Room participant sessions and filtered contexts isolated', async () => {

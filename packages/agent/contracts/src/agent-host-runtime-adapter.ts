@@ -167,13 +167,12 @@ export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
 } as const satisfies AgentHostRouteSupportRecord;
 
 const LAUNCH_ANY = { connection: 'launch-or-session', scope: 'any' } as const;
-const LAUNCH_WORKSPACE = { connection: 'launch-or-session', scope: 'workspace' } as const;
 const SESSION_ANY = { connection: 'session', scope: 'any' } as const;
 const SESSION_WORKSPACE = { connection: 'session', scope: 'workspace' } as const;
 
 export const AGENT_HOST_ROUTE_AUTHORITY = {
   sendMessage: SESSION_ANY,
-  searchProjectFiles: LAUNCH_WORKSPACE,
+  searchProjectFiles: LAUNCH_ANY,
   confirmTool: SESSION_ANY,
   activateConversation: SESSION_ANY,
   clearHistory: SESSION_ANY,

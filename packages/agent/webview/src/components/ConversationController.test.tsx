@@ -766,6 +766,53 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
   });
 
+  it('rejects restored Character selections before the Character launch port', () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-character-launch', { kind: 'unbound' });
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    const onSubmitCharacterLaunch = vi.fn(async () => undefined);
+    render(
+      <ConversationController
+        {...createProps({
+          mentionItems: [
+            {
+              id: 'character-version-a',
+              kind: 'entity',
+              label: 'A',
+              characterLaunchSelection: {
+                characterProjectId: 'character-project-a',
+                characterVersionId: 'character-version-a',
+              },
+            },
+            {
+              id: 'character-version-b',
+              kind: 'entity',
+              label: 'B',
+              characterLaunchSelection: {
+                characterProjectId: 'character-project-b',
+                characterVersionId: 'character-version-b',
+              },
+            },
+          ],
+        })}
+        agentPresentation={launchCatalog.interaction}
+        onSubmitCharacterLaunch={onSubmitCharacterLaunch}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character B' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Speak together' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room capabilities remain experimental',
+    );
+    expect(onSubmitCharacterLaunch).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+    expect(hostMocks.bindTarget).not.toHaveBeenCalled();
+  });
+
   it('does not route unbound Entry @ discovery through Workspace search', () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-unbound-mention', { kind: 'unbound' });
@@ -1128,6 +1175,41 @@ describe('ConversationController entry state', () => {
     expect(screen.queryByRole('button', { name: 'Character / Room' })).toBeNull();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
     expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('keeps Character roleplay unavailable from an unbound Entry Draft', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-entry-roleplay', { kind: 'unbound' });
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.bindTarget.mockResolvedValue(launchCatalog);
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Character' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('entry-submission-blocked').textContent).toBe(
+        'Character is unavailable.',
+      ),
+    );
+    expect(hostMocks.bindTarget).toHaveBeenCalledWith({ kind: 'unbound' });
+    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 

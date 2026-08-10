@@ -1,7 +1,10 @@
 import {
   parseCharacterConversationLaunchInput,
+  parseCharacterMemoryScope,
   parseCharacterRoom,
   parseCharacterRun,
+  parseCharacterStorylineRun,
+  parseCharacterStorylineVersion,
   parseCharacterVersion,
   parseDialogueRun,
   parseRoomRun,
@@ -10,10 +13,11 @@ import {
   type CharacterConversationLaunchResult,
   type CharacterRoom,
   type CharacterRun,
+  type CharacterMemoryScope,
+  type CharacterStorylineRun,
+  type CharacterStorylineVersion,
   type CharacterVersion,
-  type CompanionWorldBinding,
   type DialogueRun,
-  type NarrativeWorldBinding,
   type RoomRun,
   type UserCharacterRelationship,
 } from '@neko/chara/contracts';
@@ -25,6 +29,8 @@ export type CharacterConversationLaunchAggregate =
       readonly relationships: readonly UserCharacterRelationship[];
       readonly characterRun: CharacterRun;
       readonly dialogueRun: DialogueRun;
+      readonly storylineRuns: readonly CharacterStorylineRun[];
+      readonly memoryScopes: readonly CharacterMemoryScope[];
     }
   | {
       readonly topology: 'chatroom';
@@ -32,6 +38,8 @@ export type CharacterConversationLaunchAggregate =
       readonly room: CharacterRoom;
       readonly characterRuns: readonly CharacterRun[];
       readonly roomRun: RoomRun;
+      readonly storylineRuns: readonly CharacterStorylineRun[];
+      readonly memoryScopes: readonly CharacterMemoryScope[];
     };
 
 export interface CharacterConversationLaunchRepository {
@@ -43,6 +51,18 @@ export interface CharacterConversationLaunchRepository {
     relationshipId: string,
     signal?: AbortSignal,
   ): Promise<UserCharacterRelationship | undefined>;
+  readStorylineVersion(
+    characterStorylineVersionId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterStorylineVersion | undefined>;
+  readStorylineRun(
+    characterStorylineRunId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterStorylineRun | undefined>;
+  readMemoryScope(
+    characterMemoryScopeId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterMemoryScope | undefined>;
   readCharacterRun(characterRunId: string, signal?: AbortSignal): Promise<CharacterRun | undefined>;
   readDialogueRun(dialogueRunId: string, signal?: AbortSignal): Promise<DialogueRun | undefined>;
   readRoom(characterRoomId: string, signal?: AbortSignal): Promise<CharacterRoom | undefined>;
@@ -53,17 +73,10 @@ export interface CharacterConversationLaunchRepository {
   ): Promise<void>;
 }
 
-export interface CharacterConversationLaunchWorldPort {
-  validateBinding(
-    binding: CompanionWorldBinding | NarrativeWorldBinding,
-    signal?: AbortSignal,
-  ): Promise<void>;
-}
-
 export type CharacterConversationLaunchDiagnosticCode =
   | 'character-launch-version-unavailable'
   | 'character-launch-selection-invalid'
-  | 'character-launch-world-unavailable'
+  | 'external-composition-unavailable'
   | 'character-launch-conflict';
 
 export class CharacterConversationLaunchError extends Error {
@@ -80,11 +93,18 @@ export class CharacterConversationLaunchError extends Error {
 interface CharacterConversationLaunchIdentities {
   readonly relationshipId: (characterVersionId: string) => string;
   readonly characterRunId: (index: number) => string;
+  readonly characterStorylineRunId: (index: number) => string;
+  readonly characterMemoryScopeId: (index: number) => string;
   readonly characterParticipantId: (index: number) => string;
   readonly userParticipantId: string;
   readonly dialogueRunId: string;
   readonly characterRoomId: string;
   readonly roomRunId: string;
+}
+
+interface PreparedLaunchCharacter {
+  readonly publication: CharacterVersion;
+  readonly storyline?: CharacterStorylineVersion;
 }
 
 export class CharacterConversationLaunchService {
@@ -94,7 +114,6 @@ export class CharacterConversationLaunchService {
     private readonly options: {
       readonly repository: CharacterConversationLaunchRepository;
       readonly agentSessions: CharacterPrimaryAgentSessionPort;
-      readonly world: CharacterConversationLaunchWorldPort;
       readonly now?: () => string;
     },
   ) {
@@ -106,11 +125,18 @@ export class CharacterConversationLaunchService {
     signal?: AbortSignal,
   ): Promise<CharacterConversationLaunchResult> {
     const input = parseCharacterConversationLaunchInput(inputValue);
+    if (input.selection.runtimeKind === 'narrative') {
+      throw launchError(
+        'external-composition-unavailable',
+        'Narrative Character launch requires an owning external Composition provider.',
+        input.requestId,
+      );
+    }
     const identities = createLaunchIdentities(input);
     const existing = await this.readExisting(input, identities, signal);
     if (existing) return existing;
 
-    const publications = await Promise.all(
+    const characters = await Promise.all(
       input.selection.characters.map(async (selection) => {
         const stored = await this.options.repository.readPublication(
           selection.characterVersionId,
@@ -123,38 +149,43 @@ export class CharacterConversationLaunchService {
             input.requestId,
           );
         }
-        return parseCharacterVersion(stored);
+        const publication = parseCharacterVersion(stored);
+        if (selection.characterStorylineVersionId === undefined) return { publication };
+        const storyline = await this.options.repository.readStorylineVersion(
+          selection.characterStorylineVersionId,
+          signal,
+        );
+        if (!storyline) {
+          throw launchError(
+            'character-launch-selection-invalid',
+            `CharacterStorylineVersion '${selection.characterStorylineVersionId}' is unavailable.`,
+            input.requestId,
+          );
+        }
+        const canonicalStoryline = parseCharacterStorylineVersion(storyline);
+        if (canonicalStoryline.characterVersionId !== publication.characterVersionId) {
+          throw launchError(
+            'character-launch-selection-invalid',
+            `CharacterStorylineVersion '${canonicalStoryline.characterStorylineVersionId}' does not belong to CharacterVersion '${publication.characterVersionId}'.`,
+            input.requestId,
+          );
+        }
+        return { publication, storyline: canonicalStoryline };
       }),
     );
-    if (input.selection.worldBinding) {
-      try {
-        await this.options.world.validateBinding(input.selection.worldBinding, signal);
-      } catch (error) {
-        throw launchError(
-          'character-launch-world-unavailable',
-          error instanceof Error
-            ? error.message
-            : 'Character launch World authority is unavailable.',
-          input.requestId,
-        );
-      }
-    }
-    const relationships =
-      input.selection.runtimeKind === 'companion'
-        ? await this.resolveRelationships(input, identities, signal)
-        : [];
-    return publications.length === 1
-      ? this.launchDialogue(input, identities, publications[0]!, relationships, signal)
-      : this.launchRoom(input, identities, publications, relationships, signal);
+    const relationships = await this.resolveRelationships(input, identities, signal);
+    return characters.length === 1
+      ? this.launchDialogue(identities, characters[0]!, relationships, signal)
+      : this.launchRoom(input, identities, characters, relationships, signal);
   }
 
   private async launchDialogue(
-    input: CharacterConversationLaunchInput,
     identities: CharacterConversationLaunchIdentities,
-    publication: CharacterVersion,
+    character: PreparedLaunchCharacter,
     relationships: readonly UserCharacterRelationship[],
     signal?: AbortSignal,
   ): Promise<CharacterConversationLaunchResult> {
+    const publication = character.publication;
     const characterRunId = identities.characterRunId(0);
     const session = await this.options.agentSessions.createPrimarySession(
       {
@@ -172,19 +203,25 @@ export class CharacterConversationLaunchService {
     );
     try {
       const timestamp = this.now();
+      const runtimeRecords = createRuntimeRecords(
+        identities,
+        0,
+        characterRunId,
+        character.storyline,
+        timestamp,
+      );
       const characterRun = parseCharacterRun({
         characterRunId,
         characterVersionId: publication.characterVersionId,
+        ...(runtimeRecords.storylineRun === undefined
+          ? {}
+          : {
+              characterStorylineRunId: runtimeRecords.storylineRun.characterStorylineRunId,
+            }),
+        characterMemoryScopeId: runtimeRecords.memoryScope.characterMemoryScopeId,
         participantId: identities.characterParticipantId(0),
         controller: { kind: 'agent', primaryAgentSessionId: session.primaryAgentSessionId },
-        runtimeBinding:
-          input.selection.runtimeKind === 'companion'
-            ? { kind: 'companion', relationshipId: relationships[0]!.relationshipId }
-            : {
-                kind: 'narrative',
-                ...input.selection.worldBinding,
-                actorId: requireActorId(input, 0),
-              },
+        runtimeBinding: { kind: 'companion', relationshipId: relationships[0]!.relationshipId },
         createdAt: timestamp,
       });
       const dialogueRun = parseDialogueRun({
@@ -193,24 +230,25 @@ export class CharacterConversationLaunchService {
         userParticipantId: identities.userParticipantId,
         characterParticipantId: identities.characterParticipantId(0),
         characterRunId,
-        runtimeKind: input.selection.runtimeKind,
-        ...(input.selection.runtimeKind === 'companion'
-          ? {
-              relationshipIds: [relationships[0]!.relationshipId],
-              ...(input.selection.worldBinding
-                ? { worldBinding: input.selection.worldBinding }
-                : {}),
-            }
-          : { worldBinding: input.selection.worldBinding }),
+        runtimeKind: 'companion',
+        relationshipIds: [relationships[0]!.relationshipId],
         createdAt: timestamp,
       });
       await this.options.repository.commitLaunch(
-        { topology: 'dialogue', relationships, characterRun, dialogueRun },
+        {
+          topology: 'dialogue',
+          relationships,
+          characterRun,
+          dialogueRun,
+          storylineRuns:
+            runtimeRecords.storylineRun === undefined ? [] : [runtimeRecords.storylineRun],
+          memoryScopes: [runtimeRecords.memoryScope],
+        },
         signal,
       );
       return {
         topology: 'dialogue',
-        runtimeKind: input.selection.runtimeKind,
+        runtimeKind: 'companion',
         characterProjectId: publication.characterProjectId,
         characterVersionId: publication.characterVersionId,
         characterRunId,
@@ -226,14 +264,15 @@ export class CharacterConversationLaunchService {
   private async launchRoom(
     input: CharacterConversationLaunchInput,
     identities: CharacterConversationLaunchIdentities,
-    publications: readonly CharacterVersion[],
+    characters: readonly PreparedLaunchCharacter[],
     relationships: readonly UserCharacterRelationship[],
     signal?: AbortSignal,
   ): Promise<CharacterConversationLaunchResult> {
     const createdSessions: string[] = [];
     try {
       const participantSessions = [];
-      for (const [index, publication] of publications.entries()) {
+      for (const [index, character] of characters.entries()) {
+        const publication = character.publication;
         signal?.throwIfAborted();
         const characterRunId = identities.characterRunId(index);
         const session = await this.options.agentSessions.createPrimarySession(
@@ -253,16 +292,25 @@ export class CharacterConversationLaunchService {
         participantSessions.push({
           index,
           publication,
+          storyline: character.storyline,
           characterRunId,
           participantId: identities.characterParticipantId(index),
           primaryAgentSessionId: session.primaryAgentSessionId,
         });
       }
       const timestamp = this.now();
+      const runtimeRecords = participantSessions.map((participant) =>
+        createRuntimeRecords(
+          identities,
+          participant.index,
+          participant.characterRunId,
+          participant.storyline,
+          timestamp,
+        ),
+      );
       const room = parseCharacterRoom({
         characterRoomId: identities.characterRoomId,
-        title: publications.map((publication) => publication.label).join(', '),
-        defaultRuntimeKind: input.selection.runtimeKind,
+        title: characters.map((character) => character.publication.label).join(', '),
         participantTemplates: [
           {
             participantTemplateId: identities.userParticipantId,
@@ -284,35 +332,30 @@ export class CharacterConversationLaunchService {
             (participant) => participant.participantId,
           ),
         },
-        ...(input.selection.worldBinding
-          ? { worldVersionId: input.selection.worldBinding.worldVersionId }
-          : {}),
         createdAt: timestamp,
         updatedAt: timestamp,
       });
-      const characterRuns = participantSessions.map((participant) =>
-        parseCharacterRun({
+      const characterRuns = participantSessions.map((participant) => {
+        const records = runtimeRecords[participant.index]!;
+        return parseCharacterRun({
           characterRunId: participant.characterRunId,
           characterVersionId: participant.publication.characterVersionId,
+          ...(records.storylineRun === undefined
+            ? {}
+            : { characterStorylineRunId: records.storylineRun.characterStorylineRunId }),
+          characterMemoryScopeId: records.memoryScope.characterMemoryScopeId,
           participantId: participant.participantId,
           controller: {
             kind: 'agent',
             primaryAgentSessionId: participant.primaryAgentSessionId,
           },
-          runtimeBinding:
-            input.selection.runtimeKind === 'companion'
-              ? {
-                  kind: 'companion',
-                  relationshipId: relationships[participant.index]!.relationshipId,
-                }
-              : {
-                  kind: 'narrative',
-                  ...input.selection.worldBinding,
-                  actorId: requireActorId(input, participant.index),
-                },
+          runtimeBinding: {
+            kind: 'companion',
+            relationshipId: relationships[participant.index]!.relationshipId,
+          },
           createdAt: timestamp,
-        }),
-      );
+        });
+      });
       const roomRun = parseRoomRun({
         topology: 'chatroom',
         roomRunId: identities.roomRunId,
@@ -337,25 +380,28 @@ export class CharacterConversationLaunchService {
         ],
         schedulingPolicy: room.schedulingPolicy,
         events: [],
-        runtimeKind: input.selection.runtimeKind,
-        ...(input.selection.runtimeKind === 'companion'
-          ? {
-              relationshipIds: relationships.map((relationship) => relationship.relationshipId),
-              ...(input.selection.worldBinding
-                ? { worldBinding: input.selection.worldBinding }
-                : {}),
-            }
-          : { worldBinding: input.selection.worldBinding }),
+        runtimeKind: 'companion',
+        relationshipIds: relationships.map((relationship) => relationship.relationshipId),
         createdAt: timestamp,
       });
       await this.options.repository.commitLaunch(
-        { topology: 'chatroom', relationships, room, characterRuns, roomRun },
+        {
+          topology: 'chatroom',
+          relationships,
+          room,
+          characterRuns,
+          roomRun,
+          storylineRuns: runtimeRecords.flatMap((records) =>
+            records.storylineRun === undefined ? [] : [records.storylineRun],
+          ),
+          memoryScopes: runtimeRecords.map((records) => records.memoryScope),
+        },
         signal,
       );
       const firstParticipant = participantSessions[0]!;
       return {
         topology: 'chatroom',
-        runtimeKind: input.selection.runtimeKind,
+        runtimeKind: 'companion',
         characterRoomId: room.characterRoomId,
         roomRunId: roomRun.roomRunId,
         interactionAgentSessionId: firstParticipant.primaryAgentSessionId,
@@ -446,6 +492,14 @@ export class CharacterConversationLaunchService {
         );
       }
       const exactRun = parseCharacterRun(characterRun);
+      const selection = input.selection.characters[0]!;
+      if (!(await this.runtimeSelectionMatches(exactRun, selection, signal))) {
+        throw launchError(
+          'character-launch-conflict',
+          `Character launch request '${input.requestId}' conflicts with an existing Dialogue storyline.`,
+          input.requestId,
+        );
+      }
       const publication = await this.options.repository.readPublication(
         exactRun.characterVersionId,
         signal,
@@ -453,7 +507,7 @@ export class CharacterConversationLaunchService {
       if (
         !publication ||
         exactDialogue.runtimeKind !== input.selection.runtimeKind ||
-        exactRun.characterVersionId !== input.selection.characters[0]!.characterVersionId ||
+        exactRun.characterVersionId !== selection.characterVersionId ||
         exactRun.controller.kind !== 'agent'
       ) {
         throw launchError(
@@ -496,21 +550,41 @@ export class CharacterConversationLaunchService {
         input.requestId,
       );
     }
-    const participants = agentParticipants.map((participant) => {
-      if (participant.controller.kind !== 'agent' || !participant.characterVersionId) {
-        throw launchError(
-          'character-launch-conflict',
-          `RoomRun '${roomRun.roomRunId}' contains an invalid Agent participant.`,
-          input.requestId,
+    const participants = await Promise.all(
+      agentParticipants.map(async (participant, index) => {
+        if (participant.controller.kind !== 'agent' || !participant.characterVersionId) {
+          throw launchError(
+            'character-launch-conflict',
+            `RoomRun '${roomRun.roomRunId}' contains an invalid Agent participant.`,
+            input.requestId,
+          );
+        }
+        const characterRun = await this.options.repository.readCharacterRun(
+          participant.controller.characterRunId,
+          signal,
         );
-      }
-      return {
-        participantId: participant.participantId,
-        characterVersionId: participant.characterVersionId,
-        characterRunId: participant.controller.characterRunId,
-        primaryAgentSessionId: participant.controller.primaryAgentSessionId,
-      };
-    });
+        if (
+          !characterRun ||
+          !(await this.runtimeSelectionMatches(
+            parseCharacterRun(characterRun),
+            input.selection.characters[index]!,
+            signal,
+          ))
+        ) {
+          throw launchError(
+            'character-launch-conflict',
+            `Character launch request '${input.requestId}' conflicts with an existing Room storyline.`,
+            input.requestId,
+          );
+        }
+        return {
+          participantId: participant.participantId,
+          characterVersionId: participant.characterVersionId,
+          characterRunId: participant.controller.characterRunId,
+          primaryAgentSessionId: participant.controller.primaryAgentSessionId,
+        };
+      }),
+    );
     return {
       topology: 'chatroom',
       runtimeKind: roomRun.runtimeKind,
@@ -519,6 +593,43 @@ export class CharacterConversationLaunchService {
       interactionAgentSessionId: participants[0]!.primaryAgentSessionId,
       participants,
     };
+  }
+
+  private async runtimeSelectionMatches(
+    run: CharacterRun,
+    selection: CharacterConversationLaunchInput['selection']['characters'][number],
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (run.characterMemoryScopeId === undefined) return false;
+    const memoryScope = await this.options.repository.readMemoryScope(
+      run.characterMemoryScopeId,
+      signal,
+    );
+    if (memoryScope === undefined) return false;
+    const exactMemoryScope = parseCharacterMemoryScope(memoryScope);
+    if (exactMemoryScope.characterRunId !== run.characterRunId) return false;
+    if (selection.characterStorylineVersionId === undefined) {
+      return (
+        run.characterStorylineRunId === undefined &&
+        exactMemoryScope.characterStorylineRunId === undefined
+      );
+    }
+    if (
+      run.characterStorylineRunId === undefined ||
+      exactMemoryScope.characterStorylineRunId !== run.characterStorylineRunId
+    ) {
+      return false;
+    }
+    const storylineRun = await this.options.repository.readStorylineRun(
+      run.characterStorylineRunId,
+      signal,
+    );
+    if (storylineRun === undefined) return false;
+    const exactStorylineRun = parseCharacterStorylineRun(storylineRun);
+    return (
+      exactStorylineRun.characterRunId === run.characterRunId &&
+      exactStorylineRun.characterStorylineVersionId === selection.characterStorylineVersionId
+    );
   }
 }
 
@@ -531,6 +642,10 @@ function createLaunchIdentities(
     relationshipId: (characterVersionId) =>
       `relationship:${userKey}:${encodeURIComponent(characterVersionId)}`,
     characterRunId: (index) => `character-run:launch:${requestKey}:${String(index + 1)}`,
+    characterStorylineRunId: (index) =>
+      `character-storyline-run:launch:${requestKey}:${String(index + 1)}`,
+    characterMemoryScopeId: (index) =>
+      `character-memory-scope:launch:${requestKey}:${String(index + 1)}`,
     characterParticipantId: (index) => `participant:character:${String(index + 1)}`,
     userParticipantId: 'participant:user',
     dialogueRunId: `dialogue-run:launch:${requestKey}`,
@@ -539,16 +654,45 @@ function createLaunchIdentities(
   };
 }
 
-function requireActorId(input: CharacterConversationLaunchInput, index: number): string {
-  const actorId = input.selection.characters[index]?.actorId;
-  if (input.selection.runtimeKind !== 'narrative' || !actorId) {
-    throw launchError(
-      'character-launch-selection-invalid',
-      `Narrative Character selection ${String(index + 1)} has no actor identity.`,
-      input.requestId,
-    );
-  }
-  return actorId;
+function createRuntimeRecords(
+  identities: CharacterConversationLaunchIdentities,
+  index: number,
+  characterRunId: string,
+  storyline: CharacterStorylineVersion | undefined,
+  timestamp: string,
+): {
+  readonly storylineRun?: CharacterStorylineRun;
+  readonly memoryScope: CharacterMemoryScope;
+} {
+  const storylineRun =
+    storyline === undefined
+      ? undefined
+      : parseCharacterStorylineRun({
+          characterStorylineRunId: identities.characterStorylineRunId(index),
+          characterStorylineVersionId: storyline.characterStorylineVersionId,
+          characterRunId,
+          currentStageId: storyline.stages[0]!.stageId,
+          acceptedTransitions: [],
+          storylineRevision: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+  const memoryScope = parseCharacterMemoryScope({
+    characterMemoryScopeId: identities.characterMemoryScopeId(index),
+    characterRunId,
+    ...(storylineRun === undefined
+      ? {}
+      : { characterStorylineRunId: storylineRun.characterStorylineRunId }),
+    memoryRevision: 0,
+    candidates: [],
+    entries: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  return {
+    ...(storylineRun === undefined ? {} : { storylineRun }),
+    memoryScope,
+  };
 }
 
 function launchError(

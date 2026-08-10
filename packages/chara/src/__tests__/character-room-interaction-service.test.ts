@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
   parseCharacterRoom,
   parseCharacterVersion,
   parseUserCharacterRelationship,
@@ -133,7 +135,6 @@ function createFixture() {
         releaseUnboundSession,
         submitTurn: vi.fn(async () => ({ turnId: 'unused', content: 'unused' })),
       },
-      worldBindings: { validateBinding: vi.fn(async () => undefined) },
     },
   };
 }
@@ -142,7 +143,6 @@ function characterRoom(): CharacterRoom {
   return parseCharacterRoom({
     characterRoomId: 'room-a',
     title: 'Archive room',
-    defaultRuntimeKind: 'companion',
     participantTemplates: [
       {
         participantTemplateId: 'participant-a',
@@ -170,6 +170,8 @@ function characterVersion(suffix: string): CharacterVersion {
     label: suffix,
     definition: {
       summary: suffix,
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
       canon: [],
       knowledgeBoundary: [],
       behaviorPolicy: [],

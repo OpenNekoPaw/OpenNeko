@@ -233,17 +233,33 @@ import {
 } from '../shared/automation-session-control-contract';
 import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
+  CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL,
+  CHARACTER_AVATAR_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
   createCharacterFoundationCommandHostRequest,
   createCharacterFoundationHostRequest,
+  createCharacterConversationLaunchHostRequest,
+  createCharacterAvatarOpenRequest,
+  createCharacterAvatarReleaseRequest,
   createCharacterRoomWorkbenchSnapshotRequest,
   parseCharacterFoundationHostResult,
+  parseCharacterConversationLaunchHostResult,
+  parseCharacterAvatarHostResult,
   parseCharacterRoomWorkbenchProjectionEvent,
   parseCharacterRoomWorkbenchSnapshotResult,
   type CharacterRoomWorkbenchProjectionEvent,
   type OpenNekoDesktopCharacterBridge,
+  type OpenNekoDesktopCharacterConversationBridge,
+  type OpenNekoDesktopCharacterAvatarBridge,
   type OpenNekoDesktopCharacterRoomWorkbenchBridge,
 } from '@neko/chara/contracts';
+import {
+  WORLD_FOUNDATION_HOST_CHANNEL,
+  createWorldFoundationCommandHostRequest,
+  createWorldFoundationHostRequest,
+  parseWorldFoundationHostResult,
+  type OpenNekoDesktopWorldBridge,
+} from '@neko/world/contracts';
 
 let requestSequence = 0;
 let latestShellProjection: DesktopShellMutationContext | undefined;
@@ -318,7 +334,25 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopApplicationSettingsBridge &
   OpenNekoDesktopProjectPortabilityBridge &
   OpenNekoDesktopCharacterBridge &
-  OpenNekoDesktopCharacterRoomWorkbenchBridge = {
+  OpenNekoDesktopCharacterConversationBridge &
+  OpenNekoDesktopCharacterAvatarBridge &
+  OpenNekoDesktopCharacterRoomWorkbenchBridge &
+  OpenNekoDesktopWorldBridge = {
+  worldFoundation: {
+    async getSnapshot() {
+      const request = createWorldFoundationHostRequest(nextRequestId('world-foundation'));
+      const response: unknown = await ipcRenderer.invoke(WORLD_FOUNDATION_HOST_CHANNEL, request);
+      return parseWorldFoundationHostResult(response, request.requestId).snapshot;
+    },
+    async execute(command) {
+      const request = createWorldFoundationCommandHostRequest(
+        nextRequestId('world-foundation-command'),
+        command,
+      );
+      const response: unknown = await ipcRenderer.invoke(WORLD_FOUNDATION_HOST_CHANNEL, request);
+      return parseWorldFoundationHostResult(response, request.requestId).snapshot;
+    },
+  },
   characterFoundation: {
     async getSnapshot() {
       const request = createCharacterFoundationHostRequest(nextRequestId('character-foundation'));
@@ -338,6 +372,46 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseCharacterFoundationHostResult(response, request.requestId).snapshot;
+    },
+  },
+  characterConversations: {
+    async launch(input) {
+      const context = requireShellMutationContext();
+      const request = createCharacterConversationLaunchHostRequest({
+        requestId: nextRequestId('character-conversation-launch'),
+        rendererSessionId: context.rendererSessionId,
+        ...input,
+      });
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL,
+        request,
+      );
+      return parseCharacterConversationLaunchHostResult(response, request.requestId).launch;
+    },
+  },
+  characterAvatar: {
+    async openSurface(input) {
+      const context = requireShellMutationContext();
+      const request = createCharacterAvatarOpenRequest({
+        requestId: nextRequestId('character-avatar-open'),
+        rendererSessionId: context.rendererSessionId,
+        ...input,
+      });
+      const response: unknown = await ipcRenderer.invoke(CHARACTER_AVATAR_HOST_CHANNEL, request);
+      return parseCharacterAvatarHostResult(response, request.requestId);
+    },
+    async releaseSurface(avatarResourceLeaseId) {
+      const context = requireShellMutationContext();
+      const request = createCharacterAvatarReleaseRequest({
+        requestId: nextRequestId('character-avatar-release'),
+        rendererSessionId: context.rendererSessionId,
+        avatarResourceLeaseId,
+      });
+      const response: unknown = await ipcRenderer.invoke(CHARACTER_AVATAR_HOST_CHANNEL, request);
+      const result = parseCharacterAvatarHostResult(response, request.requestId);
+      if (result.status !== 'released' || result.avatarResourceLeaseId !== avatarResourceLeaseId) {
+        throw new Error('Character Avatar release did not confirm the exact resource lease.');
+      }
     },
   },
   characterRoomWorkbench: {

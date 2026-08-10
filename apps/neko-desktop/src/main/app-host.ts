@@ -199,22 +199,29 @@ import {
 import {
   parseCharacterFoundationAnyHostRequest,
   parseCharacterFoundationHostRequest,
+  parseCharacterAvatarHostRequest,
+  parseCharacterConversationLaunchHostRequest,
   parseCharacterRoomWorkbenchSnapshotRequest,
   type CharacterConversationLaunchInput,
   type CharacterConversationLaunchResult,
-  type CharacterFoundationCommand,
-  type CharacterFoundationCommandHostRequest,
+  type CharacterAvatarHostResult,
   type CharacterFoundationHostResult,
   type CharacterRoomWorkbenchProjectionEvent,
   type CharacterRoomWorkbenchSnapshotResult,
   type RoomView,
 } from '@neko/chara/contracts';
+import type { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-runtime';
 import type {
   CharacterFoundationCommandPort,
   CharacterFoundationService,
   CharacterRoomMessageSubmissionResult,
   SubmitCharacterRoomMessageInput,
 } from '@neko/chara/application';
+import {
+  parseWorldFoundationAnyHostRequest,
+  type WorldFoundationHostResult,
+} from '@neko/world/contracts';
+import type { WorldFoundationCommandPort, WorldFoundationService } from '@neko/world/application';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -233,11 +240,25 @@ export interface DesktopAppHostOptions {
   readonly assistantResources?: AssistantResourceService;
   readonly characterFoundation: CharacterFoundationService;
   readonly characterFoundationCommands: CharacterFoundationCommandPort;
+  readonly worldFoundation: WorldFoundationService;
+  readonly worldFoundationCommands: WorldFoundationCommandPort;
+  readonly characterAvatar?: DesktopCharacterAvatarRuntime;
   readonly characterConversations: {
     launch(
       input: CharacterConversationLaunchInput,
       signal?: AbortSignal,
     ): Promise<CharacterConversationLaunchResult>;
+  };
+  readonly characterInteractions: {
+    submitTurn(
+      input: {
+        readonly topology: 'dialogue';
+        readonly dialogueRunId: string;
+        readonly characterRunId: string;
+        readonly message: string;
+      },
+      signal?: AbortSignal,
+    ): Promise<{ readonly turnId: string; readonly content: string }>;
   };
   readonly characterRoomConversations: {
     submitUserMessage(
@@ -299,7 +320,11 @@ export class DesktopAppHost {
   readonly assistantResources: AssistantResourceService | undefined;
   readonly characterFoundation: CharacterFoundationService;
   readonly characterFoundationCommands: CharacterFoundationCommandPort;
+  readonly worldFoundation: WorldFoundationService;
+  readonly worldFoundationCommands: WorldFoundationCommandPort;
+  readonly characterAvatar: DesktopCharacterAvatarRuntime | undefined;
   readonly characterConversations: DesktopAppHostOptions['characterConversations'];
+  readonly characterInteractions: DesktopAppHostOptions['characterInteractions'];
   readonly characterRoomConversations: DesktopAppHostOptions['characterRoomConversations'];
   readonly characterRoomWorkbench: DesktopAppHostOptions['characterRoomWorkbench'];
   readonly resourceBrowser: ResourceBrowserNodeRuntime | undefined;
@@ -340,7 +365,11 @@ export class DesktopAppHost {
     this.assistantResources = options.assistantResources;
     this.characterFoundation = options.characterFoundation;
     this.characterFoundationCommands = options.characterFoundationCommands;
+    this.worldFoundation = options.worldFoundation;
+    this.worldFoundationCommands = options.worldFoundationCommands;
+    this.characterAvatar = options.characterAvatar;
     this.characterConversations = options.characterConversations;
+    this.characterInteractions = options.characterInteractions;
     this.characterRoomConversations = options.characterRoomConversations;
     this.characterRoomWorkbench = options.characterRoomWorkbench;
     this.resourceBrowser = options.resourceBrowser;
@@ -377,12 +406,11 @@ export class DesktopAppHost {
     payload: unknown,
   ): Promise<CharacterFoundationHostResult> {
     this.requireActive();
-    const request = parseCharacterFoundationHostRequest(payload);
+    parseCharacterFoundationHostRequest(payload);
     this.windows.resolveSender(sender);
-    return {
-      requestId: request.requestId,
-      snapshot: await this.characterFoundation.getSnapshot(),
-    };
+    throw new Error(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
   }
 
   async executeCharacterFoundationRequest(
@@ -390,15 +418,88 @@ export class DesktopAppHost {
     payload: unknown,
   ): Promise<CharacterFoundationHostResult> {
     this.requireActive();
-    const request = parseCharacterFoundationAnyHostRequest(payload);
+    parseCharacterFoundationAnyHostRequest(payload);
     this.windows.resolveSender(sender);
-    if (request.operation !== 'snapshot-get') {
-      await this.characterFoundationCommands.execute(stripCommandRequestId(request));
+    throw new Error(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
+  }
+
+  async executeWorldFoundationRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<WorldFoundationHostResult> {
+    this.requireActive();
+    parseWorldFoundationAnyHostRequest(payload);
+    this.windows.resolveSender(sender);
+    throw new Error(
+      'Interactive World capabilities remain experimental and are not available in the production Desktop.',
+    );
+  }
+
+  async executeCharacterConversationLaunchRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<{ readonly requestId: string; readonly launch: CharacterConversationLaunchResult }> {
+    this.requireActive();
+    parseCharacterConversationLaunchHostRequest(payload);
+    this.windows.resolveSender(sender);
+    throw new Error(
+      'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+    );
+  }
+
+  async executeCharacterAvatarRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<CharacterAvatarHostResult> {
+    this.requireActive();
+    const request = parseCharacterAvatarHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
+    const runtime = this.characterAvatar;
+    if (!runtime) {
+      return {
+        requestId: request.requestId,
+        status: 'unavailable',
+        diagnostic: {
+          code: 'character-avatar-renderer-unavailable',
+          message: 'The Character Avatar runtime is unavailable.',
+        },
+      };
     }
-    return {
-      requestId: request.requestId,
-      snapshot: await this.characterFoundation.getSnapshot(),
-    };
+    if (request.operation === 'release') {
+      runtime.release({
+        windowId: window.windowId,
+        rendererSessionId: request.rendererSessionId,
+        avatarResourceLeaseId: request.avatarResourceLeaseId,
+      });
+      return {
+        requestId: request.requestId,
+        status: 'released',
+        avatarResourceLeaseId: request.avatarResourceLeaseId,
+      };
+    }
+    const shell = await this.shell.getProjection(window.windowId);
+    const composition = resolveActiveDesktopWindowWorkbench(shell.window);
+    if (
+      composition.workbenchInstanceId !== request.workbenchInstanceId ||
+      composition.scene.context.kind !== 'character-interaction'
+    ) {
+      return {
+        requestId: request.requestId,
+        status: 'unavailable',
+        diagnostic: {
+          code: 'character-avatar-scene-mismatch',
+          message: 'The Character Avatar request does not match the exact active Workbench.',
+        },
+      };
+    }
+    return runtime.open({
+      windowId: window.windowId,
+      request,
+      owner: composition.scene.context.owner,
+    });
   }
 
   async getCharacterRoomWorkbenchSnapshot(
@@ -579,7 +680,10 @@ export class DesktopAppHost {
         };
       }
       const { context, firstSubmitRecord } = restored;
-      if (context.kind !== 'assistant' || context.assistantSpaceId !== request.assistantSpaceId) {
+      const scene = resolveActiveDesktopWindowWorkbench(
+        (await this.shell.getProjection(window.windowId)).window,
+      ).scene;
+      if (!assistantSurfaceContextMatches(context, scene, request.assistantSpaceId)) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
         );
@@ -618,10 +722,15 @@ export class DesktopAppHost {
         publish,
         readConversationContext: (conversationId) =>
           this.conversationLifecycle.readConversationContext(conversationId),
-        readConversationConfiguration: (conversationId) =>
-          this.conversationLifecycle.readConversationConfiguration(conversationId),
-        updateConversationConfiguration: (input) =>
-          this.conversationLifecycle.updateConfiguration(input),
+        ...(context.kind === 'assistant'
+          ? {
+              readConversationConfiguration: (conversationId: string) =>
+                this.conversationLifecycle.readConversationConfiguration(conversationId),
+              updateConversationConfiguration: (
+                input: Parameters<AgentConversationLifecycleService['updateConfiguration']>[0],
+              ) => this.conversationLifecycle.updateConfiguration(input),
+            }
+          : {}),
         readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
         personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
       });
@@ -1022,6 +1131,31 @@ export class DesktopAppHost {
         ) {
           throw new Error('Every scheduled Room participant response was rejected.');
         }
+        return { requestId: request.requestId, status: 'accepted' };
+      }
+      if (context.kind === 'character') {
+        const scene = resolveActiveDesktopWindowWorkbench(
+          (await this.shell.getProjection(window.windowId)).window,
+        ).scene;
+        if (
+          !context.characterRunId ||
+          !context.dialogueRunId ||
+          scene.context.kind !== 'character-interaction' ||
+          scene.context.owner.kind !== 'character' ||
+          scene.context.scope.conversationId !== request.message.conversationId ||
+          !isSameAgentConversationOwner(conversationOwnerFromContext(context), scene.context.owner)
+        ) {
+          throw new Error(
+            'Character message does not match the exact active Character Conversation owner.',
+          );
+        }
+        this.agentBridge.assertConnection(request.connection, grant);
+        await this.characterInteractions.submitTurn({
+          topology: 'dialogue',
+          dialogueRunId: context.dialogueRunId,
+          characterRunId: context.characterRunId,
+          message: request.message.message,
+        });
         return { requestId: request.requestId, status: 'accepted' };
       }
     }
@@ -1727,9 +1861,6 @@ export class DesktopAppHost {
           conversation.unavailable.message,
         );
       }
-      if (navigation.owner.kind === 'character' || navigation.owner.kind === 'room') {
-        return unavailableConversationOwner(request.requestId, navigation.owner);
-      }
       const context = await this.conversationLifecycle.readConversationContext(
         navigation.conversationId,
       );
@@ -2121,6 +2252,7 @@ export class DesktopAppHost {
     this.canvas?.detachWindow(windowId);
     this.cut?.detachWindow(windowId);
     this.options.assistantPreviewLifecycle?.detachWindow(windowId);
+    this.characterAvatar?.detachWindow(windowId);
     this.agentBridge.detachWindow(windowId);
     void this.agentLaunch.detachWindow(windowId).catch((error: unknown) => {
       this.reportError(
@@ -2233,6 +2365,11 @@ export class DesktopAppHost {
     }
     try {
       this.preview?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.characterAvatar?.dispose();
     } catch (error) {
       errors.push(error);
     }
@@ -2594,10 +2731,19 @@ async function readAgentConversationBootstrap(
   conversationId: string,
 ) {
   try {
-    const [context, firstSubmitRecord] = await Promise.all([
-      lifecycle.readConversationContext(conversationId),
-      lifecycle.readFirstSubmitRecord(conversationId),
-    ]);
+    const context = await lifecycle.readConversationContext(conversationId);
+    let firstSubmitRecord;
+    try {
+      firstSubmitRecord = await lifecycle.readFirstSubmitRecord(conversationId);
+    } catch (error) {
+      if (
+        !(error instanceof AgentConversationLifecycleUnavailableError) ||
+        error.conversationId !== conversationId ||
+        (context.kind !== 'character' && context.kind !== 'room')
+      ) {
+        throw error;
+      }
+    }
     return { status: 'ready' as const, context, firstSubmitRecord };
   } catch (error) {
     if (
@@ -2744,11 +2890,4 @@ function textEditorSubscriptionKey(identity: TextEditorRuntimeIdentity): string 
     identity.documentId,
     identity.sessionId,
   ].join(':');
-}
-
-function stripCommandRequestId(
-  request: CharacterFoundationCommandHostRequest,
-): CharacterFoundationCommand {
-  const { requestId: _requestId, ...command } = request;
-  return command;
 }

@@ -1,7 +1,13 @@
 import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
   parseCharacterVersion,
+  parseCharacterStorylineVersion,
   type CharacterRoom,
+  type CharacterMemoryScope,
   type CharacterRun,
+  type CharacterStorylineRun,
+  type CharacterStorylineVersion,
   type CharacterVersion,
   type DialogueRun,
   type RoomRun,
@@ -34,6 +40,12 @@ describe('CharacterConversationLaunchService', () => {
     });
     expect(fixture.repository.dialogues).toHaveLength(1);
     expect(fixture.repository.rooms).toHaveLength(0);
+    expect(fixture.repository.memoryScopes).toEqual([
+      expect.objectContaining({
+        characterMemoryScopeId: 'character-memory-scope:launch:request-a:1',
+        characterRunId: 'character-run:launch:request-a:1',
+      }),
+    ]);
     expect(fixture.createPrimarySession).toHaveBeenCalledTimes(1);
   });
 
@@ -69,10 +81,44 @@ describe('CharacterConversationLaunchService', () => {
     expect(fixture.repository.rooms).toHaveLength(1);
     expect(fixture.repository.roomRuns).toHaveLength(1);
     expect(fixture.repository.characterRuns).toHaveLength(2);
+    expect(fixture.repository.memoryScopes).toHaveLength(2);
     expect(fixture.repository.roomRuns[0]?.schedulingPolicy).toEqual({
       kind: 'bounded-autonomous',
       maxResponsesPerCycle: 2,
       eligibleParticipantIds: ['participant:character:1', 'participant:character:2'],
+    });
+  });
+
+  it('atomically binds an explicitly selected storyline and fresh memory scope to the CharacterRun', async () => {
+    const fixture = createFixture([publication('a')]);
+    fixture.repository.storylineVersions.push(storyline('a', 'version-a'));
+
+    await fixture.service.launch({
+      ...companionInput('request-storyline', ['version-a']),
+      selection: {
+        runtimeKind: 'companion',
+        characters: [
+          {
+            characterVersionId: 'version-a',
+            characterStorylineVersionId: 'storyline-version-a',
+          },
+        ],
+      },
+    });
+
+    expect(fixture.repository.characterRuns[0]).toMatchObject({
+      characterStorylineRunId: 'character-storyline-run:launch:request-storyline:1',
+      characterMemoryScopeId: 'character-memory-scope:launch:request-storyline:1',
+    });
+    expect(fixture.repository.storylineRuns[0]).toMatchObject({
+      characterStorylineVersionId: 'storyline-version-a',
+      characterRunId: 'character-run:launch:request-storyline:1',
+      currentStageId: 'stage-a',
+      storylineRevision: 0,
+    });
+    expect(fixture.repository.memoryScopes[0]).toMatchObject({
+      characterStorylineRunId: 'character-storyline-run:launch:request-storyline:1',
+      memoryRevision: 0,
     });
   });
 
@@ -106,6 +152,18 @@ describe('CharacterConversationLaunchService', () => {
     expect(retry).toEqual(first);
     expect(fixture.createPrimarySession).not.toHaveBeenCalled();
   });
+
+  it('rejects replay when the exact Character memory authority is missing', async () => {
+    const fixture = createFixture([publication('a')]);
+    const input = companionInput('request-corrupt-memory', ['version-a']);
+    await fixture.service.launch(input);
+    fixture.repository.memoryScopes.length = 0;
+
+    await expect(fixture.service.launch(input)).rejects.toMatchObject({
+      code: 'character-launch-conflict',
+    });
+    expect(fixture.createPrimarySession).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createFixture(publications: readonly CharacterVersion[]) {
@@ -125,7 +183,6 @@ function createFixture(publications: readonly CharacterVersion[]) {
       releaseUnboundSession,
       submitTurn: vi.fn(async () => ({ turnId: 'unused', content: 'unused' })),
     },
-    world: { validateBinding: vi.fn(async () => undefined) },
     now: () => NOW,
   });
   return { service, repository, createPrimarySession, releaseUnboundSession };
@@ -135,6 +192,9 @@ class MemoryLaunchRepository implements CharacterConversationLaunchRepository {
   readonly publications: CharacterVersion[];
   readonly relationships: UserCharacterRelationship[] = [];
   readonly characterRuns: CharacterRun[] = [];
+  readonly storylineVersions: CharacterStorylineVersion[] = [];
+  readonly storylineRuns: CharacterStorylineRun[] = [];
+  readonly memoryScopes: CharacterMemoryScope[] = [];
   readonly dialogues: DialogueRun[] = [];
   readonly rooms: CharacterRoom[] = [];
   readonly roomRuns: RoomRun[] = [];
@@ -150,6 +210,26 @@ class MemoryLaunchRepository implements CharacterConversationLaunchRepository {
 
   async readRelationship(relationshipId: string) {
     return clone(this.relationships.find((item) => item.relationshipId === relationshipId));
+  }
+
+  async readStorylineVersion(characterStorylineVersionId: string) {
+    return clone(
+      this.storylineVersions.find(
+        (item) => item.characterStorylineVersionId === characterStorylineVersionId,
+      ),
+    );
+  }
+
+  async readStorylineRun(characterStorylineRunId: string) {
+    return clone(
+      this.storylineRuns.find((item) => item.characterStorylineRunId === characterStorylineRunId),
+    );
+  }
+
+  async readMemoryScope(characterMemoryScopeId: string) {
+    return clone(
+      this.memoryScopes.find((item) => item.characterMemoryScopeId === characterMemoryScopeId),
+    );
   }
 
   async readCharacterRun(characterRunId: string) {
@@ -171,6 +251,8 @@ class MemoryLaunchRepository implements CharacterConversationLaunchRepository {
   async commitLaunch(aggregate: CharacterConversationLaunchAggregate): Promise<void> {
     if (this.failCommit) throw new Error('aggregate failed');
     this.relationships.push(...structuredClone(aggregate.relationships));
+    this.storylineRuns.push(...structuredClone(aggregate.storylineRuns));
+    this.memoryScopes.push(...structuredClone(aggregate.memoryScopes));
     if (aggregate.topology === 'dialogue') {
       this.characterRuns.push(structuredClone(aggregate.characterRun));
       this.dialogues.push(structuredClone(aggregate.dialogueRun));
@@ -189,12 +271,31 @@ function publication(suffix: string): CharacterVersion {
     label: `Character ${suffix.toUpperCase()}`,
     definition: {
       summary: `Character ${suffix}`,
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
       canon: [],
       knowledgeBoundary: [],
       behaviorPolicy: [],
       expressionPolicy: [],
       representationRefs: [],
     },
+    acceptedEvidenceIds: [],
+    publishedAt: NOW,
+  });
+}
+
+function storyline(suffix: string, characterVersionId: string): CharacterStorylineVersion {
+  return parseCharacterStorylineVersion({
+    characterStorylineVersionId: `storyline-version-${suffix}`,
+    characterVersionId,
+    label: `Storyline ${suffix.toUpperCase()}`,
+    premise: 'A sealed archive opens.',
+    desire: 'Protect the record.',
+    conflict: 'The record must be shared.',
+    growthArc: 'Learn to trust a witness.',
+    stages: [{ stageId: `stage-${suffix}`, title: 'Guarded', description: 'Keeps distance.' }],
+    turningPoints: [],
+    constraints: [],
     acceptedEvidenceIds: [],
     publishedAt: NOW,
   });

@@ -14,15 +14,6 @@ import {
 
 const now = '2026-08-09T10:00:00.000Z';
 
-function worldBinding() {
-  return {
-    worldVersionId: 'world-version-a',
-    worldRunId: 'world-run-a',
-    worldSaveId: 'world-save-a',
-    branchId: 'branch-main',
-  };
-}
-
 function participants() {
   return [
     {
@@ -67,7 +58,32 @@ function baseRoomRun() {
 }
 
 describe('Dialogue and Chatroom canonical contracts', () => {
-  it('accepts all topology and runtime-kind combinations without a Play branch', () => {
+  it('keeps Room cover as an opaque identity reference', () => {
+    expect(
+      parseCharacterRoom({
+        characterRoomId: 'room-a',
+        title: 'Archive room',
+        coverResourceRef: 'asset:room-cover-a',
+        participantTemplates: [],
+        schedulingPolicy: { kind: 'mentioned' },
+        createdAt: now,
+        updatedAt: now,
+      }).coverResourceRef,
+    ).toBe('asset:room-cover-a');
+    expect(() =>
+      parseCharacterRoom({
+        characterRoomId: 'room-a',
+        title: 'Archive room',
+        coverResourceRef: 'file:///private/room.png',
+        participantTemplates: [],
+        schedulingPolicy: { kind: 'mentioned' },
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ).toThrow(/opaque non-file reference/u);
+  });
+
+  it('accepts the canonical companion path and rejects external narrative fields', () => {
     const companionDialogue = parseDialogueRun({
       topology: 'dialogue',
       dialogueRunId: 'dialogue-companion',
@@ -78,50 +94,21 @@ describe('Dialogue and Chatroom canonical contracts', () => {
       relationshipIds: ['relationship-a'],
       createdAt: now,
     });
-    const narrativeDialogue = parseDialogueRun({
-      ...companionDialogue,
-      dialogueRunId: 'dialogue-narrative',
-      runtimeKind: 'narrative',
-      relationshipIds: undefined,
-      worldBinding: worldBinding(),
-    });
     const companionRoom = parseRoomRun({
       ...baseRoomRun(),
       runtimeKind: 'companion',
       relationshipIds: ['relationship-a', 'relationship-b'],
     });
-    const narrativeRoom = parseRoomRun({
-      ...baseRoomRun(),
-      roomRunId: 'room-run-narrative',
-      runtimeKind: 'narrative',
-      worldBinding: worldBinding(),
-    });
-
-    expect([companionDialogue.runtimeKind, narrativeDialogue.runtimeKind]).toEqual([
-      'companion',
-      'narrative',
-    ]);
-    expect([companionRoom.topology, narrativeRoom.topology]).toEqual(['chatroom', 'chatroom']);
+    expect(companionDialogue.runtimeKind).toBe('companion');
+    expect(companionRoom.topology).toBe('chatroom');
     expect(companionRoom).not.toHaveProperty('worldBinding');
-  });
-
-  it('requires complete narrative authority and does not downgrade to companion', () => {
     expect(() =>
       parseDialogueRun({
-        topology: 'dialogue',
-        dialogueRunId: 'dialogue-invalid',
-        userParticipantId: 'user-participant',
-        characterParticipantId: 'character-participant',
-        characterRunId: 'character-run-a',
+        ...companionDialogue,
         runtimeKind: 'narrative',
-        worldBinding: {
-          worldVersionId: 'world-version-a',
-          worldRunId: 'world-run-a',
-          branchId: 'branch-main',
-        },
-        createdAt: now,
+        worldBinding: { externalCompositionRef: 'composition:run-a' },
       }),
-    ).toThrow(/WorldSave/u);
+    ).toThrow(/unsupported fields|runtimeKind/u);
   });
 
   it('binds every agent participant to a distinct CharacterRun and AgentSession', () => {
@@ -204,7 +191,6 @@ describe('Dialogue and Chatroom canonical contracts', () => {
     const room = parseCharacterRoom({
       characterRoomId: 'room-a',
       title: 'Archive desk',
-      defaultRuntimeKind: 'companion',
       participantTemplates: [
         {
           participantTemplateId: 'participant-human',

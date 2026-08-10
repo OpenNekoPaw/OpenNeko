@@ -2,23 +2,18 @@ import {
   parseCharacterFoundationSnapshot,
   type CharacterFoundationSnapshot,
 } from '@neko/chara/contracts';
-import type { WorldDurableCatalogPort } from '@neko/world/application';
 import type { CharacterDurableCatalogPort } from './character-durable-catalog';
 
 export class CharacterFoundationService {
   constructor(
     private readonly options: {
       readonly characterCatalog: CharacterDurableCatalogPort;
-      readonly worldCatalog: WorldDurableCatalogPort;
     },
   ) {}
 
   async getSnapshot(signal?: AbortSignal): Promise<CharacterFoundationSnapshot> {
     signal?.throwIfAborted();
-    const [character, world] = await Promise.all([
-      this.options.characterCatalog.readCatalog(signal),
-      this.options.worldCatalog.readCatalog(signal),
-    ]);
+    const character = await this.options.characterCatalog.readCatalog(signal);
     return parseCharacterFoundationSnapshot({
       character: {
         projects: character.projects,
@@ -28,16 +23,16 @@ export class CharacterFoundationService {
         dialogueRuns: character.dialogueRuns,
         rooms: character.rooms,
         roomRuns: character.roomRuns,
+        storylineVersions: character.storylineVersions,
+        storylineRuns: character.storylineRuns,
+        storylineObservationCandidates: character.storylineObservationCandidates,
+        memoryScopes: character.memoryScopes,
+        presentationConfigurations: character.presentationConfigurations,
       },
-      world: {
-        projects: world.projects,
-        versions: world.versions,
-        runtimes: world.runtimes,
-      },
-      diagnostics: [
-        ...character.diagnostics.map((diagnostic) => ({ owner: 'character', ...diagnostic })),
-        ...world.diagnostics.map((diagnostic) => ({ owner: 'world', ...diagnostic })),
-      ],
+      diagnostics: character.diagnostics.map((diagnostic) => ({
+        owner: 'character',
+        ...diagnostic,
+      })),
     });
   }
 }

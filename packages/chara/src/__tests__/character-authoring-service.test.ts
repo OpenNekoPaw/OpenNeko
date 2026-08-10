@@ -1,7 +1,10 @@
-import type {
-  CharacterAuthoringTestSnapshot,
-  CharacterProject,
-  CharacterVersion,
+import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+  type CharacterAuthoringTestSnapshot,
+  type CharacterDefinition,
+  type CharacterProject,
+  type CharacterVersion,
 } from '@neko/chara/contracts';
 import {
   CharacterAuthoringService,
@@ -12,15 +15,17 @@ import { describe, expect, it } from 'vitest';
 const firstTime = '2026-08-09T10:00:00.000Z';
 const laterTime = '2026-08-09T11:00:00.000Z';
 
-function definition(summary = 'A careful archivist.') {
+function definition(summary = 'A careful archivist.'): CharacterDefinition {
   return {
     summary,
+    backgroundStory: createEmptyCharacterBackgroundStory(),
+    originSetting: createEmptyCharacterOriginSetting(),
     canon: ['Keeps promises.'],
     knowledgeBoundary: ['Does not know the sealed archive.'],
     behaviorPolicy: ['Ask before changing a record.'],
     expressionPolicy: ['Uses concise language.'],
     representationRefs: [
-      { representationId: 'portrait-main', role: 'portrait', targetRef: 'asset:portrait-a' },
+      { representationId: 'portrait-main', kind: 'portrait', resourceRef: 'asset:portrait-a' },
     ],
   };
 }
@@ -136,6 +141,67 @@ describe('CharacterAuthoringService', () => {
     );
   });
 
+  it('publishes reviewed BackgroundStory and OriginSetting evidence without creating runtime authority', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    await service.createProject({
+      characterProjectId: 'character-project-lore',
+      displayName: 'Lin',
+      draft: definition(),
+    });
+    await service.addEvidence({
+      characterProjectId: 'character-project-lore',
+      evidence: {
+        evidenceId: 'evidence-origin',
+        sourceRef: 'document:character-notes',
+        observedAt: firstTime,
+      },
+    });
+    await service.updateDraft({
+      characterProjectId: 'character-project-lore',
+      draft: {
+        ...definition(),
+        backgroundStory: {
+          ...createEmptyCharacterBackgroundStory(),
+          formativeEvents: [
+            {
+              loreEntryId: 'formative-event-a',
+              statement: 'Lin returned a forbidden key.',
+              evidenceIds: ['evidence-origin'],
+            },
+          ],
+        },
+        originSetting: {
+          ...createEmptyCharacterOriginSetting(),
+          believedRules: [
+            {
+              loreEntryId: 'origin-rule-a',
+              statement: 'Lin believes every promise leaves a trace.',
+              evidenceIds: ['evidence-origin'],
+            },
+          ],
+        },
+      },
+    });
+    await service.setReviewStatus({
+      characterProjectId: 'character-project-lore',
+      reviewStatus: 'ready',
+    });
+
+    const publication = await service.publish({
+      characterProjectId: 'character-project-lore',
+      characterVersionId: 'character-version-lore',
+      label: 'Lore publication',
+    });
+
+    expect(publication.acceptedEvidenceIds).toEqual(['evidence-origin']);
+    expect(publication.definition.backgroundStory.formativeEvents).toHaveLength(1);
+    expect(Object.isFrozen(publication.definition.originSetting.believedRules)).toBe(true);
+    expect(publication).not.toHaveProperty('worldRunId');
+    expect(publication).not.toHaveProperty('worldSaveId');
+    expect(repository.versions.size).toBe(1);
+  });
+
   it('keeps authoring-test snapshots out of the publication repository', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
     const service = new CharacterAuthoringService({ repository, now: () => firstTime });
@@ -188,13 +254,45 @@ describe('CharacterAuthoringService', () => {
           representationRefs: [
             {
               representationId: 'portrait-main',
-              role: 'portrait',
-              targetRef: 'file:///Users/private/portrait.png',
+              kind: 'portrait',
+              resourceRef: 'file:///Users/private/portrait.png',
             },
           ],
         },
       }),
     ).rejects.toThrow(/opaque non-file reference/u);
     expect(repository.projects.size).toBe(0);
+  });
+
+  it('rejects lore that cites evidence outside the owning CharacterProject', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    await service.createProject({
+      characterProjectId: 'character-project-a',
+      displayName: 'Lin',
+      draft: definition(),
+    });
+
+    await expect(
+      service.updateDraft({
+        characterProjectId: 'character-project-a',
+        draft: {
+          ...definition(),
+          originSetting: {
+            ...createEmptyCharacterOriginSetting(),
+            cultures: [
+              {
+                loreEntryId: 'culture-a',
+                statement: 'The archive reviews every claim.',
+                evidenceIds: ['evidence-outside-project'],
+              },
+            ],
+          },
+        },
+      }),
+    ).rejects.toThrow(/lore references unknown evidence 'evidence-outside-project'/u);
+    expect(repository.projects.get('character-project-a')?.draft.originSetting.cultures).toEqual(
+      [],
+    );
   });
 });

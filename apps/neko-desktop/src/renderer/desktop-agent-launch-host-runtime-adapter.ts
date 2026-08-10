@@ -61,6 +61,14 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     send(message): void {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       if (message.type === 'searchProjectFiles') {
+        if (message.purpose === 'roleplay') {
+          emit({
+            type: 'globalError',
+            message:
+              'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+          });
+          return;
+        }
         const receipt = catalog.interaction.bindingReceipt;
         if (catalog.interaction.binding.kind !== 'workspace' || !receipt) {
           emit({

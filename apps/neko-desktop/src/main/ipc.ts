@@ -21,8 +21,11 @@ import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
 import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
+  CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL,
+  CHARACTER_AVATAR_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
 } from '@neko/chara/contracts';
+import { WORLD_FOUNDATION_HOST_CHANNEL } from '@neko/world/contracts';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(
@@ -36,6 +39,17 @@ export function registerDesktopIpc(
 ): () => void {
   ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeCharacterFoundationRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(WORLD_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeWorldFoundationRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeCharacterConversationLaunchRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(CHARACTER_AVATAR_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeCharacterAvatarRequest(requireSender(event), payload),
   );
   ipcMain.handle(
     CHARACTER_ROOM_WORKBENCH_CHANNELS.snapshotGet,
@@ -353,6 +367,9 @@ export function registerDesktopIpc(
   return () => {
     for (const channel of [
       CHARACTER_FOUNDATION_HOST_CHANNEL,
+      WORLD_FOUNDATION_HOST_CHANNEL,
+      CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL,
+      CHARACTER_AVATAR_HOST_CHANNEL,
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
       DESKTOP_AGENT_CHANNELS.connectionDetach,
       AGENT_LAUNCH_HOST_CHANNEL,

@@ -4,8 +4,6 @@ import {
   parseRoomView,
   type CharacterRoom,
   type CharacterRun,
-  type CompanionWorldBinding,
-  type NarrativeWorldBinding,
   type RoomEvent,
   type RoomRun,
   type RoomView,
@@ -33,21 +31,12 @@ export interface CharacterRoomRepository {
   ): Promise<RoomRun>;
 }
 
-export interface CharacterRoomWorldBindingPort {
-  validateBinding(
-    binding: CompanionWorldBinding | NarrativeWorldBinding,
-    signal?: AbortSignal,
-  ): Promise<void>;
-}
-
 export type CharacterRoomDiagnosticCode =
   | 'character-room-unavailable'
   | 'room-run-unavailable'
   | 'stale-room-revision'
   | 'room-event-invalid'
-  | 'room-scheduling-unavailable'
-  | 'room-world-unavailable'
-  | 'narrative-world-unavailable';
+  | 'room-scheduling-unavailable';
 
 export class CharacterRoomError extends Error {
   constructor(
@@ -72,9 +61,8 @@ export class CharacterRoomService {
 
   constructor(
     private readonly repository: CharacterRoomRepository,
-    private readonly options: {
+    options: {
       readonly now?: () => string;
-      readonly worldBindings?: CharacterRoomWorldBindingPort;
     } = {},
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
@@ -120,36 +108,7 @@ export class CharacterRoomService {
       );
     }
     const source = parseCharacterRoom(room);
-    if (source.defaultRuntimeKind !== canonical.runtimeKind) {
-      throw roomError(
-        'room-event-invalid',
-        'RoomRun runtime kind does not match its CharacterRoom template.',
-        canonical.roomRunId,
-      );
-    }
     validateRoomRoster(source, canonical);
-    if (canonical.worldBinding) {
-      if (!this.options.worldBindings) {
-        throw roomError(
-          canonical.runtimeKind === 'narrative'
-            ? 'narrative-world-unavailable'
-            : 'room-world-unavailable',
-          'RoomRun World binding cannot be resolved because the World port is unavailable.',
-          canonical.roomRunId,
-        );
-      }
-      try {
-        await this.options.worldBindings.validateBinding(canonical.worldBinding, signal);
-      } catch (error) {
-        throw roomError(
-          canonical.runtimeKind === 'narrative'
-            ? 'narrative-world-unavailable'
-            : 'room-world-unavailable',
-          error instanceof Error ? error.message : 'RoomRun World authority is unavailable.',
-          canonical.roomRunId,
-        );
-      }
-    }
     return canonical;
   }
 

@@ -4,6 +4,7 @@ import {
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
   type RoomView,
 } from '@neko/chara/contracts';
+import { WORLD_FOUNDATION_HOST_CHANNEL } from '@neko/world/contracts';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -36,8 +37,12 @@ function emptySnapshot() {
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylineVersions: [],
+      storylineRuns: [],
+      storylineObservationCandidates: [],
+      memoryScopes: [],
+      presentationConfigurations: [],
     },
-    world: { projects: [], versions: [], runtimes: [] },
     diagnostics: [],
   };
 }
@@ -97,6 +102,30 @@ describe('Desktop Character Foundation preload bridge', () => {
         input: { characterProjectId: 'character-project-a', reviewStatus: 'ready' },
       }),
     ).resolves.toEqual(emptySnapshot());
+  });
+
+  it('strictly binds World Foundation snapshot and commands to the owner channel', async () => {
+    const snapshot = { world: { projects: [], versions: [], runtimes: [] }, diagnostics: [] };
+    electron.invoke.mockImplementation(
+      async (channel: string, request: { readonly requestId: string }) => {
+        expect(channel).toBe(WORLD_FOUNDATION_HOST_CHANNEL);
+        return { requestId: request.requestId, snapshot };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(bridge.worldFoundation.getSnapshot()).resolves.toEqual(snapshot);
+    await expect(
+      bridge.worldFoundation.execute({
+        operation: 'world-project-set-review',
+        input: { worldProjectId: 'world-project-a', reviewStatus: 'ready' },
+      }),
+    ).resolves.toEqual(snapshot);
+    expect(electron.invoke.mock.calls[1]?.[1]).toMatchObject({
+      operation: 'world-project-set-review',
+      input: { worldProjectId: 'world-project-a', reviewStatus: 'ready' },
+    });
   });
 
   it('subscribes the exact RoomRun projection without accepting foreign events', async () => {

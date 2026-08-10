@@ -2,9 +2,13 @@ export * from './npc-test-bench';
 
 export * from './character-memory';
 
+export * from './character-lore-storyline-memory';
+export * from './character-presentation';
+
 export * from './character';
 
 export * from './room';
 export * from './character-foundation-host';
 export * from './character-room-workbench-host';
+export * from './character-avatar-host';
 export * from './character-conversation-launch';

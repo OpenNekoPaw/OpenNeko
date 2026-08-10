@@ -153,6 +153,14 @@ export interface ConversationControllerProps {
     readonly conversationId: string;
     readonly content: ReactNode;
   };
+  onSubmitCharacterLaunch?: (input: {
+    readonly message: string;
+    readonly characters: readonly {
+      readonly characterProjectId: string;
+      readonly characterVersionId: string;
+      readonly characterStorylineVersionId?: string;
+    }[];
+  }) => Promise<void>;
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -1182,6 +1190,12 @@ export function ConversationController({
         if (!agentPresentation) throw new Error('Agent Draft presentation is unavailable.');
         const launchCatalog = draftHostRuntimeAdapter.readLaunchCatalog();
         const authoritativeDraft = launchCatalog.interaction;
+        if (entryCharacterLaunches.length > 0) {
+          setGlobalError(
+            'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+          );
+          return;
+        }
         if (composerWorkspace?.kind === 'entry') {
           const validation = projectHomeExperienceEntry({
             mode: entryExperienceMode,
@@ -1286,6 +1300,7 @@ export function ConversationController({
       entryWorkspaceTarget,
       handleSendWithoutConversation,
       hasConfigSnapshot,
+      entryCharacterLaunches,
       hostRuntimeAdapter,
       isEntryBindingPending,
       isDraftPresentation,
