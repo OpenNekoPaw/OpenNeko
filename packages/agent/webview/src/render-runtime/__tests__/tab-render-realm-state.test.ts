@@ -300,6 +300,11 @@ function entryDraft(draftId: string, inputValue: string): AgentEntryDraftSnapsho
     contextReferences: [],
     characterLaunches: [],
     selectedModel: 'test:test-model',
+    mediaModelSelection: {
+      image: 'test:image-model',
+      video: 'none',
+      audio: 'test:audio-model',
+    },
     executionMode: 'ask',
   };
 }

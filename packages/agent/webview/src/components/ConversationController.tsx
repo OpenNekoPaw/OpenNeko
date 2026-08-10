@@ -449,6 +449,11 @@ export function ConversationController({
     updateEntryInputValue(entryDraft?.inputValue ?? '');
     setEntryContextReferences(entryDraft ? [...entryDraft.contextReferences] : []);
     setEntryCharacterLaunches(entryDraft ? [...entryDraft.characterLaunches] : []);
+    setEntryMediaModelSelection(
+      entryDraft?.mediaModelSelection
+        ? { ...entryDraft.mediaModelSelection }
+        : { image: 'none', video: 'none', audio: 'none' },
+    );
     const launchConfiguration = launchCatalog.configuration;
     setEntrySelectedModel(
       launchConfiguration.fields.model.effectiveValue?.modelCatalogEntryId ?? '',
@@ -491,6 +496,7 @@ export function ConversationController({
       characterLaunches: entryCharacterLaunches,
       ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
       selectedModel: entrySelectedModel,
+      mediaModelSelection: entryMediaModelSelection,
       executionMode: entryExecutionMode,
       experienceMode: entryExperienceMode,
     });
@@ -501,6 +507,7 @@ export function ConversationController({
     entryExecutionMode,
     entryExperienceMode,
     entryInputValue,
+    entryMediaModelSelection,
     entrySelectedModel,
     entryWorkspaceTarget,
     hostRuntimeAdapter,
@@ -674,18 +681,31 @@ export function ConversationController({
           ? configuredModelId
           : '',
     );
-    setEntryMediaModelSelection(
-      (current) =>
-        projectMediaModelSelectionDefaults({
-          selection: current,
-          defaults: activeSettings.defaultMediaModels ?? {},
-        }).selection,
-    );
+    setEntryMediaModelSelection((current) => {
+      const availableMediaModels = new Map(
+        entryModelState.availableMediaModels.map((model) => [model.id, model.category]),
+      );
+      const selection: MediaModelSelection = {
+        image: availableMediaModels.get(current.image) === 'image' ? current.image : 'none',
+        video: availableMediaModels.get(current.video) === 'video' ? current.video : 'none',
+        audio: availableMediaModels.get(current.audio) === 'audio' ? current.audio : 'none',
+      };
+      const projected = projectMediaModelSelectionDefaults({
+        selection,
+        defaults: activeSettings.defaultMediaModels ?? {},
+      }).selection;
+      return projected.image === current.image &&
+        projected.video === current.video &&
+        projected.audio === current.audio
+        ? current
+        : projected;
+    });
   }, [
     draftLaunchCatalog,
     activeSettings.defaultMediaModels,
     activeSettings.selectedModelId,
     activeSettings.selectedProviderId,
+    entryModelState.availableMediaModels,
   ]);
   const handleModelSelectForConversation = useCallback(
     (conversationId: string, modelId: string) => {

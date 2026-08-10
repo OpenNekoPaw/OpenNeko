@@ -793,12 +793,39 @@ describe('ConversationController entry state', () => {
         ],
         characterLaunches: [],
         selectedModel: 'test-model',
+        mediaModelSelection: {
+          image: 'nekoapi-media:gpt-image-2',
+          video: 'none',
+          audio: 'nekoapi-media:audio-1',
+        },
         executionMode: 'auto',
       },
     });
+    const settings = createSettings();
     render(
       <ConversationController
-        {...createProps()}
+        {...createProps({
+          settings: {
+            ...settings,
+            chatModelOptions: [
+              ...settings.chatModelOptions,
+              {
+                id: 'nekoapi-media:gpt-image-2',
+                label: 'GPT Image 2',
+                providerId: 'nekoapi-media',
+                modelId: 'gpt-image-2',
+                category: 'image',
+              },
+              {
+                id: 'nekoapi-media:audio-1',
+                label: 'Audio 1',
+                providerId: 'nekoapi-media',
+                modelId: 'audio-1',
+                category: 'audio',
+              },
+            ],
+          },
+        })}
         agentPresentation={createDraftProjection('draft-restored', {
           kind: 'unbound',
         })}
@@ -809,6 +836,9 @@ describe('ConversationController entry state', () => {
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'restored entry text');
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('brief.txt');
     expect(screen.getByTestId('entry-selected-model').textContent).toBe('test-model');
+    expect(screen.getByTestId('entry-media-models').textContent).toBe(
+      'nekoapi-media:gpt-image-2|none|nekoapi-media:audio-1',
+    );
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited entry text' } });
 
     expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({
@@ -817,7 +847,74 @@ describe('ConversationController entry state', () => {
         draftId: 'draft-restored',
         inputValue: 'edited entry text',
         selectedModel: 'test-model',
+        mediaModelSelection: {
+          image: 'nekoapi-media:gpt-image-2',
+          video: 'none',
+          audio: 'nekoapi-media:audio-1',
+        },
         executionMode: 'ask',
+      }),
+    });
+    hostRuntimeMocks.getState.mockReturnValue(undefined);
+  });
+
+  it('isolates stale restored media selections and reapplies an available configured default', () => {
+    vi.clearAllMocks();
+    hostRuntimeMocks.getState.mockReturnValue({
+      drafts: [],
+      entryDraft: {
+        draftId: 'draft-stale-media-model',
+        inputValue: 'keep this draft',
+        contextReferences: [],
+        characterLaunches: [],
+        selectedModel: 'test-model',
+        mediaModelSelection: {
+          image: 'removed:image-model',
+          video: 'removed:video-model',
+          audio: 'removed:audio-model',
+        },
+        executionMode: 'ask',
+      },
+    });
+    const settings = createSettings();
+    render(
+      <ConversationController
+        {...createProps({
+          settings: {
+            ...settings,
+            chatModelOptions: [
+              ...settings.chatModelOptions,
+              {
+                id: 'current:image-model',
+                label: 'Current Image',
+                providerId: 'current',
+                modelId: 'image-model',
+                category: 'image',
+              },
+            ],
+            defaultMediaModels: { image: 'current:image-model' },
+          },
+        })}
+        agentPresentation={createDraftProjection('draft-stale-media-model', {
+          kind: 'unbound',
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'keep this draft');
+    expect(screen.getByTestId('entry-media-models').textContent).toBe(
+      'current:image-model|none|none',
+    );
+    expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({
+      drafts: [],
+      entryDraft: expect.objectContaining({
+        draftId: 'draft-stale-media-model',
+        inputValue: 'keep this draft',
+        mediaModelSelection: {
+          image: 'current:image-model',
+          video: 'none',
+          audio: 'none',
+        },
       }),
     });
     hostRuntimeMocks.getState.mockReturnValue(undefined);
@@ -2957,6 +3054,7 @@ function createDraftLaunchCatalog(draftId: string, binding: AgentDomainBinding) 
         availability: { status: 'available' as const },
       },
     ],
+    defaultMediaModels: {},
     configuration: createDraftConfiguration({
       modelCatalogEntryId: 'test-model',
       providerId: 'test',

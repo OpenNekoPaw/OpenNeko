@@ -33,6 +33,7 @@ export interface AgentEntryDraftSnapshot {
     readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
   };
   readonly selectedModel: string;
+  readonly mediaModelSelection?: Readonly<Record<'image' | 'video' | 'audio', string>>;
   readonly executionMode: 'plan' | 'ask' | 'auto';
   readonly experienceMode?: AgentEntryExperienceMode;
 }
@@ -383,8 +384,37 @@ function parseEntryDraft(
     characterLaunches: parsedCharacterLaunches,
     ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
     selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
+    ...(value.mediaModelSelection === undefined
+      ? {}
+      : {
+          mediaModelSelection: parseEntryMediaModelSelection(
+            value.mediaModelSelection,
+            `${path}.mediaModelSelection`,
+          ),
+        }),
     executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
     ...(isAgentEntryExperienceMode(experienceMode) ? { experienceMode } : {}),
+  };
+}
+
+function parseEntryMediaModelSelection(
+  value: unknown,
+  path: string,
+): NonNullable<AgentEntryDraftSnapshot['mediaModelSelection']> {
+  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  const categories = ['image', 'video', 'audio'] as const;
+  if (
+    Object.keys(value).length !== categories.length ||
+    Object.keys(value).some(
+      (category) => !categories.includes(category as (typeof categories)[number]),
+    )
+  ) {
+    throw new Error(`${path} must contain exact image, video and audio selections.`);
+  }
+  return {
+    image: stringValue(value.image, `${path}.image`),
+    video: stringValue(value.video, `${path}.video`),
+    audio: stringValue(value.audio, `${path}.audio`),
   };
 }
 
