@@ -67,6 +67,11 @@ import {
   parseAgentInputInvocationIntent,
   type AgentInputInvocationIntent,
 } from './agent-draft-submit';
+import {
+  parseAgentFlatPurposeModelRefs,
+  type AgentFlatPurposeModelRefs,
+} from './agent-purpose-model';
+export type { AgentFlatPurposeModelRefMap, AgentFlatPurposeModelRefs } from './agent-purpose-model';
 import type { AgentBindingKind } from './agent-interaction-binding';
 import { parseAgentInputCatalog, type AgentInputCatalogEntry } from './agent-input-trigger';
 import type {
@@ -104,20 +109,6 @@ export type AgentMediaModelSelections = Partial<{
   video: ModelRef<'video'>;
   audio: ModelRef<'audio'>;
 }>;
-
-export interface AgentFlatPurposeModelRefMap {
-  readonly 'image.generate': ModelRef<'image'>;
-  readonly 'image.edit': ModelRef<'image'>;
-  readonly 'image.understand': ModelRef<'llm'>;
-  readonly 'video.generate': ModelRef<'video'>;
-  readonly 'video.understand': ModelRef<'llm'>;
-  readonly 'audio.generate': ModelRef<'audio'>;
-  readonly 'audio.tts': ModelRef<'audio'>;
-  readonly 'audio.music.generate': ModelRef<'audio'>;
-  readonly 'audio.understand': ModelRef<'llm'>;
-}
-
-export type AgentFlatPurposeModelRefs = Partial<AgentFlatPurposeModelRefMap>;
 
 export type AgentModelSlots = Partial<Record<AgentModelSlot, ModelRef<'llm'>>>;
 
@@ -1465,9 +1456,14 @@ export function parseSendMessageWebviewMessage(raw: unknown): SendMessageWebview
   const mediaModel = raw.mediaModel === undefined ? undefined : parseMediaModelRef(raw.mediaModel);
   if (raw.mediaModel !== undefined && !mediaModel) return null;
 
-  const purposeModels =
-    raw.purposeModels === undefined ? undefined : parseAgentFlatPurposeModelRefs(raw.purposeModels);
-  if (raw.purposeModels !== undefined && !purposeModels) return null;
+  let purposeModels: AgentFlatPurposeModelRefs | undefined;
+  if (raw.purposeModels !== undefined) {
+    try {
+      purposeModels = parseAgentFlatPurposeModelRefs(raw.purposeModels);
+    } catch {
+      return null;
+    }
+  }
 
   const attachments =
     raw.attachments === undefined
@@ -2768,49 +2764,6 @@ function isAgentContextType(value: unknown): value is AgentContextType {
     value === 'document-selection' ||
     value === 'canvas-storyboard-action-intent'
   );
-}
-
-function parseAgentFlatPurposeModelRefs(value: unknown): AgentFlatPurposeModelRefs | null {
-  if (!isRecord(value)) return null;
-
-  const selections: {
-    -readonly [Purpose in keyof AgentFlatPurposeModelRefMap]?: AgentFlatPurposeModelRefMap[Purpose];
-  } = {};
-  for (const purpose of Object.keys(value)) {
-    const category = purposeModelCategory(purpose);
-    if (!category) return null;
-    const model = parseModelRef(value[purpose], category);
-    if (!model) return null;
-    if (purpose === 'image.generate') selections['image.generate'] = model as ModelRef<'image'>;
-    if (purpose === 'image.edit') selections['image.edit'] = model as ModelRef<'image'>;
-    if (purpose === 'image.understand') selections['image.understand'] = model as ModelRef<'llm'>;
-    if (purpose === 'video.generate') selections['video.generate'] = model as ModelRef<'video'>;
-    if (purpose === 'video.understand') selections['video.understand'] = model as ModelRef<'llm'>;
-    if (purpose === 'audio.generate') selections['audio.generate'] = model as ModelRef<'audio'>;
-    if (purpose === 'audio.tts') selections['audio.tts'] = model as ModelRef<'audio'>;
-    if (purpose === 'audio.music.generate') {
-      selections['audio.music.generate'] = model as ModelRef<'audio'>;
-    }
-    if (purpose === 'audio.understand') selections['audio.understand'] = model as ModelRef<'llm'>;
-  }
-
-  return Object.keys(selections).length > 0 ? selections : null;
-}
-
-function purposeModelCategory(value: string): ProtocolModelCategory | undefined {
-  if (value === 'image.generate' || value === 'image.edit') return 'image';
-  if (value === 'video.generate') return 'video';
-  if (value === 'audio.generate' || value === 'audio.tts' || value === 'audio.music.generate') {
-    return 'audio';
-  }
-  if (
-    value === 'image.understand' ||
-    value === 'video.understand' ||
-    value === 'audio.understand'
-  ) {
-    return 'llm';
-  }
-  return undefined;
 }
 
 function parseAgentModelSlots(value: unknown): AgentModelSlots | null {

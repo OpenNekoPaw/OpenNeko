@@ -97,6 +97,7 @@ import {
 import { projectOptimisticQueuedMessageItem } from '../presenters/message-queue-presenter';
 import {
   projectChatWorkspaceModelState,
+  projectMessageModelSelection,
   projectMediaModelSelectionDefaults,
   projectMediaModelSelectionForSessionModeChange,
 } from '../presenters/config-message-presenter';
@@ -1227,6 +1228,12 @@ export function ConversationController({
           return typeof data?.['resourceGrantId'] === 'string' ? [data['resourceGrantId']] : [];
         });
         const submittedReferenceIds = new Set(contextPayloads.map((payload) => payload.id));
+        const purposeModels = projectMessageModelSelection({
+          selectedModel: entrySelectedModel,
+          chatModelOptions: activeSettings.chatModelOptions,
+          sessionMode: 'agent',
+          agentMediaModels: entryModelState.agentMediaModels,
+        }).purposeModels;
         setIsForegroundConversationActivationPending(true);
         void draftHostRuntimeAdapter
           .submitDraft({
@@ -1235,6 +1242,7 @@ export function ConversationController({
             references,
             resourceGrantIds,
             configuration,
+            ...(purposeModels && Object.keys(purposeModels).length > 0 ? { purposeModels } : {}),
           })
           .then((projection) => {
             committedEntryDraftIdRef.current = agentPresentation.draftId;
@@ -1267,10 +1275,13 @@ export function ConversationController({
     },
     [
       agentPresentation,
+      activeSettings.chatModelOptions,
       composerWorkspace,
       entryContextReferences,
       entryExperienceMode,
       entryInputValue,
+      entryModelState.agentMediaModels,
+      entrySelectedModel,
       entrySessionMode,
       entryWorkspaceTarget,
       handleSendWithoutConversation,

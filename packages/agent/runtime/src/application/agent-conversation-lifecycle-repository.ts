@@ -3,6 +3,7 @@ import {
   parseAgentConversationConfiguration,
   parseAgentConversationTurnConfigurationSnapshot,
   parseAgentDraftInputIntent,
+  parseAgentFlatPurposeModelRefs,
   parseAgentInputReferenceReceipt,
   parseMessageContextReference,
   parseAgentScratchArtifactRef,
@@ -388,9 +389,20 @@ export function parseAgentConversationLifecycleRecord(
     ],
     'Agent Conversation lifecycle record',
   );
-  const initialInput = exactRecord(
+  const initialInputRecord = requireRecord(
     record['initialInput'],
-    ['messageId', 'intent', 'references', 'contextReferences', 'resourceGrantIds'],
+    'Agent initial input must be an object.',
+  );
+  const initialInput = exactRecord(
+    initialInputRecord,
+    [
+      'messageId',
+      'intent',
+      'references',
+      'contextReferences',
+      'resourceGrantIds',
+      ...('purposeModels' in initialInputRecord ? ['purposeModels'] : []),
+    ],
     'Agent initial input',
   );
   const configuration = parseAgentConversationConfiguration(record['configuration']);
@@ -455,6 +467,9 @@ export function parseAgentConversationLifecycleRecord(
       references: referencesValue.map(parseAgentInputReferenceReceipt),
       contextReferences: contextReferencesValue.map(parseMessageContextReference),
       resourceGrantIds,
+      ...(initialInput['purposeModels'] === undefined
+        ? {}
+        : { purposeModels: parseAgentFlatPurposeModelRefs(initialInput['purposeModels']) }),
     },
     configuration,
     pendingTurn: {

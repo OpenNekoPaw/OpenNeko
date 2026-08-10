@@ -73,6 +73,62 @@ describe('Agent Draft submit contract', () => {
     });
   });
 
+  it('keeps exact generation purpose models on the first submitted Turn', () => {
+    expect(
+      parseAgentDraftSubmitInput({
+        draft: {
+          phase: 'draft',
+          draftId: 'draft-entry-1',
+          binding: { kind: 'unbound' },
+          bindingReceipt: null,
+        },
+        input: { kind: 'message', text: 'Generate an image' },
+        references: [],
+        resourceGrantIds: [],
+        configuration,
+        purposeModels: {
+          'image.generate': {
+            providerId: 'image-provider',
+            modelId: 'image-model',
+            category: 'image',
+          },
+        },
+      }),
+    ).toMatchObject({
+      purposeModels: {
+        'image.generate': {
+          providerId: 'image-provider',
+          modelId: 'image-model',
+          category: 'image',
+        },
+      },
+    });
+  });
+
+  it('rejects a generation purpose model with the wrong media category', () => {
+    expect(() =>
+      parseAgentDraftSubmitInput({
+        draft: {
+          phase: 'draft',
+          draftId: 'draft-entry-1',
+          binding: { kind: 'unbound' },
+          bindingReceipt: null,
+        },
+        input: { kind: 'message', text: 'Generate an image' },
+        references: [],
+        resourceGrantIds: [],
+        configuration,
+        purposeModels: {
+          'image.generate': {
+            providerId: 'image-provider',
+            modelId: 'image-model',
+            category: 'video',
+          },
+        },
+      }),
+    ).toThrow("category must be 'image'");
+  });
+
   it('rejects a bound Draft without its exact binding receipt', () => {
     expect(() =>
       parseAgentDraftSubmitInput({

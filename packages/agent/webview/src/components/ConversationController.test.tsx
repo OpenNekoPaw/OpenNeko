@@ -969,6 +969,64 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
+  it('submits the configured image generation model with the Entry Draft', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createBoundAssistantLaunchCatalog('draft-image-purpose');
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.submitDraft.mockResolvedValue({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-image-purpose',
+        binding: launchCatalog.interaction.binding,
+      },
+      turnId: 'turn-image-purpose',
+      turnStatus: 'running',
+    });
+    render(
+      <ConversationController
+        {...createProps({
+          settings: {
+            ...createSettings(),
+            chatModelOptions: [
+              ...createSettings().chatModelOptions,
+              {
+                id: 'image-provider:image-model',
+                providerId: 'image-provider',
+                modelId: 'image-model',
+                label: 'Image Model',
+                category: 'image',
+                capabilities: ['image.generate'],
+              },
+            ],
+            defaultMediaModels: { image: 'image-provider:image-model' },
+          },
+        })}
+        agentPresentation={launchCatalog.interaction}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('entry-media-models').textContent).toBe(
+        'image-provider:image-model|none|none',
+      ),
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Generate a portrait' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.submitDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purposeModels: {
+          'image.generate': {
+            providerId: 'image-provider',
+            modelId: 'image-model',
+            category: 'image',
+          },
+        },
+      }),
+    );
+  });
+
   it('reports a Session-only command in Draft without submitting or creating a Turn', async () => {
     vi.clearAllMocks();
     const launchCatalog = {

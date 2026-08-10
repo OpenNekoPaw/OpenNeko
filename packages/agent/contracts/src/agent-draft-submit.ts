@@ -8,6 +8,10 @@ import {
   parseAgentConfigurationRequest,
   type AgentConfigurationRequest,
 } from './agent-model-catalog';
+import {
+  parseAgentFlatPurposeModelRefs,
+  type AgentFlatPurposeModelRefs,
+} from './agent-purpose-model';
 
 export type AgentDraftInputIntent =
   | { readonly kind: 'message'; readonly text: string }
@@ -53,6 +57,7 @@ export interface AgentDraftSubmitInput {
   readonly references: readonly AgentInputReferenceReceipt[];
   readonly resourceGrantIds: readonly string[];
   readonly configuration: AgentConfigurationRequest;
+  readonly purposeModels?: AgentFlatPurposeModelRefs;
 }
 
 export interface AgentDraftSubmitProjection {
@@ -64,8 +69,9 @@ export interface AgentDraftSubmitProjection {
 
 export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInput {
   const record = requireRecord(value, 'Agent Draft submit input must be an object.');
-  requireExactKeys(
+  requireAllowedKeys(
     record,
+    ['draft', 'input', 'references', 'resourceGrantIds', 'configuration', 'purposeModels'],
     ['draft', 'input', 'references', 'resourceGrantIds', 'configuration'],
     'Agent Draft submit input',
   );
@@ -79,6 +85,9 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
     references: parseReferenceReceipts(record['references']),
     resourceGrantIds: requireIdentityArray(record['resourceGrantIds'], 'Resource grant'),
     configuration: parseAgentConfigurationRequest(record['configuration']),
+    ...(record['purposeModels'] === undefined
+      ? {}
+      : { purposeModels: parseAgentFlatPurposeModelRefs(record['purposeModels']) }),
   };
 }
 

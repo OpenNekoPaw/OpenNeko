@@ -183,6 +183,174 @@ describe('Agent controller composition', () => {
     await composition.dispose?.();
   });
 
+  it('binds a configured image model into a text-only main model Turn policy', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'desktop-agent-image-purpose-'));
+    temporaryRoots.push(root);
+    const configPath = join(root, 'config.toml');
+    await writeFile(
+      configPath,
+      [
+        '[[providers]]',
+        'id = "deepseek"',
+        'name = "DeepSeek"',
+        'type = "openai"',
+        'api_url = "https://deepseek.example.test/v1"',
+        'protocol_profile = "openai-chat"',
+        'enabled = true',
+        'requires_api_key = false',
+        '',
+        '[[providers]]',
+        'id = "image-provider"',
+        'name = "Image Provider"',
+        'type = "openai"',
+        'api_url = "https://image.example.test/v1"',
+        'enabled = true',
+        'requires_api_key = false',
+        '',
+        '[[models]]',
+        'id = "deepseek-chat"',
+        'name = "deepseek-chat"',
+        'provider_id = "deepseek"',
+        'type = "llm"',
+        'capabilities = ["chat", "tools"]',
+        'context_window = 8192',
+        'max_output_tokens = 4096',
+        'enabled = true',
+        '',
+        '[[models]]',
+        'id = "image-model"',
+        'name = "image-model-api"',
+        'provider_id = "image-provider"',
+        'type = "image"',
+        'capabilities = ["text_to_image"]',
+        'enabled = true',
+      ].join('\n'),
+      'utf8',
+    );
+    const config = new ConfigManager({
+      userConfigManager: new FileUserConfigManager({ filePath: configPath }),
+      assistantRuntimeSettings: createRuntimeSettings({
+        selectedProviderId: 'deepseek',
+        selectedModelId: 'deepseek-chat',
+      }),
+    });
+    const workspace = createWorkspace(root);
+    await workspace.createConversation('conversation-image');
+    const request = {
+      modelCatalogEntryId: 'deepseek:deepseek-chat',
+      providerId: 'deepseek',
+      modelId: 'deepseek-chat',
+      executionMode: 'ask' as const,
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    };
+    const configuration = {
+      conversationId: 'conversation-image',
+      turnId: 'turn-image',
+      request,
+      projection: projectAgentConfigurationPolicy({
+        models: projectAgentModelCatalog(config.getAssistantConfigState()),
+        request,
+        source: 'draft-request' as const,
+        defaults: {
+          executionMode: 'ask' as const,
+          temperature: 0.7,
+          maximumOutputTokens: 4096,
+          thinkingBudget: 0,
+        },
+      }),
+    };
+    const turnIdentity = {
+      workspaceId: workspace.workspaceId,
+      conversationId: 'conversation-image',
+      branchId: 'main',
+      turnId: 'turn-image',
+      runId: 'run-image',
+    };
+    workspace.startTurn.mockImplementation((input) => ({
+      identity: turnIdentity,
+      completion: Promise.resolve({
+        identity: turnIdentity,
+        durability: 'durable',
+        projection: { conversationId: 'conversation-image', turns: [] },
+        configuration: input.configuration,
+        path: {
+          runtime: 'pi-conversation-runtime',
+          transcript: 'pi-session',
+          metadata: 'sqlite',
+          projection: 'conversation-projection-store',
+        },
+      }),
+    }));
+    workspace.readConversationEvidence.mockReturnValue({
+      workspaceId: workspace.workspaceId,
+      conversationId: 'conversation-image',
+      branchId: 'main',
+      piSessionId: 'pi-session-image',
+      writerLeaseId: 'writer-lease-image',
+    });
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: root,
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: () => config,
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+    });
+
+    await composition.startInitialTurn?.({
+      workspace,
+      conversationId: 'conversation-image',
+      turnId: 'turn-image',
+      messageText: 'Generate an image',
+      configuration,
+      context: {
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      locale: 'en',
+      purposeModels: {
+        'image.generate': {
+          providerId: 'image-provider',
+          modelId: 'image-model',
+          category: 'image',
+        },
+      },
+    });
+
+    expect(workspace.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelPolicy: expect.objectContaining({
+          'agent.main': expect.objectContaining({ execution: 'pi' }),
+          'image.generate': {
+            purpose: 'image.generate',
+            execution: 'domain',
+            model: {
+              provider: 'image-provider',
+              id: 'image-model',
+              name: 'image-model-api',
+            },
+            parameters: {},
+          },
+        }),
+      }),
+    );
+    await composition.dispose?.();
+  });
+
   it('bootstraps the exact persisted Conversation as the active Tab', async () => {
     const workspace = createWorkspace();
     await workspace.createConversation('conversation-1');

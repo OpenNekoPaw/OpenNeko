@@ -7,6 +7,10 @@ import {
   resolveAgentModelPolicy,
   resolvePiToolPermissionAction,
   type AgentModelPolicy,
+  type AgentModelBindingMap,
+  type AgentModelCatalogEntry,
+  type AgentModelPurpose,
+  type AgentModelPurposeRequirement,
   type OpenNekoPiModelConfig,
   type OpenNekoPiProtocolProfile,
   type PiProductEventSink,
@@ -45,6 +49,7 @@ import {
   type AgentConversationTurnConfigurationSnapshot,
   type AgentContextPayload,
   type AgentFileReference,
+  type AgentFlatPurposeModelRefs,
   type AgentMessageQueueSnapshot,
   type OpenTab,
   type Message,
@@ -63,6 +68,7 @@ import {
   type AssistantSettingsData,
 } from '@neko/host/settings';
 import { projectLlmParameters } from '@neko/host/settings';
+import { modelSupportsPurpose } from '@neko/host/settings';
 import {
   createEffectiveAgentConfigurationProjection,
   type EffectiveAgentWorkspaceConfigSnapshot,
@@ -97,6 +103,21 @@ import {
 } from './agent-launch-service';
 
 const SESSION_COMMAND_HANDLER_IDS = new Set(['builtin:clear', 'builtin:compact']);
+
+const AGENT_DOMAIN_GENERATION_PURPOSES = [
+  'image.generate',
+  'image.edit',
+  'video.generate',
+  'audio.generate',
+  'audio.tts',
+  'audio.music.generate',
+] as const satisfies readonly Exclude<AgentModelPurpose, 'agent.main'>[];
+
+interface AgentGenerationModelPolicyProjection {
+  readonly catalog: readonly AgentModelCatalogEntry[];
+  readonly bindings: AgentModelBindingMap;
+  readonly requirements: Partial<Record<AgentModelPurpose, AgentModelPurposeRequirement>>;
+}
 
 export interface AgentControllerEffects extends AgentHostControllerEffectPorts {
   injectContext(payload: AgentContextPayload): Promise<void>;
@@ -186,6 +207,7 @@ export interface AgentControllerComposition {
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
+    readonly purposeModels?: AgentFlatPurposeModelRefs;
   }) => Promise<void>;
   resolveExternalOwnerTurnRuntime(input: {
     readonly workspace: AgentWorkspaceRuntime;
@@ -508,6 +530,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
+    readonly purposeModels?: AgentFlatPurposeModelRefs;
   }): Promise<void> => {
     const facts = createDesktopAgentFactsProjector({
       connection: {
@@ -533,6 +556,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             sessionMode: 'agent',
             locale: input.locale,
             turnId: input.turnId,
+            ...(input.purposeModels === undefined ? {} : { purposeModels: input.purposeModels }),
             ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
           },
           context: {
@@ -1291,6 +1315,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       input.workspace,
       input.config,
       input.configuration,
+      input.request.purposeModels,
     );
     const executionMode = requireConfigurationValue(
       input.configuration.projection.fields.executionMode,
@@ -1410,6 +1435,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     config: ConfigManager,
     conversationConfiguration:
       AgentConversationConfiguration | AgentConversationTurnConfigurationSnapshot,
+    purposeModels?: AgentFlatPurposeModelRefs,
   ): Promise<{
     readonly policy: AgentModelPolicy;
     readonly configuration: AgentTurnConfigurationSnapshot;
@@ -1502,6 +1528,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       (diagnostic) => diagnostic.code === 'invalid-anthropic-thinking-sampling-combination',
     );
     if (blocking) throw new Error(blocking.message);
+    const generationPolicy = projectAgentGenerationModelPolicy(config, purposeModels);
     const policy = resolveAgentModelPolicy({
       catalog: [
         {
@@ -1514,6 +1541,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
                 ? 'configured'
                 : 'missing',
         },
+        ...generationPolicy.catalog,
       ],
       userBindings: {
         'agent.main': {
@@ -1538,7 +1566,11 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           },
         },
       },
-      requirements: { 'agent.main': { capabilities: ['llm.chat'] } },
+      conversationOverrides: generationPolicy.bindings,
+      requirements: {
+        'agent.main': { capabilities: ['llm.chat'] },
+        ...generationPolicy.requirements,
+      },
     });
     const effectiveSnapshot: EffectiveAgentWorkspaceConfigSnapshot = {
       ...requestedSnapshot,
@@ -2046,6 +2078,85 @@ function resolveAuth(
     return { type: 'custom-header', header };
   }
   return { type: 'provider-default' };
+}
+
+function projectAgentGenerationModelPolicy(
+  config: ConfigManager,
+  purposeModels: AgentFlatPurposeModelRefs | undefined,
+): AgentGenerationModelPolicyProjection {
+  if (purposeModels === undefined) {
+    return { catalog: [], bindings: {}, requirements: {} };
+  }
+
+  const entries = new Map<
+    string,
+    {
+      readonly provider: Provider;
+      readonly model: Model;
+      readonly purposes: Set<AgentModelPurpose>;
+    }
+  >();
+  const bindings: AgentModelBindingMap = {};
+  const requirements: Partial<Record<AgentModelPurpose, AgentModelPurposeRequirement>> = {};
+
+  for (const purpose of AGENT_DOMAIN_GENERATION_PURPOSES) {
+    const reference = purposeModels[purpose];
+    if (reference === undefined) continue;
+    const provider = config.getProvider(reference.providerId);
+    const model = config.getModel(reference.modelId);
+    if (
+      provider === undefined ||
+      model === undefined ||
+      provider.enabled === false ||
+      model.enabled === false
+    ) {
+      throw new Error(
+        `Agent generation model '${reference.providerId}/${reference.modelId}' for '${purpose}' is stale or unavailable.`,
+      );
+    }
+    if (model.providerId !== provider.id) {
+      throw new Error(
+        `Agent generation model '${reference.modelId}' belongs to '${model.providerId}', not '${provider.id}'.`,
+      );
+    }
+    if (model.type !== undefined && model.type !== reference.category) {
+      throw new Error(
+        `Agent generation model '${provider.id}/${model.id}' has category '${model.type}', not '${reference.category}'.`,
+      );
+    }
+    if (!modelSupportsPurpose(model, purpose)) {
+      throw new Error(
+        `Agent generation model '${provider.id}/${model.id}' does not support '${purpose}'.`,
+      );
+    }
+
+    const key = `${provider.id}\u0000${model.id}`;
+    const current = entries.get(key);
+    if (current) current.purposes.add(purpose);
+    else entries.set(key, { provider, model, purposes: new Set([purpose]) });
+    bindings[purpose] = { providerId: provider.id, modelId: model.id };
+    requirements[purpose] = { capabilities: [purpose] };
+  }
+
+  return {
+    catalog: [...entries.values()].map(({ provider, model, purposes }) => ({
+      model: {
+        provider: provider.id,
+        id: model.id,
+        name: model.displayName ?? model.name,
+      },
+      execution: 'domain' as const,
+      capabilities: [...new Set([...model.capabilities, ...purposes])],
+      credentialState:
+        provider.requiresApiKey === false
+          ? 'not-required'
+          : provider.apiKey?.trim()
+            ? 'configured'
+            : 'missing',
+    })),
+    bindings,
+    requirements,
+  };
 }
 
 function cloneTabState(tabState: TabState): TabState {

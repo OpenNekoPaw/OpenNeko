@@ -38,6 +38,13 @@ const draftInput = {
   input: { kind: 'message' as const, text: 'Hello' },
   references: [],
   resourceGrantIds: [],
+  purposeModels: {
+    'image.generate': {
+      providerId: 'image-provider',
+      modelId: 'image-model',
+      category: 'image' as const,
+    },
+  },
   configuration: {
     modelCatalogEntryId: 'openai:gpt-5',
     providerId: 'openai',
@@ -120,6 +127,9 @@ describe('Agent launch Draft submission application service', () => {
     expect(fixture.bindings.resolve).toHaveBeenCalledWith(binding);
     expect(fixture.events).toEqual(['materialize', 'resource-commit', 'scene-handoff', 'execute']);
     await fixture.lifecycle.waitForProviderIdle();
+    expect(fixture.provider.start).toHaveBeenCalledWith(
+      expect.objectContaining({ purposeModels: draftInput.purposeModels }),
+    );
     const result = await submitted;
     await expect(
       fixture.lifecycle.readConversation(result.session.conversationId),

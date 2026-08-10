@@ -1632,6 +1632,7 @@ async function startDesktop(): Promise<void> {
           context: request.context,
           locale: 'en',
           contextPayloads: request.contextPayloads,
+          ...(request.purposeModels === undefined ? {} : { purposeModels: request.purposeModels }),
           ...(request.input.kind === 'skill'
             ? {
                 skillName: request.input.skillName,

@@ -309,6 +309,13 @@ function createRecord(
       references: [],
       contextReferences: [],
       resourceGrantIds: [],
+      purposeModels: {
+        'image.generate': {
+          providerId: 'image-provider',
+          modelId: 'image-model',
+          category: 'image',
+        },
+      },
     },
     configuration: { conversationId, request, projection },
     pendingTurn: {
