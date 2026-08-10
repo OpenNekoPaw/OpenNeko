@@ -137,15 +137,23 @@ Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draf
 Project selection 保留在 catalog，并以独立行操作显式打开 Workspace，不创建空洞的 Detail shell。
 Character Management 使用 package-owned catalog Main 与 exact detail Secondary Main；Character/Room
 Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、Avatar/Scene Main、
-Character/World Manager 与 Room 按需 Timeline。当前未接入的 Avatar renderer、World 运行管理和 Room
-提交能力必须在 owning Surface 返回 owner-qualified unavailable，Desktop 不得伪造业务事实或成功状态。
+Character/World Manager 与 Room 按需 Timeline。Avatar/Scene Main 只解析作者显式选择的 VRM，并通过
+Desktop Main 授权的短生命周期 opaque resource lease 建立唯一动态 runtime；未支持的表现格式、缺失资源、
+完整 World Experience 和未接入的 Room 提交能力必须在 owning Surface 返回 owner-qualified unavailable，Desktop
+不得选择 first-compatible 表现、暴露 raw path、回退静态肖像或伪造业务事实与成功状态。
+
+World Foundation 使用独立 `world-management` 单例 scene，在同一个 package-owned Root 中组合 Library、
+Studio 和确定性 Preview。Main/preload 只转发 strict command/snapshot contract；Project、Version、Run、Save、
+branch 与 event 事务均由 `@neko/world` / `@neko/world-node` 拥有。离开该 scene 后 Root 必须卸载，但 durable
+World 记录和后台无关能力不受影响。该 Preview 只检查已发布定义和 committed replay，不创建 Story、Gameplay
+或 WorldExperience，也不调用 Agent、游戏引擎或世界模型。
 
 Host 把完整 Project catalog、Desktop stored recent Project context 与 owner-qualified Agent conversation
 catalog 组合成一个 canonical grouped navigation projection，PrimarySidebar 只消费该投影，不在 React 中
 重新 join 或推断。Project header 是容器入口，conversation child 携带 exact `conversationId + owner`；当前
 PrimarySidebar 将 `project` 和无法解析 Project 的 `workspace` group 统一放入“项目”，并只将无 Project 的
 Assistant conversation 放入“会话”。失效 Workspace group 保留局部 diagnostic 和清理操作，不得转成独立
-Assistant conversation。Character、Room 与 World 只保留封闭的未来分类，未具备 package-owned projection
+Assistant conversation。Character 与 Room conversation 只保留封闭分类；World Foundation 作为独立 scene 而不是 conversation group。未具备 package-owned projection
 和 runtime 前不得显示空栏目、占位记录、数量、操作或路由。当前拥有 Conversation 或属于 recent Project
 context 的 Project 保留一个 group；清理最后一条 Conversation 只让 child 变为空，不得让 recent Project
 从侧栏消失或伪造默认 Conversation。完整 catalog 中从未进入 recent context 且没有 Conversation 的 Project

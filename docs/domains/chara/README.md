@@ -1,69 +1,75 @@
 # Chara 领域
 
-Chara 是 Character 创作、发布版本、运行绑定和角色语义的 owner。host-neutral domain/application
-位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara-node`，browser-only 管理视图位于
-`packages/chara-webview`。Desktop 已组合 Character catalog + detail 管理场景、Agent Entry
-`@CharacterVersion` companion 启动和 Character/Room Workbench；Agent 仍拥有唯一 Pi AgentSession、
-turn、Tool、Approval、transcript 和 compaction。
+Chara 是角色创作、发布、个人故事线、主观记忆、关系记忆、Dialogue/Room 运行和角色表现语义的 owner。host-neutral domain/application 位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara-node`，browser-only 管理视图位于 `packages/chara-webview`。Agent 继续拥有唯一 Pi AgentSession、turn、Tool、Approval、transcript 和 compaction。
 
-目标领域模型区分：
+## 核心模型
 
 ```text
 CharacterProject
-  -> CharacterVersion
-       -> narrative run：剧情角色，记忆由 NarrativeSave/WorldSave 的分支和时间点决定
-       -> companion run：日常陪伴，记忆由 UserCharacterRelationship 跨会话持有
+  -> CharacterBackgroundStory
+  -> CharacterOriginSetting
+  -> canon / knowledge / behavior / expression
+  -> immutable CharacterVersion
+
+CharacterVersion
+  -> CharacterStorylineVersion -> CharacterStorylineRun
+  -> CharacterRun -> CharacterMemoryScope
+  -> UserCharacterRelationship -> companion relationship memory
 ```
 
-产品可以使用“剧情模式 / 日常模式”文案；领域契约使用 `narrative / companion`。两种运行
-拥有不同 durable owner、版本升级和 capability policy，不能在同一活动 session 上切换，也
-不能默认互相召回记忆。
+四个容易混淆的概念必须分开：
 
-角色互动产品由两个正交维度组合，而不是建立四套平行会话 runtime：
+| 概念             | Owner    | 含义                                           |
+| ---------------- | -------- | ---------------------------------------------- |
+| 角色背景故事     | Chara    | 出生、经历、关系、形成性事件和个人历史         |
+| 角色原生背景设定 | Chara    | 原生时代、文化、社会环境及角色视角下的背景认知 |
+| 外部世界创作     | 外部领域 | 可独立创作和发布的共享世界定义，不属于 Chara   |
+| 外部运行世界     | 外部领域 | 运行状态、事件、存档和分支，不属于 Chara       |
 
-| 互动拓扑   | 日常 `companion`         | 叙事 `narrative`                           |
-| ---------- | ------------------------ | ------------------------------------------ |
-| `dialogue` | 单角色对话，World 可选   | 单角色对话，必须绑定精确 World/save/branch |
-| `chatroom` | 多角色聊天室，World 可选 | 多角色聊天室，必须绑定 World 和每个 actor  |
+`CharacterOriginSetting` 只是角色 lore，不能创建或替代 WorldProject、WorldRun、WorldState、WorldSave 或 branch。文档和代码不得使用 `CharacterWorld` 表达它。
 
-每个 agent-controlled character 拥有独立 CharacterRun 和 primary AgentSession；多人房间只
-共享 revisioned room timeline，不共享 responder、transcript、模型配置或可变记忆。聊天室是由
-多角色显式选择触发的扩展能力，单角色对话不创建或强制绑定 Room。Play-use、Game/Activity 与
-Computer Use 由独立变更负责；Chara 不拥有游戏状态、窗口/设备 handle 或输入注入。
-`Embody Character` 仍是“用户扮演角色、Agent 提供只读反馈”的创作验证流程，不等同于
-Play。
+## 故事线与记忆
 
-技术上，LLM 负责角色表达、规则理解、长期策略、协作、记忆查询和上下文编排；VLA 或等价
-低延迟 control policy 负责实时游戏的短时视觉—语言—动作闭环。角色记忆、Agent transcript、
-游戏状态、游戏经验和当前 turn context 分属不同 owner。新游戏优先通过通用 observation/action
-profile、规则/教程检索、用户示范、有限试玩、结果验证和 in-context experience 快速适应，
-而不是为每款游戏重新训练模型或增加专用角色 Agent。
+`CharacterStorylineVersion/Run` 只拥有角色个人欲望、冲突、成长弧、阶段和已接受转折，不拥有外部世界故事线或共享事实。外部事件只能作为 observation candidate，经 Chara owner 按精确 CharacterStorylineRun 和 expected revision 接受后推进个人故事线。
 
-对话记忆使用三个互斥 scope，但 `workspace` 不是第三种角色运行模式：
+角色记忆与关系记忆也保持独立：
+
+- `CharacterMemoryScope`：角色主观经历、感受、个人回忆和认知变化；
+- `UserCharacterRelationship`：用户偏好、边界、约定、共同经历和关系里程碑；
+- `AgentSession`：transcript、turn、Tool Call 和 compaction；
+- 外部存档：由外部 owner 保存，不是角色记忆。
+
+Transcript、外部事件和 Activity result 只能产生带来源的 memory candidate，不能自动成为已接受记忆。外部存档的保存、恢复、分支或删除不得复制、重置或删除 CharacterMemory。
+
+## 创作与运行组合
+
+Chara 只向外部 Composition owner 提供精确引用：
 
 ```text
-workspace conversation -> Workspace Memory，不进入角色记忆
-narrative conversation -> NarrativeSave/WorldSave revisioned event
-companion conversation -> transcript evidence -> accepted relationship memory
+CharacterVersionRef
+CharacterStorylineVersionRef
+CharacterRunRef
+CharacterStorylineRunRef
+CharacterMemoryScopeRef
 ```
 
-时间、空间和叙事密度只用于聚合、摘要粒度、冗余控制和召回多样性；新颖性、重复度、
-连接性、情感强度、用户明确重视和事件后果形成可解释的显著性证据。Scope、分支、时间点、
-角色认知、权限、敏感性和删除状态的硬过滤始终先于密度、显著性、关键词或 embedding 排序。
-Chara 必须保留显著性依据，但不持久化单一 `importance` 分数；密度只是可选的可重建优化，
-首版不要求核密度估计、叙事图指标或其他连续分布模型。
+内容创作时，WorldExperienceProject/Version 等外部 Composition 可以关联 CharacterVersion/CharacterStorylineVersion 与精确 World/WorldStory 版本；运行时 WorldExperienceRun 等 binding 可以关联 CharacterRun/CharacterStorylineRun/CharacterMemoryScope 与精确外部 runtime identity。关联不改变双方 owner，也不复制双方数据。Composition producer 未完成时保持 unavailable，Chara 不创建本地替代 DTO 或推断 active/latest 外部 identity。
 
-阅读路径：
+## Dialogue、Room 与表现
 
-- [`architecture.md`](architecture.md)：owner、依赖、生命周期与错误边界；
+一个显式 `@CharacterVersion` 选择启动 Dialogue，多个选择启动 Room。每个 agent-controlled participant 拥有独立 CharacterRun、primary AgentSession、Chat/TTS 配置和 memory view；human-controlled Character 不创建隐藏 AgentSession。Room 只拥有参与者、调度和有序 RoomEvent，不拥有外部共享状态或存档。
+
+Character Studio 管理概览、背景故事、原生背景设定、认知与行为、个人故事线、角色/关系记忆、表现资源、声音、运行历史和发布版本。Character Runtime Workbench 组合 Agent Interaction/Room、唯一 Avatar Main、Character Runtime 配置和按需 Room timeline。图片、模型和音频 bytes 继续由 Assets/Content/Media/Voice owner 管理，Chara 只保存稳定引用与角色语义。
+
+## 当前状态
+
+当前已实现 CharacterProject/Version、UserCharacterRelationship、CharacterRun、Dialogue/Room durable records、Character catalog/detail、Agent Entry Character selection、Room 调度/投影和基础 Character Workbench。尚未实现 CharacterBackgroundStory、CharacterOriginSetting、CharacterStoryline、narrative CharacterMemory、完整 Avatar/Voice/Chat-TTS 产品路径。
+
+现有 Character Foundation Host 仍包含外部 World CRUD 和完整 catalog，这是待删除的架构漂移，不构成 Chara 能力。相关收敛任务见当前 Character OpenSpec；World Story/Gameplay/Experience 与 Character + World composition/binding 由 `define-ai-native-interactive-world` 处理。
+
+## 阅读路径
+
+- [`architecture.md`](architecture.md)：Chara owner、依赖、生命周期、故事线和记忆边界；
 - [`../../architecture/package-boundaries.md`](../../architecture/package-boundaries.md)：跨包约束；
-- [`../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md`](../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md)：Agent 收敛顺序；
-- [`../../../openspec/changes/define-character-dialogue-chatroom-world-foundation/`](../../../openspec/changes/define-character-dialogue-chatroom-world-foundation/)：正在实施的角色发布、对话、聊天室、Workbench 与最小 World Foundation 规格、设计和任务；
-
-当前已支持 CharacterProject/CharacterVersion 持久化与发布、UserCharacterRelationship、
-Dialogue/Room durable records、最小 World Foundation，以及 Character catalog/detail 和 Workbench
-composition；Room 消息、参与者调度、用户过滤的 Interaction/Timeline 投影也已形成 canonical path。
-尚未完成叙事模式 Agent Entry、真实 2D/3D Avatar renderer、
-角色运行管理 projection、完整 World runtime、Game Activity、Play-use Host port 或桌宠窗口。这些
-能力必须通过后续真实 owner、Desktop 组合和运行态资格验证，不能由 Agent transcript、Entity、
-Canvas Storyline、Webview state、静态占位或空 adapter 代替。
+- [`../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md`](../../architecture/adr-agent-runtime-single-authority-and-simplification-boundary.md)：Agent 单一 authority；
+- [`../../../openspec/changes/define-character-dialogue-chatroom-world-foundation/`](../../../openspec/changes/define-character-dialogue-chatroom-world-foundation/)：当前 Chara 创作、故事线、记忆、Dialogue/Room 与 Workbench 变更。
