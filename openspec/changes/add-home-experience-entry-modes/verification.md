@@ -79,3 +79,36 @@ No blocking scoped code-quality findings remain.
 - A real Assistant/Workspace first submit still requires explicit provider/model/cost authorization.
 - The full shared-UI typecheck and package-wide UI suite should be rerun after the unrelated
   concurrent worktree failures are resolved.
+
+## Follow-up: Entry Media Model Configuration Recovery
+
+- Root cause: the canonical Draft launch catalog already read the safe Assistant configuration, but
+  omitted `defaultMediaModels` from its public projection. The entry composer therefore received the
+  media model catalog without its configured defaults. Draft presentation recovery also omitted the
+  current image/video/audio selections and reset them to `none` after a remount.
+- The launch contract now carries only configured media model catalog-entry identities; Provider
+  credentials and Host authority remain outside Renderer state. The Desktop Draft adapter projects the
+  same values through the existing `configState` message.
+- The package-owned entry snapshot now preserves exact local image/video/audio selections. Restored
+  selections are checked against the current category-qualified model catalog; stale values are reset
+  locally before an available current default is applied. Input text and sibling Drafts remain intact.
+- Deterministic acceptance passed: Agent launch contract 3 tests; launch application 12 tests; entry
+  snapshot and controller 63 tests; Desktop launch adapter and Agent Surface 19 tests. The complete
+  Agent runtime suite also passed 117 files / 1116 tests before the final stale-selection regression.
+- `@neko/agent-contracts` and `@neko/agent-runtime` typechecks passed; Agent Webview build and Desktop
+  typecheck passed. Strict OpenSpec validation, package/application/Agent/Webview boundaries, and the
+  no-internal-versioning audit passed.
+- Agent Evaluation disposition: excluded. This change does not alter effective runtime model policy,
+  Tool registration, provider invocation, or generation Job routing; strict projection, persistence,
+  and Host-adapter tests fully determine the changed behavior.
+- UI validation scope: configured default display, Draft remount recovery, stale local selection, and
+  adjacent Agent Entry startup. The owning Desktop runtime was selected because launch projection and
+  session presentation cross Main/Renderer and lifecycle boundaries. Functional evidence passed through
+  the production contract and Desktop adapter tests. Direct visual evidence is blocked: another process
+  already owned this checkout's development bundle, and Computer Use could not attach to its OpenNeko
+  window. No user-owned process was terminated and no provider call was made.
+- UI validation result: `blocked` for post-fix pixel inspection only. No layout or styling code changed;
+  remaining risk is limited to confirming the recovered model labels in the live configuration popover.
+- Quality review: L2 contract/projection change, no blocking findings. The canonical owner remains Agent
+  launch configuration, the Renderer stores only disposable presentation identities, and stale state
+  fails locally without fallback provider/model selection.

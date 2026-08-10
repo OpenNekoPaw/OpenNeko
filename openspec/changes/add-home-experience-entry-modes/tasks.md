@@ -45,3 +45,10 @@
 - [x] 7.5 Keep Character selected-but-unavailable and World disabled until owner-qualified target providers are composed; add poison assertions against management navigation.
 - [x] 7.6 Run focused UI, Agent Webview, Desktop renderer, typecheck, OpenSpec validation, and adjacent regression checks.
 - [x] 7.7 Run visible Electron acceptance for Assistant/Workspace/Character/World entry states, submit validation, no management navigation, and responsive layout; commit in reviewable batches.
+
+## 8. Restore Entry Media Model Configuration
+
+- [x] 8.1 Extend the canonical launch catalog with safe configured image, video, and audio default model identities and project them through the Draft Host adapter.
+- [x] 8.2 Preserve exact Draft-local image, video, and audio model selections in the package-owned entry snapshot without copying Provider authority into Renderer state.
+- [x] 8.3 Add contract, application, adapter, snapshot, and controller regressions for configured defaults, manual selection restoration, and stale local isolation.
+- [x] 8.4 Run focused Agent/Desktop tests, typechecks, strict OpenSpec validation, UI validation, and quality review; record remaining provider-backed risk.

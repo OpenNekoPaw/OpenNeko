@@ -50,6 +50,13 @@ to Assistant presentation and MUST NOT alter durable records.
 - **THEN** only that Draft mode resets to Assistant with a diagnostic
 - **AND** its valid input text and unrelated durable data remain unchanged
 
+#### Scenario: Entry media model configuration is restored
+
+- **WHEN** the Agent Entry Draft is rebuilt after a Scene or presentation remount
+- **THEN** the launch catalog projects the configured default image, video, and audio generation model identities
+- **AND** any valid Draft-local media model selections are restored with the unsent input instead of resetting to `none`
+- **AND** an unavailable or stale media model remains visibly unselected without changing Provider configuration or another Draft
+
 ### Requirement: Workspace requires explicit Project authority
 
 Workspace mode SHALL expose an entry-composer chooser for exact Project selection or directory authorization.
