@@ -493,6 +493,7 @@ export interface ProjectMentionExtra {
   characterLaunchSelection?: {
     readonly characterProjectId: string;
     readonly characterVersionId: string;
+    readonly characterStorylineVersionId?: string;
   };
   referenceReceipt?: import('./agent-draft-submit').AgentInputReferenceReceipt;
 }

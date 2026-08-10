@@ -59,13 +59,7 @@ import { type ChatModelOption } from '@neko/ai-contracts';
 import { contentLocatorKey, type ContentLocator } from '@neko/content';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
-import type {
-  AgentModelSlots,
-  AgentQueuedMessageItem,
-  AgentDomainBinding,
-  SessionMode,
-} from '@neko/agent-contracts';
-import { projectCharacterDraftBindingFromRoleplayItem } from '../roleplay-entry-action';
+import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';
 import {
   useComposerWorkspacePresentation,
   type AgentComposerWorkspaceTarget,
@@ -108,9 +102,6 @@ interface InputAreaProps {
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
   draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
   onDraftWorkspaceTargetChange?: (target: AgentComposerWorkspaceTarget | undefined) => void;
-  onDraftCharacterTargetSelect?: (
-    binding: Extract<AgentDomainBinding, { readonly kind: 'character' }>,
-  ) => Promise<void>;
   selectedCharacterLaunches?: readonly SelectedCharacterLaunch[];
   onAddCharacterLaunch?: (selection: SelectedCharacterLaunch) => void;
   onRemoveCharacterLaunch?: (characterVersionId: string) => void;
@@ -221,8 +212,8 @@ export function InputArea({
   onAuthorizeResource,
   draftWorkspaceTarget,
   onDraftWorkspaceTargetChange,
-  onDraftCharacterTargetSelect,
   selectedCharacterLaunches = [],
+  onAddCharacterLaunch,
   onRemoveCharacterLaunch,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
@@ -910,10 +901,18 @@ export function InputArea({
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    if (!onDraftCharacterTargetSelect) {
-      throw new Error('Character selection requires an exact Agent Draft target handler.');
+    const selection = item.characterLaunchSelection;
+    if (!selection || !onAddCharacterLaunch) {
+      throw new Error('Character selection requires an exact Character launch handler.');
     }
-    void onDraftCharacterTargetSelect(projectCharacterDraftBindingFromRoleplayItem(item));
+    onAddCharacterLaunch({
+      characterProjectId: selection.characterProjectId,
+      characterVersionId: selection.characterVersionId,
+      ...(selection.characterStorylineVersionId === undefined
+        ? {}
+        : { characterStorylineVersionId: selection.characterStorylineVersionId }),
+      label: item.label,
+    });
     textareaRef.current?.focus();
   };
 

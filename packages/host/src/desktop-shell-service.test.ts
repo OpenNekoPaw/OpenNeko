@@ -723,6 +723,32 @@ describe('DesktopShellService', () => {
     });
   });
 
+  it('transitions to one World Foundation management scene without creating a business session', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+
+    const transitioned = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'world-management-1',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: activeScene(projection.window).sceneId,
+        intent: { kind: 'open-world-management' },
+      }),
+    );
+
+    expect(transitioned).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        sceneId: `scene:${windowId}:world-management`,
+        context: { kind: 'world-management' },
+        slots: { main: { kind: 'world-management' } },
+      },
+    });
+  });
+
   it('allocates a fresh unbound draft for every Start Creating transition', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();

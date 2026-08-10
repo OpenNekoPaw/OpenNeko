@@ -22,7 +22,7 @@ describe('Agent host runtime adapter contracts', () => {
     });
     expect(classifyAgentHostRoute('searchProjectFiles')).toEqual({
       connection: 'launch-or-session',
-      scope: 'workspace',
+      scope: 'any',
     });
     expect(classifyAgentHostRoute('requestCanvasAuthoringHandoff')).toEqual({
       connection: 'session',

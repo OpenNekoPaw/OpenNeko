@@ -1304,7 +1304,7 @@ describe('InputArea composer controls', () => {
   it('opens the entry prompt only for exact published Character selections', () => {
     const onSend = vi.fn();
     const onEntryPromptMenuChange = vi.fn();
-    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1318,6 +1318,10 @@ describe('InputArea composer controls', () => {
               characterId: 'char-xiaoju',
               characterVersionId: 'character-version-xiaoju',
               roleProfileId: 'role-profile-xiaoju',
+            },
+            characterLaunchSelection: {
+              characterProjectId: 'char-xiaoju',
+              characterVersionId: 'character-version-xiaoju',
             },
           },
           {
@@ -1339,6 +1343,10 @@ describe('InputArea composer controls', () => {
               characterVersionId: 'character-version-cn',
               roleProfileId: 'role-profile-cn',
             },
+            characterLaunchSelection: {
+              characterProjectId: 'char-cn',
+              characterVersionId: 'character-version-cn',
+            },
           },
           {
             id: 'scene-1',
@@ -1353,7 +1361,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={onEntryPromptMenuChange}
-          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
+          onAddCharacterLaunch={onAddCharacterLaunch}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
@@ -1369,18 +1377,17 @@ describe('InputArea composer controls', () => {
     fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(onDraftCharacterTargetSelect).toHaveBeenCalledWith({
-      kind: 'character',
-      characterId: 'char-xiaoju',
+    expect(onAddCharacterLaunch).toHaveBeenCalledWith({
+      characterProjectId: 'char-xiaoju',
       characterVersionId: 'character-version-xiaoju',
-      roleProfileId: 'role-profile-xiaoju',
+      label: '小橘',
     });
     expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
   });
 
   it('preserves prefilled Draft text while binding the exact Character target', () => {
     const onSend = vi.fn();
-    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1394,6 +1401,10 @@ describe('InputArea composer controls', () => {
               characterVersionId: 'character-version-xiaoju',
               roleProfileId: 'role-profile-xiaoju',
             },
+            characterLaunchSelection: {
+              characterProjectId: 'char-xiaoju',
+              characterVersionId: 'character-version-xiaoju',
+            },
           },
         ]}
       >
@@ -1402,7 +1413,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
-          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
+          onAddCharacterLaunch={onAddCharacterLaunch}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
@@ -1412,7 +1423,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /小橘/ }));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(onDraftCharacterTargetSelect).toHaveBeenCalledWith(
+    expect(onAddCharacterLaunch).toHaveBeenCalledWith(
       expect.objectContaining({ characterVersionId: 'character-version-xiaoju' }),
     );
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('你还记得昨晚的雨吗？');
@@ -1420,7 +1431,7 @@ describe('InputArea composer controls', () => {
 
   it('keeps an Entity candidate unavailable until Chara publishes exact identities', () => {
     const onSend = vi.fn();
-    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1442,7 +1453,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
-          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
+          onAddCharacterLaunch={onAddCharacterLaunch}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -1451,7 +1462,7 @@ describe('InputArea composer controls', () => {
 
     expect(screen.getByText('未找到可用于角色扮演的角色实体。')).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /小橘/ })).toBeNull();
-    expect(onDraftCharacterTargetSelect).not.toHaveBeenCalled();
+    expect(onAddCharacterLaunch).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
   });
 

@@ -36,6 +36,14 @@ export interface AgentWebviewRootProps {
     readonly conversationId: string;
     readonly content: ReactNode;
   };
+  readonly onSubmitCharacterLaunch?: (input: {
+    readonly message: string;
+    readonly characters: readonly {
+      readonly characterProjectId: string;
+      readonly characterVersionId: string;
+      readonly characterStorylineVersionId?: string;
+    }[];
+  }) => Promise<void>;
 }
 
 export function AgentWebviewRoot({
@@ -47,6 +55,7 @@ export function AgentWebviewRoot({
   initialConversation,
   initialInput,
   locale,
+  onSubmitCharacterLaunch,
   presentation = 'default',
 }: AgentWebviewRootProps): ReactElement {
   useEffect(() => {
@@ -71,6 +80,7 @@ export function AgentWebviewRoot({
                 initialInput={initialInput}
                 presentation={presentation}
                 conversationFeed={conversationFeed}
+                onSubmitCharacterLaunch={onSubmitCharacterLaunch}
               />
             </ComposerWorkspaceProvider>
           </I18nProvider>

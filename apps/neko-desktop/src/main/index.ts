@@ -64,6 +64,7 @@ import {
   projectAgentDraftInputText,
 } from '@neko/agent-runtime/application';
 import { createCharacterPrimaryAgentSessionAdapter } from './character-primary-agent-session-adapter';
+import { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-runtime';
 import { setRootLogger as setAgentRootLogger } from '@neko/agent-runtime';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
@@ -108,17 +109,29 @@ import {
   initializeWorldPersistenceTables,
 } from '@neko/world-node';
 import {
+  createWorldFoundationActionHandlers,
+  WorldAuthoringService,
+  WorldFoundationCommandService,
+  WorldFoundationService,
+  WorldRuntimeService,
+  WorldTransformationPlanningService,
+  WorldTransformationStateCommitService,
+} from '@neko/world/application';
+import {
   CharacterAuthoringService,
+  CharacterAvatarAuthorityService,
   CharacterConversationLaunchService,
   CharacterFoundationCommandService,
   CharacterFoundationService,
   CharacterInteractionService,
+  CharacterMemoryService,
+  CharacterPresentationService,
   CharacterRoomConversationService,
   CharacterRoomInteractionService,
   CharacterRoomService,
+  CharacterStorylineService,
   UserCharacterRelationshipService,
 } from '@neko/chara/application';
-import { WorldAuthoringService, WorldRuntimeService } from '@neko/world/application';
 import {
   AssetCenterNodeRuntime,
   ResourceBrowserNodeRuntime,
@@ -325,12 +338,11 @@ async function startDesktop(): Promise<void> {
   const characterRepository = createPersistentCharacterRepository({
     metadataStore: localMetadataStore,
   });
-  const worldRepository = createPersistentWorldRepository({ metadataStore: localMetadataStore });
   const characterFoundation = new CharacterFoundationService({
     characterCatalog: characterRepository,
-    worldCatalog: worldRepository,
   });
-  const worldRuntime = new WorldRuntimeService({ repository: worldRepository, actionHandlers: [] });
+  const worldRepository = createPersistentWorldRepository({ metadataStore: localMetadataStore });
+  const worldFoundation = new WorldFoundationService({ catalog: worldRepository });
   const initialApplicationSettings = await applicationSettings.initialize();
   const applicationSettingsStateDiagnostics = readDesktopApplicationSettingsStateDiagnostics(
     await applicationSettingsRepository.read(),
@@ -1266,11 +1278,7 @@ async function startDesktop(): Promise<void> {
       });
     },
   });
-  const characterRooms = new CharacterRoomService(characterRepository, {
-    worldBindings: {
-      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
-    },
-  });
+  const characterRooms = new CharacterRoomService(characterRepository);
   const characterAgentSessions = createCharacterPrimaryAgentSessionAdapter({
     workspace: assistantAgentWorkspace,
     conversationContexts: createPersistentAgentConversationContextAuthority({
@@ -1287,6 +1295,16 @@ async function startDesktop(): Promise<void> {
     baseSystemPrompt: (characterRunId) =>
       `You are the primary Character Agent for CharacterRun '${characterRunId}'.`,
   });
+  const characterPresentation = new CharacterPresentationService(characterRepository);
+  const characterStorylines = new CharacterStorylineService(characterRepository);
+  const characterMemories = new CharacterMemoryService(characterRepository);
+  const characterAvatarAuthority = new CharacterAvatarAuthorityService(characterRepository);
+  const characterAvatar = new DesktopCharacterAvatarRuntime({
+    globalAssetRoot: globalStorage.assets,
+    assetLibraryMemberships: metadataRepositories.assetLibraryMemberships,
+    resources: resourceRegistry,
+    authority: characterAvatarAuthority,
+  });
   const characterInteractions = new CharacterInteractionService({
     repository: characterRepository,
     agentSessions: characterAgentSessions,
@@ -1294,18 +1312,7 @@ async function startDesktop(): Promise<void> {
       materializeRoomView: (roomRunId, participantId, signal) =>
         characterRooms.materializeView({ roomRunId, participantId }, signal),
     },
-    worldViews: {
-      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
-      materializeWorldView: ({ binding, participantId, actorId }, signal) =>
-        worldRuntime.materializeBindingView(
-          {
-            ...binding,
-            participantId,
-            ...(actorId === undefined ? {} : { actorId }),
-          },
-          signal,
-        ),
-    },
+    presentationTurns: characterPresentation,
   });
   const characterRoomConversations = new CharacterRoomConversationService({
     rooms: characterRooms,
@@ -1314,17 +1321,11 @@ async function startDesktop(): Promise<void> {
   const characterConversations = new CharacterConversationLaunchService({
     repository: characterRepository,
     agentSessions: characterAgentSessions,
-    world: {
-      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
-    },
   });
   const characterRoomInteractions = new CharacterRoomInteractionService({
     repository: characterRepository,
     roomRuns: characterRooms,
     agentSessions: characterAgentSessions,
-    worldBindings: {
-      validateBinding: (binding, signal) => worldRuntime.validateBinding(binding, signal),
-    },
   });
   const characterFoundationCommands = new CharacterFoundationCommandService({
     characterAuthoring: new CharacterAuthoringService({ repository: characterRepository }),
@@ -1332,8 +1333,35 @@ async function startDesktop(): Promise<void> {
     interactions: characterInteractions,
     rooms: characterRooms,
     roomInteractions: characterRoomInteractions,
-    worldAuthoring: new WorldAuthoringService({ repository: worldRepository }),
-    worldRuntime,
+    presentation: characterPresentation,
+    storylines: characterStorylines,
+    memories: characterMemories,
+  });
+  const worldRuntime = new WorldRuntimeService({
+    repository: worldRepository,
+    actionHandlers: createWorldFoundationActionHandlers(),
+  });
+  const worldTransformationPlanner = new WorldTransformationPlanningService({
+    capabilities: [
+      {
+        capabilityKind: 'world-action',
+        capabilityId: 'world.foundation.fact.set',
+      },
+      {
+        capabilityKind: 'world-action',
+        capabilityId: 'world.foundation.fact.delete',
+      },
+    ],
+    runtimeRepository: worldRepository,
+  });
+  const worldFoundationCommands = new WorldFoundationCommandService({
+    authoring: new WorldAuthoringService({ repository: worldRepository }),
+    runtime: worldRuntime,
+    transformations: new WorldTransformationStateCommitService({
+      planner: worldTransformationPlanner,
+      runtime: worldRuntime,
+      runtimeRepository: worldRepository,
+    }),
   });
   const agentLaunch = createDesktopAgentLaunchRuntime({
     agent: agentComposition,
@@ -1726,7 +1754,11 @@ async function startDesktop(): Promise<void> {
     assistantResources,
     characterFoundation,
     characterFoundationCommands,
+    worldFoundation,
+    worldFoundationCommands,
+    characterAvatar,
     characterConversations,
+    characterInteractions,
     characterRoomConversations,
     characterRoomWorkbench: characterRooms,
     assistantPreviewLifecycle: assistantPreview,

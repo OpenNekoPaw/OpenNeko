@@ -39,6 +39,7 @@ export type DesktopWorkbenchSceneContext =
     }
   | { readonly kind: 'asset-center'; readonly assetCenterSessionId: string }
   | { readonly kind: 'character-management'; readonly detail?: DesktopCharacterDetailSelection }
+  | { readonly kind: 'world-management' }
   | { readonly kind: 'extensions' }
   | { readonly kind: 'project-management' }
   | { readonly kind: 'settings'; readonly settingsSectionId: string };
@@ -76,6 +77,7 @@ export type DesktopWorkbenchMainSurfaceRef =
   | { readonly kind: 'asset-management'; readonly assetCenterSessionId: string }
   | { readonly kind: 'character-management' }
   | { readonly kind: 'character-detail'; readonly selection: DesktopCharacterDetailSelection }
+  | { readonly kind: 'world-management' }
   | {
       readonly kind: 'character-avatar';
       readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
@@ -141,6 +143,7 @@ export type DesktopSceneTransitionIntent =
   | { readonly kind: 'open-project-workspace'; readonly projectId: string }
   | { readonly kind: 'open-asset-center' }
   | { readonly kind: 'open-character-management' }
+  | { readonly kind: 'open-world-management' }
   | {
       readonly kind: 'select-character-detail';
       readonly selection: DesktopCharacterDetailSelection;
@@ -555,6 +558,10 @@ function parseSceneContext(value: unknown): DesktopWorkbenchSceneContext {
         : { detail: parseCharacterDetailSelection(record['detail']) }),
     };
   }
+  if (kind === 'world-management') {
+    requireExactKeys(record, ['kind'], 'World Management Scene context');
+    return { kind };
+  }
   if (kind === 'extensions') {
     requireExactKeys(record, ['kind'], 'Extensions Scene context');
     return { kind };
@@ -719,6 +726,10 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
     requireExactKeys(record, ['kind', 'selection'], 'Character Detail Surface ref');
     return { kind, selection: parseCharacterDetailSelection(record['selection']) };
   }
+  if (kind === 'world-management') {
+    requireExactKeys(record, ['kind'], 'World Management Surface ref');
+    return { kind };
+  }
   if (kind === 'character-avatar') {
     requireExactKeys(record, ['kind', 'owner'], 'Character Avatar Surface ref');
     const owner = parseAgentConversationOwnerRef(record['owner']);
@@ -822,6 +833,7 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
     kind === 'new-agent-conversation' ||
     kind === 'open-asset-center' ||
     kind === 'open-character-management' ||
+    kind === 'open-world-management' ||
     kind === 'open-extensions' ||
     kind === 'open-project-management'
   ) {
@@ -973,6 +985,14 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
       !equalCharacterDetailSelection(slots.secondaryMain.selection, context.detail)
     ) {
       throw mismatch('Character Detail Surface does not match Scene selection.');
+    }
+    return;
+  }
+  if (context.kind === 'world-management') {
+    assertManagerKinds(slots, []);
+    assertMainKinds(slots, ['world-management']);
+    if (slots.main?.kind !== 'world-management') {
+      throw mismatch('World Management Scene requires its Foundation Main Surface.');
     }
     return;
   }

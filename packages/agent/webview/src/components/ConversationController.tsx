@@ -149,6 +149,14 @@ export interface ConversationControllerProps {
     readonly conversationId: string;
     readonly content: ReactNode;
   };
+  onSubmitCharacterLaunch?: (input: {
+    readonly message: string;
+    readonly characters: readonly {
+      readonly characterProjectId: string;
+      readonly characterVersionId: string;
+      readonly characterStorylineVersionId?: string;
+    }[];
+  }) => Promise<void>;
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -200,6 +208,7 @@ export function ConversationController({
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
+  onSubmitCharacterLaunch,
   settings,
   hasConfigSnapshot,
   setSettings,
@@ -1095,16 +1104,17 @@ export function ConversationController({
           setInitialSessionModeRequest(null);
           setEntryPromptMenu(null);
           updateEntryInputValue('');
-          if (agentPresentation?.phase === 'draft') {
-            return;
-          }
+          if (agentPresentation?.phase === 'draft') return;
           startNewForegroundConversation();
           return;
         case 'roleplay':
           setPendingSendRequest(null);
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
-          if (agentPresentation?.phase === 'draft') {
+          if (
+            agentPresentation?.phase === 'draft' &&
+            agentPresentation.binding.kind !== 'unbound'
+          ) {
             setEntryPromptMenu(null);
             setGlobalError('Character and Room scope is not available.');
             return;
@@ -1162,6 +1172,36 @@ export function ConversationController({
           launchCatalog.configuration.fields.model.policy.status === 'unavailable'
         ) {
           setGlobalError('Choose a configured provider and model before sending.');
+          return;
+        }
+        if (entryCharacterLaunches.length > 0) {
+          if (authoritativeDraft.binding.kind !== 'unbound') {
+            setGlobalError('Character launch requires the unbound Agent Entry Draft.');
+            return;
+          }
+          if (!onSubmitCharacterLaunch) {
+            setGlobalError('Character conversation launch is unavailable.');
+            return;
+          }
+          setIsForegroundConversationActivationPending(true);
+          void onSubmitCharacterLaunch({
+            message: messageText,
+            characters: entryCharacterLaunches.map((selection) => ({
+              characterProjectId: selection.characterProjectId,
+              characterVersionId: selection.characterVersionId,
+              ...(selection.characterStorylineVersionId === undefined
+                ? {}
+                : { characterStorylineVersionId: selection.characterStorylineVersionId }),
+            })),
+          })
+            .then(() => {
+              committedEntryDraftIdRef.current = agentPresentation.draftId;
+              writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
+              updateEntryInputValue('');
+              setEntryCharacterLaunches([]);
+            })
+            .catch((error: unknown) => setGlobalError(describeError(error)))
+            .finally(() => setIsForegroundConversationActivationPending(false));
           return;
         }
         let references: readonly AgentInputReferenceReceipt[];
@@ -1647,24 +1687,6 @@ export function ConversationController({
                     : undefined
                 }
                 draftWorkspaceTarget={entryWorkspaceTarget}
-                onDraftCharacterTargetSelect={
-                  isDraftPresentation
-                    ? async (binding) => {
-                        setEntryContextReferences([]);
-                        setProjectFiles([]);
-                        setMentionItems([]);
-                        updateMentionSearchFilter('');
-                        try {
-                          await requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).bindTarget(
-                            binding,
-                          );
-                          setEntryWorkspaceTarget(undefined);
-                        } catch (error) {
-                          setGlobalError(describeError(error));
-                        }
-                      }
-                    : undefined
-                }
                 onDraftWorkspaceTargetChange={
                   composerWorkspace?.kind === 'entry'
                     ? async (target) => {

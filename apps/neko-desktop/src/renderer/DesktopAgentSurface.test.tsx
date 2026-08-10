@@ -20,6 +20,7 @@ vi.mock('@neko/agent-webview/root', async () => {
       composerWorkspace,
       conversationFeed,
       locale,
+      onSubmitCharacterLaunch,
       presentation,
     }: {
       readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
@@ -27,6 +28,13 @@ vi.mock('@neko/agent-webview/root', async () => {
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly locale: string;
+      readonly onSubmitCharacterLaunch?: (input: {
+        readonly message: string;
+        readonly characters: readonly {
+          readonly characterVersionId: string;
+          readonly label: string;
+        }[];
+      }) => Promise<void>;
       readonly presentation: string;
       readonly conversationFeed?: { readonly conversationId: string; readonly content: ReactNode };
     }) => {
@@ -62,6 +70,23 @@ vi.mock('@neko/agent-webview/root', async () => {
         >
           {hostRuntimeAdapter.runtimeId}:{locale}
           {conversationFeed?.content}
+          {onSubmitCharacterLaunch ? (
+            <button
+              data-testid="submit-character-launch"
+              type="button"
+              onClick={() =>
+                void onSubmitCharacterLaunch({
+                  message: 'Meet at the archive.',
+                  characters: [
+                    { characterVersionId: 'character-version-a', label: 'Lin' },
+                    { characterVersionId: 'character-version-b', label: 'Mira' },
+                  ],
+                })
+              }
+            >
+              launch characters
+            </button>
+          ) : null}
         </div>
       );
     },
@@ -349,6 +374,49 @@ describe('DesktopAgentSurface', () => {
 
     await act(async () => root.unmount());
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
+  });
+
+  it('submits Character selections through the exact Desktop launch surface identity', async () => {
+    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-character'));
+    const launchCharacters = vi.fn(async () => ({
+      topology: 'chatroom' as const,
+      runtimeKind: 'companion' as const,
+      characterRoomId: 'character-room-a',
+      roomRunId: 'room-run-a',
+      interactionAgentSessionId: 'conversation:room:room-run-a',
+      participants: [],
+    }));
+    installBridge(vi.fn(), { attach, detach: vi.fn() });
+    window.openNekoDesktop.characterConversations.launch = launchCharacters;
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />);
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="submit-character-launch"]')
+        ?.click();
+    });
+
+    expect(launchCharacters).toHaveBeenCalledWith({
+      workbenchInstanceId: 'workbench-assistant-1',
+      agentSurfaceId: 'agent-surface-assistant-1',
+      agentViewId: 'agent-view:window-1',
+      draftId: 'draft-launch-1',
+      message: 'Meet at the archive.',
+      selection: {
+        runtimeKind: 'companion',
+        characters: [
+          { characterVersionId: 'character-version-a' },
+          { characterVersionId: 'character-version-b' },
+        ],
+      },
+    });
+    await act(async () => root.unmount());
   });
 
   it('keeps the Root DOM identity while replacing the adapter by exact launch identity', async () => {
@@ -642,8 +710,12 @@ function installBridge(
             dialogueRuns: [],
             rooms: [],
             roomRuns: [],
+            storylineVersions: [],
+            storylineRuns: [],
+            storylineObservationCandidates: [],
+            memoryScopes: [],
+            presentationConfigurations: [],
           },
-          world: { projects: [], versions: [], runtimes: [] },
           diagnostics: [],
         })),
         execute: vi.fn(async () => ({
@@ -655,10 +727,31 @@ function installBridge(
             dialogueRuns: [],
             rooms: [],
             roomRuns: [],
+            storylineVersions: [],
+            storylineRuns: [],
+            storylineObservationCandidates: [],
+            memoryScopes: [],
+            presentationConfigurations: [],
           },
+          diagnostics: [],
+        })),
+      },
+      worldFoundation: {
+        getSnapshot: vi.fn(async () => ({
           world: { projects: [], versions: [], runtimes: [] },
           diagnostics: [],
         })),
+        execute: vi.fn(async () => ({
+          world: { projects: [], versions: [], runtimes: [] },
+          diagnostics: [],
+        })),
+      },
+      characterConversations: {
+        launch: vi.fn(),
+      },
+      characterAvatar: {
+        openSurface: vi.fn(),
+        releaseSurface: vi.fn(),
       },
       characterRoomWorkbench: {
         getSnapshot: vi.fn(),

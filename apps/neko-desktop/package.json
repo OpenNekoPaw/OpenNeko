@@ -47,8 +47,9 @@
     "@neko/text-editor-node": "workspace:*",
     "@neko/text-editor-webview": "workspace:*",
     "@neko/ui": "workspace:*",
-    "@neko/world": "workspace:*",
     "@neko/world-node": "workspace:*",
+    "@neko/world": "workspace:*",
+    "@neko/world-webview": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

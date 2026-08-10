@@ -2760,6 +2760,18 @@ function createTransitionedScene(
       },
     });
   }
+  if (intent.kind === 'open-world-management') {
+    const sceneId = `scene:${windowId}:world-management`;
+    return parseDesktopWorkbenchSceneProjection({
+      sceneId,
+      windowId,
+      context: { kind: 'world-management' },
+      slots: {
+        main: { kind: 'world-management' },
+        status: { kind: 'scene-status', sceneId },
+      },
+    });
+  }
   if (intent.kind === 'select-character-detail') {
     if (current.context.kind !== 'character-management') {
       throw new DesktopSceneContractError(

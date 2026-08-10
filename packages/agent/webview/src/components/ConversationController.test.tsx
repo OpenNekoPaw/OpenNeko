@@ -672,6 +672,63 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
+  it('submits exact CharacterVersion selections through the Character launch port', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-character-launch', { kind: 'unbound' });
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    const onSubmitCharacterLaunch = vi.fn(async () => undefined);
+    render(
+      <ConversationController
+        {...createProps({
+          mentionItems: [
+            {
+              id: 'character-version-a',
+              kind: 'entity',
+              label: 'A',
+              characterLaunchSelection: {
+                characterProjectId: 'character-project-a',
+                characterVersionId: 'character-version-a',
+              },
+            },
+            {
+              id: 'character-version-b',
+              kind: 'entity',
+              label: 'B',
+              characterLaunchSelection: {
+                characterProjectId: 'character-project-b',
+                characterVersionId: 'character-version-b',
+              },
+            },
+          ],
+        })}
+        agentPresentation={launchCatalog.interaction}
+        onSubmitCharacterLaunch={onSubmitCharacterLaunch}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character B' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Speak together' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(onSubmitCharacterLaunch).toHaveBeenCalledOnce());
+    expect(onSubmitCharacterLaunch).toHaveBeenCalledWith({
+      message: 'Speak together',
+      characters: [
+        {
+          characterProjectId: 'character-project-a',
+          characterVersionId: 'character-version-a',
+        },
+        {
+          characterProjectId: 'character-project-b',
+          characterVersionId: 'character-version-b',
+        },
+      ],
+    });
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+    expect(hostMocks.bindTarget).not.toHaveBeenCalled();
+  });
+
   it('does not route unbound Entry @ discovery through Workspace search', () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-unbound-mention', { kind: 'unbound' });
@@ -933,6 +990,25 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
     expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('opens exact Character roleplay selection from an unbound Entry Draft', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createDraftProjection('draft-entry-roleplay', { kind: 'unbound' })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Roleplay/ }));
+
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
+      purpose: 'roleplay',
+    });
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('roleplay');
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('removes Entry Draft owner choices after Workspace activation', () => {

@@ -12,6 +12,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       bridge: createBridge(),
       catalog: createCatalog(),
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
     });
     const messages: AgentHostToWebviewMessage[] = [];
     adapter.subscribe((message) => messages.push(message));
@@ -29,7 +30,54 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(JSON.stringify(messages[0])).not.toContain('apiKey');
     expect(messages[1]).toEqual({
       type: 'globalError',
-      message: "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+      message:
+        "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+    });
+  });
+
+  it('projects published Character versions for roleplay search without Workspace authority', async () => {
+    const bridge = createBridge();
+    const searchCharacterMentions = vi.fn(async () => [
+      {
+        type: 'character' as const,
+        id: 'character-version-a',
+        label: 'Lin · Published',
+        summary: 'An archivist.',
+        source: 'entity-graph' as const,
+        characterLaunchSelection: {
+          characterProjectId: 'character-project-a',
+          characterVersionId: 'character-version-a',
+        },
+      },
+    ]);
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+      searchCharacterMentions,
+    });
+    const messages: AgentHostToWebviewMessage[] = [];
+    adapter.subscribe((message) => messages.push(message));
+
+    adapter.send({ type: 'searchProjectFiles', filter: 'lin', purpose: 'roleplay' });
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+
+    expect(searchCharacterMentions).toHaveBeenCalledWith('lin');
+    expect(bridge.agentLaunch.searchWorkspaceMentions).not.toHaveBeenCalled();
+    expect(messages[0]).toEqual({
+      type: 'projectFiles',
+      filter: 'lin',
+      purpose: 'roleplay',
+      files: [],
+      mentionExtras: [
+        expect.objectContaining({
+          id: 'character-version-a',
+          characterLaunchSelection: {
+            characterProjectId: 'character-project-a',
+            characterVersionId: 'character-version-a',
+          },
+        }),
+      ],
     });
   });
 
@@ -57,6 +105,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       bridge,
       catalog: workspaceCatalog,
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
     });
     const messages: AgentHostToWebviewMessage[] = [];
     adapter.subscribe((message) => messages.push(message));
@@ -128,6 +177,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       bridge,
       catalog,
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
     });
     const messages: AgentHostToWebviewMessage[] = [];
     adapter.subscribe((message) => messages.push(message));
@@ -163,6 +213,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       bridge,
       catalog: createCatalog(),
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
     });
     const messages: AgentHostToWebviewMessage[] = [];
     adapter.subscribe((message) => messages.push(message));
@@ -192,6 +243,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       bridge,
       catalog: createCatalog(),
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
     });
 
     await expect(adapter.bindTarget(workspaceBinding)).resolves.toEqual(workspaceCatalog);
@@ -208,12 +260,14 @@ describe('Electron Agent launch Host runtime adapter', () => {
       bridge: createBridge(),
       catalog: createCatalog(),
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
       storage,
     });
     const replacement = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
       catalog: createCatalog({ connectionId: 'launch-replacement' }),
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
       storage,
     });
     const workspaceReplacement = createElectronAgentLaunchHostRuntimeAdapter({
@@ -227,6 +281,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
         },
       }),
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
       storage,
     });
 
@@ -268,6 +323,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       bridge,
       catalog: createCatalog(),
       draftId: 'draft:entry',
+      searchCharacterMentions: vi.fn(async () => []),
     });
 
     const payload = await adapter.authorizeResource('file');

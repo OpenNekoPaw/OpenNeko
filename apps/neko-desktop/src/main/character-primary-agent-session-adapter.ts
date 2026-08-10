@@ -163,6 +163,13 @@ export function createCharacterPrimaryAgentSessionAdapter(
         ...(runtime.systemPrompt === undefined ? {} : { systemPrompt: runtime.systemPrompt }),
         ...(runtime.events === undefined ? {} : { events: runtime.events }),
       });
+      try {
+        await input.onTurnStarted?.(operation.identity.turnId);
+      } catch (error) {
+        options.workspace.cancelTurn(input.primaryAgentSessionId, operation.identity);
+        await operation.completion.catch(() => undefined);
+        throw error;
+      }
       const cancel = (): void => {
         options.workspace.cancelTurn(input.primaryAgentSessionId, operation.identity);
       };
@@ -220,9 +227,17 @@ function projectCharacterAgentContextPayload(
         kind: 'character-primary-turn-context',
         characterRunId,
         characterVersion: context.characterVersion,
+        ...(context.characterStorylineRun === undefined
+          ? {}
+          : { characterStorylineRun: context.characterStorylineRun }),
+        ...(context.characterMemoryScope === undefined
+          ? {}
+          : { characterMemoryScope: context.characterMemoryScope }),
         ...(context.relationship === undefined ? {} : { relationship: context.relationship }),
         ...(context.roomView === undefined ? {} : { roomView: context.roomView }),
-        ...(context.worldView === undefined ? {} : { worldView: context.worldView }),
+        ...(context.presentationConfiguration === undefined
+          ? {}
+          : { presentationConfiguration: context.presentationConfiguration }),
       }),
     },
   };

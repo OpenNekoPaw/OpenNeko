@@ -46,6 +46,18 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const rendererInstrumentation = vi.hoisted(() => ({
   extensionRootRender: vi.fn(),
   textEditorRootRender: vi.fn(),
+  avatarRootRender: vi.fn(),
+}));
+
+vi.mock('@neko/chara-webview/avatar', () => ({
+  VrmAvatarSurface: ({
+    descriptor,
+  }: {
+    readonly descriptor: { readonly avatarResourceLeaseId: string };
+  }) => {
+    rendererInstrumentation.avatarRootRender(descriptor.avatarResourceLeaseId);
+    return <div data-character-vrm-runtime={descriptor.avatarResourceLeaseId} />;
+  },
 }));
 
 vi.mock('./DesktopExtensionManagementSurface', () => ({
@@ -95,6 +107,7 @@ describe('DesktopApplication scene lifecycle', () => {
     document.body.replaceChildren();
     rendererInstrumentation.extensionRootRender.mockClear();
     rendererInstrumentation.textEditorRootRender.mockClear();
+    rendererInstrumentation.avatarRootRender.mockClear();
     vi.restoreAllMocks();
   });
 
@@ -479,6 +492,59 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('routes World navigation to its singleton Foundation scene', async () => {
+    const projection = createProjection();
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'world-management-1',
+      scene: worldManagementScene(),
+    }));
+    installBridge({ projection, transition });
+    const { container, root } = await renderApplication();
+    const worlds = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Worlds',
+    );
+    if (!worlds) throw new Error('Desktop fixture requires World navigation.');
+
+    await act(async () => worlds.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-world-management' },
+      activeScene(projection).sceneId,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('mounts only the current World Foundation Root and unloads it on scene replacement', async () => {
+    const initial = withActiveScene(createProjection(), worldManagementScene());
+    const settings = withActiveScene(initial, settingsScene());
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    installBridge({
+      projection: initial,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await waitFor(() => container.querySelector('[data-world-foundation="true"]') !== null);
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: settings.applicationInstanceId,
+        windowId: settings.window.windowId,
+        rendererSessionId: settings.rendererSessionId,
+        sequence: 1,
+        projection: settings,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+    expect(container.querySelector('[data-world-foundation="true"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it('mounts only the current Character Management catalog and unmounts it on replacement', async () => {
     const initial = withActiveScene(createProjection(), characterManagementScene());
     const settings = withActiveScene(initial, settingsScene());
@@ -530,6 +596,12 @@ describe('DesktopApplication scene lifecycle', () => {
         ?.getAttribute('data-character-owner-id'),
     ).toBe('character-run-1');
     expect(container.querySelector('[data-character-runtime-manager="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-runtime-capability="storyline"]')).not.toBeNull();
+    expect(container.querySelector('[data-runtime-capability="memory"]')).not.toBeNull();
+    expect(container.querySelector('[data-runtime-capability="chat-tts"]')).not.toBeNull();
+    expect(container.querySelector('[data-runtime-capability="representation"]')).not.toBeNull();
+    expect(container.querySelector('[data-runtime-capability="saves"]')).toBeNull();
+    expect(container.querySelector('[data-runtime-capability="world"]')).toBeNull();
     expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
     expect(
       container.querySelector('.desktop-scene-workbench--character-interaction'),
@@ -572,6 +644,94 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
     expect(container.querySelector('[data-character-runtime-manager="true"]')).toBeNull();
     expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('mounts one exact selected VRM and releases its Host lease on scene exit', async () => {
+    const character = withActiveScene(createProjection(), characterInteractionScene());
+    const settings = withActiveScene(character, settingsScene());
+    const openSurface = vi.fn(async () => ({
+      requestId: 'avatar-open-a',
+      status: 'ready' as const,
+      descriptor: {
+        avatarResourceLeaseId: 'avatar-lease-a',
+        characterRunId: 'character-run-1',
+        representationId: 'avatar-main',
+        kind: 'vrm' as const,
+        url: 'openneko://resource/avatar-a',
+        displayName: 'avatar.vrm',
+        mediaType: 'model/gltf-binary' as const,
+        byteLength: 128,
+        sourceFingerprint: '1:128',
+      },
+    }));
+    const releaseSurface = vi.fn(async () => undefined);
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    installBridge({
+      projection: character,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+      characterFoundationGetSnapshot: vi.fn(async () => avatarCharacterFoundationSnapshot()),
+      characterAvatarOpenSurface: openSurface,
+      characterAvatarReleaseSurface: releaseSurface,
+    });
+    const { container, root } = await renderApplication();
+
+    await waitFor(
+      () => container.querySelector('[data-character-vrm-runtime="avatar-lease-a"]') !== null,
+    );
+    expect(openSurface).toHaveBeenCalledWith({
+      workbenchInstanceId: character.window.workbench.workbenchInstanceId,
+      characterRunId: 'character-run-1',
+      representationId: 'avatar-main',
+    });
+    expect(rendererInstrumentation.avatarRootRender).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: settings.applicationInstanceId,
+        windowId: settings.window.windowId,
+        rendererSessionId: settings.rendererSessionId,
+        sequence: 1,
+        projection: settings,
+      });
+    });
+    await waitFor(() => releaseSurface.mock.calls.length === 1);
+    expect(releaseSurface).toHaveBeenCalledWith('avatar-lease-a');
+    expect(container.querySelector('[data-character-vrm-runtime]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('projects the exact Room cover and participant portrait without mounting another Avatar', async () => {
+    const room = withActiveScene(createProjection(), characterRoomInteractionScene());
+    const openSurface = vi.fn();
+    installBridge({
+      projection: room,
+      characterFoundationGetSnapshot: vi.fn(async () => roomIdentityArtFoundationSnapshot()),
+      characterAvatarOpenSurface: openSurface,
+    });
+    const { container, root } = await renderApplication();
+
+    await waitFor(
+      () =>
+        container
+          .querySelector('[data-character-room-feed="true"]')
+          ?.getAttribute('data-room-cover-resource-ref') === 'global-asset-library:room-cover-a',
+    );
+    expect(
+      container.querySelectorAll(
+        '[data-participant-portrait-resource-ref="global-asset-library:portrait-lin"]',
+      ),
+    ).toHaveLength(1);
+    expect(
+      container
+        .querySelector('[data-character-avatar-surface="true"]')
+        ?.hasAttribute('data-room-cover-resource-ref'),
+    ).toBe(false);
+    expect(container.querySelector('[data-character-vrm-runtime]')).toBeNull();
+    expect(openSurface).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
@@ -2198,6 +2358,13 @@ function installBridge({
   assetCenterExecute = vi.fn(),
   projectPortability,
   textEditorExecute = vi.fn(),
+  characterFoundationGetSnapshot = vi.fn(async () => emptyCharacterFoundationSnapshot()),
+  worldFoundationGetSnapshot = vi.fn(async () => ({
+    world: { projects: [], versions: [], runtimes: [] },
+    diagnostics: [],
+  })),
+  characterAvatarOpenSurface = vi.fn(),
+  characterAvatarReleaseSurface = vi.fn(),
   characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
   characterRoomSubscribe = vi.fn(() => () => undefined),
 }: {
@@ -2213,6 +2380,10 @@ function installBridge({
   readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
   readonly projectPortability?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
   readonly textEditorExecute?: (request: TextEditorHostRequest) => Promise<TextEditorHostResult>;
+  readonly characterFoundationGetSnapshot?: typeof window.openNekoDesktop.characterFoundation.getSnapshot;
+  readonly worldFoundationGetSnapshot?: typeof window.openNekoDesktop.worldFoundation.getSnapshot;
+  readonly characterAvatarOpenSurface?: typeof window.openNekoDesktop.characterAvatar.openSurface;
+  readonly characterAvatarReleaseSurface?: typeof window.openNekoDesktop.characterAvatar.releaseSurface;
   readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
   readonly characterRoomSubscribe?: typeof window.openNekoDesktop.characterRoomWorkbench.subscribe;
 }): void {
@@ -2227,8 +2398,19 @@ function installBridge({
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },
       characterFoundation: {
-        getSnapshot: vi.fn(async () => emptyCharacterFoundationSnapshot()),
+        getSnapshot: characterFoundationGetSnapshot,
         execute: vi.fn(async () => emptyCharacterFoundationSnapshot()),
+      },
+      worldFoundation: {
+        getSnapshot: worldFoundationGetSnapshot,
+        execute: vi.fn(async () => ({
+          world: { projects: [], versions: [], runtimes: [] },
+          diagnostics: [],
+        })),
+      },
+      characterAvatar: {
+        openSurface: characterAvatarOpenSurface,
+        releaseSurface: characterAvatarReleaseSurface,
       },
       characterRoomWorkbench: {
         getSnapshot: characterRoomGetSnapshot,
@@ -2473,6 +2655,19 @@ function characterManagementScene() {
   });
 }
 
+function worldManagementScene() {
+  const sceneId = 'scene:window-1:world-management';
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'world-management' },
+    slots: {
+      main: { kind: 'world-management' },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+}
+
 function characterInteractionScene() {
   const sceneId = 'scene:window-1:character-interaction:conversation-character-1';
   const scope = {
@@ -2545,9 +2740,169 @@ function emptyCharacterFoundationSnapshot() {
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylineVersions: [],
+      storylineRuns: [],
+      storylineObservationCandidates: [],
+      memoryScopes: [],
+      presentationConfigurations: [],
     },
-    world: { projects: [], versions: [], runtimes: [] },
     diagnostics: [],
+  };
+}
+
+function avatarCharacterFoundationSnapshot() {
+  const snapshot = emptyCharacterFoundationSnapshot();
+  return {
+    ...snapshot,
+    character: {
+      ...snapshot.character,
+      versions: [
+        {
+          characterVersionId: 'character-version-1',
+          characterProjectId: 'character-project-1',
+          label: 'Avatar publication',
+          definition: {
+            summary: 'A Character with a selected Avatar.',
+            backgroundStory: {
+              overview: '',
+              origins: [],
+              personalHistory: [],
+              formativeEvents: [],
+              establishedRelationships: [],
+            },
+            originSetting: {
+              overview: '',
+              eras: [],
+              cultures: [],
+              socialEnvironment: [],
+              importantPlaces: [],
+              organizations: [],
+              believedRules: [],
+            },
+            canon: [],
+            knowledgeBoundary: [],
+            behaviorPolicy: [],
+            expressionPolicy: [],
+            representationRefs: [
+              {
+                representationId: 'avatar-main',
+                kind: 'vrm' as const,
+                resourceRef: 'global-asset-library:avatar-a',
+              },
+            ],
+            representationDefaults: { avatarRepresentationId: 'avatar-main' },
+          },
+          acceptedEvidenceIds: [],
+          publishedAt: '2026-08-10T00:00:00.000Z',
+        },
+      ],
+      characterRuns: [
+        {
+          characterRunId: 'character-run-1',
+          characterVersionId: 'character-version-1',
+          participantId: 'participant-1',
+          controller: { kind: 'agent' as const, primaryAgentSessionId: 'agent-session-1' },
+          runtimeBinding: { kind: 'companion' as const, relationshipId: 'relationship-1' },
+          createdAt: '2026-08-10T00:00:00.000Z',
+        },
+      ],
+    },
+  };
+}
+
+function roomIdentityArtFoundationSnapshot() {
+  const snapshot = emptyCharacterFoundationSnapshot();
+  return {
+    ...snapshot,
+    character: {
+      ...snapshot.character,
+      versions: [
+        {
+          characterVersionId: 'character-version-lin',
+          characterProjectId: 'character-project-lin',
+          label: 'Portrait publication',
+          definition: {
+            summary: 'Lin',
+            backgroundStory: {
+              overview: '',
+              origins: [],
+              personalHistory: [],
+              formativeEvents: [],
+              establishedRelationships: [],
+            },
+            originSetting: {
+              overview: '',
+              eras: [],
+              cultures: [],
+              socialEnvironment: [],
+              importantPlaces: [],
+              organizations: [],
+              believedRules: [],
+            },
+            canon: [],
+            knowledgeBoundary: [],
+            behaviorPolicy: [],
+            expressionPolicy: [],
+            representationRefs: [
+              {
+                representationId: 'portrait-lin',
+                kind: 'portrait' as const,
+                resourceRef: 'global-asset-library:portrait-lin',
+              },
+            ],
+            representationDefaults: { portraitRepresentationId: 'portrait-lin' },
+          },
+          acceptedEvidenceIds: [],
+          publishedAt: '2026-08-10T00:00:00.000Z',
+        },
+      ],
+      characterRuns: [
+        {
+          characterRunId: 'character-run-lin',
+          characterVersionId: 'character-version-lin',
+          participantId: 'participant-lin',
+          controller: { kind: 'agent' as const, primaryAgentSessionId: 'agent-session-lin' },
+          runtimeBinding: { kind: 'companion' as const, relationshipId: 'relationship-lin' },
+          createdAt: '2026-08-10T00:00:00.000Z',
+        },
+      ],
+      rooms: [
+        {
+          characterRoomId: 'room-1',
+          title: 'Room One',
+          coverResourceRef: 'global-asset-library:room-cover-a',
+          participantTemplates: [],
+          schedulingPolicy: { kind: 'mentioned' as const },
+          createdAt: '2026-08-10T00:00:00.000Z',
+          updatedAt: '2026-08-10T00:00:00.000Z',
+        },
+      ],
+      roomRuns: [
+        {
+          topology: 'chatroom' as const,
+          roomRunId: 'room-run-1',
+          characterRoomId: 'room-1',
+          roomRevision: 0,
+          participants: [
+            {
+              participantId: 'participant-lin',
+              displayName: 'Lin',
+              characterVersionId: 'character-version-lin',
+              controller: {
+                kind: 'agent' as const,
+                characterRunId: 'character-run-lin',
+                primaryAgentSessionId: 'agent-session-lin',
+              },
+            },
+          ],
+          schedulingPolicy: { kind: 'mentioned' as const },
+          events: [],
+          runtimeKind: 'companion' as const,
+          relationshipIds: ['relationship-lin'],
+          createdAt: '2026-08-10T00:00:00.000Z',
+        },
+      ],
+    },
   };
 }
 

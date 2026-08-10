@@ -100,17 +100,22 @@ import {
   CharacterDetailSurface,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface as CharacterRoomTimelineProjectionSurface,
+  projectCharacterRoomIdentity,
+  type CharacterManagementRuntime,
   useCharacterManagementRuntime,
   useCharacterRoomWorkbenchRuntime,
 } from '@neko/chara-webview/root';
+import { VrmAvatarSurface } from '@neko/chara-webview/avatar';
 import '@neko/chara-webview/style.css';
+import { WorldFoundationRoot } from '@neko/world-webview/root';
+import '@neko/world-webview/style.css';
 
 type ShellState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'ready'; readonly projection: DesktopShellProjection }
   | { readonly kind: 'error'; readonly message: string };
 
-type HomeSection = 'create' | 'characters' | 'assets' | 'extensions' | 'projects';
+type HomeSection = 'create' | 'characters' | 'worlds' | 'assets' | 'extensions' | 'projects';
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
 type RetainedMetadataDiagnostic = Extract<
   NonNullable<DesktopShellProjection['stateDiagnostics']>[number],
@@ -695,11 +700,13 @@ function DesktopSceneWorkbench({
       : scene.context.kind === 'character-management' ||
           scene.context.kind === 'character-interaction'
         ? 'characters'
-        : scene.context.kind === 'extensions'
-          ? 'extensions'
-          : scene.context.kind === 'project-management'
-            ? 'projects'
-            : 'create';
+        : scene.context.kind === 'world-management'
+          ? 'worlds'
+          : scene.context.kind === 'extensions'
+            ? 'extensions'
+            : scene.context.kind === 'project-management'
+              ? 'projects'
+              : 'create';
   const workspaceProject = resolveWorkspaceSceneProject(projection, activeWorkbench);
   const cutCapability = projection.domains.find((candidate) => candidate.surface === 'cut');
   const workspaceScene = scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace';
@@ -716,6 +723,23 @@ function DesktopSceneWorkbench({
         ? undefined
         : window.openNekoDesktop.characterRoomWorkbench,
   });
+  const characterManagement = useCharacterManagementRuntime({
+    active:
+      scene.context.kind === 'character-management' ||
+      scene.context.kind === 'character-interaction',
+    host:
+      scene.context.kind === 'character-management' ||
+      scene.context.kind === 'character-interaction'
+        ? window.openNekoDesktop.characterFoundation
+        : undefined,
+  });
+  const characterRoomIdentity =
+    roomInteractionOwner && characterManagement.loadState.kind === 'ready'
+      ? projectCharacterRoomIdentity(
+          characterManagement.loadState.snapshot,
+          roomInteractionOwner.roomRunId,
+        )
+      : undefined;
   const launchScope = characterInteractionScene
     ? scene.context.scope
     : scene.context.kind === 'agent' && scene.context.scope.kind !== 'workspace'
@@ -792,7 +816,11 @@ function DesktopSceneWorkbench({
                 {...agentSurfaceProps}
                 conversationFeed={
                   roomInteractionOwner ? (
-                    <CharacterRoomInteractionFeed locale={locale} state={roomWorkbench} />
+                    <CharacterRoomInteractionFeed
+                      identity={characterRoomIdentity}
+                      locale={locale}
+                      state={roomWorkbench}
+                    />
                   ) : undefined
                 }
               />
@@ -1026,6 +1054,7 @@ function DesktopSceneWorkbench({
       >
         <DesktopWorkbenchRuntimePortals
           actions={actions}
+          characterManagement={characterManagement}
           composition={activeWorkbench}
           interactive={interactive}
           portalTargets={portalTargets}
@@ -1072,6 +1101,7 @@ function DesktopWorkbenchPortalTarget({
 
 function DesktopWorkbenchRuntimePortals({
   actions,
+  characterManagement,
   composition,
   interactive,
   portalTargets,
@@ -1080,6 +1110,7 @@ function DesktopWorkbenchRuntimePortals({
   resourceBrowserView,
 }: {
   readonly actions: ShellActions;
+  readonly characterManagement: CharacterManagementRuntime;
   readonly composition: DesktopWindowCompositionProjection;
   readonly interactive: boolean;
   readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
@@ -1095,13 +1126,6 @@ function DesktopWorkbenchRuntimePortals({
     viewMode: resourceBrowserView,
   });
   const extensionManagement = useDesktopExtensionManagementScene(scene);
-  const characterManagement = useCharacterManagementRuntime({
-    active: scene.context.kind === 'character-management',
-    host:
-      scene.context.kind === 'character-management'
-        ? window.openNekoDesktop.characterFoundation
-        : undefined,
-  });
   const workspaceProject = resolveWorkspaceSceneProject(projection, composition);
   const workspaceSlots = useContentProjectWorkbenchSlots({
     actions,
@@ -1184,8 +1208,14 @@ function DesktopWorkbenchRuntimePortals({
             : undefined
         }
       />
+    ) : scene.context.kind === 'world-management' ? (
+      <WorldFoundationRoot active host={window.openNekoDesktop.worldFoundation} locale={locale} />
     ) : characterInteraction ? (
-      <CharacterAvatarSurface owner={characterInteraction.owner} />
+      <CharacterAvatarSurface
+        owner={characterInteraction.owner}
+        runtime={characterManagement}
+        workbenchInstanceId={composition.workbenchInstanceId}
+      />
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
       workspaceSlots.main
     ) : assistantScope ? (
@@ -1223,6 +1253,14 @@ function DesktopWorkbenchRuntimePortals({
       <StaticWorkbenchMainPanelSurface
         label={t('home.characters')}
         panelId="character-management"
+        role="management"
+      >
+        {mainContent}
+      </StaticWorkbenchMainPanelSurface>
+    ) : scene.context.kind === 'world-management' ? (
+      <StaticWorkbenchMainPanelSurface
+        label={t('home.worlds')}
+        panelId="world-management"
         role="management"
       >
         {mainContent}
@@ -1284,7 +1322,10 @@ function DesktopWorkbenchRuntimePortals({
     scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
       workspaceSlots.rightDock
     ) : characterInteraction ? (
-      <CharacterRuntimeManagerSurface owner={characterInteraction.owner} />
+      <CharacterRuntimeManagerSurface
+        owner={characterInteraction.owner}
+        runtime={characterManagement}
+      />
     ) : undefined;
   const bottomPanel =
     characterInteraction?.owner.kind === 'room' &&
@@ -1353,49 +1394,183 @@ type CharacterInteractionOwner = Extract<
 
 function CharacterAvatarSurface({
   owner,
+  runtime,
+  workbenchInstanceId,
 }: {
   readonly owner: CharacterInteractionOwner;
+  readonly runtime: CharacterManagementRuntime;
+  readonly workbenchInstanceId: string;
 }): JSX.Element {
   const { t } = useTranslation();
   const isRoom = owner.kind === 'room';
+  const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
+  const runs = snapshot ? resolveOwnerCharacterRuns(snapshot, owner) : [];
+  const characterRun = owner.kind === 'character' ? runs[0] : undefined;
+  const characterPublication =
+    characterRun === undefined
+      ? undefined
+      : snapshot?.character.versions.find(
+          (publication) => publication.characterVersionId === characterRun.characterVersionId,
+        );
+  const avatarRepresentationId =
+    characterPublication?.definition.representationDefaults?.avatarRepresentationId;
+  const dynamicRepresentation = characterPublication?.definition.representationRefs.find(
+    (representation) => representation.representationId === avatarRepresentationId,
+  );
+  const [avatarResource, setAvatarResource] = useState<
+    | { readonly kind: 'idle' }
+    | { readonly kind: 'loading' }
+    | {
+        readonly kind: 'ready';
+        readonly descriptor: Extract<
+          Awaited<ReturnType<typeof window.openNekoDesktop.characterAvatar.openSurface>>,
+          { readonly status: 'ready' }
+        >['descriptor'];
+      }
+    | { readonly kind: 'unavailable'; readonly message: string }
+  >({ kind: 'idle' });
+  const [runtimeDiagnostic, setRuntimeDiagnostic] = useState<string>();
+  const handleRuntimeDiagnostic = useCallback((message: string) => {
+    setRuntimeDiagnostic(message);
+  }, []);
+  const avatarCharacterRunId = characterRun?.characterRunId;
+  const selectedAvatarRepresentationId = dynamicRepresentation?.representationId;
+
+  useEffect(() => {
+    if (!avatarCharacterRunId || !selectedAvatarRepresentationId) {
+      setAvatarResource({ kind: 'idle' });
+      return;
+    }
+    let active = true;
+    let avatarResourceLeaseId: string | undefined;
+    setRuntimeDiagnostic(undefined);
+    setAvatarResource({ kind: 'loading' });
+    void window.openNekoDesktop.characterAvatar
+      .openSurface({
+        workbenchInstanceId,
+        characterRunId: avatarCharacterRunId,
+        representationId: selectedAvatarRepresentationId,
+      })
+      .then((result) => {
+        if (result.status !== 'ready') {
+          if (active) {
+            setAvatarResource({
+              kind: 'unavailable',
+              message:
+                result.status === 'unavailable'
+                  ? result.diagnostic.message
+                  : 'The Character Avatar resource could not be opened.',
+            });
+          }
+          return;
+        }
+        avatarResourceLeaseId = result.descriptor.avatarResourceLeaseId;
+        if (!active) {
+          void window.openNekoDesktop.characterAvatar.releaseSurface(avatarResourceLeaseId);
+          return;
+        }
+        setAvatarResource({ kind: 'ready', descriptor: result.descriptor });
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setAvatarResource({
+            kind: 'unavailable',
+            message:
+              error instanceof Error ? error.message : 'The Character Avatar is unavailable.',
+          });
+        }
+      });
+    return () => {
+      active = false;
+      if (avatarResourceLeaseId) {
+        void window.openNekoDesktop.characterAvatar.releaseSurface(avatarResourceLeaseId);
+      }
+    };
+  }, [avatarCharacterRunId, selectedAvatarRepresentationId, workbenchInstanceId]);
+
+  const diagnostic =
+    runtimeDiagnostic ??
+    (avatarResource.kind === 'unavailable' ? avatarResource.message : undefined);
   return (
     <section
       className="character-workbench-avatar"
       data-character-avatar-surface="true"
       data-character-owner-kind={owner.kind}
       data-character-owner-id={owner.kind === 'room' ? owner.roomRunId : owner.characterRunId}
+      data-avatar-representation-kind={dynamicRepresentation?.kind}
+      data-avatar-resource-ref={dynamicRepresentation?.resourceRef}
     >
-      <div className="character-workbench-avatar__stage" aria-hidden="true">
-        {isRoom ? <UsersIcon size={72} /> : <UserIcon size={72} />}
+      <div className="character-workbench-avatar__stage">
+        {avatarResource.kind === 'ready' ? (
+          <VrmAvatarSurface
+            descriptor={avatarResource.descriptor}
+            onDiagnostic={handleRuntimeDiagnostic}
+          />
+        ) : isRoom ? (
+          <UsersIcon aria-hidden="true" size={72} />
+        ) : avatarResource.kind === 'loading' ? (
+          <LoadingIcon aria-hidden="true" size={32} />
+        ) : (
+          <UserIcon aria-hidden="true" size={72} />
+        )}
       </div>
-      <div className="character-workbench-avatar__status" role="status">
-        <WarningIcon size={16} />
-        <div>
-          <strong>
-            {t(
-              isRoom
-                ? 'character.workbench.roomSceneUnavailable'
-                : 'character.workbench.avatarUnavailable',
-            )}
-          </strong>
-          <span>{t('character.workbench.rendererUnavailableDetail')}</span>
+      {avatarResource.kind !== 'ready' || diagnostic ? (
+        <div className="character-workbench-avatar__status" role="status">
+          {avatarResource.kind === 'loading' ? (
+            <LoadingIcon size={16} />
+          ) : (
+            <WarningIcon size={16} />
+          )}
+          <div>
+            <strong>
+              {t(
+                isRoom
+                  ? 'character.workbench.roomSceneUnavailable'
+                  : 'character.workbench.avatarUnavailable',
+              )}
+            </strong>
+            <span>{diagnostic ?? t('character.workbench.rendererUnavailableDetail')}</span>
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }
 
 function CharacterRuntimeManagerSurface({
   owner,
+  runtime,
 }: {
   readonly owner: CharacterInteractionOwner;
+  readonly runtime: CharacterManagementRuntime;
 }): JSX.Element {
   const { t } = useTranslation();
+  const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
+  const runs = snapshot ? resolveOwnerCharacterRuns(snapshot, owner) : [];
+  const runIds = new Set(runs.map((run) => run.characterRunId));
+  const versionIds = new Set(runs.map((run) => run.characterVersionId));
+  const storylineRuns =
+    snapshot?.character.storylineRuns.filter((run) => runIds.has(run.characterRunId)) ?? [];
+  const memoryScopes =
+    snapshot?.character.memoryScopes.filter((scope) => runIds.has(scope.characterRunId)) ?? [];
+  const relationships =
+    snapshot?.character.relationships.filter((item) => versionIds.has(item.characterVersionId)) ??
+    [];
+  const configurations =
+    snapshot?.character.presentationConfigurations.filter((item) =>
+      runIds.has(item.characterRunId),
+    ) ?? [];
+  const representations =
+    snapshot?.character.versions
+      .filter((version) => versionIds.has(version.characterVersionId))
+      .flatMap((version) => version.definition.representationRefs) ?? [];
   const capabilities = [
-    ['memory', t('character.workbench.memory')],
-    ['storyline', t('character.workbench.storyline')],
-    ['saves', t('character.workbench.saves')],
-    ['world', t('character.workbench.world')],
+    ['storyline', t('character.workbench.storyline'), `${storylineRuns.length}`],
+    ['memory', t('character.workbench.memory'), `${memoryScopes.length}`],
+    ['relationship-memory', t('character.workbench.relationshipMemory'), `${relationships.length}`],
+    ['chat-tts', t('character.workbench.chatTts'), `${configurations.length}`],
+    ['representation', t('character.workbench.representation'), `${representations.length}`],
+    ['composition', t('character.workbench.composition'), t('character.workbench.notConnected')],
   ] as const;
   return (
     <section
@@ -1412,19 +1587,40 @@ function CharacterRuntimeManagerSurface({
         <strong>{owner.kind === 'room' ? owner.roomId : owner.characterId}</strong>
       </div>
       <div className="character-workbench-manager__capabilities">
-        {capabilities.map(([kind, label]) => (
+        {capabilities.map(([kind, label, value]) => (
           <div
             key={kind}
             className="character-workbench-manager__row"
             data-runtime-capability={kind}
           >
             <span>{label}</span>
-            <small>{t('character.workbench.notConnected')}</small>
+            <small>{value}</small>
           </div>
         ))}
       </div>
     </section>
   );
+}
+
+function resolveOwnerCharacterRuns(
+  snapshot: Extract<
+    CharacterManagementRuntime['loadState'],
+    { readonly kind: 'ready' }
+  >['snapshot'],
+  owner: CharacterInteractionOwner,
+) {
+  if (owner.kind === 'character') {
+    return snapshot.character.characterRuns.filter(
+      (run) => run.characterRunId === owner.characterRunId,
+    );
+  }
+  const room = snapshot.character.roomRuns.find((run) => run.roomRunId === owner.roomRunId);
+  const characterRunIds = new Set(
+    room?.participants.flatMap((participant) =>
+      participant.controller.kind === 'agent' ? [participant.controller.characterRunId] : [],
+    ) ?? [],
+  );
+  return snapshot.character.characterRuns.filter((run) => characterRunIds.has(run.characterRunId));
 }
 
 function WorkbenchMainPanelSurface({
@@ -1644,6 +1840,8 @@ function sceneIntentForSection(section: HomeSection): DesktopSceneTransitionInte
       return { kind: 'open-agent-entry' };
     case 'characters':
       return { kind: 'open-character-management' };
+    case 'worlds':
+      return { kind: 'open-world-management' };
     case 'assets':
       return { kind: 'open-asset-center' };
     case 'extensions':
@@ -2521,6 +2719,13 @@ function ApplicationPrimarySidebar({
           label={t('home.characters')}
           icon={<UserIcon size={17} />}
           onClick={() => onNavigate('characters')}
+        />
+        <DesktopApplicationNavigationButton
+          active={activeSection === 'worlds'}
+          disabled={disabled}
+          label={t('home.worlds')}
+          icon={<GridIcon size={17} />}
+          onClick={() => onNavigate('worlds')}
         />
         <DesktopApplicationNavigationButton
           active={activeSection === 'assets'}

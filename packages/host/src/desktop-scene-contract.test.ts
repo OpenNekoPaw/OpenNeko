@@ -268,6 +268,35 @@ describe('Desktop Scene contract', () => {
     ).toThrow("Main Surface 'project-management' is not valid for this Scene");
   });
 
+  it('owns World Foundation as one Window scene without an Experience runtime slot', () => {
+    const sceneId = 'scene:window-1:world-management';
+    const projection = {
+      sceneId,
+      windowId: 'window-1',
+      context: { kind: 'world-management' as const },
+      slots: {
+        main: { kind: 'world-management' as const },
+        status: { kind: 'scene-status' as const, sceneId },
+      },
+    };
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-world-management',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: { kind: 'open-world-management' },
+      }).intent,
+    ).toEqual({ kind: 'open-world-management' });
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: { main: { kind: 'character-management' }, status: projection.slots.status },
+      }),
+    ).toThrow("Main Surface 'character-management' is not valid for this Scene");
+  });
+
   it('creates exact Scene identity transition requests and rejects arbitrary intent', () => {
     expect(
       createDesktopSceneTransitionRequest({

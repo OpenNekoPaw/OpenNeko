@@ -77,14 +77,19 @@ describe('EmptyState', () => {
     expect(onEntryAction).toHaveBeenCalledWith('roleplay');
   });
 
-  it('does not block an unbound Entry Draft with owner choices', () => {
-    const view = render(<EmptyState draftScope="unbound" presentation="desktop-dock" />);
+  it('keeps canonical chat and roleplay actions reachable from an unbound Entry Draft', () => {
+    const onEntryAction = vi.fn();
+    const view = render(
+      <EmptyState draftScope="unbound" onEntryAction={onEntryAction} presentation="desktop-dock" />,
+    );
 
     expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Workspace' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Character / Room' })).toBeNull();
-    expect(document.querySelector('.agent-empty-actions')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start Chat' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Roleplay' }));
+    expect(onEntryAction).toHaveBeenCalledWith('roleplay');
 
     view.rerender(<EmptyState draftScope="workspace" presentation="desktop-dock" />);
     expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();

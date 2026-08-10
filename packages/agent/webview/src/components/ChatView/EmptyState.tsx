@@ -43,7 +43,7 @@ export function EmptyState({
   const entries = EMPTY_STATE_ENTRIES;
   const selectedEntry = entries.find((entry) => entry.action === selectedAction);
   const suggestedSkills = skills.filter((skill) => skill.enabled).slice(0, 4);
-  const draftPresentation = draftScope !== undefined;
+  const draftPresentation = draftScope !== undefined && draftScope !== 'unbound';
 
   if (presentation === 'desktop-dock') {
     return (
