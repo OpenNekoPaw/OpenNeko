@@ -299,6 +299,7 @@ export const en = {
   'workspace.chatOnly': 'Chat only',
   'workspace.mainOnly': 'Main only',
   'workspace.mainPanel': 'Main panel',
+  'workspace.creativePanels': 'Main and Cut panels',
   'workspace.canvasAndTimeline': 'Canvas + Timeline',
   'workspace.canvasAndModel': 'Canvas + Model',
   'workspace.resources': 'Resources',

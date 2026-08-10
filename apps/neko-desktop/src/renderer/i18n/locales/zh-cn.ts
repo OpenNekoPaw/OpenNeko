@@ -279,6 +279,7 @@ export const zhCN = {
   'workspace.chatOnly': '仅 Chat',
   'workspace.mainOnly': '仅主面板',
   'workspace.mainPanel': '主面板',
+  'workspace.creativePanels': '主面板与剪辑面板',
   'workspace.canvasAndTimeline': '画布 + 时间线',
   'workspace.canvasAndModel': '画布 + 模型',
   'workspace.resources': '资源库',

@@ -1136,7 +1136,7 @@ export const desktopWorkspaceResizeScenario = Object.freeze({
     assertWorkspacePanelHeaderAlignment(panelHeaderAlignment);
     const workspaceScreenshot = await screenshot('workspace-resized-shell-chrome');
     const displayModes = await exerciseWorkspaceDisplayModes(evaluate, click, screenshot);
-    const cutTabs = await exerciseCutTabAdd(evaluate, click, screenshot);
+    const cutTabs = await exerciseCutTabAdd(evaluate, click, pressKey, screenshot);
     const evidence = {
       workspaceActivation,
       workspaceDockResize,
@@ -4053,18 +4053,19 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
       region: 'agent',
       mode: 'main-only',
       pressed: false,
-      selectedRegions: ['main', 'management'],
+      selectedRegions: ['creative-panels', 'management'],
     },
     {
       label: 'agent-restored',
       region: 'agent',
       mode: 'chat-main',
       pressed: true,
-      selectedRegions: ['agent', 'main', 'management'],
+      selectedRegions: ['agent', 'creative-panels', 'management'],
     },
     {
       label: 'main-hidden',
       region: 'main',
+      option: 'main',
       mode: 'chat-only',
       pressed: false,
       selectedRegions: ['agent', 'management'],
@@ -4072,30 +4073,37 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
     {
       label: 'main-restored',
       region: 'main',
+      option: 'main',
       mode: 'chat-main',
       pressed: true,
-      selectedRegions: ['agent', 'main', 'management'],
+      selectedRegions: ['agent', 'creative-panels', 'management'],
     },
     {
       label: 'management-hidden',
       region: 'management',
       resources: 'hidden',
       pressed: false,
-      selectedRegions: ['agent', 'main'],
+      selectedRegions: ['agent', 'creative-panels'],
     },
     {
       label: 'management-restored',
       region: 'management',
       resources: 'docked',
       pressed: true,
-      selectedRegions: ['agent', 'main', 'management'],
+      selectedRegions: ['agent', 'creative-panels', 'management'],
     },
   ];
   const states = [];
   const screenshots = [];
   for (const expected of cases) {
-    const selector = `[data-workbench-region-control="${expected.region}"]`;
-    await waitForWorkspaceRegionControl(evaluate, expected.region);
+    const selector = expected.option
+      ? `[data-workbench-region-option="${expected.option}"]`
+      : `[data-workbench-region-control="${expected.region}"]`;
+    if (expected.option) {
+      await openWorkspaceCreativePanels(evaluate, click);
+    } else {
+      await waitForWorkspaceRegionControl(evaluate, expected.region);
+    }
     await click(selector);
     await waitForCondition(
       evaluate,
@@ -4106,7 +4114,7 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
         const control = document.querySelector(${JSON.stringify(selector)});
         return ${expected.mode ? `workbench.display.mode === ${JSON.stringify(expected.mode)}` : 'true'} &&
           ${expected.resources ? `workbench.resourceDock.presentation === ${JSON.stringify(expected.resources)}` : 'true'} &&
-          control?.getAttribute('aria-pressed') === ${JSON.stringify(String(expected.pressed))};
+          control?.getAttribute(${JSON.stringify(expected.option ? 'aria-checked' : 'aria-pressed')}) === ${JSON.stringify(String(expected.pressed))};
       })()`,
       `Workspace region '${expected.region}' did not commit its presentation.`,
     );
@@ -4127,7 +4135,7 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
           resources: workbench.resourceDock.presentation,
           hasAgent: Boolean(document.querySelector('[data-dock-owner="agent"], [data-primary-surface="agent"]')),
           hasMain: Boolean(document.querySelector('[data-main-view-id]')),
-          pressed: control?.getAttribute('aria-pressed') === 'true',
+          pressed: control?.getAttribute(${JSON.stringify(expected.option ? 'aria-checked' : 'aria-pressed')}) === 'true',
           selectedRegions: [...document.querySelectorAll(
             '.workspace-region-controls [data-workbench-region-control][aria-pressed="true"]',
           )].map((element) => element.getAttribute('data-workbench-region-control')),
@@ -4156,15 +4164,16 @@ async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
     states.push(state);
     screenshots.push(await screenshot(`workspace-layout-${expected.label}`));
   }
+  await openWorkspaceCreativePanels(evaluate, click);
   const cutPanel = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('projection')}
-    const control = document.querySelector('[data-workbench-region-control="cut-panel"]');
+    const control = document.querySelector('[data-workbench-region-option="cut-panel"]');
     const workbench = activeWorkbench.layout;
     return {
       hasCutPanel: Boolean(workbench.cutPanel),
       disabled: control instanceof HTMLButtonElement && control.disabled,
-      pressed: control?.getAttribute('aria-pressed') === 'true',
+      pressed: control?.getAttribute('aria-checked') === 'true',
     };
   })()`);
   if (cutPanel.hasCutPanel || cutPanel.disabled || cutPanel.pressed) {
@@ -4188,8 +4197,28 @@ async function waitForWorkspaceRegionControl(evaluate, region) {
   );
 }
 
-async function exerciseCutTabAdd(evaluate, click, screenshot) {
-  await click('[data-workbench-region-control="cut-panel"]');
+async function openWorkspaceCreativePanels(evaluate, click) {
+  await waitForWorkspaceRegionControl(evaluate, 'creative-panels');
+  const alreadyOpen = await evaluate(
+    `document.querySelector('[data-workbench-region-option="main"]') instanceof HTMLButtonElement`,
+  );
+  if (!alreadyOpen) {
+    await click('[data-workbench-region-control="creative-panels"]');
+  }
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const main = document.querySelector('[data-workbench-region-option="main"]');
+      const cut = document.querySelector('[data-workbench-region-option="cut-panel"]');
+      return main instanceof HTMLButtonElement && cut instanceof HTMLButtonElement;
+    })()`,
+    'Combined Main and Cut choices did not become interactive.',
+  );
+}
+
+async function exerciseCutTabAdd(evaluate, click, pressKey, screenshot) {
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="cut-panel"]');
   await waitForCondition(
     evaluate,
     `document.querySelectorAll('.project-cut-panel__tabs .neko-workbench-editor-tab').length === 1 &&
@@ -4219,10 +4248,11 @@ async function exerciseCutTabAdd(evaluate, click, screenshot) {
         fitsHeader: addRect.right <= headerRect.right + 0.5,
         remainingRightSpace: headerRect.right - addRect.right,
       };
-    })()`);
+  })()`);
   const initial = await inspect();
-  assertCutTabAddGeometry(initial, 'initial');
   const initialScreenshot = await screenshot('workspace-cut-tab-add-adjacent');
+  const layoutScreenshots = await exerciseCutOnlyLayout(evaluate, click, pressKey, screenshot);
+  assertCutTabAddGeometry(initial, 'initial');
   await click('[data-cut-tab-add="true"]');
   await waitForCondition(
     evaluate,
@@ -4234,7 +4264,145 @@ async function exerciseCutTabAdd(evaluate, click, screenshot) {
   const added = await inspect();
   assertCutTabAddGeometry(added, 'added');
   const addedScreenshot = await screenshot('workspace-cut-tab-add-second-draft');
-  return { states: { initial, added }, screenshots: [initialScreenshot, addedScreenshot] };
+  return {
+    states: { initial, added },
+    screenshots: [initialScreenshot, ...layoutScreenshots, addedScreenshot],
+  };
+}
+
+async function exerciseCutOnlyLayout(evaluate, click, pressKey, screenshot) {
+  await evaluate(`(() => {
+    const cutRoot = document.querySelector('[data-owner-root="cut"]');
+    if (!(cutRoot instanceof HTMLElement)) {
+      throw new Error('Cut layout lifecycle probe requires the exact Cut Root.');
+    }
+    window.__openNekoCutLayoutProbe = cutRoot;
+  })()`);
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="main"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      return activeWorkbench.layout.display.mode === 'chat-only' &&
+        activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        shell?.getAttribute('data-interaction-presentation') === 'docked' &&
+        shell?.getAttribute('data-bottom-panel-presentation') === 'expanded' &&
+        !document.querySelector('[data-main-view-id]') &&
+        document.querySelector('[data-owner-root="cut"]') === window.__openNekoCutLayoutProbe;
+    })()`,
+    'Main did not hide while retaining a docked Agent and expanding the same Cut Root.',
+  );
+  const agentCutScreenshot = await screenshot('workspace-layout-agent-cut-expanded');
+  await click('[data-workbench-region-control="agent"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      return activeWorkbench.layout.display.mode === 'empty-main' &&
+        activeWorkbench.layout.main.views.length > 0 &&
+        activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        shell?.getAttribute('data-interaction-presentation') === 'hidden' &&
+        shell?.getAttribute('data-bottom-panel-presentation') === 'expanded' &&
+        !document.querySelector('[data-main-view-id]') &&
+        Boolean(document.querySelector('[data-workbench-cut-panel="true"]')) &&
+        document.querySelector('[data-owner-root="cut"]') === window.__openNekoCutLayoutProbe;
+    })()`,
+    'Cut-only did not project hidden Agent, retained Main refs and the same expanded Cut Root.',
+  );
+  const cutOnlyScreenshot = await screenshot('workspace-layout-cut-only-expanded');
+
+  await evaluate(`(() => {
+    const control = document.querySelector('[data-workbench-region-control="creative-panels"]');
+    if (!(control instanceof HTMLButtonElement)) {
+      throw new Error('Combined Main and Cut control is unavailable for keyboard validation.');
+    }
+    control.focus();
+  })()`);
+  await pressKey('Enter');
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const trigger = document.querySelector('[data-workbench-region-control="creative-panels"]');
+      const menu = document.querySelector('.workspace-creative-panels-popover__menu');
+      return trigger?.getAttribute('aria-expanded') === 'true' &&
+        menu?.getAttribute('role') === 'menu' &&
+        document.querySelectorAll('[data-workbench-region-option]').length === 2;
+    })()`,
+    'Combined Main and Cut Popover did not open from the keyboard.',
+  );
+  const keyboardScreenshot = await screenshot('workspace-layout-keyboard-popover');
+  await pressKey('Escape');
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[data-workbench-region-option]') === null`,
+    'Combined Main and Cut Popover did not close with Escape.',
+  );
+
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="main"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      return activeWorkbench.layout.display.mode === 'main-only' &&
+        Boolean(document.querySelector('[data-main-view-id]')) &&
+        activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        shell?.getAttribute('data-bottom-panel-presentation') === 'docked' &&
+        document.querySelector('[data-owner-root="cut"]') === window.__openNekoCutLayoutProbe;
+    })()`,
+    'Main did not restore above the retained Cut Root.',
+  );
+  const restoredMainScreenshot = await screenshot('workspace-layout-main-restored-with-cut');
+  await click('[data-workbench-region-control="agent"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      return activeWorkbench.layout.display.mode === 'chat-main';
+    })()`,
+    'Agent did not restore alongside Main and Cut.',
+  );
+
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="cut-panel"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      return activeWorkbench.layout.cutPanel?.presentation === 'hidden' &&
+        !document.querySelector('[data-workbench-cut-panel="true"]');
+    })()`,
+    'Cut did not hide while preserving Agent and Main.',
+  );
+  const hiddenCutScreenshot = await screenshot('workspace-layout-cut-hidden');
+  await openWorkspaceCreativePanels(evaluate, click);
+  await click('[data-workbench-region-option="cut-panel"]');
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      ${requireActiveWorkbenchProjection('projection')}
+      return activeWorkbench.layout.cutPanel?.presentation === 'docked' &&
+        Boolean(document.querySelector('[data-workbench-cut-panel="true"]'));
+    })()`,
+    'Cut did not restore through the combined control.',
+  );
+  return [
+    agentCutScreenshot,
+    cutOnlyScreenshot,
+    keyboardScreenshot,
+    restoredMainScreenshot,
+    hiddenCutScreenshot,
+  ];
 }
 
 function assertCutTabAddGeometry(detail, phase) {
@@ -4921,7 +5089,7 @@ function assertWorkspaceTopControls(detail) {
     detail.layoutControlInFooter ||
     JSON.stringify(detail.sidebarControlKinds) !== JSON.stringify(['primary-sidebar']) ||
     JSON.stringify(detail.workspaceLayoutControlKinds) !==
-      JSON.stringify(['agent', 'main', 'cut-panel', 'management'])
+      JSON.stringify(['agent', 'creative-panels', 'management'])
   ) {
     throw new Error('Workspace layout controls are not in the shared Workbench title chrome.');
   }

@@ -135,7 +135,7 @@ describe('Desktop scene Workbench', () => {
     );
   });
 
-  it('toggles Agent, Main, management and Cut Panel through independent region controls', () => {
+  it('toggles Agent, Main, management and Cut through one canonical layout projection', () => {
     const initial = activeWorkbenchLayout(workspaceProjection());
     const withoutAgent = toggleWorkbenchRegion(initial, 'agent');
     expect(withoutAgent.display.mode).toBe('main-only');
@@ -164,11 +164,21 @@ describe('Desktop scene Workbench', () => {
     expect(restoredCutPanel.cutPanel?.presentation).toBe('docked');
     expect(restoredCutPanel.main).toEqual(initial.main);
 
-    expect(() => toggleWorkbenchRegion(withoutAgent, 'main')).toThrow(
-      'cannot hide Main while Agent is unavailable',
+    const cutOnlyFromMain = toggleWorkbenchRegion(withoutAgent, 'main');
+    expect(cutOnlyFromMain.display.mode).toBe('empty-main');
+    expect(cutOnlyFromMain.cutPanel?.presentation).toBe('docked');
+
+    const cutOnlyFromAgent = toggleWorkbenchRegion(withoutMain, 'agent');
+    expect(cutOnlyFromAgent.display.mode).toBe('empty-main');
+    expect(toggleWorkbenchRegion(cutOnlyFromAgent, 'agent').display.mode).toBe('chat-only');
+    expect(toggleWorkbenchRegion(cutOnlyFromAgent, 'main').display.mode).toBe('main-only');
+    expect(() => toggleWorkbenchRegion(cutOnlyFromAgent, 'cutPanel')).toThrow(
+      'cannot hide the last visible business region',
     );
-    expect(() => toggleWorkbenchRegion(withoutMain, 'agent')).toThrow(
-      'cannot hide Agent while Main is unavailable',
+
+    const withoutCutAndAgent = toggleWorkbenchRegion(withoutCutPanel, 'agent');
+    expect(() => toggleWorkbenchRegion(withoutCutAndAgent, 'main')).toThrow(
+      'cannot hide the last visible business region',
     );
   });
 
@@ -190,6 +200,51 @@ describe('Desktop scene Workbench', () => {
     expect(() => toggleWorkbenchRegion(withoutCutPanel, 'cutPanel')).toThrow(
       'cannot toggle Cut Panel without an attached Cut View',
     );
+  });
+
+  it('expands Cut across Main when Agent and Main are hidden', () => {
+    const projection = workspaceProjection();
+    const layout = activeWorkbenchLayout(projection);
+    const mainHidden = toggleWorkbenchRegion(layout, 'main');
+    const cutOnly = toggleWorkbenchRegion(mainHidden, 'agent');
+    const markup = renderShell(
+      <DesktopShellView projection={withWorkbench(projection, workspaceScene(), cutOnly)} />,
+    );
+
+    expect(cutOnly.display.mode).toBe('empty-main');
+    expect(markup).toContain('data-interaction-presentation="hidden"');
+    expect(markup).toContain('data-bottom-panel-visible="true"');
+    expect(markup).toContain('data-bottom-panel-presentation="expanded"');
+    expect(markup).toContain('data-workbench-slot="main"');
+    expect(markup).toContain('data-workbench-slot="bottomPanel"');
+    expect(markup).not.toContain('data-main-view-id=');
+    expect(markup).not.toContain('Connecting to Agent');
+  });
+
+  it('keeps Agent docked and expands Cut when Main is hidden', () => {
+    const projection = workspaceProjection();
+    const layout = activeWorkbenchLayout(projection);
+    const withoutMain = toggleWorkbenchRegion(layout, 'main');
+    const markup = renderShell(
+      <DesktopShellView projection={withWorkbench(projection, workspaceScene(), withoutMain)} />,
+    );
+
+    expect(withoutMain.display.mode).toBe('chat-only');
+    expect(markup).toContain('data-interaction-presentation="docked"');
+    expect(markup).toContain('data-bottom-panel-presentation="expanded"');
+    expect(markup).toContain('data-workbench-slot="bottomPanel"');
+  });
+
+  it('returns Cut below Main when Main is visible', () => {
+    const projection = workspaceProjection();
+    const layout = activeWorkbenchLayout(projection);
+    const markup = renderShell(
+      <DesktopShellView projection={withWorkbench(projection, workspaceScene(), layout)} />,
+    );
+
+    expect(markup).toContain('data-interaction-presentation="docked"');
+    expect(markup).toContain('data-bottom-panel-presentation="docked"');
+    expect(markup).toContain('data-workbench-slot="bottomPanel"');
   });
 
   it.each([
@@ -232,7 +287,7 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('aria-label="Expand sidebar"');
   });
 
-  it('places independent Workspace region controls in shared Workbench title chrome only', () => {
+  it('places structural Workspace controls in shared Workbench title chrome only', () => {
     const markup = renderShell(<DesktopShellView projection={workspaceProjection()} />);
     const sidebarControls = markup.match(
       /<div class="primary-sidebar-brand__controls">([\s\S]*?)<\/div>/u,
@@ -247,18 +302,20 @@ describe('Desktop scene Workbench', () => {
     expect(sidebarControls).not.toContain('data-workbench-region-control="main"');
     expect(sidebarControls).not.toContain('data-workbench-region-control="management"');
     expect(titleChrome).toContain('data-workbench-region-control="agent"');
-    expect(titleChrome).toContain('data-workbench-region-control="main"');
+    expect(titleChrome).toContain('data-workbench-region-control="creative-panels"');
     expect(titleChrome).toContain('data-workbench-region-control="management"');
-    expect(titleChrome).toContain('data-workbench-region-control="cut-panel"');
-    const controlOrder = ['agent', 'main', 'cut-panel', 'management'].map((region) =>
+    expect(titleChrome).not.toContain('data-workbench-region-control="main"');
+    expect(titleChrome).not.toContain('data-workbench-region-control="cut-panel"');
+    const controlOrder = ['agent', 'creative-panels', 'management'].map((region) =>
       titleChrome.indexOf(`data-workbench-region-control="${region}"`),
     );
     expect(controlOrder.every((index) => index >= 0)).toBe(true);
     expect(controlOrder).toEqual([...controlOrder].sort((left, right) => left - right));
+    expect(titleChrome).toContain('codicon-layout-sidebar-left');
     expect(titleChrome).toContain('codicon-layout');
-    expect(titleChrome).toContain('codicon-layout-centered');
     expect(titleChrome).toContain('codicon-layout-sidebar-right');
-    expect(titleChrome).toContain('codicon-layout-panel');
+    expect(desktopShellSource).toContain('data-workbench-region-option="main"');
+    expect(desktopShellSource).toContain('data-workbench-region-option="cut-panel"');
     expect(markup).not.toContain('aria-label="Close resource management"');
     const footer = markup.match(/<div class="home-navigation-footer">([\s\S]*?)<\/div>/u)?.[1];
     expect(footer).not.toContain('data-workbench-region-control');
@@ -285,7 +342,7 @@ describe('Desktop scene Workbench', () => {
     const projection = workspaceProjection();
     const scene = workspaceScene();
     const layout = activeWorkbenchLayout(projection);
-    const visibleRegions = ['agent', 'main', 'cut-panel', 'management'] as const;
+    const visibleRegions = ['agent', 'creative-panels', 'management'] as const;
     const initialMarkup = renderShell(<DesktopShellView projection={projection} />);
 
     for (const region of visibleRegions) {
@@ -294,7 +351,6 @@ describe('Desktop scene Workbench', () => {
 
     for (const [region, workbenchRegion] of [
       ['agent', 'agent'],
-      ['main', 'main'],
       ['management', 'management'],
     ] as const) {
       const markup = renderShell(
@@ -312,6 +368,16 @@ describe('Desktop scene Workbench', () => {
       }
     }
 
+    const mainHidden = toggleWorkbenchRegion(layout, 'main');
+    const allCreativePanelsHidden = toggleWorkbenchRegion(mainHidden, 'cutPanel');
+    const hiddenCreativeMarkup = renderShell(
+      <DesktopShellView projection={withWorkbench(projection, scene, allCreativePanelsHidden)} />,
+    );
+    expectWorkspaceRegionControl(hiddenCreativeMarkup, 'creative-panels', {
+      selected: false,
+      disabled: false,
+    });
+
     const { cutPanel: _cutPanelSlot, ...slotsWithoutCutPanel } = scene.slots;
     const sceneWithoutCutPanel = parseDesktopWorkbenchSceneProjection({
       ...scene,
@@ -326,17 +392,13 @@ describe('Desktop scene Workbench', () => {
         )}
       />,
     );
-    expectWorkspaceRegionControl(hiddenCutMarkup, 'cut-panel', {
-      selected: false,
-      disabled: false,
-    });
+    expectWorkspaceRegionControl(hiddenCutMarkup, 'creative-panels', { selected: true });
 
     const dockedCutWithoutSurfaceMarkup = renderShell(
       <DesktopShellView projection={withWorkbench(projection, sceneWithoutCutPanel, layout)} />,
     );
-    expectWorkspaceRegionControl(dockedCutWithoutSurfaceMarkup, 'cut-panel', {
-      selected: false,
-      disabled: false,
+    expectWorkspaceRegionControl(dockedCutWithoutSurfaceMarkup, 'creative-panels', {
+      selected: true,
     });
 
     const { cutPanel: _cutPanelLayout, ...layoutWithoutCutPanel } = layout;
@@ -345,10 +407,7 @@ describe('Desktop scene Workbench', () => {
         projection={withWorkbench(projection, sceneWithoutCutPanel, layoutWithoutCutPanel)}
       />,
     );
-    expectWorkspaceRegionControl(missingCutMarkup, 'cut-panel', {
-      selected: false,
-      disabled: false,
-    });
+    expectWorkspaceRegionControl(missingCutMarkup, 'creative-panels', { selected: true });
 
     const unavailableCutMarkup = renderShell(
       <DesktopShellView
@@ -366,10 +425,7 @@ describe('Desktop scene Workbench', () => {
         }}
       />,
     );
-    expectWorkspaceRegionControl(unavailableCutMarkup, 'cut-panel', {
-      selected: false,
-      disabled: true,
-    });
+    expectWorkspaceRegionControl(unavailableCutMarkup, 'creative-panels', { selected: true });
 
     const { main: _mainSlot, ...slotsWithoutMain } = scene.slots;
     const sceneWithoutMain = parseDesktopWorkbenchSceneProjection({
@@ -384,13 +440,13 @@ describe('Desktop scene Workbench', () => {
         projection={withWorkbench(projection, sceneWithoutMain, layoutWithoutMain)}
       />,
     );
-    expectWorkspaceRegionControl(missingMainSurfaceMarkup, 'main', {
-      selected: false,
-      disabled: true,
+    expectWorkspaceRegionControl(missingMainSurfaceMarkup, 'creative-panels', {
+      selected: true,
+      disabled: false,
     });
     expectWorkspaceRegionControl(missingMainSurfaceMarkup, 'agent', {
       selected: true,
-      disabled: true,
+      disabled: false,
     });
   });
 
@@ -551,7 +607,9 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('data-workbench-slot="main"');
     expect(markup).toContain('data-workbench-slot="rightDock"');
     expect(markup).toContain('data-workbench-slot="bottomPanel"');
-    expect(markup).toMatch(/data-workbench-region-control="cut-panel"[^>]*aria-pressed="true"/u);
+    expect(markup).toMatch(
+      /data-workbench-region-control="creative-panels"[^>]*aria-pressed="true"/u,
+    );
     vi.unstubAllGlobals();
   });
 
@@ -826,7 +884,7 @@ function workspaceScene(): DesktopWorkbenchSceneProjection {
 
 function expectWorkspaceRegionControl(
   markup: string,
-  region: 'agent' | 'main' | 'cut-panel' | 'management',
+  region: 'agent' | 'creative-panels' | 'management',
   expected: { readonly selected: boolean; readonly disabled?: boolean },
 ): void {
   const control = markup.match(

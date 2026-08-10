@@ -40,6 +40,7 @@ export type {
   MainPanelControlPlacement,
 } from './creative-workbench';
 export type {
+  ControlledWorkbenchBottomPanelPresentation,
   ControlledWorkbenchDockPresentation,
   ControlledWorkbenchInteractionPresentation,
   ControlledWorkbenchMainSplit,

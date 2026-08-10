@@ -42,6 +42,23 @@ describe('Desktop renderer styles', () => {
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
   });
 
+  it('keeps the combined Main and Cut menu compact and keyboard-visible', () => {
+    const popoverRule = styles.match(
+      /\.workspace-creative-panels-popover\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const itemRule = styles.match(
+      /\.workspace-creative-panels-popover__item\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(popoverRule?.groups?.body).toMatch(/width\s*:\s*190px/u);
+    expect(itemRule?.groups?.body).toMatch(
+      /grid-template-columns\s*:\s*18px minmax\(0, 1fr\) 18px/u,
+    );
+    expect(styles).toMatch(
+      /\.workspace-creative-panels-popover__item:hover:not\(:disabled\),\s*\n\.workspace-creative-panels-popover__item:focus-visible\s*\{[^}]*background/u,
+    );
+  });
+
   it('keeps the Cut add target adjacent to the final tab while allowing tab overflow', () => {
     const tabsRule = styles.match(
       /\.project-cut-panel__tabs \.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u,

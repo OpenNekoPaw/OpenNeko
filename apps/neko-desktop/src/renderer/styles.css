@@ -517,6 +517,47 @@ code {
   -webkit-app-region: no-drag;
 }
 
+.workspace-creative-panels-popover {
+  width: 190px;
+  padding: 5px;
+}
+
+.workspace-creative-panels-popover__menu {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-creative-panels-popover__item {
+  display: grid;
+  min-height: 32px;
+  grid-template-columns: 18px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--neko-fg);
+  background: transparent;
+  text-align: left;
+  cursor: default;
+}
+
+.workspace-creative-panels-popover__item:hover:not(:disabled),
+.workspace-creative-panels-popover__item:focus-visible {
+  outline: 0;
+  background: var(--neko-list-hoverBackground, var(--neko-desktop-control-hover));
+}
+
+.workspace-creative-panels-popover__item:disabled {
+  opacity: 0.5;
+}
+
+.workspace-creative-panels-popover__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .primary-sidebar-brand__controls .workbench-region-toggle,
 .neko-controlled-workbench-title .workbench-region-toggle {
   border: 0;

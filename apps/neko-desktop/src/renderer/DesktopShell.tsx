@@ -13,6 +13,7 @@ import {
   MessageIcon,
   OpenIcon,
   PackageIcon,
+  Popover,
   PlusIcon,
   RemoveIcon,
   SearchIcon,
@@ -829,8 +830,20 @@ function DesktopSceneWorkbench({
     workspaceScene && scene.slots.interaction?.kind === 'agent'
       ? scene.slots.interaction
       : undefined;
+  const workspaceMainSurface =
+    workspaceScene && scene.slots.main?.kind === 'workspace-main' ? scene.slots.main : undefined;
+  const cutPanel = workspaceScene ? activeWorkbench.layout.cutPanel : undefined;
+  const workspaceCutSurface =
+    workspaceScene && scene.slots.cutPanel?.kind === 'workspace-cut'
+      ? scene.slots.cutPanel
+      : undefined;
+  const cutPanelVisible = workspaceCutSurface !== undefined && cutPanel?.presentation === 'docked';
+  const workspaceMainVisible =
+    workspaceMainSurface !== undefined && isWorkbenchRegionVisible(activeWorkbench.layout, 'main');
+  const cutPanelExpanded = cutPanelVisible && !workspaceMainVisible;
   const workspaceAgentVisible =
-    workspaceAgentSurface !== undefined && activeWorkbench.layout.display.mode !== 'main-only';
+    workspaceAgentSurface !== undefined &&
+    isWorkbenchRegionVisible(activeWorkbench.layout, 'agent');
   const interactionVisible = Boolean(launchScope) || workspaceAgentVisible;
   const interactionPresentation = launchScope
     ? characterInteractionScene
@@ -838,11 +851,11 @@ function DesktopSceneWorkbench({
       : assistantPreviewVisible
         ? ('docked' as const)
         : ('main' as const)
-    : workspaceScene && activeWorkbench.layout.display.mode === 'chat-only'
-      ? ('main' as const)
-      : workspaceAgentVisible
+    : workspaceAgentVisible
+      ? cutPanelExpanded || workspaceMainVisible
         ? ('docked' as const)
-        : ('hidden' as const);
+        : ('main' as const)
+      : ('hidden' as const);
   const interactionPosition =
     characterInteractionScene ||
     (workspaceScene &&
@@ -937,14 +950,6 @@ function DesktopSceneWorkbench({
       : undefined;
   const resourceDockVisible =
     workspaceResourceSurface !== undefined && activeResourcePresentation !== 'hidden';
-  const workspaceMainSurface =
-    workspaceScene && scene.slots.main?.kind === 'workspace-main' ? scene.slots.main : undefined;
-  const cutPanel = workspaceScene ? activeWorkbench.layout.cutPanel : undefined;
-  const workspaceCutSurface =
-    workspaceScene && scene.slots.cutPanel?.kind === 'workspace-cut'
-      ? scene.slots.cutPanel
-      : undefined;
-  const cutPanelVisible = workspaceCutSurface !== undefined && cutPanel?.presentation === 'docked';
   const characterManagerVisible =
     characterInteractionScene && scene.slots.rightManager?.kind === 'character-runtime-manager';
   const rightDockVisible = resourceDockVisible || characterManagerVisible;
@@ -982,7 +987,7 @@ function DesktopSceneWorkbench({
         })
       : undefined;
   const cutPanelResize =
-    cutPanelVisible && !interactionLocks.workbench
+    cutPanelVisible && !cutPanelExpanded && !interactionLocks.workbench
       ? {
           label: t('workspace.resizeCutPanel'),
           minSize: DESKTOP_WORKBENCH_LIMITS.cutPanelHeight.min,
@@ -1029,7 +1034,7 @@ function DesktopSceneWorkbench({
                   selected:
                     workspaceMainSurface !== undefined &&
                     activeWorkbench.layout.main.views.length > 0 &&
-                    activeWorkbench.layout.display.mode !== 'chat-only',
+                    isWorkbenchRegionVisible(activeWorkbench.layout, 'main'),
                 },
                 management: {
                   available: workspaceResourceSurface !== undefined,
@@ -1098,6 +1103,7 @@ function DesktopSceneWorkbench({
             : undefined
         }
         bottomPanelVisible={bottomPanelVisible}
+        bottomPanelPresentation={cutPanelExpanded ? 'expanded' : 'docked'}
         bottomPanelHeight={cutPanel?.height ?? (roomTimelineVisible ? 260 : undefined)}
         bottomPanelResize={cutPanelResize}
         leftDock={portalDeck('leftDock', scene.context.kind === 'settings')}
@@ -1914,7 +1920,7 @@ function useContentProjectWorkbenchSlots({
         );
   const mainSurface = (
     <MainViewGroupSurface
-      visible={workbench.display.mode !== 'chat-only'}
+      visible={isWorkbenchRegionVisible(workbench, 'main')}
       actions={actions}
       canvasCapability={canvasCapability}
       group={primaryGroup}
@@ -1949,7 +1955,7 @@ function useContentProjectWorkbenchSlots({
     bottomPanel,
     secondaryMain: secondaryGroup ? (
       <MainViewGroupSurface
-        visible={workbench.display.mode !== 'chat-only'}
+        visible={isWorkbenchRegionVisible(workbench, 'main')}
         actions={actions}
         canvasCapability={canvasCapability}
         group={secondaryGroup}
@@ -2067,36 +2073,38 @@ function MainViewGroupSurface({
       mainGroupId={group.groupId}
       panelId={`workspace:${group.groupId}`}
       tabs={
-        <WorkbenchEditorTabs
-          activeId={group.activeViewId}
-          emptyLabel={t('workspace.mainTabs.empty')}
-          label={t('workspace.mainTabs.label')}
-          contextActionsRef={setContextActionsTarget}
-          tabs={views.map((view) => ({
-            id: view.viewId,
-            label: view.displayLabel,
-            closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
-          }))}
-          onClose={(viewId) => {
-            const view = views.find((candidate) => candidate.viewId === viewId);
-            if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-            actions.onCloseWorkbenchView(workbenchInstanceId, workbench, view);
-          }}
-          onReorder={(sourceViewId, targetViewId) => {
-            actions.onUpdateWorkbench(
-              workbenchInstanceId,
-              reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
-            );
-          }}
-          onSelect={(viewId) => {
-            const view = views.find((candidate) => candidate.viewId === viewId);
-            if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-            actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusMainView(workbench, view));
-          }}
-        />
+        visible ? (
+          <WorkbenchEditorTabs
+            activeId={group.activeViewId}
+            emptyLabel={t('workspace.mainTabs.empty')}
+            label={t('workspace.mainTabs.label')}
+            contextActionsRef={setContextActionsTarget}
+            tabs={views.map((view) => ({
+              id: view.viewId,
+              label: view.displayLabel,
+              closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
+            }))}
+            onClose={(viewId) => {
+              const view = views.find((candidate) => candidate.viewId === viewId);
+              if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+              actions.onCloseWorkbenchView(workbenchInstanceId, workbench, view);
+            }}
+            onReorder={(sourceViewId, targetViewId) => {
+              actions.onUpdateWorkbench(
+                workbenchInstanceId,
+                reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
+              );
+            }}
+            onSelect={(viewId) => {
+              const view = views.find((candidate) => candidate.viewId === viewId);
+              if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+              actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusMainView(workbench, view));
+            }}
+          />
+        ) : undefined
       }
     >
-      {views.length === 0 ? (
+      {!visible || views.length === 0 ? (
         <EmptyMainSurface />
       ) : activeView && visible ? (
         <div className="project-main-view-stack__item" data-main-view-id={activeView.viewId}>
@@ -2178,6 +2186,8 @@ function WorkspaceRegionControls({
   readonly workbenchInstanceId: string;
 }): JSX.Element {
   const { t } = useTranslation();
+  const [creativePanelsOpen, setCreativePanelsOpen] = useState(false);
+  const creativePanelsSelected = regionState.main.selected || regionState.cutPanel.selected;
   return (
     <div
       className="workspace-region-controls"
@@ -2190,9 +2200,11 @@ function WorkspaceRegionControls({
         disabled={
           disabled ||
           !regionState.agent.available ||
-          (regionState.agent.selected && !regionState.main.selected)
+          (regionState.agent.selected &&
+            !regionState.main.selected &&
+            !regionState.cutPanel.selected)
         }
-        icon={<span className={toCodiconClassName('layout')} aria-hidden="true" />}
+        icon={<span className={toCodiconClassName('layout-sidebar-left')} aria-hidden="true" />}
         label={t('workspace.agent')}
         size="xs"
         title={t('workspace.agent')}
@@ -2201,41 +2213,89 @@ function WorkspaceRegionControls({
           actions.onUpdateWorkbench(workbenchInstanceId, toggleWorkbenchRegion(workbench, 'agent'))
         }
       />
-      <IconButton
-        className="workbench-region-toggle"
-        data-workbench-region-control="main"
-        disabled={
-          disabled ||
-          !regionState.main.available ||
-          (regionState.main.selected && !regionState.agent.selected)
+      <Popover
+        align="end"
+        contentClassName="workspace-creative-panels-popover"
+        onOpenChange={setCreativePanelsOpen}
+        open={creativePanelsOpen}
+        trigger={
+          <IconButton
+            className="workbench-region-toggle"
+            data-workbench-region-control="creative-panels"
+            disabled={disabled || (!regionState.main.available && !regionState.cutPanel.available)}
+            icon={<span className={toCodiconClassName('layout')} aria-hidden="true" />}
+            label={t('workspace.creativePanels')}
+            size="xs"
+            title={t('workspace.creativePanels')}
+            aria-expanded={creativePanelsOpen}
+            aria-haspopup="menu"
+            aria-pressed={creativePanelsSelected}
+          />
         }
-        icon={<span className={toCodiconClassName('layout-centered')} aria-hidden="true" />}
-        label={t('workspace.mainPanel')}
-        size="xs"
-        title={t('workspace.mainPanel')}
-        aria-pressed={regionState.main.selected}
-        onClick={() =>
-          actions.onUpdateWorkbench(workbenchInstanceId, toggleWorkbenchRegion(workbench, 'main'))
-        }
-      />
-      <IconButton
-        className="workbench-region-toggle"
-        data-workbench-region-control="cut-panel"
-        disabled={disabled || !regionState.cutPanel.available}
-        icon={<span className={toCodiconClassName('layout-panel')} aria-hidden="true" />}
-        label={t('workspace.cutPanel')}
-        size="xs"
-        title={t('workspace.cutPanel')}
-        aria-pressed={regionState.cutPanel.selected}
-        onClick={() =>
-          workbench.cutPanel
-            ? actions.onUpdateWorkbench(
+      >
+        <div
+          className="workspace-creative-panels-popover__menu"
+          role="menu"
+          aria-label={t('workspace.creativePanels')}
+        >
+          <button
+            type="button"
+            className="workspace-creative-panels-popover__item"
+            data-workbench-region-option="main"
+            disabled={
+              disabled ||
+              !regionState.main.available ||
+              (regionState.main.selected &&
+                !regionState.agent.selected &&
+                !regionState.cutPanel.selected)
+            }
+            role="menuitemcheckbox"
+            aria-checked={regionState.main.selected}
+            onClick={() =>
+              actions.onUpdateWorkbench(
                 workbenchInstanceId,
-                toggleWorkbenchRegion(workbench, 'cutPanel'),
+                toggleWorkbenchRegion(workbench, 'main'),
               )
-            : actions.onCreateCutDraft(workbenchInstanceId)
-        }
-      />
+            }
+          >
+            <span className={toCodiconClassName('layout-centered')} aria-hidden="true" />
+            <span>{t('workspace.mainPanel')}</span>
+            <span className="workspace-creative-panels-popover__check" aria-hidden="true">
+              {regionState.main.selected ? <span className={toCodiconClassName('check')} /> : null}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="workspace-creative-panels-popover__item"
+            data-workbench-region-option="cut-panel"
+            disabled={
+              disabled ||
+              !regionState.cutPanel.available ||
+              (regionState.cutPanel.selected &&
+                !regionState.agent.selected &&
+                !regionState.main.selected)
+            }
+            role="menuitemcheckbox"
+            aria-checked={regionState.cutPanel.selected}
+            onClick={() =>
+              workbench.cutPanel
+                ? actions.onUpdateWorkbench(
+                    workbenchInstanceId,
+                    toggleWorkbenchRegion(workbench, 'cutPanel'),
+                  )
+                : actions.onCreateCutDraft(workbenchInstanceId)
+            }
+          >
+            <span className={toCodiconClassName('layout-panel')} aria-hidden="true" />
+            <span>{t('workspace.cutPanel')}</span>
+            <span className="workspace-creative-panels-popover__check" aria-hidden="true">
+              {regionState.cutPanel.selected ? (
+                <span className={toCodiconClassName('check')} />
+              ) : null}
+            </span>
+          </button>
+        </div>
+      </Popover>
       <IconButton
         className="workbench-region-toggle"
         data-workbench-region-control="management"
@@ -2426,9 +2486,14 @@ function isWorkbenchRegionVisible(
   workbench: DesktopWorkbenchLayoutProjection,
   region: WorkbenchRegion,
 ): boolean {
-  if (region === 'agent') return workbench.display.mode !== 'main-only';
+  if (region === 'agent') {
+    return workbench.display.mode === 'chat-main' || workbench.display.mode === 'chat-only';
+  }
   if (region === 'main') {
-    return workbench.main.views.length > 0 && workbench.display.mode !== 'chat-only';
+    return (
+      workbench.main.views.length > 0 &&
+      (workbench.display.mode === 'chat-main' || workbench.display.mode === 'main-only')
+    );
   }
   if (region === 'management') return workbench.resourceDock.presentation !== 'hidden';
   return workbench.cutPanel?.presentation === 'docked';
@@ -2440,23 +2505,28 @@ export function toggleWorkbenchRegion(
 ): DesktopWorkbenchLayoutProjection {
   const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
   const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
+  const cutPanelVisible = isWorkbenchRegionVisible(workbench, 'cutPanel');
   if (region === 'agent') {
-    if (agentVisible && !mainVisible) {
-      throw new Error('Desktop Workbench cannot hide Agent while Main is unavailable.');
+    if (agentVisible) {
+      if (mainVisible) return setWorkbenchDisplayMode(workbench, 'main-only');
+      if (cutPanelVisible) return setWorkbenchDisplayMode(workbench, 'empty-main');
+      throw new Error('Desktop Workbench cannot hide the last visible business region.');
     }
     return setWorkbenchDisplayMode(
       workbench,
-      agentVisible ? 'main-only' : 'chat-main',
+      mainVisible ? 'chat-main' : 'chat-only',
       workbench.display.chatPosition,
     );
   }
   if (region === 'main') {
-    if (mainVisible && !agentVisible) {
-      throw new Error('Desktop Workbench cannot hide Main while Agent is unavailable.');
+    if (mainVisible) {
+      if (agentVisible) return setWorkbenchDisplayMode(workbench, 'chat-only');
+      if (cutPanelVisible) return setWorkbenchDisplayMode(workbench, 'empty-main');
+      throw new Error('Desktop Workbench cannot hide the last visible business region.');
     }
     return setWorkbenchDisplayMode(
       workbench,
-      mainVisible ? 'chat-only' : 'chat-main',
+      agentVisible ? 'chat-main' : 'main-only',
       workbench.display.chatPosition,
     );
   }
@@ -2468,6 +2538,9 @@ export function toggleWorkbenchRegion(
   }
   if (!workbench.cutPanel) {
     throw new Error('Desktop Workbench cannot toggle Cut Panel without an attached Cut View.');
+  }
+  if (cutPanelVisible && !agentVisible && !mainVisible) {
+    throw new Error('Desktop Workbench cannot hide the last visible business region.');
   }
   return setCutPanelPresentation(
     workbench,

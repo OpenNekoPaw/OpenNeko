@@ -123,6 +123,7 @@ export interface WorkbenchWebviewRuntimeFrameProps {
 }
 
 export type ControlledWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
+export type ControlledWorkbenchBottomPanelPresentation = 'docked' | 'expanded';
 export type ControlledWorkbenchMainSplit = 'none' | 'columns' | 'rows';
 export type ControlledWorkbenchMainComposition = 'continuous' | 'independent-shells';
 export type ControlledWorkbenchInteractionPresentation =
@@ -163,6 +164,7 @@ export interface ControlledWorkbenchShellProps {
   readonly rightDockResize?: ControlledWorkbenchResizeBinding;
   readonly bottomPanel?: ReactNode;
   readonly bottomPanelVisible?: boolean;
+  readonly bottomPanelPresentation?: ControlledWorkbenchBottomPanelPresentation;
   readonly bottomPanelHeight?: number;
   readonly bottomPanelResize?: ControlledWorkbenchResizeBinding;
   readonly statusBar?: ReactNode;
@@ -214,6 +216,7 @@ export function EditorWorkbenchShell({
 export function ControlledWorkbenchShell({
   bottomPanel,
   bottomPanelHeight = 420,
+  bottomPanelPresentation = 'docked',
   bottomPanelResize,
   bottomPanelVisible = false,
   className,
@@ -244,6 +247,14 @@ export function ControlledWorkbenchShell({
   statusBar,
   titleBar,
 }: ControlledWorkbenchShellProps): React.ReactElement {
+  if (bottomPanelPresentation === 'expanded' && (!bottomPanel || !bottomPanelVisible)) {
+    throw new Error('Controlled Workbench expanded bottom Panel requires visible content.');
+  }
+  if (bottomPanelPresentation === 'expanded' && interaction && interactionPresentation === 'main') {
+    throw new Error(
+      'Controlled Workbench expanded bottom Panel cannot share Main with Interaction.',
+    );
+  }
   const interactionSide =
     interaction && interactionPresentation !== 'hidden' && interactionPresentation !== 'main'
       ? interactionPosition
@@ -297,7 +308,7 @@ export function ControlledWorkbenchShell({
   const bottomPanelResizeState = useControlledWorkbenchResize({
     binding: bottomPanelResize,
     edge: 'bottom',
-    enabled: Boolean(bottomPanel && bottomPanelVisible),
+    enabled: Boolean(bottomPanel && bottomPanelVisible && bottomPanelPresentation === 'docked'),
     size: bottomPanelHeight,
   });
   const mainSplitResizeState = useControlledWorkbenchResize({
@@ -333,6 +344,7 @@ export function ControlledWorkbenchShell({
       data-main-split={effectiveSplit}
       data-main-composition={mainComposition}
       data-bottom-panel-visible={bottomPanel && bottomPanelVisible ? 'true' : 'false'}
+      data-bottom-panel-presentation={bottomPanelPresentation}
       style={shellStyle}
     >
       {titleBar ? <div className="neko-controlled-workbench-title">{titleBar}</div> : null}
@@ -472,7 +484,7 @@ export function ControlledWorkbenchShell({
           data-resizing={bottomPanelResizeState.isResizing ? 'true' : 'false'}
         >
           {bottomPanel}
-          {bottomPanelResize && bottomPanelVisible ? (
+          {bottomPanelResize && bottomPanelVisible && bottomPanelPresentation === 'docked' ? (
             <ResizeHandle
               className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--top"
               handleProps={bottomPanelResizeState.handleProps}

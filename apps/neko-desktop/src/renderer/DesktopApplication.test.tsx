@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import {
   createDefaultDesktopWorkbenchLayout,
+  openOrFocusCutView,
   openOrFocusMainView,
   setWorkbenchDisplayMode,
+  type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
@@ -42,6 +44,14 @@ import type {
 import type { RoomView } from '@neko/chara/contracts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+class TestResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+Object.assign(globalThis, { ResizeObserver: TestResizeObserver });
 
 const rendererInstrumentation = vi.hoisted(() => ({
   extensionRootRender: vi.fn(),
@@ -88,6 +98,12 @@ vi.mock('./DesktopTextEditorSurface', () => ({
     rendererInstrumentation.textEditorRootRender(view.viewId);
     return <div data-text-editor-root={view.viewId} />;
   },
+}));
+
+vi.mock('./DesktopCutSurface', () => ({
+  DesktopCutSurface: ({ view }: { readonly view: { readonly viewId: string } }) => (
+    <div data-cut-root={view.viewId} />
+  ),
 }));
 
 describe('DesktopApplication scene lifecycle', () => {
@@ -185,6 +201,116 @@ describe('DesktopApplication scene lifecycle', () => {
         },
       }),
     );
+    await act(async () => root.unmount());
+  });
+
+  it('delegates the Main choice from one combined creative-panel control', async () => {
+    const projection = createTextEditorCutShellProjection('main-only');
+    const updateWorkbench = vi.fn(
+      async (_workbenchInstanceId: string, _layout: DesktopWorkbenchLayoutProjection) => projection,
+    );
+    installBridge({ projection, updateWorkbench });
+    const { container, root } = await renderApplication();
+
+    const controls = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-workbench-region-control]'),
+    ].filter((control) => control.dataset['workbenchRegionControl'] !== 'primary-sidebar');
+    expect(controls.map((control) => control.dataset['workbenchRegionControl'])).toEqual([
+      'agent',
+      'creative-panels',
+      'management',
+    ]);
+    expect(container.querySelector('[data-workbench-region-control="main"]')).toBeNull();
+    expect(container.querySelector('[data-workbench-region-control="cut-panel"]')).toBeNull();
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-control="creative-panels"]',
+    );
+    if (!trigger) throw new Error('Desktop fixture requires the creative panel control.');
+    await act(async () => trigger.click());
+    const mainOption = document.body.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-option="main"]',
+    );
+    const cutOption = document.body.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-option="cut-panel"]',
+    );
+    expect(mainOption?.getAttribute('aria-checked')).toBe('true');
+    expect(cutOption?.getAttribute('aria-checked')).toBe('true');
+
+    if (!mainOption || !cutOption) throw new Error('Desktop creative panel options are missing.');
+    await act(async () => mainOption.click());
+    await waitFor(() => updateWorkbench.mock.calls.length === 1);
+    expect(updateWorkbench.mock.calls[0]?.[1]).toMatchObject({
+      display: { mode: 'empty-main' },
+      cutPanel: { presentation: 'docked' },
+    });
+
+    await act(async () => root.unmount());
+  });
+
+  it('delegates the Cut choice from the combined creative-panel control', async () => {
+    const projection = createTextEditorCutShellProjection('main-only');
+    const updateWorkbench = vi.fn(
+      async (_workbenchInstanceId: string, _layout: DesktopWorkbenchLayoutProjection) => projection,
+    );
+    installBridge({ projection, updateWorkbench });
+    const { container, root } = await renderApplication();
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-control="creative-panels"]',
+    );
+    if (!trigger) throw new Error('Desktop fixture requires the creative panel control.');
+    await act(async () => trigger.click());
+    const cutOption = document.body.querySelector<HTMLButtonElement>(
+      '[data-workbench-region-option="cut-panel"]',
+    );
+    if (!cutOption) throw new Error('Desktop Cut panel option is missing.');
+    expect(cutOption.getAttribute('aria-checked')).toBe('true');
+    expect(cutOption.disabled).toBe(false);
+
+    await act(async () => cutOption.click());
+    await waitFor(() => updateWorkbench.mock.calls.length === 1);
+    expect(updateWorkbench.mock.calls[0]?.[1]).toMatchObject({
+      display: { mode: 'main-only' },
+      cutPanel: { presentation: 'hidden' },
+    });
+
+    await act(async () => root.unmount());
+  });
+
+  it('expands Cut and unmounts the Main View in Cut-only mode', async () => {
+    const projection = createTextEditorCutShellProjection('empty-main');
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+
+    expect(
+      container
+        .querySelector('[data-neko-controlled-workbench="true"]')
+        ?.getAttribute('data-interaction-presentation'),
+    ).toBe('hidden');
+    expect(
+      container
+        .querySelector('[data-neko-controlled-workbench="true"]')
+        ?.getAttribute('data-bottom-panel-presentation'),
+    ).toBe('expanded');
+    expect(container.querySelector('[data-main-view-id]')).toBeNull();
+    expect(rendererInstrumentation.textEditorRootRender).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-workbench-slot="bottomPanel"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('keeps Agent docked while Cut expands when Main is hidden', async () => {
+    const projection = createTextEditorCutShellProjection('chat-only');
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+    const shell = container.querySelector('[data-neko-controlled-workbench="true"]');
+
+    expect(shell?.getAttribute('data-interaction-presentation')).toBe('docked');
+    expect(shell?.getAttribute('data-bottom-panel-presentation')).toBe('expanded');
+    expect(container.querySelector('[data-cut-root="cut:view-1"]')).not.toBeNull();
+    expect(container.querySelector('[data-workbench-slot="bottomPanel"]')).not.toBeNull();
+
     await act(async () => root.unmount());
   });
 
@@ -2434,6 +2560,41 @@ function createTextEditorShellProjection(): DesktopShellProjection {
         scene,
       }),
     },
+  };
+}
+
+function createTextEditorCutShellProjection(
+  mode: 'chat-only' | 'main-only' | 'empty-main',
+): DesktopShellProjection {
+  const base = createTextEditorShellProjection();
+  const current = resolveActiveDesktopWindowWorkbench(base.window);
+  const cutView = {
+    viewId: 'cut:view-1',
+    viewInstanceId: 'view-instance-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    kind: 'cut' as const,
+    ownerId: 'cut-session:view-1',
+    displayLabel: 'story.otio',
+    documentId: 'story.otio',
+  };
+  const layout = setWorkbenchDisplayMode(openOrFocusCutView(current.layout, cutView), mode);
+  const scene = parseDesktopWorkbenchSceneProjection({
+    ...current.scene,
+    slots: {
+      ...current.scene.slots,
+      cutPanel: {
+        kind: 'workspace-cut',
+        workspaceId: 'workspace-1',
+        viewId: cutView.viewId,
+        viewInstanceId: cutView.viewInstanceId,
+        ownerId: cutView.ownerId,
+      },
+    },
+  });
+  return {
+    ...withActiveScene(base, scene, layout),
+    domains: [{ surface: 'cut', status: 'ready', ownerSlice: 'P1.5' }],
   };
 }
 

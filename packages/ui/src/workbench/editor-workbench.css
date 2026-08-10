@@ -290,6 +290,23 @@
   grid-template-rows: auto minmax(0, 1fr) 0 auto;
 }
 
+.neko-controlled-workbench-shell[data-bottom-panel-presentation='expanded'] {
+  grid-template-rows: auto minmax(0, 1fr) 0 auto;
+}
+
+.neko-controlled-workbench-shell[data-bottom-panel-presentation='expanded']
+  .neko-controlled-workbench-main {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.neko-controlled-workbench-shell[data-bottom-panel-presentation='expanded']
+  .neko-controlled-workbench-bottom-panel {
+  grid-column: main-start / main-end;
+  grid-row: main-start / bottom-panel-end;
+  border-top: 0;
+}
+
 .neko-controlled-workbench-title {
   grid-area: title;
   min-width: 0;

@@ -13,7 +13,7 @@ export const DESKTOP_WORKBENCH_LIMITS = {
 
 export type DesktopWorkbenchDockPosition = 'left' | 'right';
 export type DesktopWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
-export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only';
+export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only' | 'empty-main';
 export type DesktopWorkbenchMainSplitAxis = 'columns' | 'rows';
 export type DesktopPreviewViewPresentation = 'temporary' | 'pinned' | 'side';
 export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut' | 'text-editor';
@@ -174,6 +174,14 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
     record['cutPanel'] === undefined
       ? undefined
       : parseDesktopWorkbenchCutPanel(record['cutPanel']);
+  const displayMode = requireOneOf(
+    display['mode'],
+    ['chat-main', 'chat-only', 'main-only', 'empty-main'] as const,
+    'Desktop Workbench display mode is invalid.',
+  );
+  if (displayMode === 'empty-main' && cutPanel?.presentation !== 'docked') {
+    throw invalidPayload("Desktop display mode 'empty-main' requires a docked Cut Panel.");
+  }
 
   return {
     windowId: requireNonEmptyString(
@@ -193,11 +201,7 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
       ),
     },
     display: {
-      mode: requireOneOf(
-        display['mode'],
-        ['chat-main', 'chat-only', 'main-only'] as const,
-        'Desktop Workbench display mode is invalid.',
-      ),
+      mode: displayMode,
       chatPosition: requireOneOf(
         display['chatPosition'],
         ['left', 'right'] as const,
@@ -226,6 +230,9 @@ export function setWorkbenchDisplayMode(
 ): DesktopWorkbenchLayoutProjection {
   if (mode === 'main-only' && workbench.main.views.length === 0) {
     throw invalidPayload(`Desktop display mode '${mode}' requires an attached Main View.`);
+  }
+  if (mode === 'empty-main' && workbench.cutPanel?.presentation !== 'docked') {
+    throw invalidPayload(`Desktop display mode '${mode}' requires a docked Cut Panel.`);
   }
   return {
     ...workbench,
@@ -537,7 +544,13 @@ export function closeCutView(
   const views = panel.views.filter((view) => view.viewId !== viewId);
   if (views.length === 0) {
     const { cutPanel: _cutPanel, ...withoutCutPanel } = workbench;
-    return parseDesktopWorkbenchLayout(withoutCutPanel);
+    return parseDesktopWorkbenchLayout({
+      ...withoutCutPanel,
+      display:
+        workbench.display.mode === 'empty-main'
+          ? { ...workbench.display, mode: 'chat-only' }
+          : workbench.display,
+    });
   }
   return parseDesktopWorkbenchLayout({
     ...workbench,
