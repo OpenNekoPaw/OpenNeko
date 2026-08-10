@@ -7,6 +7,7 @@ import {
   readFile,
   rename,
   rm,
+  stat,
   statfs,
   writeFile,
 } from 'node:fs/promises';
@@ -22,10 +23,16 @@ import type {
   AgentExtensionArtifactStageReceipt,
   AgentExtensionReviewedArtifact,
 } from '@neko/agent-runtime/extensions';
+import {
+  DESKTOP_EXTENSION_MAX_EXPANDED_BYTES,
+  DesktopExtensionArchiveInventory,
+  assertDesktopExtensionDiskBudget,
+  normalizeDesktopExtensionArchivePath,
+  resolveDesktopExtensionArchiveTarget,
+} from './desktop-extension-archive-policy';
 
 const MAX_REDIRECTS = 5;
-const MAX_EXPANDED_BYTES = 1_500_000_000;
-const MAX_ARCHIVE_FILES = 20_000;
+const MAX_RESUME_ATTEMPTS = 1;
 
 export interface DesktopExtensionArtifactHostOptions {
   readonly platform: { readonly os: string; readonly arch: string };
@@ -53,7 +60,7 @@ export function createDesktopExtensionArtifactHost(
         throw new Error(`Extension artifact operation '${input.operationId}' already exists.`);
       }
       assertStageLocation(input.installRoot, input.stagingRoot);
-      await assertDiskBudget(input.installRoot, input.artifact.sizeBytes);
+      await assertDiskBudget(input.installRoot, input.artifact.sizeBytes, input.artifact.archive);
       await mkdir(input.stagingRoot, { recursive: false });
       stagingByOperation.set(input.operationId, input.stagingRoot);
       const archivePath = resolve(input.stagingRoot, '.artifact-download');
@@ -68,7 +75,12 @@ export function createDesktopExtensionArtifactHost(
         input.signal.throwIfAborted();
         assertArtifactSignature(input.artifact, trustedKeys.get(input.artifact.signature.keyId));
         input.signal.throwIfAborted();
-        await extractReviewedArchive(input.artifact.archive, archivePath, input.stagingRoot);
+        await extractReviewedArchive(
+          input.artifact.archive,
+          archivePath,
+          input.stagingRoot,
+          input.signal,
+        );
         input.signal.throwIfAborted();
         await rm(archivePath, { force: true });
         await validateContainedProvenance(input.stagingRoot, input.artifact);
@@ -118,9 +130,12 @@ export function createDesktopExtensionArtifactHost(
 }
 
 export function createExtensionArtifactSignatureMessage(
-  artifact: Pick<AgentExtensionReviewedArtifact, 'url' | 'sizeBytes' | 'sha256'>,
+  artifact: Pick<AgentExtensionReviewedArtifact, 'deliverySource' | 'url' | 'sizeBytes' | 'sha256'>,
 ): Uint8Array {
-  return Buffer.from(`${artifact.url}\n${artifact.sizeBytes}\n${artifact.sha256}\n`, 'utf8');
+  return Buffer.from(
+    `${artifact.deliverySource}\n${artifact.url}\n${artifact.sizeBytes}\n${artifact.sha256}\n`,
+    'utf8',
+  );
 }
 
 async function downloadArtifact(input: {
@@ -130,66 +145,264 @@ async function downloadArtifact(input: {
   readonly signal: AbortSignal;
   readonly reportProgress: (transferredBytes: number) => void;
 }): Promise<{ readonly finalUrl: string; readonly sizeBytes: number; readonly sha256: string }> {
-  let currentUrl = input.artifact.url;
+  let resume: ArtifactDownloadResume | undefined;
+  let reportedBytes = 0;
+  for (let attempt = 0; attempt <= MAX_RESUME_ATTEMPTS; attempt += 1) {
+    const { response, finalUrl } = await requestArtifactResponse(input, resume);
+    const responseBody = await validateArtifactResponse(response, input.artifact, resume);
+    const digest = createHash('sha256');
+    let sizeBytes = resume?.transferredBytes ?? 0;
+    if (resume) {
+      await hashExistingArtifact(input.archivePath, sizeBytes, digest);
+    }
+    const counter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        sizeBytes += chunk.byteLength;
+        if (sizeBytes > input.artifact.sizeBytes) {
+          callback(new Error('Extension artifact exceeded the reviewed download size.'));
+          return;
+        }
+        digest.update(chunk);
+        if (sizeBytes > reportedBytes) {
+          input.reportProgress(sizeBytes);
+          reportedBytes = sizeBytes;
+        }
+        callback(null, chunk);
+      },
+    });
+    try {
+      await pipeline(
+        Readable.from(readWebResponse(responseBody)),
+        counter,
+        createWriteStream(input.archivePath, { flags: resume ? 'a' : 'wx' }),
+        { signal: input.signal },
+      );
+    } catch (error) {
+      if (
+        !(error instanceof ArtifactDownloadInterruptedError) ||
+        input.signal.aborted ||
+        resume !== undefined ||
+        attempt >= MAX_RESUME_ATTEMPTS
+      ) {
+        throw error;
+      }
+      resume = await createArtifactDownloadResume({
+        archivePath: input.archivePath,
+        artifact: input.artifact,
+        response,
+        finalUrl,
+        transferredBytes: sizeBytes,
+      });
+      if (!resume) throw error;
+      continue;
+    }
+    const sha256 = `sha256:${digest.digest('hex')}`;
+    if (sizeBytes !== input.artifact.sizeBytes || sha256 !== input.artifact.sha256) {
+      throw new Error('Extension artifact size or digest does not match the catalog.');
+    }
+    return { finalUrl, sizeBytes, sha256 };
+  }
+  throw new Error('Extension artifact resume attempts were exhausted.');
+}
+
+interface ArtifactDownloadResume {
+  readonly url: string;
+  readonly transferredBytes: number;
+  readonly validator: ArtifactDownloadValidator;
+}
+
+interface ArtifactDownloadValidator {
+  readonly header: 'etag' | 'last-modified';
+  readonly value: string;
+}
+
+async function requestArtifactResponse(
+  input: {
+    readonly request: typeof fetch;
+    readonly artifact: AgentExtensionReviewedArtifact;
+    readonly signal: AbortSignal;
+  },
+  resume: ArtifactDownloadResume | undefined,
+): Promise<{ readonly response: Response; readonly finalUrl: string }> {
+  let currentUrl = assertReviewedArtifactUrl(resume?.url ?? input.artifact.url, input.artifact);
   let response: Response | undefined;
+  const requestHeaders = resume
+    ? {
+        Range: `bytes=${resume.transferredBytes}-`,
+        'If-Range': resume.validator.value,
+      }
+    : undefined;
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     input.signal.throwIfAborted();
-    response = await input.request(currentUrl, { redirect: 'manual', signal: input.signal });
+    response = await input.request(currentUrl, {
+      redirect: 'manual',
+      signal: input.signal,
+      ...(requestHeaders ? { headers: requestHeaders } : {}),
+    });
     if (![301, 302, 303, 307, 308].includes(response.status)) break;
     const location = response.headers.get('location');
-    if (!location) throw new Error('Extension artifact redirect has no location.');
-    const next = new URL(location, currentUrl);
-    if (
-      next.protocol !== 'https:' ||
-      next.username ||
-      next.password ||
-      next.port ||
-      !input.artifact.allowedHosts.includes(next.hostname)
-    ) {
-      throw new Error('Extension artifact redirect left the reviewed HTTPS hosts.');
+    if (!location) {
+      await response.body?.cancel();
+      throw new Error('Extension artifact redirect has no location.');
     }
     await response.body?.cancel();
-    currentUrl = next.href;
+    currentUrl = assertReviewedArtifactUrl(new URL(location, currentUrl).href, input.artifact);
     response = undefined;
   }
   if (!response) throw new Error('Extension artifact exceeded the redirect limit.');
-  if (!response.ok || !response.body) {
-    throw new Error(`Extension artifact download failed with HTTP ${response.status}.`);
+  let finalUrl: string;
+  try {
+    finalUrl = assertReviewedArtifactUrl(response.url || currentUrl, input.artifact);
+  } catch (error) {
+    await response.body?.cancel();
+    throw error;
   }
-  const responseUrl = response.url || currentUrl;
-  const finalUrl = new URL(responseUrl);
-  if (finalUrl.protocol !== 'https:' || !input.artifact.allowedHosts.includes(finalUrl.hostname)) {
-    throw new Error('Extension artifact response came from an unreviewed host.');
+  return { response, finalUrl };
+}
+
+function assertReviewedArtifactUrl(
+  value: string,
+  artifact: AgentExtensionReviewedArtifact,
+): string {
+  const url = new URL(value);
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !artifact.allowedHosts.includes(url.hostname)
+  ) {
+    throw new Error('Extension artifact request left the reviewed HTTPS hosts.');
   }
+  return url.href;
+}
+
+async function validateArtifactResponse(
+  response: Response,
+  artifact: AgentExtensionReviewedArtifact,
+  resume: ArtifactDownloadResume | undefined,
+): Promise<ReadableStream<Uint8Array>> {
+  try {
+    if (!response.body) {
+      throw new Error(`Extension artifact download failed with HTTP ${response.status}.`);
+    }
+    if (!resume) {
+      if (response.status !== 200) {
+        throw new Error(`Extension artifact download failed with HTTP ${response.status}.`);
+      }
+      assertContentLength(response, artifact.sizeBytes);
+      return response.body;
+    }
+    if (response.status !== 206) {
+      throw new Error('Extension artifact resume did not return partial content.');
+    }
+    if (response.headers.get(resume.validator.header) !== resume.validator.value) {
+      throw new Error('Extension artifact resume validator changed.');
+    }
+    const contentRange = response.headers.get('content-range');
+    const expectedRange = `bytes ${resume.transferredBytes}-${artifact.sizeBytes - 1}/${artifact.sizeBytes}`;
+    if (contentRange !== expectedRange) {
+      throw new Error('Extension artifact resume Content-Range is invalid.');
+    }
+    assertContentLength(response, artifact.sizeBytes - resume.transferredBytes);
+    return response.body;
+  } catch (error) {
+    await response.body?.cancel();
+    throw error;
+  }
+}
+
+function assertContentLength(response: Response, expectedBytes: number): void {
   const declaredLength = response.headers.get('content-length');
-  if (declaredLength !== null && Number(declaredLength) !== input.artifact.sizeBytes) {
+  if (declaredLength === null) return;
+  const parsedLength = Number(declaredLength);
+  if (
+    !/^[0-9]+$/u.test(declaredLength) ||
+    !Number.isSafeInteger(parsedLength) ||
+    parsedLength !== expectedBytes
+  ) {
     throw new Error('Extension artifact Content-Length does not match the catalog.');
   }
-  const digest = createHash('sha256');
-  let sizeBytes = 0;
-  const counter = new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      sizeBytes += chunk.byteLength;
-      if (sizeBytes > input.artifact.sizeBytes) {
-        callback(new Error('Extension artifact exceeded the reviewed download size.'));
-        return;
-      }
-      digest.update(chunk);
-      input.reportProgress(sizeBytes);
-      callback(null, chunk);
-    },
-  });
-  await pipeline(
-    Readable.from(readWebResponse(response.body)),
-    counter,
-    createWriteStream(input.archivePath, { flags: 'wx' }),
-    { signal: input.signal },
-  );
-  const sha256 = `sha256:${digest.digest('hex')}`;
-  if (sizeBytes !== input.artifact.sizeBytes || sha256 !== input.artifact.sha256) {
-    throw new Error('Extension artifact size or digest does not match the catalog.');
+}
+
+async function createArtifactDownloadResume(input: {
+  readonly archivePath: string;
+  readonly artifact: AgentExtensionReviewedArtifact;
+  readonly response: Response;
+  readonly finalUrl: string;
+  readonly transferredBytes: number;
+}): Promise<ArtifactDownloadResume | undefined> {
+  if (!hasByteRangeSupport(input.response.headers)) {
+    return undefined;
   }
-  return { finalUrl: finalUrl.href, sizeBytes, sha256 };
+  const validator = readArtifactDownloadValidator(input.response.headers);
+  if (!validator) return undefined;
+  let file: Awaited<ReturnType<typeof stat>>;
+  try {
+    file = await stat(input.archivePath);
+  } catch (error) {
+    if (isEnoent(error)) return undefined;
+    throw error;
+  }
+  if (!file.isFile() || file.size > input.transferredBytes) {
+    throw new Error('Extension artifact partial download state is invalid.');
+  }
+  if (file.size <= 0 || file.size >= input.artifact.sizeBytes) return undefined;
+  return Object.freeze({
+    url: input.finalUrl,
+    transferredBytes: file.size,
+    validator,
+  });
+}
+
+function hasByteRangeSupport(headers: Headers): boolean {
+  return (headers.get('accept-ranges') ?? '')
+    .split(',')
+    .some((value) => value.trim().toLocaleLowerCase('en-US') === 'bytes');
+}
+
+function readArtifactDownloadValidator(headers: Headers): ArtifactDownloadValidator | undefined {
+  const etag = headers.get('etag');
+  if (etag && !etag.startsWith('W/') && etag.startsWith('"') && etag.endsWith('"')) {
+    return Object.freeze({ header: 'etag', value: etag });
+  }
+  const lastModified = headers.get('last-modified');
+  const lastModifiedTime = lastModified ? Date.parse(lastModified) : Number.NaN;
+  if (
+    lastModified &&
+    Number.isFinite(lastModifiedTime) &&
+    new Date(lastModifiedTime).toUTCString() === lastModified
+  ) {
+    return Object.freeze({ header: 'last-modified', value: lastModified });
+  }
+  return undefined;
+}
+
+async function hashExistingArtifact(
+  archivePath: string,
+  expectedBytes: number,
+  digest: ReturnType<typeof createHash>,
+): Promise<void> {
+  const file = await stat(archivePath);
+  if (!file.isFile() || file.size !== expectedBytes) {
+    throw new Error('Extension artifact partial download state is invalid.');
+  }
+  await pipeline(
+    createReadStream(archivePath),
+    new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        digest.update(chunk);
+        callback();
+      },
+    }),
+  );
+}
+
+class ArtifactDownloadInterruptedError extends Error {
+  constructor(readError: unknown) {
+    super('Extension artifact response body was interrupted.', { cause: readError });
+    this.name = 'ArtifactDownloadInterruptedError';
+  }
 }
 
 function assertArtifactSignature(
@@ -209,12 +422,13 @@ async function extractReviewedArchive(
   archive: AgentExtensionReviewedArtifact['archive'],
   archivePath: string,
   stagingRoot: string,
+  signal: AbortSignal,
 ): Promise<void> {
   if (archive === 'zip') {
-    await extractZip(archivePath, stagingRoot);
+    await extractZip(archivePath, stagingRoot, signal);
     return;
   }
-  await extractTarGzip(archivePath, stagingRoot);
+  await extractTarGzip(archivePath, stagingRoot, signal);
 }
 
 class NodeFileReader extends Reader<string> {
@@ -244,7 +458,11 @@ class NodeFileReader extends Reader<string> {
   }
 }
 
-async function extractZip(archivePath: string, stagingRoot: string): Promise<void> {
+async function extractZip(
+  archivePath: string,
+  stagingRoot: string,
+  signal: AbortSignal,
+): Promise<void> {
   const reader = new NodeFileReader(archivePath);
   const zip = new ZipReader(reader, {
     checkOverlappingEntryOnly: false,
@@ -252,8 +470,9 @@ async function extractZip(archivePath: string, stagingRoot: string): Promise<voi
   });
   try {
     const entries = await zip.getEntries();
-    const inventory = new ArchiveInventory();
+    const inventory = new DesktopExtensionArchiveInventory();
     for (const entry of entries) {
+      signal.throwIfAborted();
       const mode = entry.unixMode ?? 0;
       const fileType = mode & 0o170000;
       const kind = entry.directory ? 'directory' : 'file';
@@ -263,8 +482,9 @@ async function extractZip(archivePath: string, stagingRoot: string): Promise<voi
       inventory.add(entry.filename, kind, entry.uncompressedSize);
     }
     for (const entry of entries) {
-      const normalized = normalizeArchivePath(entry.filename);
-      const target = resolveArchiveTarget(stagingRoot, normalized);
+      signal.throwIfAborted();
+      const normalized = normalizeDesktopExtensionArchivePath(entry.filename);
+      const target = resolveDesktopExtensionArchiveTarget(stagingRoot, normalized);
       if (entry.directory) {
         await mkdir(target, { recursive: true });
         continue;
@@ -274,6 +494,7 @@ async function extractZip(archivePath: string, stagingRoot: string): Promise<voi
       await entry.getData(Writable.toWeb(output), {
         checkSignature: true,
         checkOverlappingEntry: true,
+        signal,
       });
       await chmod(
         target,
@@ -286,13 +507,17 @@ async function extractZip(archivePath: string, stagingRoot: string): Promise<voi
   }
 }
 
-async function extractTarGzip(archivePath: string, stagingRoot: string): Promise<void> {
+async function extractTarGzip(
+  archivePath: string,
+  stagingRoot: string,
+  signal: AbortSignal,
+): Promise<void> {
   const tarPath = resolve(stagingRoot, '.expanded.tar');
   let expandedBytes = 0;
   const counter = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       expandedBytes += chunk.byteLength;
-      if (expandedBytes > MAX_EXPANDED_BYTES) {
+      if (expandedBytes > DESKTOP_EXTENSION_MAX_EXPANDED_BYTES) {
         callback(new Error('Extension TAR expansion exceeded its byte limit.'));
         return;
       }
@@ -304,12 +529,14 @@ async function extractTarGzip(archivePath: string, stagingRoot: string): Promise
     createGunzip(),
     counter,
     createWriteStream(tarPath, { flags: 'wx' }),
+    { signal },
   );
   const handle = await open(tarPath, 'r');
-  const inventory = new ArchiveInventory();
+  const inventory = new DesktopExtensionArchiveInventory();
   try {
     let offset = 0;
     while (offset + 512 <= expandedBytes) {
+      signal.throwIfAborted();
       const header = Buffer.alloc(512);
       const { bytesRead } = await handle.read(header, 0, header.length, offset);
       if (bytesRead !== 512) throw new Error('Extension TAR header is truncated.');
@@ -326,7 +553,12 @@ async function extractTarGzip(archivePath: string, stagingRoot: string): Promise
         throw new Error('Extension TAR contains a link or unsupported entry type.');
       }
       const normalized = inventory.add(path, kind, size);
-      const target = resolveArchiveTarget(stagingRoot, normalized);
+      const target = resolveDesktopExtensionArchiveTarget(stagingRoot, normalized);
+      const dataEnd = offset + 512 + size;
+      const nextOffset = offset + 512 + Math.ceil(size / 512) * 512;
+      if (dataEnd > expandedBytes || nextOffset > expandedBytes) {
+        throw new Error('Extension TAR entry content is truncated.');
+      }
       if (kind === 'directory') {
         await mkdir(target, { recursive: true });
       } else {
@@ -337,95 +569,17 @@ async function extractTarGzip(archivePath: string, stagingRoot: string): Promise
           await pipeline(
             createReadStream(tarPath, { start: offset + 512, end: offset + 512 + size - 1 }),
             createWriteStream(target, { flags: 'wx', mode: 0o600 }),
+            { signal },
           );
         }
         await chmod(target, (mode & 0o111) !== 0 ? 0o755 : 0o644);
       }
-      offset += 512 + Math.ceil(size / 512) * 512;
+      offset = nextOffset;
     }
   } finally {
     await handle.close();
     await rm(tarPath, { force: true });
   }
-}
-
-class ArchiveInventory {
-  private readonly entries = new Map<string, 'file' | 'directory'>();
-  private expandedBytes = 0;
-
-  add(rawPath: string, kind: 'file' | 'directory', size: number): string {
-    if (!Number.isSafeInteger(size) || size < 0) {
-      throw new Error('Extension archive entry size is invalid.');
-    }
-    const path = normalizeArchivePath(rawPath);
-    const key = path.toLocaleLowerCase('en-US');
-    if (this.entries.has(key)) {
-      throw new Error('Extension archive contains a duplicate or case-colliding path.');
-    }
-    const segments = key.split('/');
-    for (let index = 1; index < segments.length; index += 1) {
-      if (this.entries.get(segments.slice(0, index).join('/')) === 'file') {
-        throw new Error('Extension archive places an entry below a file.');
-      }
-    }
-    if (
-      kind === 'file' &&
-      [...this.entries.keys()].some((candidate) => candidate.startsWith(`${key}/`))
-    ) {
-      throw new Error('Extension archive replaces a directory with a file.');
-    }
-    this.entries.set(key, kind);
-    if (this.entries.size > MAX_ARCHIVE_FILES) {
-      throw new Error('Extension archive contains too many entries.');
-    }
-    this.expandedBytes += size;
-    if (this.expandedBytes > MAX_EXPANDED_BYTES) {
-      throw new Error('Extension archive expanded size exceeds its limit.');
-    }
-    return path;
-  }
-}
-
-function normalizeArchivePath(value: string): string {
-  const path = value.replace(/\/$/u, '');
-  if (!path || isAbsolute(path) || path.includes('\\') || path.includes('\0')) {
-    throw new Error('Extension archive path is unsafe.');
-  }
-  const segments = path.split('/');
-  if (
-    segments.some(
-      (segment) =>
-        !segment ||
-        segment === '.' ||
-        segment === '..' ||
-        segment.endsWith('.') ||
-        segment.endsWith(' ') ||
-        segment.includes(':') ||
-        isWindowsReservedSegment(segment),
-    )
-  ) {
-    throw new Error('Extension archive path is unsafe on a supported platform.');
-  }
-  return segments.join('/');
-}
-
-function isWindowsReservedSegment(segment: string): boolean {
-  const stem = segment.split('.', 1)[0]?.toLocaleLowerCase('en-US') ?? '';
-  if (['con', 'prn', 'aux', 'nul'].includes(stem)) return true;
-  if (stem.length !== 4 || (stem.slice(0, 3) !== 'com' && stem.slice(0, 3) !== 'lpt')) {
-    return false;
-  }
-  const unit = stem.charCodeAt(3) - '0'.charCodeAt(0);
-  return unit >= 1 && unit <= 9;
-}
-
-function resolveArchiveTarget(root: string, path: string): string {
-  const target = resolve(root, path);
-  const fromRoot = relative(resolve(root), target);
-  if (!fromRoot || fromRoot.startsWith('..') || isAbsolute(fromRoot)) {
-    throw new Error('Extension archive target escaped staging.');
-  }
-  return target;
 }
 
 function validateTarChecksum(header: Buffer): void {
@@ -474,7 +628,10 @@ async function validateContainedProvenance(
   ) {
     throw new Error('Extension artifact contained provenance does not match the catalog.');
   }
-  const licensePath = resolveArchiveTarget(stagingRoot, artifact.licenseInventory.path);
+  const licensePath = resolveDesktopExtensionArchiveTarget(
+    stagingRoot,
+    artifact.licenseInventory.path,
+  );
   const licenseDigest = `sha256:${createHash('sha256')
     .update(await readFile(licensePath))
     .digest('hex')}`;
@@ -498,7 +655,12 @@ async function* readWebResponse(
   let completed = false;
   try {
     while (true) {
-      const result = await reader.read();
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await reader.read();
+      } catch (error) {
+        throw new ArtifactDownloadInterruptedError(error);
+      }
       if (result.done) {
         completed = true;
         return;
@@ -506,7 +668,13 @@ async function* readWebResponse(
       yield result.value;
     }
   } finally {
-    if (!completed) await reader.cancel();
+    if (!completed) {
+      try {
+        await reader.cancel();
+      } catch {
+        // Preserve the primary stream or pipeline failure.
+      }
+    }
     reader.releaseLock();
   }
 }
@@ -521,13 +689,14 @@ function hasExactKeys(value: Readonly<Record<string, unknown>>, keys: readonly s
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
-async function assertDiskBudget(installRoot: string, archiveBytes: number): Promise<void> {
+async function assertDiskBudget(
+  installRoot: string,
+  archiveBytes: number,
+  archive: AgentExtensionReviewedArtifact['archive'],
+): Promise<void> {
   const stats = await statfs(installRoot);
   const available = stats.bavail * stats.bsize;
-  const required = archiveBytes + MAX_EXPANDED_BYTES;
-  if (!Number.isSafeInteger(available) || available < required) {
-    throw new Error('Extension artifact staging has insufficient disk space.');
-  }
+  assertDesktopExtensionDiskBudget(available, archiveBytes, archive);
 }
 
 function assertStageLocation(installRoot: string, stagingRoot: string): void {

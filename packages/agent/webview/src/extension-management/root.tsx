@@ -264,6 +264,9 @@ export function AgentExtensionManagementRoot({
                     </small>
                     <small>
                       {t(`home.capabilities.artifactStatus.${extension.artifactStatus}`)}
+                      {extension.deliverySource
+                        ? ` · ${t(`home.capabilities.deliverySource.${extension.deliverySource}`)}`
+                        : ''}
                       {extension.artifactPlatform ? ` · ${extension.artifactPlatform}` : ''}
                       {extension.downloadSizeBytes > 0
                         ? ` · ${formatByteSize(extension.downloadSizeBytes)}`

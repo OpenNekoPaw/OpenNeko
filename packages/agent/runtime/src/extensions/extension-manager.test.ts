@@ -20,15 +20,18 @@ import {
   createOpenNekoExtensionRepository,
   type AgentExtensionArtifactHostPort,
   type AgentExtensionArtifactStageReceipt,
+  type AgentExtensionCandidateQualificationPort,
   type AgentExtensionReviewedArtifact,
   type AgentExtensionSupportPort,
 } from './extension-manager';
+import { calculateExtensionPackageTreeSha256 } from './extension-package-integrity';
 
 describe('Desktop extension manager', () => {
   it('checks Agent turn and exact Automation session ownership without affecting siblings', async () => {
-    let hasActiveAgentTurns = true;
+    let activePluginId: string | undefined = 'browser-use@openneko';
     const ownership = createAgentExtensionMutationOwnership({
-      hasActiveAgentTurns: () => hasActiveAgentTurns,
+      listOwnedAgentTurns: (pluginId) =>
+        pluginId === activePluginId ? [{ runId: 'agent-run-1' }] : [],
       listOwnedAutomationSessions: (pluginId) =>
         pluginId === 'browser-use@openneko' ? [{ sessionId: 'automation-session-1' }] : [],
     });
@@ -38,8 +41,11 @@ describe('Desktop extension manager', () => {
       mutation: 'disable' as const,
     };
 
-    await expect(ownership.assertIdle(input)).rejects.toThrow('Agent turn is active');
-    hasActiveAgentTurns = false;
+    await expect(ownership.assertIdle(input)).rejects.toThrow('owns 1 Agent turn');
+    await expect(
+      ownership.assertIdle({ ...input, pluginId: 'sibling@openneko' }),
+    ).resolves.toBeUndefined();
+    activePluginId = undefined;
     await expect(ownership.assertIdle(input)).rejects.toThrow('owns 1 Automation session');
     await expect(
       ownership.assertIdle({ ...input, pluginId: 'sibling@openneko' }),
@@ -64,7 +70,6 @@ describe('Desktop extension manager', () => {
           category: 'Productivity',
         },
       });
-      await writeInstalledArtifactState(fixture, 'computer-use', '0.1.0');
       await mkdir(join(installedRoot, 'skills'), { recursive: true });
       await writeFile(
         join(installedRoot, '.mcp.json'),
@@ -78,6 +83,7 @@ describe('Desktop extension manager', () => {
         }),
         'utf8',
       );
+      await writeInstalledArtifactState(fixture, 'computer-use', '0.1.0');
       await writePlugin(availableRoot, {
         name: 'computer-use',
         version: '0.2.4',
@@ -392,13 +398,76 @@ describe('Desktop extension manager', () => {
           updatesFrom: ['1.0.0'],
         },
       ]);
+      const lifecycle: string[] = [];
       const ownership = {
-        assertIdle: vi.fn(async () => undefined),
+        assertIdle: vi.fn(async () => {
+          lifecycle.push('assert-idle');
+        }),
       };
-      const manager = createManager(fixture, createAgentSupport(), ownership);
+      const qualificationClose = vi.fn(async () => {
+        lifecycle.push('candidate-close');
+      });
+      const cancellationClose = vi.fn(async () => undefined);
+      const candidateQualification: AgentExtensionCandidateQualificationPort = {
+        qualify: vi
+          .fn<AgentExtensionCandidateQualificationPort['qualify']>()
+          .mockRejectedValueOnce(new Error('Candidate qualification failed.'))
+          .mockResolvedValueOnce({
+            close: vi.fn(async () => {
+              throw new Error('Candidate process did not close.');
+            }),
+          })
+          .mockImplementationOnce(
+            ({ signal }) =>
+              new Promise((resolve) => {
+                signal.addEventListener('abort', () => resolve({ close: cancellationClose }), {
+                  once: true,
+                });
+              }),
+          )
+          .mockImplementationOnce(async () => {
+            lifecycle.push('candidate-qualify');
+            return { close: qualificationClose };
+          }),
+      };
+      const commit = fixture.artifactHost.commit.getMockImplementation();
+      if (!commit) throw new Error('Expected the fixture artifact commit implementation.');
+      fixture.artifactHost.commit.mockImplementation(async (input) => {
+        lifecycle.push('commit');
+        await commit(input);
+      });
+      const manager = createManager(
+        fixture,
+        createAgentSupport(),
+        ownership,
+        candidateQualification,
+      );
       await manager.enablePlugin('sample@openneko');
       await manager.disablePlugin('sample@openneko');
       ownership.assertIdle.mockClear();
+      lifecycle.length = 0;
+
+      await expect(manager.updatePlugin('sample@openneko')).rejects.toThrow(
+        'Candidate qualification failed',
+      );
+      await expect(manager.updatePlugin('sample@openneko')).rejects.toThrow(
+        'Candidate process did not close',
+      );
+      const cancelling = manager.updatePlugin('sample@openneko');
+      await vi.waitFor(() => expect(candidateQualification.qualify).toHaveBeenCalledTimes(3));
+      const cancellingOperation = manager.readArtifactOperations()[0];
+      if (!cancellingOperation) throw new Error('Expected an active update operation.');
+      manager.cancelArtifactOperation(cancellingOperation.operationId);
+      await expect(cancelling).rejects.toMatchObject({ name: 'AbortError' });
+      expect(cancellationClose).toHaveBeenCalledOnce();
+      expect(fixture.artifactHost.commit).not.toHaveBeenCalled();
+      expect(fixture.artifactHost.discard).toHaveBeenCalledTimes(3);
+      await expect(readFile(join(installedRoot, 'runtime-marker.txt'), 'utf8')).resolves.toBe(
+        'old',
+      );
+
+      ownership.assertIdle.mockClear();
+      lifecycle.length = 0;
 
       const updated = await manager.updatePlugin('sample@openneko');
 
@@ -411,6 +480,7 @@ describe('Desktop extension manager', () => {
           canUpdate: false,
           acceptedPermissions: [],
           declaredPermissions: ['interact', 'observe'],
+          enableGrantStatus: 'required',
         }),
       ]);
       expect(ownership.assertIdle).toHaveBeenCalledTimes(2);
@@ -419,13 +489,38 @@ describe('Desktop extension manager', () => {
         expect.objectContaining({ mutation: 'update' }),
         expect.objectContaining({ mutation: 'update' }),
       ]);
-      expect(ownershipCalls[0]?.operationId).toBe(ownershipCalls[1]?.operationId);
+      const updateOperationId = ownershipCalls[0]?.operationId;
+      if (!updateOperationId) throw new Error('Expected update operation ownership.');
+      expect(updateOperationId).toBe(ownershipCalls[1]?.operationId);
+      expect(candidateQualification.qualify).toHaveBeenLastCalledWith({
+        operationId: updateOperationId,
+        descriptor: expect.objectContaining({
+          pluginId: 'sample@openneko',
+          pluginRoot: expect.stringContaining('.artifact-'),
+        }),
+        signal: expect.any(AbortSignal),
+      });
+      expect(qualificationClose).toHaveBeenCalledOnce();
+      expect(lifecycle).toEqual([
+        'assert-idle',
+        'candidate-qualify',
+        'candidate-close',
+        'assert-idle',
+        'commit',
+      ]);
       await expect(readFile(join(installedRoot, 'runtime-marker.txt'), 'utf8')).resolves.toBe(
         'new',
       );
       await expect(
         readFile(join(fixture.stateRoot, 'sample.install.json'), 'utf8'),
       ).resolves.toContain('"packageRelease":"2.0.0"');
+      await expect(readFile(join(fixture.stateRoot, 'sample.json'), 'utf8')).resolves.toBe(
+        JSON.stringify({
+          pluginId: 'sample@openneko',
+          enabled: false,
+          acceptedPermissions: [],
+        }),
+      );
     });
   });
 
@@ -489,8 +584,8 @@ describe('Desktop extension manager', () => {
           version: '1.0.0',
           skills: './skills',
         });
-        await writeInstalledArtifactState(fixture, name, '1.0.0');
         await mkdir(join(installedRoot, 'skills'), { recursive: true });
+        await writeInstalledArtifactState(fixture, name, '1.0.0');
       }
       await writeMarketplace(fixture.marketplaceRoot, []);
       const operations: Array<{
@@ -672,6 +767,44 @@ describe('Desktop extension manager', () => {
     });
   });
 
+  it('keeps managed delivery sources explicit and rejects a GitHub source on a non-GitHub origin', async () => {
+    await withRepository(async (fixture) => {
+      const sourceRoot = join(fixture.marketplaceRoot, 'plugins', 'browser-use');
+      await writePlugin(sourceRoot, {
+        name: 'browser-use',
+        version: '0.13.7',
+        interface: { displayName: 'Browser Use' },
+      });
+      await writeMarketplace(fixture.marketplaceRoot, [
+        { name: 'browser-use', version: '0.13.7', path: 'plugins/browser-use' },
+      ]);
+
+      await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
+        records: [
+          expect.objectContaining({
+            id: 'browser-use@openneko',
+            deliverySource: 'official-download',
+            canInstall: true,
+          }),
+        ],
+      });
+
+      await writeMarketplace(fixture.marketplaceRoot, [
+        {
+          name: 'browser-use',
+          version: '0.13.7',
+          path: 'plugins/browser-use',
+          artifacts: [{ ...reviewedArtifact(), deliverySource: 'github-release' }],
+        },
+      ]);
+      await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
+        records: [],
+        diagnostics: [{ code: 'repository_invalid', count: 1 }],
+      });
+      expect(fixture.artifactHost.stage).not.toHaveBeenCalled();
+    });
+  });
+
   it('rejects a marketplace package that escapes the OpenNeko snapshot through a parent symlink', async () => {
     await withRepository(async (fixture) => {
       const externalRoot = join(fixture.root, 'external-packages');
@@ -791,6 +924,165 @@ describe('Desktop extension manager', () => {
     });
   });
 
+  it('recovers the exact enable grant after restart while requiring fresh readiness facts', async () => {
+    await withRepository(async (fixture) => {
+      const installedRoot = join(fixture.installRoot, 'browser-use');
+      await writePlugin(installedRoot, {
+        name: 'browser-use',
+        version: '0.13.7',
+        permissions: ['browser-observe'],
+        skills: './skills',
+      });
+      await mkdir(join(installedRoot, 'skills'), { recursive: true });
+      await writeInstalledArtifactState(fixture, 'browser-use', '0.13.7');
+      await writeMarketplace(fixture.marketplaceRoot, []);
+
+      await createManager(fixture).enablePlugin('browser-use@openneko');
+      const restartedManager = createManager(fixture);
+      const restarted = await restartedManager.readCatalog();
+      expect(restarted).toMatchObject({
+        records: [
+          expect.objectContaining({
+            id: 'browser-use@openneko',
+            enabled: true,
+            artifactStatus: 'installed',
+            enableGrantStatus: 'accepted',
+            dependencyStatus: 'unchecked',
+            acceptedPermissions: ['browser-observe'],
+            agentStatus: 'error',
+            runtimeDiagnosticCode: 'runtime-not-composed',
+          }),
+        ],
+        runtimeDescriptors: [expect.objectContaining({ pluginId: 'browser-use@openneko' })],
+      });
+      restartedManager.setRuntimeReadiness(
+        restarted,
+        new Map([
+          [
+            'browser-use@openneko',
+            {
+              status: 'ready',
+              diagnosticCode: '',
+              dependencyStatus: 'ready',
+              hostPermissionStatus: 'not-applicable',
+              qualificationStatus: 'qualified',
+            },
+          ],
+        ]),
+      );
+      await expect(restartedManager.readCatalog()).resolves.toMatchObject({
+        records: [expect.objectContaining({ agentStatus: 'ready' })],
+      });
+
+      await restartedManager.disablePlugin('browser-use@openneko');
+      await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
+        records: [
+          expect.objectContaining({
+            id: 'browser-use@openneko',
+            enabled: false,
+            enableGrantStatus: 'accepted',
+            acceptedPermissions: ['browser-observe'],
+            agentStatus: 'disabled',
+          }),
+        ],
+        runtimeDescriptors: [],
+      });
+
+      await writeFile(
+        join(fixture.stateRoot, 'browser-use.json'),
+        JSON.stringify({
+          pluginId: 'browser-use@openneko',
+          acceptedPermissions: [],
+        }),
+        'utf8',
+      );
+      await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
+        records: [
+          expect.objectContaining({
+            id: 'browser-use@openneko',
+            installed: true,
+            enabled: false,
+            artifactStatus: 'installed',
+            enableGrantStatus: 'required',
+            acceptedPermissions: [],
+            agentStatus: 'error',
+            runtimeDiagnosticCode: 'state-invalid',
+          }),
+        ],
+        runtimeDescriptors: [],
+        diagnostics: [{ code: 'state_invalid', count: 1 }],
+      });
+
+      await writeFile(
+        join(fixture.stateRoot, 'browser-use.json'),
+        JSON.stringify({
+          pluginId: 'browser-use@openneko',
+          enabled: false,
+          acceptedPermissions: ['browser-interact'],
+        }),
+        'utf8',
+      );
+      await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
+        records: [
+          expect.objectContaining({
+            id: 'browser-use@openneko',
+            enabled: false,
+            acceptedPermissions: [],
+            agentStatus: 'error',
+            runtimeDiagnosticCode: 'state-invalid',
+          }),
+        ],
+        runtimeDescriptors: [],
+        diagnostics: [{ code: 'state_invalid', count: 1 }],
+      });
+    });
+  });
+
+  it('blocks a tampered installed tree after restart without affecting a valid sibling', async () => {
+    await withRepository(async (fixture) => {
+      for (const name of ['browser-use', 'sibling']) {
+        const installedRoot = join(fixture.installRoot, name);
+        await writePlugin(installedRoot, {
+          name,
+          version: '1.2.3',
+          skills: './skills',
+        });
+        await mkdir(join(installedRoot, 'skills'), { recursive: true });
+        await writeFile(join(installedRoot, 'runtime.txt'), 'reviewed', 'utf8');
+        await writeInstalledArtifactState(fixture, name, '1.2.3');
+      }
+      await writeMarketplace(fixture.marketplaceRoot, []);
+      const manager = createManager(fixture);
+      await manager.enablePlugin('browser-use@openneko');
+      await manager.enablePlugin('sibling@openneko');
+
+      await writeFile(
+        join(fixture.installRoot, 'browser-use', 'runtime.txt'),
+        'modified after install',
+        'utf8',
+      );
+      await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
+        records: [
+          expect.objectContaining({
+            id: 'browser-use@openneko',
+            installed: true,
+            artifactStatus: 'invalid',
+            agentStatus: 'error',
+            runtimeDiagnosticCode: 'state-invalid',
+          }),
+          expect.objectContaining({
+            id: 'sibling@openneko',
+            installed: true,
+            enabled: true,
+            artifactStatus: 'installed',
+          }),
+        ],
+        runtimeDescriptors: [expect.objectContaining({ pluginId: 'sibling@openneko' })],
+        diagnostics: [{ code: 'state_invalid', count: 1 }],
+      });
+    });
+  });
+
   it('keeps installed App-only plugins disabled until explicitly enabled', async () => {
     await withRepository(async (fixture) => {
       const installedRoot = join(fixture.installRoot, 'app-only');
@@ -799,12 +1091,12 @@ describe('Desktop extension manager', () => {
         version: '1.0.0',
         apps: './apps.json',
       });
-      await writeInstalledArtifactState(fixture, 'app-only', '1.0.0');
       await writeFile(
         join(installedRoot, 'apps.json'),
         JSON.stringify({ apps: { connector: { id: 'private-id' } } }),
         'utf8',
       );
+      await writeInstalledArtifactState(fixture, 'app-only', '1.0.0');
       await writeMarketplace(fixture.marketplaceRoot, []);
 
       const manager = createManager(fixture);
@@ -833,12 +1125,12 @@ describe('Desktop extension manager', () => {
         version: '1.0.0',
         apps: './apps.json',
       });
-      await writeInstalledArtifactState(fixture, 'installed-app', '1.0.0');
       await writeFile(
         join(installedRoot, 'apps.json'),
         JSON.stringify({ apps: { connector: {} } }),
         'utf8',
       );
+      await writeInstalledArtifactState(fixture, 'installed-app', '1.0.0');
       await writePlugin(supportedRoot, {
         name: 'creative-skill',
         version: '1.0.0',
@@ -874,6 +1166,61 @@ describe('Desktop extension manager', () => {
       );
     });
   });
+
+  it('retains the exact accepted grant when an update reduces permissions', async () => {
+    await withRepository(async (fixture) => {
+      const installedRoot = join(fixture.installRoot, 'sample');
+      const marketplaceRoot = join(fixture.marketplaceRoot, 'plugins', 'sample');
+      const artifactRoot = join(fixture.artifactRoot, 'sample');
+      const externalPackageReleaseField = 'version';
+      await writePlugin(installedRoot, {
+        name: 'sample',
+        [externalPackageReleaseField]: '1.0.0',
+        permissions: ['observe', 'interact'],
+        skills: './skills',
+      });
+      await mkdir(join(installedRoot, 'skills'), { recursive: true });
+      await writeInstalledArtifactState(fixture, 'sample', '1.0.0');
+      await writePlugin(marketplaceRoot, {
+        name: 'sample',
+        [externalPackageReleaseField]: '2.0.0',
+        permissions: ['observe'],
+        skills: './skills',
+      });
+      await mkdir(join(marketplaceRoot, 'skills'), { recursive: true });
+      await cp(marketplaceRoot, artifactRoot, { recursive: true, errorOnExist: true });
+      await writeMarketplace(fixture.marketplaceRoot, [
+        {
+          name: 'sample',
+          [externalPackageReleaseField]: '2.0.0',
+          path: 'plugins/sample',
+          updatesFrom: ['1.0.0'],
+        },
+      ]);
+      const manager = createManager(fixture);
+      await manager.enablePlugin('sample@openneko');
+      await manager.disablePlugin('sample@openneko');
+
+      await expect(manager.updatePlugin('sample@openneko')).resolves.toMatchObject({
+        records: [
+          expect.objectContaining({
+            enabled: false,
+            declaredPermissions: ['observe'],
+            acceptedPermissions: ['observe'],
+            enableGrantStatus: 'accepted',
+          }),
+        ],
+        runtimeDescriptors: [],
+      });
+      await expect(readFile(join(fixture.stateRoot, 'sample.json'), 'utf8')).resolves.toBe(
+        JSON.stringify({
+          pluginId: 'sample@openneko',
+          enabled: false,
+          acceptedPermissions: ['observe'],
+        }),
+      );
+    });
+  });
 });
 
 function createManager(
@@ -882,6 +1229,7 @@ function createManager(
   mutationOwnership: Parameters<typeof createAgentExtensionManager>[0]['mutationOwnership'] = {
     assertIdle: vi.fn(async () => undefined),
   },
+  candidateQualification: AgentExtensionCandidateQualificationPort = createCandidateQualification(),
 ) {
   return createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
@@ -890,10 +1238,17 @@ function createManager(
       stateRoot: fixture.stateRoot,
       trashItem: fixture.trashItem,
       artifactHost: fixture.artifactHost,
+      candidateQualification,
     }),
     agentSupport,
     mutationOwnership,
   });
+}
+
+function createCandidateQualification(): AgentExtensionCandidateQualificationPort {
+  return {
+    qualify: vi.fn(async () => ({ close: vi.fn(async () => undefined) })),
+  };
 }
 
 function createAgentSupport(
@@ -1032,6 +1387,7 @@ async function writeMarketplace(
 
 function reviewedArtifact(): AgentExtensionReviewedArtifact {
   return {
+    deliverySource: 'official-download',
     platform: { os: 'darwin', arch: 'arm64' },
     archive: 'tar.gz',
     url: 'https://artifacts.openneko.example/extensions/fixture.tar.gz',
@@ -1069,17 +1425,22 @@ async function writeInstalledArtifactState(
   packageRelease: string,
 ): Promise<void> {
   const artifact = reviewedArtifact();
+  const packageTreeSha256 = await calculateExtensionPackageTreeSha256(
+    join(fixture.installRoot, name),
+  );
   await writeFile(
     join(fixture.stateRoot, `${name}.install.json`),
     JSON.stringify({
       pluginId: `${name}@openneko`,
       packageRelease,
+      deliverySource: artifact.deliverySource,
       platform: artifact.platform,
       archive: artifact.archive,
       artifactUrl: artifact.url,
       finalUrl: artifact.url,
       sizeBytes: artifact.sizeBytes,
       sha256: artifact.sha256,
+      packageTreeSha256,
       signatureKeyId: artifact.signature.keyId,
       provenance: artifact.provenance,
       licenseInventory: artifact.licenseInventory,

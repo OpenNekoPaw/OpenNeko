@@ -9,10 +9,12 @@ import type {
   AgentExtensionArtifactOperationPhase,
   AgentExtensionArtifactOperationSnapshot,
   AgentExtensionDiagnosticCode,
+  AgentExtensionManagedDeliverySource,
   AgentExtensionRuntimeDescriptor,
   AgentExtensionRuntimeReadiness,
   AgentExtensionStatus,
 } from '@neko/agent-contracts';
+import { calculateExtensionPackageTreeSha256 } from './extension-package-integrity';
 import { createPluginRuntimeSourceFingerprint } from './plugin-runtime-source-fingerprint';
 
 export type {
@@ -25,8 +27,6 @@ const OPENNEKO_MARKETPLACE_ID = 'openneko';
 const OPENNEKO_MARKETPLACE_PUBLISHER = 'OpenNeko';
 const MAX_PLUGIN_DOCUMENT_BYTES = 1_000_000;
 const MAX_ICON_BYTES = 512_000;
-const MAX_PACKAGE_FILES = 2_048;
-const MAX_PACKAGE_BYTES = 100_000_000;
 const MAX_ARTIFACT_BYTES = 1_000_000_000;
 
 export interface AgentExtensionArtifactPlatform {
@@ -35,6 +35,7 @@ export interface AgentExtensionArtifactPlatform {
 }
 
 export interface AgentExtensionReviewedArtifact {
+  readonly deliverySource: AgentExtensionManagedDeliverySource;
   readonly platform: AgentExtensionArtifactPlatform;
   readonly archive: 'zip' | 'tar.gz';
   readonly url: string;
@@ -97,6 +98,23 @@ export interface AgentExtensionSupportPort {
   isSupported(descriptor: AgentExtensionRuntimeDescriptor): Promise<boolean>;
 }
 
+export interface AgentExtensionCandidateQualification {
+  close(): Promise<void>;
+}
+
+export interface AgentExtensionCandidateQualificationPort {
+  /**
+   * Inspect one staged candidate without registering it into Agent. A rejected
+   * qualification must release its own resources; a successful qualification
+   * transfers all candidate runtime ownership to the returned handle.
+   */
+  qualify(input: {
+    readonly operationId: string;
+    readonly descriptor: AgentExtensionRuntimeDescriptor;
+    readonly signal: AbortSignal;
+  }): Promise<AgentExtensionCandidateQualification>;
+}
+
 export type AgentExtensionRuntimeMutation = 'enable' | 'disable' | 'update' | 'remove';
 
 export interface AgentExtensionMutationOwnershipPort {
@@ -108,16 +126,17 @@ export interface AgentExtensionMutationOwnershipPort {
 }
 
 export function createAgentExtensionMutationOwnership(options: {
-  readonly hasActiveAgentTurns: () => boolean;
+  readonly listOwnedAgentTurns: (pluginId: string) => readonly { readonly runId: string }[];
   readonly listOwnedAutomationSessions: (
     pluginId: string,
   ) => readonly { readonly sessionId: string }[];
 }): AgentExtensionMutationOwnershipPort {
   return {
     async assertIdle({ pluginId, mutation }) {
-      if (options.hasActiveAgentTurns()) {
+      const turns = options.listOwnedAgentTurns(pluginId);
+      if (turns.length > 0) {
         throw new Error(
-          `OpenNeko extension '${pluginId}' cannot ${mutation} while an Agent turn is active.`,
+          `OpenNeko extension '${pluginId}' cannot ${mutation} while it owns ${turns.length} Agent turn(s).`,
         );
       }
       const sessions = options.listOwnedAutomationSessions(pluginId);
@@ -181,6 +200,7 @@ export function createOpenNekoExtensionRepository(options: {
   readonly installRoot: string;
   readonly stateRoot: string;
   readonly artifactHost: AgentExtensionArtifactHostPort;
+  readonly candidateQualification: AgentExtensionCandidateQualificationPort;
   readonly trashItem: (absolutePath: string) => Promise<void>;
 }): AgentExtensionRepositoryPort {
   const marketplaceRoot = requireAbsoluteRoot(options.marketplaceRoot, 'marketplace');
@@ -192,6 +212,7 @@ export function createOpenNekoExtensionRepository(options: {
     installRoot,
     stateRoot,
     options.artifactHost,
+    options.candidateQualification,
     options.trashItem,
   );
 }
@@ -250,6 +271,22 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
         continue;
       }
       let verifiedPlugin = plugin.value;
+      if (
+        entry.installed &&
+        (entry.enabled || entry.acceptedPermissions.length > 0) &&
+        !sameStringSet(entry.acceptedPermissions, verifiedPlugin.declaredPermissions)
+      ) {
+        diagnosticCodes.push('state_invalid');
+        verifiedPlugin = Object.freeze({
+          ...verifiedPlugin,
+          entry: Object.freeze({
+            ...entry,
+            enabled: false,
+            acceptedPermissions: [],
+            grantDiagnostic: 'state_invalid',
+          }),
+        });
+      }
       if (entry.updateCandidate) {
         const candidate = await readPluginPackage(
           createRepositoryEntry({
@@ -277,7 +314,9 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
       ) {
         visiblePlugins.push(verifiedPlugin);
       }
-      if (entry.installed && entry.enabled) runtimeDescriptors.push(verifiedPlugin.runtime);
+      if (verifiedPlugin.entry.installed && verifiedPlugin.entry.enabled) {
+        runtimeDescriptors.push(verifiedPlugin.runtime);
+      }
     }
     let records = [
       ...visiblePlugins.map((plugin) => projectExtension(plugin, undefined)),
@@ -596,6 +635,31 @@ function createArtifactOperationAbortError(operationId: string): Error {
   return error;
 }
 
+async function closeCandidateQualification(
+  qualification: AgentExtensionCandidateQualification,
+  signal: AbortSignal,
+): Promise<void> {
+  let abortError: unknown;
+  try {
+    signal.throwIfAborted();
+  } catch (error) {
+    abortError = error;
+  }
+  try {
+    await qualification.close();
+  } catch (closeError) {
+    if (abortError !== undefined) {
+      throw new AggregateError(
+        [abortError, closeError],
+        'Extension update candidate cancellation and cleanup both failed.',
+      );
+    }
+    throw closeError;
+  }
+  if (abortError !== undefined) throw abortError;
+  signal.throwIfAborted();
+}
+
 class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
   private initialization: Promise<readonly AgentExtensionDiagnosticCode[]> | undefined;
 
@@ -604,6 +668,7 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
     private readonly installRoot: string,
     private readonly stateRoot: string,
     private readonly artifactHost: AgentExtensionArtifactHostPort,
+    private readonly candidateQualification: AgentExtensionCandidateQualificationPort,
     private readonly trashItem: (absolutePath: string) => Promise<void>,
   ) {}
 
@@ -670,12 +735,49 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
     if (!identity || identity.name !== name) {
       throw new Error(`OpenNeko extension '${pluginId}' is not installed.`);
     }
-    await writeExtensionGrant(this.stateRoot, name, pluginId, acceptedPermissions);
+    const installedArtifact = await readInstalledArtifactState(this.stateRoot, name);
+    if (
+      installedArtifact.diagnostic !== undefined ||
+      installedArtifact.value === undefined ||
+      installedArtifact.value.packageRelease !== identity.version
+    ) {
+      throw new Error(`OpenNeko extension '${pluginId}' install state is invalid.`);
+    }
+    let currentPackageTreeSha256: string;
+    try {
+      currentPackageTreeSha256 = await calculateExtensionPackageTreeSha256(target);
+    } catch {
+      throw new Error(`OpenNeko extension '${pluginId}' package integrity is invalid.`);
+    }
+    if (currentPackageTreeSha256 !== installedArtifact.value.packageTreeSha256) {
+      throw new Error(`OpenNeko extension '${pluginId}' package integrity is invalid.`);
+    }
+    const verified = await readPluginPackage(
+      createRepositoryEntry({
+        name,
+        version: identity.version,
+        authorityRoot: this.installRoot,
+        sourcePath: target,
+        installed: true,
+        installedArtifact: installedArtifact.value,
+      }),
+    );
+    if (
+      verified.status === 'error' ||
+      !sameStringSet(acceptedPermissions, verified.value.declaredPermissions)
+    ) {
+      throw new Error(`OpenNeko extension '${pluginId}' permission grant is invalid.`);
+    }
+    await writeExtensionGrant(this.stateRoot, name, pluginId, true, acceptedPermissions);
   }
 
   async disable(pluginId: string, _operationId: string): Promise<void> {
     const name = pluginNameFromId(pluginId);
-    await rm(extensionGrantPath(this.stateRoot, name), { force: true });
+    const grant = await readExtensionGrant(this.stateRoot, name);
+    if (grant.diagnostic !== undefined) {
+      throw new Error(`OpenNeko extension '${pluginId}' enable grant is invalid.`);
+    }
+    await writeExtensionGrant(this.stateRoot, name, pluginId, false, grant.acceptedPermissions);
   }
 
   async install(
@@ -723,7 +825,7 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
         installRoot: this.installRoot,
         stagingRoot,
       });
-      await assertPackageTree(receipt.stagingRoot);
+      const packageTreeSha256 = await calculateExtensionPackageTreeSha256(receipt.stagingRoot);
       const stagedEntry = createRepositoryEntry({
         name,
         version: entry.version,
@@ -745,12 +847,14 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
       await writeInstalledArtifactState(this.stateRoot, name, {
         pluginId,
         packageRelease: entry.version,
+        deliverySource: entry.artifact.deliverySource,
         platform: entry.artifact.platform,
         archive: entry.artifact.archive,
         artifactUrl: entry.artifact.url,
         finalUrl: receipt.finalUrl,
         sizeBytes: receipt.sizeBytes,
         sha256: receipt.sha256,
+        packageTreeSha256,
         signatureKeyId: receipt.signatureKeyId,
         provenance: receipt.provenance,
         licenseInventory: receipt.licenseInventory,
@@ -809,7 +913,7 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
         installRoot: this.installRoot,
         stagingRoot,
       });
-      await assertPackageTree(receipt.stagingRoot);
+      const packageTreeSha256 = await calculateExtensionPackageTreeSha256(receipt.stagingRoot);
       const stagedEntry = createRepositoryEntry({
         name,
         version: candidate.packageRelease,
@@ -824,6 +928,12 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
       if (currentPackage.status === 'error' || stagedPackage.status === 'error') {
         throw new Error(`OpenNeko extension '${pluginId}' update package is invalid.`);
       }
+      const qualification = await this.candidateQualification.qualify({
+        operationId,
+        descriptor: stagedPackage.value.runtime,
+        signal: operation.signal,
+      });
+      await closeCandidateQualification(qualification, operation.signal);
       await assertCommitIdle();
       operation.reportPhase('committing');
       await rename(target, backupRoot);
@@ -837,24 +947,24 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
       await writeInstalledArtifactState(this.stateRoot, name, {
         pluginId,
         packageRelease: candidate.packageRelease,
+        deliverySource: candidate.artifact.deliverySource,
         platform: candidate.artifact.platform,
         archive: candidate.artifact.archive,
         artifactUrl: candidate.artifact.url,
         finalUrl: receipt.finalUrl,
         sizeBytes: receipt.sizeBytes,
         sha256: receipt.sha256,
+        packageTreeSha256,
         signatureKeyId: receipt.signatureKeyId,
         provenance: receipt.provenance,
         licenseInventory: receipt.licenseInventory,
       });
-      if (
-        !sameStringSet(
-          currentPackage.value.declaredPermissions,
-          stagedPackage.value.declaredPermissions,
-        )
-      ) {
-        await rm(extensionGrantPath(this.stateRoot, name), { force: true });
-      }
+      const retainedAcceptedPermissions = stagedPackage.value.declaredPermissions.every(
+        (permission) => entry.acceptedPermissions.includes(permission),
+      )
+        ? stagedPackage.value.declaredPermissions
+        : [];
+      await writeExtensionGrant(this.stateRoot, name, pluginId, false, retainedAcceptedPermissions);
       await rm(backupRoot, { recursive: true, force: false });
       targetMoved = false;
     } catch (error) {
@@ -864,11 +974,13 @@ class OpenNekoExtensionRepository implements AgentExtensionRepositoryPort {
         if (targetMoved) await rename(backupRoot, target);
         if (candidateCommitted) {
           await writeInstalledArtifactState(this.stateRoot, name, previousArtifact);
-          if (entry.enabled) {
-            await writeExtensionGrant(this.stateRoot, name, pluginId, entry.acceptedPermissions);
-          } else {
-            await rm(extensionGrantPath(this.stateRoot, name), { force: true });
-          }
+          await writeExtensionGrant(
+            this.stateRoot,
+            name,
+            pluginId,
+            entry.enabled,
+            entry.acceptedPermissions,
+          );
         }
       } catch (caught) {
         recoveryError = caught;
@@ -974,17 +1086,20 @@ interface RepositoryPluginEntry {
   readonly updateCandidate?: RepositoryUpdateCandidate;
   readonly installedArtifact?: InstalledArtifactState;
   readonly integrityDiagnostic?: AgentExtensionDiagnosticCode;
+  readonly grantDiagnostic?: AgentExtensionDiagnosticCode;
 }
 
 interface InstalledArtifactState {
   readonly pluginId: string;
   readonly packageRelease: string;
+  readonly deliverySource: AgentExtensionManagedDeliverySource;
   readonly platform: AgentExtensionArtifactPlatform;
   readonly archive: AgentExtensionReviewedArtifact['archive'];
   readonly artifactUrl: string;
   readonly finalUrl: string;
   readonly sizeBytes: number;
   readonly sha256: string;
+  readonly packageTreeSha256: string;
   readonly signatureKeyId: string;
   readonly provenance: AgentExtensionReviewedArtifact['provenance'];
   readonly licenseInventory: AgentExtensionReviewedArtifact['licenseInventory'];
@@ -1081,6 +1196,17 @@ async function readInstalledEntries(
     const pluginRoot = resolve(installRoot, child.name);
     const identity = await readPluginIdentity(pluginRoot);
     const installedArtifact = await readInstalledArtifactState(stateRoot, child.name);
+    let integrityDiagnostic = installedArtifact.diagnostic;
+    if (integrityDiagnostic === undefined && installedArtifact.value !== undefined) {
+      try {
+        const currentPackageTreeSha256 = await calculateExtensionPackageTreeSha256(pluginRoot);
+        if (currentPackageTreeSha256 !== installedArtifact.value.packageTreeSha256) {
+          integrityDiagnostic = 'state_invalid';
+        }
+      } catch {
+        integrityDiagnostic = 'state_invalid';
+      }
+    }
     if (!identity || identity.name !== child.name) {
       const grant = await readExtensionGrant(stateRoot, child.name);
       if (grant.diagnostic) diagnostics.push(grant.diagnostic);
@@ -1096,18 +1222,16 @@ async function readInstalledEntries(
           ...(installedArtifact.value === undefined
             ? {}
             : { installedArtifact: installedArtifact.value }),
-          ...(installedArtifact.diagnostic === undefined
-            ? {}
-            : { integrityDiagnostic: installedArtifact.diagnostic }),
+          ...(integrityDiagnostic === undefined ? {} : { integrityDiagnostic }),
+          ...(grant.diagnostic === undefined ? {} : { grantDiagnostic: grant.diagnostic }),
         }),
       );
       continue;
     }
     const grant = await readExtensionGrant(stateRoot, identity.name);
     if (grant.diagnostic) diagnostics.push(grant.diagnostic);
-    const integrityDiagnostic =
-      installedArtifact.diagnostic ??
-      (installedArtifact.value?.packageRelease === identity.version ? undefined : 'state_invalid');
+    integrityDiagnostic ??=
+      installedArtifact.value?.packageRelease === identity.version ? undefined : 'state_invalid';
     entries.push(
       createRepositoryEntry({
         name: identity.name,
@@ -1121,6 +1245,7 @@ async function readInstalledEntries(
           ? {}
           : { installedArtifact: installedArtifact.value }),
         ...(integrityDiagnostic === undefined ? {} : { integrityDiagnostic }),
+        ...(grant.diagnostic === undefined ? {} : { grantDiagnostic: grant.diagnostic }),
       }),
     );
   }
@@ -1142,23 +1267,28 @@ async function readInstalledArtifactState(
     !hasOnlyKeys(value, [
       'pluginId',
       'packageRelease',
+      'deliverySource',
       'platform',
       'archive',
       'artifactUrl',
       'finalUrl',
       'sizeBytes',
       'sha256',
+      'packageTreeSha256',
       'signatureKeyId',
       'provenance',
       'licenseInventory',
     ]) ||
     value['pluginId'] !== pluginId ||
     !isNonEmptyString(value['packageRelease']) ||
+    (value['deliverySource'] !== 'github-release' &&
+      value['deliverySource'] !== 'official-download') ||
     (value['archive'] !== 'zip' && value['archive'] !== 'tar.gz') ||
     !Number.isSafeInteger(value['sizeBytes']) ||
     (value['sizeBytes'] as number) <= 0 ||
     (value['sizeBytes'] as number) > MAX_ARTIFACT_BYTES ||
     !isSha256(value['sha256']) ||
+    !isSha256(value['packageTreeSha256']) ||
     !isExtensionIdentifierValue(value['signatureKeyId'])
   ) {
     return { diagnostic: 'state_invalid' };
@@ -1175,12 +1305,14 @@ async function readInstalledArtifactState(
     value: Object.freeze({
       pluginId,
       packageRelease: value['packageRelease'],
+      deliverySource: value['deliverySource'],
       platform,
       archive: value['archive'],
       artifactUrl: artifactUrl.href,
       finalUrl: finalUrl.href,
       sizeBytes: value['sizeBytes'] as number,
       sha256: value['sha256'],
+      packageTreeSha256: value['packageTreeSha256'],
       signatureKeyId: value['signatureKeyId'],
       provenance,
       licenseInventory,
@@ -1208,6 +1340,7 @@ async function writeExtensionGrant(
   stateRoot: string,
   name: string,
   pluginId: string,
+  enabled: boolean,
   acceptedPermissions: readonly string[],
 ): Promise<void> {
   await mkdir(stateRoot, { recursive: true });
@@ -1218,6 +1351,7 @@ async function writeExtensionGrant(
       staging,
       JSON.stringify({
         pluginId,
+        enabled,
         acceptedPermissions: [...acceptedPermissions].sort(),
       }),
       { encoding: 'utf8', flag: 'wx' },
@@ -1243,7 +1377,8 @@ async function readExtensionGrant(
   }
   if (
     result.status === 'error' ||
-    !hasOnlyKeys(result.value, ['pluginId', 'acceptedPermissions']) ||
+    !hasOnlyKeys(result.value, ['pluginId', 'enabled', 'acceptedPermissions']) ||
+    typeof result.value['enabled'] !== 'boolean' ||
     result.value['pluginId'] !== pluginId
   ) {
     return { enabled: false, acceptedPermissions: [], diagnostic: 'state_invalid' };
@@ -1252,7 +1387,7 @@ async function readExtensionGrant(
   if (acceptedPermissions === undefined) {
     return { enabled: false, acceptedPermissions: [], diagnostic: 'state_invalid' };
   }
-  return { enabled: true, acceptedPermissions };
+  return { enabled: result.value['enabled'], acceptedPermissions };
 }
 
 function parseMarketplaceIndex(value: Record<string, unknown>):
@@ -1338,6 +1473,7 @@ function parseReviewedArtifacts(
     if (
       !isRecord(item) ||
       !hasOnlyKeys(item, [
+        'deliverySource',
         'platform',
         'archive',
         'url',
@@ -1351,6 +1487,7 @@ function parseReviewedArtifacts(
     ) {
       return undefined;
     }
+    const deliverySource = parseManagedDeliverySource(item['deliverySource']);
     const platform = parseArtifactPlatform(item['platform']);
     const url = parseReviewedHttpsUrl(item['url']);
     const allowedHosts = parseArtifactHosts(item['allowedHosts']);
@@ -1358,6 +1495,7 @@ function parseReviewedArtifacts(
     const provenance = parseArtifactProvenance(item['provenance']);
     const licenseInventory = parseArtifactLicenseInventory(item['licenseInventory']);
     if (
+      !deliverySource ||
       !platform ||
       !url ||
       !allowedHosts ||
@@ -1373,11 +1511,15 @@ function parseReviewedArtifacts(
     ) {
       return undefined;
     }
+    if (deliverySource === 'github-release' && url.hostname !== 'github.com') {
+      return undefined;
+    }
     const platformKey = `${platform.os}:${platform.arch}`;
     if (platforms.has(platformKey)) return undefined;
     platforms.add(platformKey);
     artifacts.push(
       Object.freeze({
+        deliverySource,
         platform,
         archive: item['archive'],
         url: url.href,
@@ -1391,6 +1533,12 @@ function parseReviewedArtifacts(
     );
   }
   return Object.freeze(artifacts);
+}
+
+function parseManagedDeliverySource(
+  value: unknown,
+): AgentExtensionManagedDeliverySource | undefined {
+  return value === 'github-release' || value === 'official-download' ? value : undefined;
 }
 
 function parsePackageReleaseSet(value: unknown): readonly string[] | undefined {
@@ -1617,6 +1765,7 @@ function createRepositoryEntry(input: {
   readonly artifact?: AgentExtensionReviewedArtifact;
   readonly installedArtifact?: InstalledArtifactState;
   readonly integrityDiagnostic?: AgentExtensionDiagnosticCode;
+  readonly grantDiagnostic?: AgentExtensionDiagnosticCode;
 }): RepositoryPluginEntry {
   return Object.freeze({
     pluginId: `${input.name}@${OPENNEKO_MARKETPLACE_ID}`,
@@ -1639,6 +1788,7 @@ function createRepositoryEntry(input: {
     ...(input.integrityDiagnostic === undefined
       ? {}
       : { integrityDiagnostic: input.integrityDiagnostic }),
+    ...(input.grantDiagnostic === undefined ? {} : { grantDiagnostic: input.grantDiagnostic }),
   });
 }
 
@@ -1778,6 +1928,9 @@ function projectExtension(
   if (!entry.installed) {
     agentStatus = entry.canInstall ? 'not-installed' : 'unsupported';
     runtimeDiagnosticCode = entry.canInstall ? '' : 'artifact-unavailable';
+  } else if (entry.grantDiagnostic) {
+    agentStatus = 'error';
+    runtimeDiagnosticCode = entry.grantDiagnostic.replaceAll('_', '-');
   } else if (!entry.enabled) {
     agentStatus = 'disabled';
     runtimeDiagnosticCode = '';
@@ -1811,6 +1964,7 @@ function projectExtension(
     canDisable: entry.installed && entry.enabled,
     canRemove: entry.canRemove,
     updatePackageRelease: plugin.updatePackageRelease,
+    deliverySource: projectedArtifact?.deliverySource ?? '',
     artifactPlatform: projectedArtifact
       ? `${projectedArtifact.platform.os}-${projectedArtifact.platform.arch}`
       : '',
@@ -1820,7 +1974,8 @@ function projectExtension(
     enableGrantStatus:
       plugin.declaredPermissions.length === 0
         ? 'not-required'
-        : entry.enabled
+        : entry.grantDiagnostic === undefined &&
+            sameStringSet(entry.acceptedPermissions, plugin.declaredPermissions)
           ? 'accepted'
           : 'required',
     hostPermissionStatus: readiness?.hostPermissionStatus ?? 'unknown',
@@ -1857,6 +2012,7 @@ function projectInvalidExtension(
     canDisable: entry.enabled,
     canRemove: !entry.enabled,
     updatePackageRelease: '',
+    deliverySource: '',
     artifactPlatform: '',
     downloadSizeBytes: 0,
     artifactStatus: 'invalid',
@@ -2003,38 +2159,6 @@ async function readJsonFile(
     return isRecord(parsed) ? { status: 'ok', value: parsed } : { status: 'error' };
   } catch (error) {
     return isEnoent(error) ? { status: 'missing' } : { status: 'error' };
-  }
-}
-
-async function assertPackageTree(pluginRoot: string): Promise<void> {
-  let fileCount = 0;
-  let byteCount = 0;
-  const pending = [pluginRoot];
-  while (pending.length > 0) {
-    const directory = pending.pop();
-    if (!directory) throw new Error('OpenNeko extension package traversal failed.');
-    const children = await readdir(directory, { withFileTypes: true });
-    for (const child of children) {
-      const target = resolve(directory, child.name);
-      if (!isInsideOrEqual(pluginRoot, target) || child.isSymbolicLink()) {
-        throw new Error('OpenNeko extension package contains an unsafe path.');
-      }
-      fileCount += 1;
-      if (fileCount > MAX_PACKAGE_FILES) {
-        throw new Error('OpenNeko extension package contains too many files.');
-      }
-      if (child.isDirectory()) {
-        pending.push(target);
-        continue;
-      }
-      if (!child.isFile()) {
-        throw new Error('OpenNeko extension package contains an unsupported file type.');
-      }
-      byteCount += (await lstat(target)).size;
-      if (byteCount > MAX_PACKAGE_BYTES) {
-        throw new Error('OpenNeko extension package is too large.');
-      }
-    }
   }
 }
 

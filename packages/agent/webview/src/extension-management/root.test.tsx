@@ -128,6 +128,7 @@ describe('AgentExtensionManagementRoot', () => {
       ...extension('browser-use@openneko', 'Browser Use', false),
       version: '0.13.7',
       canInstall: false,
+      deliverySource: '' as const,
       artifactPlatform: '',
       downloadSizeBytes: 0,
       artifactStatus: 'unavailable' as const,
@@ -209,6 +210,7 @@ describe('AgentExtensionManagementRoot', () => {
       <AgentExtensionManagementRoot confirmAction={confirmAction} interactive runtime={runtime} />,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'home.capabilities.extensions' }));
+    expect(screen.getByText(/home\.capabilities\.deliverySource\.official-download/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.update' }));
 
     await waitFor(() => expect(runtime.updatePlugin).toHaveBeenCalledWith('browser-use@openneko'));
@@ -351,6 +353,7 @@ function extension(id: string, displayName: string, installed: boolean) {
     canDisable: installed,
     canRemove: false,
     updatePackageRelease: '',
+    deliverySource: 'official-download' as const,
     artifactPlatform: installed ? '' : 'darwin-arm64',
     downloadSizeBytes: installed ? 0 : 1024,
     artifactStatus: installed ? ('installed' as const) : ('available' as const),

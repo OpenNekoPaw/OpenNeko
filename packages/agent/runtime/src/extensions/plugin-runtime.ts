@@ -8,12 +8,16 @@ import type { MCPServerConfig } from '@neko/agent-contracts';
 import type { Tool } from '@neko/agent-contracts';
 
 import type {
+  AgentExtensionCandidateQualificationPort,
   AgentExtensionSupportPort,
   AgentExtensionCatalogSnapshot,
   AgentExtensionRuntimeDescriptor,
   AgentExtensionRuntimeReadiness,
 } from './extension-manager';
-import { createPluginRuntimeSourceFingerprint } from './plugin-runtime-source-fingerprint';
+import {
+  createPluginRuntimeContributionFingerprint,
+  createPluginRuntimeSourceFingerprint,
+} from './plugin-runtime-source-fingerprint';
 
 export { createPluginRuntimeSourceFingerprint } from './plugin-runtime-source-fingerprint';
 
@@ -37,11 +41,74 @@ export function createAgentExtensionSupport(
   };
 }
 
+export function createAgentExtensionCandidateQualification(
+  options: {
+    readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
+  } = {},
+): AgentExtensionCandidateQualificationPort {
+  return {
+    async qualify({ operationId, descriptor, signal }) {
+      signal.throwIfAborted();
+      const runtime = await buildAgentPluginRuntime(
+        {
+          records: [],
+          runtimeDescriptors: [descriptor],
+          diagnostics: [],
+        },
+        options,
+      );
+      try {
+        signal.throwIfAborted();
+        const readiness = runtime.readiness.get(descriptor.pluginId);
+        if (!readiness || readiness.status !== 'ready') {
+          throw new Error(
+            `OpenNeko extension '${descriptor.pluginId}' update candidate is not qualified: ${readiness?.diagnosticCode ?? 'runtime-unavailable'}.`,
+          );
+        }
+      } catch (error) {
+        try {
+          await runtime.dispose();
+        } catch (disposeError) {
+          throw new AggregateError(
+            [error, disposeError],
+            `OpenNeko extension '${descriptor.pluginId}' candidate qualification and cleanup failed.`,
+          );
+        }
+        throw error;
+      }
+      let open = true;
+      return Object.freeze({
+        async close() {
+          if (!open) {
+            throw new Error(
+              `Extension update candidate qualification '${operationId}' is already closed.`,
+            );
+          }
+          open = false;
+          await runtime.dispose();
+        },
+      });
+    },
+  };
+}
+
 export interface AgentPluginRuntime {
   readonly sourceFingerprint: string;
+  readonly contributions: ReadonlyMap<string, AgentPluginRuntimeContribution>;
   readonly skillRoots: readonly SkillSourceRoot[];
   readonly tools: readonly Tool[];
   readonly readiness: ReadonlyMap<string, AgentExtensionRuntimeReadiness>;
+  dispose(): Promise<void>;
+}
+
+export interface AgentPluginRuntimeContribution {
+  readonly pluginId: string;
+  readonly sourceFingerprint: string;
+  readonly mcpServerConflict: boolean;
+  readonly mcpServerIds: readonly string[];
+  readonly skillRoots: readonly SkillSourceRoot[];
+  readonly tools: readonly Tool[];
+  readonly readiness: AgentExtensionRuntimeReadiness;
   dispose(): Promise<void>;
 }
 
@@ -51,72 +118,164 @@ export async function buildAgentPluginRuntime(
     readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
   } = {},
 ): Promise<AgentPluginRuntime> {
+  return reconcileAgentPluginRuntime(undefined, snapshot, options);
+}
+
+export async function reconcileAgentPluginRuntime(
+  previous: AgentPluginRuntime | undefined,
+  snapshot: AgentExtensionCatalogSnapshot,
+  options: {
+    readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
+  } = {},
+): Promise<AgentPluginRuntime> {
   const processEnv = options.processEnv ?? process.env;
+  const contributions = new Map<string, AgentPluginRuntimeContribution>();
+  const created: AgentPluginRuntimeContribution[] = [];
+  try {
+    const descriptors = [...snapshot.runtimeDescriptors].sort((left, right) =>
+      left.pluginId.localeCompare(right.pluginId),
+    );
+    const conflictedPluginIds = findConflictedMcpServerPluginIds(descriptors);
+    assertNoChangedContributionConflictsWithRetainedRuntime(
+      previous,
+      snapshot,
+      descriptors,
+      conflictedPluginIds,
+    );
+    for (const descriptor of descriptors) {
+      if (contributions.has(descriptor.pluginId)) {
+        throw new Error(`Plugin runtime contribution '${descriptor.pluginId}' is duplicated.`);
+      }
+      const sourceFingerprint = createPluginRuntimeContributionFingerprint(snapshot, descriptor);
+      const existing = previous?.contributions.get(descriptor.pluginId);
+      const mcpServerConflict = conflictedPluginIds.has(descriptor.pluginId);
+      if (
+        existing?.sourceFingerprint === sourceFingerprint &&
+        existing.mcpServerConflict === mcpServerConflict
+      ) {
+        contributions.set(descriptor.pluginId, existing);
+        continue;
+      }
+      const contribution = await buildAgentPluginRuntimeContribution(
+        descriptor,
+        sourceFingerprint,
+        processEnv,
+        mcpServerConflict,
+      );
+      contributions.set(descriptor.pluginId, contribution);
+      created.push(contribution);
+    }
+    return createAgentPluginRuntime(snapshot, contributions);
+  } catch (error) {
+    const cleanup = await Promise.allSettled(created.map((contribution) => contribution.dispose()));
+    const cleanupErrors = cleanup.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        'Failed to build and dispose a Desktop plugin runtime.',
+      );
+    }
+    throw error;
+  }
+}
+
+export function listChangedAgentPluginRuntimeIds(
+  previous: AgentPluginRuntime | undefined,
+  next: AgentPluginRuntime,
+): readonly string[] {
+  const pluginIds = new Set([
+    ...(previous?.contributions.keys() ?? []),
+    ...next.contributions.keys(),
+  ]);
+  return Object.freeze(
+    [...pluginIds]
+      .filter(
+        (pluginId) => previous?.contributions.get(pluginId) !== next.contributions.get(pluginId),
+      )
+      .sort(),
+  );
+}
+
+export function listChangedPluginRuntimeSourceIds(
+  previous: AgentPluginRuntime | undefined,
+  snapshot: AgentExtensionCatalogSnapshot,
+): readonly string[] {
+  const descriptors = new Map(
+    snapshot.runtimeDescriptors.map((descriptor) => [descriptor.pluginId, descriptor] as const),
+  );
+  const pluginIds = new Set([...(previous?.contributions.keys() ?? []), ...descriptors.keys()]);
+  return Object.freeze(
+    [...pluginIds]
+      .filter((pluginId) => {
+        const descriptor = descriptors.get(pluginId);
+        if (!descriptor) return previous?.contributions.has(pluginId) === true;
+        return (
+          previous?.contributions.get(pluginId)?.sourceFingerprint !==
+          createPluginRuntimeContributionFingerprint(snapshot, descriptor)
+        );
+      })
+      .sort(),
+  );
+}
+
+export async function disposeAgentPluginRuntimeChanges(
+  runtime: AgentPluginRuntime | undefined,
+  retained: AgentPluginRuntime | undefined,
+): Promise<void> {
+  if (!runtime) return;
+  const retainedContributions = new Set(retained?.contributions.values() ?? []);
+  const results = await Promise.allSettled(
+    [...runtime.contributions.values()]
+      .filter((contribution) => !retainedContributions.has(contribution))
+      .map((contribution) => contribution.dispose()),
+  );
+  const errors = results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []));
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Failed to dispose replaced Desktop plugin contributions.');
+  }
+}
+
+async function buildAgentPluginRuntimeContribution(
+  descriptor: AgentExtensionRuntimeDescriptor,
+  sourceFingerprint: string,
+  processEnv: Readonly<NodeJS.ProcessEnv>,
+  mcpServerConflict: boolean,
+): Promise<AgentPluginRuntimeContribution> {
   const mcpManager = new MCPManager();
   try {
     const skillRoots: SkillSourceRoot[] = [];
-    const readiness = new Map<string, AgentExtensionRuntimeReadiness>();
-    const contributionStates = new Map<string, PluginContributionState>();
-    const serverOwners = new Map<string, string>();
-    const conflictedServerIds = new Set<string>();
-
-    for (const descriptor of snapshot.runtimeDescriptors) {
-      const state: PluginContributionState = {
-        descriptor,
-        skillReady: false,
-        mcpServerIds: [],
-        connectedServerIds: [],
-        unsupported: [],
-        failures: [],
-      };
-      contributionStates.set(descriptor.pluginId, state);
-
-      if (descriptor.skillRoot) {
-        const skillResult = await validatePluginSkillRoot(descriptor);
-        if (skillResult) {
-          skillRoots.push(skillResult);
-          state.skillReady = true;
-        } else {
-          state.failures.push('skill-invalid');
-        }
-      }
-
-      if (descriptor.appIds.length > 0) state.unsupported.push('app-unsupported');
-      if (descriptor.mcpDocumentPath) {
-        const parsed = await parsePluginMcpDocument(descriptor, processEnv);
-        state.unsupported.push(...parsed.unsupported);
-        state.failures.push(...parsed.failures);
-        for (const server of parsed.servers) {
-          if (conflictedServerIds.has(server.id)) {
-            state.failures.push('mcp-server-conflict');
-            continue;
-          }
-          const existingOwner = serverOwners.get(server.id);
-          if (existingOwner) {
-            state.failures.push('mcp-server-conflict');
-            const existingState = contributionStates.get(existingOwner);
-            existingState?.failures.push('mcp-server-conflict');
-            if (existingState) {
-              const index = existingState.mcpServerIds.indexOf(server.id);
-              if (index >= 0) existingState.mcpServerIds.splice(index, 1);
-            }
-            mcpManager.unregister(server.id);
-            serverOwners.delete(server.id);
-            conflictedServerIds.add(server.id);
-            continue;
-          }
-          serverOwners.set(server.id, descriptor.pluginId);
-          state.mcpServerIds.push(server.id);
-          mcpManager.register(server);
-        }
+    const state: PluginContributionState = {
+      descriptor,
+      skillReady: false,
+      mcpServerIds: [],
+      connectedServerIds: [],
+      unsupported: [],
+      failures: [],
+    };
+    if (descriptor.skillRoot) {
+      const skillResult = await validatePluginSkillRoot(descriptor);
+      if (skillResult) {
+        skillRoots.push(skillResult);
+        state.skillReady = true;
+      } else {
+        state.failures.push('skill-invalid');
       }
     }
-
+    if (descriptor.appIds.length > 0) state.unsupported.push('app-unsupported');
+    if (mcpServerConflict) {
+      state.failures.push('mcp-server-conflict');
+    } else if (descriptor.mcpDocumentPath) {
+      const parsed = await parsePluginMcpDocument(descriptor, processEnv);
+      state.unsupported.push(...parsed.unsupported);
+      state.failures.push(...parsed.failures);
+      state.mcpServerIds.push(...parsed.servers.map((server) => server.id));
+      if (descriptor.mcpToolExposure !== 'adapter-only') {
+        for (const server of parsed.servers) mcpManager.register(server);
+      }
+    }
     for (const server of mcpManager.listServers()) {
-      const owner = serverOwners.get(server.id);
-      if (!owner) throw new Error(`Plugin MCP Server '${server.id}' has no owner.`);
-      const state = contributionStates.get(owner);
-      if (!state) throw new Error(`Plugin '${owner}' runtime state is unavailable.`);
       try {
         await mcpManager.connect(server.id);
         state.connectedServerIds.push(server.id);
@@ -124,22 +283,26 @@ export async function buildAgentPluginRuntime(
         state.failures.push('mcp-connect-failed');
       }
     }
-
-    const rawExposureDeniedServerIds = snapshot.runtimeDescriptors.flatMap((descriptor) =>
-      descriptor.mcpToolExposure === 'adapter-only' ? descriptor.mcpServerIds : [],
-    );
-    const tools = await createAllMCPTools(mcpManager, { rawExposureDeniedServerIds });
+    const tools = await createAllMCPTools(mcpManager);
     assertUniqueToolNames(tools);
-    for (const state of contributionStates.values()) {
-      readiness.set(state.descriptor.pluginId, projectReadiness(state));
-    }
-
+    let disposal: Promise<void> | undefined;
     return Object.freeze({
-      sourceFingerprint: createPluginRuntimeSourceFingerprint(snapshot),
+      pluginId: descriptor.pluginId,
+      sourceFingerprint,
+      mcpServerConflict,
+      mcpServerIds: Object.freeze(
+        descriptor.mcpToolExposure === 'adapter-only' ? [] : [...state.mcpServerIds],
+      ),
       skillRoots: Object.freeze(skillRoots),
       tools: Object.freeze(tools),
-      readiness,
-      dispose: () => mcpManager.dispose(),
+      readiness: projectReadiness(state),
+      async dispose() {
+        disposal ??= mcpManager.dispose().catch((error: unknown) => {
+          disposal = undefined;
+          throw error;
+        });
+        await disposal;
+      },
     });
   } catch (error) {
     try {
@@ -147,11 +310,101 @@ export async function buildAgentPluginRuntime(
     } catch (disposeError) {
       throw new AggregateError(
         [error, disposeError],
-        'Failed to build and dispose a Desktop plugin runtime.',
+        `Failed to build and dispose plugin contribution '${descriptor.pluginId}'.`,
       );
     }
     throw error;
   }
+}
+
+function findConflictedMcpServerPluginIds(
+  descriptors: readonly AgentExtensionRuntimeDescriptor[],
+): ReadonlySet<string> {
+  const owners = new Map<string, string>();
+  const conflicted = new Set<string>();
+  for (const descriptor of descriptors) {
+    if (descriptor.mcpToolExposure === 'adapter-only') continue;
+    for (const serverId of new Set(descriptor.mcpServerIds)) {
+      const owner = owners.get(serverId);
+      if (owner) {
+        conflicted.add(owner);
+        conflicted.add(descriptor.pluginId);
+      } else {
+        owners.set(serverId, descriptor.pluginId);
+      }
+    }
+  }
+  return conflicted;
+}
+
+function assertNoChangedContributionConflictsWithRetainedRuntime(
+  previous: AgentPluginRuntime | undefined,
+  snapshot: AgentExtensionCatalogSnapshot,
+  descriptors: readonly AgentExtensionRuntimeDescriptor[],
+  conflictedPluginIds: ReadonlySet<string>,
+): void {
+  if (!previous || conflictedPluginIds.size === 0) return;
+  const descriptorByPluginId = new Map(
+    descriptors.map((descriptor) => [descriptor.pluginId, descriptor] as const),
+  );
+  const retainedConflictedPluginId = [...conflictedPluginIds].find((pluginId) => {
+    const descriptor = descriptorByPluginId.get(pluginId);
+    const contribution = previous.contributions.get(pluginId);
+    return (
+      descriptor !== undefined &&
+      contribution !== undefined &&
+      !contribution.mcpServerConflict &&
+      contribution.sourceFingerprint ===
+        createPluginRuntimeContributionFingerprint(snapshot, descriptor)
+    );
+  });
+  if (retainedConflictedPluginId) {
+    throw new Error(
+      `Plugin MCP Server conflict would replace authoritative contribution '${retainedConflictedPluginId}'.`,
+    );
+  }
+}
+
+function createAgentPluginRuntime(
+  snapshot: AgentExtensionCatalogSnapshot,
+  contributions: ReadonlyMap<string, AgentPluginRuntimeContribution>,
+): AgentPluginRuntime {
+  const serverOwners = new Map<string, string>();
+  const toolOwners = new Map<string, string>();
+  for (const contribution of contributions.values()) {
+    for (const serverId of contribution.mcpServerIds) {
+      const owner = serverOwners.get(serverId);
+      if (owner) {
+        throw new Error(
+          `Plugin MCP Server '${serverId}' is declared by both '${owner}' and '${contribution.pluginId}'.`,
+        );
+      }
+      serverOwners.set(serverId, contribution.pluginId);
+    }
+    for (const tool of contribution.tools) {
+      const owner = toolOwners.get(tool.name);
+      if (owner) {
+        throw new Error(
+          `Plugin Tool '${tool.name}' is declared by both '${owner}' and '${contribution.pluginId}'.`,
+        );
+      }
+      toolOwners.set(tool.name, contribution.pluginId);
+    }
+  }
+  const ordered = [...contributions.values()].sort((left, right) =>
+    left.pluginId.localeCompare(right.pluginId),
+  );
+  const runtime: AgentPluginRuntime = {
+    sourceFingerprint: createPluginRuntimeSourceFingerprint(snapshot),
+    contributions: new Map(ordered.map((contribution) => [contribution.pluginId, contribution])),
+    skillRoots: Object.freeze(ordered.flatMap((contribution) => contribution.skillRoots)),
+    tools: Object.freeze(ordered.flatMap((contribution) => contribution.tools)),
+    readiness: new Map(
+      ordered.map((contribution) => [contribution.pluginId, contribution.readiness]),
+    ),
+    dispose: () => disposeAgentPluginRuntimeChanges(runtime, undefined),
+  };
+  return Object.freeze(runtime);
 }
 
 interface PluginContributionState {
@@ -402,11 +655,11 @@ function projectReadiness(state: PluginContributionState): AgentExtensionRuntime
   }
   if (adapterOnly) {
     return {
-      status: 'unsupported',
+      status: state.skillReady ? 'partial' : 'unsupported',
       diagnosticCode: 'automation-adapter-unavailable',
-      dependencyStatus: mcpReady ? 'ready' : 'error',
+      dependencyStatus: 'unchecked',
       hostPermissionStatus: 'unknown',
-      qualificationStatus: 'unqualified',
+      qualificationStatus: state.skillReady ? 'partial' : 'unqualified',
     };
   }
   if (state.skillReady || mcpReady) {

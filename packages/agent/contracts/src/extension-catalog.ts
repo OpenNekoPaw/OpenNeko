@@ -2,6 +2,7 @@ export type AgentExtensionStatus =
   'not-installed' | 'disabled' | 'ready' | 'partial' | 'unsupported' | 'error';
 
 export type AgentExtensionArtifactStatus = 'unavailable' | 'available' | 'installed' | 'invalid';
+export type AgentExtensionManagedDeliverySource = 'github-release' | 'official-download';
 export type AgentExtensionDependencyStatus = 'unchecked' | 'ready' | 'error';
 export type AgentExtensionEnableGrantStatus = 'not-required' | 'required' | 'accepted';
 export type AgentExtensionHostPermissionStatus =
@@ -25,6 +26,7 @@ export interface AgentExtensionCatalogItem {
   readonly canDisable: boolean;
   readonly canRemove: boolean;
   readonly updatePackageRelease: string;
+  readonly deliverySource: AgentExtensionManagedDeliverySource | '';
   readonly artifactPlatform: string;
   readonly downloadSizeBytes: number;
   readonly artifactStatus: AgentExtensionArtifactStatus;

@@ -12,6 +12,7 @@ import {
   createDesktopExtensionArtifactHost,
   createExtensionArtifactSignatureMessage,
 } from './desktop-extension-artifact-host';
+import { DESKTOP_EXTENSION_MAX_EXPANDED_BYTES } from './desktop-extension-archive-policy';
 
 const roots: string[] = [];
 
@@ -79,6 +80,195 @@ describe('Desktop extension artifact Host', () => {
     await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('follows only the exact reviewed HTTPS redirect chain', async () => {
+    const fixture = await createFixture({
+      allowedHosts: ['artifacts.openneko.dev', 'downloads.openneko.dev'],
+      redirectChain: ['https://downloads.openneko.dev/releases/browser-use.tar.gz'],
+    });
+
+    await expect(fixture.host.stage(fixture.stageInput)).resolves.toMatchObject({
+      finalUrl: 'https://downloads.openneko.dev/releases/browser-use.tar.gz',
+    });
+    expect(fixture.request).toHaveBeenNthCalledWith(
+      1,
+      'https://artifacts.openneko.dev/browser-use.tar.gz',
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+    expect(fixture.request).toHaveBeenNthCalledWith(
+      2,
+      'https://downloads.openneko.dev/releases/browser-use.tar.gz',
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+    await fixture.host.discard(fixture.stageInput.operationId);
+  });
+
+  it('rejects a reviewed-host redirect chain beyond the bounded limit', async () => {
+    const redirectChain = Array.from(
+      { length: 6 },
+      (_value, index) => `https://artifacts.openneko.dev/redirect-${String(index + 1)}`,
+    );
+    const fixture = await createFixture({ redirectChain });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'exceeded the redirect limit',
+    );
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects a mismatched Content-Length before writing unreviewed bytes', async () => {
+    const fixture = await createFixture({ contentLengthOffset: 1 });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'Content-Length does not match',
+    );
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects a non-decimal Content-Length before writing unreviewed bytes', async () => {
+    const fixture = await createFixture({ contentLength: '1e3' });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'Content-Length does not match',
+    );
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it.each([
+    { name: 'strong ETag', header: 'etag', validator: '"artifact-etag-1"' },
+    {
+      name: 'Last-Modified',
+      header: 'last-modified',
+      validator: 'Mon, 10 Aug 2026 00:00:00 GMT',
+    },
+  ] as const)(
+    'resumes the same artifact once with its exact $name validator and byte range',
+    async ({ header, validator }) => {
+      const transferredBytes = 256;
+      const fixture = await createFixture({
+        createRequest: (archive) => {
+          let requestCount = 0;
+          return vi.fn<typeof fetch>(async (_url, init) => {
+            requestCount += 1;
+            if (requestCount === 1) {
+              return createInterruptedResponse(archive, transferredBytes, {
+                'accept-ranges': 'bytes',
+                [header]: validator,
+              });
+            }
+            const headers = new Headers(init?.headers);
+            expect(headers.get('range')).toBe(`bytes=${transferredBytes}-`);
+            expect(headers.get('if-range')).toBe(validator);
+            return new Response(new Uint8Array(archive.subarray(transferredBytes)), {
+              status: 206,
+              headers: {
+                'content-length': String(archive.byteLength - transferredBytes),
+                'content-range': `bytes ${transferredBytes}-${archive.byteLength - 1}/${archive.byteLength}`,
+                [header]: validator,
+              },
+            });
+          });
+        },
+      });
+
+      await expect(fixture.host.stage(fixture.stageInput)).resolves.toMatchObject({
+        sizeBytes: fixture.artifact.sizeBytes,
+        sha256: fixture.artifact.sha256,
+      });
+      expect(fixture.request).toHaveBeenCalledTimes(2);
+      expect(fixture.request).toHaveBeenNthCalledWith(
+        2,
+        fixture.artifact.url,
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+      expect(fixture.stageInput.reportProgress).toHaveBeenLastCalledWith(
+        fixture.artifact.sizeBytes,
+      );
+      await fixture.host.discard(fixture.stageInput.operationId);
+    },
+  );
+
+  it('rejects resume when the exact server validator changes', async () => {
+    const transferredBytes = 256;
+    const fixture = await createFixture({
+      createRequest: (archive) => {
+        let requestCount = 0;
+        return vi.fn<typeof fetch>(async () => {
+          requestCount += 1;
+          if (requestCount === 1) {
+            return createInterruptedResponse(archive, transferredBytes, {
+              'accept-ranges': 'bytes',
+              etag: '"artifact-etag-1"',
+            });
+          }
+          return new Response(new Uint8Array(archive.subarray(transferredBytes)), {
+            status: 206,
+            headers: {
+              'content-length': String(archive.byteLength - transferredBytes),
+              'content-range': `bytes ${transferredBytes}-${archive.byteLength - 1}/${archive.byteLength}`,
+              etag: '"artifact-etag-2"',
+            },
+          });
+        });
+      },
+    });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'resume validator changed',
+    );
+    expect(fixture.request).toHaveBeenCalledTimes(2);
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('does not resume a partial response without a server validator', async () => {
+    const fixture = await createFixture({
+      createRequest: (archive) =>
+        vi.fn<typeof fetch>(async () =>
+          createInterruptedResponse(archive, 256, { 'accept-ranges': 'bytes' }),
+        ),
+    });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'response body was interrupted',
+    );
+    expect(fixture.request).toHaveBeenCalledOnce();
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('bounds a second interrupted response without a third request', async () => {
+    const firstTransferredBytes = 256;
+    const secondTransferredBytes = 128;
+    const validator = '"artifact-etag-1"';
+    const fixture = await createFixture({
+      createRequest: (archive) => {
+        let requestCount = 0;
+        return vi.fn<typeof fetch>(async () => {
+          requestCount += 1;
+          if (requestCount === 1) {
+            return createInterruptedResponse(archive, firstTransferredBytes, {
+              'accept-ranges': 'bytes',
+              etag: validator,
+            });
+          }
+          return createInterruptedResponse(
+            archive.subarray(firstTransferredBytes),
+            secondTransferredBytes,
+            {
+              'content-range': `bytes ${firstTransferredBytes}-${archive.byteLength - 1}/${archive.byteLength}`,
+              etag: validator,
+            },
+            206,
+          );
+        });
+      },
+    });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'response body was interrupted',
+    );
+    expect(fixture.request).toHaveBeenCalledTimes(2);
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('cancels the exact in-flight request and removes its staging', async () => {
     const request = vi.fn<typeof fetch>(async (_url, init) => {
       await new Promise<void>((_resolve, reject) => {
@@ -97,6 +287,24 @@ describe('Desktop extension artifact Host', () => {
     fixture.operationController.abort();
 
     await expect(staging).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rechecks cancellation while expanding TAR entries and removes partial staging', async () => {
+    const fixture = await createFixture();
+    const signal = fixture.operationController.signal;
+    const throwIfAborted = signal.throwIfAborted.bind(signal);
+    let checks = 0;
+    vi.spyOn(signal, 'throwIfAborted').mockImplementation(() => {
+      checks += 1;
+      if (checks === 5) fixture.operationController.abort();
+      throwIfAborted();
+    });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(checks).toBeGreaterThanOrEqual(5);
     await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -123,6 +331,40 @@ describe('Desktop extension artifact Host', () => {
     const fixture = await createFixture({ extraEntries: entries });
 
     await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(error);
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects a TAR entry whose declared expansion exceeds the production byte limit', async () => {
+    const fixture = await createFixture({
+      extraEntries: [
+        {
+          path: 'runtime/oversized-payload',
+          content: '',
+          declaredSize: DESKTOP_EXTENSION_MAX_EXPANDED_BYTES + 1,
+        },
+      ],
+    });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'expanded size exceeds its limit',
+    );
+    await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects a TAR entry whose declared content is truncated', async () => {
+    const fixture = await createFixture({
+      extraEntries: [
+        {
+          path: 'runtime/truncated-payload',
+          content: '',
+          declaredSize: 2_048,
+        },
+      ],
+    });
+
+    await expect(fixture.host.stage(fixture.stageInput)).rejects.toThrow(
+      'entry content is truncated',
+    );
     await expect(access(fixture.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -159,6 +401,7 @@ interface TarEntry {
   readonly content: string;
   readonly type?: string;
   readonly mode?: number;
+  readonly declaredSize?: number;
 }
 
 async function createFixture(
@@ -169,6 +412,11 @@ async function createFixture(
     readonly containedSourceCommit?: string;
     readonly modifyResponseBytes?: boolean;
     readonly archiveKind?: 'tar.gz' | 'zip';
+    readonly allowedHosts?: readonly string[];
+    readonly redirectChain?: readonly string[];
+    readonly contentLengthOffset?: number;
+    readonly contentLength?: string;
+    readonly createRequest?: (archive: Buffer) => typeof fetch;
   } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), 'neko-extension-artifact-'));
@@ -207,10 +455,11 @@ async function createFixture(
   const archive =
     options.archiveKind === 'zip' ? await createZip(archiveEntries) : createTarGzip(archiveEntries);
   const unsignedArtifact = {
+    deliverySource: 'official-download',
     platform: { os: process.platform, arch: process.arch },
     archive: options.archiveKind ?? 'tar.gz',
     url: 'https://artifacts.openneko.dev/browser-use.tar.gz',
-    allowedHosts: ['artifacts.openneko.dev'],
+    allowedHosts: options.allowedHosts ?? ['artifacts.openneko.dev'],
     sizeBytes: archive.byteLength,
     sha256: digest(archive),
     provenance,
@@ -229,14 +478,24 @@ async function createFixture(
       ).toString('base64'),
     },
   };
+  const pendingRedirects = [...(options.redirectChain ?? [])];
   const request =
     options.request ??
+    options.createRequest?.(archive) ??
     vi.fn<typeof fetch>(async () => {
+      const redirect = pendingRedirects.shift();
+      if (redirect) {
+        return new Response(null, { status: 302, headers: { location: redirect } });
+      }
       const responseBytes = Buffer.from(archive);
       if (options.modifyResponseBytes) responseBytes[0] = (responseBytes[0] ?? 0) ^ 0xff;
       return new Response(new Uint8Array(responseBytes), {
         status: 200,
-        headers: { 'content-length': String(responseBytes.byteLength) },
+        headers: {
+          'content-length':
+            options.contentLength ??
+            String(responseBytes.byteLength + (options.contentLengthOffset ?? 0)),
+        },
       });
     });
   const trustedKeyId = options.trustedKeyId ?? artifact.signature.keyId;
@@ -249,6 +508,7 @@ async function createFixture(
   return {
     artifact,
     host,
+    request,
     operationController,
     stagingRoot,
     targetRoot,
@@ -263,6 +523,33 @@ async function createFixture(
       reportProgress: vi.fn(),
     },
   };
+}
+
+function createInterruptedResponse(
+  content: Buffer,
+  transferredBytes: number,
+  headers: Readonly<Record<string, string>>,
+  status = 200,
+): Response {
+  let delivered = false;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (!delivered) {
+        delivered = true;
+        controller.enqueue(new Uint8Array(content.subarray(0, transferredBytes)));
+        return;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+      controller.error(new Error('Fixture connection reset.'));
+    },
+  });
+  return new Response(body, {
+    status,
+    headers: {
+      'content-length': String(content.byteLength),
+      ...headers,
+    },
+  });
 }
 
 async function createZip(entries: readonly TarEntry[]): Promise<Buffer> {
@@ -288,7 +575,7 @@ function createTarGzip(entries: readonly TarEntry[]): Buffer {
     writeOctal(header, 100, 8, entry.mode ?? 0o644);
     writeOctal(header, 108, 8, 0);
     writeOctal(header, 116, 8, 0);
-    writeOctal(header, 124, 12, content.byteLength);
+    writeOctal(header, 124, 12, entry.declaredSize ?? content.byteLength);
     writeOctal(header, 136, 12, 0);
     header.fill(0x20, 148, 156);
     header[156] = (entry.type ?? '0').charCodeAt(0);

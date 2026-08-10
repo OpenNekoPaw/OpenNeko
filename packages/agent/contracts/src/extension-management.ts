@@ -292,6 +292,7 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'canDisable',
       'canRemove',
       'updatePackageRelease',
+      'deliverySource',
       'artifactPlatform',
       'downloadSizeBytes',
       'artifactStatus',
@@ -365,6 +366,11 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     record['updatePackageRelease'],
     'Agent Extension Management update package release must be a string.',
   );
+  const deliverySource = requireOneOf(
+    record['deliverySource'],
+    ['', 'github-release', 'official-download'] as const,
+    'Agent Extension Management delivery source is invalid.',
+  );
   const artifactPlatform = requireString(
     record['artifactPlatform'],
     'Agent Extension Management artifact platform must be a string.',
@@ -406,15 +412,20 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     canDisable !== (installed && enabled) ||
     canRemove !== (installed && !enabled) ||
     (!installed && (enabled || acceptedPermissions.length > 0)) ||
+    (acceptedPermissions.length > 0 && !sameStringSet(declaredPermissions, acceptedPermissions)) ||
     (enabled && !sameStringSet(declaredPermissions, acceptedPermissions)) ||
-    (!enabled && acceptedPermissions.length > 0) ||
     (artifactStatus === 'available') !== canInstall ||
     (!installed && artifactStatus === 'installed') ||
     (installed && artifactStatus === 'available') ||
     (artifactStatus === 'unavailable' && downloadSizeBytes !== 0) ||
+    (artifactStatus === 'unavailable' && deliverySource !== '') ||
+    ((artifactStatus === 'available' || artifactStatus === 'installed') && deliverySource === '') ||
+    (artifactStatus === 'invalid' && deliverySource !== '') ||
     (artifactStatus === 'invalid' && dependencyStatus !== 'error') ||
     (declaredPermissions.length === 0 && enableGrantStatus !== 'not-required') ||
-    (declaredPermissions.length > 0 && enableGrantStatus !== (enabled ? 'accepted' : 'required'))
+    (declaredPermissions.length > 0 &&
+      enableGrantStatus !==
+        (sameStringSet(declaredPermissions, acceptedPermissions) ? 'accepted' : 'required'))
   ) {
     throw new Error('Agent Extension Management extension flags are inconsistent.');
   }
@@ -459,6 +470,7 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     canDisable,
     canRemove,
     updatePackageRelease,
+    deliverySource,
     artifactPlatform,
     downloadSizeBytes,
     artifactStatus,

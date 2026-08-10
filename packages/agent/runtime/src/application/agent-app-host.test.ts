@@ -2730,6 +2730,85 @@ describe('AgentAppHost', () => {
     ).toBe(false);
   });
 
+  it('tracks exact extension-owned turns while reconciling sibling child runtimes', async () => {
+    const fixture = await createFixture();
+    const targetRoot = join(fixture.root, 'target-plugin');
+    const siblingRoot = join(fixture.root, 'sibling-plugin');
+    const targetSkillRoot = join(targetRoot, 'skills');
+    const siblingSkillRoot = join(siblingRoot, 'skills');
+    await writePluginSkill(targetSkillRoot, 'target-skill');
+    await writePluginSkill(siblingSkillRoot, 'sibling-skill');
+    const targetDescriptor = {
+      pluginId: 'target@openneko',
+      pluginRoot: targetRoot,
+      skillRoot: targetSkillRoot,
+      mcpServerIds: [],
+      appIds: [],
+    };
+    const siblingDescriptor = {
+      pluginId: 'sibling@openneko',
+      pluginRoot: siblingRoot,
+      skillRoot: siblingSkillRoot,
+      mcpServerIds: [],
+      appIds: [],
+    };
+    await fixture.composition.reconcilePluginRuntime({
+      records: [],
+      runtimeDescriptors: [targetDescriptor],
+      diagnostics: [],
+    });
+    const stream = createAssistantMessageEventStream();
+    const models = createFixtureModels(() => stream);
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-plugin-owner',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const turn = workspace.startTurn({
+      conversationId: 'conversation-plugin-owner',
+      prompt: 'hold plugin owner',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await vi.waitFor(() =>
+      expect(fixture.composition.listActivePluginTurns('target@openneko')).toHaveLength(1),
+    );
+    expect(fixture.composition.listActivePluginTurns('sibling@openneko')).toEqual([]);
+
+    await expect(
+      fixture.composition.reconcilePluginRuntime({
+        records: [],
+        runtimeDescriptors: [targetDescriptor, siblingDescriptor],
+        diagnostics: [],
+      }),
+    ).resolves.toBeInstanceOf(Map);
+    await expect(
+      fixture.composition.reconcilePluginRuntime({
+        records: [],
+        runtimeDescriptors: [siblingDescriptor],
+        diagnostics: [],
+      }),
+    ).rejects.toThrow("plugin 'target@openneko' runtime cannot change");
+
+    const message = assistant('plugin owner complete');
+    stream.push({ type: 'start', partial: message });
+    stream.push({ type: 'done', reason: 'stop', message });
+    stream.end();
+    await turn.completion;
+    await expect(
+      fixture.composition.reconcilePluginRuntime({
+        records: [],
+        runtimeDescriptors: [],
+        diagnostics: [],
+      }),
+    ).resolves.toBeInstanceOf(Map);
+  });
+
   async function createFixture(
     createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger,
   ) {
@@ -2780,6 +2859,17 @@ describe('AgentAppHost', () => {
       composition,
       resolveWorkspaceGenerationJobs,
     };
+  }
+
+  async function writePluginSkill(skillRoot: string, name: string): Promise<void> {
+    await mkdir(join(skillRoot, name), { recursive: true });
+    await writeFile(
+      join(skillRoot, name, 'SKILL.md'),
+      ['---', `name: ${name}`, `description: ${name} fixture`, '---', `${name} body`, ''].join(
+        '\n',
+      ),
+      'utf8',
+    );
   }
 });
 

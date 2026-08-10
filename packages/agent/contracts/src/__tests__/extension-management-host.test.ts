@@ -66,6 +66,7 @@ function createProjection() {
         canDisable: true,
         canRemove: false,
         updatePackageRelease: '',
+        deliverySource: 'official-download',
         artifactPlatform: 'darwin-arm64',
         downloadSizeBytes: 64_208_172,
         artifactStatus: 'installed',
@@ -120,6 +121,38 @@ describe('Agent Extension Management Host contract', () => {
         request,
       ),
     ).toMatchObject({ projection: { identity } });
+    expect(
+      parseAgentExtensionManagementHostResult(
+        {
+          requestId: request.requestId,
+          route: request.route,
+          projection: {
+            ...createProjection(),
+            extensions: [
+              {
+                ...createProjection().extensions[0],
+                enabled: false,
+                canEnable: true,
+                canDisable: false,
+                canRemove: true,
+                agentStatus: 'disabled',
+              },
+            ],
+          },
+        },
+        request,
+      ),
+    ).toMatchObject({
+      projection: {
+        extensions: [
+          expect.objectContaining({
+            enabled: false,
+            enableGrantStatus: 'accepted',
+            acceptedPermissions: ['accessibility', 'screen-recording'],
+          }),
+        ],
+      },
+    });
   });
 
   it('rejects stale owners, unknown fields and physical paths', () => {
