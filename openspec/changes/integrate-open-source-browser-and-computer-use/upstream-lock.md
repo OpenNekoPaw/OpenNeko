@@ -85,6 +85,15 @@ artifact 同样只记录供应链事实；在 packaged Windows OpenNeko、标准
 `pid`、`window_id` 和 `session`，模型参数不得声明这些 routing fields。该记录只证明 schema 审核，
 不证明 macOS TCC、target-only capture 或 packaged qualification 已完成。
 
+固定 commit 的 macOS platform registry 还注册了只读 `list_apps` 与 `list_windows`，它们不在上述 portable
+`contract/manifest.json` 子集中，因此目标选择 adapter 以同一固定 source tree 的
+`platform-macos/src/tools/list_apps.rs`、`list_windows.rs` 为事实来源分别锁定 schema digest：
+`sha256:99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa` 与
+`sha256:17649c06ad39be8e10d8148ebb47f6e90d0f0bae57675b1e57cb508d581ce0ed`。后者返回 exact
+`window_id`、PID、bounds、`is_on_screen` 与 `on_current_space`；OpenNeko 只接受当前 Space、可见且正尺寸的
+窗口。该 metadata 枚举只服务显式 target selection/revalidation，不进入 Agent reviewed operation allowlist，
+也不构成 screenshot 或 input 资格证据。
+
 ## Official MCP SDK
 
 - npm package：`@modelcontextprotocol/sdk@1.30.0`
@@ -97,9 +106,25 @@ artifact 同样只记录供应链事实；在 packaged Windows OpenNeko、标准
 ## Qualification blockers
 
 - Browser Use Python/Chromium 自包含 artifact、可复现 build recipe、完整 dependency lock 和 SBOM 未完成。
-- Browser Use/Cua Driver 的生产 transitive license inventory 尚未生成和审查。
+- Browser Use 的生产 transitive license inventory 尚未生成；Cua Driver 已生成精确锁定的 367-package SPDX
+  候选，但尚未完成人工 license expression/text 审查。
+- Cua Node runtime 已有 OpenNeko-owned exact source/36-package Cargo lock/Rust `1.97.1`/双架构 `--locked`
+  rebuild recipe；隔离的 official rustup `1.29.0` 已安装并校验 Rust
+  `1.97.1 (8bab26f4f 2026-07-14)` 与两个 macOS target。正式 recipe 的两个 independent build 已产生相同
+  1,569,136-byte universal binary 与 receipt，SHA-256 为
+  `c4e5b70fddbf6ffdd6477a90ea4da5fa3881d99796d9ded9f5faaf3e1039725a`；receipt 记录隔离 HOME 与
+  `/openneko/cargo-home` canonical remap。
+- `darwin-arm64` 上游三个 main root package 的 locked target closure 与 first-party Node runtime Darwin closure 合并后
+  在排除只由 Cargo `dev` edge 引入的 `cua-driver-testkit@0.19.2` 后，是 367 个唯一 `name@release` identity；
+  locale-independent canonical array SHA-256 为 `aaaa49126e1de4500915ddccb371a7688d11d283b57ef114ddba0e4c2b9bad93`。
+  Candidate SPDX 必须精确覆盖该 production-only 集合；
+  identity closure 通过不代表 license expression 或文本已完成人工审核。
+- 两次真实离线 metadata 运行生成逐字节一致的 SPDX candidate：476,482 bytes，SHA-256
+  `08756f9c17062202d0efeb8b149aece1a105486cbcb13ea80f9f1816d6725a51`，`reviewed=false`。两次真实 assembly
+  生成逐字节一致的 contained candidate：63,911,219 bytes，SHA-256
+  `9e3bae3b3358fe0d9ea44007916610e3c5b997360a2146a32349135df2ab63f6`，`catalogReady=false`。
 - OpenNeko artifact Host 已实现 catalog-bound Ed25519 signature、streaming size/digest、contained provenance、
   license inventory digest 与 tar.gz/ZIP poison validation；真实 Browser Use/Cua Driver 发布 artifact 的签名、
-  provenance/license inventory 产出和 packaged qualification 仍未完成。
+  已有未复核 provenance/license candidate；真实发布签名、人工许可复核和 packaged qualification 仍未完成。
 - Cua Driver macOS signing/notarization、TCC、target-only capture 实机证据未完成。
 - Windows 只记录 artifact，不声明产品支持；Browser Use 其他 OS/arch 也未资格化。
