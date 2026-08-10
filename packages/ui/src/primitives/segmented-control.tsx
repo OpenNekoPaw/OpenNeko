@@ -80,7 +80,9 @@ export function SegmentedControl({
             title={option.description ?? String(option.label)}
             onBlur={() => setFocusedValue((current) => (current === option.value ? null : current))}
             onClick={() => onValueChange(option.value)}
-            onFocus={() => setFocusedValue(option.value)}
+            onFocus={(event) =>
+              setFocusedValue(event.currentTarget.matches(':focus-visible') ? option.value : null)
+            }
             onMouseEnter={() => setHoveredValue(option.value)}
             onMouseLeave={() =>
               setHoveredValue((current) => (current === option.value ? null : current))

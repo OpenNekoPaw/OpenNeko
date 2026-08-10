@@ -215,6 +215,21 @@ describe('@neko/ui compound primitives', () => {
     ).toBe('none');
     expect(tabs[0]?.style.height).toBe('30px');
 
+    const matchesFocusVisible = vi
+      .spyOn(tabs[0] as HTMLButtonElement, 'matches')
+      .mockReturnValue(false);
+    act(() => {
+      tabs[0]?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    expect(tabs[0]?.style.boxShadow).toBe('');
+
+    matchesFocusVisible.mockReturnValue(true);
+    act(() => {
+      tabs[0]?.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      tabs[0]?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    expect(tabs[0]?.style.boxShadow).toContain('var(--neko-focusBorder');
+
     act(() => {
       tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     });
