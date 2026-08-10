@@ -35,6 +35,7 @@
 - [x] 5.2 Delete direct-generation context/provider, input projector, status UI, submit branches and related Desktop renderer/preload/Main wiring; add stale/forged renderer contract tests proving direct-mode requests fail before Conversation, Turn, Job or provider creation.
 - [x] 5.3 Retain Agent Generation Tool registration, approval, purpose-qualified effective model receipt, GenerationJob/artifact projection and Workspace Board delivery; add delegation tests proving `Conversation -> Turn -> Tool Call -> exact Workspace GenerationJob -> artifact -> Board` remains the only Agent media path.
 - [x] 5.4 Add deletion/poison tests for removed `DirectGenerationOperationPort`, generation SessionMode values, media-mode controls, direct provider invocation and fallback to Canvas, another provider/model or active/recent Workspace.
+- [x] 5.5 Carry exact purpose-model selections through Draft first-submit persistence and normal Conversation turns, resolve generation bindings as domain models in the immutable Turn policy, and prove text-only main models retain generation Tool discovery without fallback.
 
 ## 6. Desktop Composition And Trust Boundary
 

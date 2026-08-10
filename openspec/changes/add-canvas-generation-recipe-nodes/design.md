@@ -143,6 +143,15 @@ Natural-language generation therefore remains:
 Conversation -> Agent Turn -> approved typed Tool Call -> Workspace GenerationJob -> artifact -> Conversation/Board projection
 ```
 
+The exact purpose-model selections made in the Agent composer are part of the immutable Turn input.
+They cross the Draft first-submit boundary, are retained with the pending Turn for restart-safe provider
+execution, and are resolved against the same Workspace `ConfigManager` that owns the generation model.
+Generation models enter the Agent model policy as domain-executed purpose bindings; they are not registered
+as Pi chat models. Tool discovery consumes that policy, so a configured `image.generate` binding exposes the
+approved image Tool even when `agent.main` is a text-only model such as DeepSeek. A missing, stale,
+provider-mismatched or capability-mismatched binding fails the affected Turn visibly and never falls back to
+another configured model.
+
 The composer change does not remove Generation Tool registration, generated artifact records or Workspace Board delivery. Direct media controls are removed from the Agent consumer rather than hidden behind CSS, a feature flag or an unreachable handler. Future World/3D capabilities must enter through real capability/tool contracts or a later Canvas kind, not by reviving dormant SessionMode branches.
 
 ### Agent and Canvas use different result targets through one Job owner
