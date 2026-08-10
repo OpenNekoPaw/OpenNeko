@@ -108,6 +108,14 @@ Every explicit rerun SHALL create a new GenerationJob and new immutable outputs.
 - **THEN** the terminal output remains bound to its submitted Recipe/input fingerprint and is preserved
 - **AND** Canvas visibly indicates that the current Recipe differs from the selected generated result
 
+#### Scenario: A stale-Recipe runtime projection crosses the Desktop boundary
+
+- **GIVEN** the exact Generation Node Recipe differs from its submitted Recipe/input fingerprint
+- **WHEN** Node/Main projects `recipeStale: true` through preload and the Webview rebuilds the Canvas snapshot
+- **THEN** the canonical Canvas Host decoder validates and preserves that boolean stale marker
+- **AND** Canvas opens with the node-local stale indication instead of rejecting the snapshot or reporting a project load failure
+- **AND** unknown projection fields and non-boolean stale markers still fail visibly at the current message boundary
+
 ### Requirement: One node has at most one active run
 
 The first release SHALL allow at most one non-terminal GenerationJob per Generation Node. It SHALL NOT automatically run a node because an upstream value, connection, output selection or Recipe changed.

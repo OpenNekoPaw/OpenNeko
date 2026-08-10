@@ -773,6 +773,7 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     'progress',
     'resultLocators',
     'text',
+    'recipeStale',
     'diagnostic',
   ]);
   if (Object.keys(record).some((key) => !allowed.has(key))) {
@@ -795,6 +796,7 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
   const resultLocators = record['resultLocators'];
   const diagnostic = record['diagnostic'];
   const text = record['text'];
+  const recipeStale = record['recipeStale'];
   return {
     nodeId: requireOpaqueIdentity(record['nodeId'], 'Canvas Generation node identity is invalid.'),
     submissionId: requireOpaqueIdentity(
@@ -819,6 +821,14 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     ...(text === undefined
       ? {}
       : { text: requireString(text, 'Canvas Generation text output is invalid.') }),
+    ...(recipeStale === undefined
+      ? {}
+      : {
+          recipeStale: requireBoolean(
+            recipeStale,
+            'Canvas Generation Recipe stale marker is invalid.',
+          ),
+        }),
     ...(diagnostic === undefined ? {} : { diagnostic: parseGenerationDiagnostic(diagnostic) }),
   };
 }

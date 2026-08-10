@@ -18,6 +18,7 @@
 - [x] 3.2 Implement snapshot-first monotonic Job observation, cancellation and reopen/restart reattachment without retaining a React Root; prove one non-terminal run per node, idempotent uncertain-outcome recovery and exact Workspace/document/node ownership.
 - [x] 3.3 Apply successful committed outputs only to the originating Generation Node, preserving multiple outputs and selection; poison Job/Media/File/Group sibling creation, Workspace Board mirroring, active/recent Canvas fallback, deleted-node recreation and cross-document writes.
 - [x] 3.4 Preserve historical generated Media/Job content and provenance as readable user data while removing its regenerate success action; test that regeneration requires an explicit new Generation Node and never mutates or converts the historical node automatically.
+- [x] 3.5 Keep `recipeStale` in the single canonical Canvas Generation runtime projection across Node/Main, preload and Webview; strictly decode the optional boolean, reject unknown or invalid fields, and add producer/consumer contract regressions proving a stale Recipe cannot fail the Canvas snapshot load.
 
 ## 4. Canvas Webview Authoring
 
