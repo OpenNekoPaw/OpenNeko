@@ -225,6 +225,45 @@ describe('Tab render realm state', () => {
     expect(parsed.state).toEqual({ drafts: [tabDraft] });
     expect(parsed.diagnostics).toEqual([expect.objectContaining({ code: 'invalid-entry-draft' })]);
   });
+
+  it('restores entry mode and exact Workspace target as Draft presentation state', () => {
+    const stored = {
+      ...entryDraft('draft-workspace', 'keep this text'),
+      experienceMode: 'workspace' as const,
+      workspaceTarget: {
+        label: 'OpenNeko',
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        },
+      },
+    };
+
+    expect(parseTabRenderRealmState({ drafts: [], entryDraft: stored })).toEqual({
+      state: { drafts: [], entryDraft: stored },
+      diagnostics: [],
+    });
+  });
+
+  it('resets only an invalid entry mode while preserving valid Draft text', () => {
+    const parsed = parseTabRenderRealmState({
+      drafts: [],
+      entryDraft: { ...entryDraft('draft-a', 'preserved'), experienceMode: 'management' },
+    });
+
+    expect(parsed.state.entryDraft).toMatchObject({
+      draftId: 'draft-a',
+      inputValue: 'preserved',
+    });
+    expect(parsed.state.entryDraft).not.toHaveProperty('experienceMode');
+    expect(parsed.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'invalid-entry-draft',
+        message: expect.stringContaining('experienceMode'),
+      }),
+    ]);
+  });
 });
 
 function createHost(state: unknown): {

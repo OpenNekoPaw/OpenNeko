@@ -28,6 +28,7 @@ import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
 import { ConversationController } from './ConversationController';
 import conversationControllerSource from './ConversationController.tsx?raw';
 import inputAreaSource from './ChatView/InputArea/InputArea.tsx?raw';
+import { ComposerWorkspaceProvider } from './ComposerWorkspaceContext';
 
 const hostMocks = vi.hoisted(() => ({
   runtimeId: 'conversation-controller-test',
@@ -580,13 +581,14 @@ vi.mock('./ChatView/InputArea', async () => {
 });
 
 describe('ConversationController entry state', () => {
-  it('has no parallel Home mode, legacy entry action, or mode-click binding path', () => {
-    expect(conversationControllerSource).not.toContain('HomeExperience');
-    expect(conversationControllerSource).not.toContain('experienceMode');
+  it('keeps Home modes in Draft configuration and out of management Scene navigation', () => {
+    expect(conversationControllerSource).toContain('HomeExperienceModeSelector');
+    expect(conversationControllerSource).toContain('entryExperienceMode');
     expect(conversationControllerSource).not.toContain('start-chat');
-    expect(conversationControllerSource).not.toContain('.bindTarget(');
-    expect(inputAreaSource).not.toContain("kind === 'entry'");
-    expect(inputAreaSource).not.toContain('onChooseDirectory');
+    expect(conversationControllerSource).toContain('.bindTarget(');
+    expect(conversationControllerSource).not.toContain('open-project-management');
+    expect(conversationControllerSource).not.toContain('open-character-management');
+    expect(inputAreaSource).toContain('onChooseDirectory');
   });
 
   it('projects a global Host error through the renderer body portal', () => {
@@ -700,6 +702,40 @@ describe('ConversationController entry state', () => {
         draft: expect.objectContaining({ binding: { kind: 'unbound' }, bindingReceipt: null }),
         input: { kind: 'message', text: 'Start directly' },
       }),
+    );
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('switches Workspace as Draft configuration without leaving the entry or clearing text', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-mode-config', { kind: 'unbound' });
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.bindTarget.mockResolvedValue(launchCatalog);
+
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController {...createProps()} agentPresentation={launchCatalog.interaction} />
+      </ComposerWorkspaceProvider>,
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'preserve this request' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Workspace' }));
+
+    await waitFor(() => expect(hostMocks.bindTarget).toHaveBeenCalledWith({ kind: 'unbound' }));
+    expect(input).toHaveProperty('value', 'preserve this request');
+    expect(screen.getByRole('tab', { name: 'Workspace' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(screen.getByTestId('entry-submission-blocked').textContent).toBe(
+      'Choose a project or directory.',
     );
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });

@@ -61,6 +61,33 @@ export const chat = {
   'chat.emptyState.scope.assistantActiveTitle': '助手已就绪',
   'chat.emptyState.scope.workspaceActiveTitle': '工作区已就绪',
   'chat.emptyState.scope.activeDescription': '输入内容以开始新的会话。',
+  'chat.entryExperience.label': '选择对话模式',
+  'chat.entryExperience.mode.assistant': '助手',
+  'chat.entryExperience.mode.workspace': '工作区',
+  'chat.entryExperience.mode.character': '角色',
+  'chat.entryExperience.mode.world': '世界',
+  'chat.entryExperience.assistant.title': '想聊些什么？',
+  'chat.entryExperience.assistant.description': '无需选择项目或目录，直接开始助手会话。',
+  'chat.entryExperience.workspace.title': '我们该处理什么工作？',
+  'chat.entryExperience.workspace.description': '先选择已授权的项目或目录，再描述要完成的工作。',
+  'chat.entryExperience.character.title': '进入角色对话',
+  'chat.entryExperience.character.description':
+    '角色模式需要已发布的角色版本，以及由角色领域提供的对话或聊天室入口。',
+  'chat.entryExperience.world.title': '进入互动世界',
+  'chat.entryExperience.world.description':
+    '世界模式需要世界体验版本，以及由世界领域提供的运行入口。',
+  'chat.entryExperience.validation.bindingPending': '正在更新对话目标…',
+  'chat.entryExperience.validation.configurationRequired': '发送前请选择已配置的服务商和模型。',
+  'chat.entryExperience.validation.assistantBindingMismatch':
+    '正在解除当前工作区绑定，请稍后再发送。',
+  'chat.entryExperience.validation.workspaceChooserUnavailable': '当前入口无法选择项目或目录。',
+  'chat.entryExperience.validation.workspaceRequired': '发送前请选择项目或已授权目录。',
+  'chat.entryExperience.validation.workspaceBindingMismatch':
+    '所选工作区未授权给当前草稿，请重新选择。',
+  'chat.entryExperience.validation.characterUnavailable':
+    '角色模式尚不可用。需要先接入角色领域的对话或聊天室入口。',
+  'chat.entryExperience.validation.worldUnavailable':
+    '世界模式尚不可用。需要先接入世界领域的运行入口。',
   'chat.skill.active': '活跃 Skill 生命周期记录',
   'chat.skill.toolLimit': '工具限制：{count}',
   'chat.skill.clear': '清除记录',
@@ -223,6 +250,9 @@ export const chat = {
   'chat.input.attachUnavailableWhileRunning': '当前回复结束后可添加附件',
   'chat.input.attachFile': '添加附件',
   'chat.input.workspace.label': '工作目录',
+  'chat.input.workspace.openProject': '选择项目',
+  'chat.input.workspace.chooseDirectory': '从系统目录选择',
+  'chat.input.workspace.clear': '清除项目选择',
   'chat.input.commands': '命令',
   'chat.input.skills': '技能',
   'chat.input.mediaModelCalls': '媒体模型调用：{count}',

@@ -62,6 +62,38 @@ export const chat = {
   'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
   'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
   'chat.emptyState.scope.activeDescription': 'Enter a message to start a new conversation.',
+  'chat.entryExperience.label': 'Choose a conversation mode',
+  'chat.entryExperience.mode.assistant': 'Assistant',
+  'chat.entryExperience.mode.workspace': 'Workspace',
+  'chat.entryExperience.mode.character': 'Character',
+  'chat.entryExperience.mode.world': 'World',
+  'chat.entryExperience.assistant.title': 'What would you like to explore?',
+  'chat.entryExperience.assistant.description':
+    'Start a conversation without selecting a project or directory.',
+  'chat.entryExperience.workspace.title': 'What should we work on?',
+  'chat.entryExperience.workspace.description':
+    'Choose an authorized project or directory, then describe the work.',
+  'chat.entryExperience.character.title': 'Enter a character conversation',
+  'chat.entryExperience.character.description':
+    'Character requires a published CharacterVersion and a Chara-owned dialogue or room launcher.',
+  'chat.entryExperience.world.title': 'Enter an interactive world',
+  'chat.entryExperience.world.description':
+    'World requires a WorldExperienceVersion and a World-owned run launcher.',
+  'chat.entryExperience.validation.bindingPending': 'Updating the conversation target…',
+  'chat.entryExperience.validation.configurationRequired':
+    'Choose a configured provider and model before sending.',
+  'chat.entryExperience.validation.assistantBindingMismatch':
+    'Assistant is waiting for the current Workspace binding to be released.',
+  'chat.entryExperience.validation.workspaceChooserUnavailable':
+    'Project and directory selection is unavailable in this entry.',
+  'chat.entryExperience.validation.workspaceRequired':
+    'Choose a project or authorized directory before sending.',
+  'chat.entryExperience.validation.workspaceBindingMismatch':
+    'The selected Workspace is not authorized for this draft. Select it again.',
+  'chat.entryExperience.validation.characterUnavailable':
+    'Character is not available yet. Connect the Chara dialogue or room launcher first.',
+  'chat.entryExperience.validation.worldUnavailable':
+    'World is not available yet. Connect the World run launcher first.',
   'chat.skill.active': 'Active Skill records',
   'chat.skill.toolLimit': 'Tool limit: {count}',
   'chat.skill.clear': 'Clear record',
@@ -237,6 +269,9 @@ export const chat = {
   'chat.input.attachUnavailableWhileRunning': 'Attach files after the current response finishes',
   'chat.input.attachFile': 'Attach file',
   'chat.input.workspace.label': 'Working directory',
+  'chat.input.workspace.openProject': 'Choose project',
+  'chat.input.workspace.chooseDirectory': 'Choose from system directories',
+  'chat.input.workspace.clear': 'Clear project selection',
   'chat.input.commands': 'Commands',
   'chat.input.skills': 'Skills',
   'chat.input.mediaModelCalls': 'Media model calls: {count}',

@@ -80,7 +80,10 @@ export function AgentWebviewRoot({
   );
 }
 
-export type { AgentComposerWorkspacePresentation } from './components/ComposerWorkspaceContext';
+export type {
+  AgentComposerWorkspacePresentation,
+  AgentComposerWorkspaceTarget,
+} from './components/ComposerWorkspaceContext';
 
 interface AgentWebviewFoundationBoundaryProps {
   readonly foundation?: WebviewFoundationContextValue;

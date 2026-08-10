@@ -1,8 +1,31 @@
 import { createContext, useContext, type ReactNode } from 'react';
-export interface AgentComposerWorkspacePresentation {
-  readonly kind: 'workspace';
+import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
+
+export interface AgentComposerWorkspaceTarget {
   readonly label: string;
+  readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
 }
+
+export interface AgentComposerProjectOption {
+  readonly projectId: string;
+  readonly label: string;
+  readonly disabled?: boolean;
+}
+
+export type AgentComposerWorkspacePresentation =
+  | {
+      readonly kind: 'entry';
+      readonly projects: readonly AgentComposerProjectOption[];
+      readonly onChooseDirectory: () => Promise<AgentComposerWorkspaceTarget | undefined>;
+      readonly onSelectProject: (
+        projectId: string,
+      ) => Promise<AgentComposerWorkspaceTarget | undefined>;
+      readonly disabled?: boolean;
+    }
+  | {
+      readonly kind: 'workspace';
+      readonly label: string;
+    };
 
 const ComposerWorkspaceContext = createContext<AgentComposerWorkspacePresentation | undefined>(
   undefined,

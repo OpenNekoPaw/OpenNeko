@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -724,6 +724,46 @@ describe('InputArea composer controls', () => {
 
     expect(screen.queryByLabelText('工作目录')).toBeNull();
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
+  });
+
+  it('selects an exact Workspace target from the Entry composer', async () => {
+    const target = {
+      label: 'OpenNeko',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+      },
+    };
+    const onSelectProject = vi.fn(async () => target);
+    const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
+    render(
+      <Harness
+        composerWorkspace={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject,
+        }}
+      >
+        <InputArea
+          presentation="entry"
+          inputValue="preserved"
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          showDraftWorkspaceControl
+          onDraftWorkspaceTargetChange={onDraftWorkspaceTargetChange}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'OpenNeko' }));
+
+    await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
+    expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(target);
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
   });
 
   it('keeps command and Skill discovery available in the Entry composer', () => {

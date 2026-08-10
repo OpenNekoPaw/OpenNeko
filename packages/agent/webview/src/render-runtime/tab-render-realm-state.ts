@@ -4,7 +4,15 @@ import type {
   TabRenderState,
   TabRenderStateUpdate,
 } from './tab-render-runtime';
-import type { AgentContextPayload } from '@neko/agent-contracts';
+import {
+  parseAgentBoundDomainBinding,
+  type AgentBoundDomainBinding,
+  type AgentContextPayload,
+} from '@neko/agent-contracts';
+import {
+  isAgentEntryExperienceMode,
+  type AgentEntryExperienceMode,
+} from '../entry-experience-mode';
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly inputValue: string;
@@ -20,8 +28,13 @@ export interface AgentEntryDraftSnapshot {
     readonly characterVersionId: string;
     readonly label: string;
   }[];
+  readonly workspaceTarget?: {
+    readonly label: string;
+    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+  };
   readonly selectedModel: string;
   readonly executionMode: 'plan' | 'ask' | 'auto';
+  readonly experienceMode?: AgentEntryExperienceMode;
 }
 
 export interface TabRenderRealmState {
@@ -111,7 +124,17 @@ export function parseTabRenderRealmState(value: unknown): ParsedTabRenderRealmSt
   let entryDraft: AgentEntryDraftSnapshot | undefined;
   if (value.entryDraft !== undefined) {
     try {
-      entryDraft = parseEntryDraft(value.entryDraft);
+      const invalidExperienceMode =
+        isRecord(value.entryDraft) &&
+        value.entryDraft.experienceMode !== undefined &&
+        !isAgentEntryExperienceMode(value.entryDraft.experienceMode);
+      entryDraft = parseEntryDraft(value.entryDraft, invalidExperienceMode);
+      if (invalidExperienceMode) {
+        diagnostics.push({
+          code: 'invalid-entry-draft',
+          message: 'Agent entry draft snapshot experienceMode is invalid and was reset.',
+        });
+      }
     } catch (error) {
       diagnostics.push({
         code: 'invalid-entry-draft',
@@ -319,7 +342,10 @@ function parseDraft(value: unknown, index: number): TabRenderDraftSnapshot {
   };
 }
 
-function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
+function parseEntryDraft(
+  value: unknown,
+  recoverInvalidExperienceMode = false,
+): AgentEntryDraftSnapshot {
   const path = 'Agent entry draft snapshot';
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   const contextReferences = value.contextReferences;
@@ -339,6 +365,15 @@ function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
   ) {
     throw new Error(`${path}.characterLaunches must not contain duplicate CharacterVersions.`);
   }
+  const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
+  const experienceMode = value.experienceMode;
+  if (
+    experienceMode !== undefined &&
+    !isAgentEntryExperienceMode(experienceMode) &&
+    !recoverInvalidExperienceMode
+  ) {
+    throw new Error(`${path}.experienceMode is invalid.`);
+  }
   return {
     draftId: nonEmptyString(value.draftId, `${path}.draftId`),
     inputValue: stringValue(value.inputValue, `${path}.inputValue`),
@@ -346,8 +381,26 @@ function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
       parseEntryContextReference(reference, `${path}.contextReferences[${index}]`),
     ),
     characterLaunches: parsedCharacterLaunches,
+    ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
     selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
     executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
+    ...(isAgentEntryExperienceMode(experienceMode) ? { experienceMode } : {}),
+  };
+}
+
+function parseEntryWorkspaceTarget(
+  value: unknown,
+  path: string,
+): AgentEntryDraftSnapshot['workspaceTarget'] {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`${path}.workspaceTarget must be an object.`);
+  const context = parseAgentBoundDomainBinding(value.context);
+  if (context.kind !== 'workspace') {
+    throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
+  }
+  return {
+    label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
+    context,
   };
 }
 
