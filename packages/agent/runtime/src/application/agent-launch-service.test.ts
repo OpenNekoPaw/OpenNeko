@@ -16,6 +16,8 @@ const assistantDraft = (assistantSpaceId = 'assistant:1') => ({
 
 const emptyCatalog = {
   models: [],
+  defaultMediaModels: {},
+  mediaUnderstandingModels: mediaUnderstandingModels(),
   configuration: projectAgentConfigurationPolicy({
     models: [],
     request: null,
@@ -38,7 +40,7 @@ const noWorkspaceMentions = {
 };
 
 describe('Agent launch application service', () => {
-  it('projects configured media model defaults with the Draft launch catalog', () => {
+  it('projects configured media models without requiring LLM token metadata', () => {
     const config = createAssistantConfigState();
     const projection = projectAgentLaunchBaseCatalog({
       config: {
@@ -53,8 +55,28 @@ describe('Agent launch application service', () => {
             category: 'image',
             capabilities: ['image.generate'],
           },
+          {
+            id: 'openai:music-1',
+            label: 'Music 1',
+            providerId: 'openai',
+            modelId: 'music-1',
+            category: 'audio',
+            capabilities: ['text_to_music'],
+          },
+          {
+            id: 'openai:video-1',
+            label: 'Video 1',
+            providerId: 'openai',
+            modelId: 'video-1',
+            category: 'video',
+            capabilities: ['text_to_video'],
+          },
         ],
-        defaultMediaModels: { image: 'openai:gpt-image-1' },
+        defaultMediaModels: {
+          image: 'openai:gpt-image-1',
+          audio: 'openai:music-1',
+          video: 'openai:video-1',
+        },
       },
       thinkingBudget: 128,
       skills: { records: [], diagnostics: [] },
@@ -63,15 +85,31 @@ describe('Agent launch application service', () => {
       launchCommandHandlerIds: new Set(),
     });
 
-    expect(projection.defaultMediaModels).toEqual({ image: 'openai:gpt-image-1' });
+    expect(projection.defaultMediaModels).toEqual({
+      image: 'openai:gpt-image-1',
+      audio: 'openai:music-1',
+      video: 'openai:video-1',
+    });
     expect(projection.models).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'openai:gpt-image-1',
           modelType: 'image',
+          availability: { status: 'available' },
+        }),
+        expect.objectContaining({
+          id: 'openai:music-1',
+          modelType: 'audio',
+          availability: { status: 'available' },
+        }),
+        expect.objectContaining({
+          id: 'openai:video-1',
+          modelType: 'video',
+          availability: { status: 'available' },
         }),
       ]),
     );
+    expect(projection.mediaUnderstandingModels.image.optionId).toBe('openai:gpt-5');
   });
 
   it('projects Character capability restrictions through canonical catalog and config policies', () => {
@@ -160,6 +198,8 @@ describe('Agent launch application service', () => {
           ] as const;
           return {
             models,
+            defaultMediaModels: {},
+            mediaUnderstandingModels: mediaUnderstandingModels(),
             configuration: availableConfiguration(models),
             inputs: [],
           };
@@ -556,6 +596,8 @@ describe('Agent launch application service', () => {
       catalog: {
         readCatalog: async () => ({
           models: [model],
+          defaultMediaModels: {},
+          mediaUnderstandingModels: mediaUnderstandingModels(),
           configuration: availableConfiguration([model]),
           inputs: [compact, skill],
         }),
@@ -756,6 +798,8 @@ describe('Agent launch application service', () => {
       catalog: {
         readCatalog: async () => ({
           models: [model],
+          defaultMediaModels: {},
+          mediaUnderstandingModels: mediaUnderstandingModels(),
           configuration: defaultConfiguration,
           inputs: [],
         }),
@@ -856,10 +900,27 @@ function createAssistantConfigState(): AssistantConfigState {
         category: 'llm',
         contextWindow: 128_000,
         maxOutputTokens: 16_384,
-        capabilities: ['agent.main', 'character.dialogue'],
+        capabilities: ['chat'],
       },
     ],
     modelGroups: [],
     defaultMediaModels: {},
+    mediaUnderstandingModels: mediaUnderstandingModels(),
   };
+}
+
+function mediaUnderstandingModels() {
+  return {
+    image: {
+      category: 'image',
+      purpose: 'image.understand',
+      status: 'configured',
+      providerId: 'openai',
+      modelId: 'gpt-5',
+      optionId: 'openai:gpt-5',
+      source: 'explicit-config',
+    },
+    audio: { category: 'audio', purpose: 'audio.understand', status: 'missing' },
+    video: { category: 'video', purpose: 'video.understand', status: 'missing' },
+  } as const;
 }

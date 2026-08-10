@@ -464,6 +464,7 @@ vi.mock('./ChatView/InputArea', async () => {
         onRequestFiles,
         selectedModel,
         mediaModelSelection,
+        mediaUnderstandingModels,
         contextChips,
         onAddContextChip,
         onRemoveContextChip,
@@ -475,6 +476,9 @@ vi.mock('./ChatView/InputArea', async () => {
           <span data-testid="entry-config-state">{`${modelCatalogStatus}:${String(isBusy)}`}</span>
           <span data-testid="entry-media-models">
             {Object.values(mediaModelSelection).join('|')}
+          </span>
+          <span data-testid="entry-media-understanding">
+            {mediaUnderstandingModels?.audio.optionId ?? mediaUnderstandingModels?.audio.status}
           </span>
           <input
             placeholder="Type anything..."
@@ -1431,6 +1435,26 @@ describe('ConversationController entry state', () => {
               },
             ],
             defaultMediaModels: { image: 'nekoapi-media:gpt-image-2' },
+            mediaUnderstandingModels: {
+              image: {
+                category: 'image',
+                purpose: 'image.understand',
+                status: 'configured',
+                optionId: 'nekoapi-chat:gpt-5.5',
+              },
+              audio: {
+                category: 'audio',
+                purpose: 'audio.understand',
+                status: 'configured',
+                optionId: 'nekoapi-chat:gpt-5.5',
+              },
+              video: {
+                category: 'video',
+                purpose: 'video.understand',
+                status: 'configured',
+                optionId: 'nekoapi-chat:gpt-5.5',
+              },
+            },
           },
         })}
         agentPresentation={launchCatalog.interaction}
@@ -1440,6 +1464,9 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-selected-model').textContent).toBe('nekoapi-chat:gpt-5.5');
     expect(screen.getByTestId('entry-media-models').textContent).toBe(
       'nekoapi-media:gpt-image-2|none|none',
+    );
+    expect(screen.getByTestId('entry-media-understanding').textContent).toBe(
+      'nekoapi-chat:gpt-5.5',
     );
   });
 
@@ -3015,7 +3042,10 @@ function createDraftSkillCatalogEntry(
   };
 }
 
-function createDraftLaunchCatalog(draftId: string, binding: AgentDomainBinding) {
+function createDraftLaunchCatalog(
+  draftId: string,
+  binding: AgentDomainBinding,
+): AgentLaunchCatalogProjection {
   const connectionId = `connection:${draftId}`;
   return {
     connection: {
@@ -3055,6 +3085,11 @@ function createDraftLaunchCatalog(draftId: string, binding: AgentDomainBinding) 
       },
     ],
     defaultMediaModels: {},
+    mediaUnderstandingModels: {
+      image: { category: 'image', purpose: 'image.understand', status: 'missing' },
+      audio: { category: 'audio', purpose: 'audio.understand', status: 'missing' },
+      video: { category: 'video', purpose: 'video.understand', status: 'missing' },
+    },
     configuration: createDraftConfiguration({
       modelCatalogEntryId: 'test-model',
       providerId: 'test',

@@ -43,6 +43,7 @@ describe('Agent launch contract', () => {
         },
       ],
       defaultMediaModels: { image: 'openai:gpt-image-1' },
+      mediaUnderstandingModels: mediaUnderstandingModels(),
       configuration: configuration({
         modelCatalogEntryId: 'openai:gpt-5',
         providerId: 'openai',
@@ -74,6 +75,10 @@ describe('Agent launch contract', () => {
 
     expect(projection.interaction.binding).toEqual(binding);
     expect(projection.defaultMediaModels).toEqual({ image: 'openai:gpt-image-1' });
+    expect(projection.mediaUnderstandingModels.image).toMatchObject({
+      status: 'configured',
+      optionId: 'openai:gpt-5',
+    });
     expect(projection.inputs[0]?.source).toMatchObject({ kind: 'project' });
   });
 
@@ -109,6 +114,7 @@ describe('Agent launch contract', () => {
       },
       models: [],
       defaultMediaModels: {},
+      mediaUnderstandingModels: mediaUnderstandingModels(),
       configuration: configuration(null),
       inputs: [],
     };
@@ -139,6 +145,8 @@ describe('Agent launch contract', () => {
         bindingReceipt: null,
       },
       models: [],
+      defaultMediaModels: {},
+      mediaUnderstandingModels: mediaUnderstandingModels(),
       configuration: configuration(null),
       inputs: [],
     };
@@ -156,6 +164,22 @@ describe('Agent launch contract', () => {
     ).toThrow('unsupported fields');
   });
 });
+
+function mediaUnderstandingModels() {
+  return {
+    image: {
+      category: 'image',
+      purpose: 'image.understand',
+      status: 'configured',
+      providerId: 'openai',
+      modelId: 'gpt-5',
+      optionId: 'openai:gpt-5',
+      source: 'explicit-config',
+    },
+    audio: { category: 'audio', purpose: 'audio.understand', status: 'missing' },
+    video: { category: 'video', purpose: 'video.understand', status: 'missing' },
+  } as const;
+}
 
 function configuration(
   request: {

@@ -29,7 +29,7 @@ import {
   type ProjectFileMentionInfo,
   type ProjectMentionExtra,
 } from '@neko/agent-contracts';
-import type { AssistantConfigState } from '@neko/host/settings';
+import { modelSupportsPurpose, type AssistantConfigState } from '@neko/host/settings';
 import type { AgentSkillCatalog } from './agent-app-host';
 import { buildSkillActivationId } from '../pi/skill-host';
 
@@ -37,6 +37,7 @@ export interface AgentLaunchCatalogSource {
   readCatalog(interaction: AgentDraftInteractionProjection): Promise<{
     readonly models: readonly AgentModelCatalogEntry[];
     readonly defaultMediaModels: AgentLaunchCatalogProjection['defaultMediaModels'];
+    readonly mediaUnderstandingModels: AgentLaunchCatalogProjection['mediaUnderstandingModels'];
     readonly configuration: AgentConfigurationPolicyProjection;
     readonly inputs: readonly AgentInputCatalogEntry[];
   }>;
@@ -132,9 +133,13 @@ export function projectAgentLaunchBaseCatalog(input: {
 }): {
   readonly models: readonly AgentModelCatalogEntry[];
   readonly defaultMediaModels: AgentLaunchCatalogProjection['defaultMediaModels'];
+  readonly mediaUnderstandingModels: AgentLaunchCatalogProjection['mediaUnderstandingModels'];
   readonly configuration: AgentConfigurationPolicyProjection;
   readonly inputs: readonly AgentInputCatalogEntry[];
 } {
+  if (!input.config.mediaUnderstandingModels) {
+    throw new Error('Agent launch media understanding model projection is required.');
+  }
   const models = projectAgentModelCatalog(input.config);
   const selectedModel =
     input.config.selectedProviderId && input.config.selectedModelId
@@ -161,6 +166,7 @@ export function projectAgentLaunchBaseCatalog(input: {
   return {
     models,
     defaultMediaModels: { ...input.config.defaultMediaModels },
+    mediaUnderstandingModels: structuredClone(input.config.mediaUnderstandingModels),
     configuration: projectAgentConfigurationPolicy({
       models,
       request,
@@ -234,9 +240,12 @@ export function projectAgentModelCatalog(
 ): readonly AgentModelCatalogEntry[] {
   return config.chatModelOptions.map((model): AgentModelCatalogEntry => {
     const missing: string[] = [];
-    if (!model.contextWindow) missing.push('context window');
-    if (!model.maxOutputTokens) missing.push('maximum output tokens');
-    if (!model.capabilities?.length) missing.push('purpose capabilities');
+    const modelType = model.category ?? 'llm';
+    if (modelType === 'llm' && !model.contextWindow) missing.push('context window');
+    if (modelType === 'llm' && !model.maxOutputTokens) missing.push('maximum output tokens');
+    if (!supportsCatalogPurpose(modelType, model.capabilities ?? [])) {
+      missing.push('matching purpose capability');
+    }
     const providerConfigured = config.configuredProviders.some(
       (provider) => provider.id === model.providerId,
     );
@@ -246,7 +255,7 @@ export function projectAgentModelCatalog(
       label: model.label,
       providerId: model.providerId,
       modelId: model.modelId,
-      modelType: model.category ?? 'llm',
+      modelType,
       contextWindow: model.contextWindow ?? null,
       maximumOutputTokens: model.maxOutputTokens ?? null,
       purposeCapabilities: model.capabilities ?? [],
@@ -263,6 +272,21 @@ export function projectAgentModelCatalog(
             },
     };
   });
+}
+
+function supportsCatalogPurpose(
+  modelType: AgentModelCatalogEntry['modelType'],
+  capabilities: readonly string[],
+): boolean {
+  const purposes = {
+    llm: ['llm.chat'],
+    image: ['image.generate'],
+    video: ['video.generate'],
+    audio: ['audio.generate', 'audio.music.generate', 'audio.tts'],
+  }[modelType];
+  return purposes.some((purpose) =>
+    modelSupportsPurpose({ type: modelType, capabilities }, purpose),
+  );
 }
 
 export function projectAgentInputCatalog(input: {
@@ -427,6 +451,7 @@ interface AgentLaunchState {
   attachmentCount: number;
   models: readonly AgentModelCatalogEntry[];
   defaultMediaModels: AgentLaunchCatalogProjection['defaultMediaModels'];
+  mediaUnderstandingModels: AgentLaunchCatalogProjection['mediaUnderstandingModels'];
   configuration: AgentConfigurationPolicyProjection;
   inputs: readonly AgentInputCatalogEntry[];
   workspaceMentionInputIds: Set<string>;
@@ -509,6 +534,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
       attachmentCount: 1,
       models: [...catalog.models],
       defaultMediaModels: { ...catalog.defaultMediaModels },
+      mediaUnderstandingModels: structuredClone(catalog.mediaUnderstandingModels),
       configuration: catalog.configuration,
       inputs: [...catalog.inputs],
       workspaceMentionInputIds: new Set(),
@@ -559,6 +585,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
     }
     state.models = [...catalog.models];
     state.defaultMediaModels = { ...catalog.defaultMediaModels };
+    state.mediaUnderstandingModels = structuredClone(catalog.mediaUnderstandingModels);
     state.configuration = rebaseDraftConfiguration(
       previousConfiguration,
       catalog.configuration,
@@ -832,6 +859,7 @@ function project(state: AgentLaunchState): AgentLaunchCatalogProjection {
     interaction: state.interaction,
     models: state.models,
     defaultMediaModels: state.defaultMediaModels,
+    mediaUnderstandingModels: state.mediaUnderstandingModels,
     configuration: state.configuration,
     inputs: state.inputs,
   });

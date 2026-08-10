@@ -3405,6 +3405,11 @@ function createLaunchCatalog(input: {
     },
     models: [],
     defaultMediaModels: {},
+    mediaUnderstandingModels: {
+      image: { category: 'image', purpose: 'image.understand', status: 'missing' },
+      audio: { category: 'audio', purpose: 'audio.understand', status: 'missing' },
+      video: { category: 'video', purpose: 'video.understand', status: 'missing' },
+    },
     configuration: projectAgentConfigurationPolicy({
       models: [],
       request: null,
