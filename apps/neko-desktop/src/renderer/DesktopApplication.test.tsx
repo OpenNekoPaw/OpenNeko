@@ -61,16 +61,30 @@ const rendererInstrumentation = vi.hoisted(() => ({
 
 vi.mock('./DesktopExtensionManagementSurface', () => ({
   DesktopExtensionManagementSurface: ({
+    onDetailVisibilityChange,
     runtime,
   }: {
+    readonly onDetailVisibilityChange: (visible: boolean) => void;
     readonly runtime: DesktopExtensionManagementRuntime;
   }) => {
     rendererInstrumentation.extensionRootRender(runtime.identity.windowId);
     return (
-      <div
-        data-extension-management-root="agent"
-        data-extension-management-window={runtime.identity.windowId}
-      />
+      <>
+        <div
+          data-extension-management-root="agent"
+          data-extension-management-window={runtime.identity.windowId}
+        />
+        <button
+          data-select-extension-detail="true"
+          type="button"
+          onClick={() => onDetailVisibilityChange(true)}
+        />
+        <button
+          data-clear-extension-detail="true"
+          type="button"
+          onClick={() => onDetailVisibilityChange(false)}
+        />
+      </>
     );
   },
 }));
@@ -1185,6 +1199,33 @@ describe('DesktopApplication scene lifecycle', () => {
     });
     expect(rendererInstrumentation.extensionRootRender).toHaveBeenCalledTimes(extensionRenderCount);
     expect(dispose).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+  });
+
+  it('mounts an edge-to-edge Extensions detail split only after exact selection', async () => {
+    const projection = withActiveScene(createProjection(), extensionsScene());
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+    const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
+
+    expect(shell?.dataset.mainSplit).toBe('none');
+    expect(shell?.dataset.mainComposition).toBe('continuous');
+    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).toBeNull();
+    expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
+
+    const select = container.querySelector<HTMLButtonElement>('[data-select-extension-detail]');
+    await act(async () => select?.click());
+    expect(shell?.dataset.mainSplit).toBe('columns');
+    expect(shell?.dataset.mainComposition).toBe('continuous');
+    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).not.toBeNull();
+    expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
+
+    const clear = container.querySelector<HTMLButtonElement>('[data-clear-extension-detail]');
+    await act(async () => clear?.click());
+    expect(shell?.dataset.mainSplit).toBe('none');
+    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Resize Main split"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -2865,6 +2906,7 @@ function extensionsScene() {
     context: { kind: 'extensions' },
     slots: {
       main: { kind: 'extension-management' },
+      secondaryMain: { kind: 'extension-detail' },
       status: { kind: 'scene-status', sceneId },
     },
   });

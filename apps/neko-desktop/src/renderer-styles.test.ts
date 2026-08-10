@@ -415,6 +415,9 @@ describe('Desktop renderer styles', () => {
     expect(styles).toMatch(
       /\.management-surface-list\[data-empty='true'\]\s*\{[\s\S]*?display\s*:\s*grid[\s\S]*?grid-template-columns\s*:\s*minmax\(0, 1fr\)[\s\S]*?flex\s*:\s*1/u,
     );
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.management-surface-row__select\[data-selected='true'\]\s*\{[^}]*border-color[^}]*background/u,
+    );
     expect(styles).toMatch(/\.management-surface-row-actions button\s*\{[\s\S]*?width\s*:\s*28px/u);
     expect(styles).not.toMatch(/\.management-surface-empty/u);
     expect(styles).not.toMatch(/\.project-management-detail(?:__content)?\s*\{/u);

@@ -241,12 +241,34 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
 
       await clickApplicationNavigation(evaluate, click, 2);
       await waitForSelector('.agent-extension-management-root');
-      const extensions = await inspectWorkbench(evaluate, 'management', 'extension-management');
-      assertManagementMain(extensions, 'extension-management');
-      assertSharedManagementPanel(extensions, 'extension-management');
-      assertBoundedManagement(extensions, 'extension-management');
-      const extensionsScreenshot = await screenshot('extension-management-main-large');
-      checkpoint('extension-management-main-large', extensions);
+      const extensionsGrid = await inspectExtensionsManagement(evaluate);
+      assertExtensionsCatalogOnly(extensionsGrid, 'grid', 'skills');
+      const extensionsGridScreenshot = await screenshot('extension-management-skills-grid-large');
+      checkpoint('extension-management-skills-grid-large', extensionsGrid);
+
+      await click('[data-catalog-view-control="list"]');
+      await waitForSelector('.agent-extension-management-root[data-catalog-view="list"]');
+      const extensionsList = await inspectExtensionsManagement(evaluate);
+      assertExtensionsCatalogOnly(extensionsList, 'list', 'skills');
+      const extensionsListScreenshot = await screenshot('extension-management-skills-list-large');
+      checkpoint('extension-management-skills-list-large', extensionsList);
+
+      await click('[data-extension-catalog-tab="extensions"]');
+      await click('.agent-extension-management-root [role="option"]');
+      await waitForSelector('[data-workbench-main-panel="extension-detail"]');
+      await waitForSelector('[data-automation-endpoint-management="true"]');
+      await waitForSelector('[data-automation-permission-management="true"]');
+      const extensionsConfiguration = await inspectExtensionsManagement(evaluate);
+      assertExtensionsManagement(extensionsConfiguration, 'list', 'extensions');
+      const extensionsResize = await exerciseManagementMainSplit(evaluate, drag);
+      const extensionsScreenshot = await screenshot('extension-management-configuration-large');
+      const extensions = {
+        grid: extensionsGrid,
+        list: extensionsList,
+        configuration: extensionsConfiguration,
+        resize: extensionsResize,
+      };
+      checkpoint('extension-management-configuration-large', extensions);
 
       await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('.project-management-catalog');
@@ -610,6 +632,8 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           smallAgentScreenshot,
           assetsScreenshot,
           assetPreviewScreenshot,
+          extensionsGridScreenshot,
+          extensionsListScreenshot,
           extensionsScreenshot,
           projectsScreenshot,
           settingsScreenshot,
@@ -4930,6 +4954,31 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
   })()`);
 }
 
+async function inspectExtensionsManagement(evaluate) {
+  const workbench = await inspectWorkbench(evaluate, 'management', 'extension-management');
+  const catalog = await evaluate(`(() => {
+    const root = document.querySelector('.agent-extension-management-root');
+    const secondary = document.querySelector('${ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR}');
+    return {
+      view: root?.getAttribute('data-catalog-view'),
+      activeTab: root
+        ?.querySelector('[data-extension-catalog-tab][aria-pressed="true"]')
+        ?.getAttribute('data-extension-catalog-tab'),
+      selectedCount: root?.querySelectorAll('[role="option"][aria-selected="true"]').length ?? 0,
+      configurationKind: secondary
+        ?.querySelector('[data-extension-configuration-kind]')
+        ?.getAttribute('data-extension-configuration-kind'),
+      endpointConfigurationVisible: Boolean(
+        secondary?.querySelector('[data-automation-endpoint-management="true"]'),
+      ),
+      permissionConfigurationVisible: Boolean(
+        secondary?.querySelector('[data-automation-permission-management="true"]'),
+      ),
+    };
+  })()`);
+  return { ...workbench, ...catalog };
+}
+
 function assertAgentDraftControls(detail) {
   if (
     detail.composerCount !== 1 ||
@@ -5052,6 +5101,43 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
   ) {
     throw new Error(
       `Management + Detail did not preserve the edge-to-edge Workbench composition: ${JSON.stringify(detail)}`,
+    );
+  }
+}
+
+function assertExtensionsManagement(detail, view, tab) {
+  assertManagementDetailSplit(detail, 'extension-management', 'extension-detail');
+  if (
+    !detail.compactPanelIds.includes('extension-detail') ||
+    detail.view !== view ||
+    detail.activeTab !== tab ||
+    detail.configurationKind !== tab ||
+    detail.selectedCount !== 1 ||
+    (tab === 'skills' &&
+      (detail.endpointConfigurationVisible || detail.permissionConfigurationVisible)) ||
+    (tab === 'extensions' &&
+      (!detail.endpointConfigurationVisible || !detail.permissionConfigurationVisible))
+  ) {
+    throw new Error(
+      `Extensions management did not preserve its catalog/configuration contract: ${JSON.stringify(detail)}`,
+    );
+  }
+}
+
+function assertExtensionsCatalogOnly(detail, view, tab) {
+  assertSingleWorkbench(detail);
+  assertManagementMain(detail, 'extension-management');
+  assertSharedManagementPanel(detail, 'extension-management');
+  if (
+    detail.view !== view ||
+    detail.activeTab !== tab ||
+    detail.selectedCount !== 0 ||
+    detail.configurationKind !== undefined ||
+    detail.endpointConfigurationVisible ||
+    detail.permissionConfigurationVisible
+  ) {
+    throw new Error(
+      `Extensions management reserved configuration without a selection: ${JSON.stringify(detail)}`,
     );
   }
 }

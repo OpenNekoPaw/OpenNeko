@@ -21,7 +21,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Window Scene authority 只消费 Agent application 返回的 committed Conversation/owner projection；在 first submit 尚未完成 target、input、configuration、local commit 和 runtime materialization 前不得切换到 Assistant/Workspace/Character/Room Scene。
 - Scene 只由 typed navigation intent、已提交 Conversation owner 和领域 capability facts 决定；模型文本、active/current/recent Project 和组件可用性不得发明 owner 或可执行 Scene。
 - 资源中心建立 Assets-owned `AssetCenterSession`，由同一 session 的 Management Root 在 Main 管理 catalog/filter/selection，并把选中资源通过授权 descriptor 投影给可选 Secondary Preview Root；Desktop 不拥有 Asset selection、资源事实或 preview 类型判断。
-- 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个视觉、DOM 与 overflow 边界独立的共享 panel shell；两个 shell 各自拥有边框、直角边界、背景并由带间距的 resize composition 连接，不能只在同一连续 Main 底板上画分隔线。
+- 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个 DOM 与 overflow 边界独立的共享 panel；两个 panel 以直角边界贴边连接，resize handle 覆盖在分界线上，不得通过空白 margin/gap 分隔内容。
 - 扩展/Skill、项目管理和 Settings 也通过明确 Surface slots 组合；缺失真实 owner/public Root 时显示 owner-qualified unavailable，而不是在 Desktop 复制临时业务实现。
 - Conversation 创建本地原子提交 context、conversation、initial message 和 durable pending-turn intent，并在返回 session Scene 前把同一 identity 物化到精确 Assistant/Workspace Agent runtime；外部 provider turn 以 request identity 幂等启动和恢复，不宣称与本地事务原子。
 - Entry Draft 首次提交完成一次 owner/session/endpoint 交接：lifecycle authority 已提交 initial message/pending intent、正确 scope 的 runtime conversation 可启动、session Scene 和新 projection endpoint 同时可附着；旧 launch attachment 只能经旧 endpoint 释放。崩溃重放可修复缺失的本地 session materialization，但不得重复 provider execution 或忽略 endpoint identity mismatch。
@@ -81,6 +81,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - `@neko/ui` 继续拥有无领域状态的 `ControlledWorkbenchShell`、slots、resize 与可访问交互 primitive；不新增产品 scene registry 或领域判断。
 - `@neko/agent-contracts`、`@neko/agent-runtime` 与 `@neko/agent-webview` 拥有唯一 Agent Root、draft/session presentation、`assistant | workspace` scope、launch-safe capability catalog、conversation context、Assistant user-space/scratch lifecycle 和幂等 initial turn。
 - `@neko/assets-domain` 与 `@neko/assets-webview` 拥有 `AssetCenterSession`、management selection 和资源 Root；`@neko/preview-*` 消费 Host 授权的 exact resource descriptor，不接收本地路径。
+- Extensions Scene 复用 Assets 的管理/详情 sibling panel composition：`@neko/agent-webview` 拥有 Skill/扩展分类、查询、网格/列表和当前选择等可丢弃 presentation state。没有选择时管理 Main 独占可用区域；选择后 Secondary Main 贴边显示当前配置，不保留空白 margin/gap。Automation endpoint 与 Host permission Roots 仅在已选择的扩展配置中挂载，不得出现在 Skill 页面或未选择状态。
 - `@neko/canvas-*`、`@neko/cut-*`、`@neko/preview-*` 继续拥有 workspace creative Roots；scene composition 不复制其状态、业务逻辑或媒体 runtime。
 - Agent extension management UI 必须通过 Agent package public Root/port 暴露；项目目录与 Settings 只保留 app-level placement，领域状态与操作继续委托 owning Host/package contract。
 - `apps/neko-desktop` 只保留 Electron Window/View 生命周期、typed IPC/preload、目录/文件/麦克风授权 adapter 和将公开 Roots 放入已验证 slots 的 presentation composition。

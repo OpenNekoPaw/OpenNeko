@@ -1,5 +1,48 @@
 # Verification
 
+## Extensions Management And Configuration Panels
+
+Date: 2026-08-10
+
+Extensions now uses independent management and configuration panels in the canonical Desktop
+Workbench. The Agent Webview owns the Skill/extension category, query, grid/list presentation and
+exact selection. Desktop owns only panel placement, the detail portal and extension-only Automation
+configuration slots. Neither category selects an item implicitly. With no valid package-owned
+selection, Secondary Main is not mounted and management occupies the full available Main width;
+switching to Skills also unmounts Automation endpoint and Host permission Roots.
+
+Deterministic verification passed:
+
+- Agent Extension Management focused tests: `1 file / 9 tests`;
+- Agent Webview full suite: `94 files / 733 tests`;
+- Desktop Extension/Shell/Application focused tests: `3 files / 77 tests`;
+- Desktop renderer style contract: `1 file / 26 tests`;
+- Agent Webview and Desktop TypeScript checks, focused ESLint, application boundaries (`1591`
+  files, no findings), strict OpenSpec validation and `git diff --check`.
+
+The authoritative visible Electron development runtime passed the complete unselected, selected,
+resized, view-switch and return cycle through user-operable pointer input. Fresh Skill and Extension
+states mounted no configuration panel and exposed no Main split separator. The unselected management
+panel occupied the entire remaining Main (`2301.1 px` in the large capture). Selecting Browser Use
+mounted the configuration panel plus extension-only Automation and Host permission sections. The
+management and configuration panel bounds differed by exactly `1 px`, which is the shared border;
+there was no blank margin or gutter. The `8 px` resize hit target overlaid that boundary, and dragging
+it changed management width from `1150.5 px` to `1330.4 px` while retaining the `1 px` border.
+
+Grid-to-list-to-grid switching preserved the exact selection and configuration panel. Returning to
+Skill removed Secondary Main, its resize separator, Automation endpoint content and system permission
+content, then restored management to the full `2301.1 px` available width. Direct pixel review passed
+for the large viewport and a `1000 x 700` compact viewport: the compact split used approximately
+`371/370 px` sibling panels with no document overflow, overlap, clipping or text occlusion. The
+isolated Electron process emitted no runtime diagnostic during the interaction.
+
+The visible process used a separate Electron user-data directory and a dedicated debugging endpoint
+because another development-window automation flow was active. The existing Vite owner and user data
+were not stopped or modified. Temporary validation profiles were moved to Trash after the process
+closed. `pnpm check:unused` remains blocked by unrelated existing findings: undeclared `jsdom` in the
+Markdown browser test and the unused Canvas export `NODE_DEFAULT_SIZES` (plus configuration hints).
+No Extensions-owned unused path was reported.
+
 ## Renderer Reload Surface Identity Handoff
 
 Date: 2026-08-10

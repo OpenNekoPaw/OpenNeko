@@ -122,6 +122,109 @@ describe('AgentExtensionManagementRoot', () => {
     ).toBe('true');
   });
 
+  it('keeps configuration absent until the user selects an exact item', async () => {
+    const identity = { windowId: 'window-1' };
+    const onDetailVisibilityChange = vi.fn();
+    const runtime: AgentExtensionManagementRuntime = {
+      identity,
+      getSnapshot: async () => ({
+        identity,
+        operations: [],
+        skills: [skill('Audio', 'personal')],
+        skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+        extensions: [extension('github@openneko', 'GitHub', false)],
+        extensionDiscovery: { diagnostics: [] },
+      }),
+      installPlugin: vi.fn(),
+      updatePlugin: vi.fn(),
+      cancelPluginOperation: vi.fn(),
+      enablePlugin: vi.fn(),
+      disablePlugin: vi.fn(),
+      removePlugin: vi.fn(),
+      refreshMarketplaces: vi.fn(),
+      installPersonalSkill: vi.fn(),
+      removePersonalSkill: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <AgentExtensionManagementRoot
+        confirmAction={() => true}
+        interactive
+        onDetailVisibilityChange={onDetailVisibilityChange}
+        renderDetail={({ content }) => <div data-testid="configuration">{content}</div>}
+        runtime={runtime}
+      />,
+    );
+
+    const audio = await screen.findByRole('option', { name: /Audio/u });
+    expect(audio.getAttribute('aria-selected')).toBe('false');
+    expect(screen.queryByTestId('configuration')).toBeNull();
+    expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(audio);
+    expect(audio.getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByTestId('configuration')).toBeTruthy();
+    expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('preserves exact selection while switching between grid and list presentations', async () => {
+    const identity = { windowId: 'window-1' };
+    const runtime: AgentExtensionManagementRuntime = {
+      identity,
+      getSnapshot: async () => ({
+        identity,
+        operations: [],
+        skills: [skill('Audio', 'personal'), skill('Video', 'plugin')],
+        skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+        extensions: [extension('github@openneko', 'GitHub', false)],
+        extensionDiscovery: { diagnostics: [] },
+      }),
+      installPlugin: vi.fn(),
+      updatePlugin: vi.fn(),
+      cancelPluginOperation: vi.fn(),
+      enablePlugin: vi.fn(),
+      disablePlugin: vi.fn(),
+      removePlugin: vi.fn(),
+      refreshMarketplaces: vi.fn(),
+      installPersonalSkill: vi.fn(),
+      removePersonalSkill: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <AgentExtensionManagementRoot
+        confirmAction={() => true}
+        interactive
+        renderDetail={({ content, tab }) => (
+          <div data-testid="configuration" data-tab={tab}>
+            {content}
+          </div>
+        )}
+        runtime={runtime}
+      />,
+    );
+
+    const video = await screen.findByRole('option', { name: /Video/u });
+    fireEvent.click(video);
+    expect(video.getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.view.list' }));
+    expect(
+      document.querySelector('.agent-extension-management-root')?.getAttribute('data-catalog-view'),
+    ).toBe('list');
+    expect(screen.getByRole('option', { name: /Video/u }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(screen.getByTestId('configuration').getAttribute('data-tab')).toBe('skills');
+    expect(screen.queryByText('home.capabilities.detail.agentStatus')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.extensions' }));
+    expect(screen.queryByTestId('configuration')).toBeNull();
+    fireEvent.click(await screen.findByRole('option', { name: /GitHub/u }));
+    expect(screen.getByTestId('configuration').getAttribute('data-tab')).toBe('extensions');
+    expect(await screen.findByText('home.capabilities.detail.agentStatus')).toBeTruthy();
+  });
+
   it('shows unavailable automation qualification without exposing an install action', async () => {
     const identity = { windowId: 'window-1' };
     const browserUse = {
@@ -163,7 +266,7 @@ describe('AgentExtensionManagementRoot', () => {
       <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'home.capabilities.extensions' }));
-    expect((await screen.findAllByText('Browser Use')).length).toBeGreaterThan(0);
+    fireEvent.click(await screen.findByRole('option', { name: /Browser Use/u }));
     expect(
       screen.getByText(/home\.capabilities\.runtimeDiagnostic\.artifact-unavailable/u),
     ).toBeTruthy();
@@ -210,6 +313,7 @@ describe('AgentExtensionManagementRoot', () => {
       <AgentExtensionManagementRoot confirmAction={confirmAction} interactive runtime={runtime} />,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'home.capabilities.extensions' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Browser Use/u }));
     expect(screen.getByText(/home\.capabilities\.deliverySource\.official-download/u)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.update' }));
 
@@ -242,7 +346,7 @@ describe('AgentExtensionManagementRoot', () => {
         ],
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
-        extensions: [],
+        extensions: [extension('browser-use@openneko', 'Browser Use', true)],
         extensionDiscovery: { diagnostics: [] },
       })),
       installPlugin: vi.fn(),
@@ -259,6 +363,10 @@ describe('AgentExtensionManagementRoot', () => {
     const view = render(
       <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
     );
+
+    expect(screen.queryByRole('button', { name: 'home.capabilities.cancelOperation' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'home.capabilities.extensions' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Browser Use/u }));
 
     fireEvent.click(
       await screen.findByRole('button', { name: 'home.capabilities.cancelOperation' }),
@@ -313,6 +421,7 @@ describe('AgentExtensionManagementRoot', () => {
       <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'home.capabilities.extensions' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Browser Use/u }));
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.install' }));
 
     await waitFor(() => expect(installPlugin).toHaveBeenCalledWith('browser-use@openneko'));

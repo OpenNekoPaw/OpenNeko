@@ -211,6 +211,7 @@ describe('Desktop Scene contract', () => {
         main: {
           kind: 'extension-management' as const,
         },
+        secondaryMain: { kind: 'extension-detail' as const },
         status: { kind: 'scene-status' as const, sceneId },
       },
     };

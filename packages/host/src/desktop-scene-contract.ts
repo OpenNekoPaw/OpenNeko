@@ -977,6 +977,9 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     if (slots.main?.kind !== 'extension-management') {
       throw mismatch('Extensions Scene requires its Extension Management Main Surface.');
     }
+    if (slots.secondaryMain?.kind !== 'extension-detail') {
+      throw mismatch('Extensions Scene requires its Extension Detail Secondary Main Surface.');
+    }
     return;
   }
   if (context.kind === 'project-management') {

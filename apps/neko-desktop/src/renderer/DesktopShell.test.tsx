@@ -479,7 +479,6 @@ describe('Desktop scene Workbench', () => {
 
   it.each([
     ['asset-management', projectionWithScene(assetCenterScene())],
-    ['extension-management', projectionWithScene(extensionsScene())],
     ['project-management', projectionWithScene(projectManagementScene())],
   ])('uses one tabless current Main target for %s', (_panelId, projection) => {
     const markup = renderShell(<DesktopShellView projection={projection} />);
@@ -488,6 +487,18 @@ describe('Desktop scene Workbench', () => {
     expect(markup.match(/data-workbench-slot="main"/gu) ?? []).toHaveLength(1);
     expect(markup).toContain('data-main-split="none"');
     expect(markup).not.toContain('project-main-group__tabs');
+  });
+
+  it('keeps Extensions management full-width until package selection qualifies detail', () => {
+    const markup = renderShell(
+      <DesktopShellView projection={projectionWithScene(extensionsScene())} />,
+    );
+
+    expect(markup).toContain('data-main-split="none"');
+    expect(markup).toContain('data-main-composition="continuous"');
+    expect(markup).not.toContain('data-workbench-slot="secondaryMain"');
+    expect(markup).not.toContain('aria-label="Resize Main split"');
+    expect(markup).not.toContain('data-workbench-main-gutter="true"');
   });
 
   it('composes management Main and detail surfaces edge-to-edge at an equal split', () => {
@@ -963,6 +974,7 @@ function managementScene(
       context: { kind },
       slots: {
         main: { kind: 'extension-management' },
+        secondaryMain: { kind: 'extension-detail' },
         status: { kind: 'scene-status', sceneId },
       },
     });

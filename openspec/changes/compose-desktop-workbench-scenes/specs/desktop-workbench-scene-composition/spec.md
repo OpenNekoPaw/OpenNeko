@@ -508,24 +508,47 @@ Extensions and project management SHALL place their package-owned management Roo
 - **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
 - **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
 
+#### Scenario: Extensions management separates catalog and configuration
+
+- **WHEN** the Extensions Scene is active
+- **THEN** Main renders the package-owned Skill/extension catalog without a preselected item or reserved Secondary Main column
+- **AND** category, query, grid/list mode and exact selection remain package-owned disposable presentation state
+- **AND** selecting an item mounts Secondary Main and updates only that configuration panel without opening a Workspace, creating a conversation or changing durable extension facts
+- **AND** when the selection is absent or becomes invalid, management returns to full width with no empty configuration panel or resize gutter
+- **AND** leaving the Scene unmounts both Roots and reconstructs their canonical presentation defaults when the Scene is opened again
+
+#### Scenario: Skill configuration excludes extension-only settings
+
+- **WHEN** the Skill category is visible
+- **THEN** Secondary Main is absent until a Skill is selected, then displays only that Skill's source, description and allowed personal-Skill management actions
+- **AND** Automation endpoint, Host permission, extension runtime status and plugin lifecycle controls are not mounted in that configuration Root
+- **AND** switching to Extensions does not mount those extension-only settings until an extension is selected
+
+#### Scenario: Extensions catalog switches between grid and list
+
+- **WHEN** the user activates the grid or list presentation control in Extensions management
+- **THEN** the same filtered Skill or extension catalog is rendered in the selected presentation
+- **AND** the exact current selection and configuration identity are preserved
+- **AND** both presentations expose an accessible selected state, bounded item geometry and a compact one-column layout when the management panel is narrow
+
 #### Scenario: Low-information Project selection remains in management Main
 
 - **WHEN** a Project catalog selection has no content-rich owner-qualified Detail Root
 - **THEN** Workbench keeps Project Management as the only Main shell and does not reserve a Secondary Main column or resize gutter
 - **AND** the selected row exposes a separate explicit open action without making selection itself open the Workspace
 
-#### Scenario: Management and detail use independent tabless shells
+#### Scenario: Management and detail use adjacent tabless panels
 
 - **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
-- **THEN** management and Preview/Detail occupy two independent shared panel shells connected by the shared resize primitive
-- **AND** each sibling shell has its own DOM, border, zero-radius boundary, background, clipping and overflow boundary with a visible gutter between them
-- **AND** the composition does not render both contents on one continuous Main surface separated only by a line
+- **THEN** management and Preview/Detail occupy two sibling panel DOM and overflow boundaries connected by the shared resize primitive
+- **AND** both panels use zero-radius boundaries and meet edge-to-edge without blank margin or gap
+- **AND** the resize handle overlays their shared divider without reserving visible layout space
 - **AND** neither shell renders a synthetic single-item Workbench tab strip
 - **AND** Preview/Detail content does not render a descriptor header and inherits the same theme background as its sibling management shell
 
 #### Scenario: User resizes a management and detail split
 
-- **WHEN** Assets, Extensions or Projects displays a qualified Preview/Detail and the user drags the shared resize gutter
+- **WHEN** Assets, Extensions or Projects displays a qualified Preview/Detail and the user drags the shared resize handle
 - **THEN** the management Main remains at least as wide as the Preview/Detail panel
 - **AND** the resize contract rejects ratios below one half while preserving the full-width management layout when Secondary Main is absent
 

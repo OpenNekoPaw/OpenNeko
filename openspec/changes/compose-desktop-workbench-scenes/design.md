@@ -133,6 +133,18 @@ Surface 并原子切换 Scene，使 renderer 不会先挂载一个必然 bootstr
 
 PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects` 与 `agentHome.conversations`，因此删除 Home composer/management page 时必须保留最近项目、最近会话、attention 和显式恢复/删除操作。
 
+Extensions Scene 将 management 与 configuration 组合为按选择出现的两个 sibling panel。Agent Webview
+拥有当前 `skills | extensions` 分类、查询、`grid | list` 展示模式和精确选择；这些均为 Scene Root
+卸载即可丢弃的 presentation state，不进入 Host Scene、durable catalog 或全局 store。Management Main
+只呈现可扫描目录与目录级动作；默认不选择条目并独占全部 Main，只有用户选择有效 Skill 或扩展后才
+挂载 Secondary Main，呈现对应详情和条目级动作。两个 panel 贴边共享一条视觉边界，resize handle 覆盖
+在分界线上而不占据空白 margin/gap。Skill 配置
+仅包含 Skill 的来源、描述与允许的个人 Skill 管理操作；Automation endpoint、Computer Use Host
+permission 及其他扩展运行时配置只在 `extensions` 分类下挂载。Desktop 只提供两个 Workbench panel
+target、typed Host adapter 和 Automation configuration slot，不复制 Agent catalog 或选择规则。目录在
+grid/list 间切换时保持同一选择和 detail identity；切换分类时只恢复该分类内仍有效的选择，非法或消失
+的条目只清空当前分类的 detail 并恢复全宽 management。
+
 #### Window claim always enters a fresh Entry Draft
 
 应用启动或用户重新打开一个已经释放的 Window 时，Host Shell 的 `claimWindowId()` 是唯一 startup

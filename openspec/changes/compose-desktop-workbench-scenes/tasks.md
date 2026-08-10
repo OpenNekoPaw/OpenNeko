@@ -168,3 +168,12 @@ preserve or a legacy path to keep after the replacement is complete.
 - [x] 15.1 Trace the exact Canvas submit path and record the failure boundary: the local database contains an empty retired `generation_jobs` shape with required `revision` and `snapshot_version` columns, while the canonical writer correctly omits internal version fields.
 - [x] 15.2 Add persistence regressions for empty non-canonical table reset and populated non-canonical table preservation; implement package-owned canonical schema validation/reset without migration, compatibility writer or fallback store, and project an actionable Generation persistence diagnostic.
 - [ ] 15.3 Run focused Generation/Canvas/Desktop tests, typecheck, application boundaries, diff checks and strict OpenSpec validation; then trigger one real Canvas image submission far enough to prove durable Job creation and provider invocation, without automatically retrying or duplicating a charged request.
+
+## 16. Extensions Management And Configuration Panels
+
+- [x] 16.1 Add Agent Webview regressions for package-owned Skill/extension selection, isolated configuration content, grid/list switching, empty results and presentation reconstruction after unmount.
+- [x] 16.2 Compose Extensions management and configuration as independent Workbench Main/Secondary Main shells with the shared equal split and bounded resize behavior; keep Desktop limited to Root placement, typed adapters and extension-only Automation configuration slots.
+- [x] 16.3 Refine the catalog and configuration presentation for list/grid, selected, operation, unavailable and compact states; add Chinese and English UI copy without exposing extension-only configuration on Skill pages.
+- [x] 16.4 Run focused Agent Webview/Host/Desktop tests, typechecks, application-boundary and strict OpenSpec checks; validate Skill/extension, list/grid, selection, resize and compact states in the authoritative visible Electron runtime and apply UI/quality review.
+- [x] 16.5 Remove implicit Skill/extension selection, keep Extensions management full-width while no valid item is selected, and mount/unmount Secondary Main from the package-owned exact selection without persisting selection in Host or Desktop.
+- [x] 16.6 Make selected Extensions management/configuration panels edge-to-edge with an overlaid resize handle and no blank margin/gap; add focused Webview/Desktop regressions and visible Electron evidence for the unselected-to-selected cycle.
