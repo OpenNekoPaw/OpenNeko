@@ -1528,7 +1528,11 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       (diagnostic) => diagnostic.code === 'invalid-anthropic-thinking-sampling-combination',
     );
     if (blocking) throw new Error(blocking.message);
-    const generationPolicy = projectAgentGenerationModelPolicy(config, purposeModels);
+    const generationPolicy = await projectAgentGenerationModelPolicy(
+      config,
+      purposeModels,
+      this.options.credentialRuntime.credentials,
+    );
     const policy = resolveAgentModelPolicy({
       catalog: [
         {
@@ -2080,10 +2084,11 @@ function resolveAuth(
   return { type: 'provider-default' };
 }
 
-function projectAgentGenerationModelPolicy(
+async function projectAgentGenerationModelPolicy(
   config: ConfigManager,
   purposeModels: AgentFlatPurposeModelRefs | undefined,
-): AgentGenerationModelPolicyProjection {
+  credentials: AgentCredentialRuntime['credentials'],
+): Promise<AgentGenerationModelPolicyProjection> {
   if (purposeModels === undefined) {
     return { catalog: [], bindings: {}, requirements: {} };
   }
@@ -2098,6 +2103,7 @@ function projectAgentGenerationModelPolicy(
   >();
   const bindings: AgentModelBindingMap = {};
   const requirements: Partial<Record<AgentModelPurpose, AgentModelPurposeRequirement>> = {};
+  const credentialAvailability = new Map<string, boolean>();
 
   for (const purpose of AGENT_DOMAIN_GENERATION_PURPOSES) {
     const reference = purposeModels[purpose];
@@ -2130,6 +2136,16 @@ function projectAgentGenerationModelPolicy(
       );
     }
 
+    let credentialConfigured = credentialAvailability.get(provider.id);
+    if (credentialConfigured === undefined) {
+      const credentialStatus =
+        provider.requiresApiKey === false ? undefined : await credentials.status(provider.id);
+      credentialConfigured =
+        provider.requiresApiKey === false || credentialStatus?.type === 'api_key';
+      credentialAvailability.set(provider.id, credentialConfigured);
+    }
+    if (!credentialConfigured) continue;
+
     const key = `${provider.id}\u0000${model.id}`;
     const current = entries.get(key);
     if (current) current.purposes.add(purpose);
@@ -2147,12 +2163,7 @@ function projectAgentGenerationModelPolicy(
       },
       execution: 'domain' as const,
       capabilities: [...new Set([...model.capabilities, ...purposes])],
-      credentialState:
-        provider.requiresApiKey === false
-          ? 'not-required'
-          : provider.apiKey?.trim()
-            ? 'configured'
-            : 'missing',
+      credentialState: provider.requiresApiKey === false ? 'not-required' : 'configured',
     })),
     bindings,
     requirements,

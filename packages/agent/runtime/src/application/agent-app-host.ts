@@ -43,7 +43,7 @@ import {
   createCutProjectCapabilityProvider,
   registerMediaAgentTools,
 } from '@neko/agent-runtime/tools';
-import type { GenerationJobPort } from '@neko/generation';
+import type { GenerationBinding, GenerationJobPort, GenerationOwner } from '@neko/generation/job';
 import {
   buildEnhancedAgentMessage,
   projectContextReferences,
@@ -344,9 +344,7 @@ export interface CreateAgentAppHostOptions {
   readonly builtinSkillRoot?: string;
   readonly createIdentity?: () => string;
   readonly createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger;
-  readonly resolveWorkspaceGenerationJobs: (
-    workspace: AssetWorkspaceResolution,
-  ) => Promise<GenerationJobPort>;
+  readonly resolveGenerationJobs: (binding: GenerationBinding) => Promise<GenerationJobPort>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
 }
 
@@ -664,8 +662,13 @@ class DefaultAgentAppHost implements AgentAppHost {
       workspaceId: workspace.workspaceId,
       hostId: `${this.options.hostId}:${workspace.workspaceId}`,
     });
+    const isAssistantSpace = this.assistantSpaceIds.includes(workspace.workspaceId);
+    const owner: GenerationOwner = isAssistantSpace
+      ? { kind: 'assistant', assistantSpaceId: workspace.workspaceId }
+      : { kind: 'workspace', workspaceId: workspace.workspaceId };
+    const generationBinding: GenerationBinding = { owner, root: workspace.workspacePath };
     const generationJobs = createDeferredGenerationJobPort(() =>
-      this.options.resolveWorkspaceGenerationJobs(workspace),
+      this.options.resolveGenerationJobs(generationBinding),
     );
     if (this.disposed) {
       await authority.dispose();
@@ -683,13 +686,14 @@ class DefaultAgentAppHost implements AgentAppHost {
         : { builtinSkillRoot: this.options.builtinSkillRoot }),
       createIdentity: this.options.createIdentity ?? randomUUID,
       credentialRuntime: this.options.credentialRuntime,
+      owner,
       generationJobs,
       onHomeProjectionChanged: this.emitHomeProjectionChanged,
       canStartTurn: () => !this.pluginRuntimeChanging,
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
-      structuredProjectAuthoring: !this.assistantSpaceIds.includes(workspace.workspaceId),
-      ...(this.options.creatorVisibleArtifactDelivery
+      structuredProjectAuthoring: !isAssistantSpace,
+      ...(owner.kind === 'workspace' && this.options.creatorVisibleArtifactDelivery
         ? { creatorVisibleArtifactDelivery: this.options.creatorVisibleArtifactDelivery }
         : {}),
     });
@@ -760,6 +764,7 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly builtinSkillRoot?: string;
   readonly createIdentity: () => string;
   readonly credentialRuntime: AgentCredentialRuntime;
+  readonly owner: GenerationOwner;
   readonly generationJobs: GenerationJobPort;
   readonly onHomeProjectionChanged: () => void;
   readonly canStartTurn: () => boolean;
@@ -1443,16 +1448,19 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         `Agent turn ${identity.conversationId}/${identity.turnId} has no terminal projection.`,
       );
     }
-    const artifactDelivery = await deliverCreatorVisibleArtifactsFromTurnProjection({
-      turn,
-      workspaceId: identity.workspaceId,
-      conversationId: identity.conversationId,
-      turnId: identity.turnId,
-      runId: identity.runId,
-      ...(this.options.creatorVisibleArtifactDelivery
-        ? { delivery: this.options.creatorVisibleArtifactDelivery }
-        : {}),
-    });
+    const artifactDelivery =
+      this.options.owner.kind === 'workspace'
+        ? await deliverCreatorVisibleArtifactsFromTurnProjection({
+            turn,
+            workspaceId: identity.workspaceId,
+            conversationId: identity.conversationId,
+            turnId: identity.turnId,
+            runId: identity.runId,
+            ...(this.options.creatorVisibleArtifactDelivery
+              ? { delivery: this.options.creatorVisibleArtifactDelivery }
+              : {}),
+          })
+        : undefined;
     return Object.freeze({
       identity,
       durability,

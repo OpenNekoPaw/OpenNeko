@@ -314,7 +314,6 @@ function toTypeBoxObjectOptions(parameters: ToolParameters): TObjectOptions {
   return {
     properties: structuredClone(parameters.properties),
     ...(parameters.required === undefined ? {} : { required: [...parameters.required] }),
-    ...(parameters.anyOf === undefined ? {} : { anyOf: structuredClone(parameters.anyOf) }),
     ...(parameters.additionalProperties === undefined
       ? {}
       : { additionalProperties: parameters.additionalProperties }),

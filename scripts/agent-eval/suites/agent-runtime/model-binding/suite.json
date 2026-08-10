@@ -36,6 +36,15 @@
       "selection": "explicit",
       "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" },
       "configurationHash": "sha256:25fa5d7fcdf913337ab60da79de94b369131cca7022fddc2922577cc3f85e4b2"
+    },
+    {
+      "id": "nekoapi-chat-image-purpose",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
+      "purposes": {
+        "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" }
+      },
+      "configurationHash": "sha256:c14623d47482916cddc2e8c56e2fb37ff0b3aa18df384a1a3c2361635bc5db38"
     }
   ],
   "judgeProfiles": [],
@@ -65,6 +74,12 @@
       "id": "unavailable-model-update-rejection",
       "file": "cases/unavailable-model-update-rejection.json",
       "group": "failure",
+      "visibility": "public"
+    },
+    {
+      "id": "ordinary-message-with-image-purpose",
+      "file": "cases/ordinary-message-with-image-purpose.json",
+      "group": "regression",
       "visibility": "public"
     }
   ],

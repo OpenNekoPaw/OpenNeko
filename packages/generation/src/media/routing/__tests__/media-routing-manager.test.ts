@@ -48,7 +48,9 @@ describe('MediaRoutingManager', () => {
 
   beforeEach(() => {
     configManager = new MockConfigManager();
-    manager = new MediaRoutingManager(configManager satisfies MediaGenerationConfigPort);
+    manager = new MediaRoutingManager(configManager satisfies MediaGenerationConfigPort, {
+      resolveProvider: async (providerId) => configManager.getProvider(providerId),
+    });
 
     // Setup test providers
     configManager.addProvider({

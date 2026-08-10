@@ -25,6 +25,19 @@ const GENERATION_JOB_TABLES = [
   ) STRICT`,
   `CREATE INDEX IF NOT EXISTS generation_jobs_workspace_phase_updated_idx
     ON generation_jobs(workspace_id, phase, updated_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS assistant_generation_jobs (
+    assistant_space_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    phase TEXT NOT NULL CHECK (
+      phase IN ('pending', 'running', 'succeeded', 'failed', 'cancelled', 'outcome-unknown')
+    ),
+    snapshot_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL CHECK (created_at >= 0),
+    updated_at INTEGER NOT NULL CHECK (updated_at >= created_at),
+    PRIMARY KEY (assistant_space_id, job_id)
+  ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS assistant_generation_jobs_owner_phase_updated_idx
+    ON assistant_generation_jobs(assistant_space_id, phase, updated_at DESC)`,
 ] as const;
 
 export async function initializeGenerationJobTables(store: LocalMetadataStore): Promise<void> {

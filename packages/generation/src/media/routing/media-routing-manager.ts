@@ -9,7 +9,12 @@
 
 import type { MediaModelType } from '@neko/ai-contracts';
 import type { MediaGenerationType } from '@neko/generation';
-import type { MediaGenerationConfigPort, MediaProvider, MediaRoutingResult } from '../types';
+import type {
+  MediaExecutionProviderResolver,
+  MediaGenerationConfigPort,
+  MediaProvider,
+  MediaRoutingResult,
+} from '../types';
 
 /**
  * Map generation type to media model type
@@ -32,9 +37,14 @@ const GENERATION_TYPE_TO_MEDIA_TYPE: Record<MediaGenerationType, MediaModelType>
  */
 export class MediaRoutingManager {
   private readonly configManager: MediaGenerationConfigPort;
+  private readonly providerResolver: MediaExecutionProviderResolver;
 
-  constructor(configManager: MediaGenerationConfigPort) {
+  constructor(
+    configManager: MediaGenerationConfigPort,
+    providerResolver: MediaExecutionProviderResolver,
+  ) {
     this.configManager = configManager;
+    this.providerResolver = providerResolver;
   }
 
   /**
@@ -57,9 +67,15 @@ export class MediaRoutingManager {
 
     // Short-circuit: if specific provider and model are given, use directly
     if (providerId && modelId) {
-      const provider = this.configManager.getProvider(providerId);
+      const provider = await this.providerResolver.resolveProvider(providerId);
       const model = this.configManager.getModel(modelId);
-      if (provider && model && model.providerId === provider.id && isProviderConfigured(provider)) {
+      if (
+        provider &&
+        provider.id === providerId &&
+        model &&
+        model.providerId === provider.id &&
+        isExecutionProviderAvailable(provider)
+      ) {
         return {
           providerId,
           modelId,
@@ -74,13 +90,14 @@ export class MediaRoutingManager {
       const mediaType = GENERATION_TYPE_TO_MEDIA_TYPE[generationType];
       const defaultModel = this.configManager.getDefaultModelRef(mediaType);
       if (defaultModel) {
-        const provider = this.configManager.getProvider(defaultModel.providerId);
+        const provider = await this.providerResolver.resolveProvider(defaultModel.providerId);
         const model = this.configManager.getModel(defaultModel.modelId);
         if (
           provider &&
           model &&
           model.providerId === provider.id &&
-          isProviderConfigured(provider)
+          provider.id === defaultModel.providerId &&
+          isExecutionProviderAvailable(provider)
         ) {
           return {
             providerId: provider.id,
@@ -100,7 +117,7 @@ export class MediaRoutingManager {
   // remains explicit in config instead of inferred from a global default provider.
 }
 
-function isProviderConfigured(provider: MediaProvider): boolean {
+function isExecutionProviderAvailable(provider: MediaProvider): boolean {
   if (typeof provider.apiUrl !== 'string' || provider.apiUrl.length === 0) return false;
   if (provider.requiresApiKey === false) return true;
   return typeof provider.apiKey === 'string' && provider.apiKey.length > 0;

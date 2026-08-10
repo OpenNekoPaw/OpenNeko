@@ -59,8 +59,12 @@ function createService(providerInput: Provider) {
     enabled: true,
   };
   const config = createReadOnlyConfig(provider, model);
-  const routing = new MediaRoutingManager(config);
-  const executor = new MediaGenerationExecutor(config);
+  const providerResolver = {
+    resolveProvider: async (providerId: string) =>
+      providerId === provider.id ? provider : undefined,
+  };
+  const routing = new MediaRoutingManager(config, providerResolver);
+  const executor = new MediaGenerationExecutor(config, providerResolver);
   const executeLinked = vi.spyOn(executor, 'executeLinked').mockResolvedValue({
     outputs: [{ type: 'video', url: 'https://example.test/video.mp4' }],
   });

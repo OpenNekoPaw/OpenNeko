@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationExecutionPort, GenerationJobSnapshot } from '@neko/generation';
 import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/local-metadata/node';
-import { createNodeWorkspaceGenerationJobOwner } from '../workspace-generation-job-owner';
+import { createNodeGenerationJobOwner } from '../node-generation-job-owner';
 
 const temporaryDirectories: string[] = [];
 const WORKSPACE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -18,16 +18,16 @@ afterEach(async () => {
   );
 });
 
-describe('createNodeWorkspaceGenerationJobOwner', () => {
+describe('createNodeGenerationJobOwner', () => {
   it('initializes a fresh Workspace with the exact authoritative identity', async () => {
     const root = await createTemporaryDirectory();
     const homedir = path.join(root, 'home');
     const workspaceRoot = path.join(root, 'workspace');
     await Promise.all([fs.mkdir(homedir), fs.mkdir(workspaceRoot)]);
 
-    const owner = await createNodeWorkspaceGenerationJobOwner({
-      workspaceId: WORKSPACE_ID,
-      workspaceRoot,
+    const owner = await createNodeGenerationJobOwner({
+      owner: { kind: 'workspace', workspaceId: WORKSPACE_ID },
+      root: workspaceRoot,
       homedir,
       mediaExecution: createExecution(path.join(root, 'unused.png')),
       promptExecution: createExecution(path.join(root, 'unused.png')),
@@ -57,9 +57,9 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
     const sourcePath = path.join(root, 'source.png');
     await fs.writeFile(sourcePath, 'generated image bytes');
     const execution = createExecution(sourcePath);
-    const owner = await createNodeWorkspaceGenerationJobOwner({
-      workspaceId: WORKSPACE_ID,
-      workspaceRoot,
+    const owner = await createNodeGenerationJobOwner({
+      owner: { kind: 'workspace', workspaceId: WORKSPACE_ID },
+      root: workspaceRoot,
       homedir,
       mediaExecution: execution,
       promptExecution: execution,
@@ -110,9 +110,9 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
       text: '# Generated scene',
       request: { prompt: 'Write a scene' },
     });
-    const owner = await createNodeWorkspaceGenerationJobOwner({
-      workspaceId: WORKSPACE_ID,
-      workspaceRoot,
+    const owner = await createNodeGenerationJobOwner({
+      owner: { kind: 'workspace', workspaceId: WORKSPACE_ID },
+      root: workspaceRoot,
       homedir,
       mediaExecution: execution,
       promptExecution: execution,
@@ -126,6 +126,7 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
       request: { prompt: 'Write a scene' },
     });
     const completed = await waitForTerminal(owner.jobs.observeGeneration(started.ref));
+    expect(completed, completed.failure?.message).toMatchObject({ phase: 'succeeded' });
     const locator = completed.resultLocators?.[0];
 
     expect(locator).toMatchObject({
@@ -151,14 +152,96 @@ describe('createNodeWorkspaceGenerationJobOwner', () => {
     await identity.dispose();
 
     await expect(
-      createNodeWorkspaceGenerationJobOwner({
-        workspaceId: OTHER_WORKSPACE_ID,
-        workspaceRoot,
+      createNodeGenerationJobOwner({
+        owner: { kind: 'workspace', workspaceId: OTHER_WORKSPACE_ID },
+        root: workspaceRoot,
         homedir,
         mediaExecution: createExecution(path.join(root, 'unused.png')),
         promptExecution: createExecution(path.join(root, 'unused.png')),
       }),
     ).rejects.toThrow(`expected '${OTHER_WORKSPACE_ID}', received '${WORKSPACE_ID}'`);
+  });
+
+  it('persists Assistant output under its durable user root without a Workspace descriptor', async () => {
+    const root = await createTemporaryDirectory();
+    const homedir = path.join(root, 'home');
+    const assistantRoot = path.join(homedir, '.neko', 'assistant-spaces', 'local-user');
+    await fs.mkdir(assistantRoot, { recursive: true });
+    const sourcePath = path.join(root, 'source.png');
+    await fs.writeFile(sourcePath, 'assistant generated image bytes');
+    const execution = createExecution(sourcePath);
+    const owner = await createNodeGenerationJobOwner({
+      owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+      root: assistantRoot,
+      homedir,
+      mediaExecution: execution,
+      promptExecution: execution,
+    });
+
+    const started = await owner.jobs.submitGeneration({
+      lifecycleMode: 'detached',
+      generationType: 'text-to-image',
+      providerId: 'provider-1',
+      modelId: 'model-1',
+      request: {
+        prompt: 'Generate an Assistant fixture image',
+        providerId: 'provider-1',
+        modelId: 'model-1',
+      },
+    });
+    const completed = await waitForTerminal(owner.jobs.observeGeneration(started.ref));
+    expect(completed, completed.failure?.message).toMatchObject({ phase: 'succeeded' });
+    const locator = completed.resultLocators?.[0];
+
+    expect(locator).toMatchObject({
+      kind: 'generated-output',
+      path: expect.stringMatching(/^neko\/generated\/image\//u),
+    });
+    await expect(fs.readFile(path.join(assistantRoot, locator!.path), 'utf8')).resolves.toBe(
+      'assistant generated image bytes',
+    );
+    await expect(fs.stat(path.join(assistantRoot, 'neko', 'project.json'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(path.isAbsolute(locator!.path)).toBe(false);
+    expect(locator!.path).not.toContain('.part');
+
+    await owner.dispose();
+
+    const reopened = await createNodeGenerationJobOwner({
+      owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+      root: assistantRoot,
+      homedir,
+      mediaExecution: createExecution(path.join(root, 'unused.png')),
+      promptExecution: createExecution(path.join(root, 'unused.png')),
+    });
+    await expect(reopened.jobs.describeGeneration(started.ref)).resolves.toMatchObject({
+      phase: 'succeeded',
+      resultLocators: [locator],
+    });
+    await reopened.dispose();
+  });
+
+  it('rejects an Assistant root outside durable user storage before provider execution', async () => {
+    const root = await createTemporaryDirectory();
+    const homedir = path.join(root, 'home');
+    const temporaryAssistantRoot = path.join(root, 'tmp', 'assistant-space');
+    await Promise.all([
+      fs.mkdir(homedir, { recursive: true }),
+      fs.mkdir(temporaryAssistantRoot, { recursive: true }),
+    ]);
+    const execution = createExecution(path.join(root, 'unused.png'));
+
+    await expect(
+      createNodeGenerationJobOwner({
+        owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+        root: temporaryAssistantRoot,
+        homedir,
+        mediaExecution: execution,
+        promptExecution: execution,
+      }),
+    ).rejects.toThrow('must be an exact user-owned Assistant Space');
+    expect(execution.generateImage).not.toHaveBeenCalled();
   });
 });
 

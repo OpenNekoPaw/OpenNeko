@@ -9,6 +9,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import type { PiCapabilityToolContext } from '../pi/capability-tool-bridge';
+import { projectOpenNekoTool } from '../pi/openneko-tool';
 import { PiContentToolModelProtocol } from './pi-content-tool-model-protocol';
 
 const SOURCE = { kind: 'workspace-file' as const, path: 'books/book.pdf' };
@@ -229,9 +230,22 @@ describe('Pi content Tool model protocol', () => {
   it('projects one directory level with format-specific paths and references', () => {
     const protocol = new PiContentToolModelProtocol();
     const definition = protocol.projectDefinition(tool('ListDirectory'));
+    const providerTool = projectOpenNekoTool(tool('ListDirectory'), { modelProtocol: protocol });
 
     expect(definition?.parameters.properties).toHaveProperty('path');
     expect(definition?.parameters.properties).toHaveProperty('cursor_ref');
+    expect(definition?.parameters).toHaveProperty('anyOf');
+    expect(providerTool.parameters).toMatchObject({
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        cursor_ref: { type: 'string' },
+      },
+      additionalProperties: false,
+    });
+    for (const keyword of ['oneOf', 'anyOf', 'allOf', 'enum', 'const', 'not']) {
+      expect(providerTool.parameters).not.toHaveProperty(keyword);
+    }
     expect(JSON.stringify(definition)).not.toMatch(/absolute|recursive|contentLocator|after/u);
 
     const text = requireText(

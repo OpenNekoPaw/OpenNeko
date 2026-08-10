@@ -345,6 +345,24 @@ function createCatalog() {
       },
     },
     models: [],
+    defaultMediaModels: {},
+    mediaUnderstandingModels: {
+      image: {
+        category: 'image' as const,
+        purpose: 'image.understand' as const,
+        status: 'missing' as const,
+      },
+      audio: {
+        category: 'audio' as const,
+        purpose: 'audio.understand' as const,
+        status: 'missing' as const,
+      },
+      video: {
+        category: 'video' as const,
+        purpose: 'video.understand' as const,
+        status: 'missing' as const,
+      },
+    },
     configuration: projectAgentConfigurationPolicy({
       models: [],
       request: null,

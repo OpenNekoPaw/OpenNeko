@@ -48,7 +48,7 @@ describe('@neko/generation architecture boundaries', () => {
       [
         'packages/agent/runtime/src/tools/generation/media-agent-tools.ts',
         'packages/canvas/node/src/canvas-generation-node-runtime.ts',
-        'packages/generation/src/media/workspace-generation-job-owner.ts',
+        'packages/generation/src/media/node-generation-job-owner.ts',
         'apps/neko-desktop/src/main/desktop-cut-runtime.ts',
         'packages/cut/node/src/CutApplicationRuntime.ts',
         'packages/cut/node/src/CutExportTaskRegistry.ts',
@@ -62,7 +62,7 @@ describe('@neko/generation architecture boundaries', () => {
       'packages/canvas/node/src/canvas-generation-node-runtime.ts',
     );
     const generationOwnerSource = sources.get(
-      'packages/generation/src/media/workspace-generation-job-owner.ts',
+      'packages/generation/src/media/node-generation-job-owner.ts',
     );
     const cutSource = sources.get('apps/neko-desktop/src/main/desktop-cut-runtime.ts');
     const cutApplicationSource = sources.get('packages/cut/node/src/CutApplicationRuntime.ts');
@@ -77,7 +77,7 @@ describe('@neko/generation architecture boundaries', () => {
     expect(canvasGenerationSource).toContain('getWorkspaceJobs');
     expect(canvasGenerationSource).not.toContain('ConfigManager');
     expect(canvasGenerationSource).not.toContain('createMediaPlatform');
-    expect(canvasGenerationSource).not.toContain('createNodeWorkspaceGenerationJobOwner');
+    expect(canvasGenerationSource).not.toContain('createNodeGenerationJobOwner');
     expect(canvasGenerationSource).not.toContain('new GenerationJobCoordinator');
     expect(canvasGenerationSource).not.toContain('createPersistentGenerationJobStore');
     expect(canvasGenerationSource).toContain('jobs.submitGeneration');

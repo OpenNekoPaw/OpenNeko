@@ -48,7 +48,8 @@ describe('GeneratedAssetIndex', () => {
     const manifest = createManifestStore();
     const store = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
-      workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+      ownerRoot: workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
     });
     const index = new GeneratedAssetIndex(store);
@@ -74,13 +75,53 @@ describe('GeneratedAssetIndex', () => {
     expect(restored.get(asset.id)).toEqual(asset);
   });
 
+  it('isolates global generated-output projections by exact Assistant Space owner', async () => {
+    const firstRoot = await createTempDir();
+    const secondRoot = await createTempDir();
+    const manifest = createManifestStore();
+    const firstStore = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:first' },
+      ownerRoot: firstRoot,
+      pathResolver: new PathResolver(new Map([['ASSISTANT_SPACE', firstRoot]])),
+    });
+    const secondStore = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:second' },
+      ownerRoot: secondRoot,
+      pathResolver: new PathResolver(new Map([['ASSISTANT_SPACE', secondRoot]])),
+    });
+    const first = imageAsset({
+      path: path.join(firstRoot, 'neko', 'generated', 'image', 'a.png'),
+    });
+    const second = imageAsset({
+      path: path.join(secondRoot, 'neko', 'generated', 'image', 'b.png'),
+    });
+
+    await firstStore.update(() => [first]);
+    await secondStore.update(() => [second]);
+
+    await expect(firstStore.load()).resolves.toEqual([first]);
+    await expect(secondStore.load()).resolves.toEqual([second]);
+    expect(Object.keys(manifest.current().entries).sort()).toEqual([
+      'generated-output:assistant:assistant-space:first:asset-1',
+      'generated-output:assistant:assistant-space:second:asset-1',
+    ]);
+    expect(Object.values(manifest.current().entries)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ descriptor: expect.objectContaining({ scope: 'global' }) }),
+      ]),
+    );
+  });
+
   it('rejects unsupported generated lifecycle fields before updating the index store', async () => {
     const workspaceRoot = await createTempDir();
     const manifest = createManifestStore();
     const index = new GeneratedAssetIndex(
       new LocalMetadataGeneratedOutputProjectionStore({
         manifestStore: manifest.store,
-        workspaceRoot,
+        owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+        ownerRoot: workspaceRoot,
         pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
       }),
     );
@@ -110,7 +151,8 @@ describe('GeneratedAssetIndex', () => {
     const manifest = createManifestStore();
     const store = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
-      workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+      ownerRoot: workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
     });
     const lifecycle = createGeneratedAssetRevisionRef({
@@ -150,7 +192,8 @@ describe('GeneratedAssetIndex', () => {
     const manifest = createManifestStore();
     const canonicalStore = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
-      workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+      ownerRoot: workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
     });
     const first = imageAsset({
@@ -190,7 +233,8 @@ describe('GeneratedAssetIndex', () => {
     const rejections: GeneratedOutputProjectionRejection[] = [];
     const isolatedStore = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
-      workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+      ownerRoot: workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
       rejectedProjectionPolicy: {
         mode: 'preserve-and-report',
@@ -217,7 +261,8 @@ describe('GeneratedAssetIndex', () => {
     const manifest = createManifestStore();
     const canonicalStore = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
-      workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+      ownerRoot: workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
     });
     const asset = imageAsset({
@@ -233,7 +278,8 @@ describe('GeneratedAssetIndex', () => {
     const rejections: GeneratedOutputProjectionRejection[] = [];
     const isolatedStore = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
-      workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+      ownerRoot: workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
       rejectedProjectionPolicy: {
         mode: 'preserve-and-report',
@@ -252,7 +298,8 @@ describe('GeneratedAssetIndex', () => {
     const manifest = createManifestStore();
     const store = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
-      workspaceRoot,
+      owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+      ownerRoot: workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
     });
     const lifecycle = createGeneratedAssetRevisionRef({
@@ -289,7 +336,8 @@ describe('GeneratedAssetIndex', () => {
     const index = new GeneratedAssetIndex(
       new LocalMetadataGeneratedOutputProjectionStore({
         manifestStore: manifest.store,
-        workspaceRoot,
+        owner: { kind: 'workspace', workspaceId: 'workspace-test' },
+        ownerRoot: workspaceRoot,
         pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
       }),
     );

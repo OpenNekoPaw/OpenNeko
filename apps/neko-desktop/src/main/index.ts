@@ -85,6 +85,7 @@ import {
 } from './desktop-functional-fixture';
 import { DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT } from '../shared/agent-automation-contract';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
+import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
 import {
   createAutomationApplicationService,
   createAutomationTargetSelectionCoordinator,
@@ -141,12 +142,12 @@ import {
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
-import { WorkspaceGenerationApplicationRuntime } from '@neko/generation/job';
+import { GenerationApplicationRuntime } from '@neko/generation/job';
 import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
 import {
   createContentReadMediaRequestAssetMaterializer,
   createMediaPlatform,
-  createNodeWorkspaceGenerationJobOwner,
+  createNodeGenerationJobOwner,
 } from '@neko/generation/media';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
@@ -499,22 +500,29 @@ async function startDesktop(): Promise<void> {
         : []),
     ],
   });
-  const generationRuntime = new WorkspaceGenerationApplicationRuntime({
-    createOwner: async ({ workspaceId, workspaceRoot }) => {
-      const configManager = workspaceConfigAuthority.getWorkspaceConfig({
-        workspaceId,
-        workspacePath: workspaceRoot,
-      });
+  const generationRuntime = new GenerationApplicationRuntime({
+    createOwner: async ({ owner, root }) => {
+      const configManager =
+        owner.kind === 'workspace'
+          ? workspaceConfigAuthority.getWorkspaceConfig({
+              workspaceId: owner.workspaceId,
+              workspacePath: root,
+            })
+          : workspaceConfigAuthority.getApplicationConfig();
       const media = createMediaPlatform({
         configManager,
+        providerResolver: createDesktopMediaExecutionProviderResolver({
+          config: configManager,
+          credentials: credentialRuntime.credentials,
+        }),
         requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
-          contentRead: createNodeHostContentReadService({ workspaceRoot }),
+          contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
           encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
         }),
       });
-      return createNodeWorkspaceGenerationJobOwner({
-        workspaceId,
-        workspaceRoot,
+      return createNodeGenerationJobOwner({
+        owner,
+        root,
         homedir,
         mediaExecution: media.service,
         promptExecution: new PromptGenerationService(
@@ -533,11 +541,7 @@ async function startDesktop(): Promise<void> {
     hostId: `electron:${applicationInstanceId}`,
     credentialRuntime,
     catalogReader: agentCatalogReader,
-    resolveWorkspaceGenerationJobs: (workspace) =>
-      generationRuntime.getWorkspaceJobs({
-        workspaceId: workspace.workspaceId,
-        workspaceRoot: workspace.workspacePath,
-      }),
+    resolveGenerationJobs: (binding) => generationRuntime.getJobs(binding),
     assistantSpaceIds: [assistantSpaceId],
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     createWorkspaceLogger: (workspace) => {
@@ -787,7 +791,11 @@ async function startDesktop(): Promise<void> {
   const canvasDocumentEntryAccess = createNodeDocumentLowLevelAccess();
   const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
     generation: {
-      getWorkspaceJobs: (input) => generationRuntime.getWorkspaceJobs(input),
+      getWorkspaceJobs: (input) =>
+        generationRuntime.getJobs({
+          owner: { kind: 'workspace', workspaceId: input.workspaceId },
+          root: input.workspaceRoot,
+        }),
       validateBinding: ({ workspace, binding }) => {
         const config = workspaceConfigAuthority.getWorkspaceConfig({
           workspaceId: workspace.workspaceId,

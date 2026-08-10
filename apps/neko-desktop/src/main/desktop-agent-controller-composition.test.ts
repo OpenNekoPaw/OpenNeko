@@ -22,6 +22,7 @@ import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import {
   ConfigManager,
   FileUserConfigManager,
+  FileProviderCredentialSource,
   type AssistantRuntimeSettingsPort,
 } from '@neko/host/settings';
 
@@ -183,7 +184,7 @@ describe('Agent controller composition', () => {
     await composition.dispose?.();
   });
 
-  it('binds a configured image model into a text-only main model Turn policy', async () => {
+  it('binds media purposes through config and login credentials without blocking ordinary chat', async () => {
     const root = await mkdtemp(join(tmpdir(), 'desktop-agent-image-purpose-'));
     temporaryRoots.push(root);
     const configPath = join(root, 'config.toml');
@@ -205,7 +206,16 @@ describe('Agent controller composition', () => {
         'type = "openai"',
         'api_url = "https://image.example.test/v1"',
         'enabled = true',
-        'requires_api_key = false',
+        'requires_api_key = true',
+        'api_key = "config-image-secret"',
+        '',
+        '[[providers]]',
+        'id = "login-image-provider"',
+        'name = "Login Image Provider"',
+        'type = "openai"',
+        'api_url = "https://login-image.example.test/v1"',
+        'enabled = true',
+        'requires_api_key = true',
         '',
         '[[models]]',
         'id = "deepseek-chat"',
@@ -221,6 +231,14 @@ describe('Agent controller composition', () => {
         'id = "image-model"',
         'name = "image-model-api"',
         'provider_id = "image-provider"',
+        'type = "image"',
+        'capabilities = ["text_to_image"]',
+        'enabled = true',
+        '',
+        '[[models]]',
+        'id = "login-image-model"',
+        'name = "login-image-model-api"',
+        'provider_id = "login-image-provider"',
         'type = "image"',
         'capabilities = ["text_to_image"]',
         'enabled = true',
@@ -290,10 +308,29 @@ describe('Agent controller composition', () => {
       piSessionId: 'pi-session-image',
       writerLeaseId: 'writer-lease-image',
     });
+    const storedSecrets = new Map<string, string>();
+    const secretGet = vi.fn(async (key: string) => storedSecrets.get(key));
+    const credentialRuntime = createAgentCredentialRuntime({
+      secrets: {
+        get: secretGet,
+        set: async (key, value) => {
+          storedSecrets.set(key, value);
+        },
+        delete: async (key) => {
+          storedSecrets.delete(key);
+        },
+      },
+      configCredentials: new FileProviderCredentialSource({ filePath: configPath }),
+      prompt: {
+        text: async () => null,
+        select: async () => null,
+        notify: () => undefined,
+      },
+    });
     const composition = createAgentControllerComposition({
       host: createHost(),
       userHome: root,
-      credentialRuntime: createCredentialRuntime(),
+      credentialRuntime,
       resolveWorkspaceConfig: () => config,
       resources: {
         registerFile: vi.fn(async () => ({
@@ -347,6 +384,95 @@ describe('Agent controller composition', () => {
           },
         }),
       }),
+    );
+    expect(config.getProvider('image-provider')).not.toHaveProperty('apiKey');
+    expect(secretGet).not.toHaveBeenCalledWith('openneko.agent.pi.credential:image-provider');
+
+    workspace.startTurn.mockClear();
+    await composition.startInitialTurn?.({
+      workspace,
+      conversationId: 'conversation-image',
+      turnId: 'turn-missing-image',
+      messageText: 'Hello',
+      configuration: { ...configuration, turnId: 'turn-missing-image' },
+      context: {
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      locale: 'en',
+      purposeModels: {
+        'image.generate': {
+          providerId: 'login-image-provider',
+          modelId: 'login-image-model',
+          category: 'image',
+        },
+      },
+    });
+    const missingCredentialPolicy = workspace.startTurn.mock.calls[0]?.[0].modelPolicy;
+    expect(missingCredentialPolicy?.['agent.main']).toMatchObject({ execution: 'pi' });
+    expect(missingCredentialPolicy?.['image.generate']).toBeUndefined();
+
+    await credentialRuntime.credentials.replace('login-image-provider', {
+      type: 'oauth',
+      access: 'oauth-access',
+      refresh: 'oauth-refresh',
+      expires: Date.now() + 60_000,
+    });
+    workspace.startTurn.mockClear();
+    await composition.startInitialTurn?.({
+      workspace,
+      conversationId: 'conversation-image',
+      turnId: 'turn-oauth-image',
+      messageText: 'Hello again',
+      configuration: { ...configuration, turnId: 'turn-oauth-image' },
+      context: {
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      locale: 'en',
+      purposeModels: {
+        'image.generate': {
+          providerId: 'login-image-provider',
+          modelId: 'login-image-model',
+          category: 'image',
+        },
+      },
+    });
+    expect(workspace.startTurn.mock.calls[0]?.[0].modelPolicy['image.generate']).toBeUndefined();
+
+    await credentialRuntime.credentials.replace('login-image-provider', {
+      type: 'api_key',
+      key: 'login-image-secret',
+    });
+    workspace.startTurn.mockClear();
+    await composition.startInitialTurn?.({
+      workspace,
+      conversationId: 'conversation-image',
+      turnId: 'turn-login-image',
+      messageText: 'Generate an image',
+      configuration: { ...configuration, turnId: 'turn-login-image' },
+      context: {
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      locale: 'en',
+      purposeModels: {
+        'image.generate': {
+          providerId: 'login-image-provider',
+          modelId: 'login-image-model',
+          category: 'image',
+        },
+      },
+    });
+    expect(workspace.startTurn.mock.calls[0]?.[0].modelPolicy['image.generate']).toMatchObject({
+      execution: 'domain',
+      model: { provider: 'login-image-provider', id: 'login-image-model' },
+    });
+    expect(JSON.stringify(workspace.startTurn.mock.calls[0]?.[0])).not.toContain(
+      'login-image-secret',
     );
     await composition.dispose?.();
   });
