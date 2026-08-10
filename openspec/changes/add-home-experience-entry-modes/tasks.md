@@ -52,3 +52,10 @@
 - [x] 8.2 Preserve exact Draft-local image, video, and audio model selections in the package-owned entry snapshot without copying Provider authority into Renderer state.
 - [x] 8.3 Add contract, application, adapter, snapshot, and controller regressions for configured defaults, manual selection restoration, and stale local isolation.
 - [x] 8.4 Run focused Agent/Desktop tests, typechecks, strict OpenSpec validation, UI validation, and quality review; record remaining provider-backed risk.
+
+## 9. Correct Entry Media Catalog Projection
+
+- [x] 9.1 Make launch-model availability type-aware so image, video, and audio models do not require LLM-only token metadata.
+- [x] 9.2 Project Host-resolved media-understanding status through the canonical launch catalog and Draft config adapter.
+- [x] 9.3 Add contract, application, adapter, and controller regressions using configured media defaults and purpose bindings.
+- [x] 9.4 Run focused Host/Agent/Desktop tests, typechecks, strict OpenSpec validation, UI validation, and quality review; commit without unrelated worktree changes.

@@ -85,6 +85,17 @@ label 保持可辨识和键盘可访问。
 模式/target pending 只禁用 selector 与 chooser；输入框、Window navigation 和布局控制继续可用。切换模式不取消
 其他 Conversation 或后台 task，也不保留隐藏 Root。
 
+### 7. Entry 模型目录按模型类型判定可用性
+
+Agent Launch catalog 继续作为 Entry 唯一的模型目录。LLM 只有在 provider、purpose capability、
+`contextWindow` 与 `maxOutputTokens` 完整时才可用于对话；image、video、audio 生成模型不使用 LLM token
+metadata，因此只按 provider 与对应 purpose capability 判定可用性。不得因媒体模型没有 LLM token metadata
+而从 Entry 配置中隐藏。
+
+Host 已从 canonical `config.toml` 解析的 image/audio/video understanding model status 作为只读安全投影进入
+同一个 launch catalog，再由 Draft adapter 发送给 composer。Renderer 不重读配置文件、不推断 provider，且不以
+首个可用模型替代显式 `default_models` 或 `default_model_purposes`。
+
 ## Replaced Paths
 
 - 删除 Desktop `Scene → selected mode` 与 `mode → management Scene intent` presenter。

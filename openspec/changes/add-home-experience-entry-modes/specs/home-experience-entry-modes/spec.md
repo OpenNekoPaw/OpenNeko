@@ -57,6 +57,20 @@ to Assistant presentation and MUST NOT alter durable records.
 - **AND** any valid Draft-local media model selections are restored with the unsent input instead of resetting to `none`
 - **AND** an unavailable or stale media model remains visibly unselected without changing Provider configuration or another Draft
 
+#### Scenario: Configured media models remain available without LLM token metadata
+
+- **GIVEN** `config.toml` declares enabled image, video, and audio generation models with matching purpose capabilities and explicit defaults
+- **WHEN** those media models omit LLM-only context-window or maximum-output-token metadata
+- **THEN** the Agent Entry model catalog still exposes them as available generation choices
+- **AND** the explicit image, video, and audio defaults are selected without an inferred fallback
+
+#### Scenario: Configured media understanding bindings are shown
+
+- **GIVEN** `config.toml` declares explicit image, video, and audio understanding purpose bindings
+- **WHEN** the Agent Entry configuration menu opens
+- **THEN** it shows the Host-resolved understanding model identity for each category
+- **AND** Renderer does not read the config file or infer another provider or model
+
 ### Requirement: Workspace requires explicit Project authority
 
 Workspace mode SHALL expose an entry-composer chooser for exact Project selection or directory authorization.

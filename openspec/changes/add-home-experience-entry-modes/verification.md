@@ -112,3 +112,37 @@ No blocking scoped code-quality findings remain.
 - Quality review: L2 contract/projection change, no blocking findings. The canonical owner remains Agent
   launch configuration, the Renderer stores only disposable presentation identities, and stale state
   fails locally without fallback provider/model selection.
+
+## Follow-up: Correct Entry Media Catalog Projection
+
+- Safe runtime audit of the canonical user config confirmed `~/.neko/config.toml` read status `ok`, no
+  validation diagnostics, configured image/video/audio models, explicit type defaults, and explicit
+  image/audio/video understanding-purpose bindings. Secret values were neither read from the
+  credential owner nor printed.
+- Root cause was after `ConfigManager`: Agent Launch required `contextWindow` and
+  `maxOutputTokens` for every catalog entry. Those are LLM token fields, so valid media models were
+  marked unavailable and filtered by the Draft adapter. Audio music models additionally require the
+  canonical `audio.music.generate` / `text_to_music` purpose match.
+- Launch availability is now model-type aware. LLM keeps chat capability and token-metadata
+  requirements; image, video, and audio require an appropriate generation purpose and configured
+  provider without LLM token metadata. No first-model or provider fallback was added.
+- Host-resolved media-understanding status now travels through the strict launch catalog and the
+  existing Draft `configState` adapter. The Renderer does not read TOML or receive credentials.
+- Deterministic verification passed: launch contract 3 tests, launch application 12 tests, Entry
+  controller 52 tests, Desktop launch runtime/adapter 13 tests; Agent contracts/runtime/Webview and
+  Desktop typechecks passed.
+- Strict OpenSpec validation, all OpenSpec validation (72 items), Agent/application/Webview/package
+  boundaries, legacy-debt scan, and `git diff --check` passed.
+- Agent Evaluation disposition: the media-menu visibility and strict projection are `excluded` from
+  provider-backed judging because this follow-up does not change `agent.main` invocation, Tool
+  registration, or generation execution. Existing first-submit behavior continues to `reuse`
+  `agent-runtime.launch-binding`. The key-free harness and all-suite dry-run passed 44 files / 294
+  tests and 24 suites / 64 cases; this is readiness evidence, not real provider acceptance.
+- UI validation runtime: the owning visible Electron Desktop was selected. Functional contract and
+  adapter evidence passed, but post-fix pixel inspection is `blocked`: the current development app
+  cannot load because an unrelated concurrent Automation Webview change is missing the exported
+  `@neko/automation-webview/target-selection/root` entry. The observed screen is the fail-visible
+  Desktop bootstrap error, not Agent Entry. No concurrent source or user process was modified.
+- Quality review: L2 public contract/runtime/Renderer adapter change, no blocking findings. The
+  strict contract fails visibly when understanding projection is absent, state remains Draft-local,
+  and all model-purpose matching reuses the Host-owned canonical registry.
