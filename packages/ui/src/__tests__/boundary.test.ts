@@ -15,6 +15,7 @@ const forbiddenImportPatterns = [
 ];
 const markdownUiRoot = join(srcRoot, 'markdown');
 const markdownCoreRoot = join(srcRoot, '../../markdown/src');
+const markdownBrowserRoot = join(markdownCoreRoot, 'browser');
 
 describe('@neko/ui dependency boundary', () => {
   it('does not import node-only modules or feature packages from source files', () => {
@@ -70,16 +71,38 @@ describe('@neko/ui dependency boundary', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps markdown core free of React and shared UI reverse dependencies', () => {
+  it('keeps the markdown default-entry core free of React and shared UI reverse dependencies', () => {
     const forbiddenMarkdownCorePatterns = [
       /from\s+['"]react(?:\/|['"])/,
       /from\s+['"]react-dom(?:\/|['"])/,
       /from\s+['"]@neko\/ui(?:\/|['"])/,
     ];
-    const violations = collectSourceFiles(markdownCoreRoot).flatMap((filePath) => {
+    const violations = collectSourceFiles(markdownCoreRoot, new Set(['browser'])).flatMap(
+      (filePath) => {
+        const text = readFileSync(filePath, 'utf-8');
+        const relativePath = relative(markdownCoreRoot, filePath);
+        return forbiddenMarkdownCorePatterns
+          .filter((pattern) => pattern.test(text))
+          .map((pattern) => `${relativePath}: ${pattern}`);
+      },
+    );
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps the markdown browser entry free of Node and shared UI reverse dependencies', () => {
+    const forbiddenMarkdownBrowserPatterns = [
+      /from\s+['"]node:/,
+      /from\s+['"](?:fs|path|url)['"]/,
+      /from\s+['"]@neko\/ui(?:\/|['"])/,
+    ];
+    const browserFiles = collectSourceFiles(markdownBrowserRoot);
+    expect(browserFiles.length).toBeGreaterThan(0);
+
+    const violations = browserFiles.flatMap((filePath) => {
       const text = readFileSync(filePath, 'utf-8');
-      const relativePath = relative(markdownCoreRoot, filePath);
-      return forbiddenMarkdownCorePatterns
+      const relativePath = relative(markdownBrowserRoot, filePath);
+      return forbiddenMarkdownBrowserPatterns
         .filter((pattern) => pattern.test(text))
         .map((pattern) => `${relativePath}: ${pattern}`);
     });
@@ -88,19 +111,25 @@ describe('@neko/ui dependency boundary', () => {
   });
 });
 
-function collectSourceFiles(directory: string): string[] {
+function collectSourceFiles(
+  directory: string,
+  ignoredDirectories: ReadonlySet<string> = new Set(),
+): string[] {
   return readdirSync(directory).flatMap((entry) => {
     const path = join(directory, entry);
     const stat = statSync(path);
 
     if (stat.isDirectory()) {
-      if (entry === '__tests__') {
+      if (entry === '__tests__' || ignoredDirectories.has(entry)) {
         return [];
       }
-      return collectSourceFiles(path);
+      return collectSourceFiles(path, ignoredDirectories);
     }
 
-    if (!Array.from(sourceExtensions).some((extension) => path.endsWith(extension))) {
+    if (
+      /\.(?:test|spec)\.tsx?$/.test(entry) ||
+      !Array.from(sourceExtensions).some((extension) => path.endsWith(extension))
+    ) {
       return [];
     }
 

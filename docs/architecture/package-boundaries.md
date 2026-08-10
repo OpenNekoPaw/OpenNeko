@@ -16,12 +16,12 @@ Package 角色、独立拆包条件、领域家族命名、显式 exports 和产
 
 ## 分层与依赖方向
 
-| 层级            | 主要包                                                                                                                              | 可依赖                          | 不得依赖                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
-| L0 host-neutral | `@neko/shared`、`@neko/content`、`@neko/entity-domain`、`@neko/search-domain`、`@neko/markdown`、`@neko/skills`、包自有 L0 contract | 更低层纯 contract/utility       | Electron、React、应用根、功能包内部实现                                           |
-| L1 host/runtime | `@neko/host`、`@neko/media`、各功能包 host-neutral core/platform                                                                    | L0、明确 runtime dependency     | React/Webview 实现、`apps/*`、其他功能包内部实现                                  |
-| L2 browser UI   | `@neko/ui`、`packages/<domain>/webview` package                                                                                     | L0、L2 公共 UI、包自有 contract | Electron、Node-only API、本地文件路径                                             |
-| Application     | `apps/neko-desktop`                                                                                                                 | package public entries          | package root 下的 `src/` 内部实现、应用级领域/contract 副本、业务状态机/策略/事务 |
+| 层级            | 主要包                                                                                                                                       | 可依赖                          | 不得依赖                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
+| L0 host-neutral | `@neko/shared`、`@neko/content`、`@neko/entity-domain`、`@neko/search-domain`、`@neko/markdown` 默认入口、`@neko/skills`、包自有 L0 contract | 更低层纯 contract/utility       | Electron、React、应用根、功能包内部实现                                           |
+| L1 host/runtime | `@neko/host`、`@neko/media`、各功能包 host-neutral core/platform                                                                             | L0、明确 runtime dependency     | React/Webview 实现、`apps/*`、其他功能包内部实现                                  |
+| L2 browser UI   | `@neko/ui`、`@neko/markdown/rich-surface`、`packages/<domain>/webview` package                                                               | L0、L2 公共 UI、包自有 contract | Electron、Node-only API、本地文件路径                                             |
+| Application     | `apps/neko-desktop`                                                                                                                          | package public entries          | package root 下的 `src/` 内部实现、应用级领域/contract 副本、业务状态机/策略/事务 |
 
 依赖必须自上而下组合：
 
