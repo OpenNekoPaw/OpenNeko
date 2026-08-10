@@ -55,6 +55,21 @@
 
 ## Foundational Matrix
 
+### Follow-up: Agent Generation Tool Discovery
+
+- Evaluation disposition is `reuse`: `agent-runtime.workflow-controller/media-tool-terminal-result`
+  already requires the public Agent input path, an exact flat `image.generate` binding, one
+  `GenerateImage` Tool call, Generation Job/artifact/Workspace Board evidence and a same-Conversation
+  missing-binding failure with no provider, Canvas or direct-generation fallback. No Scenario or
+  runner contract change is required for this defect.
+- Deterministic evidence adds the missing preconditions below that behavior case: Entry Draft
+  projection of the configured image model, Draft-submit contract validation, pending first-Turn
+  persistence/restart restoration and Desktop controller projection of a domain-executed
+  `image.generate` policy beside a text-only `agent.main` model.
+- Key-free Agent Evaluation and the focused Scenario dry-run pass. These results prove schema,
+  discovery and harness readiness only. The provider-backed visible case remains unexecuted because
+  this task has no explicit provider/model cost authorization.
+
 - Covered deterministically: basic and multi-turn Conversation behavior, queue/terminal convergence, Canvas run-intent persistence, uncertain submission recovery, exact Job reattachment, result apply after Recipe edits, renderer unmount/reopen, output preservation and Conversation/Workspace isolation through Agent Runtime, Canvas Domain/Node and Desktop headless tests.
 - Unaffected and rechecked: compaction continuation, transcript restoration, Conversation switching and transcript/config/context isolation remain owned by the existing Agent Runtime suites, which passed in the full package run.
 - Blocked as real-provider evidence: natural-language Agent generation, visible Canvas paid generation, provider-backed generation-record restoration and artifact/Board projection after a complete application reopen.
