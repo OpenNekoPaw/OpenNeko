@@ -140,15 +140,9 @@ function doesStoryboardMediaMatchRef(
 }
 
 function getLocalImageMediaPath(media: ResolvedCompositeMedia | undefined): string | undefined {
-  return (
-    (media?.stableUri && isCanvasReferenceImagePathUsable(media.stableUri)
-      ? media.stableUri
-      : undefined) ?? (media?.src && isCanvasPortableImageUrl(media.src) ? media.src : undefined)
-  );
-}
-
-function isCanvasPortableImageUrl(value: string): boolean {
-  return value.startsWith('data:') || value.startsWith('http://') || value.startsWith('https://');
+  return media?.stableUri && isCanvasReferenceImagePathUsable(media.stableUri)
+    ? media.stableUri
+    : undefined;
 }
 
 function isAbsolutePath(value: string): boolean {

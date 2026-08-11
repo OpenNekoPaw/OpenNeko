@@ -22,6 +22,7 @@
     "@neko/markdown": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/preview-domain": "workspace:*",
+    "@neko/preview-webview": "workspace:*",
     "@neko/search-domain": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",

@@ -177,7 +177,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-1',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/asset.png',
+                    descriptor: previewDescriptor('asset.png'),
                     caption: 'Wide',
                     role: 'original',
                   },
@@ -201,7 +201,7 @@ describe('composite rich content renderers', () => {
     expect(screen.getByText('Opening')).toBeTruthy();
     expect(screen.getByText('Shot 1')).toBeTruthy();
     expect(screen.getByText('Wide establishing frame')).toBeTruthy();
-    expect(screen.getByAltText('Wide')).toBeTruthy();
+    expect(screen.getByAltText('asset.png')).toBeTruthy();
     expect(screen.getByText('Original')).toBeTruthy();
     expect(screen.getByText('Asset 1 is not available for call-2')).toBeTruthy();
   });
@@ -321,7 +321,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'read-image',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/panel.png',
+                    descriptor: previewDescriptor('panel.png'),
                     caption: 'Original panel',
                     role: 'source',
                   },
@@ -367,7 +367,7 @@ describe('composite rich content renderers', () => {
     expect(document.body.textContent).not.toContain('animated blue pulse under the table');
     expect(document.body.textContent).toContain('Process reference');
     expect(document.body.textContent).toContain('reference media');
-    expect(screen.getByAltText('Original panel')).toBeTruthy();
+    expect(screen.getByAltText('panel.png')).toBeTruthy();
   });
 
   it('renders semantic storyboard images with a bounded natural-size preview', () => {
@@ -410,7 +410,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'read-image',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/wide-panel.png',
+                    descriptor: previewDescriptor('wide-panel.png'),
                     caption: 'Wide panel',
                   },
                 ],
@@ -426,9 +426,9 @@ describe('composite rich content renderers', () => {
     expect(markup).toContain('data-agent-storyboard-canvas-scene-table="true"');
     expect(markup).toContain('style="width:1160px"');
     expect(markup).toContain('w-[132px]');
-    expect(markup).toContain('inline-flex max-h-[220px] max-w-[170px]');
-    expect(markup).toContain('h-auto max-h-[220px] w-auto max-w-full object-contain');
-    expect(markup).toContain('object-contain');
+    expect(markup).toContain('max-h-[220px] max-w-[170px] overflow-hidden');
+    expect(markup).toContain('data-preview-presentation="quick"');
+    expect(markup).toContain('data-preview-presentation-owner="preview-webview"');
     expect(markup).not.toContain('object-cover');
     expect(markup).not.toContain('max-h-[720px]');
   });
@@ -486,7 +486,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'read-image',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/page-1.jpg',
+                    descriptor: previewDescriptor('page-1.jpg'),
                     localPath: '${WORKSPACE}/page-1.jpg',
                     mimeType: 'image/jpeg',
                   },
@@ -593,7 +593,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-a',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/a.png',
+                    descriptor: previewDescriptor('a.png'),
                     caption: 'A',
                   },
                 ],
@@ -609,7 +609,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-b',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/b.png',
+                    descriptor: previewDescriptor('b.png'),
                     caption: 'B',
                   },
                 ],
@@ -648,7 +648,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-1',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/asset.png',
+                    descriptor: previewDescriptor('asset.png'),
                     caption: 'Final',
                     localPath: '/repo/out.png',
                   },
@@ -687,7 +687,6 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-1',
                     assetIndex: 0,
                     type: 'image',
-                    src: '',
                     caption: 'broken-output.png',
                     localPath: '/repo/broken-output.png',
                   },
@@ -726,7 +725,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-1',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/resources/missing.png',
+                    descriptor: previewDescriptor('missing.png'),
                     caption: 'Missing preview',
                   },
                 ],
@@ -739,11 +738,11 @@ describe('composite rich content renderers', () => {
       />,
     );
 
-    fireEvent.error(screen.getByAltText('Missing preview'));
+    fireEvent.error(screen.getByAltText('missing.png'));
 
     expect(screen.getAllByText('Missing preview').length).toBeGreaterThan(0);
-    expect(screen.getByText('Preview unavailable')).toBeTruthy();
-    expect(screen.queryByAltText('Missing preview')).toBeNull();
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByAltText('missing.png')).toBeTruthy();
   });
 });
 
@@ -762,4 +761,17 @@ function renderWithI18nToStaticMarkup(
   service.registerBundle('chat', 'en', enChat);
   service.registerBundle('chat', 'zh-cn', zhCnChat);
   return renderToStaticMarkup(<I18nProvider service={service}>{node}</I18nProvider>);
+}
+
+function previewDescriptor(displayName: string) {
+  return {
+    descriptorId: `descriptor-${displayName}`,
+    sourceFingerprint: `fingerprint-${displayName}`,
+    contentLocator: { kind: 'workspace-file' as const, path: `assets/${displayName}` },
+    url: 'openneko://resource/12345678901234567890123456789012',
+    contentKind: 'image' as const,
+    mediaType: 'image/png',
+    displayName,
+    byteLength: 1024,
+  };
 }

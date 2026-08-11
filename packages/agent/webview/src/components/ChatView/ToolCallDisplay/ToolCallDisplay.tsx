@@ -33,6 +33,7 @@ import {
 } from './icons';
 import { DocumentImageThumbnails } from './DocumentImageThumbnails';
 import { GenerationJobCard } from './GenerationJobCard';
+import { AgentPreviewCollection } from '../MediaPreview/AgentPreviewCollection';
 import { useToolCallAccessoryRenderer } from '../ToolCallAccessoryContext';
 
 const logger = getLogger('ToolCallDisplay');
@@ -94,11 +95,11 @@ function ToolCallDisplayComponent({
     resultJson,
     hasExpandableContent,
     isImageTool,
-    imageUrls,
+    imageDescriptors,
     isVideoTool,
-    videoUrls,
+    videoDescriptors,
     isAudioTool,
-    audioUrls,
+    audioDescriptors,
     documentThumbnails,
     copyText,
     isFileTool,
@@ -123,7 +124,8 @@ function ToolCallDisplayComponent({
   const toneClass = isFailed ? 'is-danger' : isSuccess ? 'is-success' : isPending ? 'is-info' : '';
   const compactActionClass =
     'inline-flex items-center gap-1 rounded-md border border-[var(--agent-input-border)] bg-[var(--agent-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--agent-fg)] transition-colors hover:bg-[var(--agent-hover)]';
-  const mediaOutputCount = imageUrls.length + videoUrls.length + audioUrls.length;
+  const mediaOutputCount =
+    imageDescriptors.length + videoDescriptors.length + audioDescriptors.length;
   const attachmentOutputs =
     toolCall.result?.attachments?.filter(
       (attachment) => attachment.contentLocator ?? attachment.assetRef?.contentLocator,
@@ -218,9 +220,9 @@ function ToolCallDisplayComponent({
       <GenerationJobCard
         toolCall={toolCall}
         job={generationJob}
-        imageUrls={imageUrls}
-        videoUrls={videoUrls}
-        audioUrls={audioUrls}
+        imageDescriptors={imageDescriptors}
+        videoDescriptors={videoDescriptors}
+        audioDescriptors={audioDescriptors}
         isPending={isPending}
         isSuccess={isSuccess}
         isFailed={isFailed}
@@ -390,48 +392,14 @@ function ToolCallDisplayComponent({
               <ArtifactTransferSummary artifacts={toolCall.result.artifacts} />
             )}
 
-            {isImageTool && imageUrls.length > 0 && (
-              <div className="space-y-2">
-                {imageUrls.map((url, index) => (
-                  <RichContentRenderer
-                    key={url}
-                    kind="image"
-                    data={{
-                      src: url,
-                      alt: `Generated image ${index + 1}`,
-                      name: `generated_${index + 1}.png`,
-                    }}
-                  />
-                ))}
-              </div>
+            {isImageTool && imageDescriptors.length > 0 && (
+              <AgentPreviewCollection descriptors={imageDescriptors} />
             )}
-            {isVideoTool && videoUrls.length > 0 && (
-              <div className="space-y-2">
-                {videoUrls.map((url, index) => (
-                  <RichContentRenderer
-                    key={url}
-                    kind="video"
-                    data={{
-                      src: url,
-                      title: `generated_${index + 1}.mp4`,
-                    }}
-                  />
-                ))}
-              </div>
+            {isVideoTool && videoDescriptors.length > 0 && (
+              <AgentPreviewCollection descriptors={videoDescriptors} />
             )}
-            {isAudioTool && audioUrls.length > 0 && (
-              <div className="space-y-2">
-                {audioUrls.map((url, index) => (
-                  <RichContentRenderer
-                    key={url}
-                    kind="audio"
-                    data={{
-                      src: url,
-                      title: `generated_${index + 1}.mp3`,
-                    }}
-                  />
-                ))}
-              </div>
+            {isAudioTool && audioDescriptors.length > 0 && (
+              <AgentPreviewCollection descriptors={audioDescriptors} />
             )}
           </div>
         </section>

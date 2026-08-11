@@ -544,19 +544,14 @@ describe('ResourceBrowserRoot', () => {
 
   it('opens a package-owned quick preview on hover and releases it on leave', async () => {
     const runtime = createRuntime();
-    const renderQuickPreview = vi.fn((descriptor) => (
-      <div data-testid="quick-preview">{descriptor.displayName}</div>
-    ));
-    render(
-      <ResourceBrowserRoot runtime={runtime} locale="en" renderQuickPreview={renderQuickPreview} />,
-    );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
     const row = (await screen.findByText('cat.png')).closest('.neko-resource-browser__item-row');
     expect(row).toBeTruthy();
     fireEvent.pointerEnter(row!);
 
     await waitFor(() => expect(runtime.resolveQuickPreview).toHaveBeenCalledOnce());
-    expect((await screen.findByTestId('quick-preview')).textContent).toBe('preview.png');
+    expect(await screen.findByLabelText('preview.png')).toBeTruthy();
 
     fireEvent.pointerLeave(row!);
     await waitFor(() =>
@@ -567,39 +562,25 @@ describe('ResourceBrowserRoot', () => {
         }),
       ),
     );
-    expect(screen.queryByTestId('quick-preview')).toBeNull();
+    expect(screen.queryByLabelText('preview.png')).toBeNull();
   });
 
   it('releases the high-cost quick preview when its current Root is suspended', async () => {
     const runtime = createRuntime();
     const view = render(
-      <ResourceBrowserRoot
-        lifecyclePresentation="active"
-        runtime={runtime}
-        locale="en"
-        renderQuickPreview={(descriptor) => (
-          <div data-testid="quick-preview">{descriptor.displayName}</div>
-        )}
-      />,
+      <ResourceBrowserRoot lifecyclePresentation="active" runtime={runtime} locale="en" />,
     );
 
     const row = (await screen.findByText('cat.png')).closest('.neko-resource-browser__item-row');
     expect(row).toBeTruthy();
     fireEvent.pointerEnter(row!);
-    await screen.findByTestId('quick-preview');
+    await screen.findByLabelText('preview.png');
 
     view.rerender(
-      <ResourceBrowserRoot
-        lifecyclePresentation="suspended"
-        runtime={runtime}
-        locale="en"
-        renderQuickPreview={(descriptor) => (
-          <div data-testid="quick-preview">{descriptor.displayName}</div>
-        )}
-      />,
+      <ResourceBrowserRoot lifecyclePresentation="suspended" runtime={runtime} locale="en" />,
     );
 
-    await waitFor(() => expect(screen.queryByTestId('quick-preview')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText('preview.png')).toBeNull());
     expect(runtime.releaseQuickPreview).toHaveBeenCalledWith(
       expect.objectContaining({ previewSessionId: 'hover:content:cat' }),
     );
@@ -626,15 +607,7 @@ describe('ResourceBrowserRoot', () => {
         },
       })),
     );
-    render(
-      <ResourceBrowserRoot
-        runtime={runtime}
-        locale="en"
-        renderQuickPreview={(descriptor) => (
-          <div data-testid="quick-preview">{descriptor.displayName}</div>
-        )}
-      />,
-    );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
     const row = (await screen.findByText('cat.png')).closest('.neko-resource-browser__item-row');
     expect(row).toBeTruthy();
@@ -653,7 +626,7 @@ describe('ResourceBrowserRoot', () => {
         }),
       ),
     );
-    expect(screen.queryByTestId('quick-preview')).toBeNull();
+    expect(screen.queryByLabelText('stale.png')).toBeNull();
   });
 
   it('drags a portable ContentLocator without exposing an absolute path', async () => {

@@ -13,6 +13,7 @@ import type {
   Message,
   ToolCall,
 } from '@neko/agent-contracts';
+import type { PreviewMediaDescriptor } from '@neko/preview-domain';
 
 const MEDIA_FILE_EXTENSIONS = [
   '.png',
@@ -57,7 +58,7 @@ export interface MessageResourceProjectionOptions {
   resolveDisplayLocator?: (
     locator: ContentLocator | ContentRepresentationLocator,
     context: MessageResourceProjectionContext,
-  ) => Promise<string | undefined>;
+  ) => Promise<PreviewMediaDescriptor | undefined>;
 }
 
 export function isLocalMediaFilePath(value: string): boolean {
@@ -282,9 +283,9 @@ async function projectResourceValueInternal(
   }
 
   if (displayLocator) {
-    const renderUri = await resolveDisplayLocator(displayLocator, mediaType, options);
-    if (renderUri) {
-      projected['renderUri'] = renderUri;
+    const previewDescriptor = await resolveDisplayLocator(displayLocator, mediaType, options);
+    if (previewDescriptor) {
+      projected['previewDescriptor'] = previewDescriptor;
     } else {
       appendProjectionDiagnostic(
         projected,
@@ -310,7 +311,7 @@ async function resolveDisplayLocator(
   locator: ContentLocator | ContentRepresentationLocator,
   mediaType: string | undefined,
   options: MessageResourceProjectionOptions,
-): Promise<string | undefined> {
+): Promise<PreviewMediaDescriptor | undefined> {
   try {
     return await options.resolveDisplayLocator?.(locator, {
       ...(mediaType ? { mediaType } : {}),

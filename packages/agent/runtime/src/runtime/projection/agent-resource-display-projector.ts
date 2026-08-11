@@ -18,6 +18,11 @@ import {
 } from '@neko/content';
 import type { AgentResourceDisplayProjectionFact } from '@neko/agent-contracts';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import {
+  detectPreviewContentKind,
+  type PreviewContentKind,
+  type PreviewMediaDescriptor,
+} from '@neko/preview-domain';
 
 export interface AgentResourceDisplayLease {
   readonly url: string;
@@ -72,6 +77,7 @@ export interface AgentResourceDisplayHostIdentity {
 interface DisplayLease {
   readonly attachmentId: string;
   readonly sourceFingerprint: string;
+  readonly descriptor: PreviewMediaDescriptor;
   readonly lease: AgentResourceDisplayLease;
 }
 
@@ -108,7 +114,7 @@ export function createAgentResourceDisplayProjector<
     context: { readonly mediaType?: string },
     attachmentId: string,
     conversationId: string,
-  ): Promise<string | undefined> => {
+  ): Promise<PreviewMediaDescriptor | undefined> => {
     if (disposed) throw new Error('Desktop Agent resource display projector is disposed.');
     if (
       locator.kind === 'content-representation' ||
@@ -131,7 +137,7 @@ export function createAgentResourceDisplayProjector<
       const sourceFingerprint = bytesFingerprint(loaded.bytes);
       const key = `${attachmentId}:${messageResourceProjectionKey(locator)}`;
       const current = leases.get(key);
-      if (current?.sourceFingerprint === sourceFingerprint) return current.lease.url;
+      if (current?.sourceFingerprint === sourceFingerprint) return current.descriptor;
       current?.lease.release();
       leases.delete(key);
       const lease = await registerBytes(
@@ -144,8 +150,16 @@ export function createAgentResourceDisplayProjector<
         },
         { bytes: loaded.bytes, mediaType, sourceFingerprint },
       );
-      leases.set(key, { attachmentId, sourceFingerprint, lease });
-      return lease.url;
+      const descriptor = createDisplayDescriptor({
+        attachmentId,
+        locator,
+        url: lease.url,
+        mediaType,
+        sourceFingerprint,
+        byteLength: loaded.sizeBytes ?? loaded.bytes.byteLength,
+      });
+      leases.set(key, { attachmentId, sourceFingerprint, descriptor, lease });
+      return descriptor;
     }
     const relativePath = projectableWorkspacePath(locator);
     if (!relativePath) return undefined;
@@ -156,7 +170,7 @@ export function createAgentResourceDisplayProjector<
     const sourceFingerprint = resourceFingerprint(metadata.fingerprint, metadata.byteLength);
     const key = `${attachmentId}:${contentLocatorKey(locator)}`;
     const current = leases.get(key);
-    if (current?.sourceFingerprint === sourceFingerprint) return current.lease.url;
+    if (current?.sourceFingerprint === sourceFingerprint) return current.descriptor;
     current?.lease.release();
     leases.delete(key);
     const absolutePath = await resolveWorkspaceFile(input.workspace.workspacePath, relativePath);
@@ -170,8 +184,16 @@ export function createAgentResourceDisplayProjector<
       },
       { absolutePath, mediaType, sourceFingerprint },
     );
-    leases.set(key, { attachmentId, sourceFingerprint, lease });
-    return lease.url;
+    const descriptor = createDisplayDescriptor({
+      attachmentId,
+      locator,
+      url: lease.url,
+      mediaType,
+      sourceFingerprint,
+      byteLength: metadata.byteLength,
+    });
+    leases.set(key, { attachmentId, sourceFingerprint, descriptor, lease });
+    return descriptor;
   };
 
   return {
@@ -297,9 +319,8 @@ function collectProjectedResources(
       : undefined;
   if (locator) {
     const diagnosticCodes = readProjectionDiagnosticCodes(owner['resourceProjectionDiagnostics']);
-    const renderUri = owner['renderUri'];
-    const authorized =
-      typeof renderUri === 'string' && renderUri.startsWith('openneko://resource/');
+    const descriptor = owner['previewDescriptor'];
+    const authorized = isProjectedPreviewDescriptor(descriptor);
     if (authorized || diagnosticCodes.length > 0) {
       record({
         status: authorized ? 'authorized' : 'denied',
@@ -310,6 +331,59 @@ function collectProjectedResources(
     }
   }
   for (const item of Object.values(owner)) collectProjectedResources(item, visited, record);
+}
+
+function createDisplayDescriptor(input: {
+  readonly attachmentId: string;
+  readonly locator: ContentLocator | ContentRepresentationLocator;
+  readonly url: string;
+  readonly mediaType: string;
+  readonly sourceFingerprint: string;
+  readonly byteLength: number;
+}): PreviewMediaDescriptor {
+  const source =
+    input.locator.kind === 'content-representation' ? input.locator.source : input.locator;
+  const displayPath = displayLocatorPath(input.locator);
+  const contentKind =
+    detectPreviewContentKind(displayPath) ?? contentKindFromMediaType(input.mediaType);
+  if (!contentKind) {
+    throw new Error(`Agent display media type is unsupported: ${input.mediaType}.`);
+  }
+  return {
+    descriptorId: `agent-display:${input.attachmentId}:${messageResourceProjectionKey(input.locator)}`,
+    sourceFingerprint: input.sourceFingerprint,
+    contentLocator: source,
+    url: input.url,
+    contentKind,
+    mediaType: input.mediaType,
+    displayName: path.posix.basename(displayPath),
+    byteLength: input.byteLength,
+  };
+}
+
+function contentKindFromMediaType(mediaType: string): PreviewContentKind | undefined {
+  if (mediaType.startsWith('image/')) return 'image';
+  if (mediaType.startsWith('video/')) return 'video';
+  if (mediaType.startsWith('audio/')) return 'audio';
+  if (mediaType.startsWith('text/')) return 'text';
+  if (mediaType.startsWith('model/')) return 'model';
+  if (
+    mediaType === 'application/pdf' ||
+    mediaType.includes('document') ||
+    mediaType.includes('epub')
+  ) {
+    return 'document';
+  }
+  return undefined;
+}
+
+function isProjectedPreviewDescriptor(value: unknown): value is PreviewMediaDescriptor {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'url') === 'string' &&
+    String(Reflect.get(value, 'url')).startsWith('openneko://resource/')
+  );
 }
 
 function readProjectionDiagnosticCodes(value: unknown): readonly string[] {

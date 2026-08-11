@@ -54,6 +54,7 @@ import {
   type ResourceBrowserQuickPreviewResult,
   type ResourceBrowserRecoveryPlanResult,
 } from '@neko/assets-domain/resource-browser/contract';
+import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
 import { getResourceBrowserLabels } from './labels';
 import {
   EntityInspector,
@@ -78,9 +79,6 @@ export interface ResourceBrowserRootProps {
     readonly viewId: string;
     readonly presentation: 'temporary' | 'side';
   };
-  readonly renderQuickPreview?: (
-    descriptor: ResourceBrowserQuickPreviewResult['descriptor'],
-  ) => ReactNode;
 }
 
 type ResourceBrowserRootState =
@@ -103,7 +101,6 @@ export function ResourceBrowserRoot({
   locale,
   lifecyclePresentation = 'active',
   previewTarget,
-  renderQuickPreview,
   runtime,
 }: ResourceBrowserRootProps): ReactElement {
   const labels = getResourceBrowserLabels(locale);
@@ -208,7 +205,6 @@ export function ResourceBrowserRoot({
   const beginQuickPreview = (item: ResourceBrowserItem): void => {
     if (
       lifecyclePresentation === 'suspended' ||
-      !renderQuickPreview ||
       (item.kind !== 'image' && item.kind !== 'video' && item.kind !== 'audio')
     ) {
       return;
@@ -1204,12 +1200,15 @@ export function ResourceBrowserRoot({
                       ) : null}
                     </span>
                   ) : null}
-                  {quickPreview?.resourceId === item.resourceId && renderQuickPreview ? (
+                  {quickPreview?.resourceId === item.resourceId ? (
                     <div
                       className="neko-resource-browser__quick-preview"
                       data-preview-kind={quickPreview.result.descriptor.contentKind}
                     >
-                      {renderQuickPreview(quickPreview.result.descriptor)}
+                      <QuickPreviewSurface
+                        descriptor={quickPreview.result.descriptor}
+                        locale={locale}
+                      />
                     </div>
                   ) : null}
                 </div>

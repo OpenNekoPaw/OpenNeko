@@ -17,9 +17,8 @@ import type {
 } from '@neko/canvas-domain';
 import { isEntityMemoryContribution } from '@neko/search-domain';
 import { contentLocatorKey, isContentLocator } from '@neko/content';
-import { isPublicGeneratedAssetResultUri } from '@neko/generation';
+import { parsePreviewMediaDescriptor, type PreviewMediaDescriptor } from '@neko/preview-domain';
 import { normalizeCanonicalStoryboardTable } from '@neko/canvas-domain';
-import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 
 export type CompositeRichContentKind = 'storyboard-table' | 'comparison-grid' | 'asset-gallery';
@@ -44,8 +43,7 @@ export interface ResolvedCompositeMedia {
   readonly toolCallId: string;
   readonly assetIndex: number;
   readonly type: CompositeMediaType;
-  readonly src: string;
-  readonly renderUri?: string;
+  readonly descriptor?: PreviewMediaDescriptor;
   readonly assetId?: string;
   readonly stableUri?: string;
   readonly localPath?: string;
@@ -114,8 +112,7 @@ export interface ProjectCompositeBlockRichContentInput {
 interface MediaCandidate {
   readonly assetIndex: number;
   readonly type: CompositeMediaType;
-  readonly src?: string;
-  readonly renderUri?: string;
+  readonly descriptor?: PreviewMediaDescriptor;
   readonly assetId?: string;
   readonly stableUri?: string;
   readonly localPath?: string;
@@ -598,7 +595,7 @@ function isStoryboardImageSourceTool(toolName: string): boolean {
 }
 
 function isImageCandidateResolvable(candidate: MediaCandidate): boolean {
-  return Boolean(candidate.src || candidate.renderUri || candidate.contentLocator);
+  return Boolean(candidate.descriptor || candidate.contentLocator);
 }
 
 function maybeAlignStoryboardSectionMediaRefs(
@@ -756,7 +753,6 @@ function projectStoryboardDocumentResourceMediaRef(
     toolCallId: mediaRef.refId,
     assetIndex,
     type: inferMediaType(mediaRef.mimeType, contentLocator.entryPath, 'image'),
-    src: '',
     contentLocator,
     ...(mediaRef.mimeType ? { mimeType: mediaRef.mimeType } : {}),
     ...(mediaRef.label ? { caption: mediaRef.label, label: mediaRef.label } : {}),
@@ -827,31 +823,14 @@ function resolveCompositeMediaRef(
     };
   }
 
-  if (candidate.type === 'model' && !candidate.src && !candidate.renderUri) {
+  if (!candidate.descriptor && !isImageCandidateResolvable(candidate)) {
     return {
       diagnostic: {
         code: 'missing-uri',
         toolCallId: mediaRef.toolCallId,
         assetIndex,
         ...(candidate.assetId ? { assetId: candidate.assetId } : {}),
-        message: `Asset ${assetIndex} does not have an adapter-provided model URI`,
-      },
-    };
-  }
-
-  if (
-    !candidate.src &&
-    !candidate.renderUri &&
-    candidate.type !== 'model' &&
-    !isImageCandidateResolvable(candidate)
-  ) {
-    return {
-      diagnostic: {
-        code: 'missing-uri',
-        toolCallId: mediaRef.toolCallId,
-        assetIndex,
-        ...(candidate.assetId ? { assetId: candidate.assetId } : {}),
-        message: `Asset ${assetIndex} does not have a renderable webview URI`,
+        message: `Asset ${assetIndex} does not have an authorized Preview descriptor`,
       },
     };
   }
@@ -864,14 +843,12 @@ function resolveCompositeMediaRef(
         candidate.assetId ??
           createDocumentResourceCandidateKey(candidate.contentLocator) ??
           candidate.stableUri ??
-          candidate.renderUri ??
-          candidate.src,
+          candidate.descriptor?.descriptorId,
       ].join(':'),
       toolCallId: mediaRef.toolCallId,
       assetIndex,
       type: candidate.type,
-      src: candidate.src ?? candidate.renderUri ?? '',
-      ...(candidate.renderUri ? { renderUri: candidate.renderUri } : {}),
+      ...(candidate.descriptor ? { descriptor: candidate.descriptor } : {}),
       ...(candidate.assetId ? { assetId: candidate.assetId } : {}),
       ...(candidate.stableUri ? { stableUri: candidate.stableUri } : {}),
       ...(candidate.localPath ? { localPath: candidate.localPath } : {}),
@@ -953,8 +930,7 @@ function collectMediaCandidates(toolCall: ToolCall): readonly MediaCandidate[] {
       candidate.assetId ??
       createDocumentResourceCandidateKey(candidate.contentLocator) ??
       candidate.stableUri ??
-      candidate.renderUri ??
-      candidate.src ??
+      candidate.descriptor?.descriptorId ??
       candidate.localPath;
     if (!key || seen.has(key)) return;
     seen.add(key);
@@ -990,19 +966,6 @@ function collectMediaCandidates(toolCall: ToolCall): readonly MediaCandidate[] {
     addCandidate(projectAttachmentCandidate(attachment, index));
   }
 
-  for (const [index, url] of collectResultUrls(data).entries()) {
-    const renderUri = isRenderableUri(url) ? url : undefined;
-    const stableUri = isGeneratedAssetResultMediaUri(url) ? url : undefined;
-    addCandidate({
-      assetIndex: index,
-      src: renderUri ?? stableUri,
-      ...(renderUri ? { renderUri } : {}),
-      ...(stableUri ? { stableUri } : {}),
-      type: inferMediaType(readString(data, 'mimeType'), url),
-      label: `Asset ${index + 1}`,
-    });
-  }
-
   return candidates;
 }
 
@@ -1019,7 +982,7 @@ function collectDocumentImageCandidates(
     const candidate = projectDocumentImageCandidate({
       index,
       info,
-      allowLocalPath: false,
+      descriptor: readPreviewDescriptor(info),
       label: readString(info, 'label') ?? formatDocumentImageCandidateLabel(info, index),
     });
     if (candidate) candidates.push(candidate);
@@ -1044,8 +1007,7 @@ function collectReadImageCandidates(
       index,
       info,
       path: readString(image, 'path') ?? readString(documentImage, 'path'),
-      renderUri: readRenderableUri(image) ?? readRenderableUri(documentImage),
-      allowLocalPath: false,
+      descriptor: readPreviewDescriptor(image) ?? readPreviewDescriptor(documentImage),
       label: readString(image, 'label') ?? formatDocumentImageCandidateLabel(documentImage, index),
     });
     return candidate ? [candidate] : [];
@@ -1056,15 +1018,13 @@ function projectDocumentImageCandidate(input: {
   readonly index: number;
   readonly info?: Record<string, unknown>;
   readonly path?: string;
-  readonly renderUri?: string;
-  readonly allowLocalPath: boolean;
+  readonly descriptor?: PreviewMediaDescriptor;
   readonly label?: string;
 }): MediaCandidate | null {
   const mimeType = readString(input.info, 'mimeType') ?? inferImageMimeType(input.path);
-  const renderUri =
-    input.renderUri && isRenderableUri(input.renderUri) ? input.renderUri : undefined;
+  const descriptor = input.descriptor;
   const contentLocator = parseStableContentLocator(input.info?.['contentLocator']);
-  if (!contentLocator && !renderUri) return null;
+  if (!contentLocator && !descriptor) return null;
   const pageNumber = readDocumentImagePageNumber(input.info) ?? readPageNumberFromText(input.label);
   const alias = normalizeStoryboardAlias(readString(input.info, 'alias'));
   const sourceDocumentId =
@@ -1075,7 +1035,7 @@ function projectDocumentImageCandidate(input: {
   return {
     assetIndex: input.index,
     type: 'image',
-    ...(renderUri && !contentLocator ? { src: renderUri, renderUri } : {}),
+    ...(descriptor ? { descriptor } : {}),
     ...(contentLocator ? { contentLocator } : {}),
     ...(mimeType ? { mimeType } : {}),
     ...(input.label ? { label: input.label } : {}),
@@ -1116,16 +1076,13 @@ function projectGeneratedAssetCandidate(
 ): MediaCandidate {
   const assetRef = asRecord(asset['assetRef']);
   const mimeType = readString(asset, 'mimeType') ?? readString(assetRef, 'mimeType');
-  const renderUri = readRenderableUri(asset) ?? readRenderableUri(assetRef);
+  const descriptor = readPreviewDescriptor(asset) ?? readPreviewDescriptor(assetRef);
   const stableUri = readString(assetRef, 'uri');
-  const src =
-    renderUri ?? readGeneratedAssetResultUri(asset) ?? readGeneratedAssetResultUri(assetRef);
 
   return {
     assetIndex: index,
     type: inferGeneratedAssetType(readString(asset, 'type'), mimeType),
-    ...(src ? { src } : {}),
-    ...(renderUri ? { renderUri } : {}),
+    ...(descriptor ? { descriptor } : {}),
     ...((readString(asset, 'id') ?? readString(assetRef, 'assetId'))
       ? { assetId: readString(asset, 'id') ?? readString(assetRef, 'assetId') }
       : {}),
@@ -1142,14 +1099,12 @@ function projectAssetRefCandidate(
 ): MediaCandidate {
   const mimeType = readString(assetRef, 'mimeType');
   const stableUri = readString(assetRef, 'uri');
-  const renderUri = readRenderableUri(assetRef);
-  const src = renderUri ?? readGeneratedAssetResultUri(assetRef);
+  const descriptor = readPreviewDescriptor(assetRef);
 
   return {
     assetIndex: index,
     type: inferMediaType(mimeType, stableUri),
-    ...(src ? { src } : {}),
-    ...(renderUri ? { renderUri } : {}),
+    ...(descriptor ? { descriptor } : {}),
     ...(readString(assetRef, 'assetId') ? { assetId: readString(assetRef, 'assetId') } : {}),
     ...(stableUri ? { stableUri } : {}),
     ...(mimeType ? { mimeType } : {}),
@@ -1166,18 +1121,13 @@ function projectAttachmentCandidate(
   const attachmentRecord = asRecord(attachment);
   const assetRef = asRecord(attachmentRecord?.['assetRef']);
   const mimeType = attachment.mimeType ?? readString(assetRef, 'mimeType');
-  const renderUri = readRenderableUri(attachmentRecord) ?? readRenderableUri(assetRef);
-  const src =
-    renderUri ??
-    readGeneratedAssetResultUri(attachmentRecord) ??
-    readGeneratedAssetResultUri(assetRef);
+  const descriptor = readPreviewDescriptor(attachmentRecord) ?? readPreviewDescriptor(assetRef);
   const stableUri = readString(assetRef, 'uri') ?? readPortableSourcePath(attachment.path);
 
   return {
     assetIndex: index,
     type: inferMediaType(mimeType, stableUri, attachment.type),
-    ...(src ? { src } : {}),
-    ...(renderUri ? { renderUri } : {}),
+    ...(descriptor ? { descriptor } : {}),
     ...(readString(assetRef, 'assetId') ? { assetId: readString(assetRef, 'assetId') } : {}),
     ...(stableUri ? { stableUri } : {}),
     ...(mimeType ? { mimeType } : {}),
@@ -1185,42 +1135,15 @@ function projectAttachmentCandidate(
   };
 }
 
-function collectResultUrls(data: Record<string, unknown> | undefined): readonly string[] {
-  const urls = new Set<string>();
-  for (const key of ['url', 'thumbnailUrl', 'imageUrl', 'videoUrl', 'audioUrl', 'src']) {
-    const value = readString(data, key);
-    if (value) urls.add(value);
-  }
-  for (const value of readStringArray(data, 'urls')) {
-    urls.add(value);
-  }
-  return Array.from(urls);
-}
-
-function readGeneratedAssetResultUri(
+function readPreviewDescriptor(
   record: Record<string, unknown> | undefined,
-): string | undefined {
-  const uri = readString(record, 'uri') ?? readString(record, 'url') ?? readString(record, 'src');
-  return uri && isGeneratedAssetResultMediaUri(uri) ? uri : undefined;
-}
-
-function readRenderableUri(record: Record<string, unknown> | undefined): string | undefined {
-  if (!record) return undefined;
-  for (const key of [
-    'renderUri',
-    'previewUri',
-    'preview',
-    'thumbnailUrl',
-    'url',
-    'imageUrl',
-    'videoUrl',
-    'audioUrl',
-    'src',
-  ]) {
-    const value = readString(record, key);
-    if (value && isRenderableUri(value)) return value;
+): PreviewMediaDescriptor | undefined {
+  if (!record || record['previewDescriptor'] === undefined) return undefined;
+  try {
+    return parsePreviewMediaDescriptor(record['previewDescriptor']);
+  } catch {
+    return undefined;
   }
-  return undefined;
 }
 
 function inferGeneratedAssetType(
@@ -1334,16 +1257,6 @@ function isModelMimeType(mimeType: string | undefined): boolean {
   );
 }
 
-function isRenderableUri(value: string): boolean {
-  return isAuthorizedResourceDisplayUri(value);
-}
-
-function isGeneratedAssetResultMediaUri(value: string): boolean {
-  if (!value.startsWith('generated-assets/')) return false;
-  if (!isPublicGeneratedAssetResultUri(value)) return false;
-  return inferMediaType(undefined, value) !== 'unknown';
-}
-
 function pushDiagnostic(
   diagnostics: CompositeMediaDiagnostic[],
   diagnostic: CompositeMediaDiagnostic,
@@ -1358,13 +1271,6 @@ function readRecordArray(
 ): Record<string, unknown>[] {
   const value = record?.[key];
   return Array.isArray(value) ? value.filter(isRecord) : [];
-}
-
-function readStringArray(record: Record<string, unknown> | undefined, key: string): string[] {
-  const value = record?.[key];
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-    : [];
 }
 
 function readString(record: Record<string, unknown> | undefined, key: string): string | undefined {

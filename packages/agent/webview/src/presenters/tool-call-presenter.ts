@@ -12,9 +12,12 @@ import {
   parseDocumentSourceRef,
   validateContentLocator,
 } from '@neko/content';
-import { isPublicGeneratedAssetResultUri } from '@neko/generation';
+import {
+  parsePreviewMediaDescriptor,
+  type PreviewContentKind,
+  type PreviewMediaDescriptor,
+} from '@neko/preview-domain';
 import { validateCanvasAuthoringResultEnvelope } from '@neko/canvas-domain';
-import { isAuthorizedResourceDisplayUri } from './resource-display-uri';
 import {
   AUDIO_GENERATION_TOOLS,
   FILE_TOOLS,
@@ -22,10 +25,6 @@ import {
   VIDEO_GENERATION_TOOLS,
   getToolSummary,
 } from '@neko/agent-contracts';
-
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'] as const;
-const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'] as const;
-const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'] as const;
 
 export interface DocumentImageThumbnailProjection {
   id: string;
@@ -101,11 +100,11 @@ export interface ToolCallDisplayProjection {
   backgroundTaskId?: string;
   shouldShowMediaPreview: boolean;
   isImageTool: boolean;
-  imageUrls: string[];
+  imageDescriptors: PreviewMediaDescriptor[];
   isVideoTool: boolean;
-  videoUrls: string[];
+  videoDescriptors: PreviewMediaDescriptor[];
   isAudioTool: boolean;
-  audioUrls: string[];
+  audioDescriptors: PreviewMediaDescriptor[];
   documentThumbnails: DocumentImageThumbnailProjection[];
   copyText: string | null;
   isFileTool: boolean;
@@ -172,19 +171,19 @@ export function projectToolCallDisplayState(
     backgroundTaskId: isBackgroundMode ? readString(resultData, 'taskId') : undefined,
     shouldShowMediaPreview,
     isImageTool,
-    imageUrls:
+    imageDescriptors:
       resultSuccess && shouldShowMediaPreview && isImageTool
-        ? extractToolImageUrls(resultData)
+        ? extractToolPreviewDescriptors(resultData, 'image')
         : [],
     isVideoTool,
-    videoUrls:
+    videoDescriptors:
       resultSuccess && shouldShowMediaPreview && isVideoTool
-        ? extractToolVideoUrls(resultData)
+        ? extractToolPreviewDescriptors(resultData, 'video')
         : [],
     isAudioTool,
-    audioUrls:
+    audioDescriptors:
       resultSuccess && shouldShowMediaPreview && isAudioTool
-        ? extractToolAudioUrls(resultData)
+        ? extractToolPreviewDescriptors(resultData, 'audio')
         : [],
     documentThumbnails,
     copyText,
@@ -822,16 +821,38 @@ function extractToolFilePath(data: unknown): string | null {
   return null;
 }
 
-function extractToolImageUrls(data: unknown): string[] {
-  return Array.from(collectMediaUrls(data, 'imageUrl', 'images')).filter(isValidImageUrl);
+function extractToolPreviewDescriptors(
+  data: unknown,
+  contentKind: PreviewContentKind,
+): PreviewMediaDescriptor[] {
+  const descriptors = new Map<string, PreviewMediaDescriptor>();
+  collectPreviewDescriptors(data, new WeakSet<object>(), (candidate) => {
+    try {
+      const descriptor = parsePreviewMediaDescriptor(candidate);
+      if (descriptor.contentKind === contentKind)
+        descriptors.set(descriptor.descriptorId, descriptor);
+    } catch {
+      // Invalid individual projections remain local to their result item.
+    }
+  });
+  return [...descriptors.values()];
 }
 
-function extractToolVideoUrls(data: unknown): string[] {
-  return Array.from(collectMediaUrls(data, 'videoUrl', 'videos')).filter(isValidVideoUrl);
-}
-
-function extractToolAudioUrls(data: unknown): string[] {
-  return Array.from(collectMediaUrls(data, 'audioUrl', 'audios')).filter(isValidAudioUrl);
+function collectPreviewDescriptors(
+  value: unknown,
+  visited: WeakSet<object>,
+  collect: (value: unknown) => void,
+): void {
+  if (!value || typeof value !== 'object' || visited.has(value)) return;
+  visited.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) collectPreviewDescriptors(item, visited, collect);
+    return;
+  }
+  const record = asRecord(value);
+  if (!record) return;
+  if ('previewDescriptor' in record) collect(record.previewDescriptor);
+  for (const child of Object.values(record)) collectPreviewDescriptors(child, visited, collect);
 }
 
 function extractToolCopyText(toolName: string, data: unknown): string | null {
@@ -861,90 +882,6 @@ function isGenerationTool(toolName: string): boolean {
 
 function isFileTool(toolName: string): boolean {
   return isOneOf(toolName, FILE_TOOLS);
-}
-
-function collectUrls(data: unknown, urlField: string, arrayField: string): Set<string> {
-  const result = asRecord(data);
-  const urlSet = new Set<string>();
-  if (!result) return urlSet;
-
-  if (typeof result.url === 'string') urlSet.add(result.url);
-  if (typeof result[urlField] === 'string') urlSet.add(result[urlField]);
-  if (Array.isArray(result.urls)) {
-    for (const url of result.urls) {
-      if (typeof url === 'string') urlSet.add(url);
-    }
-  }
-  if (Array.isArray(result[arrayField])) {
-    for (const item of result[arrayField]) {
-      if (typeof item === 'string') {
-        urlSet.add(item);
-      } else {
-        const record = asRecord(item);
-        const url = readString(record, 'url');
-        if (url) urlSet.add(url);
-      }
-    }
-  }
-  return urlSet;
-}
-
-function collectMediaUrls(data: unknown, urlField: string, arrayField: string): Set<string> {
-  const urls = collectUrls(data, urlField, arrayField);
-  const media = asRecord(asRecord(data)?.media);
-  if (media) {
-    for (const url of collectUrls(media, urlField, arrayField)) urls.add(url);
-  }
-  for (const url of collectNestedStringFields(data, new Set(['renderUri', 'previewUri']))) {
-    urls.add(url);
-  }
-  return urls;
-}
-
-function collectNestedStringFields(
-  value: unknown,
-  keys: ReadonlySet<string>,
-  visited: WeakSet<object> = new WeakSet<object>(),
-): string[] {
-  if (!value || typeof value !== 'object' || visited.has(value)) return [];
-  visited.add(value);
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => collectNestedStringFields(item, keys, visited));
-  }
-  const result: string[] = [];
-  for (const [key, child] of Object.entries(value)) {
-    if (keys.has(key) && typeof child === 'string' && child.length > 0) {
-      result.push(child);
-    } else {
-      result.push(...collectNestedStringFields(child, keys, visited));
-    }
-  }
-  return result;
-}
-
-function isValidImageUrl(url: string): boolean {
-  return isValidMediaUrl(url, IMAGE_EXTENSIONS);
-}
-
-function isValidVideoUrl(url: string): boolean {
-  return isValidMediaUrl(url, VIDEO_EXTENSIONS);
-}
-
-function isValidAudioUrl(url: string): boolean {
-  return isValidMediaUrl(url, AUDIO_EXTENSIONS);
-}
-
-function isValidMediaUrl(url: string, extensions: readonly string[]): boolean {
-  if (isAuthorizedResourceDisplayUri(url)) return true;
-  if (isStableGeneratedAssetMediaUri(url, extensions)) return true;
-  return false;
-}
-
-function isStableGeneratedAssetMediaUri(url: string, extensions: readonly string[]): boolean {
-  if (!url.startsWith('generated-assets/')) return false;
-  if (!isPublicGeneratedAssetResultUri(url)) return false;
-  const lowerUrl = url.toLowerCase();
-  return extensions.some((ext) => lowerUrl.endsWith(ext));
 }
 
 function formatReadDocumentCopyText(data: unknown): string | null {
@@ -1114,7 +1051,13 @@ function stripRuntimeOnlyResultFields(value: unknown, seen: WeakSet<object>): un
 }
 
 function isRuntimeOnlyResultField(key: string): boolean {
-  return key === 'localPath' || key === 'localPaths' || key === 'renderUri' || key === 'renderUris';
+  return (
+    key === 'localPath' ||
+    key === 'localPaths' ||
+    key === 'renderUri' ||
+    key === 'renderUris' ||
+    key === 'previewDescriptor'
+  );
 }
 
 function extractDocumentFilePath(result: Record<string, unknown>): string | null {

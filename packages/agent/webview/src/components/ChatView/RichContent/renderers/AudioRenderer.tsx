@@ -1,18 +1,18 @@
 /**
- * AudioRenderer — Adapter wrapping AudioCard for the RichContent registry.
+ * AudioRenderer — authorized Preview descriptor adapter for the RichContent registry.
  */
 
+import { parsePreviewMediaDescriptor, type PreviewMediaDescriptor } from '@neko/preview-domain';
+import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
 import type { RichContentProps, RichContentRendererEntry } from '../types';
-import { AudioCard } from '../../MediaPreview';
+import { getLocale } from '../../../../i18n';
 
 // ---------------------------------------------------------------------------
 // Data shape
 // ---------------------------------------------------------------------------
 
 export interface AudioRichData {
-  src: string;
-  title?: string;
-  localPath?: string;
+  descriptor: PreviewMediaDescriptor;
 }
 
 // ---------------------------------------------------------------------------
@@ -21,16 +21,23 @@ export interface AudioRichData {
 
 function isAudioRichData(data: unknown): data is AudioRichData {
   if (typeof data !== 'object' || data === null) return false;
-  const d = data as Record<string, unknown>;
-  return typeof d['src'] === 'string';
+  try {
+    return parsePreviewMediaDescriptor(Reflect.get(data, 'descriptor')).contentKind === 'audio';
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function AudioRendererComponent({ data, className, inline }: RichContentProps<AudioRichData>) {
-  return <AudioCard src={data.src} title={data.title} inline={inline} className={className} />;
+function AudioRendererComponent({ data, className }: RichContentProps<AudioRichData>) {
+  return (
+    <div className={className}>
+      <QuickPreviewSurface descriptor={data.descriptor} locale={getLocale()} />
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,6 @@ import { SubAgentCard } from './SubAgentCard';
 import { ContentBlockItem } from './ContentBlockItem';
 import { MessageActions } from './MessageActions';
 import { MarkdownRenderer } from './MessageContent';
-import { ImagePreview, AudioCard, VideoCard } from './MediaPreview';
 import { MessageAvatar } from './MessageAvatar';
 import type { PluginsAvailable } from './SendToMenu';
 import { useMessageActions } from './MessageActionsContext';
@@ -54,30 +53,6 @@ function formatTime(timestamp: number): string {
 
 // Attachment preview component
 function AttachmentDisplay({ projection }: { projection: MessageAttachmentProjection }) {
-  if (projection.previewKind === 'image' && projection.previewSrc) {
-    return <ImagePreview src={projection.previewSrc} alt={projection.name} className="mt-1" />;
-  }
-
-  if (projection.previewKind === 'audio' && projection.previewSrc) {
-    return (
-      <AudioCard
-        src={projection.previewSrc}
-        title={projection.name}
-        className="mt-1 w-full max-w-[400px]"
-      />
-    );
-  }
-
-  if (projection.previewKind === 'video' && projection.previewSrc) {
-    return (
-      <VideoCard
-        src={projection.previewSrc}
-        title={projection.name}
-        className="mt-1 w-full max-w-[500px]"
-      />
-    );
-  }
-
   const token = projectAttachmentReferenceToken(projection.attachment);
   return (
     <ReferenceToken

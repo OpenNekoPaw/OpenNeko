@@ -6,7 +6,6 @@ export interface MessageAttachmentProjection {
   attachment: MessageAttachment;
   previewKind: MessageAttachmentPreviewKind;
   name: string;
-  previewSrc: string | null;
 }
 
 function projectMessageAttachment(attachment: MessageAttachment): MessageAttachmentProjection {
@@ -14,7 +13,6 @@ function projectMessageAttachment(attachment: MessageAttachment): MessageAttachm
     attachment,
     previewKind: toAttachmentPreviewKind(attachment),
     name: attachment.name,
-    previewSrc: attachment.preview ?? null,
   };
 }
 
@@ -25,8 +23,8 @@ export function projectMessageAttachments(
 }
 
 function toAttachmentPreviewKind(attachment: MessageAttachment): MessageAttachmentPreviewKind {
-  if (attachment.preview && attachment.type === 'image') return 'image';
-  if (attachment.preview && attachment.type === 'audio') return 'audio';
-  if (attachment.preview && attachment.type === 'video') return 'video';
+  if (attachment.type === 'image') return 'image';
+  if (attachment.type === 'audio') return 'audio';
+  if (attachment.type === 'video') return 'video';
   return 'file';
 }
