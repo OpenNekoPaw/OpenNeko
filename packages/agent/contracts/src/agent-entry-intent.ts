@@ -19,6 +19,21 @@ export interface AgentAuthoringBinding {
   readonly target: AgentAuthoringTargetRef;
 }
 
+export const AGENT_AUTHORING_BINDING_METADATA_KEY = 'agentAuthoringBinding';
+
+export function readAgentAuthoringBindingMetadata(
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): AgentAuthoringBinding {
+  if (metadata === undefined || !(AGENT_AUTHORING_BINDING_METADATA_KEY in metadata)) {
+    throw new Error('Agent authoring Tool execution is missing its exact target binding.');
+  }
+  const binding = parseAgentEntryTargetBinding(metadata[AGENT_AUTHORING_BINDING_METADATA_KEY]);
+  if (binding.kind !== 'authoring') {
+    throw new Error('Agent authoring Tool execution received a non-authoring target binding.');
+  }
+  return binding;
+}
+
 export interface AgentCompanionCharacterDialogueParticipant {
   readonly characterProjectId: string;
   readonly characterVersionId: string;

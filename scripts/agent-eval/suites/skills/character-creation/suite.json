@@ -1,0 +1,62 @@
+{
+  "schema": "neko.agent-eval.suite",
+  "id": "skill.character-creation",
+  "owner": { "kind": "skill", "id": "character-creation" },
+  "target": {
+    "kind": "skill",
+    "identity": {
+      "name": "character-creation",
+      "source": "builtin",
+      "provenance": "builtin",
+      "rootId": "builtin-skills",
+      "relativePath": "character-creation",
+      "fingerprint": "sha256:bdac09667a50b0717aa373f8781412f1b5ade9615b0f82f3b93955cc3098fe7b"
+    }
+  },
+  "runtimeProfiles": [
+    {
+      "id": "markdown",
+      "settings": { "outputFormat": "markdown" },
+      "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "reviewable-character-proposal",
+      "file": "cases/reviewable-character-proposal.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "roleplay-request-does-not-author",
+      "file": "cases/roleplay-request-does-not-author.json",
+      "group": "boundary",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

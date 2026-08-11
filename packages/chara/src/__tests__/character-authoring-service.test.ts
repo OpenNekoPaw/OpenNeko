@@ -30,6 +30,19 @@ function definition(summary = 'A careful archivist.'): CharacterDefinition {
   };
 }
 
+function emptyDefinition(): CharacterDefinition {
+  return {
+    summary: '',
+    backgroundStory: createEmptyCharacterBackgroundStory(),
+    originSetting: createEmptyCharacterOriginSetting(),
+    canon: [],
+    knowledgeBoundary: [],
+    behaviorPolicy: [],
+    expressionPolicy: [],
+    representationRefs: [],
+  };
+}
+
 class MemoryCharacterAuthoringRepository implements CharacterAuthoringRepository {
   readonly projects = new Map<string, CharacterProject>();
   readonly versions = new Map<string, CharacterVersion>();
@@ -60,6 +73,35 @@ class MemoryCharacterAuthoringRepository implements CharacterAuthoringRepository
 }
 
 describe('CharacterAuthoringService', () => {
+  it('fills only a fresh exact character creation target', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    await service.createProject({
+      characterProjectId: 'character-project-fresh',
+      displayName: 'Lin',
+      draft: emptyDefinition(),
+    });
+
+    const project = await service.fillFreshDraft({
+      characterProjectId: 'character-project-fresh',
+      draft: definition('Created from reviewed evidence.'),
+    });
+
+    expect(project.draft.summary).toBe('Created from reviewed evidence.');
+    await expect(
+      service.fillFreshDraft({
+        characterProjectId: 'character-project-fresh',
+        draft: definition('A second overwrite attempt.'),
+      }),
+    ).rejects.toMatchObject({
+      code: 'character-authoring-operation-invalid',
+      characterProjectId: 'character-project-fresh',
+    });
+    expect(repository.projects.get('character-project-fresh')?.draft.summary).toBe(
+      'Created from reviewed evidence.',
+    );
+  });
+
   it('reviews sourced candidates and publishes an immutable CharacterVersion', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
     let currentTime = firstTime;

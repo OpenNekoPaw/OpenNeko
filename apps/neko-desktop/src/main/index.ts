@@ -163,6 +163,7 @@ import {
   CharacterRoomInteractionService,
   CharacterRoomService,
   CharacterStorylineService,
+  createCharacterRoleSkillCapabilityProvider,
   createCharacterDurableCatalogPort,
   UserCharacterRelationshipService,
 } from '@neko/chara/application';
@@ -697,6 +698,48 @@ async function startDesktop(): Promise<void> {
     assistantSpaceIds: [assistantSpaceId],
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     authoringMutationAuthority: agentAuthoringMutationAuthority,
+    resolveWorkspaceCapabilityProviders: (workspace) => [
+      createCharacterRoleSkillCapabilityProvider(async ({ binding, proposal, signal }) => {
+        if (binding.workspaceId !== workspace.workspaceId) {
+          throw new Error(
+            `Character creation binding Workspace '${binding.workspaceId}' does not match '${workspace.workspaceId}'.`,
+          );
+        }
+        const workspaceRoot = workspace.workspacePath;
+        if ((await realpath(workspaceRoot)) === (await realpath(characterLibraryRoot))) {
+          return new CharacterAuthoringService({
+            repository: characterAuthoringRepository,
+          }).fillFreshDraft(
+            {
+              characterProjectId: binding.target.characterProjectId,
+              draft: proposal.draft,
+            },
+            signal,
+          );
+        }
+        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
+        const composition = await compositionRepository.read(signal);
+        if (!composition) {
+          throw new Error('Character creation target has no exact Project composition.');
+        }
+        await new ProjectCompositionService(compositionRepository).requireLocalTarget(
+          composition.contentProjectId,
+          binding.target,
+          signal,
+        );
+        const repository = createCharacterAuthoringFileRepository({
+          workspaceRoot,
+          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+        });
+        return new CharacterAuthoringService({ repository }).fillFreshDraft(
+          {
+            characterProjectId: binding.target.characterProjectId,
+            draft: proposal.draft,
+          },
+          signal,
+        );
+      }),
+    ],
     pluginToolAdapters: {
       build: (descriptor) => requireAutomationPluginToolAdapter().build(descriptor),
     },

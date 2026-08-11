@@ -56,16 +56,22 @@ The Character Workbench role/participant manager SHALL read and update provider/
 - **THEN** the next turn uses that participant's selected provider/model with an empty effective Skill/Tool receipt
 - **AND** the manager does not offer a successful Skill/Tool activation, republish CharacterVersion or alter another participant
 
-### Requirement: Workspace Agent composes Chara through public capabilities
+### Requirement: Workspace Agent creates Character drafts through public authoring capabilities
 
-A Workspace-bound Agent MAY discover Chara-contributed, owner-qualified capabilities for an exact authorized CharacterProject/CharacterVersion. Chara SHALL provide bounded character use/preview, validation and explicit formal-Conversation handoff through public Agent/Chara application ports. Invoking these capabilities MUST NOT rebind the Workspace Conversation, infer a selected/recent Character, call a Character provider/runtime directly or silently create formal CharacterRun, Companion continuity or memory facts.
+A Workspace-bound Agent MAY discover an authoring-only `character-creation` Skill and Chara-contributed capability after the existing Authoring target chooser creates and binds one exact fresh CharacterProject under an authorized Workspace/ContentProject. The primary workflow SHALL transform user prompt text and Agent-authorized reference projections into one reviewable Character definition, separate confirmed source facts from inferred suggestions, and fill only that bound draft through a confirmation-gated Chara authoring command. It MUST NOT allocate or infer a CharacterProject identity, rebind the Workspace Conversation, publish CharacterVersion, create Storyline/CharacterRun/Room/Companion continuity, or call a Character provider/runtime directly.
 
-Automated Character validation SHALL compose one tool-free Character responder and one independent Probe Agent. Evidence SHALL remain scoped to the validation turns, reports MAY be saved only under the authorized project-local character-test artifact location, and suggested profile, relationship, knowledge or story changes MUST remain unapplied until the user confirms the existing Chara owning command.
+Preview, validation and improvement MAY operate on an exact created CharacterProject or authoring-test snapshot as explicit secondary workflows. Automated Character validation SHALL compose one tool-free Character responder and one independent Probe Agent. Evidence SHALL remain scoped to validation turns, reports MAY be saved only under the authorized project-local character-test artifact location, and suggested profile, relationship, knowledge or story changes MUST remain unapplied until the user confirms the existing Chara owning command.
 
-#### Scenario: Workspace Agent uses an exact published Character
+#### Scenario: Workspace Agent creates a draft character from prompt and material
 
-- **WHEN** a Workspace Agent invokes the Chara capability with an authorized exact CharacterVersion
-- **THEN** the capability returns a bounded role artifact or an explicit ref to a newly created canonical Character Conversation according to the requested operation
+- **WHEN** the user asks the Workspace Agent to create a character from prompt text and exact authorized source references
+- **THEN** the Authoring chooser first creates and binds one exact fresh CharacterProject, after which the Skill proposes a bounded Character definition with source-backed facts separated from inferred suggestions and asks for mutation confirmation
+- **AND** confirmation fills only that draft without publishing a CharacterVersion or creating a Conversation, Room, continuity or memory record
+
+#### Scenario: Workspace Agent previews an exact draft Character
+
+- **WHEN** a Workspace Agent invokes the secondary preview operation with an authorized exact CharacterProject draft
+- **THEN** the capability returns a bounded authoring artifact without creating a formal Character Conversation
 - **AND** the Workspace Conversation keeps its original binding and no Character fact or long-term memory is promoted automatically
 
 #### Scenario: Workspace Agent validates a draft Character

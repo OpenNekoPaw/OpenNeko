@@ -22,11 +22,13 @@ import {
 } from '@neko/agent-runtime/pi';
 import {
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  AGENT_AUTHORING_BINDING_METADATA_KEY,
   TOOL_NAMES_CANVAS,
   TOOL_NAMES_CUT,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_SYSTEM,
   type Tool,
+  type ToolExecuteOptions,
   type ToolResult,
   type EffectiveAgentConfigurationProjection,
   type AgentAuthoringTargetRef,
@@ -298,7 +300,15 @@ describe('AgentAppHost', () => {
       displayName: 'Authoring',
       locator: { kind: 'variable', value: '${HOME}/workspace' },
     });
-    const executeMutation = vi.fn(async () => ({ success: true, data: { updated: true } }));
+    const executeMutation = vi.fn(
+      async (_args: Record<string, unknown>, options?: ToolExecuteOptions) => ({
+        success: true,
+        data: {
+          updated: true,
+          binding: options?.metadata?.[AGENT_AUTHORING_BINDING_METADATA_KEY],
+        },
+      }),
+    );
     workspace.tools.register({
       name: 'ContentMutationFixture',
       description: 'Exercises exact per-Turn authoring mutation authority.',
@@ -353,6 +363,16 @@ describe('AgentAppHost', () => {
     expect(seenTools.get('write content')).toEqual(expect.arrayContaining(mutationNames));
     expect(JSON.stringify(contentResult.projection)).not.toContain('"success":false');
     expect(executeMutation).toHaveBeenCalledOnce();
+    expect(executeMutation).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          [AGENT_AUTHORING_BINDING_METADATA_KEY]: expect.objectContaining({
+            target: { kind: 'content-project', contentProjectId: 'content-1' },
+          }),
+        }),
+      }),
+    );
     expect(authorize).toHaveBeenCalledWith(
       expect.objectContaining({ expectedTargetKind: 'content-project' }),
     );

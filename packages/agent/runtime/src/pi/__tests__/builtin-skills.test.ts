@@ -12,6 +12,7 @@ const BUILTIN_ROOT = resolve(
 );
 const EXPECTED_BUILTINS = [
   'audio-mixing',
+  'character-creation',
   'color-grading',
   'image',
   'media-production',
@@ -43,6 +44,12 @@ describe('Pi builtin Skill packages', () => {
     const snapshot = await discoverBuiltins(env);
 
     expect(snapshot.invoke('skill-creator')).toContain('A root `manifest.json` is not part');
+    const characterCreation = snapshot.invoke('character-creation');
+    expect(characterCreation).toContain('source-backed facts from creative inferences');
+    expect(characterCreation).toContain('exact selected draft');
+    expect(characterCreation).not.toContain('CharacterProjectCreate');
+    expect(characterCreation).not.toContain('UpdateCharacterDraft');
+    expect(characterCreation).not.toContain('tool schema');
     const storyboard = snapshot.invoke('storyboard');
     expect(storyboard).toContain('actual pixel-level visual evidence, OCR, or panel boundaries');
     expect(storyboard).not.toContain('ReadDocument');

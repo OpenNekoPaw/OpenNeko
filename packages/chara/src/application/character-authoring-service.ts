@@ -158,6 +158,26 @@ export class CharacterAuthoringService {
     );
   }
 
+  async fillFreshDraft(
+    input: UpdateCharacterDraftInput,
+    signal?: AbortSignal,
+  ): Promise<CharacterProject> {
+    return this.updateProject(
+      input.characterProjectId,
+      (project) => {
+        if (!isFreshCharacterCreationTarget(project)) {
+          throw authoringError(
+            'character-authoring-operation-invalid',
+            `CharacterProject '${project.characterProjectId}' is not a fresh character creation target.`,
+            project.characterProjectId,
+          );
+        }
+        return { ...project, draft: clone(input.draft), reviewStatus: 'draft' };
+      },
+      signal,
+    );
+  }
+
   async addEvidence(
     input: AddCharacterEvidenceInput,
     signal?: AbortSignal,
@@ -400,6 +420,35 @@ export class CharacterAuthoringService {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+function isFreshCharacterCreationTarget(project: CharacterProject): boolean {
+  const { draft } = project;
+  return (
+    project.reviewStatus === 'draft' &&
+    project.evidence.length === 0 &&
+    project.candidates.length === 0 &&
+    draft.summary.length === 0 &&
+    draft.backgroundStory.overview.length === 0 &&
+    draft.backgroundStory.origins.length === 0 &&
+    draft.backgroundStory.personalHistory.length === 0 &&
+    draft.backgroundStory.formativeEvents.length === 0 &&
+    draft.backgroundStory.establishedRelationships.length === 0 &&
+    draft.originSetting.overview.length === 0 &&
+    draft.originSetting.eras.length === 0 &&
+    draft.originSetting.cultures.length === 0 &&
+    draft.originSetting.socialEnvironment.length === 0 &&
+    draft.originSetting.importantPlaces.length === 0 &&
+    draft.originSetting.organizations.length === 0 &&
+    draft.originSetting.believedRules.length === 0 &&
+    draft.canon.length === 0 &&
+    draft.knowledgeBoundary.length === 0 &&
+    draft.behaviorPolicy.length === 0 &&
+    draft.expressionPolicy.length === 0 &&
+    draft.representationRefs.length === 0 &&
+    draft.representationDefaults === undefined &&
+    draft.voiceDefaults === undefined
+  );
 }
 
 function deepFreeze<T>(value: T): T {

@@ -16,7 +16,7 @@
 | Character/Storyline authoring facts | `@neko/chara` | Character authoring/storyline application services | Chara Webview、Agent context projector |
 | Companion continuity and accepted memories | `@neko/chara` | CharacterMemory/UserCharacterRelationship services | Character turn context materializer |
 | Conversation, Turn, transcript, compaction, participant model/Skill/Tool/Approval/permission/provider execution | `@neko/agent-runtime` | Agent application/session/configuration owner | Agent Webview、Chara domain-binding/context provider |
-| Workspace Character use/preview/validation | `@neko/chara` public primitives composed by Agent | owner-qualified Chara capability operations | Workspace Agent turn artifact or explicit Character Conversation handoff |
+| Workspace Character creation/preview/validation | `@neko/chara` public authoring primitives composed by Agent | owner-qualified Chara authoring capability operations | Workspace Agent draft artifact and confirmation-gated CharacterProject mutation |
 | External material bytes and access | Workspace/Content/Assets/Host owner | owner-qualified context provider | Agent turn context only |
 | Character/Room Scene contract | `@neko/host` | Desktop Shell application service | Desktop Renderer composition |
 | Browser-only Character surfaces | `@neko/chara-webview` | Chara projections | Desktop portal slots |
@@ -34,7 +34,7 @@
 - 让 Companion 与 Narrative 作为标准 Neko Agent domain binding 执行；Chara 只提供角色/模式/记忆/Storyline/Room 上下文，Agent 继续唯一拥有 Conversation、Turn、模型、Skill、Tool、Approval 与权限。
 - 让 Companion 在精确参与者 Agent 配置和标准授权策略下调用 Agent Skill/Tool，并让 Narrative 在同一 Agent 运行链上强制不注入、不暴露和不执行任何 Skill/Tool。
 - 让 Character/Room Workbench 的角色/参与者管理器管理每个精确 Agent Conversation 的 provider/model 与 Companion 能力，而不是读取一个全局 Character 模型设置。
-- 让 Workspace-bound Agent 通过标准 capability 组合 Chara 的精确角色使用、预览和验证 primitives，而不重绑 Workspace Conversation 或复制 Character runtime。
+- 让 Workspace-bound Agent 通过标准 capability 与 authoring-only `character-creation` Skill 创建可审阅的 CharacterProject draft，并保留预览、验证和改进辅助操作，而不重绑 Workspace Conversation 或复制 Character runtime。
 - 允许 Companion Character turn 使用授权外部资料，同时保持资料、模型输出、角色事实和长期记忆的 owner 分离。
 - 将 Storyline 收敛为稳定 authoring identity、draft、不可变 publication 和节点叙事上下文；运行时只读消费。
 - 删除 Runtime StorylineRun/transition/CAS 与 Narrative external Composition 路径，不保留兼容或 fallback。
@@ -50,7 +50,7 @@
 - 不实现 Character 专用 Agent controller、provider runner、Skill/Tool registry、permission policy 或 direct AgentWorkspace turn path。
 - 不让 Workspace 对 Chara capability 的调用绕过 Character publication、模式、上下文、候选确认或正式 Conversation lifecycle。
 - 不允许 Narrative 注入任意外部资料或读取 CompanionMemory。
-- 不在本变更实现根据提示词或素材自动生成 CharacterProject；最小角色使用普通 Character authoring/publication，快速生成由后续独立 authoring change 负责。
+- 不让角色创建 Skill 自动发布 CharacterVersion、创建 Storyline/Conversation/Room、写入 Companion continuity，或把未经用户确认的模型推断标记为角色事实。
 - 不让 model output、transcript summary、Timeline UI 或 context cache 成为 Character/Storyline/memory authority。
 
 ## Decisions
@@ -106,9 +106,11 @@ The already introduced `CharacterCompanionAssistantLane`, its AssistantSession s
 
 Alternative considered: create a restricted role-only Agent runtime. Rejected because it would still be a Character-specific execution path and would prevent qualified Characters from using standard Agent Skill/Tool capabilities. Model comparison instead records the exact standard Agent configuration used for each independent Character Conversation.
 
-Workspace-bound Agent Conversations may discover a Chara-contributed capability through the normal Agent catalog. An exact invocation names an authorized Workspace plus CharacterProject/CharacterVersion and performs one of three owner-qualified operations: create a bounded character-use response/artifact, run an authoring validation probe, or request an explicit handoff that creates a new formal Character-bound Conversation. The originating Workspace Conversation keeps its owner; results return as Agent artifacts/references and do not become Character memory or canon automatically.
+Workspace-bound Agent Conversations may discover an authoring-only `character-creation` Skill and Chara-contributed authoring capability through the normal Agent catalog. The existing Authoring target chooser first creates and binds one exact fresh CharacterProject under an authorized Workspace/ContentProject; the Skill never allocates or infers that owner. An exact creation invocation consumes only user prompt text and Agent-authorized reference projections, produces one proposed Character definition with confirmed facts separated from inferred suggestions, and fills the bound draft only after explicit confirmation. The originating Workspace Conversation keeps its owner; creation never publishes CharacterVersion, creates CharacterRun/Room/continuity, or promotes model output to canon automatically.
 
-Automated validation composes narrow Agent-owned `CharacterRoleSkillPrimitivePorts`, backed by Chara public profile/evidence/dialogue/evaluation/artifact/confirmation operations, rather than adding a Dashboard action or a validation controller. The current `CharacterDialogueRuntimeService` is exported only from `@neko/chara/testing`; implementation must extract the required production ports without exposing that testing runtime or its direct responder construction as a success path. One responder plays the exact character with `toolPolicy: none`; a separate Probe Agent asks scoped questions and evaluates voice, knowledge, relationships and reliability. Turn-scoped evidence is not copied into ordinary memory, reports are saved project-locally when permitted, and suggestions remain unconfirmed until the existing Chara confirmation command applies them. A formal Companion Conversation launched from Workspace still follows the mode-qualified policy above; validation's no-tool responder is an authoring-test boundary, not a third Character mode.
+Creation is the primary Chara Skill workflow. Preview, validation and improvement remain secondary, explicit authoring operations over an exact CharacterProject or authoring-test snapshot. They do not create a second roleplay runtime or turn Workspace Agent into the formal Character Conversation owner.
+
+Agent-owned `CharacterRoleSkillPrimitivePorts` therefore start with `proposeCreation` and confirmation-gated `fillDraft`, backed by the exact bound CharacterProject and narrow Chara public authoring operations. Optional profile/evidence/dialogue/evaluation/artifact/confirmation operations support preview, validation and improvement without promoting the testing-only `CharacterDialogueRuntimeService`. Automated validation keeps one tool-free Character responder plus an independent Probe Agent; evidence remains turn-scoped, reports stay project-local when permitted, and suggestions remain unconfirmed until the existing Chara owning command applies them.
 
 ### 3. External material is a turn context reference, not Character data
 
@@ -238,10 +240,10 @@ All new package paths and isolated fixtures remain unreachable from the producti
 4. Introduce stable Companion continuity and exact memory provenance, then atomically replace CharacterRun-owned memory scope reads. Validate existing accepted memory data without rewriting source content.
 5. Replace Narrative external Composition rejection with independent exact Narrative launch and bounded node context. Delete StorylineRun creation/transition/CAS and poison the removed public operations.
 6. Delete the package-only Companion Assistant lane and migrate Character/Room execution from Desktop special branches and direct AgentWorkspace calls to the canonical Agent launch/turn/domain-binding path. Register Chara context and mode-constraint providers, keep Agent-owned per-participant model/Skill/Tool/permission receipts, prove Companion tool calls use the normal Agent lifecycle and Narrative exposes none.
-7. Register Chara's owner-qualified use/preview/validation primitives as a standard Workspace Agent capability. Keep Workspace binding stable, keep validation responders tool-free, return project-local artifacts or an explicit formal Character Conversation handoff, and remove any direct package/runtime shortcut.
+7. Register the authoring-only `character-creation` Skill and owner-qualified creation/preview/validation primitives as a standard Workspace Agent capability. Keep Workspace binding stable, fill only the confirmation-gated exact CharacterProject fresh draft, keep validation responders tool-free, and remove any direct package/runtime shortcut.
 8. Replace fixed Avatar Main/Runtime summary with strict Presentation Main, Companion/Narrative context manager, participant manager and separate Timeline projections. Make provider/model and Companion capability controls target an exact participant through Agent public configuration ports. Update Host Scene, preload and Desktop composition atomically.
 9. Run focused package, Node persistence, Agent, Host, Webview and Desktop tests/typechecks plus boundary, internal-versioning, legacy-debt and unused-code gates. Run visible isolated Electron flows for every reachable prototype state.
-10. Add provider-backed Agent Evaluation comparing the same minimal CharacterVersion across exact per-participant Agent configurations, a Companion tool call, Narrative no-tool enforcement, Companion memory/material context, Workspace Chara use/validation and Room participant isolation. Keep unavailable provider/capability/permission failures blocked rather than adding Character fallback execution.
+10. Add provider-backed Agent Evaluation covering prompt/material-driven Character draft creation, explicit confirmation, no implicit publication/runtime creation, the same minimal CharacterVersion across exact per-participant Agent configurations, a Companion tool call, Narrative no-tool enforcement, Companion memory/material context, validation and Room participant isolation. Keep unavailable provider/capability/permission failures blocked rather than adding Character fallback execution.
 11. Keep the product promotion gate closed; a later dedicated promotion change may remove it only after real visible repeated-behavior evidence and user-data review.
 
 Rollback is performed by reverting the complete change before any product promotion. No runtime dual-read or mode fallback is retained. Because old records remain preserved rather than rewritten, rollback can restore the old reader without having overwritten authoritative user bytes; records created only under the new canonical contract remain locally invalid under the old reader and must not be silently converted.

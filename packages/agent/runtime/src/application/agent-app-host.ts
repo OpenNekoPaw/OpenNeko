@@ -62,12 +62,14 @@ import {
 } from '@neko/content/document/node';
 import {
   CONFIGURED_AGENT_TURN_CAPABILITIES,
+  AGENT_AUTHORING_BINDING_METADATA_KEY,
   isAgentAuthorizedContentReferenceContextData,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
   TOOL_NAMES_SYSTEM,
   TOOL_NAMES_TRANSCRIBE,
   type AgentContextPayload,
+  type AgentCapabilityProvider,
   type AgentEntryTargetReceipt,
   type AgentTurnCapabilityConstraint,
   type IToolRegistry,
@@ -357,6 +359,9 @@ export interface CreateAgentAppHostOptions {
   readonly resolveGenerationJobs: (binding: GenerationBinding) => Promise<GenerationJobPort>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
+  readonly resolveWorkspaceCapabilityProviders?: (
+    workspace: AssetWorkspaceResolution,
+  ) => readonly AgentCapabilityProvider[];
   readonly pluginToolAdapters?: AgentPluginToolAdapterPort;
   readonly loadTransientToolResultImage?: (input: {
     readonly receiptId: string;
@@ -723,6 +728,8 @@ class DefaultAgentAppHost implements AgentAppHost {
       ...(this.options.authoringMutationAuthority === undefined
         ? {}
         : { authoringMutationAuthority: this.options.authoringMutationAuthority }),
+      workspaceCapabilityProviders:
+        this.options.resolveWorkspaceCapabilityProviders?.(workspace) ?? [],
       ...(owner.kind === 'workspace' && this.options.creatorVisibleArtifactDelivery
         ? { creatorVisibleArtifactDelivery: this.options.creatorVisibleArtifactDelivery }
         : {}),
@@ -803,6 +810,7 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly structuredProjectAuthoring: boolean;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
+  readonly workspaceCapabilityProviders: readonly AgentCapabilityProvider[];
   readonly loadTransientToolResultImage?: (input: {
     readonly receiptId: string;
     readonly sessionId: string;
@@ -902,6 +910,9 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         ),
         context,
       );
+    }
+    for (const provider of options.workspaceCapabilityProviders) {
+      this.capabilities.registerProvider(provider, context);
     }
     registerMediaAgentTools(this.tools, options.generationJobs);
   }
@@ -2176,8 +2187,9 @@ function bindAgentAuthoringMutationAuthority(
             args: Record<string, unknown>,
             options?: Parameters<Tool['execute']>[1],
           ) => {
+            let binding;
             try {
-              await authority.authorize({
+              binding = await authority.authorize({
                 receipt,
                 expectedTargetKind,
                 ...(options?.signal ? { signal: options.signal } : {}),
@@ -2188,7 +2200,11 @@ function bindAgentAuthoringMutationAuthority(
                 error: `Agent authoring authority rejected ${tool.name}: ${error instanceof Error ? error.message : String(error)}`,
               };
             }
-            return target.execute(args, options);
+            const metadata = {
+              ...options?.metadata,
+              [AGENT_AUTHORING_BINDING_METADATA_KEY]: binding,
+            };
+            return target.execute(args, { ...options, metadata });
           };
         },
       }),
