@@ -20,9 +20,9 @@ export function HomeExperienceModeSelector({
     <nav className="agent-entry-experience-selector" aria-label={label}>
       <SegmentedControl
         appearance="neutral"
-        density="comfortable"
+        density="compact"
         label={label}
-        maxWidth={544}
+        maxWidth={480}
         value={projection.mode}
         onValueChange={(value) => onChange?.(parseAgentEntryMode(value))}
         options={projection.options.map((option) => ({

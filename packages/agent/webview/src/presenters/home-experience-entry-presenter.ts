@@ -14,6 +14,8 @@ export type HomeExperienceEntryDiagnosticKey =
   | 'chat.entryExperience.validation.workspaceRequired'
   | 'chat.entryExperience.validation.workspaceBindingMismatch'
   | 'chat.entryExperience.validation.characterUnavailable'
+  | 'chat.entryExperience.validation.characterRequired'
+  | 'chat.entryExperience.validation.characterBindingMismatch'
   | 'chat.entryExperience.validation.worldUnavailable';
 
 export interface HomeExperienceEntryOptionProjection {
@@ -42,6 +44,8 @@ export interface HomeExperienceEntryProjectionInput {
     readonly target?: import('@neko/agent-contracts').AgentAuthoringTargetRef;
   };
   readonly workspaceChooserAvailable: boolean;
+  readonly characterTargetsAvailable?: boolean;
+  readonly characterLaunches?: readonly import('../components/ChatView/InputArea/types').SelectedCharacterLaunch[];
   readonly bindingPending: boolean;
   readonly configurationReady: boolean;
 }
@@ -77,17 +81,15 @@ export function projectHomeExperienceEntry(
       mode,
       labelKey: OPTION_LABEL_KEYS[mode],
       disabled: false,
-      ...(mode === 'character-dialogue'
-        ? { descriptionKey: 'chat.entryExperience.validation.characterUnavailable' as const }
-        : mode === 'world-experience'
-          ? { descriptionKey: 'chat.entryExperience.validation.worldUnavailable' as const }
-          : {}),
+      ...(mode === 'world-experience'
+        ? { descriptionKey: 'chat.entryExperience.validation.worldUnavailable' as const }
+        : {}),
     })),
     titleKey: TITLE_KEYS[input.mode],
     descriptionKey: DESCRIPTION_KEYS[input.mode],
     ...(submissionBlockedReasonKey === undefined ? {} : { submissionBlockedReasonKey }),
     showWorkspaceControl: input.mode === 'authoring',
-    showSkillSuggestions: input.mode === 'assistant' || input.mode === 'authoring',
+    showSkillSuggestions: input.mode === 'assistant',
   };
 }
 
@@ -118,10 +120,45 @@ function projectSubmissionBlockedReason(
         ? undefined
         : 'chat.entryExperience.validation.configurationRequired';
     case 'character-dialogue':
-      return 'chat.entryExperience.validation.characterUnavailable';
+      if (input.characterTargetsAvailable !== true) {
+        return 'chat.entryExperience.validation.characterUnavailable';
+      }
+      if (!input.characterLaunches || input.characterLaunches.length === 0) {
+        return 'chat.entryExperience.validation.characterRequired';
+      }
+      if (!hasExactCharacterDialogueReceipt(input.intent, input.characterLaunches)) {
+        return 'chat.entryExperience.validation.characterBindingMismatch';
+      }
+      return input.configurationReady
+        ? undefined
+        : 'chat.entryExperience.validation.configurationRequired';
     case 'world-experience':
       return 'chat.entryExperience.validation.worldUnavailable';
   }
+}
+
+function hasExactCharacterDialogueReceipt(
+  intent: AgentEntryIntentProjection,
+  selections: NonNullable<HomeExperienceEntryProjectionInput['characterLaunches']>,
+): boolean {
+  const receipt = intent.targetReceipt;
+  if (
+    intent.mode !== 'character-dialogue' ||
+    receipt?.mode !== 'character-dialogue' ||
+    receipt.binding.kind !== 'character-dialogue'
+  ) {
+    return false;
+  }
+  const expectedParticipants = selections.map((selection) => ({
+    characterProjectId: selection.characterProjectId,
+    characterVersionId: selection.characterVersionId,
+  }));
+  const expectedStoryline =
+    selections.length === 1 ? selections[0]?.characterStorylineVersionId : undefined;
+  return (
+    JSON.stringify(receipt.binding.participants) === JSON.stringify(expectedParticipants) &&
+    receipt.binding.storylineVersionId === expectedStoryline
+  );
 }
 
 function isAssistantCompatibleDraft(draft: AgentDraftInteractionProjection): boolean {

@@ -51,11 +51,14 @@ describe('HomeExperienceModeSelector', () => {
       />,
     );
 
-    expect(screen.getByRole('tablist', { name: 'Choose a conversation mode' })).toBeTruthy();
+    const tablist = screen.getByRole('tablist', { name: 'Choose a conversation mode' });
+    expect(tablist).toBeTruthy();
+    expect(tablist.style.maxWidth).toBe('480px');
     expect(screen.getAllByRole('tab')).toHaveLength(4);
+    expect(screen.getByRole('tab', { name: 'Assistant' }).style.height).toBe('24px');
+    expect(screen.getByRole('tab', { name: 'Assistant' }).style.fontSize).toBe('12px');
     fireEvent.click(screen.getByRole('tab', { name: 'Authoring' }));
     expect(onChange).toHaveBeenCalledWith('authoring');
-    expect(screen.getByRole('tab', { name: 'World Experience' })).toHaveProperty('disabled', false);
   });
 
   it('keeps the selected mode visible while binding is pending', () => {
@@ -78,5 +81,25 @@ describe('HomeExperienceModeSelector', () => {
       screen.getByRole('tab', { name: 'Character Dialogue' }).getAttribute('aria-selected'),
     ).toBe('true');
     expect(screen.getByRole('tab', { name: 'Assistant' })).toHaveProperty('disabled', true);
+  });
+
+  it('keeps the final mode thumb inside the padded right boundary', () => {
+    const { container } = render(
+      <HomeExperienceModeSelector
+        projection={{
+          mode: 'world-experience',
+          options,
+          titleKey: 'title',
+          descriptionKey: 'description',
+          showWorkspaceControl: false,
+          showSkillSuggestions: false,
+        }}
+      />,
+    );
+
+    const thumb = container.querySelector<HTMLElement>('.neko-segmented-control-thumb');
+    expect(thumb?.style.left).toBe('2px');
+    expect(thumb?.style.width).toBe('calc(0.25 * (100% - 4px))');
+    expect(thumb?.style.transform).toBe('translateX(300%)');
   });
 });

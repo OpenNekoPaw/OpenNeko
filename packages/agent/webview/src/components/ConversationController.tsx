@@ -33,6 +33,7 @@ import {
   type AgentInteractionProjection,
   type AgentInputCatalogEntry,
   type AgentInputReferenceReceipt,
+  type AgentCharacterDialogueTargetOption,
   type ParsedAgentInputTrigger,
   isAgentInputCatalogEntryExecutable,
   parseAgentInputTrigger,
@@ -53,6 +54,9 @@ import type {
 } from './ChatView/InputArea/types';
 import { EmptyState } from './ChatView/EmptyState';
 import { HomeExperienceModeSelector } from './ChatView/HomeExperienceModeSelector';
+import { HomeExperienceQuickActions } from './ChatView/HomeExperienceQuickActions';
+import { CharacterDialogueTargetSelector } from './ChatView/CharacterDialogueTargetSelector';
+import { AuthoringTargetSelector } from './ChatView/AuthoringTargetSelector';
 import { InputArea } from './ChatView/InputArea';
 import { resolveAgentInputInvocationIntent } from './ChatView/InputArea/slash-command-catalog';
 import {
@@ -284,6 +288,12 @@ export function ConversationController({
   const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<SelectedCharacterLaunch[]>(
     [],
   );
+  const [entryCharacterTargets, setEntryCharacterTargets] = useState<
+    readonly AgentCharacterDialogueTargetOption[]
+  >([]);
+  const [entryCharacterTargetsStatus, setEntryCharacterTargetsStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'unavailable'
+  >('idle');
   const [entryMode, setEntryMode] = useState<AgentEntryMode>('assistant');
   const [entryIntent, setEntryIntent] = useState<AgentEntryIntentProjection>({
     mode: 'assistant',
@@ -291,6 +301,7 @@ export function ConversationController({
   });
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
   const [isEntryBindingPending, setIsEntryBindingPending] = useState(false);
+  const [entryQuickDetailOpen, setEntryQuickDetailOpen] = useState(true);
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
   const [entryExecutionMode, setEntryExecutionMode] = useState<SettingsState['executionMode']>(
     settings.executionMode,
@@ -338,19 +349,121 @@ export function ConversationController({
   const removeEntryContextReference = useCallback((id: string) => {
     setEntryContextReferences((current) => current.filter((reference) => reference.id !== id));
   }, []);
-  const addEntryCharacterLaunch = useCallback((selection: SelectedCharacterLaunch) => {
-    setEntryContextReferences([]);
-    setEntryCharacterLaunches((current) =>
-      current.some((candidate) => candidate.characterVersionId === selection.characterVersionId)
-        ? current
-        : [...current, selection],
-    );
-  }, []);
-  const removeEntryCharacterLaunch = useCallback((characterVersionId: string) => {
-    setEntryCharacterLaunches((current) =>
-      current.filter((selection) => selection.characterVersionId !== characterVersionId),
-    );
-  }, []);
+  const configureEntryCharacterLaunches = useCallback(
+    (nextValue: readonly SelectedCharacterLaunch[]) => {
+      if (isEntryBindingPending) return;
+      const next: SelectedCharacterLaunch[] =
+        nextValue.length > 1
+          ? nextValue.map(({ characterStorylineVersionId: _storyline, ...selection }) => selection)
+          : [...nextValue];
+      setIsEntryBindingPending(true);
+      void requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter)
+        .configureEntryTarget(
+          'character-dialogue',
+          next.length === 0
+            ? undefined
+            : {
+                kind: 'character-dialogue',
+                participants: next.map((selection) => ({
+                  characterProjectId: selection.characterProjectId,
+                  characterVersionId: selection.characterVersionId,
+                })),
+                ...(next.length === 1 && next[0]?.characterStorylineVersionId
+                  ? { storylineVersionId: next[0].characterStorylineVersionId }
+                  : {}),
+              },
+        )
+        .then((intent) => {
+          setEntryIntent(intent);
+          setEntryContextReferences([]);
+          setEntryCharacterLaunches(next);
+          setGlobalError(null);
+        })
+        .catch((error: unknown) => setGlobalError(describeError(error)))
+        .finally(() => setIsEntryBindingPending(false));
+    },
+    [hostRuntimeAdapter, isEntryBindingPending],
+  );
+  const configureEntryAuthoringTarget = useCallback(
+    async (target: AgentComposerWorkspaceTarget | undefined) => {
+      setEntryContextReferences([]);
+      setEntryCharacterLaunches([]);
+      setProjectFiles([]);
+      setMentionItems([]);
+      updateMentionSearchFilter('');
+      setIsEntryBindingPending(true);
+      try {
+        const intent = await requireAgentDraftHostRuntimeAdapter(
+          hostRuntimeAdapter,
+        ).configureEntryTarget(
+          'authoring',
+          target?.target
+            ? {
+                kind: 'authoring',
+                workspaceId: target.context.workspaceId,
+                workspaceGrantId: target.context.workspaceGrantId,
+                target: target.target,
+              }
+            : undefined,
+        );
+        setEntryIntent(intent);
+        setEntryWorkspaceTarget(target);
+        setGlobalError(null);
+      } finally {
+        setIsEntryBindingPending(false);
+      }
+    },
+    [hostRuntimeAdapter, setMentionItems, setProjectFiles, updateMentionSearchFilter],
+  );
+  const clearEntryAuthoringTarget = useCallback(async () => {
+    try {
+      await configureEntryAuthoringTarget(undefined);
+    } catch (error) {
+      setGlobalError(describeError(error));
+    }
+  }, [configureEntryAuthoringTarget]);
+  const handleEntryChooseDirectory = useCallback(async () => {
+    if (composerWorkspace?.kind !== 'entry') {
+      throw new Error('Agent Entry directory selection requires the Entry workspace provider.');
+    }
+    try {
+      const target = await composerWorkspace.onChooseDirectory();
+      if (target) await configureEntryAuthoringTarget(target);
+    } catch (error) {
+      setGlobalError(describeError(error));
+    }
+  }, [composerWorkspace, configureEntryAuthoringTarget]);
+
+  const loadEntryCharacterTargets = useCallback(async () => {
+    setEntryCharacterTargetsStatus('loading');
+    try {
+      const targets =
+        await requireAgentDraftHostRuntimeAdapter(
+          hostRuntimeAdapter,
+        ).loadCharacterDialogueTargets();
+      setEntryCharacterTargets(targets);
+      setEntryCharacterTargetsStatus('ready');
+      return targets;
+    } catch (error) {
+      setEntryCharacterTargets([]);
+      setEntryCharacterTargetsStatus('unavailable');
+      throw error;
+    }
+  }, [hostRuntimeAdapter]);
+  useEffect(() => {
+    if (
+      entryMode !== 'character-dialogue' ||
+      !entryQuickDetailOpen ||
+      entryCharacterTargetsStatus !== 'idle'
+    ) {
+      return;
+    }
+    void loadEntryCharacterTargets()
+      .then((targets) => {
+        if (targets.length === 0) setEntryQuickDetailOpen(false);
+      })
+      .catch(() => setEntryQuickDetailOpen(false));
+  }, [entryCharacterTargetsStatus, entryMode, entryQuickDetailOpen, loadEntryCharacterTargets]);
   const hydrateConversationSettings = useCallback(
     (conversationId: string, snapshot: ConversationSettingsSnapshot) => {
       settingsSnapshotByConversationRef.current.set(conversationId, snapshot);
@@ -447,12 +560,19 @@ export function ConversationController({
     const launchCatalog = draftAdapter.readLaunchCatalog();
     const authoritativeEntryIntent = draftAdapter.readEntryIntent();
     setEntryMode(authoritativeEntryIntent.mode);
+    setEntryQuickDetailOpen(true);
     setEntryIntent(authoritativeEntryIntent);
-    setEntryWorkspaceTarget(entryDraft?.workspaceTarget);
+    setEntryWorkspaceTarget(
+      authoritativeEntryIntent.mode === 'authoring' ? entryDraft?.workspaceTarget : undefined,
+    );
     setIsEntryBindingPending(false);
     updateEntryInputValue(entryDraft?.inputValue ?? '');
     setEntryContextReferences(entryDraft ? [...entryDraft.contextReferences] : []);
-    setEntryCharacterLaunches(entryDraft ? [...entryDraft.characterLaunches] : []);
+    setEntryCharacterLaunches(
+      authoritativeEntryIntent.mode === 'character-dialogue' && entryDraft
+        ? [...entryDraft.characterLaunches]
+        : [],
+    );
     setEntryMediaModelSelection(
       entryDraft?.mediaModelSelection
         ? { ...entryDraft.mediaModelSelection }
@@ -630,6 +750,9 @@ export function ConversationController({
           draft: draftLaunchCatalog.interaction,
           ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
           workspaceChooserAvailable: !composerWorkspace.disabled,
+          characterTargetsAvailable:
+            entryCharacterTargetsStatus === 'ready' && entryCharacterTargets.length > 0,
+          characterLaunches: entryCharacterLaunches,
           bindingPending: isEntryBindingPending || isForegroundConversationActivationPending,
           configurationReady:
             hasConfigSnapshot &&
@@ -1145,12 +1268,17 @@ export function ConversationController({
             : undefined,
         )
         .then((intent) => {
+          setEntryQuickDetailOpen(true);
           setEntryMode(mode);
           setEntryIntent(intent);
           if (mode !== 'authoring') setEntryWorkspaceTarget(undefined);
           setEntrySessionMode('agent');
           setEntryContextReferences([]);
           setEntryCharacterLaunches([]);
+          if (mode !== 'character-dialogue') {
+            setEntryCharacterTargets([]);
+            setEntryCharacterTargetsStatus('idle');
+          }
           setProjectFiles([]);
           setMentionItems([]);
           updateMentionSearchFilter('');
@@ -1171,6 +1299,14 @@ export function ConversationController({
       setProjectFiles,
       updateMentionSearchFilter,
     ],
+  );
+
+  const handleEntryQuickDetailOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (isEntryBindingPending) return;
+      setEntryQuickDetailOpen(nextOpen);
+    },
+    [isEntryBindingPending],
   );
 
   const handleSendWithoutConversation = useCallback(
@@ -1197,12 +1333,6 @@ export function ConversationController({
         if (!agentPresentation) throw new Error('Agent Draft presentation is unavailable.');
         const launchCatalog = draftHostRuntimeAdapter.readLaunchCatalog();
         const authoritativeDraft = launchCatalog.interaction;
-        if (entryCharacterLaunches.length > 0) {
-          setGlobalError(
-            'Character and Room capabilities remain experimental and are not available in the production Desktop.',
-          );
-          return;
-        }
         if (composerWorkspace?.kind === 'entry') {
           const validation = projectHomeExperienceEntry({
             mode: entryMode,
@@ -1212,6 +1342,9 @@ export function ConversationController({
               ? {}
               : { workspaceTarget: entryWorkspaceTarget }),
             workspaceChooserAvailable: !composerWorkspace.disabled,
+            characterTargetsAvailable:
+              entryCharacterTargetsStatus === 'ready' && entryCharacterTargets.length > 0,
+            characterLaunches: entryCharacterLaunches,
             bindingPending: isEntryBindingPending,
             configurationReady:
               hasConfigSnapshot &&
@@ -1311,6 +1444,8 @@ export function ConversationController({
       handleSendWithoutConversation,
       hasConfigSnapshot,
       entryCharacterLaunches,
+      entryCharacterTargets,
+      entryCharacterTargetsStatus,
       hostRuntimeAdapter,
       isEntryBindingPending,
       isDraftPresentation,
@@ -1648,127 +1783,175 @@ export function ConversationController({
                 onChange={handleEntryModeChange}
               />
             ) : null}
-            <EmptyState
-              presentation={emptyStatePresentation}
-              draftScope={
-                agentPresentation?.phase === 'draft' ? agentPresentation.binding.kind : undefined
-              }
-              disabled={isForegroundConversationActivationPending}
-              experienceProjection={homeExperienceProjection}
-              skills={draftSkills}
-              onSkillSelect={(skill) => updateEntryInputValue(`$${skill.name} `)}
-            />
-            <InputAreaProvider
-              isBusy={!hasConfigSnapshot && !isDraftPresentation}
-              modelCatalogStatus={hasConfigSnapshot ? 'ready' : 'loading'}
-              sessionMode={entrySessionMode}
-              onSessionModeChange={handleEntrySessionModeChange}
-              selectedModel={entrySelectedModel}
-              availableModels={entryModelState.availableModels}
-              onModelSelect={handleEntryModelSelect}
-              mediaModelSelection={entryMediaModelSelection}
-              availableMediaModels={entryModelState.availableMediaModels}
-              mediaUnderstandingModels={activeSettings.mediaUnderstandingModels}
-              mediaUnderstandingSelection={{ image: 'auto', video: 'auto', audio: 'auto' }}
-              onMediaModelSelect={handleEntryMediaModelSelect}
-              onMediaUnderstandingModelSelect={() => undefined}
-              executionMode={entryExecutionMode}
-              onExecutionModeChange={handleEntryExecutionModeChange}
-              maxContextTokens={entryModelState.selectedEffectiveInputBudget}
-              outputTokenCap={entryModelState.selectedOutputTokenCap}
-              modelMaxOutputTokens={entryModelState.selectedMaxOutputTokens}
-              mediaModelCallCount={0}
-              inputCatalog={draftLaunchCatalog?.inputs}
-              configurationPolicy={draftLaunchCatalog?.configuration}
-              inputCatalogPhase={draftLaunchCatalog?.interaction.phase}
-              inputCatalogBindingKind={draftLaunchCatalog?.interaction.binding.kind}
-              mentionItems={mentionItems}
-              onRequestFiles={(filter) => {
-                updateMentionSearchFilter(filter);
-                if (draftLaunchCatalog?.interaction.binding.kind !== 'workspace') return;
-                agentHostMessages.searchProjectFiles(filter, undefined, { purpose: 'entry' });
-              }}
-              genCategory={entryGenCategory}
-              genParams={entryGenParams}
-              onGenCategoryChange={setEntryGenCategory}
-              onGenParamsChange={handleEntryGenParamsChange}
-              contextTokenCount={0}
-              isCompressing={false}
-              contextChips={entryContextReferences}
-              onAddContextChip={addEntryContextReference}
-              onRemoveContextChip={removeEntryContextReference}
-              ambientNodes={[]}
-              conversationKind="chat"
-            >
-              <InputArea
-                presentation={isDraftPresentation ? 'entry' : 'conversation'}
-                inputValue={entryInputValue}
-                isThinking={false}
-                onInputChange={updateEntryInputValue}
-                onSend={handleEntryInputSend}
-                submissionBlockedReason={draftSubmissionBlockedReason}
-                draftWorkspaceTarget={entryWorkspaceTarget}
-                showDraftWorkspaceControl={homeExperienceProjection?.showWorkspaceControl ?? false}
-                draftTargetSelectionPending={isEntryBindingPending}
-                onDraftWorkspaceTargetChange={
-                  composerWorkspace?.kind === 'entry' && entryMode === 'authoring'
-                    ? async (target) => {
-                        setEntryContextReferences([]);
-                        setEntryCharacterLaunches([]);
-                        setProjectFiles([]);
-                        setMentionItems([]);
-                        updateMentionSearchFilter('');
-                        setIsEntryBindingPending(true);
-                        try {
-                          const intent = await requireAgentDraftHostRuntimeAdapter(
-                            hostRuntimeAdapter,
-                          ).configureEntryTarget(
-                            'authoring',
-                            target?.target
-                              ? {
-                                  kind: 'authoring',
-                                  workspaceId: target.context.workspaceId,
-                                  workspaceGrantId: target.context.workspaceGrantId,
-                                  target: target.target,
-                                }
-                              : undefined,
-                          );
-                          setEntryIntent(intent);
-                          setEntryWorkspaceTarget(target);
-                          setGlobalError(null);
-                        } catch (error) {
-                          setGlobalError(describeError(error));
-                        } finally {
-                          setIsEntryBindingPending(false);
-                        }
-                      }
-                    : undefined
+            <div className="agent-entry-center-group">
+              <EmptyState
+                presentation={emptyStatePresentation}
+                draftScope={
+                  agentPresentation?.phase === 'draft' ? agentPresentation.binding.kind : undefined
                 }
-                onAuthorizeResource={
-                  isDraftPresentation
-                    ? async () => {
-                        try {
-                          return await requireAgentDraftHostRuntimeAdapter(
-                            hostRuntimeAdapter,
-                          ).authorizeResource('file');
-                        } catch (error) {
-                          setGlobalError(describeError(error));
-                          return undefined;
-                        }
-                      }
-                    : undefined
-                }
-                selectedCharacterLaunches={entryCharacterLaunches}
-                onAddCharacterLaunch={addEntryCharacterLaunch}
-                onRemoveCharacterLaunch={removeEntryCharacterLaunch}
-                disabled={
-                  !isDraftPresentation &&
-                  (isForegroundConversationActivationPending || !hasConfigSnapshot)
-                }
-                entryPromptMenu={entryPromptMenu}
-                onEntryPromptMenuChange={setEntryPromptMenu}
+                experienceProjection={homeExperienceProjection}
               />
-            </InputAreaProvider>
+              <InputAreaProvider
+                isBusy={!hasConfigSnapshot && !isDraftPresentation}
+                modelCatalogStatus={hasConfigSnapshot ? 'ready' : 'loading'}
+                sessionMode={entrySessionMode}
+                onSessionModeChange={handleEntrySessionModeChange}
+                selectedModel={entrySelectedModel}
+                availableModels={entryModelState.availableModels}
+                onModelSelect={handleEntryModelSelect}
+                mediaModelSelection={entryMediaModelSelection}
+                availableMediaModels={entryModelState.availableMediaModels}
+                mediaUnderstandingModels={activeSettings.mediaUnderstandingModels}
+                mediaUnderstandingSelection={{ image: 'auto', video: 'auto', audio: 'auto' }}
+                onMediaModelSelect={handleEntryMediaModelSelect}
+                onMediaUnderstandingModelSelect={() => undefined}
+                executionMode={entryExecutionMode}
+                onExecutionModeChange={handleEntryExecutionModeChange}
+                maxContextTokens={entryModelState.selectedEffectiveInputBudget}
+                outputTokenCap={entryModelState.selectedOutputTokenCap}
+                modelMaxOutputTokens={entryModelState.selectedMaxOutputTokens}
+                mediaModelCallCount={0}
+                inputCatalog={draftLaunchCatalog?.inputs}
+                configurationPolicy={draftLaunchCatalog?.configuration}
+                inputCatalogPhase={draftLaunchCatalog?.interaction.phase}
+                inputCatalogBindingKind={draftLaunchCatalog?.interaction.binding.kind}
+                mentionItems={mentionItems}
+                onRequestFiles={(filter) => {
+                  updateMentionSearchFilter(filter);
+                  if (draftLaunchCatalog?.interaction.binding.kind !== 'workspace') return;
+                  agentHostMessages.searchProjectFiles(filter, undefined, { purpose: 'entry' });
+                }}
+                genCategory={entryGenCategory}
+                genParams={entryGenParams}
+                onGenCategoryChange={setEntryGenCategory}
+                onGenParamsChange={handleEntryGenParamsChange}
+                contextTokenCount={0}
+                isCompressing={false}
+                contextChips={entryContextReferences}
+                onAddContextChip={addEntryContextReference}
+                onRemoveContextChip={removeEntryContextReference}
+                ambientNodes={[]}
+                conversationKind="chat"
+              >
+                <InputArea
+                  presentation={isDraftPresentation ? 'entry' : 'conversation'}
+                  inputValue={entryInputValue}
+                  isThinking={false}
+                  onInputChange={updateEntryInputValue}
+                  onSend={handleEntryInputSend}
+                  submissionBlocked={draftSubmissionBlockedReason !== undefined}
+                  onAuthorizeResource={
+                    isDraftPresentation
+                      ? async () => {
+                          try {
+                            return await requireAgentDraftHostRuntimeAdapter(
+                              hostRuntimeAdapter,
+                            ).authorizeResource('file');
+                          } catch (error) {
+                            setGlobalError(describeError(error));
+                            return undefined;
+                          }
+                        }
+                      : undefined
+                  }
+                  entryContextAction={
+                    entryMode === 'authoring' && composerWorkspace?.kind === 'entry'
+                      ? {
+                          kind: 'directory',
+                          label: t('chat.entryAction.openDirectory'),
+                          onInvoke: handleEntryChooseDirectory,
+                        }
+                      : entryMode === 'character-dialogue'
+                        ? {
+                            kind: 'character',
+                            label: t('chat.entryContext.chooseCharacters'),
+                            onInvoke: () => setEntryQuickDetailOpen(true),
+                            disabled:
+                              entryCharacterTargetsStatus === 'unavailable' ||
+                              (entryCharacterTargetsStatus === 'ready' &&
+                                entryCharacterTargets.length === 0),
+                            disabledReason: t(
+                              'chat.entryExperience.validation.characterUnavailable',
+                            ),
+                          }
+                        : entryMode === 'world-experience'
+                          ? {
+                              kind: 'world',
+                              label: t('chat.entryAction.chooseWorld'),
+                              disabled: true,
+                              disabledReason: t('chat.entryExperience.validation.worldUnavailable'),
+                            }
+                          : undefined
+                  }
+                  entryWorkspaceTarget={
+                    entryMode === 'authoring' ? entryWorkspaceTarget : undefined
+                  }
+                  onClearEntryWorkspaceTarget={
+                    entryMode === 'authoring' && entryWorkspaceTarget && !isEntryBindingPending
+                      ? clearEntryAuthoringTarget
+                      : undefined
+                  }
+                  selectedCharacterLaunches={
+                    entryMode === 'character-dialogue' ? entryCharacterLaunches : []
+                  }
+                  onRemoveCharacterLaunch={(characterVersionId) =>
+                    configureEntryCharacterLaunches(
+                      entryCharacterLaunches.filter(
+                        (selection) => selection.characterVersionId !== characterVersionId,
+                      ),
+                    )
+                  }
+                  disabled={
+                    !isDraftPresentation &&
+                    (isForegroundConversationActivationPending || !hasConfigSnapshot)
+                  }
+                  entryPromptMenu={entryPromptMenu}
+                  onEntryPromptMenuChange={setEntryPromptMenu}
+                />
+              </InputAreaProvider>
+              {homeExperienceProjection ? (
+                <HomeExperienceQuickActions
+                  mode={entryMode}
+                  selectionPending={isEntryBindingPending}
+                  disabled={
+                    entryMode === 'character-dialogue' &&
+                    (entryCharacterTargetsStatus === 'unavailable' ||
+                      (entryCharacterTargetsStatus === 'ready' &&
+                        entryCharacterTargets.length === 0))
+                  }
+                  detailExpanded={entryQuickDetailOpen}
+                  summary={
+                    entryMode === 'character-dialogue' && entryCharacterLaunches.length
+                      ? t('chat.entryContext.characterSummary', {
+                          count: entryCharacterLaunches.length,
+                        })
+                      : undefined
+                  }
+                  skills={homeExperienceProjection.showSkillSuggestions ? draftSkills : []}
+                  onSkillSelect={(skill) => updateEntryInputValue(`$${skill.name} `)}
+                  onExpandedChange={handleEntryQuickDetailOpenChange}
+                >
+                  {entryMode === 'authoring' && composerWorkspace?.kind === 'entry' ? (
+                    <AuthoringTargetSelector
+                      presentation={composerWorkspace}
+                      selected={entryWorkspaceTarget}
+                      pending={isEntryBindingPending}
+                      onChange={configureEntryAuthoringTarget}
+                    />
+                  ) : entryMode === 'character-dialogue' &&
+                    entryCharacterTargetsStatus === 'ready' &&
+                    entryCharacterTargets.length > 0 ? (
+                    <CharacterDialogueTargetSelector
+                      targets={entryCharacterTargets}
+                      selected={entryCharacterLaunches}
+                      loading={false}
+                      pending={isEntryBindingPending}
+                      onChange={configureEntryCharacterLaunches}
+                    />
+                  ) : null}
+                </HomeExperienceQuickActions>
+              ) : null}
+            </div>
           </div>
         ) : null
       ) : null}

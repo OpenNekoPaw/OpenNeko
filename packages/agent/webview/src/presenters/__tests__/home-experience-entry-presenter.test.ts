@@ -103,6 +103,61 @@ describe('home experience entry presenter', () => {
     ).toBe('chat.entryExperience.validation.assistantBindingMismatch');
   });
 
+  it('allows Character Dialogue only with the exact selected version receipt', () => {
+    const characterLaunches = [
+      {
+        characterProjectId: 'character-project-a',
+        characterVersionId: 'character-version-a',
+        characterStorylineVersionId: 'storyline-version-a',
+        label: 'A',
+      },
+    ];
+    const intent: AgentEntryIntentProjection = {
+      mode: 'character-dialogue',
+      targetReceipt: {
+        targetReceiptId: 'target-receipt-character',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'character-dialogue',
+        binding: {
+          kind: 'character-dialogue',
+          participants: [
+            {
+              characterProjectId: 'character-project-a',
+              characterVersionId: 'character-version-a',
+            },
+          ],
+          storylineVersionId: 'storyline-version-a',
+        },
+      },
+    };
+
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'character-dialogue',
+        intent,
+        draft: draft({ kind: 'unbound' }),
+        characterTargetsAvailable: true,
+        characterLaunches,
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBeUndefined();
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'character-dialogue',
+        intent,
+        draft: draft({ kind: 'unbound' }),
+        characterTargetsAvailable: true,
+        characterLaunches: [{ ...characterLaunches[0]!, characterVersionId: 'stale-version' }],
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBe('chat.entryExperience.validation.characterBindingMismatch');
+  });
+
   it('keeps Character Dialogue and World Experience owner-qualified unavailable', () => {
     for (const mode of ['character-dialogue', 'world-experience'] as const) {
       const projection = projectHomeExperienceEntry({

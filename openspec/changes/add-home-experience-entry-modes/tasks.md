@@ -59,3 +59,15 @@
 - [x] 9.2 Project Host-resolved media-understanding status through the canonical launch catalog and Draft config adapter.
 - [x] 9.3 Add contract, application, adapter, and controller regressions using configured media defaults and purpose bindings.
 - [x] 9.4 Run focused Host/Agent/Desktop tests, typechecks, strict OpenSpec validation, UI validation, and quality review; commit without unrelated worktree changes.
+
+## 10. Consolidate Entry Binding Presentation
+
+- [x] 10.1 Project selected Project/directory, Character, and World-capable authoring targets into one composer binding-context bar without adding a second state owner.
+- [x] 10.2 Remove the duplicate current-target card and authoring summary from the chooser while preserving selected-card state and exact clear operations.
+- [x] 10.3 Add focused component/controller regressions for empty, selected, multi-character, clear, and no-duplicate states.
+- [x] 10.4 Run focused Webview tests, typecheck, strict OpenSpec validation, and visible Desktop UI acceptance for the complete select/clear cycle.
+- [x] 10.5 Move the Authoring directory chooser into the compact context bar and align its inset neutral treatment with the Entry composer.
+- [x] 10.6 Refine Authoring target choices into compact responsive cards with neutral hover, focus, and selected feedback.
+- [x] 10.7 Reuse the context bar for Character selection and expose World as a fail-visible disabled owner entry until its launcher is composed.
+- [x] 10.8 Add the Daily/Narrative runtime-kind switch to Character and Room selection, keeping Narrative fail-visible unavailable until its external Composition owner is composed.
+- [x] 10.9 Consolidate Project, Character, Room, and World target choices onto one compact horizontal card with shared selected, focus, disabled, and responsive states.

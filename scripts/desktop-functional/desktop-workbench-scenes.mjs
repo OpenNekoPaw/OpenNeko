@@ -680,6 +680,48 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
       const entryRoot = await markEntryAgentRoot(evaluate, entryDraft.draftId);
       const entryTriggerControls = await inspectEntryTriggerControls(evaluate);
       checkpoint('agent-entry-typed-trigger-controls', entryTriggerControls);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const entryWideLayout = await inspectEntryQuickActionLayout(evaluate);
+      const entryWideScreenshot = await screenshot('agent-entry-global-quick-actions');
+      await resizeWindow(evaluate, 760, 640);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const entryNarrowLayout = await inspectEntryQuickActionLayout(evaluate);
+      const entryNarrowScreenshot = await screenshot('agent-entry-global-quick-actions-narrow');
+      checkpoint('agent-entry-global-quick-action-layout', {
+        wide: entryWideLayout,
+        narrow: entryNarrowLayout,
+      });
+      await resizeWindow(evaluate, 1440, 960);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const composerBeforeGlobalActions = await inspectEntryComposerGeometry(evaluate);
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-detail .agent-entry-resource-card`,
+      );
+      await assertEntryComposerGeometry(evaluate, composerBeforeGlobalActions);
+      const entryExpandedScreenshot = await screenshot('agent-entry-global-actions-expanded');
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="assistant"]`,
+      );
+      await waitForCondition(
+        evaluate,
+        `document.querySelector(
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="assistant"]',
+        )?.getAttribute('aria-expanded') === 'false'`,
+        'Entry Assistant actions did not collapse.',
+      );
+      await assertEntryComposerGeometry(evaluate, composerBeforeGlobalActions);
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="assistant"]`,
+      );
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-detail .agent-entry-resource-card`,
+      );
 
       const slashMenu = await openEntrySlashMenu({ evaluate, screenshot, type });
       checkpoint('agent-entry-unbound-slash-menu', slashMenu.selection);
@@ -710,35 +752,48 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
       const preservedDraftText = 'Keep this Draft text while selecting a Workspace.';
       await replaceActiveAgentComposerText({ evaluate, pressKey, type }, preservedDraftText);
 
-      await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-button`, 0);
-      await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu`);
-      const targetMenu = await inspectEntryWorkspaceTargetMenu(
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-experience-selector [role="tab"]`,
+        1,
+      );
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="authoring"]`,
+      );
+      const composerBeforeTargetDetail = await inspectEntryComposerGeometry(evaluate);
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-detail .agent-entry-authoring-selector`,
+      );
+      await assertEntryComposerGeometry(evaluate, composerBeforeTargetDetail);
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-authoring-selector [data-entry-action="choose-project"]`,
+      );
+      const targetSelector = await inspectEntryAuthoringTargetSelector(
         evaluate,
         workspaceActivation.projectId,
       );
-      const targetMenuScreenshot = await screenshot('agent-entry-workspace-target-menu');
-      checkpoint('agent-entry-workspace-target-menu', {
+      const targetSelectorScreenshot = await screenshot('agent-entry-authoring-target-selector');
+      checkpoint('agent-entry-authoring-target-selector', {
         entryDraft,
         entryRoot,
         workspaceActivation,
-        targetMenu,
+        targetSelector,
       });
 
       await click(
-        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu [role="menuitem"]`,
-        targetMenu.projectMenuIndex,
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-authoring-selector [data-entry-resource-kind="project"]`,
+        targetSelector.projectButtonIndex,
       );
       await waitForCondition(
         evaluate,
         `(() => [...document.querySelectorAll(
-          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-button',
-        )].some((button) => button.textContent?.trim() === ${JSON.stringify(targetMenu.projectLabel)}))()`,
-        'Entry composer did not retain the selected exact Workspace target.',
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="authoring"]',
+        )].some((button) => button.textContent?.includes(${JSON.stringify(targetSelector.projectLabel)})))()`,
+        'Entry Authoring action did not retain the selected exact Workspace target.',
       );
       const boundDraft = await inspectBoundEntryDraft(evaluate, {
         draftId: entryDraft.draftId,
         inputValue: preservedDraftText,
-        projectLabel: targetMenu.projectLabel,
+        projectLabel: targetSelector.projectLabel,
         workspaceId: workspaceActivation.workspaceId,
       });
       checkpoint('agent-entry-workspace-bound-draft', boundDraft);
@@ -834,16 +889,19 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
         slashSelection: slashMenu.selection,
         unboundMentionSelection: unboundMention.selection,
         workspaceActivation,
-        targetMenu,
+        targetSelector,
         boundDraft,
         mentionSelection: workspaceMention.selection,
         skillSelection: skillMenu.selection,
         workspaceSession,
         provider: providerEvidence,
         screenshots: [
+          entryWideScreenshot,
+          entryNarrowScreenshot,
+          entryExpandedScreenshot,
           slashMenu.screenshot,
           unboundMention.screenshot,
-          targetMenuScreenshot,
+          targetSelectorScreenshot,
           workspaceMention.screenshot,
           skillMenu.screenshot,
           completedScreenshot,
@@ -2852,13 +2910,17 @@ async function inspectEntryTriggerControls(evaluate) {
         '.agent-composer-tool-button-text',
       ).length,
       hasWorkspaceChoice: Boolean(activeSurface.querySelector('.agent-composer-workspace-button')),
+      entryModeTabs: [...activeSurface.querySelectorAll(
+        '.agent-entry-experience-selector [role="tab"]',
+      )].map((tab) => tab.textContent?.trim() ?? ''),
       hasModelConfiguration: Boolean(activeSurface.querySelector('.agent-model-config-trigger')),
       globalAlertCount: document.querySelectorAll('.shell-diagnostic[role="alert"]').length,
     };
     if (
       result.duplicateLabels.length > 0 ||
       result.typedTriggerButtonCount !== 0 ||
-      !result.hasWorkspaceChoice ||
+      result.hasWorkspaceChoice ||
+      result.entryModeTabs.length !== 4 ||
       !result.hasModelConfiguration ||
       result.globalAlertCount !== 0
     ) {
@@ -2866,6 +2928,112 @@ async function inspectEntryTriggerControls(evaluate) {
     }
     return result;
   })()`);
+}
+
+async function inspectEntryQuickActionLayout(evaluate) {
+  return evaluate(`(() => {
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const composition = activeSurface?.querySelector('.agent-entry-composition');
+    const composer = activeSurface?.querySelector('.agent-composer-shell');
+    const quickActions = activeSurface?.querySelector('.agent-entry-quick-actions');
+    const buttons = [...(quickActions?.querySelectorAll('button') ?? [])];
+    if (
+      !(composition instanceof HTMLElement) ||
+      !(composer instanceof HTMLElement) ||
+      !(quickActions instanceof HTMLElement)
+    ) {
+      throw new Error(
+        'Entry quick-action layout is unavailable: ' +
+          JSON.stringify({
+            hasActiveSurface: activeSurface instanceof HTMLElement,
+            hasComposition: composition instanceof HTMLElement,
+            hasComposer: composer instanceof HTMLElement,
+            hasQuickActions: quickActions instanceof HTMLElement,
+          }),
+      );
+    }
+    const compositionBounds = composition.getBoundingClientRect();
+    const composerBounds = composer.getBoundingClientRect();
+    const quickActionBounds = quickActions.getBoundingClientRect();
+    const buttonRows = [...new Set(
+      buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
+    )].length;
+    const result = {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      composer: rectProjection(composerBounds),
+      quickActions: rectProjection(quickActionBounds),
+      buttonCount: buttons.length,
+      buttonRows,
+      expanded: quickActions.querySelector('.agent-entry-quick-toggle')?.getAttribute(
+        'aria-expanded',
+      ) === 'true',
+      hasIntroCard: Boolean(activeSurface?.querySelector('.agent-entry-intro.agent-empty-panel')),
+      introParagraphCount: activeSurface?.querySelectorAll('.agent-entry-intro p').length ?? 0,
+      composerValidationCount:
+        activeSurface?.querySelectorAll('.agent-composer-validation').length ?? 0,
+      hasOverlay: Boolean(
+        activeSurface?.querySelector('.agent-entry-context-overlay, .agent-entry-context-backdrop'),
+      ),
+      horizontallyContained:
+        composition.scrollWidth <= composition.clientWidth &&
+        buttons.every((button) => {
+          const bounds = button.getBoundingClientRect();
+          return bounds.left >= compositionBounds.left && bounds.right <= compositionBounds.right;
+        }),
+      actionsBelowComposer: quickActionBounds.top >= composerBounds.bottom,
+    };
+    if (
+      result.buttonCount < 1 ||
+      !result.expanded ||
+      result.hasIntroCard ||
+      result.introParagraphCount !== 0 ||
+      result.composerValidationCount !== 0 ||
+      result.hasOverlay ||
+      !result.horizontallyContained ||
+      !result.actionsBelowComposer
+    ) {
+      throw new Error('Entry quick-action layout is invalid: ' + JSON.stringify(result));
+    }
+    return result;
+
+    function rectProjection(bounds) {
+      return {
+        x: Math.round(bounds.x * 100) / 100,
+        y: Math.round(bounds.y * 100) / 100,
+        width: Math.round(bounds.width * 100) / 100,
+        height: Math.round(bounds.height * 100) / 100,
+      };
+    }
+  })()`);
+}
+
+async function inspectEntryComposerGeometry(evaluate) {
+  return evaluate(`(() => {
+    const composer = document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-shell',
+    );
+    if (!(composer instanceof HTMLElement)) {
+      throw new Error('Entry composer is unavailable for geometry inspection.');
+    }
+    const bounds = composer.getBoundingClientRect();
+    return {
+      x: Math.round(bounds.x * 100) / 100,
+      y: Math.round(bounds.y * 100) / 100,
+      width: Math.round(bounds.width * 100) / 100,
+      height: Math.round(bounds.height * 100) / 100,
+    };
+  })()`);
+}
+
+async function assertEntryComposerGeometry(evaluate, expected) {
+  const actual = await inspectEntryComposerGeometry(evaluate);
+  const keys = ['x', 'y', 'width', 'height'];
+  if (keys.some((key) => Math.abs(actual[key] - expected[key]) > 0.5)) {
+    throw new Error(
+      `Entry composer moved while quick-action presentation changed: ${JSON.stringify({ expected, actual })}`,
+    );
+  }
+  return actual;
 }
 
 async function openEntrySlashMenu({ evaluate, screenshot, type }) {
@@ -2993,24 +3161,26 @@ async function markEntryAgentRoot(evaluate, expectedDraftId) {
   })()`);
 }
 
-async function inspectEntryWorkspaceTargetMenu(evaluate, expectedProjectId) {
+async function inspectEntryAuthoringTargetSelector(evaluate, expectedProjectId) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     const project = projection.catalog.projects.find(
       (candidate) => candidate.projectId === ${JSON.stringify(expectedProjectId)},
     );
-    if (!project) throw new Error('Entry Workspace menu has no exact fixture Project.');
-    const menu = document.querySelector(
-      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu',
+    if (!project) throw new Error('Entry Authoring selector has no exact fixture Project.');
+    const selector = document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-authoring-selector',
     );
-    const items = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])];
-    const projectMenuIndex = items.findIndex(
-      (item) => item.textContent?.trim() === project.displayName,
+    const items = [...(selector?.querySelectorAll(
+      '[data-entry-resource-kind="project"]',
+    ) ?? [])];
+    const projectButtonIndex = items.findIndex(
+      (item) => item.querySelector('strong')?.textContent?.trim() === project.displayName,
     );
-    if (!(menu instanceof HTMLElement) || projectMenuIndex < 0) {
-      throw new Error('Entry Workspace menu did not expose the exact Project target.');
+    if (!(selector instanceof HTMLElement) || projectButtonIndex < 0) {
+      throw new Error('Entry Authoring selector did not expose the exact Project target.');
     }
-    const bounds = menu.getBoundingClientRect();
+    const bounds = selector.getBoundingClientRect();
     if (
       bounds.width <= 0 ||
       bounds.height <= 0 ||
@@ -3019,12 +3189,12 @@ async function inspectEntryWorkspaceTargetMenu(evaluate, expectedProjectId) {
       bounds.right > window.innerWidth ||
       bounds.bottom > window.innerHeight
     ) {
-      throw new Error('Entry Workspace target menu is clipped outside the visible viewport.');
+      throw new Error('Entry Authoring target selector is clipped outside the visible viewport.');
     }
     return {
       projectId: project.projectId,
       projectLabel: project.displayName,
-      projectMenuIndex,
+      projectButtonIndex,
       itemLabels: items.map((item) => item.textContent?.trim() ?? ''),
       withinViewport: true,
     };
@@ -3039,8 +3209,8 @@ async function inspectBoundEntryDraft(evaluate, expected) {
     const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
     const root = activeSurface?.querySelector('.desktop-agent-root[data-owner-root="agent"]');
     const inputValue = activeSurface?.querySelector('.agent-composer-textarea')?.value ?? '';
-    const workspaceLabels = [...(activeSurface?.querySelectorAll(
-      '.agent-composer-workspace-button',
+    const authoringActionLabels = [...(activeSurface?.querySelectorAll(
+      '.agent-entry-quick-toggle[data-entry-panel-mode="authoring"]',
     ) ?? [])].map((button) => button.textContent?.trim() ?? '');
     const presentationStates = Object.keys(sessionStorage).flatMap((key) => {
       if (!key.startsWith('openneko:agent:presentation:')) return [];
@@ -3061,7 +3231,7 @@ async function inspectBoundEntryDraft(evaluate, expected) {
       draftId: context.scope.kind === 'unbound' ? context.scope.draftId : undefined,
       conversationCount: projection.agentHome.conversations.length,
       inputValue,
-      workspaceLabels,
+      authoringActionLabels,
       workspaceTarget,
       rootPresent: root instanceof HTMLElement && !root.hidden,
       agentRootCount:
@@ -3074,7 +3244,9 @@ async function inspectBoundEntryDraft(evaluate, expected) {
       context.scope.draftId !== ${JSON.stringify(expected.draftId)} ||
       projection.agentHome.conversations.length !== 0 ||
       inputValue !== ${JSON.stringify(expected.inputValue)} ||
-      !workspaceLabels.includes(${JSON.stringify(expected.projectLabel)}) ||
+      !authoringActionLabels.some((label) =>
+        label.includes(${JSON.stringify(expected.projectLabel)}),
+      ) ||
       workspaceTarget?.context?.kind !== 'workspace' ||
       workspaceTarget.context.workspaceId !== ${JSON.stringify(expected.workspaceId)} ||
       typeof workspaceTarget.context.workspaceGrantId !== 'string' ||
@@ -3231,6 +3403,9 @@ async function waitForWorkspaceSession(evaluate, expected) {
       .map((element) => element.textContent?.trim() ?? '')
       .filter(Boolean);
     const rootRetained = root === window.__openNekoFunctionalEntryAgentRoot;
+    const entryQuickActionSurfaceCount = activeSurface?.querySelectorAll(
+      '.agent-entry-quick-actions',
+    ).length ?? 0;
     if (
       context.kind !== 'agent' ||
       context.scope.kind !== 'workspace' ||
@@ -3249,6 +3424,7 @@ async function waitForWorkspaceSession(evaluate, expected) {
       (activeSurface?.textContent ?? '').includes('ContentLocator') ||
       visibleRoots.length !== 1 ||
       !rootRetained ||
+      entryQuickActionSurfaceCount !== 0 ||
       Boolean(activeSurface?.querySelector('.agent-execution-activity')) ||
       alerts.length > 0
     ) {
@@ -3269,6 +3445,7 @@ async function waitForWorkspaceSession(evaluate, expected) {
       sceneScope: context.scope.kind,
       agentRootCount: visibleRoots.length,
       agentRootRetained: rootRetained,
+      entryQuickActionSurfaceCount,
       transcriptContainsSkill: activeSurface?.textContent?.includes(
         ${JSON.stringify(expected.submittedInput)},
       ) === true,

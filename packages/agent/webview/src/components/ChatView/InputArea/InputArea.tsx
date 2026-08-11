@@ -12,7 +12,16 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon, FolderIcon } from '@neko/ui/icons';
+import {
+  SendIcon,
+  StopIcon,
+  PlusIcon,
+  EditIcon,
+  CloseIcon,
+  FolderIcon,
+  PanoramaIcon,
+  UserIcon,
+} from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
 import { EntryPromptMenu as ComposerEntryPromptMenu } from './EntryPromptMenu';
@@ -44,7 +53,6 @@ import {
 } from './slash-command-catalog';
 import { findTrailingMentionRange, projectTrailingMention } from './mention-input';
 import { AgentContextChip } from './AgentContextChip';
-import { ReferenceToken } from './ReferenceToken';
 import { SuggestionChips } from './SuggestionChips';
 import { AmbientCanvasContextBar } from './AmbientCanvasContextBar';
 import { UsageIndicator } from './UsageIndicator';
@@ -57,13 +65,11 @@ import { isOptimisticQueuedMessageItem } from '../../../presenters/message-queue
 import { projectClipboardTextToContextPayload } from '../../../presenters/clipboard-context-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
 import { contentLocatorKey, type ContentLocator } from '@neko/content';
-import type { AgentContextPayload, AgentDomainBinding } from '@neko/agent-contracts';
+import type { AgentContextPayload } from '@neko/agent-contracts';
 import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';
 import {
   useComposerWorkspacePresentation,
-  type AgentComposerAuthoringCatalog,
-  type AgentComposerAuthoringTargetOption,
   type AgentComposerWorkspaceTarget,
 } from '../../ComposerWorkspaceContext';
 
@@ -97,21 +103,22 @@ interface InputAreaProps {
   composerMenuState?: ComposerMenuState;
   onComposerMenuStateChange?: (state: ComposerMenuState) => void;
   disabled?: boolean;
+  submissionBlocked?: boolean;
   submissionBlockedReason?: string;
-  draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
-  showDraftWorkspaceControl?: boolean;
-  draftTargetSelectionPending?: boolean;
-  onDraftWorkspaceTargetChange?: (
-    target: AgentComposerWorkspaceTarget | undefined,
-  ) => Promise<void>;
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
-  onDraftCharacterTargetSelect?: (
-    binding: Extract<AgentDomainBinding, { readonly kind: 'character' }>,
-  ) => Promise<void>;
+  entryContextAction?: {
+    readonly kind: 'directory' | 'character' | 'world';
+    readonly label: string;
+    readonly onInvoke?: () => void | Promise<void>;
+    readonly disabled?: boolean;
+    readonly disabledReason?: string;
+  };
+  entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  onClearEntryWorkspaceTarget?: () => Promise<void>;
   selectedCharacterLaunches?: readonly SelectedCharacterLaunch[];
   onAddCharacterLaunch?: (selection: SelectedCharacterLaunch) => void;
   onRemoveCharacterLaunch?: (characterVersionId: string) => void;
@@ -217,14 +224,14 @@ export function InputArea({
   composerMenuState: controlledComposerMenuState,
   onComposerMenuStateChange,
   disabled = false,
+  submissionBlocked = false,
   submissionBlockedReason,
-  draftWorkspaceTarget,
-  showDraftWorkspaceControl = false,
-  draftTargetSelectionPending = false,
-  onDraftWorkspaceTargetChange,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
+  entryContextAction,
+  entryWorkspaceTarget,
+  onClearEntryWorkspaceTarget,
   selectedCharacterLaunches = [],
   onAddCharacterLaunch,
   onRemoveCharacterLaunch,
@@ -238,76 +245,6 @@ export function InputArea({
   focusRequestId,
 }: InputAreaProps) {
   const composerWorkspace = useComposerWorkspacePresentation();
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [authoringCatalog, setAuthoringCatalog] = useState<AgentComposerAuthoringCatalog>();
-  const [authoringCatalogLoading, setAuthoringCatalogLoading] = useState(false);
-  const [authoringCatalogDiagnostic, setAuthoringCatalogDiagnostic] = useState<string>();
-  const [authoringCreationId, setAuthoringCreationId] = useState('');
-  const [authoringCreationName, setAuthoringCreationName] = useState('');
-  const authoringCreationContext = authoringCatalog?.creationContexts.find(
-    (candidate) => candidate.creationId === authoringCreationId,
-  );
-  const openWorkspaceMenu = useCallback(() => {
-    const open = !workspaceMenuOpen;
-    setWorkspaceMenuOpen(open);
-    if (
-      !open ||
-      composerWorkspace?.kind !== 'entry' ||
-      !composerWorkspace.loadAuthoringCatalog ||
-      authoringCatalogLoading
-    ) {
-      return;
-    }
-    setAuthoringCatalogLoading(true);
-    setAuthoringCatalogDiagnostic(undefined);
-    void composerWorkspace
-      .loadAuthoringCatalog()
-      .then(setAuthoringCatalog)
-      .catch((error: unknown) =>
-        setAuthoringCatalogDiagnostic(error instanceof Error ? error.message : String(error)),
-      )
-      .finally(() => setAuthoringCatalogLoading(false));
-  }, [authoringCatalogLoading, composerWorkspace, workspaceMenuOpen]);
-  const selectAuthoringTarget = useCallback(
-    (option: AgentComposerAuthoringTargetOption) => {
-      if (composerWorkspace?.kind !== 'entry' || !composerWorkspace.onSelectAuthoringTarget) {
-        throw new Error('Agent Entry authoring target selector is unavailable.');
-      }
-      void composerWorkspace.onSelectAuthoringTarget(option).then((target) => {
-        if (target) void onDraftWorkspaceTargetChange?.(target);
-        setWorkspaceMenuOpen(false);
-      });
-    },
-    [composerWorkspace, onDraftWorkspaceTargetChange],
-  );
-  const createAuthoringTarget = useCallback(() => {
-    if (composerWorkspace?.kind !== 'entry' || !composerWorkspace.onCreateAuthoringTarget) {
-      throw new Error('Agent Entry authoring target creation is unavailable.');
-    }
-    const context = authoringCreationContext;
-    if (!context || (context.targetKind !== 'content-project' && !authoringCreationName.trim())) {
-      return;
-    }
-    setAuthoringCatalogLoading(true);
-    setAuthoringCatalogDiagnostic(undefined);
-    void composerWorkspace
-      .onCreateAuthoringTarget(context, authoringCreationName.trim())
-      .then((target) => {
-        if (target) void onDraftWorkspaceTargetChange?.(target);
-        setAuthoringCreationName('');
-        setWorkspaceMenuOpen(false);
-      })
-      .catch((error: unknown) =>
-        setAuthoringCatalogDiagnostic(error instanceof Error ? error.message : String(error)),
-      )
-      .finally(() => setAuthoringCatalogLoading(false));
-  }, [
-    authoringCreationContext,
-    authoringCreationId,
-    authoringCreationName,
-    composerWorkspace,
-    onDraftWorkspaceTargetChange,
-  ]);
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -1014,7 +951,7 @@ export function InputArea({
     configurationPolicy,
     currentSessionMediaModelCount,
     compactControls: composerPresentation === 'compact',
-    submissionBlocked: submissionBlockedReason !== undefined,
+    submissionBlocked: submissionBlocked || submissionBlockedReason !== undefined,
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
   const attachmentInputDisabled = disabled;
@@ -1100,28 +1037,6 @@ export function InputArea({
             </div>
           )}
 
-          {presentation === 'entry' && selectedCharacterLaunches.length > 0 ? (
-            <div
-              className="agent-reference-row agent-reference-row-attached"
-              data-character-launch-selections="true"
-            >
-              {selectedCharacterLaunches.map((selection) => (
-                <ReferenceToken
-                  key={selection.characterVersionId}
-                  kind="character"
-                  label={selection.label}
-                  variant="attached"
-                  title={selection.characterVersionId}
-                  onRemove={
-                    onRemoveCharacterLaunch
-                      ? () => onRemoveCharacterLaunch(selection.characterVersionId)
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          ) : null}
-
           {/* File attachment preview */}
           <AttachmentPreview attachedFiles={attachedFiles} onRemove={handleRemoveFile} />
 
@@ -1186,156 +1101,15 @@ export function InputArea({
               disabled={attachmentInputDisabled || onAuthorizeResource !== undefined}
             />
 
-            {composerWorkspace &&
-            (composerWorkspace.kind === 'workspace' || showDraftWorkspaceControl) &&
-            (presentation === 'entry' || composerPresentation === 'default') ? (
+            {composerWorkspace?.kind === 'workspace' && composerPresentation === 'default' ? (
               <div
                 className="agent-composer-workspace"
                 aria-label={t('chat.input.workspace.label')}
               >
                 <FolderIcon size={14} />
-                {composerWorkspace.kind === 'workspace' ? (
-                  <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
-                    {composerWorkspace.label}
-                  </span>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="agent-composer-workspace-button"
-                      disabled={composerWorkspace.disabled || draftTargetSelectionPending}
-                      onClick={openWorkspaceMenu}
-                      aria-expanded={workspaceMenuOpen}
-                    >
-                      {draftWorkspaceTarget?.label ?? t('chat.input.workspace.openProject')}
-                    </button>
-                    {draftWorkspaceTarget ? (
-                      <button
-                        type="button"
-                        className="agent-composer-workspace-clear"
-                        title={t('chat.input.workspace.clear')}
-                        disabled={draftTargetSelectionPending}
-                        onClick={() => void onDraftWorkspaceTargetChange?.(undefined)}
-                      >
-                        <CloseIcon size={12} />
-                      </button>
-                    ) : null}
-                    {workspaceMenuOpen ? (
-                      <div className="agent-composer-workspace-menu" role="menu">
-                        {authoringCatalogLoading ? (
-                          <span className="agent-composer-workspace-menu-status" role="status">
-                            {t('chat.input.workspace.loadingTargets')}
-                          </span>
-                        ) : null}
-                        {authoringCatalogDiagnostic ? (
-                          <span
-                            className="agent-composer-workspace-menu-status is-error"
-                            role="alert"
-                          >
-                            {authoringCatalogDiagnostic}
-                          </span>
-                        ) : null}
-                        {authoringCatalog?.targets.map((option) => (
-                          <button
-                            key={option.optionId}
-                            type="button"
-                            role="menuitem"
-                            disabled={option.disabled || draftTargetSelectionPending}
-                            onClick={() => selectAuthoringTarget(option)}
-                          >
-                            <span>{option.label}</span>
-                            <small>{option.workspaceLabel}</small>
-                          </button>
-                        ))}
-                        {authoringCatalog?.diagnostics.map((diagnostic) => (
-                          <span
-                            className="agent-composer-workspace-menu-status is-error"
-                            key={diagnostic}
-                            role="status"
-                          >
-                            {diagnostic}
-                          </span>
-                        ))}
-                        {authoringCatalog?.creationContexts.length &&
-                        composerWorkspace.onCreateAuthoringTarget ? (
-                          <div className="agent-composer-workspace-create">
-                            <select
-                              aria-label={t('chat.input.workspace.createScope')}
-                              value={authoringCreationId}
-                              onChange={(event) =>
-                                setAuthoringCreationId(event.currentTarget.value)
-                              }
-                            >
-                              <option value="">{t('chat.input.workspace.createTarget')}</option>
-                              {authoringCatalog.creationContexts.map((context) => (
-                                <option key={context.creationId} value={context.creationId}>
-                                  {context.label}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              aria-label={t('chat.input.workspace.targetName')}
-                              placeholder={t('chat.input.workspace.targetName')}
-                              value={authoringCreationName}
-                              disabled={authoringCreationContext?.targetKind === 'content-project'}
-                              onChange={(event) =>
-                                setAuthoringCreationName(event.currentTarget.value)
-                              }
-                            />
-                            <button
-                              aria-label={t('chat.input.workspace.createTarget')}
-                              disabled={
-                                authoringCatalogLoading ||
-                                !authoringCreationId ||
-                                (authoringCreationContext?.targetKind !== 'content-project' &&
-                                  !authoringCreationName.trim())
-                              }
-                              title={t('chat.input.workspace.createTarget')}
-                              type="button"
-                              onClick={createAuthoringTarget}
-                            >
-                              <PlusIcon className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ) : null}
-                        {authoringCatalog?.targets.length ? (
-                          <span className="agent-composer-workspace-menu-separator" />
-                        ) : null}
-                        {composerWorkspace.projects.map((project) => (
-                          <button
-                            key={project.projectId}
-                            type="button"
-                            role="menuitem"
-                            disabled={project.disabled || draftTargetSelectionPending}
-                            onClick={() => {
-                              void composerWorkspace
-                                .onSelectProject(project.projectId)
-                                .then((target) => {
-                                  if (target) void onDraftWorkspaceTargetChange?.(target);
-                                  setWorkspaceMenuOpen(false);
-                                });
-                            }}
-                          >
-                            {project.label}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={composerWorkspace.disabled || draftTargetSelectionPending}
-                          onClick={() => {
-                            void composerWorkspace.onChooseDirectory().then((target) => {
-                              if (target) void onDraftWorkspaceTargetChange?.(target);
-                              setWorkspaceMenuOpen(false);
-                            });
-                          }}
-                        >
-                          {t('chat.input.workspace.chooseDirectory')}
-                        </button>
-                      </div>
-                    ) : null}
-                  </>
-                )}
+                <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
+                  {composerWorkspace.label}
+                </span>
               </div>
             ) : null}
 
@@ -1448,8 +1222,117 @@ export function InputArea({
             )}
           </div>
         </div>
+
+        {presentation === 'entry' &&
+        (entryContextAction || entryWorkspaceTarget || selectedCharacterLaunches.length > 0) ? (
+          <div
+            className="agent-entry-binding-bar"
+            aria-label={t('chat.entryContext.bindingBar')}
+            data-entry-binding-bar="true"
+          >
+            {entryContextAction ? (
+              <EntryContextActionButton action={entryContextAction} composerDisabled={disabled} />
+            ) : null}
+            {entryWorkspaceTarget ? (
+              <EntryBindingItem
+                kind={entryWorkspaceTarget.target?.kind ?? 'content-project'}
+                label={entryWorkspaceTarget.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={
+                  onClearEntryWorkspaceTarget ? () => void onClearEntryWorkspaceTarget() : undefined
+                }
+              />
+            ) : null}
+            {selectedCharacterLaunches.map((selection) => (
+              <EntryBindingItem
+                key={selection.characterVersionId}
+                kind="character-dialogue"
+                label={selection.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={
+                  onRemoveCharacterLaunch
+                    ? () => onRemoveCharacterLaunch(selection.characterVersionId)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function EntryContextActionButton({
+  action,
+  composerDisabled,
+}: {
+  readonly action: NonNullable<InputAreaProps['entryContextAction']>;
+  readonly composerDisabled: boolean;
+}): JSX.Element {
+  const icon =
+    action.kind === 'character' ? (
+      <UserIcon size={14} />
+    ) : action.kind === 'world' ? (
+      <PanoramaIcon size={14} />
+    ) : (
+      <FolderIcon size={14} />
+    );
+  const actionDisabled = composerDisabled || action.disabled || !action.onInvoke;
+
+  return (
+    <button
+      type="button"
+      className="agent-entry-context-action"
+      data-entry-context-action={action.kind}
+      disabled={actionDisabled}
+      title={action.disabledReason ?? action.label}
+      aria-label={action.label}
+      onClick={() => void action.onInvoke?.()}
+    >
+      {icon}
+      <span>{action.label}</span>
+    </button>
+  );
+}
+
+function EntryBindingItem({
+  kind,
+  label,
+  removeLabel,
+  onRemove,
+}: {
+  readonly kind: NonNullable<AgentComposerWorkspaceTarget['target']>['kind'] | 'character-dialogue';
+  readonly label: string;
+  readonly removeLabel: string;
+  readonly onRemove?: () => void;
+}): JSX.Element {
+  const icon =
+    kind === 'character-project' || kind === 'character-dialogue' ? (
+      <UserIcon size={14} />
+    ) : kind === 'world-project' ? (
+      <PanoramaIcon size={14} />
+    ) : (
+      <FolderIcon size={14} />
+    );
+
+  return (
+    <span className="agent-entry-binding-item" data-entry-binding-kind={kind} title={label}>
+      <span className="agent-entry-binding-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="agent-entry-binding-label">{label}</span>
+      {onRemove ? (
+        <button
+          type="button"
+          className="agent-entry-binding-remove"
+          aria-label={`${removeLabel}: ${label}`}
+          onClick={onRemove}
+        >
+          <CloseIcon size={12} />
+        </button>
+      ) : null}
+    </span>
   );
 }
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { EmptyState } from './EmptyState';
 
@@ -30,56 +30,41 @@ describe('EmptyState', () => {
     expect(document.querySelector('.agent-empty-state')?.className).toContain('items-center');
   });
 
-  it('projects the exact Draft scope in the Desktop dock without owner choices', () => {
+  it('projects the exact Draft scope as compact unboxed copy in the Desktop dock', () => {
     const view = render(<EmptyState draftScope="unbound" presentation="desktop-dock" />);
 
-    expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
+    const heading = screen.getByRole('heading', { name: 'Hi, create with chat' });
+    expect(heading).toBeTruthy();
+    expect(heading.className).toContain('text-[28px]');
+    expect(heading.className).toContain('leading-9');
+    expect(screen.queryByText('Describe an idea or mention a resource.')).toBeNull();
+    expect(document.querySelector('.agent-entry-intro p')).toBeNull();
     expect(document.querySelector('.agent-empty-actions')).toBeNull();
+    expect(document.querySelector('.agent-empty-panel')).toBeNull();
+    expect(document.querySelector('.agent-empty-skill-button')).toBeNull();
 
     view.rerender(<EmptyState draftScope="workspace" presentation="desktop-dock" />);
     expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
   });
 
-  it('renders at most four enabled catalog Skills in the Desktop dock', () => {
-    const onSkillSelect = vi.fn();
+  it('renders only the centered mode title for a projected Entry', () => {
     render(
       <EmptyState
-        presentation="desktop-dock"
-        skills={[
-          skill('disabled', false),
-          skill('a'),
-          skill('b'),
-          skill('c'),
-          skill('d'),
-          skill('e'),
-        ]}
-        onSkillSelect={onSkillSelect}
+        experienceProjection={{
+          mode: 'world-experience',
+          options: [],
+          titleKey: 'chat.entryExperience.worldExperience.title',
+          descriptionKey: 'chat.entryExperience.worldExperience.description',
+          showWorkspaceControl: false,
+          showSkillSuggestions: false,
+        }}
       />,
     );
 
-    expect(document.querySelectorAll('.agent-empty-skill-button')).toHaveLength(4);
-    expect(screen.queryByRole('button', { name: 'disabled' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'e' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'b' }));
-    expect(onSkillSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'b' }));
-  });
-
-  it('does not fabricate Desktop Skill suggestions when none are enabled', () => {
-    render(<EmptyState presentation="desktop-dock" skills={[skill('disabled', false)]} />);
-
-    expect(screen.queryByText('Try a Skill')).toBeNull();
-    expect(document.querySelector('.agent-empty-skill-button')).toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'chat.entryExperience.worldExperience.title' }),
+    ).toBeTruthy();
+    expect(screen.queryByText('chat.entryExperience.worldExperience.description')).toBeNull();
+    expect(screen.queryByText('AI responses may be inaccurate.')).toBeNull();
   });
 });
-
-function skill(name: string, enabled = true) {
-  return {
-    id: name,
-    name,
-    description: `${name} description`,
-    tags: [],
-    source: 'project' as const,
-    enabled,
-    invocationKind: 'skill' as const,
-  };
-}
