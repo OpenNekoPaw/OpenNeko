@@ -20,36 +20,53 @@
     --neko-canvas-grid-major,
     color-mix(in srgb, var(--neko-fg) 18%, transparent)
   );
-  --canvas-vignette: radial-gradient(
-    circle at 50% 24%,
-    color-mix(in srgb, var(--neko-accent) 8%, transparent),
-    transparent 32%
-  );
-
   /* ── Toolbar / Panel ─────────────────────────────────────────────────────── */
-  --canvas-card-surface: color-mix(in srgb, var(--neko-elevated) 97%, transparent);
-  --canvas-overlay-surface: color-mix(in srgb, var(--neko-elevated) 94%, transparent);
-  --canvas-state-surface: color-mix(in srgb, var(--neko-fg) 5%, transparent);
-  --canvas-state-surface-strong: color-mix(in srgb, var(--neko-fg) 8%, transparent);
-  --canvas-surface-border: color-mix(in srgb, var(--neko-fg) 13%, transparent);
-  --canvas-card-shadow: var(
+  --canvas-card-surface: var(--neko-elevated);
+  --canvas-overlay-surface: var(
+    --neko-desktop-overlay,
+    color-mix(in srgb, var(--neko-elevated) 92%, transparent)
+  );
+  --canvas-state-surface: var(
+    --neko-desktop-control,
+    color-mix(in srgb, var(--neko-fg) 5%, transparent)
+  );
+  --canvas-state-surface-strong: var(
+    --neko-desktop-control-pressed,
+    color-mix(in srgb, var(--neko-fg) 9%, transparent)
+  );
+  --canvas-surface-border: var(--neko-desktop-border, var(--neko-border));
+  --canvas-surface-border-strong: var(
+    --neko-desktop-border-strong,
+    color-mix(in srgb, var(--neko-fg) 18%, transparent)
+  );
+  --canvas-card-shadow:
+    0 1px 2px color-mix(in srgb, black 7%, transparent),
+    0 4px 12px color-mix(in srgb, black 5%, transparent);
+  --canvas-card-shadow-hover:
+    0 2px 5px color-mix(in srgb, black 9%, transparent),
+    0 8px 18px color-mix(in srgb, black 7%, transparent);
+  --canvas-card-shadow-selected:
+    0 4px 10px color-mix(in srgb, black 11%, transparent),
+    0 14px 30px color-mix(in srgb, black 9%, transparent);
+  --canvas-floating-shadow: var(
     --neko-desktop-shadow-surface,
-    0 8px 24px color-mix(in srgb, black 12%, transparent)
+    0 8px 24px color-mix(in srgb, black 11%, transparent)
   );
   --canvas-overlay-shadow: var(--neko-desktop-shadow-overlay, var(--neko-shadow-lg));
+  --canvas-overlay-blur: blur(16px) saturate(135%);
   --toolbar-bg: var(--canvas-overlay-surface);
   --toolbar-border: var(--canvas-surface-border);
   --toolbar-fg: var(--neko-fg);
   --toolbar-fg-secondary: var(--neko-fg-secondary);
 
   /* ── Glassmorphism surface ───────────────────────────────────────────────── */
-  --glass-bg: var(--neko-glass-bg);
-  --glass-bg-light: color-mix(in srgb, var(--neko-glass-bg) 82%, transparent);
-  --glass-border: var(--neko-glass-border);
+  --glass-bg: var(--canvas-overlay-surface);
+  --glass-bg-light: var(--canvas-overlay-surface);
+  --glass-border: var(--canvas-surface-border);
   --glass-highlight: color-mix(in srgb, var(--neko-fg) 6%, transparent);
-  --glass-shadow: var(--neko-glass-shadow);
-  --glass-shadow-sm: var(--neko-shadow-md);
-  --glass-blur: var(--neko-glass-blur);
+  --glass-shadow: var(--canvas-overlay-shadow);
+  --glass-shadow-sm: var(--canvas-floating-shadow);
+  --glass-blur: var(--canvas-overlay-blur);
 
   /* ── Title bar ───────────────────────────────────────────────────────────── */
   --titlebar-bg: var(--toolbar-bg);
@@ -64,24 +81,19 @@
   --node-bg: var(--canvas-card-surface);
   --node-surface: var(--canvas-card-surface);
   --node-border: var(--canvas-surface-border);
-  --node-selected: var(--neko-accent);
-  --node-header-bg: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--node-bg) 88%, var(--neko-fg) 9%),
-    color-mix(in srgb, var(--node-bg) 96%, var(--neko-fg) 4%)
-  );
+  --node-selected: var(--neko-desktop-accent, var(--neko-accent));
+  --node-header-bg: transparent;
   --node-divider: color-mix(in srgb, var(--neko-fg) 12%, transparent);
   --node-radius: 10px;
   --node-shadow: var(--canvas-card-shadow);
-  --node-shadow-sel:
-    0 0 0 1.5px var(--node-selected), 0 16px 38px var(--neko-accent-soft),
-    0 1px 0 color-mix(in srgb, white 38%, transparent) inset;
+  --node-shadow-hover: var(--canvas-card-shadow-hover);
+  --node-shadow-sel: var(--canvas-card-shadow-selected);
   --node-fg: var(--neko-fg);
   --node-fg-secondary: var(--neko-fg-secondary);
   --selection-bg: var(--neko-accent-soft);
-  --selection-border: color-mix(in srgb, var(--node-selected) 36%, transparent);
+  --selection-border: var(--node-selected);
   --selection-strong: color-mix(in srgb, var(--node-selected) 30%, transparent);
-  --hover-border: color-mix(in srgb, var(--neko-fg) 16%, transparent);
+  --hover-border: var(--canvas-surface-border-strong);
 
   /* ── Controls ────────────────────────────────────────────────────────────── */
   --control-bg: var(--neko-elevated);
@@ -237,21 +249,7 @@ html.canvas-webview-document #root,
 .canvas-main-surface {
   position: relative;
   flex-direction: column;
-  background:
-    var(--canvas-vignette),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--canvas-bg) 96%, var(--neko-fg) 2%),
-      var(--canvas-bg)
-    );
-}
-
-.canvas-main-surface::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  box-shadow: inset 0 0 90px color-mix(in srgb, black 10%, transparent);
+  background: var(--canvas-bg);
 }
 
 .canvas-main-surface-inner,
@@ -943,7 +941,18 @@ html.canvas-webview-document #root,
 }
 
 .canvas-hud-controls {
-  filter: drop-shadow(0 16px 34px color-mix(in srgb, black 18%, transparent));
+  filter: none;
+}
+
+@media (max-width: 920px) {
+  .canvas-main-surface:has(.selection-generation-input-panel) .canvas-hud-controls {
+    top: 16px;
+    bottom: auto;
+  }
+
+  .canvas-main-surface:has(.selection-generation-input-panel) .canvas-hud-controls .minimap-card {
+    display: none;
+  }
 }
 
 .canvas-floating-toolbar-host {
@@ -967,8 +976,8 @@ html.canvas-webview-document #root,
 }
 
 .canvas-add-action-popover-surface {
-  --neko-menu-background: color-mix(in srgb, var(--neko-elevated) 96%, transparent);
-  --neko-menu-border: var(--neko-border);
+  --neko-menu-background: var(--neko-desktop-overlay, var(--neko-elevated));
+  --neko-menu-border: var(--neko-desktop-border, var(--neko-border));
   --neko-menu-foreground: var(--neko-fg);
   --neko-menu-selectionBackground: var(--neko-hover);
   --neko-menu-selectionForeground: var(--neko-fg);
@@ -976,8 +985,8 @@ html.canvas-webview-document #root,
   --neko-popover-border: var(--neko-menu-border);
   --neko-popover-foreground: var(--neko-menu-foreground);
   --neko-popover-shadow: var(--neko-desktop-shadow-overlay, var(--neko-shadow-md));
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
 }
 
 .canvas-add-action-popover-surface > svg {
@@ -1223,8 +1232,8 @@ html.canvas-webview-document #root,
   border: 1px solid var(--node-border);
   border-radius: var(--node-radius);
   box-shadow: var(--node-shadow);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   transition:
     box-shadow 0.18s ease,
     border-color 0.18s ease,
@@ -1232,40 +1241,51 @@ html.canvas-webview-document #root,
 }
 
 .node-card.selected {
-  /* 选中：仅用 outline 模拟外描边，不改变元素盒模型也不叠加多重阴影 */
-  outline: 1.5px solid var(--node-selected);
-  outline-offset: 0;
+  outline: 2px solid var(--node-selected);
+  outline-offset: -1px;
   box-shadow: var(--node-shadow-sel);
   border-color: var(--selection-border);
 }
 
 .node-card:hover:not(.selected) {
-  /* hover：仅加深投影，不加 inset 高光避免冲突 */
-  box-shadow: var(--neko-shadow-xl);
+  box-shadow: var(--node-shadow-hover);
   border-color: var(--hover-border);
 }
 
+.node-card.node-card--transforming {
+  box-shadow: var(--node-shadow-sel);
+}
+
+.node-card--connection-valid,
+.node-card--connection-invalid {
+  outline: 2px solid;
+  outline-offset: -1px;
+}
+
+.node-card--connection-valid {
+  outline-color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.node-card--connection-invalid {
+  outline-color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+
 .node-card--foundational {
-  background: var(--canvas-card-surface);
-  border: 1px solid var(--node-border);
-  box-shadow: var(--canvas-card-shadow);
-  backdrop-filter: blur(12px) saturate(135%);
-  -webkit-backdrop-filter: blur(12px) saturate(135%);
   overflow: visible;
 }
 
 .node-card--foundational:hover:not(.selected) {
-  background: var(--canvas-card-surface);
-  border-color: color-mix(in srgb, var(--node-fg) 20%, transparent);
-  box-shadow: var(--neko-shadow-md);
+  border-color: var(--hover-border);
+  box-shadow: var(--node-shadow-hover);
 }
 
 .node-card--foundational.selected {
-  background: var(--canvas-card-surface);
   border-color: var(--selection-border);
   box-shadow: var(--node-shadow-sel);
-  outline: 1.5px solid var(--node-selected);
-  outline-offset: 1px;
+  outline: 2px solid var(--node-selected);
+  outline-offset: -1px;
 }
 
 .node-card--foundational.node-card--opaque,
@@ -1274,10 +1294,19 @@ html.canvas-webview-document #root,
   background: var(--canvas-card-surface);
 }
 
-[data-node-presentation='foundational']:focus-visible .node-card--foundational,
-[data-node-presentation='spatial-container']:focus-visible .node-card--spatial-container {
+[data-node-id]:focus-visible > .node-card:not(.node-card--spatial-container) {
   outline: 2px dashed var(--node-selected);
   outline-offset: 4px;
+}
+
+[data-node-id][data-node-selected='true']:focus-visible
+  > .node-card:not(.node-card--spatial-container) {
+  outline-style: solid;
+  outline-offset: -1px;
+}
+
+[data-node-id]:focus-visible {
+  outline: none;
 }
 
 .node-card--spatial-container {
@@ -1412,9 +1441,9 @@ html.canvas-webview-document #root,
   border-radius: 8px;
   background: var(--canvas-overlay-surface);
   color: var(--toolbar-fg);
-  box-shadow: var(--canvas-card-shadow);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--canvas-floating-shadow);
+  backdrop-filter: var(--canvas-overlay-blur);
+  -webkit-backdrop-filter: var(--canvas-overlay-blur);
 }
 
 .selection-context-toolbar__label {
@@ -1513,7 +1542,6 @@ html.canvas-webview-document #root,
 .canvas-node-external-label > .codicon {
   flex: none;
 }
-
 
 .canvas-file-node {
   position: relative;
@@ -1871,11 +1899,11 @@ html.canvas-webview-document #root,
   transform: translateX(-50%);
   border: 1px solid var(--toolbar-border);
   border-radius: 14px;
-  background: var(--canvas-overlay-surface);
+  background: var(--canvas-card-surface);
   color: var(--toolbar-fg);
-  box-shadow: var(--canvas-overlay-shadow);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--canvas-floating-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .selection-generation-input-panel__footer {
@@ -2204,7 +2232,7 @@ html.canvas-webview-document #root,
   --control-fg: var(--neko-fg);
   --node-selected: var(--neko-accent);
   --canvas-state-surface: color-mix(in srgb, var(--neko-fg) 5%, transparent);
-  --canvas-overlay-surface: color-mix(in srgb, var(--neko-elevated) 94%, transparent);
+  --canvas-overlay-surface: var(--neko-desktop-overlay, var(--neko-elevated));
   --canvas-overlay-shadow: var(--neko-desktop-shadow-overlay, var(--neko-shadow-lg));
   position: fixed;
   z-index: 75;
@@ -2214,8 +2242,8 @@ html.canvas-webview-document #root,
   background: var(--canvas-overlay-surface);
   color: var(--toolbar-fg);
   box-shadow: var(--canvas-overlay-shadow);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
 }
 
 .selection-generation-input-panel__popover-anchor {
@@ -2550,12 +2578,12 @@ html.canvas-webview-document #root,
 }
 
 .selection-action-overflow-surface {
-  --neko-popover-background: color-mix(in srgb, var(--neko-elevated) 96%, transparent);
-  --neko-popover-border: var(--neko-border);
+  --neko-popover-background: var(--neko-desktop-overlay, var(--neko-elevated));
+  --neko-popover-border: var(--neko-desktop-border, var(--neko-border));
   --neko-popover-foreground: var(--neko-fg);
   --neko-popover-shadow: var(--neko-desktop-shadow-overlay, var(--neko-shadow-lg));
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
 }
 
 .selection-action-overflow [data-danger='true'] {
@@ -2602,11 +2630,11 @@ html.canvas-webview-document #root,
   transform: translateX(-50%);
   border: 1px solid var(--toolbar-border);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--toolbar-bg) 98%, transparent);
+  background: var(--canvas-card-surface);
   color: var(--toolbar-fg);
-  box-shadow: var(--neko-shadow-lg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--canvas-floating-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .selection-material-generation-copy {
@@ -2891,20 +2919,7 @@ html.canvas-webview-document #root,
   color: var(--node-fg-secondary);
 }
 
-[data-node-id] > div:first-of-type {
-  box-shadow: var(--node-shadow);
-}
-
-[data-node-presentation='foundational'] > div:first-of-type,
-[data-node-presentation='spatial-container'] > div:first-of-type {
-  box-shadow: none;
-}
-
-[data-node-id] > div:first-of-type:hover {
-  border-color: var(--hover-border);
-}
-
-[data-node-id][data-playback-active='true'] > div:first-of-type {
+[data-node-id][data-playback-active='true'] > .node-card {
   box-shadow: var(--node-shadow-sel);
 }
 
@@ -2913,22 +2928,23 @@ html.canvas-webview-document #root,
    ============================================================================= */
 
 .canvas-context-menu {
-  --neko-menu-background: color-mix(in srgb, var(--toolbar-bg) 96%, var(--canvas-bg) 4%);
-  --neko-menu-border: var(--toolbar-border);
+  --neko-menu-background: var(--neko-desktop-overlay, var(--neko-elevated));
+  --neko-menu-border: var(--neko-desktop-border, var(--neko-border));
   --neko-menu-foreground: var(--toolbar-fg);
-  --neko-menu-selectionBackground: var(--control-hover);
+  --neko-menu-selectionBackground: var(--neko-desktop-control-hover, var(--neko-hover));
   --neko-menu-selectionForeground: var(--toolbar-fg);
-  --neko-menu-separatorBackground: var(--toolbar-border);
-  --glass-shadow: var(--neko-shadow-lg);
+  --neko-menu-separatorBackground: var(--neko-desktop-border, var(--neko-border));
+  --glass-shadow: var(--neko-desktop-shadow-overlay, var(--neko-shadow-lg));
+  --glass-blur: blur(16px) saturate(135%);
 }
 
 .mac-menu {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  background: var(--canvas-overlay-surface);
+  backdrop-filter: var(--canvas-overlay-blur);
+  -webkit-backdrop-filter: var(--canvas-overlay-blur);
+  border: 1px solid var(--canvas-surface-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--canvas-overlay-shadow);
   padding: 5px;
   min-width: 200px;
 }
@@ -2949,13 +2965,13 @@ html.canvas-webview-document #root,
 }
 
 .mac-menu-item:hover {
-  background: var(--button-bg);
-  color: #fff;
+  background: var(--canvas-state-surface);
+  color: var(--toolbar-fg);
 }
 
 .mac-menu-item.destructive:hover {
-  background: var(--neko-danger);
-  color: #fff;
+  background: color-mix(in srgb, var(--neko-danger) 9%, transparent);
+  color: var(--neko-desktop-danger-foreground, var(--neko-danger));
 }
 
 .mac-menu-separator {
@@ -2983,13 +2999,12 @@ html.canvas-webview-document #root,
   align-items: center;
   gap: 2px;
   padding: 3px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  /* 边框与 glass-border 统一，不单独加粗 */
-  border: 1px solid var(--glass-border);
+  background: var(--canvas-overlay-surface);
+  backdrop-filter: var(--canvas-overlay-blur);
+  -webkit-backdrop-filter: var(--canvas-overlay-blur);
+  border: 1px solid var(--canvas-surface-border);
   border-radius: var(--radius-xl);
-  box-shadow: var(--glass-shadow-sm);
+  box-shadow: var(--canvas-floating-shadow);
 }
 
 .zoom-pill-btn {
@@ -3033,12 +3048,12 @@ html.canvas-webview-document #root,
    ============================================================================= */
 
 .minimap-card {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  background: var(--canvas-overlay-surface);
+  backdrop-filter: var(--canvas-overlay-blur);
+  -webkit-backdrop-filter: var(--canvas-overlay-blur);
+  border: 1px solid var(--canvas-surface-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--canvas-floating-shadow);
   overflow: hidden;
 }
 

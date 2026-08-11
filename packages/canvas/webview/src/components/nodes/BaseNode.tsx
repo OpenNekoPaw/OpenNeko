@@ -400,9 +400,9 @@ export function BaseNode({
           opaqueSurface && 'node-card--opaque',
           'transition-colors duration-150',
           isSelected && 'selected',
-          (isDragging || isResizing) && 'shadow-2xl',
-          targetState?.validity === 'valid' && 'ring-2 ring-blue-500',
-          targetState?.validity === 'invalid' && 'ring-2 ring-red-500',
+          (isDragging || isResizing || isRotating) && 'node-card--transforming',
+          targetState?.validity === 'valid' && 'node-card--connection-valid',
+          targetState?.validity === 'invalid' && 'node-card--connection-invalid',
         )}
       >
         {children}

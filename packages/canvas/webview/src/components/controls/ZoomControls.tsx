@@ -53,10 +53,7 @@ export function ZoomControls({
   );
 
   return (
-    <div
-      className="flex items-center gap-1 rounded-lg p-1 shadow-lg"
-      style={{ backgroundColor: 'var(--control-bg)', border: '1px solid var(--control-border)' }}
-    >
+    <div className="zoom-pill">
       {/* Zoom out button */}
       <button
         onClick={onZoomOut}
