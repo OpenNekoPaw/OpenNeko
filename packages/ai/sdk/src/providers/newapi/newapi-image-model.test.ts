@@ -1,10 +1,67 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewAPIImageModel } from './newapi-image-model';
 
+const dispatcherFacts = vi.hoisted(() => ({
+  options: [] as unknown[],
+  closeCount: 0,
+}));
+
+vi.mock('undici', () => ({
+  Agent: class {
+    constructor(options: unknown) {
+      dispatcherFacts.options.push(options);
+    }
+
+    async close(): Promise<void> {
+      dispatcherFacts.closeCount += 1;
+    }
+
+    async destroy(): Promise<void> {}
+  },
+}));
+
 describe('NewAPIImageModel', () => {
   afterEach(() => {
+    dispatcherFacts.options.length = 0;
+    dispatcherFacts.closeCount = 0;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('uses and releases a request-scoped ten-minute image transport', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        created: 0,
+        data: [{ b64_json: 'image-bytes' }],
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const model = new NewAPIImageModel('gpt-image-2', {
+      apiUrl: 'https://www.nekoapi.com',
+      apiKey: 'test-key',
+    });
+
+    await model.doGenerate({
+      prompt: 'A playful cat',
+      n: 1,
+      size: '1024x1024',
+      aspectRatio: undefined,
+      seed: undefined,
+      files: undefined,
+      mask: undefined,
+      providerOptions: {},
+    });
+
+    expect(dispatcherFacts.options).toEqual([
+      expect.objectContaining({ headersTimeout: 600_000, bodyTimeout: 600_000 }),
+    ]);
+    const calls = fetchMock.mock.calls as unknown as Array<
+      [unknown, RequestInit & { dispatcher?: unknown }]
+    >;
+    expect(calls[0]?.[1].dispatcher).toBeDefined();
+    expect(dispatcherFacts.closeCount).toBe(1);
   });
 
   it('does not forward prompt-only style hints to the standard image generation endpoint', async () => {
@@ -139,12 +196,10 @@ describe('NewAPIImageModel', () => {
     const transportError = Object.assign(new Error('headers timed out'), {
       code: 'UND_ERR_HEADERS_TIMEOUT',
     });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw Object.assign(new Error('fetch failed'), { cause: transportError });
-      }),
-    );
+    const fetchMock = vi.fn(async () => {
+      throw Object.assign(new Error('fetch failed'), { cause: transportError });
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     const model = new NewAPIImageModel('gpt-image-2', {
       apiUrl: 'https://www.nekoapi.com',
@@ -167,5 +222,14 @@ describe('NewAPIImageModel', () => {
       isRetryable: false,
       outcomeUnknown: true,
     });
+    expect(dispatcherFacts.options).toEqual([
+      expect.objectContaining({ headersTimeout: 600_000, bodyTimeout: 600_000 }),
+    ]);
+    expect(dispatcherFacts.closeCount).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const calls = fetchMock.mock.calls as unknown as Array<[unknown]>;
+    const requestedUrl = new URL(String(calls[0]?.[0]));
+    expect(requestedUrl.origin).toBe('https://www.nekoapi.com');
+    expect(requestedUrl.pathname).toMatch(/\/images\/generations$/);
   });
 });
