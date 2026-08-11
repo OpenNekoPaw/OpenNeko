@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CharacterCatalogSurface,
   CharacterAuthoringStudioRoot,
+  CharacterCompanionContinuitySurface,
   CharacterDetailSurface,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface,
@@ -629,6 +630,101 @@ describe('Character Management surfaces', () => {
       'Character project write rejected',
     );
     expect(screen.getByRole('heading', { name: 'Define character' })).toBeTruthy();
+  });
+});
+
+describe('Character Companion continuity surface', () => {
+  it('shows Companion memory candidates and keeps Narrative context session-only', async () => {
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000004',
+    );
+    const companionRun = {
+      characterRunId: 'character-run:companion',
+      characterVersionId: 'character-version:companion',
+      participantId: 'participant:companion',
+      controller: { kind: 'agent' as const, primaryAgentSessionId: 'conversation:companion' },
+      runtimeBinding: {
+        kind: 'companion' as const,
+        companionContinuityId: 'continuity:companion',
+        relationshipId: 'relationship:companion',
+      },
+      createdAt: '2026-08-12T00:00:00.000Z',
+    };
+    const narrativeRun = {
+      characterRunId: 'character-run:narrative',
+      characterVersionId: 'character-version:narrative',
+      participantId: 'participant:narrative',
+      controller: { kind: 'agent' as const, primaryAgentSessionId: 'conversation:narrative' },
+      runtimeBinding: { kind: 'narrative' as const },
+      createdAt: '2026-08-12T00:00:00.000Z',
+    };
+    const snapshot: CharacterFoundationSnapshot = {
+      ...emptySnapshot(),
+      character: {
+        ...emptySnapshot().character,
+        characterRuns: [companionRun, narrativeRun],
+        companionContinuities: [
+          {
+            companionContinuityId: 'continuity:companion',
+            userId: 'user:local',
+            characterProjectId: 'character-project:companion',
+            continuityRevision: 2,
+            candidates: [
+              {
+                companionMemoryCandidateId: 'candidate:tea',
+                companionContinuityId: 'continuity:companion',
+                sourceCharacterVersionId: 'character-version:companion',
+                provenance: {
+                  kind: 'conversation-turn',
+                  conversationId: 'conversation:companion',
+                  turnId: 'turn:1',
+                },
+                content: 'The user prefers jasmine tea.',
+                compatibility: {
+                  requiredCanonFacts: [],
+                  prohibitedKnowledgeBoundaries: [],
+                  requiredBehaviorPolicies: [],
+                },
+                sensitivityTraits: [],
+                retentionTraits: ['long-term'],
+                expectedContinuityRevision: 2,
+                status: 'pending',
+                createdAt: '2026-08-12T00:01:00.000Z',
+              },
+            ],
+            entries: [],
+            createdAt: '2026-08-12T00:00:00.000Z',
+            updatedAt: '2026-08-12T00:01:00.000Z',
+          },
+        ],
+      },
+    };
+    const execute = vi.fn(async () => snapshot);
+    render(
+      <CharacterCompanionContinuitySurface
+        execute={execute}
+        locale="en"
+        runs={[companionRun, narrativeRun]}
+        snapshot={snapshot}
+      />,
+    );
+
+    expect(screen.getByText('The user prefers jasmine tea.')).not.toBeNull();
+    expect(screen.getByText(/Session-only/u)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(execute).toHaveBeenCalledWith({
+      operation: 'companion-memory-candidate-accept',
+      input: {
+        companionContinuityId: 'continuity:companion',
+        companionMemoryCandidateId: 'candidate:tea',
+        companionMemoryEntryId: 'companion-memory-entry:00000000-0000-4000-8000-000000000004',
+        expectedContinuityRevision: 2,
+      },
+    });
+    execute.mockRejectedValueOnce(new Error('Continuity revision changed.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Continuity revision changed.');
   });
 });
 

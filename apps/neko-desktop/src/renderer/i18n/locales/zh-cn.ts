@@ -379,6 +379,7 @@ export const zhCN = {
   'character.workbench.representation': '表现资源',
   'character.workbench.composition': '外部内容组合',
   'character.workbench.notConnected': '尚未接入',
+  'character.workbench.configureParticipant': '配置此角色',
   'workspace.resizePrimarySidebar': '调整应用导航宽度',
   'workspace.resizeLeftDock': '调整左侧栏宽度',
   'workspace.resizeRightDock': '调整右侧栏宽度',

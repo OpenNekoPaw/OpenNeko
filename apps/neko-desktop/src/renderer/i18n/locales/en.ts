@@ -407,6 +407,7 @@ export const en = {
   'character.workbench.representation': 'Representation',
   'character.workbench.composition': 'External composition',
   'character.workbench.notConnected': 'Not connected',
+  'character.workbench.configureParticipant': 'Configure this Character',
   'workspace.resizePrimarySidebar': 'Resize application navigation',
   'workspace.resizeLeftDock': 'Resize left sidebar',
   'workspace.resizeRightDock': 'Resize right sidebar',

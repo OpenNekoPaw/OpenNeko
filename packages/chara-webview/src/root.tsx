@@ -33,6 +33,7 @@ export {
   type CharacterRoomWorkbenchLoadState,
 } from './room-workbench';
 export { CharacterStorylineTimelineSurface } from './storyline-timeline';
+export { CharacterCompanionContinuitySurface } from './companion-continuity';
 
 type LoadState =
   | { readonly kind: 'idle' | 'loading' }

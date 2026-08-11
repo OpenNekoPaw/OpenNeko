@@ -118,6 +118,7 @@ import {
   CharacterCatalogSurface,
   CharacterDetailSurface,
   CharacterAuthoringStudioRoot,
+  CharacterCompanionContinuitySurface,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface as CharacterRoomTimelineProjectionSurface,
   CharacterStorylineTimelineSurface,
@@ -1901,6 +1902,11 @@ function DesktopWorkbenchRuntimePortals({
       workspaceSlots.rightDock
     ) : characterInteraction ? (
       <CharacterRuntimeManagerSurface
+        activeConversationId={characterInteraction.scope.conversationId}
+        conversations={projection.conversationNavigation.groups.flatMap(
+          (group) => group.conversations,
+        )}
+        onOpenConversation={actions.onOpenConversation}
         owner={characterInteraction.owner}
         runtime={characterManagement}
       />
@@ -2186,13 +2192,19 @@ function CharacterAvatarSurface({
 }
 
 function CharacterRuntimeManagerSurface({
+  activeConversationId,
+  conversations,
+  onOpenConversation,
   owner,
   runtime,
 }: {
+  readonly activeConversationId?: string;
+  readonly conversations: readonly DesktopAgentHomeConversationSummary[];
+  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly owner: CharacterInteractionOwner;
   readonly runtime: CharacterManagementRuntime;
 }): JSX.Element {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
   const runs = snapshot ? resolveOwnerCharacterRuns(snapshot, owner) : [];
   const roomRun =
@@ -2237,19 +2249,49 @@ function CharacterRuntimeManagerSurface({
           const schedulingEligible =
             roomRun?.schedulingPolicy.kind !== 'bounded-autonomous' ||
             roomRun.schedulingPolicy.eligibleParticipantIds.includes(run.participantId);
+          const agentSessionId =
+            run.controller.kind === 'agent' ? run.controller.primaryAgentSessionId : undefined;
+          const agentConversation =
+            agentSessionId !== undefined
+              ? conversations.find(
+                  (conversation) =>
+                    conversation.navigation.conversationId === agentSessionId,
+                )
+              : undefined;
           return (
             <article
               key={run.characterRunId}
               className="character-workbench-manager__participant"
               data-character-participant={run.participantId}
               data-character-mode={run.runtimeBinding.kind}
+              data-character-conversation-active={
+                agentSessionId !== undefined && agentSessionId === activeConversationId
+                  ? 'true'
+                  : undefined
+              }
             >
               <strong>{publication?.label ?? run.characterVersionId}</strong>
               <code>{run.characterVersionId}</code>
               <span>{run.runtimeBinding.kind}</span>
               <span>{run.controller.kind}</span>
               {run.controller.kind === 'agent' ? (
-                <code>{run.controller.primaryAgentSessionId}</code>
+                <>
+                  <code>{run.controller.primaryAgentSessionId}</code>
+                  <button
+                    type="button"
+                    disabled={agentConversation === undefined}
+                    onClick={() => {
+                      if (!agentConversation) {
+                        throw new Error(
+                          `Character Agent Conversation '${agentSessionId}' is unavailable.`,
+                        );
+                      }
+                      onOpenConversation(agentConversation);
+                    }}
+                  >
+                    {t('character.workbench.configureParticipant')}
+                  </button>
+                </>
               ) : null}
               {configuration?.tts.voiceRepresentationId ? (
                 <span>{configuration.tts.voiceRepresentationId}</span>
@@ -2292,6 +2334,15 @@ function CharacterRuntimeManagerSurface({
           </div>
         ) : null}
       </div>
+      {snapshot ? (
+        <CharacterCompanionContinuitySurface
+          execute={runtime.execute}
+          locale={locale}
+          runs={runs}
+          snapshot={snapshot}
+        />
+      ) : null}
+      {runtime.diagnostic ? <span role="alert">{runtime.diagnostic}</span> : null}
     </section>
   );
 }
