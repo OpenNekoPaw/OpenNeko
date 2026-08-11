@@ -109,6 +109,74 @@ describe('Desktop Canvas Webview delegate', () => {
     });
   });
 
+  it('resolves and releases an embedded Preview descriptor through the exact Canvas owner', async () => {
+    const descriptor = {
+      descriptorId: 'canvas-embedded-session-1-output-1',
+      sourceFingerprint: 'sha256-output-1',
+      contentLocator: {
+        kind: 'generated-output' as const,
+        outputId: 'output-1',
+        digest: 'sha256:output-1',
+        path: 'neko/generated/output-1.png',
+      },
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      contentKind: 'image' as const,
+      mediaType: 'image/png',
+      displayName: 'Output 1',
+      byteLength: 42,
+    };
+    const resolveEmbeddedPreview = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      descriptor,
+    }));
+    const releaseEmbeddedPreview = vi.fn(async () => undefined);
+    vi.stubGlobal('openNekoDesktop', {
+      canvas: { resolveEmbeddedPreview, releaseEmbeddedPreview },
+    });
+    const delegate = createDesktopCanvasWebviewDelegate(identity);
+    const message = vi.fn();
+    delegate.subscribe(message);
+
+    delegate.postMessage({
+      type: 'preview:resolveEmbedded',
+      requestId: 'embedded-1',
+      nodeId: 'generation-1',
+      outputId: 'output-1',
+      contentLocator: descriptor.contentLocator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      displayName: 'Output 1',
+    });
+
+    await vi.waitFor(() => expect(message).toHaveBeenCalled());
+    expect(resolveEmbeddedPreview).toHaveBeenCalledWith({
+      identity,
+      requestId: 'embedded-1',
+      nodeId: 'generation-1',
+      outputId: 'output-1',
+      locator: descriptor.contentLocator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      displayName: 'Output 1',
+    });
+    expect(message).toHaveBeenCalledWith({
+      type: 'preview:embeddedResolved',
+      requestId: 'embedded-1',
+      descriptor,
+    });
+
+    delegate.postMessage({
+      type: 'preview:releaseEmbedded',
+      descriptorId: descriptor.descriptorId,
+    });
+    await vi.waitFor(() =>
+      expect(releaseEmbeddedPreview).toHaveBeenCalledWith({
+        identity,
+        descriptorId: descriptor.descriptorId,
+      }),
+    );
+  });
+
   it('rejects unsupported messages and path-only sources instead of inferring locators', () => {
     vi.stubGlobal('openNekoDesktop', {
       canvas: { resolvePreviewVariant: vi.fn() },

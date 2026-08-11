@@ -89,7 +89,7 @@ describe('SelectionContextToolbar', () => {
   it('opens an Image preview inside Canvas without dispatching the Host preview action', async () => {
     const node = mediaNode('image-preview', 'image', 'assets/image.png');
     const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
-    const onCanvasImagePreview = vi.fn();
+    const onCanvasEmbeddedPreview = vi.fn();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -107,7 +107,7 @@ describe('SelectionContextToolbar', () => {
             selectedNodeIds={[node.id]}
             viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
             viewportSize={{ width: 800, height: 600 }}
-            onCanvasImagePreview={onCanvasImagePreview}
+            onCanvasEmbeddedPreview={onCanvasEmbeddedPreview}
           />
         </CanvasHostProvider>,
       );
@@ -118,10 +118,16 @@ describe('SelectionContextToolbar', () => {
       container.querySelector<HTMLButtonElement>('[data-selection-action="preview:open"]')?.click();
     });
 
-    expect(onCanvasImagePreview).toHaveBeenCalledWith(
+    expect(onCanvasEmbeddedPreview).toHaveBeenCalledWith(
       expect.objectContaining({
-        role: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'assets/image.png' },
+        nodeId: node.id,
+        initialIndex: 0,
+        items: [
+          expect.objectContaining({
+            role: 'image',
+            contentLocator: { kind: 'workspace-file', path: 'assets/image.png' },
+          }),
+        ],
       }),
     );
     expect(executeMaterialAction).not.toHaveBeenCalled();

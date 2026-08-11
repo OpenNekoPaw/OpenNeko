@@ -452,6 +452,9 @@ importers:
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain
+      '@neko/preview-webview':
+        specifier: workspace:*
+        version: link:../../preview/webview
       '@neko/search-domain':
         specifier: workspace:*
         version: link:../../search/domain
@@ -630,6 +633,9 @@ importers:
       '@neko/entity-webview':
         specifier: workspace:*
         version: link:../../entity/webview
+      '@neko/preview-webview':
+        specifier: workspace:*
+        version: link:../../preview/webview
       '@neko/ui':
         specifier: workspace:*
         version: link:../../ui
@@ -809,6 +815,9 @@ importers:
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain
+      '@neko/preview-webview':
+        specifier: workspace:*
+        version: link:../../preview/webview
       '@neko/shared':
         specifier: workspace:*
         version: link:../../shared

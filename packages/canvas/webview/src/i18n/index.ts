@@ -32,3 +32,7 @@ export function t(key: string, params?: Record<string, string | number>): string
 export function setLocale(locale: SupportedLocale): void {
   webviewI18n.setLocale(locale);
 }
+
+export function getLocale(): SupportedLocale {
+  return webviewI18n.getLocale();
+}

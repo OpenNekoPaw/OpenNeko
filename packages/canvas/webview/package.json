@@ -20,6 +20,7 @@
     "@neko/media": "workspace:*",
     "@neko/markdown": "workspace:*",
     "@neko/preview-domain": "workspace:*",
+    "@neko/preview-webview": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",
     "clsx": "^2.1.1",

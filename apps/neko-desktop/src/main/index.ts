@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, realpath, rm } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
@@ -198,7 +198,10 @@ import { createNodeHostContentReadService } from '@neko/content/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import type { ContentLocator } from '@neko/content';
-import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
+import {
+  DesktopCanvasRuntime,
+  type DesktopCanvasPreviewResourceLease,
+} from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
 import {
   createDesktopCutCanvasHandoffPayload,
@@ -1281,7 +1284,12 @@ async function startDesktop(): Promise<void> {
         target: parseDesktopCutCanvasHandoffPayload(executionPayload),
       });
     },
-    registerPreviewResource: async ({ identity, workspace, locator, mediaType }) => {
+    registerPreviewResource: async ({
+      identity,
+      workspace,
+      locator,
+      mediaType,
+    }): Promise<DesktopCanvasPreviewResourceLease> => {
       const owner = {
         windowId: identity.windowId,
         viewId: identity.viewId,
@@ -1292,10 +1300,17 @@ async function startDesktop(): Promise<void> {
       if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
         const absolutePath = await resolveWorkspaceContentLocator(workspace, locator);
         if (contentType.startsWith('image/')) {
-          return resourceRegistry.registerFile(owner, {
+          const metadata = await lstat(absolutePath);
+          const lease = await resourceRegistry.registerFile(owner, {
             absolutePath,
             mediaType: contentType,
           });
+          return {
+            ...lease,
+            sourceFingerprint: `${metadata.mtimeMs}:${metadata.size}`,
+            byteLength: metadata.size,
+            mediaType: contentType,
+          };
         }
         const thumbnail = await createDesktopThumbnailPng(absolutePath, {
           width: 640,
@@ -3114,6 +3129,9 @@ function registerCanvasPreviewBytes(
   });
   return {
     url: new URL('preview', lease.url).toString(),
+    sourceFingerprint: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+    byteLength: bytes.byteLength,
+    mediaType: contentType,
     release: () => lease.release(),
   };
 }

@@ -41,9 +41,14 @@ import {
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import {
   parseDesktopCanvasMediaRequest,
+  parseDesktopCanvasEmbeddedPreviewReleaseRequest,
+  parseDesktopCanvasEmbeddedPreviewRequest,
   parseDesktopCanvasPreviewVariantRequest,
   type DesktopCanvasMediaRequest,
   type DesktopCanvasMediaResponse,
+  type DesktopCanvasEmbeddedPreviewRequest,
+  type DesktopCanvasEmbeddedPreviewResult,
+  type DesktopCanvasEmbeddedPreviewReleaseRequest,
   type DesktopCanvasPreviewVariantRequest,
   type DesktopCanvasPreviewVariantResult,
 } from '../shared/canvas-bridge-contract';
@@ -65,6 +70,9 @@ interface DesktopCanvasSessionEntry {
 
 export interface DesktopCanvasPreviewResourceLease {
   readonly url: string;
+  readonly sourceFingerprint: string;
+  readonly byteLength: number;
+  readonly mediaType: string;
   release(): void;
 }
 
@@ -75,6 +83,7 @@ interface DesktopCanvasPreviewLeaseEntry {
   readonly locatorKey: string;
   readonly mediaType?: string;
   readonly lease: DesktopCanvasPreviewResourceLease;
+  readonly descriptor?: DesktopCanvasEmbeddedPreviewResult['descriptor'];
 }
 
 export interface DesktopCanvasMediaPort {
@@ -287,6 +296,71 @@ export class DesktopCanvasRuntime {
       requestId: request.requestId,
       url: lease.url,
     };
+  }
+
+  async resolveEmbeddedPreview(
+    windowId: string,
+    value: DesktopCanvasEmbeddedPreviewRequest | unknown,
+  ): Promise<DesktopCanvasEmbeddedPreviewResult> {
+    const request = parseDesktopCanvasEmbeddedPreviewRequest(value);
+    const entry = await this.requireSession(windowId, request.identity);
+    entry.session.authorizeEmbeddedPreviewSource(request);
+    const registerPreviewResource = this.options.registerPreviewResource;
+    if (!registerPreviewResource) throw new Error('Canvas embedded preview capability is unavailable.');
+    const descriptorId = [
+      'canvas-embedded',
+      request.identity.sessionId,
+      request.nodeId,
+      request.outputId,
+    ].join(':');
+    const key = `embedded:${sessionKey(request.identity)}:${request.nodeId}:${request.outputId}`;
+    const locatorKey = contentLocatorKey(request.locator);
+    const current = this.previewLeases.get(key);
+    if (current?.locatorKey === locatorKey && current.descriptor) {
+      return { requestId: request.requestId, descriptor: current.descriptor };
+    }
+    current?.lease.release();
+    this.previewLeases.delete(key);
+    const lease = await registerPreviewResource({
+      identity: request.identity,
+      workspace: entry.workspace,
+      locator: request.locator,
+      mediaType: request.mediaType,
+    });
+    const descriptor = {
+      descriptorId,
+      sourceFingerprint: lease.sourceFingerprint,
+      contentLocator: request.locator,
+      url: lease.url,
+      contentKind: request.contentKind,
+      mediaType: lease.mediaType,
+      displayName: request.displayName,
+      byteLength: lease.byteLength,
+    } as const;
+    this.previewLeases.set(key, {
+      windowId,
+      viewId: request.identity.viewId,
+      sessionKey: sessionKey(request.identity),
+      locatorKey,
+      mediaType: request.mediaType,
+      lease,
+      descriptor,
+    });
+    return { requestId: request.requestId, descriptor };
+  }
+
+  async releaseEmbeddedPreview(
+    windowId: string,
+    value: DesktopCanvasEmbeddedPreviewReleaseRequest | unknown,
+  ): Promise<void> {
+    const request = parseDesktopCanvasEmbeddedPreviewReleaseRequest(value);
+    await this.requireSession(windowId, request.identity);
+    const ownerSessionKey = sessionKey(request.identity);
+    this.releasePreviewLeases(
+      (entry) =>
+        entry.sessionKey === ownerSessionKey &&
+        entry.descriptor?.descriptorId === request.descriptorId,
+    );
   }
 
   async executeMediaRequest(

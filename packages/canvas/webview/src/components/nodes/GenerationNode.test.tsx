@@ -60,9 +60,10 @@ describe('GenerationNode', () => {
 
   it('presents one Job image batch side by side and selects a visible member without hiding siblings', async () => {
     const selectGenerationOutput = vi.fn(async () => snapshot());
+    const onEmbeddedPreview = vi.fn();
     const node = imageNodeWithBatch();
 
-    render(node, createHost(undefined, { selectGenerationOutput }));
+    render(node, createHost(undefined, { selectGenerationOutput }), onEmbeddedPreview);
 
     expect(container.querySelector('[data-generation-result-count="2"]')).not.toBeNull();
     expect(container.querySelector('[data-generation-layout="grid"]')).not.toBeNull();
@@ -83,6 +84,11 @@ describe('GenerationNode', () => {
     expect(container.querySelectorAll('.canvas-generation-node__result-grid-item')).toHaveLength(2);
     expect(frame?.style.width).toBe('320px');
     expect(frame?.style.height).toBe('240px');
+
+    await act(async () => {
+      choices[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+    expect(onEmbeddedPreview).toHaveBeenCalledWith('generation-image', 'image-output-1');
   });
 
   it('keeps four outputs in one bounded two-column result grid', () => {
@@ -226,7 +232,11 @@ describe('GenerationNode', () => {
     },
   );
 
-  function render(node: GenerationCanvasNode, host: CanvasWebviewHostPort): void {
+  function render(
+    node: GenerationCanvasNode,
+    host: CanvasWebviewHostPort,
+    onEmbeddedPreview?: (nodeId: string, outputId?: string) => void,
+  ): void {
     act(() => {
       root.render(
         <CanvasHostProvider host={host}>
@@ -235,6 +245,7 @@ describe('GenerationNode', () => {
             viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
             isSelected
             containerRef={{ current: container }}
+            onEmbeddedPreview={onEmbeddedPreview}
           />
         </CanvasHostProvider>,
       );

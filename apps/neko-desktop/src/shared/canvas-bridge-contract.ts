@@ -16,6 +16,11 @@ import type {
 } from '@neko/media';
 import { isMediaResourceUrl } from '@neko/media';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  parsePreviewMediaDescriptor,
+  type PreviewContentKind,
+  type PreviewMediaDescriptor,
+} from '@neko/preview-domain';
 
 export const DESKTOP_CANVAS_CHANNELS = {
   snapshotGet: 'open-neko:canvas:snapshot-get',
@@ -23,6 +28,8 @@ export const DESKTOP_CANVAS_CHANNELS = {
   textFilePreviewRead: 'open-neko:canvas:text-file-preview-read',
   intentExecute: 'open-neko:canvas:intent-execute',
   previewVariantResolve: 'open-neko:canvas:preview-variant-resolve',
+  embeddedPreviewResolve: 'open-neko:canvas:embedded-preview-resolve',
+  embeddedPreviewRelease: 'open-neko:canvas:embedded-preview-release',
   mediaRequestExecute: 'open-neko:canvas:media-request-execute',
   projectionEvent: 'open-neko:canvas:projection-event',
 } as const;
@@ -56,6 +63,10 @@ export interface OpenNekoDesktopCanvasBridge {
     resolvePreviewVariant(
       request: DesktopCanvasPreviewVariantRequest,
     ): Promise<DesktopCanvasPreviewVariantResult>;
+    resolveEmbeddedPreview(
+      request: DesktopCanvasEmbeddedPreviewRequest,
+    ): Promise<DesktopCanvasEmbeddedPreviewResult>;
+    releaseEmbeddedPreview(request: DesktopCanvasEmbeddedPreviewReleaseRequest): Promise<void>;
     executeMediaRequest(
       request: DesktopCanvasMediaRequest,
     ): Promise<DesktopCanvasMediaResponse | undefined>;
@@ -78,6 +89,27 @@ export interface DesktopCanvasPreviewVariantRequest {
 export interface DesktopCanvasPreviewVariantResult {
   readonly requestId: string;
   readonly url: string;
+}
+
+export interface DesktopCanvasEmbeddedPreviewRequest {
+  readonly identity: CanvasHostRuntimeIdentity;
+  readonly requestId: string;
+  readonly nodeId: string;
+  readonly outputId: string;
+  readonly locator: ContentLocator;
+  readonly contentKind: PreviewContentKind;
+  readonly mediaType: string;
+  readonly displayName: string;
+}
+
+export interface DesktopCanvasEmbeddedPreviewResult {
+  readonly requestId: string;
+  readonly descriptor: PreviewMediaDescriptor;
+}
+
+export interface DesktopCanvasEmbeddedPreviewReleaseRequest {
+  readonly identity: CanvasHostRuntimeIdentity;
+  readonly descriptorId: string;
 }
 
 export interface DesktopCanvasMediaInfo {
@@ -197,6 +229,55 @@ export function parseDesktopCanvasPreviewVariantResult(
     throw new Error('Desktop Canvas preview result is invalid.');
   }
   return { requestId, url: value['url'] };
+}
+
+export function parseDesktopCanvasEmbeddedPreviewRequest(
+  value: unknown,
+): DesktopCanvasEmbeddedPreviewRequest {
+  if (!isRecord(value)) throw new Error('Desktop Canvas embedded preview request must be an object.');
+  const locator = validateContentLocator(value['locator']);
+  if (!locator.ok) throw new Error('Desktop Canvas embedded preview requires a valid ContentLocator.');
+  const contentKind = value['contentKind'];
+  if (
+    contentKind !== 'image' &&
+    contentKind !== 'video' &&
+    contentKind !== 'audio' &&
+    contentKind !== 'document' &&
+    contentKind !== 'model' &&
+    contentKind !== 'text'
+  ) {
+    throw new Error('Desktop Canvas embedded preview content kind is invalid.');
+  }
+  return {
+    identity: parseDesktopCanvasHostIdentity(value['identity']),
+    requestId: requireIdentity(value['requestId'], 'embedded preview request'),
+    nodeId: requireIdentity(value['nodeId'], 'embedded preview node'),
+    outputId: requireIdentity(value['outputId'], 'embedded preview output'),
+    locator: locator.locator,
+    contentKind,
+    mediaType: requireIdentity(value['mediaType'], 'embedded preview media type'),
+    displayName: requireIdentity(value['displayName'], 'embedded preview display name'),
+  };
+}
+
+export function parseDesktopCanvasEmbeddedPreviewResult(
+  value: unknown,
+  requestId: string,
+): DesktopCanvasEmbeddedPreviewResult {
+  if (!isRecord(value) || value['requestId'] !== requestId) {
+    throw new Error('Desktop Canvas embedded preview result is invalid.');
+  }
+  return { requestId, descriptor: parsePreviewMediaDescriptor(value['descriptor']) };
+}
+
+export function parseDesktopCanvasEmbeddedPreviewReleaseRequest(
+  value: unknown,
+): DesktopCanvasEmbeddedPreviewReleaseRequest {
+  if (!isRecord(value)) throw new Error('Desktop Canvas embedded preview release must be an object.');
+  return {
+    identity: parseDesktopCanvasHostIdentity(value['identity']),
+    descriptorId: requireIdentity(value['descriptorId'], 'embedded preview descriptor'),
+  };
 }
 
 export function parseDesktopCanvasMediaRequest(value: unknown): DesktopCanvasMediaRequest {

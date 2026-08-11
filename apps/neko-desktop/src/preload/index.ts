@@ -129,6 +129,9 @@ import {
   parseDesktopCanvasMediaResponse,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
+  parseDesktopCanvasEmbeddedPreviewReleaseRequest,
+  parseDesktopCanvasEmbeddedPreviewRequest,
+  parseDesktopCanvasEmbeddedPreviewResult,
   type OpenNekoDesktopCanvasBridge,
 } from '../shared/canvas-bridge-contract';
 import {
@@ -1409,6 +1412,26 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseDesktopCanvasPreviewVariantResult(response, request.requestId);
+    },
+    async resolveEmbeddedPreview(value) {
+      const request = parseDesktopCanvasEmbeddedPreviewRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error('Desktop Canvas embedded preview requires a current owner-bound snapshot.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.embeddedPreviewResolve,
+        request,
+      );
+      return parseDesktopCanvasEmbeddedPreviewResult(response, request.requestId);
+    },
+    async releaseEmbeddedPreview(value) {
+      const request = parseDesktopCanvasEmbeddedPreviewReleaseRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error('Desktop Canvas embedded preview release requires a current owner-bound snapshot.');
+      }
+      await ipcRenderer.invoke(DESKTOP_CANVAS_CHANNELS.embeddedPreviewRelease, request);
     },
     async executeMediaRequest(value) {
       const request = parseDesktopCanvasMediaRequest(value);

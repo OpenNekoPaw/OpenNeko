@@ -67,8 +67,8 @@ import { t } from '../../i18n';
 import { getNodeLabel } from '../nodes/nodeTypeDescriptor';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
 import {
-  resolveCanvasImagePreviewSource,
-  type CanvasImagePreviewSource,
+  resolveCanvasEmbeddedPreviewRequest,
+  type CanvasEmbeddedPreviewRequest,
 } from './CanvasImagePreviewOverlay';
 import { resolveSelectionToolbarTop } from './selectionAttachmentGeometry';
 
@@ -80,7 +80,7 @@ interface SelectionContextToolbarProps {
   readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
   readonly hidden?: boolean;
-  readonly onCanvasImagePreview?: (source: CanvasImagePreviewSource) => void;
+  readonly onCanvasEmbeddedPreview?: (request: CanvasEmbeddedPreviewRequest) => void;
 }
 
 interface ToolbarAction {
@@ -109,7 +109,7 @@ export function SelectionContextToolbar({
   viewport,
   viewportSize,
   hidden = false,
-  onCanvasImagePreview,
+  onCanvasEmbeddedPreview,
 }: SelectionContextToolbarProps): ReactNode {
   const host = useOptionalCanvasHost();
   const canvasStore = useCanvasStoreApi();
@@ -167,7 +167,7 @@ export function SelectionContextToolbar({
         clipboardStore,
         historyStore,
         setExecutionDiagnostic,
-        onCanvasImagePreview,
+        onCanvasEmbeddedPreview,
       ),
     [
       canvasStore,
@@ -175,7 +175,7 @@ export function SelectionContextToolbar({
       historyStore,
       host,
       materialActionState.descriptors,
-      onCanvasImagePreview,
+      onCanvasEmbeddedPreview,
       selectedNodes,
     ],
   );
@@ -322,7 +322,7 @@ function resolveActions(
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
-  onCanvasImagePreview?: (source: CanvasImagePreviewSource) => void,
+  onCanvasEmbeddedPreview?: (request: CanvasEmbeddedPreviewRequest) => void,
 ): ToolbarAction[] {
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
@@ -348,8 +348,8 @@ function resolveActions(
     selectedIds,
     host,
     reportExecutionDiagnostic,
-    resolveCanvasImagePreviewSource(node),
-    onCanvasImagePreview,
+    resolveCanvasEmbeddedPreviewRequest(node),
+    onCanvasEmbeddedPreview,
   );
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
     const path = node.data.canvasPath;
@@ -402,8 +402,8 @@ function resolveOwnerActions(
   selectedNodeIds: readonly string[],
   host: ReturnType<typeof useOptionalCanvasHost>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
-  canvasImagePreviewSource?: CanvasImagePreviewSource,
-  onCanvasImagePreview?: (source: CanvasImagePreviewSource) => void,
+  canvasEmbeddedPreviewRequest?: CanvasEmbeddedPreviewRequest,
+  onCanvasEmbeddedPreview?: (request: CanvasEmbeddedPreviewRequest) => void,
 ): ToolbarAction[] {
   if (!host) return [];
   return descriptors
@@ -419,10 +419,10 @@ function resolveOwnerActions(
           reportExecutionDiagnostic(undefined);
           if (
             descriptor.id === CANVAS_PREVIEW_ACTION_ID &&
-            canvasImagePreviewSource &&
-            onCanvasImagePreview
+            canvasEmbeddedPreviewRequest &&
+            onCanvasEmbeddedPreview
           ) {
-            onCanvasImagePreview(canvasImagePreviewSource);
+            onCanvasEmbeddedPreview(canvasEmbeddedPreviewRequest);
             return;
           }
           void host

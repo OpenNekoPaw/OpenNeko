@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { ContentLocator } from '@neko/content';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -1497,6 +1498,9 @@ describe('DesktopCanvasRuntime', () => {
     const release = vi.fn();
     const registerPreviewResource = vi.fn(async () => ({
       url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
+      sourceFingerprint: '1:5',
+      byteLength: 5,
+      mediaType: 'image/png',
       release,
     }));
     const runtime = createRuntime(workspacePath, identity, registerPreviewResource);
@@ -1533,6 +1537,125 @@ describe('DesktopCanvasRuntime', () => {
     ).rejects.toThrow('valid ContentLocator');
     runtime.detachWindow('window-1');
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('authorizes and releases embedded Preview leases for exact Canvas outputs fail-locally', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-embedded-preview-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const firstLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'output-1',
+      digest: 'sha256:output-1',
+      path: 'neko/generated/output-1.png',
+    };
+    const secondLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'output-2',
+      digest: 'sha256:output-2',
+      path: 'neko/generated/output-2.png',
+    };
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Embedded preview',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'generation-1',
+            type: 'generation',
+            position: { x: 0, y: 0 },
+            size: { width: 240, height: 180 },
+            zIndex: 1,
+            data: {
+              recipe: { kind: 'image', prompt: 'Character', count: 2 },
+              outputs: [
+                {
+                  outputId: 'output-1',
+                  jobRef: { kind: 'generation', jobId: 'job-1' },
+                  locator: firstLocator,
+                  kind: 'image',
+                  recipeInputFingerprint: 'recipe-1',
+                },
+                {
+                  outputId: 'output-2',
+                  jobRef: { kind: 'generation', jobId: 'job-1' },
+                  locator: secondLocator,
+                  kind: 'image',
+                  recipeInputFingerprint: 'recipe-1',
+                },
+              ],
+              selectedOutputId: 'output-1',
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const releases = [vi.fn(), vi.fn()];
+    const registerPreviewResource = vi.fn(async ({ locator }: { readonly locator: ContentLocator }) => {
+      const outputId = locator.kind === 'generated-output' ? locator.outputId : 'unknown';
+      const index = outputId === 'output-1' ? 0 : 1;
+      return {
+        url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}`,
+        sourceFingerprint: `sha256-${outputId}`,
+        byteLength: 42,
+        mediaType: 'image/png',
+        release: releases[index]!,
+      };
+    });
+    const runtime = createRuntime(workspacePath, identity, registerPreviewResource);
+    await runtime.getSnapshot('window-1', identity);
+
+    await expect(
+      runtime.resolveEmbeddedPreview('window-1', {
+        identity,
+        requestId: 'embedded-invalid',
+        nodeId: 'generation-1',
+        outputId: 'output-1',
+        locator: { ...firstLocator, path: 'neko/generated/stale.png' },
+        contentKind: 'image',
+        mediaType: 'image/png',
+        displayName: 'Stale',
+      }),
+    ).rejects.toThrow('output "output-1" is stale');
+    expect(registerPreviewResource).not.toHaveBeenCalled();
+
+    const first = await runtime.resolveEmbeddedPreview('window-1', {
+      identity,
+      requestId: 'embedded-1',
+      nodeId: 'generation-1',
+      outputId: 'output-1',
+      locator: firstLocator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      displayName: 'Output 1',
+    });
+    expect(first.descriptor).toMatchObject({
+      contentLocator: firstLocator,
+      contentKind: 'image',
+      url: expect.stringMatching(/^openneko:\/\/resource\//u),
+    });
+    await runtime.releaseEmbeddedPreview('window-1', {
+      identity,
+      descriptorId: first.descriptor.descriptorId,
+    });
+    expect(releases[0]).toHaveBeenCalledOnce();
+
+    await expect(
+      runtime.resolveEmbeddedPreview('window-1', {
+        identity,
+        requestId: 'embedded-2',
+        nodeId: 'generation-1',
+        outputId: 'output-2',
+        locator: secondLocator,
+        contentKind: 'image',
+        mediaType: 'image/png',
+        displayName: 'Output 2',
+      }),
+    ).resolves.toMatchObject({ descriptor: { contentLocator: secondLocator } });
+    expect(registerPreviewResource).toHaveBeenCalledTimes(2);
   });
 
   it('routes package media requests through the owner-bound Canvas session workspace', async () => {
@@ -2391,7 +2514,13 @@ function createRuntime(
     readonly workspace: DesktopCanvasViewGrant['workspace'];
     readonly locator: import('@neko/content').ContentLocator;
     readonly mediaType?: string;
-  }) => Promise<{ readonly url: string; release(): void }>,
+  }) => Promise<{
+    readonly url: string;
+    readonly sourceFingerprint: string;
+    readonly byteLength: number;
+    readonly mediaType: string;
+    release(): void;
+  }>,
 ): DesktopCanvasRuntime {
   return new DesktopCanvasRuntime({
     shell: {

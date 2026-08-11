@@ -233,6 +233,28 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return this.enqueueOperation(() => this.readTextFilePreviewSerial(request));
   }
 
+  authorizeEmbeddedPreviewSource(input: {
+    readonly nodeId: string;
+    readonly outputId: string;
+    readonly locator: ContentLocator;
+  }): void {
+    this.assertActive();
+    const node = this.canvas.nodes.find((candidate) => candidate.id === input.nodeId);
+    if (!node) throw new Error(`Canvas embedded preview node "${input.nodeId}" is stale.`);
+    if (node.type === 'generation') {
+      const output = node.data.outputs.find((candidate) => candidate.outputId === input.outputId);
+      if (!output || !contentLocatorsEqual(output.locator, input.locator)) {
+        throw new Error(`Canvas embedded preview output "${input.outputId}" is stale.`);
+      }
+      return;
+    }
+    const locator =
+      node.type === 'media' || node.type === 'file' ? node.data.contentLocator : undefined;
+    if (input.outputId !== node.id || !locator || !contentLocatorsEqual(locator, input.locator)) {
+      throw new Error(`Canvas embedded preview source "${input.outputId}" is stale.`);
+    }
+  }
+
   private async readTextFilePreviewSerial(
     request: CanvasTextFilePreviewRequest,
   ): Promise<CanvasTextFilePreviewResult> {

@@ -15,7 +15,12 @@ import type { NodeRendererCommonProps } from './nodeRendererTypes';
 
 type GenerationNodeProps = NodeRendererCommonProps & { readonly node: GenerationCanvasNode };
 
-export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNodeProps) {
+export function GenerationNode({
+  node,
+  isSelected,
+  onEmbeddedPreview,
+  ...baseProps
+}: GenerationNodeProps) {
   const host = useOptionalCanvasHost();
   const recipe = node.data.recipe;
   const projection = host?.getGenerationProjection(node.id);
@@ -82,9 +87,24 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
                 onSelect={(outputId) => {
                   void host?.selectGenerationOutput(node.id, outputId);
                 }}
+                onPreview={onEmbeddedPreview}
               />
             ) : (
-              <div className="canvas-generation-node__single-preview">
+              <div
+                className="canvas-generation-node__single-preview"
+                onDoubleClick={(event) => {
+                  if (
+                    !selected ||
+                    !isPreviewableGenerationKind(selected.kind) ||
+                    !onEmbeddedPreview
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onEmbeddedPreview(node.id, selected.outputId);
+                }}
+              >
                 <PreviewSurface
                   source={previewSource}
                   surfaceKind="inline"
@@ -120,6 +140,12 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
   );
 }
 
+function isPreviewableGenerationKind(
+  kind: CanvasGenerationOutputBinding['kind'],
+): kind is 'image' | 'video' | 'audio' {
+  return kind === 'image' || kind === 'video' || kind === 'audio';
+}
+
 function ImageResultGrid({
   nodeId,
   outputs,
@@ -127,6 +153,7 @@ function ImageResultGrid({
   title,
   active,
   onSelect,
+  onPreview,
 }: {
   readonly nodeId: string;
   readonly outputs: readonly CanvasGenerationOutputBinding[];
@@ -134,6 +161,7 @@ function ImageResultGrid({
   readonly title: string;
   readonly active: boolean;
   readonly onSelect: (outputId: string) => void;
+  readonly onPreview?: (nodeId: string, outputId?: string) => void;
 }) {
   return (
     <div
@@ -145,28 +173,38 @@ function ImageResultGrid({
       role="group"
       aria-label={t('generation.outputCount', { count: outputs.length })}
     >
-      {outputs.map((output, index) => (
-        <button
-          key={output.outputId}
-          type="button"
-          className="canvas-generation-node__result-grid-item nodrag nowheel"
-          data-generation-output-id={output.outputId}
-          aria-pressed={output.outputId === selectedOutputId}
-          aria-label={t('generation.selectOutput', { number: index + 1 })}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect(output.outputId);
-          }}
-        >
-          <PreviewSurface
-            source={previewSourceFor(nodeId, output, title)!}
-            surfaceKind="inline"
-            chrome="full-bleed"
-          />
-          <span>{index + 1}</span>
-        </button>
-      ))}
+      {outputs.map((output, index) => {
+        const source = previewSourceFor(nodeId, output, title);
+        if (!source) {
+          throw new Error(
+            `Canvas Image result grid received non-previewable output "${output.outputId}".`,
+          );
+        }
+        return (
+          <button
+            key={output.outputId}
+            type="button"
+            className="canvas-generation-node__result-grid-item nodrag nowheel"
+            data-generation-output-id={output.outputId}
+            aria-pressed={output.outputId === selectedOutputId}
+            aria-label={t('generation.selectOutput', { number: index + 1 })}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect(output.outputId);
+            }}
+            onDoubleClick={(event) => {
+              if (!onPreview) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onPreview(nodeId, output.outputId);
+            }}
+          >
+            <PreviewSurface source={source} surfaceKind="inline" chrome="full-bleed" />
+            <span>{index + 1}</span>
+          </button>
+        );
+      })}
       {active ? <ActivityScan /> : null}
       <span className="canvas-generation-node__count-badge">
         {t('generation.outputCount', { count: outputs.length })}

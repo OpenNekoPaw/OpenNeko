@@ -13,6 +13,9 @@ describe('canonical content node runtime boundaries', () => {
   it('keeps Markdown rendering and routes audio/video through the Preview stream surface', () => {
     expect(source).toContain('<MarkdownDocumentView');
     expect(source).toContain("import('@neko/markdown/rich-surface')");
+    expect(source).not.toContain('streamdown');
+    expect(source).not.toContain('@neko/text-editor');
+    expect(source).not.toContain('TextEditor');
     expect(source).toContain('<CanvasMilkdownRichSurface');
     expect(source).toContain('onActivate={() => setIsEditing(true)}');
     expect(source).not.toContain('<textarea');
@@ -33,7 +36,11 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain("t('node.contentUnavailable')");
     expect(source).toContain("t('node.contentLocatorMissing')");
     expect(source).toContain('!contentLocator ?');
-    expect(source).toContain('onActivate={contentLocator && onOpen');
+    expect(source).toContain(
+      'contentLocator && onEmbeddedPreview ? () => onEmbeddedPreview(node.id) : undefined',
+    );
+    expect(source).toContain('isEmbeddedPreviewMediaKind(node.data.mediaKind)');
+    expect(source).toContain('contentLocator && onOpen');
   });
 
   it('presents only the File basename in the label above the node card', () => {

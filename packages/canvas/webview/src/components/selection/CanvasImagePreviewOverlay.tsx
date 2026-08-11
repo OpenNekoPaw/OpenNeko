@@ -1,85 +1,191 @@
-import { selectedCanvasGenerationOutput, type CanvasNode } from '@neko/canvas-domain';
-import { CloseIcon } from '@neko/ui/icons';
+import {
+  selectedCanvasGenerationOutput,
+  type CanvasGenerationOutputBinding,
+  type CanvasNode,
+} from '@neko/canvas-domain';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@neko/ui/icons';
 import { IconButton } from '@neko/ui/primitives';
-import { useEffect, type ReactNode } from 'react';
-import { t } from '../../i18n';
+import {
+  getPreviewMediaType,
+  parsePreviewMediaDescriptor,
+  type PreviewMediaDescriptor,
+} from '@neko/preview-domain';
+import { EmbeddedPreviewSurface } from '@neko/preview-webview/embedded';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { getLocale, t } from '../../i18n';
+import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
 import type { PreviewSourceDescriptor } from '../../preview/types';
 
-export type CanvasImagePreviewSource = PreviewSourceDescriptor & { readonly role: 'image' };
+type CanvasEmbeddedPreviewKind = 'image' | 'video' | 'audio';
+export type CanvasEmbeddedPreviewSource = PreviewSourceDescriptor & {
+  readonly previewKind: CanvasEmbeddedPreviewKind;
+};
+type CanvasEmbeddedPreviewItems = readonly [
+  CanvasEmbeddedPreviewSource,
+  ...CanvasEmbeddedPreviewSource[],
+];
 
-export function resolveCanvasImagePreviewSource(
+export interface CanvasEmbeddedPreviewRequest {
+  readonly nodeId: string;
+  readonly items: CanvasEmbeddedPreviewItems;
+  readonly initialIndex: number;
+}
+
+export function resolveCanvasEmbeddedPreviewRequest(
   node: CanvasNode,
-): CanvasImagePreviewSource | undefined {
+  preferredOutputId?: string,
+): CanvasEmbeddedPreviewRequest | undefined {
   if (node.type === 'generation') {
-    const output = selectedCanvasGenerationOutput(node.data);
-    if (!output || output.kind !== 'image') return undefined;
+    const preferredOutput = preferredOutputId
+      ? node.data.outputs.find((output) => output.outputId === preferredOutputId)
+      : undefined;
+    const activeOutput = preferredOutput ?? selectedCanvasGenerationOutput(node.data);
+    if (!activeOutput || !isEmbeddedPreviewKind(activeOutput.kind)) return undefined;
+    const outputs = node.data.outputs.filter(
+      (output) =>
+        output.kind === activeOutput.kind && output.jobRef.jobId === activeOutput.jobRef.jobId,
+    );
+    const items = outputs.map((output) => generationPreviewSource(node, output));
+    const first = items[0];
+    if (!first) return undefined;
+    const initialIndex = outputs.findIndex((output) => output.outputId === activeOutput.outputId);
+    if (initialIndex < 0) {
+      throw new Error(
+        `Canvas Image preview output "${activeOutput.outputId}" is not in its Job group.`,
+      );
+    }
     return {
-      id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
-      role: 'image',
-      title: node.data.recipe.prompt || t('node.image'),
-      asset: { kind: 'asset-identity', mediaType: 'image' },
-      contentLocator: output.locator,
-      metadata: {},
+      nodeId: node.id,
+      items: [first, ...items.slice(1)],
+      initialIndex,
     };
   }
 
-  if (node.type === 'media' && node.data.mediaType === 'image' && node.data.contentLocator) {
+  if (
+    node.type === 'media' &&
+    isEmbeddedPreviewKind(node.data.mediaType) &&
+    node.data.contentLocator
+  ) {
+    const previewKind = node.data.mediaType;
     return {
-      id: `canvas-fullscreen:media:${node.id}`,
-      role: 'image',
-      title: node.data.title || basename(node.data.assetPath) || t('node.image'),
-      asset: {
-        kind: 'asset-identity',
-        mediaType: 'image',
-        ...(node.data.runtimeAssetPath || node.data.assetPath
-          ? { path: node.data.runtimeAssetPath || node.data.assetPath }
-          : {}),
-      },
-      contentLocator: node.data.contentLocator,
-      metadata: {},
+      nodeId: node.id,
+      items: [
+        {
+          id: `canvas-fullscreen:media:${node.id}`,
+          role: previewRole(previewKind),
+          previewKind,
+          title: node.data.title || basename(node.data.assetPath) || t(`node.${previewKind}`),
+          asset: {
+            kind: 'asset-identity',
+            mediaType: previewKind,
+            ...(node.data.runtimeAssetPath || node.data.assetPath
+              ? { path: node.data.runtimeAssetPath || node.data.assetPath }
+              : {}),
+          },
+          contentLocator: node.data.contentLocator,
+          metadata: {},
+        },
+      ],
+      initialIndex: 0,
     };
   }
 
-  if (node.type === 'file' && node.data.mediaKind === 'image' && node.data.contentLocator) {
+  if (
+    node.type === 'file' &&
+    isEmbeddedPreviewKind(node.data.mediaKind) &&
+    node.data.contentLocator
+  ) {
+    const previewKind = node.data.mediaKind;
     return {
-      id: `canvas-fullscreen:file:${node.id}`,
-      role: 'image',
-      title: basename(node.data.title) || basename(node.data.path) || t('node.image'),
-      asset: { kind: 'asset-identity', mediaType: 'image' },
-      contentLocator: node.data.contentLocator,
-      metadata: {},
+      nodeId: node.id,
+      items: [
+        {
+          id: `canvas-fullscreen:file:${node.id}`,
+          role: previewRole(previewKind),
+          previewKind,
+          title: basename(node.data.title) || basename(node.data.path) || t(`node.${previewKind}`),
+          asset: { kind: 'asset-identity', mediaType: previewKind },
+          contentLocator: node.data.contentLocator,
+          metadata: {},
+        },
+      ],
+      initialIndex: 0,
     };
   }
 
   return undefined;
 }
 
-export function CanvasImagePreviewOverlay({
-  source,
+export function CanvasEmbeddedPreviewOverlay({
+  request,
   onClose,
 }: {
-  readonly source: CanvasImagePreviewSource;
+  readonly request: CanvasEmbeddedPreviewRequest;
   readonly onClose: () => void;
 }): ReactNode {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(request.initialIndex);
+  const activeSource = embeddedPreviewItemAt(request.items, activeIndex);
+  const hasPrevious = activeIndex > 0;
+  const hasNext = activeIndex < request.items.length - 1;
+
+  const selectIndex = useCallback(
+    (index: number) => {
+      const nextIndex = Math.max(0, Math.min(request.items.length - 1, index));
+      setActiveIndex(nextIndex);
+    },
+    [request.items.length],
+  );
+
+  useEffect(() => {
+    setActiveIndex(request.initialIndex);
+  }, [request]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      let handled = true;
+      switch (event.key) {
+        case 'Escape':
+          onClose();
+          break;
+        case 'ArrowLeft':
+          if (hasPrevious) selectIndex(activeIndex - 1);
+          break;
+        case 'ArrowRight':
+          if (hasNext) selectIndex(activeIndex + 1);
+          break;
+        default:
+          handled = false;
+      }
+      if (!handled) return;
       event.preventDefault();
       event.stopPropagation();
-      onClose();
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onClose]);
+  }, [activeIndex, hasNext, hasPrevious, onClose, selectIndex]);
+
+  useEffect(() => {
+    const previousFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    overlayRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, []);
 
   return (
     <div
+      ref={overlayRef}
       className="canvas-image-preview-overlay"
       data-canvas-image-preview="true"
+      data-image-preview-active-index={activeIndex}
+      data-image-preview-count={request.items.length}
       role="dialog"
       aria-modal="true"
-      aria-label={t('selection.imagePreview')}
+      aria-label={t('selection.mediaPreview')}
+      tabIndex={-1}
       onPointerDown={(event) => {
         event.stopPropagation();
         if (event.target === event.currentTarget) onClose();
@@ -90,21 +196,228 @@ export function CanvasImagePreviewOverlay({
       }}
     >
       <div className="canvas-image-preview-overlay__toolbar">
-        <span className="canvas-image-preview-overlay__title">{source.title}</span>
-        <IconButton
-          size="sm"
-          variant="ghost"
-          icon={<CloseIcon size={16} />}
-          label={t('selection.closeImagePreview')}
-          title={t('selection.closeImagePreview')}
-          onClick={onClose}
-        />
+        <span className="canvas-image-preview-overlay__title">{activeSource.title}</span>
+        <div className="canvas-image-preview-overlay__toolbar-actions">
+          {request.items.length > 1 ? (
+            <span className="canvas-image-preview-overlay__counter">
+              {t('selection.imagePreviewCounter', {
+                index: activeIndex + 1,
+                count: request.items.length,
+              })}
+            </span>
+          ) : null}
+          <IconButton
+            size="sm"
+            variant="ghost"
+            icon={<CloseIcon size={16} />}
+            label={t('selection.closeImagePreview')}
+            title={t('selection.closeImagePreview')}
+            onClick={onClose}
+          />
+        </div>
       </div>
-      <div className="canvas-image-preview-overlay__content">
-        <PreviewSurface source={source} surfaceKind="overlay" chrome="full-bleed" />
+      <div
+        className="canvas-image-preview-overlay__content"
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
+        onWheel={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        <CanvasEmbeddedPreviewBody request={request} source={activeSource} />
+        {request.items.length > 1 ? (
+          <>
+            <IconButton
+              className="canvas-image-preview-overlay__navigate canvas-image-preview-overlay__navigate--previous"
+              size="md"
+              variant="ghost"
+              icon={<ChevronLeftIcon size={20} />}
+              label={t('selection.imagePreviewPrevious')}
+              title={t('selection.imagePreviewPrevious')}
+              disabled={!hasPrevious}
+              onClick={() => selectIndex(activeIndex - 1)}
+            />
+            <IconButton
+              className="canvas-image-preview-overlay__navigate canvas-image-preview-overlay__navigate--next"
+              size="md"
+              variant="ghost"
+              icon={<ChevronRightIcon size={20} />}
+              label={t('selection.imagePreviewNext')}
+              title={t('selection.imagePreviewNext')}
+              disabled={!hasNext}
+              onClick={() => selectIndex(activeIndex + 1)}
+            />
+          </>
+        ) : null}
+      </div>
+      <div className="canvas-image-preview-overlay__footer">
+        {request.items.length > 1 ? (
+          <div className="canvas-image-preview-overlay__thumbnails" role="group">
+            {request.items.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                className="canvas-image-preview-overlay__thumbnail"
+                data-active={index === activeIndex ? 'true' : 'false'}
+                aria-pressed={index === activeIndex}
+                aria-label={t('selection.imagePreviewSelect', { index: index + 1 })}
+                onClick={() => selectIndex(index)}
+              >
+                <PreviewSurface source={item} surfaceKind="inline" chrome="full-bleed" />
+                <span>{index + 1}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span />
+        )}
+        <span />
       </div>
     </div>
   );
+}
+
+function generationPreviewSource(
+  node: Extract<CanvasNode, { readonly type: 'generation' }>,
+  output: CanvasGenerationOutputBinding,
+): CanvasEmbeddedPreviewSource {
+  if (!isEmbeddedPreviewKind(output.kind)) {
+    throw new Error(
+      `Canvas embedded preview cannot render ${output.kind} output "${output.outputId}".`,
+    );
+  }
+  return {
+    id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
+    role: previewRole(output.kind),
+    previewKind: output.kind,
+    title: node.data.recipe.prompt || t(`node.${output.kind}`),
+    asset: { kind: 'asset-identity', mediaType: output.kind },
+    contentLocator: output.locator,
+    metadata: {},
+  };
+}
+
+let embeddedPreviewRequestSequence = 0;
+
+function CanvasEmbeddedPreviewBody({
+  request,
+  source,
+}: {
+  readonly request: CanvasEmbeddedPreviewRequest;
+  readonly source: CanvasEmbeddedPreviewSource;
+}): ReactNode {
+  const host = useOptionalCanvasHost();
+  const [descriptor, setDescriptor] = useState<PreviewMediaDescriptor>();
+  const [diagnostic, setDiagnostic] = useState<string>();
+
+  useEffect(() => {
+    const hostPort = host;
+    const locator = source.contentLocator;
+    setDescriptor(undefined);
+    setDiagnostic(undefined);
+    if (!hostPort || !locator) {
+      setDiagnostic(t('selection.imagePreviewUnavailable'));
+      return;
+    }
+
+    embeddedPreviewRequestSequence += 1;
+    const requestId = `canvas-embedded-preview-${embeddedPreviewRequestSequence.toString(36)}`;
+    let resolvedDescriptorId: string | undefined;
+    let disposed = false;
+    let unsubscribe: () => void = () => undefined;
+    unsubscribe = hostPort.subscribe((message) => {
+      if (
+        !isRecord(message) ||
+        message['type'] !== 'preview:embeddedResolved' ||
+        message['requestId'] !== requestId
+      ) {
+        return;
+      }
+      if (typeof message['error'] === 'string') {
+        if (!disposed) setDiagnostic(message['error']);
+        unsubscribe();
+        return;
+      }
+      try {
+        const nextDescriptor = parsePreviewMediaDescriptor(message['descriptor']);
+        resolvedDescriptorId = nextDescriptor.descriptorId;
+        if (disposed) {
+          hostPort.postMessage({
+            type: 'preview:releaseEmbedded',
+            descriptorId: nextDescriptor.descriptorId,
+          });
+        } else {
+          setDescriptor(nextDescriptor);
+        }
+      } catch (error: unknown) {
+        if (!disposed) setDiagnostic(describeError(error));
+      }
+      unsubscribe();
+    });
+
+    const fileName = contentLocatorFileName(locator);
+    hostPort.postMessage({
+      type: 'preview:resolveEmbedded',
+      requestId,
+      nodeId: request.nodeId,
+      outputId: locator.kind === 'generated-output' ? locator.outputId : request.nodeId,
+      contentLocator: locator,
+      contentKind: source.previewKind,
+      mediaType: getPreviewMediaType(fileName) ?? defaultMediaType(source.previewKind),
+      displayName: source.title || basename(fileName) || t(`node.${source.previewKind}`),
+    });
+
+    return () => {
+      disposed = true;
+      if (resolvedDescriptorId) {
+        unsubscribe();
+        hostPort.postMessage({
+          type: 'preview:releaseEmbedded',
+          descriptorId: resolvedDescriptorId,
+        });
+      }
+    };
+  }, [host, request.nodeId, source]);
+
+  if (diagnostic) {
+    return (
+      <div className="canvas-image-preview-overlay__diagnostic" role="alert">
+        {diagnostic}
+      </div>
+    );
+  }
+  if (!descriptor) {
+    return (
+      <div className="canvas-image-preview-overlay__diagnostic" role="status">
+        {t('selection.imagePreviewLoading')}
+      </div>
+    );
+  }
+  return <EmbeddedPreviewSurface descriptor={descriptor} locale={getLocale()} />;
+}
+
+function embeddedPreviewItemAt(
+  items: CanvasEmbeddedPreviewItems,
+  index: number,
+): CanvasEmbeddedPreviewSource {
+  const item = items[index];
+  if (!item) throw new Error(`Canvas embedded preview index ${index} is out of bounds.`);
+  return item;
+}
+
+function isEmbeddedPreviewKind(value: unknown): value is CanvasEmbeddedPreviewKind {
+  return value === 'image' || value === 'video' || value === 'audio';
+}
+
+function previewRole(kind: CanvasEmbeddedPreviewKind): PreviewSourceDescriptor['role'] {
+  if (kind === 'image') return 'image';
+  return kind === 'video' ? 'video-proxy' : 'audio-waveform';
+}
+
+function defaultMediaType(kind: CanvasEmbeddedPreviewKind): string {
+  if (kind === 'image') return 'image/png';
+  return kind === 'video' ? 'video/mp4' : 'audio/mpeg';
 }
 
 function basename(value: string | undefined): string | undefined {
@@ -112,4 +425,26 @@ function basename(value: string | undefined): string | undefined {
   const normalized = value.replaceAll('\\', '/').replace(/\/+$/u, '');
   const name = normalized.slice(normalized.lastIndexOf('/') + 1).trim();
   return name || undefined;
+}
+
+function contentLocatorFileName(
+  locator: NonNullable<CanvasEmbeddedPreviewSource['contentLocator']>,
+): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return locator.entryPath;
+    case 'package-resource':
+      return locator.resourcePath;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

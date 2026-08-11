@@ -35,6 +35,8 @@ export function createDesktopCanvasWebviewDelegate(
   return {
     supportsMessage: (messageType) =>
       messageType === 'preview:resolveVariant' ||
+      messageType === 'preview:resolveEmbedded' ||
+      messageType === 'preview:releaseEmbedded' ||
       DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES.has(messageType),
     postMessage(message) {
       if (isRecord(message) && DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES.has(String(message['type']))) {
@@ -47,6 +49,29 @@ export function createDesktopCanvasWebviewDelegate(
             emit(createMediaErrorResponse(request, error));
           },
         );
+        return;
+      }
+      if (isRecord(message) && message['type'] === 'preview:resolveEmbedded') {
+        const request = parseEmbeddedPreviewMessage(message);
+        void window.openNekoDesktop.canvas
+          .resolveEmbeddedPreview({ identity, ...request })
+          .then(
+            (result) => emit({
+              type: 'preview:embeddedResolved',
+              requestId: result.requestId,
+              descriptor: result.descriptor,
+            }),
+            (error: unknown) => emit({
+              type: 'preview:embeddedResolved',
+              requestId: request.requestId,
+              error: describeError(error),
+            }),
+          );
+        return;
+      }
+      if (isRecord(message) && message['type'] === 'preview:releaseEmbedded') {
+        const descriptorId = requireString(message['descriptorId'], 'embedded preview descriptor');
+        void window.openNekoDesktop.canvas.releaseEmbeddedPreview({ identity, descriptorId });
         return;
       }
       const request = parsePreviewVariantMessage(message);
@@ -85,6 +110,27 @@ export function createDesktopCanvasWebviewDelegate(
       return () => listeners.delete(listener);
     },
   };
+}
+
+function parseEmbeddedPreviewMessage(message: Record<string, unknown>) {
+  const requestId = requireString(message['requestId'], 'embedded preview request');
+  const nodeId = requireString(message['nodeId'], 'embedded preview node');
+  const outputId = requireString(message['outputId'], 'embedded preview output');
+  const locator = readPreviewContentLocator(message);
+  if (!locator) throw new Error('Desktop Canvas embedded preview source is invalid.');
+  const contentKind = message['contentKind'];
+  if (contentKind !== 'image' && contentKind !== 'video' && contentKind !== 'audio') {
+    throw new Error('Desktop Canvas embedded preview kind is invalid.');
+  }
+  return {
+    requestId,
+    nodeId,
+    outputId,
+    locator,
+    contentKind,
+    mediaType: requireString(message['mediaType'], 'embedded preview media type'),
+    displayName: requireString(message['displayName'], 'embedded preview display name'),
+  } as const;
 }
 
 function parseMediaMessage(

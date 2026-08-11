@@ -30,8 +30,9 @@ import {
 } from '../utils/renderRefreshTiering';
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
 import {
-  CanvasImagePreviewOverlay,
-  type CanvasImagePreviewSource,
+  CanvasEmbeddedPreviewOverlay,
+  resolveCanvasEmbeddedPreviewRequest,
+  type CanvasEmbeddedPreviewRequest,
 } from './selection/CanvasImagePreviewOverlay';
 import {
   resolveGenerationSelectionSafePan,
@@ -129,7 +130,8 @@ export function InfiniteCanvas({
     readonly nodeId: string;
     readonly height: number;
   }>();
-  const [imagePreviewSource, setImagePreviewSource] = useState<CanvasImagePreviewSource>();
+  const [embeddedPreviewRequest, setEmbeddedPreviewRequest] =
+    useState<CanvasEmbeddedPreviewRequest>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
@@ -283,6 +285,18 @@ export function InfiniteCanvas({
           )
         : nodes,
     [dragPreview, nodes],
+  );
+  const openEmbeddedPreview = useCallback(
+    (nodeId: string, outputId?: string) => {
+      const node = interactionNodes.find((candidate) => candidate.id === nodeId);
+      if (!node) throw new Error(`Canvas embedded preview node "${nodeId}" is not rendered.`);
+      const request = resolveCanvasEmbeddedPreviewRequest(node, outputId);
+      if (!request) {
+        throw new Error(`Canvas node "${nodeId}" does not expose an embedded preview.`);
+      }
+      setEmbeddedPreviewRequest(request);
+    },
+    [interactionNodes],
   );
 
   const dropTargetPreview = useMemo(() => {
@@ -486,6 +500,7 @@ export function InfiniteCanvas({
             onResizeEnd: handleNodeResizeEnd,
             onRotateEnd: handleNodeRotateEnd,
             onUpdateData: onNodeUpdateData,
+            onEmbeddedPreview: openEmbeddedPreview,
             onConnectionStart: startDragConnection,
             isConnecting: isDraggingConnection,
             connectionTargetState,
@@ -506,7 +521,7 @@ export function InfiniteCanvas({
         viewport={viewport}
         viewportSize={containerSize}
         hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
-        onCanvasImagePreview={setImagePreviewSource}
+        onCanvasEmbeddedPreview={setEmbeddedPreviewRequest}
       />
       <SelectionGenerationInputPanel
         nodes={interactionNodes}
@@ -554,10 +569,10 @@ export function InfiniteCanvas({
           </span>
         )}
       </div>
-      {imagePreviewSource ? (
-        <CanvasImagePreviewOverlay
-          source={imagePreviewSource}
-          onClose={() => setImagePreviewSource(undefined)}
+      {embeddedPreviewRequest ? (
+        <CanvasEmbeddedPreviewOverlay
+          request={embeddedPreviewRequest}
+          onClose={() => setEmbeddedPreviewRequest(undefined)}
         />
       ) : null}
     </div>

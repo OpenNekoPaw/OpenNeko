@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import {
   isSameCanvasHostIdentity,
+  parseDesktopCanvasEmbeddedPreviewReleaseRequest,
+  parseDesktopCanvasEmbeddedPreviewRequest,
+  parseDesktopCanvasEmbeddedPreviewResult,
   parseDesktopCanvasHostIdentity,
   parseDesktopCanvasMediaRequest,
   parseDesktopCanvasMediaResponse,
@@ -96,6 +99,58 @@ describe('Desktop Canvas bridge contract', () => {
         'preview-1',
       ),
     ).toThrow('preview result is invalid');
+  });
+
+  it('parses exact embedded Preview ownership and rejects non-opaque transport values', () => {
+    const request = {
+      identity,
+      requestId: 'embedded-1',
+      nodeId: 'generation-1',
+      outputId: 'output-1',
+      locator: {
+        kind: 'generated-output' as const,
+        outputId: 'output-1',
+        digest: 'sha256:output-1',
+        path: 'neko/generated/output-1.png',
+      },
+      contentKind: 'image' as const,
+      mediaType: 'image/png',
+      displayName: 'Output 1',
+    };
+    const result = {
+      requestId: 'embedded-1',
+      descriptor: {
+        descriptorId: 'canvas-embedded-session-1-output-1',
+        sourceFingerprint: 'sha256-output-1',
+        contentLocator: request.locator,
+        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        contentKind: 'image' as const,
+        mediaType: 'image/png',
+        displayName: 'Output 1',
+        byteLength: 42,
+      },
+    };
+
+    expect(parseDesktopCanvasEmbeddedPreviewRequest(request)).toEqual(request);
+    expect(parseDesktopCanvasEmbeddedPreviewResult(result, 'embedded-1')).toEqual(result);
+    expect(
+      parseDesktopCanvasEmbeddedPreviewReleaseRequest({
+        identity,
+        descriptorId: result.descriptor.descriptorId,
+      }),
+    ).toEqual({ identity, descriptorId: result.descriptor.descriptorId });
+    expect(() =>
+      parseDesktopCanvasEmbeddedPreviewRequest({ ...request, identity: undefined }),
+    ).toThrow();
+    expect(() =>
+      parseDesktopCanvasEmbeddedPreviewResult(
+        {
+          ...result,
+          descriptor: { ...result.descriptor, url: 'file:///private/output-1.png' },
+        },
+        'embedded-1',
+      ),
+    ).toThrow();
   });
 
   it('parses owner-bound Canvas media requests and rejects escaping paths', () => {

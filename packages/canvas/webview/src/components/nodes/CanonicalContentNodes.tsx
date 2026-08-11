@@ -154,7 +154,12 @@ export function MarkdownNode({
   );
 }
 
-export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps<MediaCanvasNode>) {
+export function MediaNode({
+  node,
+  isSelected,
+  onEmbeddedPreview,
+  ...baseProps
+}: CanonicalNodeProps<MediaCanvasNode>) {
   const host = useOptionalCanvasHost();
   const source = node.data.runtimeAssetPath || node.data.assetPath;
   const contentLocator = node.data.contentLocator;
@@ -223,6 +228,9 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      onActivate={
+        contentLocator && onEmbeddedPreview ? () => onEmbeddedPreview(node.id) : undefined
+      }
       nodeLabel={{
         icon: (
           <span
@@ -381,6 +389,7 @@ export function FileNode({
   node,
   isSelected,
   onOpen,
+  onEmbeddedPreview,
   ...baseProps
 }: CanonicalNodeProps<FileCanvasNode>) {
   const fileName = resolveCanvasFileName(node.data);
@@ -424,7 +433,13 @@ export function FileNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
-      onActivate={contentLocator && onOpen ? () => onOpen(contentLocator) : undefined}
+      onActivate={
+        contentLocator && isEmbeddedPreviewMediaKind(node.data.mediaKind) && onEmbeddedPreview
+          ? () => onEmbeddedPreview(node.id)
+          : contentLocator && onOpen
+            ? () => onOpen(contentLocator)
+            : undefined
+      }
       nodeLabel={{
         icon: <FileIcon size={13} strokeWidth={1.6} aria-hidden="true" />,
         text: fileName,
@@ -440,6 +455,10 @@ export function FileNode({
       </div>
     </BaseNode>
   );
+}
+
+function isEmbeddedPreviewMediaKind(value: unknown): value is 'image' | 'video' | 'audio' {
+  return value === 'image' || value === 'video' || value === 'audio';
 }
 
 function CanvasFileNodeContent({
