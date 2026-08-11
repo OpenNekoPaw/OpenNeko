@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseAuthorizedPreviewSessionProjection } from './authorized-session';
+import {
+  parseAuthorizedPreviewSessionIdentity,
+  parseAuthorizedPreviewSessionProjection,
+} from './authorized-session';
 
 describe('Authorized Preview session contract', () => {
   it('accepts an exact Asset Center-owned descriptor without Project identity or a path', () => {
@@ -50,7 +53,96 @@ describe('Authorized Preview session contract', () => {
       }),
     ).toMatchObject({ status: 'ready' });
   });
+
+  it('accepts exact Agent and Canvas owners', () => {
+    expect(
+      parseAuthorizedPreviewSessionIdentity({
+        previewSessionId: 'preview:agent:1',
+        windowId: 'window-1',
+        owner: {
+          kind: 'assistant-scratch',
+          assistantSpaceId: 'assistant-space-1',
+          conversationId: 'conversation-1',
+          scratchArtifactId: 'artifact-1',
+        },
+      }).owner,
+    ).toEqual({
+      kind: 'assistant-scratch',
+      assistantSpaceId: 'assistant-space-1',
+      conversationId: 'conversation-1',
+      scratchArtifactId: 'artifact-1',
+    });
+    expect(
+      parseAuthorizedPreviewSessionIdentity({
+        previewSessionId: 'preview:canvas:1',
+        windowId: 'window-1',
+        owner: canvasOwner(),
+      }).owner,
+    ).toEqual(canvasOwner());
+  });
+
+  it('rejects inferred or incomplete Canvas ownership without affecting valid siblings', () => {
+    for (const owner of [
+      { ...canvasOwner(), outputId: undefined },
+      { ...canvasOwner(), activeCanvas: true },
+      { ...canvasOwner(), recentWorkspaceId: 'workspace-recent' },
+    ]) {
+      expect(() =>
+        parseAuthorizedPreviewSessionIdentity({
+          previewSessionId: 'preview:canvas:invalid',
+          windowId: 'window-1',
+          owner,
+        }),
+      ).toThrow();
+    }
+    expect(
+      parseAuthorizedPreviewSessionProjection({
+        identity: identity(),
+        status: 'ready',
+        descriptor: descriptor(),
+      }),
+    ).toMatchObject({ status: 'ready' });
+  });
+
+  it('keeps one expired resource fail-local while a sibling descriptor remains valid', () => {
+    expect(
+      parseAuthorizedPreviewSessionProjection({
+        identity: {
+          previewSessionId: 'preview:canvas:expired',
+          windowId: 'window-1',
+          owner: canvasOwner(),
+        },
+        status: 'unavailable',
+        diagnostic: {
+          code: 'preview-source-unavailable',
+          message: 'The authorized resource lease expired.',
+        },
+      }),
+    ).toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'preview-source-unavailable' },
+    });
+    expect(
+      parseAuthorizedPreviewSessionProjection({
+        identity: identity(),
+        status: 'ready',
+        descriptor: descriptor(),
+      }),
+    ).toMatchObject({ status: 'ready' });
+  });
 });
+
+function canvasOwner() {
+  return {
+    kind: 'canvas' as const,
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    documentId: 'neko/boards/workspace.nkc',
+    canvasSessionId: 'canvas-session-1',
+    nodeId: 'node-1',
+    outputId: 'output-1',
+  };
+}
 
 function identity() {
   return {

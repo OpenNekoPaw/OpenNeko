@@ -10,8 +10,9 @@ import {
   type PreviewRuntimeIdentity,
 } from '@neko/preview-domain';
 import type { AuthorizedPreviewSessionRuntime } from '@neko/preview-domain/authorized-session';
-import { AuthorizedPreviewRoot, PreviewRoot, getPreviewViewerRegistry } from './index';
-import { QuickPreviewSurface } from './quick-preview';
+import { AuthorizedPreviewRoot, PreviewRoot } from './index';
+import { EmbeddedPreviewSurface, QuickPreviewSurface } from './embedded-preview';
+import { getRegisteredPreviewContentKinds } from './viewer-kernel';
 import { PreviewViewerSnapshotProvider } from './viewer-snapshot-context';
 import { createPreviewViewerSnapshotStore } from './viewer-snapshot';
 import { createPreviewRuntimeBootstrap } from './runtime-bootstrap';
@@ -51,7 +52,7 @@ describe('PreviewRoot', () => {
   });
 
   it('registers image, video, audio, text, document and model viewers explicitly', () => {
-    expect(getPreviewViewerRegistry().map((entry) => entry.kind)).toEqual([
+    expect(getRegisteredPreviewContentKinds()).toEqual([
       'image',
       'video',
       'audio',
@@ -191,6 +192,71 @@ describe('PreviewRoot', () => {
     expect(container.textContent).toContain('candidates.json');
     expect(container.textContent).toContain('{"items":[]}');
     expect(JSON.stringify(container.innerHTML)).not.toContain('/Users/');
+  });
+
+  it('keeps Main Preview plain text literal and renders only explicitly typed Markdown', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async (url: string) =>
+          new Response(
+            url.includes('markdown-token') ? '# Heading\n\n**Strong**' : '# Literal text',
+            {
+              status: 200,
+            },
+          ),
+      ),
+    );
+    const plainContainer = document.createElement('div');
+    const markdownContainer = document.createElement('div');
+    document.body.append(plainContainer, markdownContainer);
+    const plainRoot = createRoot(plainContainer);
+    const markdownRoot = createRoot(markdownContainer);
+    const renderTextPreview = (mediaType: string, token: string) =>
+      withPreviewSnapshots(
+        <PreviewRoot
+          bootstrap={createPreviewRuntimeBootstrap(
+            createRuntime({
+              identity,
+              presentation: 'temporary',
+              status: 'ready',
+              descriptor: {
+                descriptorId: `descriptor-${token}`,
+                sourceFingerprint: `fingerprint-${token}`,
+                contentLocator: previewContentLocator,
+                url: `http://127.0.0.1:43125/resources/${token}`,
+                contentKind: 'text',
+                mediaType,
+                displayName: token,
+                byteLength: 24,
+              },
+            }),
+          )}
+          chrome="content-only"
+          locale="en"
+        />,
+      );
+
+    await act(async () => {
+      plainRoot.render(renderTextPreview('text/plain', 'plain-token'));
+      markdownRoot.render(renderTextPreview('text/markdown', 'markdown-token'));
+    });
+    await act(async () => Promise.resolve());
+
+    expect(plainContainer.querySelector('pre')?.textContent).toBe('# Literal text');
+    expect(plainContainer.querySelector('[data-markdown-document]')).toBeNull();
+    expect(markdownContainer.querySelector('[data-markdown-document="ready"]')).not.toBeNull();
+    expect(markdownContainer.querySelector('h1')?.textContent).toBe('Heading');
+    for (const container of [plainContainer, markdownContainer]) {
+      expect(container.querySelector('textarea')).toBeNull();
+      expect(container.querySelector('.ProseMirror')).toBeNull();
+      expect(container.textContent).not.toContain('Edit');
+    }
+
+    await act(async () => {
+      plainRoot.unmount();
+      markdownRoot.unmount();
+    });
   });
 
   it('does not let an older initial Snapshot overwrite a newer runtime event', async () => {
@@ -399,7 +465,7 @@ describe('PreviewRoot', () => {
               descriptorId: 'descriptor-image-hover',
               sourceFingerprint: 'fingerprint-1',
               contentLocator: previewContentLocator,
-              url: 'http://127.0.0.1:43125/resources/image-hover-token',
+              url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
               contentKind: 'image',
               mediaType: 'image/png',
               displayName: 'hover.png',
@@ -412,12 +478,12 @@ describe('PreviewRoot', () => {
     });
 
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/resources/image-hover-token',
+      'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
-    expect(container.querySelector('.neko-preview-quick')).toBeTruthy();
+    expect(container.querySelector('.neko-preview-surface--quick')).toBeTruthy();
   });
 
-  it('autoplays compact video and audio quick previews and pauses them on unmount', async () => {
+  it('keeps native compact video and audio paused by default and pauses them on unmount', async () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, 'play')
       .mockImplementation(async () => undefined);
@@ -434,7 +500,7 @@ describe('PreviewRoot', () => {
               descriptorId: 'descriptor-video-hover',
               sourceFingerprint: 'fingerprint-1',
               contentLocator: previewContentLocator,
-              url: 'http://127.0.0.1:43125/resources/video-hover-token',
+              url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
               contentKind: 'video',
               mediaType: 'video/mp4',
               displayName: 'hover.mp4',
@@ -446,8 +512,9 @@ describe('PreviewRoot', () => {
       await import('../audio/AudioPlayer');
     });
     const video = container.querySelector('video');
-    expect(video?.muted).toBe(true);
-    expect(play).toHaveBeenCalledOnce();
+    expect(video?.autoplay).toBe(false);
+    expect(video?.preload).toBe('metadata');
+    expect(play).not.toHaveBeenCalled();
 
     await act(async () => {
       root.render(
@@ -458,7 +525,7 @@ describe('PreviewRoot', () => {
               descriptorId: 'descriptor-audio-hover',
               sourceFingerprint: 'fingerprint-1',
               contentLocator: previewContentLocator,
-              url: 'http://127.0.0.1:43125/resources/audio-hover-token',
+              url: 'openneko://resource/cccccccccccccccccccccccccccccccc',
               contentKind: 'audio',
               mediaType: 'audio/aac',
               displayName: 'hover.aac',
@@ -469,12 +536,150 @@ describe('PreviewRoot', () => {
       );
     });
     expect(container.querySelector('audio')).toBeTruthy();
-    expect(play).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('audio')?.autoplay).toBe(false);
+    expect(play).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
     expect(pause).toHaveBeenCalled();
   });
+
+  it('keeps Embedded Preview state local and renders Canvas-style immersive image controls', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <EmbeddedPreviewSurface
+          locale="zh-cn"
+          descriptor={{
+            descriptorId: 'descriptor-embedded-image',
+            sourceFingerprint: 'fingerprint-embedded',
+            contentLocator: previewContentLocator,
+            url: 'openneko://resource/dddddddddddddddddddddddddddddddd',
+            contentKind: 'image',
+            mediaType: 'image/png',
+            displayName: 'embedded.png',
+            byteLength: 42,
+          }}
+        />,
+      );
+    });
+    expect(container.querySelector('[data-preview-presentation="embedded"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="图片缩放"]')).toBeTruthy();
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'openneko://resource/dddddddddddddddddddddddddddddddd',
+    );
+  });
+
+  it('isolates Embedded Preview zoom snapshots by descriptor while one Surface remains mounted', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const renderDescriptor = async (descriptorId: string, token: string): Promise<void> => {
+      await act(async () => {
+        root.render(
+          <EmbeddedPreviewSurface
+            locale="en"
+            descriptor={embeddedImageDescriptor(descriptorId, token)}
+          />,
+        );
+      });
+    };
+    await renderDescriptor('embedded-a', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
+    const zoomIn = container.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]');
+    if (!zoomIn) throw new Error('Embedded zoom control is required.');
+    await act(async () => zoomIn.click());
+    expect(container.querySelector('output')?.textContent).toBe('120%');
+
+    await renderDescriptor('embedded-b', 'ffffffffffffffffffffffffffffffff');
+    expect(container.querySelector('output')?.textContent).toBe('100%');
+    await renderDescriptor('embedded-a', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
+    expect(container.querySelector('output')?.textContent).toBe('120%');
+  });
+
+  it('keeps concurrent Surface locales isolated', async () => {
+    const englishContainer = document.createElement('div');
+    const chineseContainer = document.createElement('div');
+    document.body.append(englishContainer, chineseContainer);
+    const englishRoot = createRoot(englishContainer);
+    const chineseRoot = createRoot(chineseContainer);
+    await act(async () => {
+      englishRoot.render(
+        <EmbeddedPreviewSurface
+          locale="en"
+          descriptor={embeddedImageDescriptor(
+            'embedded-locale-en',
+            'gggggggggggggggggggggggggggggggg',
+          )}
+        />,
+      );
+      chineseRoot.render(
+        <EmbeddedPreviewSurface
+          locale="zh-cn"
+          descriptor={embeddedImageDescriptor(
+            'embedded-locale-zh',
+            'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh',
+          )}
+        />,
+      );
+    });
+    expect(englishContainer.querySelector('[aria-label="Image zoom"]')).toBeTruthy();
+    expect(chineseContainer.querySelector('[aria-label="图片缩放"]')).toBeTruthy();
+  });
+
+  it('rejects arbitrary transport URLs locally and does not fetch full text in Quick Preview', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QuickPreviewSurface
+          locale="en"
+          descriptor={{
+            ...embeddedImageDescriptor('invalid-transport', 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii'),
+            url: 'https://example.com/shot.png',
+          }}
+        />,
+      );
+    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'authorized OpenNeko resource',
+    );
+
+    await act(async () => {
+      root.render(
+        <QuickPreviewSurface
+          locale="en"
+          descriptor={{
+            ...embeddedImageDescriptor('quick-text', 'jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj'),
+            contentKind: 'text',
+            mediaType: 'text/markdown',
+            displayName: 'notes.md',
+          }}
+        />,
+      );
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'does not read the complete file',
+    );
+  });
 });
+
+function embeddedImageDescriptor(descriptorId: string, token: string) {
+  return {
+    descriptorId,
+    sourceFingerprint: `fingerprint-${descriptorId}`,
+    contentLocator: previewContentLocator,
+    url: `openneko://resource/${token}`,
+    contentKind: 'image' as const,
+    mediaType: 'image/png',
+    displayName: `${descriptorId}.png`,
+    byteLength: 42,
+  };
+}
 
 function createRuntime(projection: PreviewProjection): PreviewHostRuntime {
   return {

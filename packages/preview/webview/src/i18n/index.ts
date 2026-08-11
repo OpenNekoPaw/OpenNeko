@@ -5,6 +5,7 @@
  * Registers 'preview' namespace for video and audio player strings.
  */
 import { createWebviewI18n } from '@neko/ui/i18n/webview';
+import type { II18nService } from '@neko/ui/i18n';
 import type { SupportedLocale } from '@neko/ui/i18n';
 
 import { bundles as enBundles } from './locales/en';
@@ -16,6 +17,16 @@ const webviewI18n = createWebviewI18n({
     'zh-cn': zhCnBundles,
   },
 });
+
+export function createPreviewI18nService(locale: SupportedLocale): II18nService {
+  return createWebviewI18n({
+    initialLocale: locale,
+    bundles: {
+      en: enBundles,
+      'zh-cn': zhCnBundles,
+    },
+  }).i18nService;
+}
 
 export const { i18nService } = webviewI18n;
 

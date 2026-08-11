@@ -4,8 +4,15 @@ export interface PreviewMediaViewerSnapshot {
   readonly volume: number;
 }
 
+export interface PreviewImageViewerSnapshot {
+  readonly scale: number;
+  readonly translateX: number;
+  readonly translateY: number;
+}
+
 export interface PreviewViewerSnapshot {
   readonly media?: PreviewMediaViewerSnapshot;
+  readonly image?: PreviewImageViewerSnapshot;
   readonly modelState?: unknown;
   readonly documentState?: Readonly<Record<string, unknown>>;
 }

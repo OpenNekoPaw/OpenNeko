@@ -1,7 +1,4 @@
 import type {
-  ModelPreviewFormat,
-  ModelPreviewSourceDescriptor,
-  PreviewContentKind,
   PreviewMediaDescriptor,
   PreviewProjection,
   PreviewHostRuntimeRoute,
@@ -13,8 +10,6 @@ import type {
 import { PREVIEW_HOST_RUNTIME_ROUTES } from '@neko/preview-domain';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -23,43 +18,12 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { I18nProvider } from '../i18n/I18nContext';
-import { i18nService, setLocale } from '../i18n';
-import { createSourceModelViewerHost } from '../model/sourceModelViewerHost';
-import { PersistedStateProvider } from '../shared/usePersistedState';
+import { createPreviewI18nService } from '../i18n';
 import type { PreviewViewerSnapshot, PreviewViewerSnapshotStore } from './viewer-snapshot';
 import { useOptionalPreviewViewerSnapshotStore } from './viewer-snapshot-context';
+import { renderPreviewViewer } from './viewer-kernel';
 import type { PreviewRuntimeBootstrap } from './runtime-bootstrap';
 import './style.css';
-
-const AudioPlayer = lazy(async () => {
-  const module = await import('../audio/AudioPlayer');
-  return { default: module.AudioPlayer };
-});
-const VideoPlayer = lazy(async () => {
-  const module = await import('../video/VideoPlayer');
-  return { default: module.VideoPlayer };
-});
-const PdfViewer = lazy(async () => {
-  const module = await import('../pdf/PdfViewer');
-  return { default: module.PdfViewer };
-});
-const DocxViewer = lazy(async () => {
-  const module = await import('../docx/DocxViewer');
-  return { default: module.DocxViewer };
-});
-const EpubViewer = lazy(async () => {
-  const module = await import('../epub/EpubViewer');
-  return { default: module.EpubViewer };
-});
-const CbzViewer = lazy(async () => {
-  const module = await import('../cbz/CbzViewer');
-  return { default: module.CbzViewer };
-});
-const ModelViewer = lazy(async () => {
-  const module = await import('../model/ModelViewer');
-  return { default: module.ModelViewer };
-});
 
 export interface PreviewRootProps {
   readonly bootstrap: PreviewRuntimeBootstrap;
@@ -84,32 +48,6 @@ type PreviewRootState =
   | { readonly kind: 'ready'; readonly projection: PreviewProjection }
   | { readonly kind: 'error'; readonly message: string };
 
-export interface PreviewViewerProps {
-  readonly descriptor: PreviewMediaDescriptor;
-  readonly sourceUrl: string;
-  readonly locale: SupportedLocale;
-  readonly snapshot?: PreviewViewerSnapshot;
-  readonly onSnapshotChange: (update: Partial<PreviewViewerSnapshot>) => void;
-}
-
-export interface PreviewViewerRegistration {
-  readonly kind: PreviewContentKind;
-  readonly render: (props: PreviewViewerProps) => ReactElement;
-}
-
-const VIEWERS: readonly PreviewViewerRegistration[] = [
-  { kind: 'image', render: (props) => <ImagePreview {...props} /> },
-  { kind: 'video', render: (props) => <VideoPreview {...props} /> },
-  { kind: 'audio', render: (props) => <AudioPreview {...props} /> },
-  { kind: 'text', render: (props) => <TextPreview {...props} /> },
-  { kind: 'document', render: (props) => <DocumentPreview {...props} /> },
-  { kind: 'model', render: (props) => <ModelPreview {...props} /> },
-];
-
-export function getPreviewViewerRegistry(): readonly PreviewViewerRegistration[] {
-  return VIEWERS;
-}
-
 export function PreviewPresentation({
   actions,
   authorizedPreviewSessionId,
@@ -129,6 +67,7 @@ export function PreviewPresentation({
 }): ReactElement {
   const contextSnapshotStore = useOptionalPreviewViewerSnapshotStore();
   const snapshotStore = explicitSnapshotStore ?? contextSnapshotStore;
+  const surfaceI18n = useMemo(() => createPreviewI18nService(locale), [locale]);
   if (!snapshotStore) {
     throw new Error('Preview Viewer snapshot owner is missing.');
   }
@@ -137,15 +76,6 @@ export function PreviewPresentation({
       snapshotStore.update(descriptor.descriptorId, update),
     [descriptor.descriptorId, snapshotStore],
   );
-  const viewer = VIEWERS.find((candidate) => candidate.kind === descriptor.contentKind);
-  if (!viewer) {
-    return (
-      <PreviewStatus
-        chrome={chrome}
-        message={label(locale, '没有可用的预览器', 'No viewer is available')}
-      />
-    );
-  }
   return (
     <section
       className="neko-preview-root"
@@ -166,10 +96,11 @@ export function PreviewPresentation({
       ) : null}
       {lifecyclePresentation === 'active' ? (
         <div className="neko-preview-root__viewer">
-          {viewer.render({
+          {renderPreviewViewer({
             descriptor,
-            sourceUrl: descriptor.url,
+            presentation: 'main',
             locale,
+            i18nService: surfaceI18n,
             ...(snapshotStore.read(descriptor.descriptorId)
               ? { snapshot: snapshotStore.read(descriptor.descriptorId) }
               : {}),
@@ -194,10 +125,6 @@ export function PreviewRoot({
   const [pendingRoute, setPendingRoute] = useState<PreviewHostRuntimeRoute>();
   const sequence = useRef(0);
   const runtime = bootstrap.runtime;
-
-  useEffect(() => {
-    setLocale(locale);
-  }, [locale]);
 
   useEffect(() => {
     let active = true;
@@ -331,9 +258,6 @@ export function AuthorizedPreviewRoot({
   const [projection, setProjection] = useState<AuthorizedPreviewSessionProjection>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    setLocale(locale);
-  }, [locale]);
-  useEffect(() => {
     let active = true;
     const unsubscribe = runtime.subscribe((next) => {
       if (active) setProjection(next);
@@ -419,202 +343,6 @@ function PreviewActionButton({
       <span className={`codicon codicon-${icon}`} aria-hidden="true" />
     </button>
   );
-}
-
-function ImagePreview({ descriptor, sourceUrl }: PreviewViewerProps): ReactElement {
-  return <img className="neko-preview-root__image" src={sourceUrl} alt={descriptor.displayName} />;
-}
-
-function VideoPreview({
-  descriptor,
-  locale,
-  onSnapshotChange,
-  snapshot,
-  sourceUrl,
-}: PreviewViewerProps): ReactElement {
-  return (
-    <ViewerModuleBoundary locale={locale}>
-      <I18nProvider service={i18nService}>
-        <VideoPlayer
-          sourceUrl={sourceUrl}
-          displayName={descriptor.displayName}
-          initialSnapshot={snapshot?.media}
-          onSnapshotChange={(media) => onSnapshotChange({ media })}
-        />
-      </I18nProvider>
-    </ViewerModuleBoundary>
-  );
-}
-
-function AudioPreview({
-  descriptor,
-  locale,
-  onSnapshotChange,
-  snapshot,
-  sourceUrl,
-}: PreviewViewerProps): ReactElement {
-  return (
-    <ViewerModuleBoundary locale={locale}>
-      <I18nProvider service={i18nService}>
-        <AudioPlayer
-          sourceUrl={sourceUrl}
-          displayName={descriptor.displayName}
-          initialSnapshot={snapshot?.media}
-          onSnapshotChange={(media) => onSnapshotChange({ media })}
-        />
-      </I18nProvider>
-    </ViewerModuleBoundary>
-  );
-}
-
-function TextPreview({ sourceUrl, locale }: PreviewViewerProps): ReactElement {
-  const [state, setState] = useState<
-    | { readonly kind: 'loading' }
-    | { readonly kind: 'ready'; readonly text: string }
-    | { readonly kind: 'error'; readonly message: string }
-  >({ kind: 'loading' });
-  useEffect(() => {
-    const abort = new AbortController();
-    void fetch(sourceUrl, { signal: abort.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Preview source returned ${response.status}.`);
-        return response.text();
-      })
-      .then((text) => setState({ kind: 'ready', text }))
-      .catch((error: unknown) => {
-        if (!abort.signal.aborted) setState({ kind: 'error', message: describeError(error) });
-      });
-    return () => abort.abort();
-  }, [sourceUrl]);
-  if (state.kind === 'loading')
-    return <span>{label(locale, '正在读取文本…', 'Loading text…')}</span>;
-  if (state.kind === 'error') return <span role="alert">{state.message}</span>;
-  return <pre className="neko-preview-root__text">{state.text}</pre>;
-}
-
-function DocumentPreview({
-  descriptor,
-  locale,
-  onSnapshotChange,
-  snapshot,
-  sourceUrl,
-}: PreviewViewerProps): ReactElement {
-  let viewer: ReactElement;
-  switch (descriptor.mediaType) {
-    case 'application/pdf':
-      viewer = <PdfViewer sourceUrl={sourceUrl} />;
-      break;
-    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-      viewer = <DocxViewer sourceUrl={sourceUrl} />;
-      break;
-    case 'application/epub+zip':
-      viewer = <EpubViewer sourceUrl={sourceUrl} />;
-      break;
-    case 'application/x-cbz':
-      viewer = <CbzViewer sourceUrl={sourceUrl} />;
-      break;
-    default:
-      return (
-        <div className="neko-preview-root__status">
-          {label(locale, '没有可用的文档预览器。', 'No document viewer is available.')}
-        </div>
-      );
-  }
-  return (
-    <PersistedStateProvider
-      key={descriptor.descriptorId}
-      initialState={snapshot?.documentState}
-      onStateChange={(documentState) => onSnapshotChange({ documentState })}
-    >
-      <ViewerModuleBoundary locale={locale}>
-        <I18nProvider service={i18nService}>{viewer}</I18nProvider>
-      </ViewerModuleBoundary>
-    </PersistedStateProvider>
-  );
-}
-
-function ModelPreview({
-  descriptor,
-  locale,
-  onSnapshotChange,
-  snapshot,
-  sourceUrl,
-}: PreviewViewerProps): ReactElement {
-  const source = useMemo(
-    () => createModelSourceDescriptor(descriptor, sourceUrl),
-    [descriptor, sourceUrl],
-  );
-  const host = useMemo(() => {
-    const next = createSourceModelViewerHost({
-      sessionId: descriptor.descriptorId,
-      source,
-    });
-    if (snapshot?.modelState !== undefined) next.setState(snapshot.modelState);
-    return next;
-  }, [descriptor.descriptorId, snapshot?.modelState, source]);
-  useEffect(
-    () => () => onSnapshotChange({ modelState: host.getState() }),
-    [host, onSnapshotChange],
-  );
-  useEffect(() => {
-    setLocale(locale);
-  }, [locale]);
-  return (
-    <ViewerModuleBoundary locale={locale}>
-      <I18nProvider service={i18nService}>
-        <ModelViewer host={host} sessionId={descriptor.descriptorId} />
-      </I18nProvider>
-    </ViewerModuleBoundary>
-  );
-}
-
-function ViewerModuleBoundary({
-  children,
-  locale,
-}: {
-  readonly children: ReactNode;
-  readonly locale: SupportedLocale;
-}): ReactElement {
-  return (
-    <Suspense
-      fallback={
-        <div className="neko-preview-root__status" role="status">
-          {label(locale, '正在载入查看器…', 'Loading viewer…')}
-        </div>
-      }
-    >
-      {children}
-    </Suspense>
-  );
-}
-
-function createModelSourceDescriptor(
-  descriptor: PreviewMediaDescriptor,
-  sourceUrl: string,
-): ModelPreviewSourceDescriptor {
-  const format = modelFormat(descriptor.displayName);
-  return {
-    source: descriptor.contentLocator,
-    sourceFingerprint: descriptor.sourceFingerprint,
-    format,
-    entryUri: sourceUrl,
-    uriMap: descriptor.resourceUris ?? { [descriptor.displayName]: sourceUrl },
-    sizeBytes: descriptor.byteLength,
-  };
-}
-
-function modelFormat(fileName: string): ModelPreviewFormat {
-  const extension = fileName.slice(fileName.lastIndexOf('.') + 1).toLocaleLowerCase();
-  if (
-    extension === 'glb' ||
-    extension === 'gltf' ||
-    extension === 'obj' ||
-    extension === 'stl' ||
-    extension === 'ply'
-  ) {
-    return extension;
-  }
-  throw new Error(`Unsupported model format '${extension}'.`);
 }
 
 function label(locale: SupportedLocale, chinese: string, english: string): string {
