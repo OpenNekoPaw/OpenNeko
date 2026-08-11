@@ -21,7 +21,8 @@ export const NEKO_GATEWAY_DEFAULT_AUDIO_MODEL_ID = 'neko-gateway-tts';
 export const NEKO_GATEWAY_DEFAULT_MUSIC_MODEL_ID = 'neko-gateway-suno';
 export const GOOGLE_GEMINI_MEDIA_UNDERSTAND_MODEL_ID = 'google-gemini-2.5-flash';
 
-const DEFAULT_NEWAPI_BASE_URL = '';
+const DEFAULT_NEKO_GATEWAY_BASE_URL = 'https://www.nekoapi.com';
+const DEFAULT_CUSTOM_NEWAPI_BASE_URL = '';
 const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434/api';
 const DEFAULT_GOOGLE_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -35,7 +36,7 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     name: 'neko-gateway',
     displayName: 'Neko Gateway',
     type: 'newapi',
-    apiUrl: DEFAULT_NEWAPI_BASE_URL,
+    apiUrl: DEFAULT_NEKO_GATEWAY_BASE_URL,
     enabled: true,
     builtin: true,
     connectionKind: 'gateway',
@@ -55,7 +56,7 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     name: 'custom-newapi',
     displayName: 'Custom NewAPI Endpoint',
     type: 'newapi',
-    apiUrl: DEFAULT_NEWAPI_BASE_URL,
+    apiUrl: DEFAULT_CUSTOM_NEWAPI_BASE_URL,
     enabled: false,
     builtin: true,
     connectionKind: 'gateway',
