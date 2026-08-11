@@ -125,6 +125,13 @@ Running a node is a two-owner operation and cannot rely on an in-memory callback
 
 The stable submission identity is owned by Canvas authoring and consumed by Generation only as an idempotency key. It exists because Canvas document persistence and Generation Job persistence cannot share one transaction; without it, a crash after provider submission but before `.nkc` update can duplicate paid work. It is not a version field, routing generation or alternate success path.
 
+A provider adapter may prove that a synchronous paid submission lost its transport only after the
+request was sent while exposing no recoverable provider task identity. The adapter preserves that fact
+as one provider-neutral execution outcome signal. Generation then terminates the exact Job as
+`outcome-unknown` even though no provider task can be reconciled. It never converts the signal to an
+ordinary retryable failure, invents a task identity, reports success or automatically resubmits paid
+work. An explicit user rerun remains a distinct Job and retains the prior diagnostic.
+
 One Generation Node permits one non-terminal run at a time in this change. A second run request is rejected visibly; the user may cancel the active Job or wait for terminal state. Editing the Recipe while a Job runs is allowed, but the UI marks the result as originating from an older fingerprint.
 
 The Canvas Host runtime projection is one canonical package-owned contract across Node/Main, preload
@@ -145,6 +152,10 @@ The operation does not create Job, Media, File or Group sibling nodes and does n
 If a newer run owns the node, the node was deleted, the document target changed or the authoritative revision cannot be safely replanned, only that result apply is blocked. The Job and artifact remain durable, a diagnostic is recorded through the owning Canvas/Job projection, and no active/recent Canvas or new Media node is selected as fallback.
 
 During rerun the node continues showing its prior selected output with a running overlay. Success selects the new output; failure or cancellation preserves the prior output and displays the current Job diagnostic. Selecting an older output changes the node’s downstream output without mutating or deleting any artifact version.
+
+Generation progress is projected from the authoritative GenerationJob rather than inferred from animations. The Canvas runtime projection carries the Job phase, provider-derived progress and authoritative creation/update timestamps; the Webview derives a compact stage label and elapsed duration from those facts. Active nodes may use a restrained scanning treatment, but the animation is never presented as percentage progress or completion evidence. Completed, failed and cancelled runs use the same timestamps for final elapsed duration, without an estimated remaining time.
+
+One Job's image outputs are presented as one result group inside the originating Generation Node. Before any output commits, an active multi-image request keeps one content surface and exposes only the requested count badge, scan state and authoritative progress; completed-result stack layers are not rendered in this pending state. After two or more outputs commit, the collapsed state keeps the currently selected output as the primary preview, uses at most two visual stack layers, and exposes the exact output count plus current index. A transient in-node comparison state shows the group's members without changing the durable Canvas node size; choosing a member updates the existing canonical selected-output identity. Historical outputs from other Jobs remain available through the same output selection contract. Canvas does not fabricate per-output failure slots when the provider/GenerationJob contract reports only one Job-level terminal failure, and it does not automatically expand grouped results into sibling nodes.
 
 Prompt/Text results are committed as immutable generated-output content with stable digest/locator. Rendering or selecting them does not turn Job storage into editable Canvas authority. An explicit text edit creates Canvas-owned authored text state derived from that output and preserves the original generated artifact/provenance; it never rewrites the generated output in place.
 

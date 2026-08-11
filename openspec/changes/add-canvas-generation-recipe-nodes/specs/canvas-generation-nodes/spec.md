@@ -80,6 +80,20 @@ A terminal successful GenerationJob SHALL commit durable outputs before Canvas a
 - **THEN** all outputs become selectable history within the same Generation Node
 - **AND** the node exposes exactly one selected output to downstream connections without creating an automatic Canvas Group
 
+#### Scenario: Multiple image outputs are presented as one result group
+
+- **GIVEN** one Image GenerationJob committed two or more outputs
+- **WHEN** Canvas presents the originating Generation Node in its collapsed state
+- **THEN** the selected output is the primary preview with a bounded stacked-card cue, exact group count and current index
+- **AND** opening the transient comparison view presents every output from that Job without changing the durable node size
+- **AND** selecting one result updates the canonical selected-output identity while no Media, File or Group sibling node is created
+
+#### Scenario: An image result group contains no per-output failure facts
+
+- **WHEN** Generation reports one Job-level failure without committed per-output status
+- **THEN** Canvas displays the Job failure on the group and preserves any prior successful selection
+- **AND** it does not synthesize failed image slots, partial-success claims or output diagnostics that are absent from the authoritative Job contract
+
 #### Scenario: Result apply target is no longer valid
 
 - **WHEN** the originating node was deleted, a different run owns it or the exact document cannot safely apply the result
@@ -101,6 +115,29 @@ Every explicit rerun SHALL create a new GenerationJob and new immutable outputs.
 - **WHEN** a later run fails or is cancelled
 - **THEN** the previous successful output remains visible and selected
 - **AND** the failed Job diagnostic is displayed on the same node without reporting result success
+
+### Requirement: Generation status is truthful, compact and time-aware
+
+Canvas SHALL derive Generation Node status from the authoritative GenerationJob projection. Active presentation SHALL distinguish preparation, queueing, provider execution and result commit where those facts exist, SHALL expose provider-derived progress when available and SHALL show elapsed duration from authoritative Job timestamps. It SHALL NOT present decorative animation as measured progress or invent an estimated remaining time.
+
+#### Scenario: A generation run is active
+
+- **WHEN** the authoritative Job projection is pending or running
+- **THEN** the node displays the current projected stage, elapsed duration and bounded progress when provided
+- **AND** a restrained scanning placeholder may indicate activity without claiming unsupported percentage or ETA facts
+- **AND** a multi-image request shows its requested count on the single pending content surface without completed-result stack layers or duplicated card borders
+
+#### Scenario: A generation run reaches a terminal state
+
+- **WHEN** the authoritative Job completes, fails or is cancelled
+- **THEN** Canvas computes final elapsed duration from its projected creation and update timestamps and retains the matching result or diagnostic state
+- **AND** failure or cancellation does not replace a prior selected output or report a successful result
+
+#### Scenario: An empty or unsuccessful media node has no preview
+
+- **WHEN** an Image, Audio or Video Generation Node has no selected committed output in an idle, failed, cancelled or outcome-unknown state
+- **THEN** its kind icon is centered in the full content surface while the compact terminal status remains independently anchored
+- **AND** a requested multi-image count does not add completed-result stack layers unless two or more outputs were actually committed
 
 #### Scenario: Recipe changes during a run
 

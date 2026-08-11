@@ -776,6 +776,8 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     'recipeInputFingerprint',
     'jobRef',
     'phase',
+    'createdAt',
+    'updatedAt',
     'progress',
     'resultLocators',
     'text',
@@ -798,11 +800,31 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     throw invalidPayload('Canvas Generation runtime phase is invalid.');
   }
   const jobRef = record['jobRef'];
+  const createdAt = record['createdAt'];
+  const updatedAt = record['updatedAt'];
   const progress = record['progress'];
   const resultLocators = record['resultLocators'];
   const diagnostic = record['diagnostic'];
   const text = record['text'];
   const recipeStale = record['recipeStale'];
+  if ((createdAt === undefined) !== (updatedAt === undefined)) {
+    throw invalidPayload('Canvas Generation runtime timestamps must be projected together.');
+  }
+  const parsedCreatedAt =
+    createdAt === undefined
+      ? undefined
+      : requireFiniteNumber(createdAt, 'Canvas Generation created timestamp is invalid.');
+  const parsedUpdatedAt =
+    updatedAt === undefined
+      ? undefined
+      : requireFiniteNumber(updatedAt, 'Canvas Generation updated timestamp is invalid.');
+  if (
+    parsedCreatedAt !== undefined &&
+    parsedUpdatedAt !== undefined &&
+    (parsedCreatedAt < 0 || parsedUpdatedAt < parsedCreatedAt)
+  ) {
+    throw invalidPayload('Canvas Generation runtime timestamp order is invalid.');
+  }
   return {
     nodeId: requireOpaqueIdentity(record['nodeId'], 'Canvas Generation node identity is invalid.'),
     submissionId: requireOpaqueIdentity(
@@ -815,6 +837,8 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     ),
     ...(jobRef === undefined ? {} : { jobRef: parseGenerationJobRef(jobRef) }),
     phase,
+    ...(parsedCreatedAt === undefined ? {} : { createdAt: parsedCreatedAt }),
+    ...(parsedUpdatedAt === undefined ? {} : { updatedAt: parsedUpdatedAt }),
     ...(progress === undefined ? {} : { progress: parseGenerationProgress(progress) }),
     ...(resultLocators === undefined
       ? {}

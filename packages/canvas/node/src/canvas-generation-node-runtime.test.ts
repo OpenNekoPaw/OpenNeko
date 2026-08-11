@@ -251,6 +251,10 @@ describe('CanvasGenerationNodeRuntime', () => {
     );
 
     expect(projections.map((projection) => projection.phase)).toEqual(['running', 'succeeded']);
+    expect(projections).toEqual([
+      expect.objectContaining({ createdAt: 1, updatedAt: 10 }),
+      expect.objectContaining({ createdAt: 1, updatedAt: 11 }),
+    ]);
     expect(projections[1]?.resultLocators).toEqual([resultLocator()]);
     expect(describeGeneration).toHaveBeenCalledWith(run.jobRef);
     expect(observeGeneration).toHaveBeenCalledWith(run.jobRef);

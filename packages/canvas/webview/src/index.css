@@ -1843,12 +1843,188 @@ html.canvas-webview-document #root,
 }
 
 .canvas-generation-node__content {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
   overflow: hidden;
   border-radius: inherit;
   background: transparent;
+}
+
+.canvas-generation-node__single-preview,
+.canvas-generation-node__result-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.canvas-generation-node__result-stack--multiple::before,
+.canvas-generation-node__result-stack--multiple::after {
+  position: absolute;
+  z-index: 0;
+  content: '';
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--node-border) 72%, transparent);
+  border-radius: inherit;
+  background: var(--canvas-card-surface);
+}
+
+.canvas-generation-node__result-stack--multiple > .canvas-generation-node__empty {
+  position: relative;
+  z-index: 1;
+  width: calc(100% - 7px);
+  height: calc(100% - 7px);
+  border: 1px solid color-mix(in srgb, var(--node-border) 84%, transparent);
+  border-radius: inherit;
+  background: var(--canvas-card-surface);
+}
+
+.canvas-generation-node__result-stack--multiple::before {
+  inset: 4px 2px 2px 4px;
+}
+
+.canvas-generation-node__result-stack--multiple::after {
+  inset: 7px 0 0 7px;
+}
+
+.canvas-generation-node__group-primary {
+  position: absolute;
+  z-index: 1;
+  inset: 0 7px 7px 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--node-border) 84%, transparent);
+  border-radius: inherit;
+  background: var(--canvas-card-surface);
+}
+
+.canvas-generation-node__group-primary > *,
+.canvas-generation-node__single-preview > * {
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-generation-node__count-badge,
+.canvas-generation-node__result-index {
+  position: absolute;
+  z-index: 4;
+  border: 1px solid color-mix(in srgb, var(--node-border) 82%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--canvas-card-surface) 92%, transparent);
+  color: var(--node-fg);
+  font-size: 10px;
+  line-height: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.canvas-generation-node__count-badge {
+  top: 7px;
+  left: 7px;
+  min-width: 0;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+span.canvas-generation-node__count-badge {
+  cursor: default;
+}
+
+.canvas-generation-node__count-badge:hover,
+.canvas-generation-node__count-badge[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--node-fg) 9%, var(--canvas-card-surface));
+}
+
+.canvas-generation-node__result-index {
+  bottom: 14px;
+  left: 7px;
+  padding: 1px 5px;
+  color: var(--node-fg-secondary);
+}
+
+.canvas-generation-node__comparison {
+  position: absolute;
+  z-index: 2;
+  inset: 0 7px 7px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 4px;
+  overflow: auto;
+  padding: 4px;
+  border-radius: inherit;
+  background: var(--canvas-card-surface);
+}
+
+.canvas-generation-node__comparison-item {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--node-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--node-fg);
+  cursor: pointer;
+}
+
+.canvas-generation-node__comparison-item[aria-current='true'] {
+  border-color: color-mix(in srgb, var(--node-fg) 70%, var(--node-border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--node-fg) 26%, transparent);
+}
+
+.canvas-generation-node__comparison-item > :not(span) {
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-generation-node__comparison-item > span {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--canvas-card-surface) 86%, transparent);
+  font-size: 9px;
+  line-height: 14px;
+  backdrop-filter: blur(6px);
+}
+
+.canvas-generation-node__activity-scan {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.canvas-generation-node__activity-scan::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  content: '';
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--node-fg) 8%, transparent),
+    transparent
+  );
+  animation: canvas-generation-scan 1.8s ease-in-out infinite;
+}
+
+@keyframes canvas-generation-scan {
+  from {
+    transform: translateX(-120%);
+  }
+
+  to {
+    transform: translateX(420%);
+  }
 }
 
 .canvas-generation-node__empty {
@@ -1874,17 +2050,59 @@ html.canvas-webview-document #root,
   white-space: pre-wrap;
 }
 
-.canvas-generation-node__phase {
+.canvas-generation-node__status {
   position: absolute;
+  z-index: 5;
   right: 8px;
   bottom: 8px;
+  display: flex;
+  max-width: calc(100% - 16px);
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
   padding: 3px 7px;
   border: 1px solid var(--node-border);
   border-radius: 6px;
   background: color-mix(in srgb, var(--node-bg) 92%, transparent);
   color: var(--node-fg-secondary);
   font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
   backdrop-filter: blur(8px);
+}
+
+.canvas-generation-node__status[data-tone='danger'] {
+  border-color: color-mix(in srgb, var(--neko-danger) 36%, var(--node-border));
+  color: var(--neko-danger);
+}
+
+.canvas-generation-node__status[data-tone='muted'] {
+  opacity: 0.8;
+}
+
+.canvas-generation-node__progress {
+  position: absolute;
+  right: 4px;
+  bottom: 1px;
+  left: 4px;
+  height: 1px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--node-fg-secondary) 15%, transparent);
+}
+
+.canvas-generation-node__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-generation-node__activity-scan::after {
+    animation: none;
+  }
 }
 
 .selection-generation-input-panel {

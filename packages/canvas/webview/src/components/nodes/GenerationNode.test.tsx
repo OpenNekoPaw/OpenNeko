@@ -8,7 +8,7 @@ import type {
 import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 import { setLocale } from '../../i18n';
 import { GenerationNode } from './GenerationNode';
@@ -28,6 +28,7 @@ describe('GenerationNode', () => {
 
   afterEach(() => {
     act(() => root.unmount());
+    vi.restoreAllMocks();
     document.body.replaceChildren();
   });
 
@@ -49,12 +50,143 @@ describe('GenerationNode', () => {
     expect(container.textContent).toContain('Previously generated scene');
     expect(container.textContent).toContain('Text');
     expect(container.textContent).not.toContain('Text generation');
-    expect(container.textContent).not.toContain('Failed');
+    expect(container.textContent).toContain('Failed');
     expect(container.querySelector('[data-canvas-content-kind="text"]')).not.toBeNull();
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('select')).toBeNull();
     expect(container.querySelector('button[title="Run"]')).toBeNull();
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('presents one Job image batch as a compact stack and selects within an in-node comparison', async () => {
+    const selectGenerationOutput = vi.fn(async () => snapshot());
+    const node = imageNodeWithBatch();
+
+    render(node, createHost(undefined, { selectGenerationOutput }));
+
+    expect(container.querySelector('[data-generation-result-count="2"]')).not.toBeNull();
+    expect(
+      container.querySelector('.canvas-generation-node__result-stack--multiple'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain('2 outputs');
+    expect(container.textContent).toContain('2/2');
+    const frame = container.querySelector<HTMLElement>('.canvas-generation-node-frame');
+    expect(frame?.style.width).toBe('320px');
+    expect(frame?.style.height).toBe('240px');
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Compare generated outputs"]',
+    );
+    await act(async () => toggle?.click());
+
+    expect(container.querySelector('[data-generation-comparison="open"]')).not.toBeNull();
+    const choices = container.querySelectorAll<HTMLButtonElement>(
+      '.canvas-generation-node__comparison-item',
+    );
+    expect(choices).toHaveLength(2);
+    expect(frame?.style.width).toBe('320px');
+    expect(frame?.style.height).toBe('240px');
+    await act(async () => choices[0]?.click());
+    expect(selectGenerationOutput).toHaveBeenCalledWith('generation-image', 'image-output-1');
+  });
+
+  it('preserves an earlier image group and reports a later Job failure only at group level', () => {
+    const node = imageNodeWithBatch();
+    render(
+      node,
+      createHost({
+        nodeId: node.id,
+        submissionId: 'submission-later',
+        recipeInputFingerprint: 'sha256:later',
+        jobRef: { kind: 'generation', jobId: 'job-later' },
+        phase: 'failed',
+        createdAt: 1_000,
+        updatedAt: 4_000,
+        progress: { stage: 'waiting-provider', percent: 60 },
+        diagnostic: { code: 'provider-failed', message: 'The later Job failed.' },
+      }),
+    );
+
+    expect(container.querySelector('[data-generation-result-count="2"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-generation-phase="failed"]')).toHaveLength(1);
+    expect(container.textContent).toContain('Failed');
+    expect(container.textContent).toContain('3s');
+    expect(container.querySelectorAll('.canvas-generation-node__comparison-item')).toHaveLength(0);
+  });
+
+  it('shows authoritative progress stage, percentage and elapsed time', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(13_000);
+    const node: GenerationCanvasNode = {
+      id: 'generation-image',
+      type: 'generation',
+      position: { x: 20, y: 30 },
+      size: { width: 320, height: 240 },
+      zIndex: 1,
+      data: { recipe: { kind: 'image', prompt: '', count: 2 }, outputs: [] },
+    };
+    render(
+      node,
+      createHost({
+        nodeId: node.id,
+        submissionId: 'submission-image',
+        recipeInputFingerprint: 'sha256:image',
+        jobRef: { kind: 'generation', jobId: 'job-image' },
+        phase: 'running',
+        createdAt: 3_000,
+        updatedAt: 12_000,
+        progress: { stage: 'waiting-provider', percent: 42 },
+      }),
+    );
+
+    const status = container.querySelector('[data-generation-phase="running"]');
+    expect(status?.textContent).toContain('Generating');
+    expect(status?.textContent).toContain('10s');
+    expect(status?.textContent).toContain('42%');
+    expect(container.textContent).toContain('2 outputs');
+    expect(container.querySelector('.canvas-generation-node__activity-scan')).not.toBeNull();
+    expect(
+      container.querySelector('.canvas-generation-node__result-stack--pending'),
+    ).not.toBeNull();
+    expect(container.querySelector('.canvas-generation-node__result-stack--multiple')).toBeNull();
+  });
+
+  it('centers a failed Image placeholder in the full content surface without result stack layers', () => {
+    const node: GenerationCanvasNode = {
+      id: 'generation-image',
+      type: 'generation',
+      position: { x: 20, y: 30 },
+      size: { width: 320, height: 240 },
+      zIndex: 1,
+      data: { recipe: { kind: 'image', prompt: 'Two quiet frames', count: 2 }, outputs: [] },
+    };
+    render(
+      node,
+      createHost({
+        nodeId: node.id,
+        submissionId: 'submission-image',
+        recipeInputFingerprint: 'sha256:image',
+        jobRef: { kind: 'generation', jobId: 'job-image' },
+        phase: 'outcome-unknown',
+        createdAt: 3_000,
+        updatedAt: 304_000,
+        diagnostic: {
+          code: 'generation-outcome-unknown',
+          message: 'The provider outcome is unknown.',
+        },
+      }),
+    );
+
+    const empty = container.querySelector('.canvas-generation-node__empty');
+    expect(empty?.parentElement?.classList.contains('canvas-generation-node__result-stack')).toBe(
+      true,
+    );
+    expect(
+      empty?.parentElement?.classList.contains('canvas-generation-node__result-stack--pending'),
+    ).toBe(false);
+    expect(
+      empty?.parentElement?.classList.contains('canvas-generation-node__result-stack--multiple'),
+    ).toBe(false);
+    expect(container.querySelector('[data-generation-phase="outcome-unknown"]')).not.toBeNull();
   });
 
   it.each([
@@ -133,6 +265,38 @@ function nodeWithHistory(): GenerationCanvasNode {
       outputs: [first, second],
       selectedOutputId: second.outputId,
     },
+  };
+}
+
+function imageNodeWithBatch(): GenerationCanvasNode {
+  const first = imageOutput('image-output-1');
+  const second = imageOutput('image-output-2');
+  return {
+    id: 'generation-image',
+    type: 'generation',
+    position: { x: 20, y: 30 },
+    size: { width: 320, height: 240 },
+    zIndex: 1,
+    data: {
+      recipe: { kind: 'image', prompt: 'Two quiet frames', count: 2 },
+      outputs: [first, second],
+      selectedOutputId: second.outputId,
+    },
+  };
+}
+
+function imageOutput(outputId: string) {
+  return {
+    outputId,
+    jobRef: { kind: 'generation' as const, jobId: 'job-image' },
+    locator: {
+      kind: 'generated-output' as const,
+      outputId,
+      digest: `sha256:${outputId}`,
+      path: `neko/generated/image/${outputId}.png`,
+    },
+    kind: 'image' as const,
+    recipeInputFingerprint: 'sha256:image-recipe',
   };
 }
 

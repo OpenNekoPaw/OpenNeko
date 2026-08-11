@@ -440,6 +440,8 @@ function projectSnapshot(
     recipeInputFingerprint: run.recipeInputFingerprint,
     jobRef: snapshot.ref,
     phase: snapshot.phase,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt,
     progress: snapshot.progress,
     ...(snapshot.resultLocators ? { resultLocators: snapshot.resultLocators } : {}),
     ...(snapshot.failure ? { diagnostic: snapshot.failure } : {}),

@@ -11,6 +11,7 @@
 - [x] 2.2 Add Workspace-scoped idempotent submission keyed by the caller submission identity; atomically return the existing JobRef for an equivalent request and reject a conflicting payload without provider execution, Job mutation or sibling Workspace impact.
 - [x] 2.3 Extend persistence, recovery, observation, cancellation and artifact commit tests for Prompt/Text and idempotent submission, including crash recovery between Canvas run-intent persistence and JobRef binding, unsupported kind/model rejection and no provider/model/executor fallback.
 - [x] 2.4 Replace the Agent-oriented `DirectGenerationOperationPort` consumer contract with the one canonical GenerationJob port consumed through the Canvas Generation application port and Agent Tools; add import/export and architecture poison tests proving no second submit contract, wildcard executor or direct-operation success handler remains.
+- [x] 2.5 Preserve a provider-neutral unknown-outcome execution signal from synchronous paid provider submission through Media execution into the canonical Job coordinator; classify the Job `outcome-unknown` without a fabricated provider task or automatic retry.
 
 ## 3. Canvas Runtime And Recovery
 
@@ -40,6 +41,9 @@
 - [x] 4.16 Add stable Text/Image/Video/Audio content action identities and a capability-owned kind-specific toolbar layout for referenced File/Media and Generation selected outputs, reuse canonical Text Editor/Cut/Preview/Media Library execution, keep generic File as canonical document without extension inference, omit actions without an active owner, and remove Delete from all selected-node toolbars while retaining the focused Delete/Backspace keyboard path.
 - [x] 4.17 Resolve a Generation Node's exact selected successful media output through the canonical material-action catalog and compose Cut-owned Video audio separation as one exact import-plus-separate operation so generated Video toolbars expose real Edit and audio-separation actions instead of only generic Canvas actions.
 - [x] 4.18 Move ordinary Media, File and Generation names into one BaseNode-owned external label above the card, remove media footer/player titles, preserve File basename resolution and add layout regressions.
+- [x] 4.19 Project authoritative GenerationJob timestamps and progress into Canvas, then add truthful compact status, elapsed duration and grouped multi-image result presentation with bounded stack and transient comparison states.
+- [x] 4.20 Separate the active multi-image placeholder from the completed result-group stack so pending requests retain one node surface and show only count, scan state and authoritative progress without duplicated borders.
+- [x] 4.21 Keep no-preview Image/Audio/Video content inside one full-height result surface in idle and terminal states so the kind icon remains centered independently of the status pill.
 
 ## 5. Agent Direct-Mode Removal
 
@@ -77,3 +81,6 @@
 - [x] 7.16 Add visible Desktop evidence that the Workspace Board opens without reload and an existing path-shaped File node shows only its basename above the compact card.
 - [ ] 7.17 Add deterministic Domain/Webview/Desktop evidence for referenced and generated Text/Audio/Video/Image target resolution, action ordering, advanced owner contribution/omission, exact action dispatch, empty Generation omission, no toolbar Delete action and preserved focus-scoped Delete/Backspace behavior; then run focused UI validation at desktop and compact sizes.
 - [x] 7.18 Add deterministic and focused browser-component evidence that ordinary Media/File and Generation names use one visible label above the card at desktop and compact widths, with File basename preservation and no media footer/player title.
+- [ ] 7.19 Add deterministic Domain/Node/Webview evidence for authoritative generation stage/progress/timing projection, grouped image result selection, stable node size, prior-output preservation and the absence of fabricated per-output failures or automatic sibling nodes; complete focused UI validation for active, success and failure states.
+- [x] 7.20 Add a focused Generation Node regression proving active multi-image requests use the pending single-surface presentation while completed multi-output groups retain the bounded stack presentation.
+- [x] 7.21 Add focused AI SDK, Generation executor/coordinator and Canvas Webview regressions for ambiguous synchronous submission classification, no automatic resubmission and centered failed Image placeholder; then complete visible UI inspection without starting another paid request.

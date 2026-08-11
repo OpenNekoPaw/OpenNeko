@@ -106,6 +106,8 @@ describe('Canvas Host runtime contract', () => {
       submissionId: 'submission-1',
       recipeInputFingerprint: 'sha256:recipe-1',
       phase: 'succeeded',
+      createdAt: 100,
+      updatedAt: 250,
       recipeStale: true,
     };
     const snapshot = parseCanvasHostSnapshot({
@@ -126,6 +128,19 @@ describe('Canvas Host runtime contract', () => {
         generationNodes: [{ ...projection, staleReason: 'recipe-changed' }],
       }),
     ).toThrowError('Canvas Generation runtime projection contains unsupported fields.');
+    expect(() =>
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [{ ...projection, updatedAt: 50 }],
+      }),
+    ).toThrowError('Canvas Generation runtime timestamp order is invalid.');
+    const { updatedAt: _updatedAt, ...missingUpdatedAt } = projection;
+    expect(() =>
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [missingUpdatedAt],
+      }),
+    ).toThrowError('Canvas Generation runtime timestamps must be projected together.');
   });
 
   it('rejects removed fields, absolute identities and stale sessions', () => {
