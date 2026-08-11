@@ -50,6 +50,8 @@ import {
   type AgentContextPayload,
   type AgentFileReference,
   type AgentFlatPurposeModelRefs,
+  type AgentEntryTargetReceipt,
+  type AgentInputInvocationIntent,
   type AgentMessageQueueSnapshot,
   type OpenTab,
   type Message,
@@ -183,6 +185,9 @@ export interface AgentControllerComposition {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationEntryTargetReceipt?: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>;
     readonly readConversationConfiguration?: (
       conversationId: string,
     ) => Promise<AgentConversationConfiguration>;
@@ -204,6 +209,7 @@ export interface AgentControllerComposition {
     readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
+    readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
@@ -295,6 +301,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationEntryTargetReceipt?: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>;
     readonly readConversationConfiguration?: (
       conversationId: string,
     ) => Promise<AgentConversationConfiguration>;
@@ -444,6 +453,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             },
         input.readConversationConfiguration ?? missingConversationConfigurationDependency,
         input.readConversationContext ?? missingConversationContextDependency,
+        input.readConversationEntryTargetReceipt ?? readNoConversationEntryTargetReceipt,
       ),
       config: this.createConfigEffects(
         input.workspace,
@@ -459,6 +469,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         bind,
         facts,
         input.readConversationContext ?? missingConversationContextDependency,
+        input.readConversationEntryTargetReceipt ?? readNoConversationEntryTargetReceipt,
         input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,
         input.personalSkillOwnerId ?? '',
         input.readConversationConfiguration ?? missingConversationConfigurationDependency,
@@ -527,6 +538,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
+    readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
@@ -573,6 +585,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           facts,
           configuration: input.configuration,
           conversationContext: input.context,
+          entryTargetReceipt: input.entryTargetReceipt ?? null,
           ...(input.presentationText === undefined
             ? {}
             : { presentationText: input.presentationText }),
@@ -703,6 +716,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readConversationContext: (
       conversationId: string,
     ) => Promise<AgentBoundDomainBinding> = missingConversationContextDependency,
+    readConversationEntryTargetReceipt: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null> = readNoConversationEntryTargetReceipt,
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -765,7 +781,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       const operation = Promise.all([
         readConversationConfiguration(request.conversationId),
         readConversationContext(request.conversationId),
-      ]).then(([configuration, conversationContext]) =>
+        readConversationEntryTargetReceipt(request.conversationId),
+      ]).then(([configuration, conversationContext, entryTargetReceipt]) =>
         this.executeTurn({
           workspace,
           config,
@@ -774,6 +791,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           facts,
           configuration,
           conversationContext,
+          entryTargetReceipt,
           ...(skillName ? { skillName } : {}),
           ...(additionalInstructions ? { additionalInstructions } : {}),
         }),
@@ -800,6 +818,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         if (!active)
           throw new Error(`Desktop Agent conversation '${conversationId}' is not running.`);
         workspace.cancelTurn(conversationId, active);
+        return context.post(
+          buildMessageQueueSnapshotMessage(workspace.readMessageQueue(conversationId)),
+        );
       },
       activateConversation: (message, context) => {
         bind(context);
@@ -900,13 +921,18 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           buildMessageQueueSnapshotMessage(workspace.readMessageQueue(conversationId)),
         );
       },
-      promoteQueuedMessage: async ({ conversationId, queueItemId }, context) => {
+      sendQueuedMessageNow: async ({ conversationId, queueItemId }, context) => {
         bind(context);
         await context.post(
           buildMessageQueueSnapshotMessage(
-            workspace.promoteQueuedMessage(conversationId, queueItemId),
+            workspace.sendQueuedMessageNow(conversationId, queueItemId),
           ),
         );
+        this.getAgentStates(workspace.workspaceId).update({
+          conversationId,
+          phase: 'thinking',
+          startedAt: Date.now(),
+        });
       },
       cancelQueuedMessage: async ({ conversationId, queueItemId }, context) => {
         bind(context);
@@ -1065,6 +1091,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     bind: (context: AgentHostRouteEffectContext) => void,
     facts: DesktopAgentFactsProjector,
     readConversationContext: (conversationId: string) => Promise<AgentBoundDomainBinding>,
+    readConversationEntryTargetReceipt: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>,
     readGlobalSkillCatalog: () => Promise<import('./agent-app-host').AgentSkillCatalog>,
     personalSkillOwnerId: string,
     readConversationConfiguration: (
@@ -1099,15 +1128,17 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         }),
       };
     };
-    const executeSkillInput = (
+    const executeTurnInput = (
       conversationId: string,
-      input: {
-        readonly skillName: string;
-        readonly activationId: string;
-        readonly args?: string;
-      },
+      input: AgentInputInvocationIntent,
       context: AgentHostRouteEffectContext,
     ): void => {
+      const skillName = input.kind === 'skill' ? input.skillName : input.commandId;
+      const skillActivationId =
+        input.kind === 'skill'
+          ? input.activationId
+          : parseCommandArtifactActivationId(input.handlerId);
+      const prefix = input.kind === 'skill' ? '$' : '/';
       const request: AgentConversationControllerTurnRequest = {
         source: 'user-message',
         conversationId,
@@ -1118,17 +1149,21 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       const operation = Promise.all([
         readConversationConfiguration(conversationId),
         readConversationContext(conversationId),
-      ]).then(([configuration, conversationContext]) =>
+        readConversationEntryTargetReceipt(conversationId),
+      ]).then(([configuration, conversationContext, entryTargetReceipt]) =>
         this.executeTurn({
           workspace,
           config,
           request,
           context,
           facts,
+          entryTargetReceipt,
           configuration,
           conversationContext,
-          skillName: input.skillName,
-          skillActivationId: input.activationId,
+          presentationText: `${prefix}${skillName}${input.args ? ` ${input.args}` : ''}`,
+          queueInput: input,
+          skillName,
+          skillActivationId,
           ...(input.args ? { additionalInstructions: input.args } : {}),
         }),
       );
@@ -1172,15 +1207,17 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           );
         }
         if (input.kind === 'skill') {
-          executeSkillInput(conversationId, input, context);
+          executeTurnInput(conversationId, input, context);
           return;
         }
         if (input.handlerId === 'builtin:clear') {
+          assertConversationControlOperationIdle(workspace, conversationId, '/clear');
           await workspace.clearContext(conversationId);
           await context.post(buildHistoryClearedMessage(conversationId));
           return;
         }
         if (input.handlerId === 'builtin:compact') {
+          assertConversationControlOperationIdle(workspace, conversationId, '/compact');
           const configuration = await readConversationConfiguration(conversationId);
           const { policy } = await this.resolveModelPolicy(workspace, config, configuration);
           const result = await workspace.compactContext(
@@ -1194,15 +1231,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           });
           return;
         }
-        executeSkillInput(
-          conversationId,
-          {
-            skillName: input.commandId,
-            activationId: parseCommandArtifactActivationId(input.handlerId),
-            ...(input.args === undefined ? {} : { args: input.args }),
-          },
-          context,
-        );
+        executeTurnInput(conversationId, input, context);
       },
       readContextTokenCount: async (conversationId, context) => {
         bind(context);
@@ -1214,6 +1243,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
       compressContext: async (conversationId, context) => {
         bind(context);
+        assertConversationControlOperationIdle(workspace, conversationId, 'Context compression');
         const configuration = await readConversationConfiguration(conversationId);
         const { policy } = await this.resolveModelPolicy(workspace, config, configuration);
         const result = await workspace.compactContext(
@@ -1286,8 +1316,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly facts: DesktopAgentFactsProjector;
     readonly configuration:
       AgentConversationConfiguration | AgentConversationTurnConfigurationSnapshot;
+    readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
     readonly conversationContext: AgentBoundDomainBinding;
     readonly presentationText?: string;
+    readonly queueInput?: AgentInputInvocationIntent;
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
@@ -1371,7 +1403,35 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       workspaceTrusted: true,
       locale,
       systemPrompt,
+      queueDraft: {
+        message: input.presentationText ?? input.request.messageText,
+        sessionMode: input.request.sessionMode,
+        ...(input.queueInput === undefined ? {} : { input: input.queueInput }),
+        configuration: {
+          ...(input.request.chatModel === undefined ? {} : { chatModel: input.request.chatModel }),
+          ...(input.request.agentModels === undefined
+            ? {}
+            : { agentModels: input.request.agentModels }),
+          ...(input.request.llmConfig === undefined ? {} : { llmConfig: input.request.llmConfig }),
+          ...(input.request.mediaModel === undefined
+            ? {}
+            : { mediaModel: input.request.mediaModel }),
+          ...(input.request.purposeModels === undefined
+            ? {}
+            : { purposeModels: input.request.purposeModels }),
+        },
+        ...(input.request.attachments === undefined
+          ? {}
+          : { attachments: input.request.attachments }),
+        ...(input.request.contextPayloads === undefined
+          ? {}
+          : { contextPayloads: input.request.contextPayloads }),
+        ...(input.request.fileReferences === undefined
+          ? {}
+          : { fileReferences: input.request.fileReferences }),
+      },
       ...(contextPayloads.length ? { contextPayloads } : {}),
+      entryTargetReceipt: input.entryTargetReceipt,
       ...(input.skillName ? { skillName: input.skillName } : {}),
       ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
       ...(input.additionalInstructions
@@ -1413,10 +1473,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     } catch (error) {
       if (!(error instanceof AgentQueuedTurnCancellationError)) throw error;
     } finally {
-      this.postMessageQueueSnapshot(
-        input.context,
-        input.workspace.readMessageQueue(input.request.conversationId),
-      );
+      const queue = input.workspace.readMessageQueue(input.request.conversationId);
+      this.postMessageQueueSnapshot(input.context, queue);
       const residency = input.workspace
         .readRuntimeResidency()
         .conversations.find(
@@ -1424,7 +1482,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         );
       this.getAgentStates(input.workspace.workspaceId).update({
         conversationId: input.request.conversationId,
-        phase: residency?.running === true || residency?.queued === true ? 'thinking' : 'idle',
+        phase:
+          residency?.running === true || (residency?.queued === true && queue.paused !== true)
+            ? 'thinking'
+            : 'idle',
         startedAt: Date.now(),
       });
     }
@@ -2232,6 +2293,21 @@ function summarizeToolConfirmation(toolName: string, args: unknown): string {
   return keys.length === 0 ? `Run ${toolName}` : `Run ${toolName} with ${keys.join(', ')}`;
 }
 
+function assertConversationControlOperationIdle(
+  workspace: AgentWorkspaceRuntime,
+  conversationId: string,
+  operation: string,
+): void {
+  const residency = workspace
+    .readRuntimeResidency()
+    .conversations.find((candidate) => candidate.conversationId === conversationId);
+  if (residency?.running === true || residency?.queued === true) {
+    throw new Error(
+      `${operation} cannot run while Conversation '${conversationId}' has an active or queued Turn.`,
+    );
+  }
+}
+
 function parseCommandArtifactActivationId(handlerId: string): string {
   const prefix = 'command-artifact:';
   if (!handlerId.startsWith(prefix) || handlerId.length === prefix.length) {
@@ -2242,6 +2318,10 @@ function parseCommandArtifactActivationId(handlerId: string): string {
 
 async function missingConversationContextDependency(): Promise<AgentBoundDomainBinding> {
   throw new Error('Agent Session input catalog has no Conversation context dependency.');
+}
+
+async function readNoConversationEntryTargetReceipt(): Promise<null> {
+  return null;
 }
 
 const missingConversationReferenceDependency: AgentConversationReferenceResolutionPort = {

@@ -85,6 +85,9 @@
 - [x] 3.11 Model fixed GitHub Release, fixed official-vendor artifact and user-managed endpoint as explicit non-fallback
       delivery sources; add Host-owned endpoint authorization/credential storage, health/schema qualification and UI
       while ensuring OpenNeko never installs, starts, updates or terminates a user-owned service.
+- [x] 3.12 Add locale-keyed extension introduction metadata to the canonical manifest/catalog projection; render and
+      search the current Desktop locale in grid/list and configuration details, retain the canonical default for
+      undeclared locales, and add manifest, IPC and Agent Webview regressions for English and Simplified Chinese.
 
 ## 4. Automation package ownership
 

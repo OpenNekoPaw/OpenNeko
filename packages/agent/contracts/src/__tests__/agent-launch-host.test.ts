@@ -99,6 +99,37 @@ describe('Agent launch Host contract', () => {
     ).toThrow('unsupported fields');
   });
 
+  it('parses an exact owner-qualified Entry target without raw path authority', () => {
+    const request = parseAgentLaunchHostRequest({
+      requestId: 'entry-target-1',
+      operation: 'configure-entry-target',
+      connection: {
+        applicationInstanceId: 'application-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        viewId: 'view-1',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+      },
+      mode: 'authoring',
+      binding: {
+        kind: 'authoring',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        target: { kind: 'world-project', worldProjectId: 'world-1' },
+      },
+    });
+    expect(request).toMatchObject({
+      operation: 'configure-entry-target',
+      mode: 'authoring',
+      binding: { target: { kind: 'world-project', worldProjectId: 'world-1' } },
+    });
+    expect(() =>
+      parseAgentLaunchHostRequest({ ...request, workspacePath: '/Users/private/world' }),
+    ).toThrow('unsupported fields');
+  });
+
   it('rejects the removed assistant-only binding operation', () => {
     expect(() =>
       parseAgentLaunchHostRequest({

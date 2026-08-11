@@ -483,6 +483,30 @@ describe('config message presenter', () => {
     });
   });
 
+  it('does not infer an Agent generation purpose from the media model category', () => {
+    expect(
+      projectMessageModelSelection({
+        selectedModel: 'openai:gpt-4.1',
+        sessionMode: 'agent',
+        agentMediaModels: {
+          image: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
+        },
+        chatModelOptions: [
+          {
+            id: 'flux:flux-pro',
+            label: 'Flux Pro',
+            providerId: 'flux',
+            modelId: 'flux-pro',
+            category: 'image',
+          },
+        ],
+      }),
+    ).toEqual({
+      chatModel: { providerId: 'openai', modelId: 'gpt-4.1', category: 'llm' },
+      purposeModels: {},
+    });
+  });
+
   it('projects a music-only audio model to its canonical purpose', () => {
     expect(
       projectMessageModelSelection({

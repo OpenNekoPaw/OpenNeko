@@ -17,6 +17,7 @@ describe('AgentConversationMessageQueue', () => {
       conversationId: 'conv-1',
       items: [],
       pendingCount: 0,
+      paused: false,
       sequence: 0,
     });
 
@@ -31,6 +32,7 @@ describe('AgentConversationMessageQueue', () => {
     expect(queue.snapshot()).toEqual({
       conversationId: 'conv-1',
       pendingCount: 2,
+      paused: false,
       sequence: 2,
       items: [
         expect.objectContaining({
@@ -49,7 +51,7 @@ describe('AgentConversationMessageQueue', () => {
     });
   });
 
-  it('releases internal continuations before promoted user follow-ups', () => {
+  it('releases one exact send-now user item before internal continuations', () => {
     const ids = ['user-1', 'continuation-1', 'user-2'];
     const queue = createAgentConversationMessageQueue({
       conversationId: 'conv-1',
@@ -66,8 +68,8 @@ describe('AgentConversationMessageQueue', () => {
       'user-1',
       'continuation-1',
     ]);
-    expect(queue.releaseNext()?.id).toBe('continuation-1');
     expect(queue.releaseNext()?.id).toBe('user-2');
+    expect(queue.releaseNext()?.id).toBe('continuation-1');
     expect(queue.releaseNext()?.id).toBe('user-1');
   });
 
@@ -89,6 +91,57 @@ describe('AgentConversationMessageQueue', () => {
     await queue.drain(release);
     expect(release).toHaveBeenCalledWith(expect.objectContaining({ id: 'queue-1' }));
     expect(queue.snapshot().pendingCount).toBe(0);
+  });
+
+  it('owns a deep clone of the complete queued Composer draft', () => {
+    const queue = createAgentConversationMessageQueue({
+      conversationId: 'conv-1',
+      createId: () => 'queue-1',
+    });
+    const draft = {
+      message: '$review this',
+      sessionMode: 'agent' as const,
+      input: {
+        kind: 'skill' as const,
+        catalogEntryId: 'skill:review',
+        skillName: 'review',
+        activationId: 'activation-1',
+        args: 'this',
+      },
+      configuration: {
+        agentModels: {
+          primary: { providerId: 'openai', modelId: 'gpt-5', category: 'llm' as const },
+        },
+        purposeModels: {
+          'image.understand': {
+            providerId: 'openai',
+            modelId: 'gpt-5-vision',
+            category: 'llm' as const,
+          },
+        },
+      },
+      contextPayloads: [
+        {
+          type: 'document-selection' as const,
+          id: 'selection-1',
+          label: 'Selection',
+          summary: 'Selected text',
+          data: { selectedText: 'original' },
+        },
+      ],
+    };
+
+    queue.enqueue({ content: draft.message, draft });
+    draft.contextPayloads[0]!.data.selectedText = 'mutated';
+
+    expect(queue.snapshot().items[0]?.draft).toMatchObject({
+      input: { kind: 'skill', skillName: 'review', activationId: 'activation-1' },
+      configuration: {
+        agentModels: { primary: { providerId: 'openai', modelId: 'gpt-5' } },
+        purposeModels: { 'image.understand': { modelId: 'gpt-5-vision' } },
+      },
+      contextPayloads: [{ data: { selectedText: 'original' } }],
+    });
   });
 
   it('serializes concurrent drain requests through the runtime-owned release lock', async () => {
@@ -133,6 +186,9 @@ describe('AgentConversationMessageQueue', () => {
       expect.objectContaining({ content: 'updated', updatedAt: 101 }),
     );
     expect(() => queue.edit('continuation-1', 'invalid')).toThrow(AgentMessageQueueOperationError);
+    expect(() => queue.promote('continuation-1')).toThrow(AgentMessageQueueOperationError);
+    expect(() => queue.remove('continuation-1')).toThrow(AgentMessageQueueOperationError);
+    expect(queue.snapshot().items.map((item) => item.id)).toEqual(['user-1', 'continuation-1']);
     expect(() => queue.discardContinuation('user-1')).toThrow(AgentMessageQueueOperationError);
     expect(queue.discardContinuation('continuation-1', 102)).toEqual(
       expect.objectContaining({

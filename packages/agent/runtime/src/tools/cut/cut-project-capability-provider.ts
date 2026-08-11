@@ -78,7 +78,7 @@ class CutProjectCapabilityProvider implements AgentCapabilityProvider {
       category: 'timeline',
       requiresConfirmation: true,
       safetyKind: 'confirmation-gated',
-      requirements: { writableProject: true },
+      requirements: { writableProject: true, authoringTargetKind: 'content-project' },
       queryBeforeMutate: {
         preferredQueryTools: [TOOL_NAMES_CUT.CUT_QUERY_TIMELINE],
         reason:

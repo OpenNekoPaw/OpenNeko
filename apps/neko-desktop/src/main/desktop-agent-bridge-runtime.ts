@@ -16,6 +16,7 @@ import {
   type DesktopAgentConnectionIdentity,
   type AgentContextPayload,
   type AgentBoundDomainBinding,
+  type AgentEntryTargetReceipt,
   type AgentConfigurationPolicyProjection,
   type AgentConfigurationRequest,
   type AgentConversationConfiguration,
@@ -75,6 +76,9 @@ export interface DesktopAgentBridgeRuntime {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationEntryTargetReceipt?: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>;
     readonly readConversationConfiguration?: (
       conversationId: string,
     ) => Promise<AgentConversationConfiguration>;
@@ -210,6 +214,9 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationEntryTargetReceipt?: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>;
     readonly readConversationConfiguration?: (
       conversationId: string,
     ) => Promise<AgentConversationConfiguration>;
@@ -270,6 +277,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
         : { initialConversationMessage: input.initialConversationMessage }),
       readConversationContext:
         input.readConversationContext ?? missingConversationContextDependency,
+      readConversationEntryTargetReceipt: input.readConversationEntryTargetReceipt,
       readConversationConfiguration: input.readConversationConfiguration,
       updateConversationConfiguration: input.updateConversationConfiguration,
       readGlobalSkillCatalog: input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,

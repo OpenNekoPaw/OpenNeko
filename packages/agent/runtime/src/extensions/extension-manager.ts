@@ -1116,6 +1116,7 @@ interface VerifiedPlugin {
   readonly entry: RepositoryPluginEntry;
   readonly displayName: string;
   readonly description: string;
+  readonly localization: AgentExtensionCatalogItem['localization'];
   readonly developer: string;
   readonly category: string;
   readonly iconDataUrl: string;
@@ -1865,11 +1866,13 @@ async function readPluginPackage(
     return { status: 'error', code: 'manifest_invalid' };
   }
   const interfaceMetadata = optionalRecord(manifest['interface']);
+  const localization = parsePluginInterfaceLocalization(interfaceMetadata?.['localization']);
   const author = optionalRecord(manifest['author']);
   const declaredPermissions = parsePermissionList(manifest['permissions']);
   const mcpToolExposure = manifest['mcpToolExposure'];
   if (
     interfaceMetadata === null ||
+    localization === null ||
     author === null ||
     declaredPermissions === undefined ||
     (mcpToolExposure !== undefined && mcpToolExposure !== 'adapter-only') ||
@@ -1898,6 +1901,7 @@ async function readPluginPackage(
       entry,
       displayName: interfaceMetadata?.['displayName'] ?? entry.name,
       description: interfaceMetadata?.['shortDescription'] ?? manifest['description'] ?? '',
+      localization: localization ?? Object.freeze({}),
       developer: interfaceMetadata?.['developerName'] ?? author?.['name'] ?? '',
       category: interfaceMetadata?.['category'] ?? '',
       iconDataUrl: icon.value,
@@ -1952,6 +1956,7 @@ function projectExtension(
     name: entry.name,
     displayName: plugin.displayName,
     description: plugin.description,
+    localization: plugin.localization,
     version: entry.version,
     developer: plugin.developer,
     marketplace: entry.marketplace,
@@ -2000,6 +2005,7 @@ function projectInvalidExtension(
     name: entry.name,
     displayName: entry.name,
     description: '',
+    localization: Object.freeze({}),
     version: entry.version,
     developer: '',
     marketplace: entry.marketplace,
@@ -2280,6 +2286,33 @@ function hasOnlyKeys(
 function optionalRecord(value: unknown): Record<string, unknown> | undefined | null {
   if (value === undefined) return undefined;
   return isRecord(value) ? value : null;
+}
+
+function parsePluginInterfaceLocalization(
+  value: unknown,
+): AgentExtensionCatalogItem['localization'] | undefined | null {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return null;
+  const entries: Array<readonly [string, { readonly description: string }]> = [];
+  for (const [locale, localized] of Object.entries(value)) {
+    if (!isPluginLocalizationLocale(locale) || !isRecord(localized)) {
+      return null;
+    }
+    if (Object.keys(localized).length !== 1 || !isNonEmptyString(localized['shortDescription'])) {
+      return null;
+    }
+    entries.push([locale, Object.freeze({ description: localized['shortDescription'].trim() })]);
+  }
+  return Object.freeze(Object.fromEntries(entries));
+}
+
+function isPluginLocalizationLocale(value: string): boolean {
+  const [language, ...subtags] = value.split('-');
+  return (
+    language !== undefined &&
+    /^[a-z]{2,3}$/u.test(language) &&
+    subtags.every((subtag) => /^[a-z0-9]{2,8}$/u.test(subtag))
+  );
 }
 
 function isOptionalString(value: unknown): value is string | undefined {

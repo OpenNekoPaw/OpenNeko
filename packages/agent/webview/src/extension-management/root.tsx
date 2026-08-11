@@ -39,7 +39,7 @@ export function AgentExtensionManagementRoot({
   readonly renderDetail?: (input: AgentExtensionManagementDetailRenderInput) => ReactNode;
   readonly runtime: AgentExtensionManagementRuntime;
 }): JSX.Element {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [tab, setTab] = useState<AgentExtensionManagementTab>('skills');
   const [view, setView] = useState<AgentExtensionManagementView>('grid');
   const [query, setQuery] = useState('');
@@ -108,8 +108,8 @@ export function AgentExtensionManagementRoot({
     [projection?.skills, query],
   );
   const extensions = useMemo(
-    () => searchAndOrderAgentExtensions(projection?.extensions ?? [], query),
-    [projection?.extensions, query],
+    () => searchAndOrderAgentExtensions(projection?.extensions ?? [], query, locale),
+    [locale, projection?.extensions, query],
   );
   const selectedSkill = projection?.skills.find((item) => item.id === selectedSkillId);
   const selectedExtension = projection?.extensions.find((item) => item.id === selectedExtensionId);
@@ -296,6 +296,10 @@ export function AgentExtensionManagementRoot({
           {visibleEntries.map((entry) => {
             const selected = entry.item.id === selectedItemId;
             const name = entry.kind === 'skill' ? entry.item.name : entry.item.displayName;
+            const description =
+              entry.kind === 'skill'
+                ? entry.item.description
+                : resolveAgentExtensionDescription(entry.item, locale);
             return (
               <button
                 type="button"
@@ -318,7 +322,7 @@ export function AgentExtensionManagementRoot({
                 </span>
                 <span className="management-surface-copy">
                   <strong>{name}</strong>
-                  <small>{entry.item.description || entry.item.id}</small>
+                  <small>{description || entry.item.id}</small>
                   <small>
                     {entry.kind === 'skill'
                       ? t(`home.capabilities.source.${entry.item.source}`)
@@ -366,13 +370,16 @@ function AgentExtensionConfigurationRoot({
   readonly selectedSkill: AgentManagedSkillItem | undefined;
   readonly tab: AgentExtensionManagementTab;
 }): JSX.Element {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const item = tab === 'skills' ? selectedSkill : selectedExtension;
   if (!item) {
     throw new Error('Extension configuration requires an exact selected catalog item.');
   }
 
   const name = selectedSkill?.name ?? selectedExtension?.displayName ?? item.id;
+  const description = selectedExtension
+    ? resolveAgentExtensionDescription(selectedExtension, locale)
+    : item.description;
   const mutationsDisabled =
     !interactive || operationKey !== undefined || hasActiveArtifactOperation;
   return (
@@ -388,7 +395,7 @@ function AgentExtensionConfigurationRoot({
         <div>
           <p className="section-label">{t('home.capabilities.configuration')}</p>
           <h2>{name}</h2>
-          <p>{item.description || item.id}</p>
+          <p>{description || item.id}</p>
         </div>
       </header>
 
@@ -629,11 +636,18 @@ export function searchAndOrderAgentSkills(
 export function searchAndOrderAgentExtensions(
   extensions: readonly AgentExtensionCatalogItem[],
   query: string,
+  locale = 'en',
 ): readonly AgentExtensionCatalogItem[] {
   const normalized = query.trim().toLocaleLowerCase();
   return [...extensions]
     .filter((item) =>
-      [item.id, item.displayName, item.description, item.developer, item.marketplace]
+      [
+        item.id,
+        item.displayName,
+        resolveAgentExtensionDescription(item, locale),
+        item.developer,
+        item.marketplace,
+      ]
         .join(' ')
         .toLocaleLowerCase()
         .includes(normalized),
@@ -642,6 +656,13 @@ export function searchAndOrderAgentExtensions(
       if (left.installed !== right.installed) return left.installed ? -1 : 1;
       return left.displayName.localeCompare(right.displayName);
     });
+}
+
+export function resolveAgentExtensionDescription(
+  extension: AgentExtensionCatalogItem,
+  locale: string,
+): string {
+  return extension.localization[locale]?.description ?? extension.description;
 }
 
 function describeError(reason: unknown): string {

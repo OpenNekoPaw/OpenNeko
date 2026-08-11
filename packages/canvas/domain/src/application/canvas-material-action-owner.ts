@@ -24,6 +24,7 @@ export const CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID = 'media-library:cop
 export const CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID = 'media-library:copy-to-global';
 export const CANVAS_REGENERATE_ACTION_ID = 'generation:regenerate';
 export const CANVAS_EDIT_AND_GENERATE_ACTION_ID = 'generation:edit-and-generate';
+export const CANVAS_EDIT_TEXT_ACTION_ID = 'text:edit';
 export const CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID = 'audio:voice-denoise';
 export const CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID = 'video:separate-audio';
 export const CANVAS_VIDEO_ENHANCE_ACTION_ID = 'video:enhance';
@@ -78,11 +79,23 @@ export function createCanvasMaterialActionOwner(options: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
   }) => Promise<void>;
+  readonly resolveReveal?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly target: CanvasMaterialActionTarget;
+  }) => Promise<boolean>;
   readonly resolveCut?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
   }) => Promise<boolean>;
   readonly openInCut?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly target: CanvasMaterialActionTarget;
+  }) => Promise<void>;
+  readonly resolveEditText?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly target: CanvasMaterialActionTarget;
+  }) => Promise<boolean>;
+  readonly editText?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
   }) => Promise<void>;
@@ -131,6 +144,7 @@ export function createCanvasMaterialActionOwner(options: {
     readonly preview?: string;
     readonly reveal?: string;
     readonly openInCut?: string;
+    readonly editText?: string;
     readonly addToCut?: string;
     readonly separateAudio?: string;
     readonly copyToProjectMediaLibrary?: string;
@@ -151,24 +165,46 @@ export function createCanvasMaterialActionOwner(options: {
       effect: 'read',
     });
   }
-  if (options.reveal) {
-    baseDescriptors.push({
-      id: CANVAS_REVEAL_ACTION_ID,
-      ownerId: 'desktop',
-      label: options.labels?.reveal ?? 'Reveal',
-      mediaKinds: MATERIAL_MEDIA_KINDS,
-      origins: ['referenced', 'generated'],
-      selection: { minimum: 1, maximum: 1 },
-      effect: 'handoff',
-    });
-  }
-
   return {
     async resolve({ identity, targets }) {
       const descriptors = [...baseDescriptors];
       const target = targets.length === 1 ? targets[0] : undefined;
       if (
         target &&
+        options.reveal &&
+        (!options.resolveReveal || (await options.resolveReveal({ identity, target })))
+      ) {
+        descriptors.push({
+          id: CANVAS_REVEAL_ACTION_ID,
+          ownerId: 'desktop',
+          label: options.labels?.reveal ?? 'Reveal',
+          mediaKinds: MATERIAL_MEDIA_KINDS,
+          origins: ['referenced', 'generated'],
+          selection: { minimum: 1, maximum: 1 },
+          effect: 'handoff',
+        });
+      }
+      if (
+        target?.mediaKind === 'document' &&
+        target.origin === 'referenced' &&
+        options.resolveEditText &&
+        options.editText &&
+        (await options.resolveEditText({ identity, target }))
+      ) {
+        descriptors.push({
+          id: CANVAS_EDIT_TEXT_ACTION_ID,
+          ownerId: 'text-editor',
+          label: options.labels?.editText ?? 'Edit text',
+          mediaKinds: ['document'],
+          origins: ['referenced'],
+          selection: { minimum: 1, maximum: 1 },
+          effect: 'handoff',
+        });
+      }
+      if (
+        target &&
+        (target.mediaKind === 'document' || target.mediaKind === 'other') &&
+        target.origin === 'referenced' &&
         options.resolveCut &&
         options.openInCut &&
         (await options.resolveCut({ identity, target }))
@@ -278,6 +314,10 @@ export function createCanvasMaterialActionOwner(options: {
       }
       if (action.actionId === CANVAS_REVEAL_ACTION_ID && options.reveal) {
         await options.reveal({ identity, target });
+        return {};
+      }
+      if (action.actionId === CANVAS_EDIT_TEXT_ACTION_ID && options.editText) {
+        await options.editText({ identity, target });
         return {};
       }
       if (action.actionId === CANVAS_OPEN_IN_CUT_ACTION_ID && options.openInCut) {

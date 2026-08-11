@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -16,8 +17,10 @@ import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import {
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_ADD_TO_CUT_ACTION_ID,
+  CANVAS_EDIT_TEXT_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
+  CANVAS_REVEAL_ACTION_ID,
   CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
 } from '@neko/canvas-domain';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
@@ -34,6 +37,68 @@ afterEach(async () => {
 });
 
 describe('DesktopCanvasRuntime', () => {
+  it('reads a bounded text preview through the workspace content service', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-text-preview-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    await writeFixtureFile(workspacePath, 'data/project.json', '{"name":"OpenNeko"}');
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Text preview',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'file-json',
+            type: 'file',
+            position: { x: 0, y: 0 },
+            size: { width: 280, height: 180 },
+            zIndex: 1,
+            data: {
+              path: 'data/project.json',
+              title: 'project.json',
+              mediaType: 'application/json',
+              contentLocator: { kind: 'workspace-file', path: 'data/project.json' },
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+    await runtime.getSnapshot('window-1', identity);
+
+    await expect(
+      runtime.readTextFilePreview('window-1', {
+        requestId: 'preview-ready',
+        identity,
+        nodeId: 'file-json',
+        locator: { kind: 'workspace-file', path: 'data/project.json' },
+      }),
+    ).resolves.toEqual({
+      requestId: 'preview-ready',
+      nodeId: 'file-json',
+      status: 'ready',
+      kind: 'json',
+      text: '{\n  "name": "OpenNeko"\n}',
+      truncated: false,
+      empty: false,
+    });
+    await expect(
+      runtime.readTextFilePreview('window-1', {
+        requestId: 'preview-stale',
+        identity,
+        nodeId: 'file-json',
+        locator: { kind: 'workspace-file', path: 'data/other.json' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'canvas-text-preview-stale-node' },
+    });
+    await runtime.dispose();
+  });
+
   it('opens path-only material nodes as unavailable without migrating or authorizing content', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-degraded-content-'));
     roots.push(workspacePath);
@@ -274,8 +339,106 @@ describe('DesktopCanvasRuntime', () => {
     expect(action.status).toBe('accepted');
     expect(previewResource).toHaveBeenCalledWith({
       identity,
+      workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
       locator: { kind: 'workspace-file', path: 'media/cat.png' },
       absolutePath: await realpath(path.join(workspacePath, 'media/cat.png')),
+    });
+    await runtime.dispose();
+  });
+
+  it('routes a document-entry Image preview without inventing a Host file path', async () => {
+    const workspacePath = await mkdtemp(
+      path.join(tmpdir(), 'openneko-canvas-document-entry-preview-'),
+    );
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const locator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/cover.jpg',
+    };
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Document entry preview',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'document-entry-image',
+            type: 'media',
+            position: { x: 40, y: 60 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: {
+              assetPath: '',
+              mediaType: 'image',
+              title: 'image result',
+              contentLocator: locator,
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const previewResource = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasDocumentEntryPreviewTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource,
+    });
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-document-entry-preview',
+      identity,
+      selectedNodeIds: ['document-entry-image'],
+    });
+    expect(resolution.descriptors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: CANVAS_PREVIEW_ACTION_ID })]),
+    );
+    expect(resolution.descriptors).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: CANVAS_REVEAL_ACTION_ID })]),
+    );
+
+    const result = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'preview-document-entry',
+        commandId: 'preview-document-entry',
+        identity,
+        intent: {
+          type: 'execute-material-action',
+          action: {
+            identity: materialIdentity(identity),
+            actionId: CANVAS_PREVIEW_ACTION_ID,
+            selectedNodeIds: ['document-entry-image'],
+            payload: {},
+          },
+        },
+      }),
+    );
+
+    expect(result.status).toBe('accepted');
+    expect(previewResource).toHaveBeenCalledWith({
+      identity,
+      workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
+      locator,
     });
     await runtime.dispose();
   });
@@ -498,6 +661,97 @@ describe('DesktopCanvasRuntime', () => {
       target: expectedTarget,
       absolutePath,
     });
+    await runtime.dispose();
+  });
+
+  it('offers Text Editor only for an admitted referenced document and dispatches its exact target', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-edit-text-'));
+    roots.push(workspacePath);
+    await writeFixtureFile(workspacePath, 'notes/scene.md', '# Scene');
+    const identity = createIdentity();
+    const resolveEditText = vi.fn(async () => true);
+    const editText = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasEditTextActionTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      resolveEditText,
+      editText,
+    });
+    await runtime.getSnapshot('window-1', identity);
+    const authored = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'request-text-material',
+        commandId: 'command-text-material',
+        identity,
+        intent: {
+          type: 'author-material',
+          request: {
+            kind: 'direct-reference',
+            identity: materialIdentity(identity),
+            locator: { kind: 'workspace-file', path: 'notes/scene.md' },
+            mediaKind: 'document',
+          },
+        },
+      }),
+    );
+    if (authored.status !== 'accepted') throw new Error(authored.diagnostic.message);
+    const node = authored.snapshot.canvas.nodes[0];
+    if (!node) throw new Error('Authored text node is missing.');
+    const expectedTarget = {
+      nodeId: node.id,
+      mediaKind: 'document' as const,
+      origin: 'referenced' as const,
+      locator: { kind: 'workspace-file' as const, path: 'notes/scene.md' },
+    };
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-edit-text-action',
+      identity,
+      selectedNodeIds: [node.id],
+    });
+
+    expect(resolution.descriptors).toEqual([
+      expect.objectContaining({ id: CANVAS_EDIT_TEXT_ACTION_ID, ownerId: 'text-editor' }),
+    ]);
+    expect(resolveEditText).toHaveBeenCalledWith({ identity, target: expectedTarget });
+
+    const action = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'request-edit-text',
+        commandId: 'command-edit-text',
+        identity,
+        intent: {
+          type: 'execute-material-action',
+          action: {
+            identity: materialIdentity(identity),
+            actionId: CANVAS_EDIT_TEXT_ACTION_ID,
+            selectedNodeIds: [node.id],
+            payload: {},
+          },
+        },
+      }),
+    );
+
+    expect(action.status).toBe('accepted');
+    expect(editText).toHaveBeenCalledWith({ identity, target: expectedTarget });
     await runtime.dispose();
   });
 
@@ -742,6 +996,223 @@ describe('DesktopCanvasRuntime', () => {
           path: 'neko/generated/video-output-1.mp4',
         },
       },
+    });
+    await runtime.dispose();
+  });
+
+  it('keeps generated Image actions available without probing the Cut document owner', async () => {
+    const workspacePath = await mkdtemp(
+      path.join(tmpdir(), 'openneko-canvas-generated-image-actions-'),
+    );
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const contents = 'generated-image';
+    const locator = {
+      kind: 'generated-output' as const,
+      outputId: 'image-output-1',
+      digest: `sha256:${createHash('sha256').update(contents).digest('hex')}`,
+      path: 'neko/generated/image-output-1.png',
+    };
+    await writeFixtureFile(workspacePath, locator.path, contents);
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Generated image actions',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'generated-image-1',
+            type: 'media',
+            position: { x: 40, y: 60 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: {
+              assetPath: locator.path,
+              mediaType: 'image',
+              contentLocator: locator,
+              generation: {
+                jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+                summary: { prompt: 'Generate an image', model: 'fixture-image-model' },
+              },
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const resolveCut = vi.fn(async () => {
+      throw new Error('Generated Image must not enter Cut document resolution.');
+    });
+    const previewResource = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasGeneratedImageActionsTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource,
+      resolveCut,
+      openInCut: vi.fn(async () => undefined),
+    });
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-generated-image-actions',
+      identity,
+      selectedNodeIds: ['generated-image-1'],
+    });
+
+    expect(resolution.descriptors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: CANVAS_PREVIEW_ACTION_ID, ownerId: 'preview' }),
+      ]),
+    );
+    expect(resolveCut).not.toHaveBeenCalled();
+
+    const action = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'preview-generated-image',
+        commandId: 'preview-generated-image',
+        identity,
+        intent: {
+          type: 'execute-material-action',
+          action: {
+            identity: materialIdentity(identity),
+            actionId: CANVAS_PREVIEW_ACTION_ID,
+            selectedNodeIds: ['generated-image-1'],
+            payload: {},
+          },
+        },
+      }),
+    );
+
+    expect(action.status).toBe('accepted');
+    expect(previewResource).toHaveBeenCalledWith({
+      identity,
+      workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
+      locator,
+      absolutePath: await realpath(path.join(workspacePath, locator.path)),
+    });
+    await runtime.dispose();
+  });
+
+  it('projects Preview for the exact selected output of an Image Generation node', async () => {
+    const workspacePath = await mkdtemp(
+      path.join(tmpdir(), 'openneko-canvas-generation-image-preview-'),
+    );
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const contents = 'generation-image-output';
+    const locator = {
+      kind: 'generated-output' as const,
+      outputId: 'image-output-1',
+      digest: `sha256:${createHash('sha256').update(contents).digest('hex')}`,
+      path: 'neko/generated/image-output-1.png',
+    };
+    await writeFixtureFile(workspacePath, locator.path, contents);
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Image Generation output preview',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'image-generation-1',
+            type: 'generation',
+            position: { x: 40, y: 60 },
+            size: { width: 240, height: 160 },
+            zIndex: 1,
+            data: {
+              recipe: { kind: 'image', prompt: '' },
+              outputs: [
+                {
+                  outputId: locator.outputId,
+                  jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+                  locator,
+                  kind: 'image',
+                  recipeInputFingerprint: 'recipe-fingerprint-1',
+                },
+              ],
+              selectedOutputId: locator.outputId,
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const previewResource = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasGenerationImagePreviewTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource,
+    });
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-image-generation-preview',
+      identity,
+      selectedNodeIds: ['image-generation-1'],
+    });
+    expect(resolution.descriptors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: CANVAS_PREVIEW_ACTION_ID, ownerId: 'preview' }),
+      ]),
+    );
+
+    const action = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'preview-image-generation-output',
+        commandId: 'preview-image-generation-output',
+        identity,
+        intent: {
+          type: 'execute-material-action',
+          action: {
+            identity: materialIdentity(identity),
+            actionId: CANVAS_PREVIEW_ACTION_ID,
+            selectedNodeIds: ['image-generation-1'],
+            payload: {},
+          },
+        },
+      }),
+    );
+
+    expect(action.status).toBe('accepted');
+    expect(previewResource).toHaveBeenCalledWith({
+      identity,
+      workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
+      locator,
+      absolutePath: await realpath(path.join(workspacePath, locator.path)),
     });
     await runtime.dispose();
   });

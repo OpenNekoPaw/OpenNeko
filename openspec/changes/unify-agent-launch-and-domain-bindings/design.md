@@ -374,6 +374,81 @@ Agent Evaluation disposition 为 `create`：现有文档附件和搜索案例没
 route；新增一个 focused complete-session case，硬断言 `ListDirectory -> Read` 文本路径和
 `ListDirectory -> ReadDocument` 结构化路径，并 poison shell、raw locator、absolute path 与 binary-as-text。
 
+### 16. 图片感知 Tool 与 Prompt 消费同一 Turn 路由快照
+
+`image.understand` 配置只表达 purpose model binding，不自动构成可调用能力。Agent Workspace runtime
+注册一个 host-neutral `perception.image.understand` Tool；Pi bridge 仅在冻结的 Turn model policy 包含
+有效 `image.understand` purpose use 时将其投影到模型 Tool snapshot。Tool 的 model-visible 参数只包含
+Conversation-scoped `input_ref`/`image_ref` 短引用与有界 focus，`PiContentToolModelProtocol` 在 exact
+Conversation 内解析为 canonical content 或 representation locator。Tool 通过既有
+`AgentContentAccessRuntime` 有界读取并校验图片，使用 `ToolExecuteOptions.purposeModel` 调用冻结的精确
+Pi purpose model，再向 `agent.main` 返回 `PerceptionEvidence`、usage 与 provider/model identity；结果不含
+图片 payload、raw path、locator 或另一个 provider 选择参数。
+
+每个 Turn 在 provider execution 前形成唯一图片路由：
+
+```text
+agent.main accepts image
+  -> register ReadImage, omit perception.image.understand, use native Pi ImageContent
+
+agent.main rejects image + exact Pi image.understand use + registered Tool
+  -> omit ReadImage, register perception.image.understand, return structured text evidence
+
+otherwise
+  -> register neither image success path and fail the exact reference/Turn visibly
+```
+
+Tool snapshot、内容引用计划和 system Prompt 必须消费同一不可变路由结论。只有 external route 的最终
+model-visible Tool snapshot 确实包含图片感知 Tool 时才添加外部感知指令；不得通过比较 chat/perception
+配置 model id 推断 Tool 存在。`ReadImage` 不得为文本模型返回成功图片 attachment 后依赖 provider SDK
+丢弃像素，也不得内部切换到 purpose model。purpose binding、内容读取或模型调用失败只失败当前 Tool
+Call/Turn，不尝试另一 provider、模型、reader、source 或原生视觉路径。
+
+| 层   | 结论                                                                                                                                         |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Agent application 拥有 Turn 路由与 Prompt；感知 Tool 拥有图片理解请求和证据；Content runtime 拥有授权 bytes；Pi bridge 拥有 purpose model。 |
+| 依赖 | Tool 依赖 host-neutral content port 与执行期 purpose model，不依赖 Electron、Renderer、配置文件或 Desktop path adapter。                    |
+| 接口 | 模型只见短引用和 focus；内部准备参数携带 canonical locator；结果是结构化 `PerceptionEvidence`，不新增内部 contract 版本。                    |
+| 扩展 | 后续媒体 purpose Tool 可复用“实际 Tool snapshot 驱动 Prompt”的原则，但本任务不建立通用媒体路由框架。                                      |
+| 测试 | 覆盖 external/native/unavailable 三路、精确 purpose identity、短引用隔离、图片预算、无 `ReadImage` 文本路径和无 provider fallback。         |
+
+Agent Evaluation disposition 为 `update`：扩充既有 `agent-runtime.perception-routing`。正例必须证明
+DeepSeek-compatible `agent.main -> perception.image.understand -> exact image.understand purpose`；原生视觉
+边界必须证明外部 Tool 缺席；缺失 purpose binding 边界必须证明 Tool 与相关 Prompt 均缺席并 fail-visible。
+真实 visible Desktop 与 hidden complete-session provider 运行继续受任务 11.7 的显式成本授权约束。
+
+### 17. Conversation 队列保存完整输入并串行处理中断
+
+Agent Workspace application 是每个 Conversation 待执行 Turn 的唯一队列 owner。Webview 在当前 Turn
+活动时继续提交与空闲发送相同的 canonical input request，包括文本、附件、context payload、文件引用、
+typed command/Skill identity 和发送时选择的模型配置。队列项向 Renderer 只投影重建 Composer 所需的
+安全 Draft presentation；运行所需的完整 immutable input 仍由 application 保存，不由 UI、Desktop 或
+transcript 充当第二事实来源。
+
+普通完成、失败或 provider 终止后，application 从同一 Conversation 队列释放下一项。用户显式停止当前
+Turn 时，application 先暂停该 Conversation 的待处理队列，再取消 exact turn/run identity；停止不会清空、
+编辑或自动执行队列项。用户对指定队列项执行“立即发送”时，application 原子提升该项、恢复队列，并在
+存在当前 Turn 时取消当前 Turn；只有当前 Turn 达到 terminal 后才启动指定项，不允许同一 Conversation
+并发执行两个 Turn。
+
+删除只移除指定 pending item。编辑原子移除指定项并把其完整 Draft presentation 恢复到 owning Tab；若
+Composer 已有未提交内容，则保留现有 Draft并显示局部冲突 diagnostic，不丢弃或覆盖任一组用户输入。
+所有 queue action 必须绑定 exact Conversation 和 queue item identity；stale、cross-Conversation 或非用户
+continuation item 失败当前操作，不能回退 active Conversation 或改变 sibling 队列。
+
+| 层   | 结论                                                                                                                                                 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Agent application 拥有完整 pending Turn、顺序、暂停和释放；Webview 拥有 Composer Draft；Desktop 只转发 typed queue intent。                         |
+| 依赖 | Queue contract 位于 `@neko/agent-contracts`，application 不依赖 React/Electron，Renderer 不持有 runtime input authority。                            |
+| 接口 | 复用唯一 queue snapshot，原子替换 `promote` 为 `send-now`；queue item 增加有界、可克隆的 Draft presentation，不增加内部版本或平行 handler。          |
+| 扩展 | 普通 message 与会产生 Turn 的 typed Skill/command 共用同一 `startTurn` queue；不产生 Turn 的 Session command 仍由自身 operation contract 串行校验。 |
+| 测试 | 覆盖中断暂停、正常 drain、富输入重建、删除、编辑冲突、指定项立即发送、stale/cross-Conversation 拒绝、Desktop route 和可见控制。                      |
+
+Agent Evaluation disposition 为 `update`：扩充 `agent-runtime.workflow-controller` 的
+`cancel-resume-recovery`，证明 queue submit、active cancel、paused pending、指定项 send-now、exact identity、
+terminal idle 与无并发/无 active-Conversation fallback。可见 Desktop 验收必须通过真实 Composer 控件检查停止
+按钮、运行中输入、富引用排队和队列操作；没有显式 provider 成本授权时记录为 infrastructure-blocked。
+
 ## Risks / Trade-offs
 
 - [Character/World 成熟度不同导致 union 形同假能力] → provider 未实现时只投影 unavailable；任务按 Assistant/Workspace、Character、World 三阶段设 gate，后阶段不得阻塞前阶段正确性。

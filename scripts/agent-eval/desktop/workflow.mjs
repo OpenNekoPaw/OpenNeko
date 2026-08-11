@@ -78,8 +78,17 @@ async function executeStep(input) {
       return driver.queue({
         conversationId: requireConversationId(conversationId),
         prompt: step.prompt,
+        timeoutMs: input.defaultTimeoutMs,
         ...resolveModelOverride(step, input.modelProfiles),
       });
+    case 'send-queued-now': {
+      const queued = requireQueueReceipt(receipts, step.queueStepId, step);
+      return driver.sendQueuedMessageNow({
+        conversationId: requireConversationId(conversationId),
+        queueItemId: queued.queueItemId,
+        timeoutMs: input.defaultTimeoutMs,
+      });
+    }
     case 'wait-for-idle': {
       const idle = await driver.waitForIdle(requireConversationId(conversationId), step.timeoutMs);
       if (typeof driver.readFacts !== 'function') return idle;
@@ -216,6 +225,16 @@ function requireSubmissionReceipt(receipts, stepId, step) {
   return receipt;
 }
 
+function requireQueueReceipt(receipts, stepId, step) {
+  const receipt = requireReceipt(receipts, stepId, step);
+  if (typeof receipt.queueItemId !== 'string' || receipt.queueItemId.trim().length === 0) {
+    throw configurationError(
+      `Desktop Agent workflow step '${step.id}' requires a queued message identity from '${stepId}'.`,
+    );
+  }
+  return receipt;
+}
+
 function readLastAssistant(snapshot) {
   const assistant = snapshot?.messages
     ?.filter((message) => message?.role === 'assistant' && message.isError !== true)
@@ -253,6 +272,10 @@ async function createWorkflowStepEvidence(input) {
     ...(input.receipt?.accepted === undefined ? {} : { accepted: input.receipt.accepted }),
     ...(input.receipt?.facts === undefined ? {} : { facts: input.receipt.facts }),
     ...(input.receipt?.status === undefined ? {} : { status: input.receipt.status }),
+    ...(input.receipt?.queueItemId === undefined
+      ? {}
+      : { queueItemId: input.receipt.queueItemId }),
+    ...(input.step.kind === 'send-queued-now' ? { queueStepId: input.step.queueStepId } : {}),
     ...(input.step.kind === 'queue' ? { queued: observation?.queued === true } : {}),
     ...(observation === undefined ? {} : { snapshot: observation }),
   };
@@ -272,6 +295,8 @@ function workflowMethod(kind) {
       return 'session.waitForIdle';
     case 'cancel':
       return 'message.cancel';
+    case 'send-queued-now':
+      return 'message.queue.send-now';
     case 'confirm':
       return 'tool.confirm';
     case 'resume':

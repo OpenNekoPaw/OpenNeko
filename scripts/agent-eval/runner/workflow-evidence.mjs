@@ -32,15 +32,33 @@ export function assertWorkflowQueueState(assertion, steps) {
     if (queue.pendingCount !== 0) {
       throw new Error(`queue was not drained at ${assertion.stepId}: ${queue.pendingCount}`);
     }
-  } else if (queue.pausedAfterCancel !== true) {
-    throw new Error(`queue was not paused after cancellation at ${assertion.stepId}`);
+  } else if (assertion.status === 'paused-after-cancel') {
+    const minPending = assertion.minPending ?? 1;
+    if (queue.paused !== true || queue.pendingCount < minPending) {
+      throw new Error(`queue was not paused with pending items at ${assertion.stepId}`);
+    }
+  } else {
+    const queuedStep = requireWorkflowStep(steps, assertion.queueStepId);
+    if (
+      step.method !== 'message.queue.send-now' ||
+      step.accepted !== true ||
+      typeof step.queueItemId !== 'string' ||
+      step.queueItemId !== queuedStep.queueItemId ||
+      step.queueStepId !== assertion.queueStepId ||
+      queue.paused !== false
+    ) {
+      throw new Error(
+        `step ${assertion.stepId} did not resume and send the exact item from ${assertion.queueStepId}`,
+      );
+    }
   }
   return {
     stepId: assertion.stepId,
     status: assertion.status,
     pendingCount: queue.pendingCount,
     sequence: queue.sequence,
-    pausedAfterCancel: queue.pausedAfterCancel === true,
+    paused: queue.paused === true,
+    ...(step.queueItemId === undefined ? {} : { queueItemId: step.queueItemId }),
   };
 }
 
@@ -83,7 +101,11 @@ function matchesProcessEvent(event, item) {
     return item?.id === event.stepId && (!event.method || item?.method === event.method);
   }
   if (event.kind === 'turn') {
-    return item?.role === event.role && (!event.source || item?.source === event.source);
+    return (
+      item?.role === event.role &&
+      (!event.source || item?.source === event.source) &&
+      (!event.contentContains || item?.content?.includes(event.contentContains))
+    );
   }
   if (event.kind === 'timeline') {
     return (

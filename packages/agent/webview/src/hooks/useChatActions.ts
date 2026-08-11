@@ -1,7 +1,7 @@
 /**
  * useChatActions - Chat message sending, cancellation, and copy
  *
- * Sends messages to the Desktop host; compatible text sends are queued by the runtime.
+ * Sends messages to the Desktop host; subsequent full inputs are queued by the runtime.
  * Model configuration is locked for the duration of a running Agent turn.
  */
 
@@ -156,18 +156,6 @@ export function useChatActions({
       const hasFileReferences = selectedFileReferenceCount > 0;
       if (!trimmed && !hasAttachments && !hasContextPayloads && !hasFileReferences) return;
       const effectiveSessionMode: SessionMode = inputSessionMode ?? sessionMode ?? 'agent';
-      if (
-        isQueueingSend &&
-        !isQueueableRunningTextSend({
-          trimmed,
-          hasAttachments,
-          hasContextPayloads,
-          selectedFileReferenceCount,
-        })
-      ) {
-        return;
-      }
-
       const conversationId = activeConversationId;
       if (!conversationId) {
         const pendingSessionMode = inputSessionMode ?? sessionMode ?? 'agent';
@@ -312,18 +300,7 @@ export function useChatActions({
 
       const conversationId = activeConversationIdRef.current;
       const trimmed = messageText.trim();
-      if (
-        isQueueingSend &&
-        !isQueueableRunningTextSend({
-          trimmed,
-          hasAttachments: false,
-          hasContextPayloads: false,
-          selectedFileReferenceCount: 0,
-        })
-      ) {
-        return;
-      }
-
+      if (!trimmed) return;
       if (!conversationId) {
         ensureConversationForSend?.({
           messageText,
@@ -340,7 +317,7 @@ export function useChatActions({
       const userMessage: Message = {
         id: Date.now().toString(),
         role: 'user',
-        content: messageText,
+        content: trimmed,
         timestamp: Date.now(),
         ...(isQueueingSend ? { isQueued: true } : {}),
       };
@@ -361,7 +338,7 @@ export function useChatActions({
       });
       agentHostMessages.sendMessage({
         conversationId,
-        message: messageText,
+        message: trimmed,
         sessionMode: 'agent',
         ...modelProjection,
       });
@@ -488,19 +465,4 @@ function fileReferenceContextType(
   }
   if (reference.source === 'entity-graph') return 'entity';
   return 'file';
-}
-
-function isQueueableRunningTextSend(input: {
-  readonly trimmed: string;
-  readonly hasAttachments: boolean;
-  readonly hasContextPayloads: boolean;
-  readonly selectedFileReferenceCount: number;
-}): boolean {
-  return (
-    input.trimmed.length > 0 &&
-    !input.hasAttachments &&
-    !input.hasContextPayloads &&
-    input.selectedFileReferenceCount === 0 &&
-    !/^[/$]/.test(input.trimmed)
-  );
 }

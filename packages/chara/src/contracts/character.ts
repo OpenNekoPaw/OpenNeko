@@ -12,16 +12,32 @@ import {
   requireUniqueIdentities,
   type CharaJsonValue,
 } from './codec';
+import {
+  collectCharacterLoreEvidenceIds,
+  parseCharacterBackgroundStory,
+  parseCharacterOriginSetting,
+  type CharacterBackgroundStory,
+  type CharacterOriginSetting,
+} from './character-lore-storyline-memory';
 
 export const CHARACTER_REVIEW_STATUSES = ['draft', 'ready', 'blocked'] as const;
 export const CHARACTER_CANDIDATE_STATUSES = ['pending', 'accepted', 'rejected'] as const;
-export const CHARACTER_RUNTIME_KINDS = ['companion', 'narrative'] as const;
+export const CHARACTER_RUNTIME_KINDS = ['companion'] as const;
+export const CHARACTER_REPRESENTATION_KINDS = [
+  'portrait',
+  'live2d',
+  'vrm',
+  'mmd',
+  'pngtuber',
+  'voice',
+] as const;
 export const CHARACTER_CONTROLLER_KINDS = ['human', 'agent'] as const;
 export const RELATIONSHIP_MEMORY_CANDIDATE_STATUSES = ['pending', 'accepted', 'rejected'] as const;
 
 export type CharacterReviewStatus = (typeof CHARACTER_REVIEW_STATUSES)[number];
 export type CharacterCandidateStatus = (typeof CHARACTER_CANDIDATE_STATUSES)[number];
 export type CharacterRuntimeKind = (typeof CHARACTER_RUNTIME_KINDS)[number];
+export type CharacterRepresentationKind = (typeof CHARACTER_REPRESENTATION_KINDS)[number];
 export type RelationshipMemoryCandidateStatus =
   (typeof RELATIONSHIP_MEMORY_CANDIDATE_STATUSES)[number];
 
@@ -43,17 +59,33 @@ export interface CharacterCanonCandidate {
 
 export interface CharacterRepresentationRef {
   readonly representationId: string;
-  readonly role: string;
-  readonly targetRef: string;
+  readonly kind: CharacterRepresentationKind;
+  readonly resourceRef: string;
+}
+
+export interface CharacterRepresentationDefaults {
+  readonly portraitRepresentationId?: string;
+  readonly avatarRepresentationId?: string;
+}
+
+export interface CharacterVoiceDefaults {
+  readonly providerRef: string;
+  readonly voiceRepresentationId: string;
+  readonly speed: number;
+  readonly autoRead: boolean;
 }
 
 export interface CharacterDefinition {
   readonly summary: string;
+  readonly backgroundStory: CharacterBackgroundStory;
+  readonly originSetting: CharacterOriginSetting;
   readonly canon: readonly string[];
   readonly knowledgeBoundary: readonly string[];
   readonly behaviorPolicy: readonly string[];
   readonly expressionPolicy: readonly string[];
   readonly representationRefs: readonly CharacterRepresentationRef[];
+  readonly representationDefaults?: CharacterRepresentationDefaults;
+  readonly voiceDefaults?: CharacterVoiceDefaults;
 }
 
 export interface CharacterProject {
@@ -92,20 +124,13 @@ export interface CompanionCharacterBinding {
   readonly relationshipId: string;
 }
 
-export interface NarrativeCharacterBinding {
-  readonly kind: 'narrative';
-  readonly worldVersionId: string;
-  readonly worldRunId: string;
-  readonly worldSaveId: string;
-  readonly branchId: string;
-  readonly actorId: string;
-}
-
-export type CharacterRuntimeBinding = CompanionCharacterBinding | NarrativeCharacterBinding;
+export type CharacterRuntimeBinding = CompanionCharacterBinding;
 
 export interface CharacterRun {
   readonly characterRunId: string;
   readonly characterVersionId: string;
+  readonly characterStorylineRunId?: string;
+  readonly characterMemoryScopeId?: string;
   readonly participantId: string;
   readonly controller: CharacterController;
   readonly runtimeBinding: CharacterRuntimeBinding;
@@ -143,7 +168,11 @@ export type CharacterRecordKind =
   | 'character-version'
   | 'authoring-test-snapshot'
   | 'character-run'
-  | 'user-character-relationship';
+  | 'user-character-relationship'
+  | 'character-storyline-version'
+  | 'character-storyline-run'
+  | 'character-storyline-observation-candidate'
+  | 'character-memory-scope';
 
 export interface CharacterRecordDiagnostic {
   readonly code: 'invalid-character-record';
@@ -191,13 +220,15 @@ export function parseCharacterProject(value: unknown): CharacterProject {
       );
     }
   }
+  const draft = parseCharacterDefinition(record['draft']);
+  validateCharacterDefinitionEvidence(draft, evidenceIds, 'CharacterProject');
   return {
     characterProjectId: requireIdentity(
       record['characterProjectId'],
       'CharacterProject characterProjectId',
     ),
     displayName: requireIdentity(record['displayName'], 'CharacterProject displayName'),
-    draft: parseCharacterDefinition(record['draft']),
+    draft,
     evidence,
     candidates,
     reviewStatus: requireOneOf(
@@ -223,6 +254,12 @@ export function parseCharacterVersion(value: unknown): CharacterVersion {
     ],
     'CharacterVersion',
   );
+  const acceptedEvidenceIds = requireUniqueStringArray(
+    record['acceptedEvidenceIds'],
+    'CharacterVersion acceptedEvidenceIds',
+  );
+  const definition = parseCharacterDefinition(record['definition']);
+  validateCharacterDefinitionEvidence(definition, new Set(acceptedEvidenceIds), 'CharacterVersion');
   return {
     characterVersionId: requireIdentity(
       record['characterVersionId'],
@@ -233,11 +270,8 @@ export function parseCharacterVersion(value: unknown): CharacterVersion {
       'CharacterVersion characterProjectId',
     ),
     label: requireIdentity(record['label'], 'CharacterVersion label'),
-    definition: parseCharacterDefinition(record['definition']),
-    acceptedEvidenceIds: requireUniqueStringArray(
-      record['acceptedEvidenceIds'],
-      'CharacterVersion acceptedEvidenceIds',
-    ),
+    definition,
+    acceptedEvidenceIds,
     publishedAt: requireIsoDate(record['publishedAt'], 'CharacterVersion publishedAt'),
   };
 }
@@ -270,6 +304,8 @@ export function parseCharacterRun(value: unknown): CharacterRun {
     [
       'characterRunId',
       'characterVersionId',
+      'characterStorylineRunId',
+      'characterMemoryScopeId',
       'participantId',
       'controller',
       'runtimeBinding',
@@ -277,12 +313,22 @@ export function parseCharacterRun(value: unknown): CharacterRun {
     ],
     'CharacterRun',
   );
+  const characterStorylineRunId = optionalIdentity(
+    record['characterStorylineRunId'],
+    'CharacterRun CharacterStorylineRun identity',
+  );
+  const characterMemoryScopeId = optionalIdentity(
+    record['characterMemoryScopeId'],
+    'CharacterRun CharacterMemoryScope identity',
+  );
   return {
     characterRunId: requireIdentity(record['characterRunId'], 'CharacterRun characterRunId'),
     characterVersionId: requireIdentity(
       record['characterVersionId'],
       'CharacterRun characterVersionId',
     ),
+    ...(characterStorylineRunId === undefined ? {} : { characterStorylineRunId }),
+    ...(characterMemoryScopeId === undefined ? {} : { characterMemoryScopeId }),
     participantId: requireIdentity(record['participantId'], 'CharacterRun participantId'),
     controller: parseCharacterController(record['controller']),
     runtimeBinding: parseCharacterRuntimeBinding(record['runtimeBinding']),
@@ -363,16 +409,63 @@ export function parseCharacterDefinition(value: unknown): CharacterDefinition {
     value,
     [
       'summary',
+      'backgroundStory',
+      'originSetting',
       'canon',
       'knowledgeBoundary',
       'behaviorPolicy',
       'expressionPolicy',
       'representationRefs',
+      'representationDefaults',
+      'voiceDefaults',
     ],
     'Character definition',
   );
+  const voiceDefaults =
+    record['voiceDefaults'] === undefined
+      ? undefined
+      : parseCharacterVoiceDefaults(record['voiceDefaults']);
+  const representationRefs = requireUniqueIdentities(
+    requireArray(
+      record['representationRefs'],
+      parseCharacterRepresentationRef,
+      'Character representationRefs',
+    ),
+    (item) => item.representationId,
+    'Character representationRefs',
+  );
+  const representationDefaults =
+    record['representationDefaults'] === undefined
+      ? undefined
+      : parseCharacterRepresentationDefaults(record['representationDefaults']);
+  if (representationDefaults?.portraitRepresentationId !== undefined) {
+    assertRepresentationDefault(
+      representationRefs,
+      representationDefaults.portraitRepresentationId,
+      ['portrait'],
+      'portrait',
+    );
+  }
+  if (representationDefaults?.avatarRepresentationId !== undefined) {
+    assertRepresentationDefault(
+      representationRefs,
+      representationDefaults.avatarRepresentationId,
+      ['live2d', 'vrm', 'mmd', 'pngtuber'],
+      'Avatar',
+    );
+  }
+  if (
+    voiceDefaults &&
+    !representationRefs.some(
+      (ref) => ref.representationId === voiceDefaults.voiceRepresentationId && ref.kind === 'voice',
+    )
+  ) {
+    throw new Error('Character voice defaults must reference an exact voice representation.');
+  }
   return {
     summary: requireString(record['summary'], 'Character definition summary'),
+    backgroundStory: parseCharacterBackgroundStory(record['backgroundStory']),
+    originSetting: parseCharacterOriginSetting(record['originSetting']),
     canon: requireStringArray(record['canon'], 'Character canon'),
     knowledgeBoundary: requireStringArray(
       record['knowledgeBoundary'],
@@ -380,16 +473,62 @@ export function parseCharacterDefinition(value: unknown): CharacterDefinition {
     ),
     behaviorPolicy: requireStringArray(record['behaviorPolicy'], 'Character behaviorPolicy'),
     expressionPolicy: requireStringArray(record['expressionPolicy'], 'Character expressionPolicy'),
-    representationRefs: requireUniqueIdentities(
-      requireArray(
-        record['representationRefs'],
-        parseCharacterRepresentationRef,
-        'Character representationRefs',
-      ),
-      (item) => item.representationId,
-      'Character representationRefs',
-    ),
+    representationRefs,
+    ...(representationDefaults === undefined ? {} : { representationDefaults }),
+    ...(voiceDefaults === undefined ? {} : { voiceDefaults }),
   };
+}
+
+function parseCharacterRepresentationDefaults(value: unknown): CharacterRepresentationDefaults {
+  const record = requireExactRecord(
+    value,
+    ['portraitRepresentationId', 'avatarRepresentationId'],
+    'Character representation defaults',
+  );
+  const portraitRepresentationId = optionalIdentity(
+    record['portraitRepresentationId'],
+    'Character default portrait representation',
+  );
+  const avatarRepresentationId = optionalIdentity(
+    record['avatarRepresentationId'],
+    'Character default Avatar representation',
+  );
+  if (portraitRepresentationId === undefined && avatarRepresentationId === undefined) {
+    throw new Error('Character representation defaults require a portrait or Avatar selection.');
+  }
+  return {
+    ...(portraitRepresentationId === undefined ? {} : { portraitRepresentationId }),
+    ...(avatarRepresentationId === undefined ? {} : { avatarRepresentationId }),
+  };
+}
+
+function assertRepresentationDefault(
+  representations: readonly CharacterRepresentationRef[],
+  representationId: string,
+  allowedKinds: readonly CharacterRepresentationKind[],
+  label: string,
+): void {
+  const representation = representations.find(
+    (candidate) => candidate.representationId === representationId,
+  );
+  if (!representation || !allowedKinds.includes(representation.kind)) {
+    throw new Error(
+      `Character ${label} default must reference an exact compatible representation.`,
+    );
+  }
+}
+
+function validateCharacterDefinitionEvidence(
+  definition: CharacterDefinition,
+  availableEvidenceIds: ReadonlySet<string>,
+  label: string,
+): void {
+  const missing = collectCharacterLoreEvidenceIds(definition).find(
+    (evidenceId) => !availableEvidenceIds.has(evidenceId),
+  );
+  if (missing !== undefined) {
+    throw new Error(`${label} lore references unknown evidence '${missing}'.`);
+  }
 }
 
 function parseCharacterEvidenceRef(value: unknown): CharacterEvidenceRef {
@@ -437,23 +576,58 @@ function parseCharacterCanonCandidate(value: unknown): CharacterCanonCandidate {
   };
 }
 
-function parseCharacterRepresentationRef(value: unknown): CharacterRepresentationRef {
+export function parseCharacterRepresentationRef(value: unknown): CharacterRepresentationRef {
   const record = requireExactRecord(
     value,
-    ['representationId', 'role', 'targetRef'],
+    ['representationId', 'kind', 'resourceRef'],
     'Character representation reference',
   );
-  const targetRef = requireIdentity(record['targetRef'], 'Character representation targetRef');
-  if (!/^[a-z][a-z0-9+.-]*:[^\s]+$/u.test(targetRef) || /^file:/u.test(targetRef)) {
-    throw new Error('Character representation targetRef must be an opaque non-file reference.');
+  const resourceRef = requireIdentity(
+    record['resourceRef'],
+    'Character representation resourceRef',
+  );
+  if (!/^[a-z][a-z0-9+.-]*:[^\s]+$/u.test(resourceRef) || /^file:/u.test(resourceRef)) {
+    throw new Error('Character representation resourceRef must be an opaque non-file reference.');
   }
   return {
     representationId: requireIdentity(
       record['representationId'],
       'Character representation identity',
     ),
-    role: requireIdentity(record['role'], 'Character representation role'),
-    targetRef,
+    kind: requireOneOf(
+      record['kind'],
+      CHARACTER_REPRESENTATION_KINDS,
+      'Character representation kind',
+    ),
+    resourceRef,
+  };
+}
+
+function parseCharacterVoiceDefaults(value: unknown): CharacterVoiceDefaults {
+  const record = requireExactRecord(
+    value,
+    ['providerRef', 'voiceRepresentationId', 'speed', 'autoRead'],
+    'Character voice defaults',
+  );
+  const providerRef = requireIdentity(record['providerRef'], 'Character voice provider');
+  if (!/^[a-z][a-z0-9+.-]*:[^\s]+$/u.test(providerRef) || /^file:/u.test(providerRef)) {
+    throw new Error('Character voice provider must be an opaque non-file reference.');
+  }
+  const speed = record['speed'];
+  if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0.5 || speed > 2) {
+    throw new Error('Character voice speed must be between 0.5 and 2.');
+  }
+  if (typeof record['autoRead'] !== 'boolean') {
+    throw new Error('Character voice autoRead must be a boolean.');
+  }
+  return {
+    providerRef,
+    voiceRepresentationId: requireIdentity(
+      record['voiceRepresentationId'],
+      'Character voice representation',
+    ),
+    speed,
+    autoRead: record['autoRead'],
   };
 }
 
@@ -490,38 +664,11 @@ function parseCharacterController(value: unknown): CharacterController {
 }
 
 function parseCharacterRuntimeBinding(value: unknown): CharacterRuntimeBinding {
-  const record = requireExactRecord(
-    value,
-    [
-      'kind',
-      'relationshipId',
-      'worldVersionId',
-      'worldRunId',
-      'worldSaveId',
-      'branchId',
-      'actorId',
-    ],
-    'Character runtime binding',
-  );
+  const record = requireExactRecord(value, ['kind', 'relationshipId'], 'Character runtime binding');
   const kind = requireOneOf(record['kind'], CHARACTER_RUNTIME_KINDS, 'Character runtime kind');
-  if (kind === 'companion') {
-    requireAbsent(record, ['worldVersionId', 'worldRunId', 'worldSaveId', 'branchId', 'actorId']);
-    return {
-      kind,
-      relationshipId: requireIdentity(
-        record['relationshipId'],
-        'Companion Character relationshipId',
-      ),
-    };
-  }
-  requireAbsent(record, ['relationshipId']);
   return {
     kind,
-    worldVersionId: requireIdentity(record['worldVersionId'], 'Narrative WorldVersion identity'),
-    worldRunId: requireIdentity(record['worldRunId'], 'Narrative WorldRun identity'),
-    worldSaveId: requireIdentity(record['worldSaveId'], 'Narrative WorldSave identity'),
-    branchId: requireIdentity(record['branchId'], 'Narrative World branch identity'),
-    actorId: requireIdentity(record['actorId'], 'Narrative actor identity'),
+    relationshipId: requireIdentity(record['relationshipId'], 'Companion Character relationshipId'),
   };
 }
 
@@ -572,13 +719,4 @@ function requireStringArray(value: unknown, label: string): readonly string[] {
 
 function requireUniqueStringArray(value: unknown, label: string): readonly string[] {
   return requireUniqueIdentities(requireStringArray(value, label), (item) => item, label);
-}
-
-function requireAbsent(record: Readonly<Record<string, unknown>>, keys: readonly string[]): void {
-  const present = keys.filter((key) => record[key] !== undefined);
-  if (present.length > 0) {
-    throw new Error(
-      `Character runtime binding contains fields owned by another runtime kind: ${present.join(', ')}.`,
-    );
-  }
 }

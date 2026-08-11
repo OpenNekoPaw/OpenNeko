@@ -731,7 +731,7 @@ function m3Facts() {
         kind: 'cancel',
         method: 'message.cancel',
         accepted: true,
-        snapshot: snapshot({ pausedAfterCancel: true, turns: facts.turns }),
+        snapshot: snapshot({ paused: true, pendingCount: 1, turns: facts.turns }),
       },
       {
         id: 'resume',
@@ -767,7 +767,7 @@ function snapshot(options = {}) {
     messageQueue: {
       sequence: 1,
       pendingCount: options.pendingCount ?? 0,
-      pausedAfterCancel: options.pausedAfterCancel ?? false,
+      paused: options.paused ?? false,
       items: [],
     },
     turns: options.turns ?? [],

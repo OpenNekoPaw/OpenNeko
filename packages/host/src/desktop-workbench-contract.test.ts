@@ -95,6 +95,58 @@ describe('Desktop Workbench contract', () => {
     ).toThrow('requires exact document and editor session identities');
   });
 
+  it('accepts only exact owner-qualified Character and World authoring Views', () => {
+    const initial = createDefaultDesktopWorkbenchLayout('window-1');
+    const character = openOrFocusMainView(initial, {
+      viewId: 'character-view-1',
+      viewInstanceId: 'character-view-instance-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'character-authoring',
+      ownerId: 'character',
+      displayLabel: 'Lead',
+      characterProjectId: 'character-project-1',
+    });
+    const world = openOrFocusMainView(character, {
+      viewId: 'world-view-1',
+      viewInstanceId: 'world-view-instance-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'world-authoring',
+      ownerId: 'world',
+      displayLabel: 'Setting',
+      worldProjectId: 'world-project-1',
+    });
+    expect(world.main.views.map((view) => view.kind)).toEqual([
+      'character-authoring',
+      'world-authoring',
+    ]);
+    expect(() =>
+      openOrFocusMainView(initial, {
+        viewId: 'character-view-2',
+        viewInstanceId: 'character-view-instance-2',
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        kind: 'character-authoring',
+        ownerId: 'character',
+        displayLabel: 'Missing',
+      }),
+    ).toThrow('requires an exact CharacterProject');
+    expect(() =>
+      openOrFocusMainView(initial, {
+        viewId: 'world-view-2',
+        viewInstanceId: 'world-view-instance-2',
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        kind: 'world-authoring',
+        ownerId: 'world',
+        displayLabel: 'Setting',
+        worldProjectId: 'world-project-1',
+        characterProjectId: 'character-project-1',
+      }),
+    ).toThrow('belongs only to Character authoring Views');
+  });
+
   it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
     const canvas = openOrFocusMainView(
       createDefaultDesktopWorkbenchLayout('window-1'),
@@ -300,7 +352,10 @@ describe('Desktop Workbench contract', () => {
   });
 });
 
-function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
+function viewRef(
+  viewId: string,
+  kind: 'canvas' | 'preview' | 'cut' | 'character-authoring' | 'world-authoring',
+) {
   return {
     viewId,
     viewInstanceId: 'view-instance-1',

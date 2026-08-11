@@ -1,6 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ContentLocator } from '@neko/content';
+import { createNodeHostContentReadService } from '@neko/content/node';
 import { listWorkspaceLinkedMediaLibraries } from './workspace-linked-media-libraries';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
@@ -8,8 +9,18 @@ export async function resolveWorkspaceContentLocator(
   workspace: AssetWorkspaceResolution,
   locator: ContentLocator,
 ): Promise<string> {
-  if (locator.kind !== 'workspace-file') {
-    throw new Error('Workspace content operation requires a workspace-file ContentLocator.');
+  if (locator.kind !== 'workspace-file' && locator.kind !== 'generated-output') {
+    throw new Error(
+      'Workspace content path resolution requires a workspace-file or generated-output ContentLocator.',
+    );
+  }
+  if (locator.kind === 'generated-output') {
+    const content = await createNodeHostContentReadService({
+      workspaceRoot: workspace.workspacePath,
+    }).stat(locator);
+    if (content.status !== 'ready') {
+      throw new Error(`Generated output content is unavailable: ${content.diagnostic.code}.`);
+    }
   }
   const requestedPath = path.join(workspace.workspacePath, ...locator.path.split('/'));
   const resolvedPath = await realpath(requestedPath);

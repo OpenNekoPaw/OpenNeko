@@ -169,6 +169,51 @@ describe('Desktop Agent launch preload bridge', () => {
     ).resolves.toEqual(catalog);
   });
 
+  it('forwards exact Agent Entry target configuration and returns its Host receipt', async () => {
+    const catalog = createCatalog();
+    const binding = {
+      kind: 'authoring' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+    };
+    const intent = {
+      mode: 'authoring' as const,
+      targetReceipt: {
+        targetReceiptId: 'target-receipt-1',
+        draftId: catalog.connection.draftId,
+        connectionId: catalog.connection.connectionId,
+        mode: 'authoring' as const,
+        binding,
+      },
+    };
+    electron.invoke.mockImplementation(
+      async (
+        _channel: string,
+        request: { readonly requestId: string; readonly operation: string },
+      ) => {
+      expect(request).toMatchObject({
+        operation: 'configure-entry-target',
+        connection: catalog.connection,
+        mode: 'authoring',
+        binding,
+      });
+        return {
+          requestId: request.requestId,
+          status: 'entry-configured',
+          intent,
+          catalog,
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(
+      bridge.agentLaunch.configureEntryTarget(catalog.connection, 'authoring', binding),
+    ).resolves.toEqual({ intent, catalog });
+  });
+
   it('forwards Workspace mention search with the exact binding receipt', async () => {
     const catalog = createCatalog();
     const projection = {

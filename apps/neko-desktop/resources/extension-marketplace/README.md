@@ -8,6 +8,25 @@ Each catalog entry points to a contained package directory. A package uses
 portable `SKILL.md` directories for Pi Agent Skills, and optional contained MCP
 configuration supported by the OpenNeko runtime.
 
+The manifest keeps `interface.shortDescription` as its canonical default
+introduction. Optional translations use exact lower-case locale keys under
+`interface.localization`, for example:
+
+```json
+{
+  "interface": {
+    "shortDescription": "Reviewed browser observation",
+    "localization": {
+      "zh-cn": { "shortDescription": "经过审核的浏览器观察能力" }
+    }
+  }
+}
+```
+
+Each localized record contains only `shortDescription`. Invalid locale keys or
+localized records invalidate that plugin manifest without hiding valid sibling
+plugins. Locales without an entry display the canonical default introduction.
+
 Browser Use and Computer Use are listed from this first-party snapshot so
 their reviewed scope and current qualification state are visible. Their entries
 remain `unavailable` until OpenNeko publishes the exact self-contained platform

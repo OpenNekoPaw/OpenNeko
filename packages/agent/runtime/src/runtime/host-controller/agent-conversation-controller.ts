@@ -99,13 +99,13 @@ export function tryHandleAgentConversationControllerRoute(
         effects.readMessageQueue(conversationId, context),
       );
 
-    case 'promoteQueuedMessage':
+    case 'sendQueuedMessageNow':
       return runRequiredConversationRoute(
         message,
-        'promote queued message',
+        'send queued message now',
         context,
         (conversationId) =>
-          effects.promoteQueuedMessage(
+          effects.sendQueuedMessageNow(
             { conversationId, queueItemId: message.queueItemId },
             context,
           ),

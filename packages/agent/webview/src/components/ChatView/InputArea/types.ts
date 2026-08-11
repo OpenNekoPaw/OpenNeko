@@ -157,6 +157,7 @@ export interface MentionItem {
   characterLaunchSelection?: {
     readonly characterProjectId: string;
     readonly characterVersionId: string;
+    readonly characterStorylineVersionId?: string;
   };
   /** Host-provided normalized or expanded search text */
   searchText?: string;
@@ -169,6 +170,7 @@ export interface MentionItem {
 export interface SelectedCharacterLaunch {
   readonly characterProjectId: string;
   readonly characterVersionId: string;
+  readonly characterStorylineVersionId?: string;
   readonly label: string;
 }
 

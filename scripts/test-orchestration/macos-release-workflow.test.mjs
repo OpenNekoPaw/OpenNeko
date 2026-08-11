@@ -51,6 +51,14 @@ describe('macOS release workflow', () => {
     const trustStep = release.steps?.find(
       (candidate) => candidate.name === 'Verify ad-hoc app and DMG closure',
     );
+    const createReleaseStep = release.steps?.find(
+      (candidate) => candidate.name === 'Create GitHub release',
+    );
+    assert.match(createReleaseStep?.run ?? '', /--title "\$RELEASE_TAG"/u);
+    assert.doesNotMatch(
+      createReleaseStep?.run ?? '',
+      /--title "[^"\n]*(?:OpenNeko|Preview)[^"\n]*"/u,
+    );
     assert.match(trustStep?.run ?? '', /VERSION="\$\{RELEASE_TAG#v\}"/u);
     assert.match(
       trustStep?.run ?? '',

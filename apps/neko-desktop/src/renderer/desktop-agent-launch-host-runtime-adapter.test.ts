@@ -25,6 +25,26 @@ describe('Electron Agent launch Host runtime adapter', () => {
         selectedProviderId: 'openai',
         selectedModelId: 'gpt-5',
         defaultMediaModels: { image: 'openai:gpt-image-1' },
+        chatModelOptions: [
+          {
+            id: 'openai:gpt-5',
+            label: 'GPT-5',
+            providerId: 'openai',
+            modelId: 'gpt-5',
+            category: 'llm',
+            capabilities: ['agent.main'],
+            contextWindow: 128_000,
+            maxOutputTokens: 16_384,
+          },
+          {
+            id: 'openai:gpt-image-1',
+            label: 'GPT Image 1',
+            providerId: 'openai',
+            modelId: 'gpt-image-1',
+            category: 'image',
+            capabilities: ['text_to_image'],
+          },
+        ],
         mediaUnderstandingModels: {
           image: expect.objectContaining({ optionId: 'openai:gpt-5' }),
         },
@@ -35,6 +55,26 @@ describe('Electron Agent launch Host runtime adapter', () => {
       type: 'globalError',
       message:
         "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+    });
+  });
+
+  it('rejects roleplay search before Character authority is called', () => {
+    const bridge = createBridge();
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
+    const messages: AgentHostToWebviewMessage[] = [];
+    adapter.subscribe((message) => messages.push(message));
+
+    adapter.send({ type: 'searchProjectFiles', filter: 'lin', purpose: 'roleplay' });
+
+    expect(bridge.agentLaunch.searchWorkspaceMentions).not.toHaveBeenCalled();
+    expect(messages[0]).toEqual({
+      type: 'globalError',
+      message:
+        'Character and Room capabilities remain experimental and are not available in the production Desktop.',
     });
   });
 
@@ -207,6 +247,46 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(adapter.readLaunchCatalog()).toEqual(workspaceCatalog);
   });
 
+  it('stores the Host-issued Entry receipt and matching capability catalog together', async () => {
+    const bridge = createBridge();
+    const binding = {
+      kind: 'authoring' as const,
+      workspaceId: 'workspace:1',
+      workspaceGrantId: 'workspace-grant:1',
+      target: { kind: 'content-project' as const, contentProjectId: 'content:1' },
+    };
+    const workspaceCatalog = createCatalog({
+      binding: {
+        kind: 'workspace',
+        workspaceId: binding.workspaceId,
+        workspaceGrantId: binding.workspaceGrantId,
+      },
+    });
+    const intent = {
+      mode: 'authoring' as const,
+      targetReceipt: {
+        targetReceiptId: 'entry-target:1',
+        draftId: 'draft:entry',
+        connectionId: workspaceCatalog.connection.connectionId,
+        mode: 'authoring' as const,
+        binding,
+      },
+    };
+    bridge.agentLaunch.configureEntryTarget.mockResolvedValueOnce({
+      intent,
+      catalog: workspaceCatalog,
+    });
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
+
+    await expect(adapter.configureEntryTarget('authoring', binding)).resolves.toEqual(intent);
+    expect(adapter.readEntryIntent()).toEqual(intent);
+    expect(adapter.readLaunchCatalog()).toEqual(workspaceCatalog);
+  });
+
   it('restores the one Window entry draft across scope and connection replacement', () => {
     const storage = createStorage();
     const first = createElectronAgentLaunchHostRuntimeAdapter({
@@ -301,6 +381,7 @@ function createBridge() {
       attach: vi.fn(),
       authorizeResource: vi.fn(),
       bindTarget: vi.fn(),
+      configureEntryTarget: vi.fn(),
       updateConfiguration: vi.fn(),
       searchWorkspaceMentions: vi.fn(),
       submitDraft: vi.fn(),
@@ -342,7 +423,7 @@ function createCatalog(
       modelType: 'image' as const,
       contextWindow: null,
       maximumOutputTokens: null,
-      purposeCapabilities: ['image.generate'],
+      purposeCapabilities: ['text_to_image'],
       availability: { status: 'available' as const },
     },
   ];

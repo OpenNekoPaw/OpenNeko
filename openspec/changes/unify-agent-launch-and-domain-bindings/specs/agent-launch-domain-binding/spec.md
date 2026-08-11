@@ -318,3 +318,45 @@ startup or replace the complete Desktop UI with an IPC error.
 
 - **WHEN** an Agent attach or bootstrap request rejects after the Desktop Surface has mounted
 - **THEN** Renderer displays an internationalized local Agent diagnostic with an explicit retry action, does not expose raw IPC, path or grant identity text, and does not prevent the Window Shell or sibling Surfaces from rendering
+
+### Requirement: Running Conversation input uses one full-capability serial queue
+
+While an exact Conversation Turn is active, the Agent composer SHALL remain editable and SHALL submit
+subsequent canonical inputs to the Conversation-owned queue with the same supported text, attachment,
+context, reference, typed invocation and configuration semantics as an idle submission. The system SHALL
+NOT replace the Composer with wait-or-cancel guidance or create a reduced text-only queue path.
+
+#### Scenario: Rich input is submitted during an active Turn
+
+- **WHEN** the user submits a supported message with references, context or other normal message input while the exact Conversation has an active Turn
+- **THEN** the complete request is queued under that Conversation and its safe Draft presentation is visible in the queue
+- **AND** the request is not read by the provider until every preceding Turn reaches terminal state
+
+#### Scenario: Active Turn completes normally
+
+- **WHEN** an active Turn reaches completed or failed terminal state with pending queue items
+- **THEN** the Conversation starts exactly one next item in queue order with its captured input and no concurrent same-Conversation provider Turn
+
+#### Scenario: User stops the active Turn
+
+- **WHEN** the user activates the visible stop control or its keyboard equivalent
+- **THEN** Agent cancels only the exact active Turn, projects a cancelled terminal result and pauses pending queue items
+- **AND** pending items remain available for delete, edit or explicit immediate send instead of being cleared or automatically executed
+
+#### Scenario: User immediately sends one queued item
+
+- **WHEN** the user chooses immediate send for an exact pending item
+- **THEN** Agent atomically moves that item ahead of other user items, resumes the queue and cancels an active Turn when necessary
+- **AND** the selected item starts only after the cancelled Turn is terminal, without changing Conversation identity or bypassing internal continuations
+
+#### Scenario: User edits or deletes one queued item
+
+- **WHEN** the user edits or deletes an exact pending user item
+- **THEN** only that item is removed from execution; edit restores its complete safe Draft presentation to the owning Tab while delete does not alter the Composer
+- **AND** stale, cross-Conversation or continuation-item operations fail locally without changing sibling items or another Conversation
+
+#### Scenario: Composer already contains a Draft during queue edit
+
+- **WHEN** a queued item is taken for edit while the owning Composer contains unsent input, attachments, references or context
+- **THEN** the existing Composer Draft is preserved and a local conflict diagnostic is shown
+- **AND** the queued item is not silently overwritten, merged or reported as still pending

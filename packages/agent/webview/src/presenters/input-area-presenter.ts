@@ -86,15 +86,14 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
   const modelPolicy = input.configurationPolicy?.fields.model.policy.status ?? 'editable';
   const executionModePolicy =
     input.configurationPolicy?.fields.executionMode.policy.status ?? 'editable';
-  const isActionTrigger = /^[/$]/.test(input.inputValue.trimStart());
-  const hasQueueableTextOnlyContent =
-    hasText && !hasAttachments && !hasContextChips && !hasAmbientNodes && !isActionTrigger;
+  const hasQueueableContent = hasText || hasAttachments || hasContextChips;
   const canQueue =
     input.isThinking &&
     !input.disabled &&
+    !input.submissionBlocked &&
     !isCharacterRoleSession &&
     isAgentMode &&
-    hasQueueableTextOnlyContent;
+    hasQueueableContent;
   const hasCurrentSessionMediaModels = input.currentSessionMediaModelCount > 0;
 
   return {

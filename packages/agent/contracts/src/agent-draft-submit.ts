@@ -12,6 +12,7 @@ import {
   parseAgentFlatPurposeModelRefs,
   type AgentFlatPurposeModelRefs,
 } from './agent-purpose-model';
+import { parseAgentEntryTargetReceipt, type AgentEntryTargetReceipt } from './agent-entry-intent';
 
 export type AgentDraftInputIntent =
   | { readonly kind: 'message'; readonly text: string }
@@ -53,6 +54,7 @@ export interface AgentInputReferenceReceipt {
 
 export interface AgentDraftSubmitInput {
   readonly draft: AgentDraftInteractionProjection;
+  readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
   readonly input: AgentDraftInputIntent;
   readonly references: readonly AgentInputReferenceReceipt[];
   readonly resourceGrantIds: readonly string[];
@@ -71,8 +73,16 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
   const record = requireRecord(value, 'Agent Draft submit input must be an object.');
   requireAllowedKeys(
     record,
-    ['draft', 'input', 'references', 'resourceGrantIds', 'configuration', 'purposeModels'],
-    ['draft', 'input', 'references', 'resourceGrantIds', 'configuration'],
+    [
+      'draft',
+      'entryTargetReceipt',
+      'input',
+      'references',
+      'resourceGrantIds',
+      'configuration',
+      'purposeModels',
+    ],
+    ['draft', 'entryTargetReceipt', 'input', 'references', 'resourceGrantIds', 'configuration'],
     'Agent Draft submit input',
   );
   const draft = parseAgentDraftInteractionProjection(record['draft']);
@@ -81,6 +91,10 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
   }
   return {
     draft,
+    entryTargetReceipt:
+      record['entryTargetReceipt'] === null
+        ? null
+        : parseAgentEntryTargetReceipt(record['entryTargetReceipt']),
     input: parseAgentDraftInputIntent(record['input']),
     references: parseReferenceReceipts(record['references']),
     resourceGrantIds: requireIdentityArray(record['resourceGrantIds'], 'Resource grant'),

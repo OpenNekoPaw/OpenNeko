@@ -391,6 +391,7 @@ describe('createCanvasWebviewHost', () => {
       identity,
       getSnapshot: () => session.getSnapshot(),
       resolveMaterialActions: (request) => session.resolveMaterialActions(request),
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
       subscribe: () => () => {},
       async executeIntent(request) {
         const result = await session.executeIntent(request);
@@ -478,6 +479,7 @@ describe('createCanvasWebviewHost', () => {
         requestIds.push(request.requestId);
         return session.resolveMaterialActions(request);
       },
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
       subscribe: (listener) => session.subscribe(listener),
       executeIntent: (request) => session.executeIntent(request),
     };
@@ -561,6 +563,7 @@ describe('createCanvasWebviewHost', () => {
           if (requestIds.length === 1) await firstResolutionGate;
           return session.resolveMaterialActions(request);
         },
+        readTextFilePreview: (request) => session.readTextFilePreview(request),
         subscribe: (listener) => session.subscribe(listener),
         executeIntent: (request) => session.executeIntent(request),
       };
@@ -657,6 +660,7 @@ describe('createCanvasWebviewHost', () => {
         return current;
       },
       resolveMaterialActions: (request) => session.resolveMaterialActions(request),
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
       subscribe: (listener) => session.subscribe(listener),
       executeIntent: (request) => session.executeIntent(request),
     };

@@ -16,7 +16,8 @@ export type DesktopWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
 export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only' | 'empty-main';
 export type DesktopWorkbenchMainSplitAxis = 'columns' | 'rows';
 export type DesktopPreviewViewPresentation = 'temporary' | 'pinned' | 'side';
-export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut' | 'text-editor';
+export type DesktopWorkbenchViewKind =
+  'canvas' | 'preview' | 'cut' | 'text-editor' | 'character-authoring' | 'world-authoring';
 
 export interface DesktopWorkbenchViewRef {
   readonly viewId: string;
@@ -28,6 +29,8 @@ export interface DesktopWorkbenchViewRef {
   readonly displayLabel: string;
   readonly documentId?: string;
   readonly editorSessionId?: string;
+  readonly characterProjectId?: string;
+  readonly worldProjectId?: string;
   readonly previewPresentation?: DesktopPreviewViewPresentation;
   readonly previewContentKind?: PreviewContentKind;
 }
@@ -640,6 +643,8 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
       'displayLabel',
       ...(record['documentId'] === undefined ? [] : ['documentId']),
       ...(record['editorSessionId'] === undefined ? [] : ['editorSessionId']),
+      ...(record['characterProjectId'] === undefined ? [] : ['characterProjectId']),
+      ...(record['worldProjectId'] === undefined ? [] : ['worldProjectId']),
       ...(record['previewPresentation'] === undefined ? [] : ['previewPresentation']),
       ...(record['previewContentKind'] === undefined ? [] : ['previewContentKind']),
     ],
@@ -647,7 +652,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   );
   const kind = requireOneOf(
     record['kind'],
-    ['canvas', 'preview', 'cut', 'text-editor'] as const,
+    ['canvas', 'preview', 'cut', 'text-editor', 'character-authoring', 'world-authoring'] as const,
     'Desktop Workbench Main View kind is invalid.',
   );
   const documentId = readOptionalNonEmptyString(
@@ -657,6 +662,14 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   const editorSessionId = readOptionalNonEmptyString(
     record['editorSessionId'],
     'Desktop Text Editor session identity is invalid.',
+  );
+  const characterProjectId = readOptionalNonEmptyString(
+    record['characterProjectId'],
+    'Desktop Character authoring target identity is invalid.',
+  );
+  const worldProjectId = readOptionalNonEmptyString(
+    record['worldProjectId'],
+    'Desktop World authoring target identity is invalid.',
   );
   const previewPresentation =
     record['previewPresentation'] === undefined
@@ -690,6 +703,26 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   if (kind !== 'text-editor' && editorSessionId !== undefined) {
     throw invalidPayload('Desktop Text Editor session identity belongs only to Text Editor Views.');
   }
+  if (kind === 'character-authoring' && !characterProjectId) {
+    throw invalidPayload('Desktop Character authoring View requires an exact CharacterProject.');
+  }
+  if (kind !== 'character-authoring' && characterProjectId !== undefined) {
+    throw invalidPayload(
+      'Desktop CharacterProject identity belongs only to Character authoring Views.',
+    );
+  }
+  if (kind === 'world-authoring' && !worldProjectId) {
+    throw invalidPayload('Desktop World authoring View requires an exact WorldProject.');
+  }
+  if (kind !== 'world-authoring' && worldProjectId !== undefined) {
+    throw invalidPayload('Desktop WorldProject identity belongs only to World authoring Views.');
+  }
+  if (
+    (kind === 'character-authoring' || kind === 'world-authoring') &&
+    (documentId !== undefined || editorSessionId !== undefined)
+  ) {
+    throw invalidPayload('Domain authoring Views cannot carry Content document identities.');
+  }
   return {
     viewId: requireNonEmptyString(
       record['viewId'],
@@ -718,6 +751,8 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
     ),
     ...(documentId ? { documentId } : {}),
     ...(editorSessionId ? { editorSessionId } : {}),
+    ...(characterProjectId ? { characterProjectId } : {}),
+    ...(worldProjectId ? { worldProjectId } : {}),
     ...(previewPresentation ? { previewPresentation } : {}),
     ...(previewContentKind ? { previewContentKind } : {}),
   };

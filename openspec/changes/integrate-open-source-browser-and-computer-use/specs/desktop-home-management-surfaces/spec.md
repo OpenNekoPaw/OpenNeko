@@ -68,6 +68,14 @@ update a runtime merely because the user opened Agent, Extensions, a Skill or a 
 - **THEN** no runtime artifact SHALL download or execute
 - **AND** unknown, unsigned, checksum-invalid or unsupported-platform records SHALL not become installable
 
+#### Scenario: Extension introduction follows the Desktop locale
+
+- **WHEN** an extension manifest declares a localized introduction for the current Desktop locale
+- **THEN** Extensions SHALL display that introduction consistently in grid/list results and the selected configuration detail
+- **AND** search SHALL use the same locale-resolved introduction
+- **AND** a locale without a declared introduction SHALL display the manifest's canonical default introduction
+- **AND** invalid locale keys or localization metadata SHALL invalidate only the affected plugin manifest
+
 ### Requirement: First-delivery catalog trust is application-anchored
 
 The first Browser Use and Computer Use delivery MUST use only the reviewed catalog shipped inside the signed OpenNeko

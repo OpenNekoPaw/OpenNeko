@@ -20,7 +20,14 @@ import {
   type ToolResult,
 } from '@neko/agent-contracts';
 import { type PerceptualAssetRef } from '@neko/media';
-import { probeImageMetadata, type ImageMetadata } from '@neko/content/document';
+import type { ImageMetadata } from '@neko/content/document';
+import {
+  loadAgentImageAsset,
+  type AgentImageAssetAccessRuntime,
+  type AgentImageAssetDiagnostic,
+  type AgentImageAssetResult,
+  type AgentImageAssetStatus,
+} from './image-asset-source';
 
 const DEFAULT_READ_IMAGE_LIMIT = 4;
 const MAX_READ_IMAGE_LIMIT = AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES;
@@ -31,33 +38,10 @@ export interface ReadImageToolDeps {
   readonly now?: () => number;
 }
 
-export interface ReadImageContentAccessRuntime {
-  loadContentAsset?(input: {
-    readonly locator: ContentLocator;
-    readonly maxBytes: number;
-  }): Promise<ReadImageProviderAssetResult>;
-  loadRepresentationAsset?(input: {
-    readonly locator: ContentRepresentationLocator;
-    readonly maxBytes: number;
-  }): Promise<ReadImageProviderAssetResult>;
-}
-
-export interface ReadImageProviderAssetResult {
-  readonly status: ReadImageContentStatus;
-  readonly diagnostics: readonly ReadImageDiagnostic[];
-  readonly bytes?: Uint8Array;
-  readonly mimeType?: string;
-  readonly sizeBytes?: number;
-}
-
-export type ReadImageContentStatus =
-  'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';
-
-export interface ReadImageDiagnostic {
-  readonly code: string;
-  readonly severity: 'info' | 'warning' | 'error';
-  readonly message: string;
-}
+export type ReadImageContentAccessRuntime = AgentImageAssetAccessRuntime;
+export type ReadImageProviderAssetResult = AgentImageAssetResult;
+export type ReadImageContentStatus = AgentImageAssetStatus;
+export type ReadImageDiagnostic = AgentImageAssetDiagnostic;
 
 export interface ReadImageInputImage {
   readonly alias?: string;
@@ -371,55 +355,25 @@ async function loadImage(
   deps: ReadImageToolDeps,
   input: ReadImageInputImage,
 ): Promise<LoadedImage> {
-  const contentAccessRuntime = deps.contentAccessRuntime;
-  if (!contentAccessRuntime) {
-    throw new Error('ReadImage requires AgentContentAccessRuntime.');
+  const loaded = await loadAgentImageAsset({
+    binding: input,
+    contentAccessRuntime: deps.contentAccessRuntime,
+    maxBytes: MAX_READ_IMAGE_BYTES,
+    operationName: 'ReadImage',
+  });
+  const resolvedPath = input.representationLocator
+    ? `data:${loaded.metadata.mimeType};base64,${Buffer.from(loaded.bytes).toString('base64')}`
+    : input.contentLocator
+      ? `content:${contentLocatorKey(input.contentLocator)}`
+      : undefined;
+  if (!resolvedPath) {
+    throw new Error('ReadImage loaded an image without a canonical source identity.');
   }
-  if (input.representationLocator) {
-    if (!contentAccessRuntime.loadRepresentationAsset) {
-      throw new Error('ReadImage representation access is unavailable.');
-    }
-    const represented = await contentAccessRuntime.loadRepresentationAsset({
-      locator: input.representationLocator,
-      maxBytes: MAX_READ_IMAGE_BYTES,
-    });
-    if (represented.status !== 'ready' || !represented.bytes) {
-      throw new Error(
-        represented.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
-          `ReadImage could not load representation bytes: ${represented.status}`,
-      );
-    }
-    const metadata = probeImageMetadata(represented.bytes);
-    if (!metadata) throw new Error('ReadImage representation is not a supported image.');
-    return {
-      input,
-      resolvedPath: `data:${metadata.mimeType};base64,${Buffer.from(represented.bytes).toString('base64')}`,
-      metadata,
-    };
-  }
-  if (input.contentLocator) {
-    if (!contentAccessRuntime.loadContentAsset) {
-      throw new Error('ReadImage content read access is unavailable.');
-    }
-    const loaded = await contentAccessRuntime.loadContentAsset({
-      locator: input.contentLocator,
-      maxBytes: MAX_READ_IMAGE_BYTES,
-    });
-    if (loaded.status !== 'ready' || !loaded.bytes) {
-      throw new Error(
-        loaded.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
-          `ReadImage could not load content bytes: ${loaded.status}`,
-      );
-    }
-    const metadata = probeImageMetadata(loaded.bytes);
-    if (!metadata) throw new Error('ReadImage content is not a supported image.');
-    return {
-      input,
-      resolvedPath: `content:${contentLocatorKey(input.contentLocator)}`,
-      metadata,
-    };
-  }
-  throw new Error('ReadImage requires images[].contentLocator or images[].representationLocator.');
+  return {
+    input,
+    resolvedPath,
+    metadata: loaded.metadata,
+  };
 }
 
 function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {

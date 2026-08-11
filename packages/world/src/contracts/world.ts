@@ -14,6 +14,8 @@ import {
   type WorldJsonValue,
 } from './codec';
 
+export type { WorldJsonValue } from './codec';
+
 export const WORLD_REVIEW_STATUSES = ['draft', 'ready', 'blocked'] as const;
 export const WORLD_VISIBILITY_KINDS = ['public', 'actors', 'hidden'] as const;
 export const WORLD_FACT_MUTATION_KINDS = ['set', 'delete'] as const;
@@ -89,6 +91,9 @@ export interface WorldVersion {
   readonly acceptedSourceRefIds: readonly string[];
   readonly publishedAt: string;
 }
+
+/** Immutable publication identity for a complete, formally runnable World Experience. */
+export type WorldExperienceVersionId = string;
 
 export interface WorldRun {
   readonly worldRunId: string;
@@ -675,7 +680,7 @@ function parseWorldRule(value: unknown): WorldRule {
   };
 }
 
-function parseWorldFact(value: unknown): WorldFact {
+export function parseWorldFact(value: unknown): WorldFact {
   const record = requireExactRecord(
     value,
     ['factId', 'key', 'value', 'visibility', 'knownByActorIds'],

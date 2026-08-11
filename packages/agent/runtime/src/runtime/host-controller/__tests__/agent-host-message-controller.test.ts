@@ -19,7 +19,7 @@ function createEffects(): AgentHostControllerEffectPorts {
       readAgentStates: vi.fn(),
       readConversationSnapshot: vi.fn(),
       readMessageQueue: vi.fn(),
-      promoteQueuedMessage: vi.fn(),
+      sendQueuedMessageNow: vi.fn(),
       cancelQueuedMessage: vi.fn(),
       editQueuedMessage: vi.fn(),
       clearHistory: vi.fn(),

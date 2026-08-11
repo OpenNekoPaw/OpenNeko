@@ -188,12 +188,10 @@ export function MiniMap({
   return (
     <div
       ref={miniMapRef}
-      className="relative rounded-lg shadow-lg overflow-hidden cursor-pointer"
+      className="minimap-card relative cursor-pointer"
       style={{
         width,
         height,
-        backgroundColor: 'var(--canvas-bg)',
-        border: '1px solid var(--control-border)',
       }}
       onClick={handleClick}
     >

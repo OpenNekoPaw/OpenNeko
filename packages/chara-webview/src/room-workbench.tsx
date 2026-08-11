@@ -1,4 +1,5 @@
 import type {
+  CharacterFoundationSnapshot,
   CharacterRoomWorkbenchProjection,
   OpenNekoDesktopCharacterRoomWorkbenchBridge,
   RoomEvent,
@@ -13,6 +14,51 @@ export type CharacterRoomWorkbenchLoadState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'failed'; readonly message: string }
   | { readonly kind: 'ready'; readonly projection: CharacterRoomWorkbenchProjection };
+
+export interface CharacterRoomIdentityProjection {
+  readonly roomRunId: string;
+  readonly title: string;
+  readonly coverResourceRef?: string;
+  readonly participants: readonly {
+    readonly participantId: string;
+    readonly displayName: string;
+    readonly portraitResourceRef?: string;
+  }[];
+}
+
+export function projectCharacterRoomIdentity(
+  snapshot: CharacterFoundationSnapshot,
+  roomRunId: string,
+): CharacterRoomIdentityProjection | undefined {
+  const roomRun = snapshot.character.roomRuns.find((run) => run.roomRunId === roomRunId);
+  if (!roomRun) return undefined;
+  const room = snapshot.character.rooms.find(
+    (candidate) => candidate.characterRoomId === roomRun.characterRoomId,
+  );
+  if (!room) return undefined;
+  return {
+    roomRunId,
+    title: room.title,
+    ...(room.coverResourceRef === undefined ? {} : { coverResourceRef: room.coverResourceRef }),
+    participants: roomRun.participants.map((participant) => {
+      const publication = snapshot.character.versions.find(
+        (candidate) => candidate.characterVersionId === participant.characterVersionId,
+      );
+      const portraitRepresentationId =
+        publication?.definition.representationDefaults?.portraitRepresentationId;
+      const portrait = publication?.definition.representationRefs.find(
+        (representation) =>
+          representation.representationId === portraitRepresentationId &&
+          representation.kind === 'portrait',
+      );
+      return {
+        participantId: participant.participantId,
+        displayName: participant.displayName,
+        ...(portrait === undefined ? {} : { portraitResourceRef: portrait.resourceRef }),
+      };
+    }),
+  };
+}
 
 export function useCharacterRoomWorkbenchRuntime(input: {
   readonly active: boolean;
@@ -59,9 +105,11 @@ export function useCharacterRoomWorkbenchRuntime(input: {
 }
 
 export function CharacterRoomInteractionFeed({
+  identity,
   locale,
   state,
 }: {
+  readonly identity?: CharacterRoomIdentityProjection;
   readonly locale: SupportedLocale;
   readonly state: CharacterRoomWorkbenchLoadState;
 }): JSX.Element {
@@ -86,13 +134,41 @@ export function CharacterRoomInteractionFeed({
       participant.displayName,
     ]),
   );
+  const activeSpeakerId = messages.at(-1)?.authorParticipantId;
   return (
     <section
       className="character-room-feed"
       data-character-room-feed="true"
+      data-room-cover-resource-ref={identity?.coverResourceRef}
       data-room-revision={projection.roomRevision}
       data-room-run-id={projection.roomRunId}
     >
+      {identity ? (
+        <header className="character-room-feed__identity">
+          <div className="character-room-feed__cover" title={identity.coverResourceRef}>
+            <UsersIcon aria-hidden="true" size={18} />
+          </div>
+          <div className="character-room-feed__identity-copy">
+            <strong>{identity.title}</strong>
+            <ul aria-label={foundationLabel(locale, '聊天室参与者', 'Room participants')}>
+              {identity.participants.map((participant) => (
+                <li
+                  data-participant-id={participant.participantId}
+                  data-participant-portrait-resource-ref={participant.portraitResourceRef}
+                  data-room-speaker-active={
+                    participant.participantId === activeSpeakerId ? 'true' : undefined
+                  }
+                  key={participant.participantId}
+                  title={participant.portraitResourceRef}
+                >
+                  <span aria-hidden="true">{participant.displayName.slice(0, 1)}</span>
+                  <small>{participant.displayName}</small>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </header>
+      ) : null}
       {messages.length === 0 ? (
         <RoomWorkbenchStatus>
           {foundationLabel(locale, '聊天室已就绪', 'Room ready')}
@@ -196,8 +272,8 @@ function timelineEventLabel(locale: SupportedLocale, event: RoomEvent): string {
       return foundationLabel(locale, '内容管理', 'Moderation');
     case 'scheduling':
       return foundationLabel(locale, '角色调度', 'Character scheduling');
-    case 'world-event-reference':
-      return foundationLabel(locale, '世界事件', 'World event');
+    case 'external-event-reference':
+      return foundationLabel(locale, '外部事件', 'External event');
   }
 }
 
@@ -217,8 +293,8 @@ function timelineEventDetail(
       return `${participantName(event.moderatorParticipantId)} / ${event.action}`;
     case 'scheduling':
       return event.eligibleParticipantIds.map(participantName).join(', ');
-    case 'world-event-reference':
-      return event.worldEventId;
+    case 'external-event-reference':
+      return event.sourceRef;
   }
 }
 

@@ -6,10 +6,12 @@ import {
   parseAgentDomainBinding,
   parseAgentDraftMentionSearchProjection,
   parseAgentDraftSubmitInput,
+  parseAgentEntryIntentProjection,
   parseAgentDraftInteractionProjection,
   parseAgentLaunchCatalogProjection,
   parseAgentLaunchConnectionIdentity,
   sameAgentDomainBinding,
+  sameAgentEntryTargetReceipt,
   type AgentDomainBinding,
   type AgentConfigurationFieldPolicy,
   type AgentConfigurationPolicyProjection,
@@ -18,6 +20,9 @@ import {
   type AgentDraftMentionSearchProjection,
   type AgentDraftSubmitInput,
   type AgentDraftInteractionProjection,
+  type AgentEntryIntentProjection,
+  type AgentEntryMode,
+  type AgentEntryTargetBinding,
   type AgentInputCatalogEntry,
   type AgentInputReferenceReceipt,
   type AgentInputSourceReceipt,
@@ -87,6 +92,12 @@ export interface AgentLaunchDomainCapabilityPolicy {
 export interface AgentLaunchApplicationService {
   attach(input: AgentLaunchAttachInput): Promise<AgentLaunchCatalogProjection>;
   readCatalog(connection: AgentLaunchConnectionIdentity): AgentLaunchCatalogProjection;
+  readEntryIntent(connection: AgentLaunchConnectionIdentity): AgentEntryIntentProjection;
+  configureEntryTarget(
+    connection: AgentLaunchConnectionIdentity,
+    mode: AgentEntryMode,
+    binding?: AgentEntryTargetBinding,
+  ): Promise<AgentEntryIntentProjection>;
   replaceBinding(
     connection: AgentLaunchConnectionIdentity,
     binding: AgentDomainBinding,
@@ -117,6 +128,14 @@ export function createAgentLaunchApplicationService(input: {
   readonly catalog: AgentLaunchCatalogSource;
   readonly authorization: AgentLaunchAuthorizationPort;
   readonly workspaceMentions: AgentLaunchWorkspaceMentionSearchPort;
+  readonly entryTargets?: {
+    configure(input: {
+      readonly connection: AgentLaunchConnectionIdentity;
+      readonly draftId: string;
+      readonly mode: AgentEntryMode;
+      readonly binding?: AgentEntryTargetBinding;
+    }): Promise<AgentEntryIntentProjection>;
+  };
   readonly createIdentity: () => string;
 }): AgentLaunchApplicationService {
   return new DefaultAgentLaunchApplicationService(input);
@@ -455,6 +474,8 @@ interface AgentLaunchState {
   configuration: AgentConfigurationPolicyProjection;
   inputs: readonly AgentInputCatalogEntry[];
   workspaceMentionInputIds: Set<string>;
+  entryIntent: AgentEntryIntentProjection;
+  entryConfigurationOrdinal: number;
 }
 
 class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationService {
@@ -468,6 +489,14 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
       readonly catalog: AgentLaunchCatalogSource;
       readonly authorization: AgentLaunchAuthorizationPort;
       readonly workspaceMentions: AgentLaunchWorkspaceMentionSearchPort;
+      readonly entryTargets?: {
+        configure(input: {
+          readonly connection: AgentLaunchConnectionIdentity;
+          readonly draftId: string;
+          readonly mode: AgentEntryMode;
+          readonly binding?: AgentEntryTargetBinding;
+        }): Promise<AgentEntryIntentProjection>;
+      };
       readonly createIdentity: () => string;
     },
   ) {}
@@ -538,6 +567,8 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
       configuration: catalog.configuration,
       inputs: [...catalog.inputs],
       workspaceMentionInputIds: new Set(),
+      entryIntent: initialEntryIntent(draft.binding),
+      entryConfigurationOrdinal: 0,
     };
     this.connections.set(key, state);
     return state;
@@ -547,13 +578,50 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
     return project(this.requireConnection(connection));
   }
 
+  readEntryIntent(connection: AgentLaunchConnectionIdentity): AgentEntryIntentProjection {
+    return parseAgentEntryIntentProjection(this.requireConnection(connection).entryIntent);
+  }
+
+  async configureEntryTarget(
+    connection: AgentLaunchConnectionIdentity,
+    mode: AgentEntryMode,
+    binding?: AgentEntryTargetBinding,
+  ): Promise<AgentEntryIntentProjection> {
+    const state = this.requireConnection(connection);
+    if (!this.input.entryTargets) {
+      throw new Error('Agent Entry target providers are unavailable.');
+    }
+    const ordinal = ++state.entryConfigurationOrdinal;
+    const intent = await this.input.entryTargets.configure({
+      connection: state.connection,
+      draftId: state.interaction.draftId,
+      mode,
+      ...(binding === undefined ? {} : { binding }),
+    });
+    const current = this.requireConnection(connection);
+    if (current !== state || current.entryConfigurationOrdinal !== ordinal) {
+      throw new Error('Agent Entry target result is stale for its launch connection.');
+    }
+    const domainBinding = entryIntentDomainBinding(intent);
+    await this.replaceBinding(connection, domainBinding, true);
+    const committed = this.requireConnection(connection);
+    if (committed !== state || committed.entryConfigurationOrdinal !== ordinal) {
+      throw new Error('Agent Entry target changed while its capability catalog was loading.');
+    }
+    committed.entryIntent = intent;
+    return parseAgentEntryIntentProjection(intent);
+  }
+
   async replaceBinding(
     connection: AgentLaunchConnectionIdentity,
     bindingValue: AgentDomainBinding,
+    forceReceiptReplacement = false,
   ): Promise<AgentLaunchCatalogProjection> {
     const state = this.requireConnection(connection);
     const binding = parseAgentDomainBinding(bindingValue);
-    if (sameAgentDomainBinding(state.interaction.binding, binding)) return project(state);
+    if (!forceReceiptReplacement && sameAgentDomainBinding(state.interaction.binding, binding)) {
+      return project(state);
+    }
     const interaction = parseAgentDraftInteractionProjection({
       phase: 'draft',
       draftId: state.interaction.draftId,
@@ -719,6 +787,9 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
     ) {
       throw new Error('Agent Draft submit does not match its exact launch binding receipt.');
     }
+    if (!sameAgentEntryTargetReceipt(input.entryTargetReceipt, state.entryIntent.targetReceipt)) {
+      throw new Error('Agent Draft submit does not match its exact Entry target receipt.');
+    }
     if (JSON.stringify(input.configuration) !== JSON.stringify(state.configuration.request)) {
       throw new Error('Agent Draft submit configuration is stale for its exact Draft.');
     }
@@ -863,6 +934,32 @@ function project(state: AgentLaunchState): AgentLaunchCatalogProjection {
     configuration: state.configuration,
     inputs: state.inputs,
   });
+}
+
+function initialEntryIntent(binding: AgentDomainBinding): AgentEntryIntentProjection {
+  return parseAgentEntryIntentProjection({
+    mode:
+      binding.kind === 'workspace'
+        ? 'authoring'
+        : binding.kind === 'character'
+          ? 'character-dialogue'
+          : binding.kind === 'world'
+            ? 'world-experience'
+            : 'assistant',
+    targetReceipt: null,
+  });
+}
+
+function entryIntentDomainBinding(intent: AgentEntryIntentProjection): AgentDomainBinding {
+  const binding = intent.targetReceipt?.binding;
+  if (binding?.kind === 'authoring') {
+    return {
+      kind: 'workspace',
+      workspaceId: binding.workspaceId,
+      workspaceGrantId: binding.workspaceGrantId,
+    };
+  }
+  return { kind: 'unbound' };
 }
 
 export function projectAgentConfigurationPolicy(input: {

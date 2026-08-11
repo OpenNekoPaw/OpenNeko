@@ -21,8 +21,15 @@ import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
 import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
+  CHARACTER_AUTHORING_HOST_CHANNEL,
+  CHARACTER_AVATAR_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
 } from '@neko/chara/contracts';
+import { WORLD_AUTHORING_HOST_CHANNEL, WORLD_FOUNDATION_HOST_CHANNEL } from '@neko/world/contracts';
+import {
+  PROJECT_AUTHORING_HOST_CHANNEL,
+  PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
+} from '@neko/project/contracts';
 import type { DesktopAppHost } from './app-host';
 
 export function registerDesktopIpc(
@@ -36,6 +43,26 @@ export function registerDesktopIpc(
 ): () => void {
   ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeCharacterFoundationRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(CHARACTER_AUTHORING_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeCharacterAuthoringRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(WORLD_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeWorldFoundationRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(WORLD_AUTHORING_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeWorldAuthoringRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(PROJECT_AUTHORING_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.getProjectAuthoringNavigation(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.createProjectLocalAuthoringTarget(requireSender(event), payload),
+  );
+  ipcMain.handle(CHARACTER_AVATAR_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeCharacterAvatarRequest(requireSender(event), payload),
   );
   ipcMain.handle(
     CHARACTER_ROOM_WORKBENCH_CHANNELS.snapshotGet,
@@ -219,6 +246,11 @@ export function registerDesktopIpc(
       appHost.resolveCanvasMaterialActions(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.readCanvasTextFilePreview(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.intentExecute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeCanvasIntent(requireSender(event), payload),
@@ -353,6 +385,12 @@ export function registerDesktopIpc(
   return () => {
     for (const channel of [
       CHARACTER_FOUNDATION_HOST_CHANNEL,
+      CHARACTER_AUTHORING_HOST_CHANNEL,
+      WORLD_FOUNDATION_HOST_CHANNEL,
+      WORLD_AUTHORING_HOST_CHANNEL,
+      PROJECT_AUTHORING_HOST_CHANNEL,
+      PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
+      CHARACTER_AVATAR_HOST_CHANNEL,
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
       DESKTOP_AGENT_CHANNELS.connectionDetach,
       AGENT_LAUNCH_HOST_CHANNEL,
@@ -383,6 +421,7 @@ export function registerDesktopIpc(
       TEXT_EDITOR_HOST_CHANNELS.execute,
       DESKTOP_CANVAS_CHANNELS.snapshotGet,
       DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
+      DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
       DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
       DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,

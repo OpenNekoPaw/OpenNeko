@@ -22,6 +22,13 @@ import {
   type AgentDraftInteractionProjection,
 } from './agent-interaction-binding';
 import {
+  parseAgentEntryIntentProjection,
+  parseAgentEntryTargetBinding,
+  type AgentEntryIntentProjection,
+  type AgentEntryMode,
+  type AgentEntryTargetBinding,
+} from './agent-entry-intent';
+import {
   parseAgentConfigurationRequest,
   type AgentConfigurationRequest,
 } from './agent-model-catalog';
@@ -33,6 +40,13 @@ import {
 export const AGENT_LAUNCH_HOST_CHANNEL = 'neko:agent:launch' as const;
 
 export type AgentLaunchHostRequest =
+  | {
+      readonly requestId: string;
+      readonly operation: 'configure-entry-target';
+      readonly connection: AgentLaunchConnectionIdentity;
+      readonly mode: AgentEntryMode;
+      readonly binding: AgentEntryTargetBinding | null;
+    }
   | {
       readonly requestId: string;
       readonly operation: 'bind-target';
@@ -102,6 +116,12 @@ export type AgentLaunchHostResult =
       readonly requestId: string;
       readonly status: 'mentions';
       readonly projection: AgentDraftMentionSearchProjection;
+    }
+  | {
+      readonly requestId: string;
+      readonly status: 'entry-configured';
+      readonly intent: AgentEntryIntentProjection;
+      readonly catalog: AgentLaunchCatalogProjection;
     };
 
 export interface OpenNekoAgentLaunchBridge {
@@ -120,6 +140,14 @@ export interface OpenNekoAgentLaunchBridge {
       connection: AgentLaunchConnectionIdentity,
       binding: AgentDomainBinding,
     ): Promise<AgentLaunchCatalogProjection>;
+    configureEntryTarget(
+      connection: AgentLaunchConnectionIdentity,
+      mode: AgentEntryMode,
+      binding?: AgentEntryTargetBinding,
+    ): Promise<{
+      readonly intent: AgentEntryIntentProjection;
+      readonly catalog: AgentLaunchCatalogProjection;
+    }>;
     updateConfiguration(
       connection: AgentLaunchConnectionIdentity,
       configuration: AgentConfigurationRequest,
@@ -184,6 +212,25 @@ export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequ
       operation: 'bind-target',
       connection: parseAgentLaunchConnectionIdentity(record['connection']),
       binding: parseAgentDomainBinding(record['binding']),
+    };
+  }
+  if (record['operation'] === 'configure-entry-target') {
+    requireExactKeys(record, ['requestId', 'operation', 'connection', 'mode', 'binding']);
+    const mode = record['mode'];
+    if (
+      mode !== 'assistant' &&
+      mode !== 'authoring' &&
+      mode !== 'character-dialogue' &&
+      mode !== 'world-experience'
+    ) {
+      throw new Error(`Unknown Agent Entry mode '${String(mode)}'.`);
+    }
+    return {
+      requestId,
+      operation: 'configure-entry-target',
+      connection: parseAgentLaunchConnectionIdentity(record['connection']),
+      mode,
+      binding: record['binding'] === null ? null : parseAgentEntryTargetBinding(record['binding']),
     };
   }
   if (record['operation'] === 'search-workspace-mentions') {
@@ -270,6 +317,15 @@ export function parseAgentLaunchHostResult(
       requestId,
       status: 'mentions',
       projection: parseAgentDraftMentionSearchProjection(record['projection']),
+    };
+  }
+  if (record['status'] === 'entry-configured') {
+    requireExactKeys(record, ['requestId', 'status', 'intent', 'catalog']);
+    return {
+      requestId,
+      status: 'entry-configured',
+      intent: parseAgentEntryIntentProjection(record['intent']),
+      catalog: parseAgentLaunchCatalogProjection(record['catalog']),
     };
   }
   throw new Error(`Unknown Agent launch Host result '${String(record['status'])}'.`);

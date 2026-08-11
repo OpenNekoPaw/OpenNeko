@@ -1088,7 +1088,7 @@ describe('useChatActions', () => {
     expect(setAttachedFiles).toHaveBeenCalledWith([]);
   });
 
-  it('does not queue rich sends that the running Agent turn cannot append', () => {
+  it('queues rich sends without dropping their attachments while the Agent turn is running', () => {
     const setMessages = vi.fn();
 
     const { result } = renderHook(() => {
@@ -1117,7 +1117,12 @@ describe('useChatActions', () => {
       });
     });
 
-    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-queue',
+      message: '参考素材继续',
+      sessionMode: 'agent',
+      attachments: [{ id: 'file-1', name: 'ref.png', type: 'image' }],
+    });
     expect(setMessages).not.toHaveBeenCalled();
   });
 

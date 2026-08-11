@@ -95,6 +95,49 @@ describe('DesktopPreviewRuntime', () => {
     },
   );
 
+  it('publishes authorized document-entry bytes with the stable locator and Range support', async () => {
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => createShellProjection(workbench),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
+    };
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources: createResources(),
+      createIdentity: () => 'document-entry-image',
+    });
+    const locator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/cover.png',
+    };
+    const bytes = new TextEncoder().encode('embedded-image');
+
+    const opened = await runtime.open({
+      identity: resourceIdentity,
+      item: { ...createItem('cover.png', 'content:cover'), locator },
+      bytes,
+    });
+    const projection = await preparePreview(runtime, opened);
+    if (projection.status !== 'ready') throw new Error('Expected a ready embedded Preview.');
+
+    expect(projection.descriptor).toMatchObject({
+      contentLocator: locator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      byteLength: bytes.byteLength,
+      sourceFingerprint: expect.stringMatching(/^sha256:/u),
+    });
+    const range = await fetchResource(projection.descriptor.url, {
+      headers: { Range: 'bytes=0-7' },
+    });
+    expect(range.status).toBe(206);
+    expect(range.headers.get('content-range')).toBe(`bytes 0-7/${bytes.byteLength}`);
+    expect(await range.text()).toBe('embedded');
+  });
+
   it('publishes EPUB as one virtual directory only when the first exact Snapshot is requested', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-epub-'));
     roots.push(root);

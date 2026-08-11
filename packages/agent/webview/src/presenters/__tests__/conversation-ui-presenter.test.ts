@@ -216,6 +216,7 @@ describe('conversation UI presenter', () => {
         isThinking: true,
         queuedMessageCount: 1,
         queuedMessages: [queuedB],
+        queuePaused: false,
       },
       skill: {
         activationProgress: [activationB],

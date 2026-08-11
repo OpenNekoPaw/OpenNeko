@@ -226,10 +226,10 @@ describe('Tab render realm state', () => {
     expect(parsed.diagnostics).toEqual([expect.objectContaining({ code: 'invalid-entry-draft' })]);
   });
 
-  it('restores entry mode and exact Workspace target as Draft presentation state', () => {
+  it('restores Authoring mode and exact Workspace target as Draft presentation state', () => {
     const stored = {
       ...entryDraft('draft-workspace', 'keep this text'),
-      experienceMode: 'workspace' as const,
+      entryMode: 'authoring' as const,
       workspaceTarget: {
         label: 'OpenNeko',
         context: {
@@ -237,6 +237,7 @@ describe('Tab render realm state', () => {
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
         },
+        target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
       },
     };
 
@@ -249,18 +250,18 @@ describe('Tab render realm state', () => {
   it('resets only an invalid entry mode while preserving valid Draft text', () => {
     const parsed = parseTabRenderRealmState({
       drafts: [],
-      entryDraft: { ...entryDraft('draft-a', 'preserved'), experienceMode: 'management' },
+      entryDraft: { ...entryDraft('draft-a', 'preserved'), entryMode: 'management' },
     });
 
     expect(parsed.state.entryDraft).toMatchObject({
       draftId: 'draft-a',
       inputValue: 'preserved',
     });
-    expect(parsed.state.entryDraft).not.toHaveProperty('experienceMode');
+    expect(parsed.state.entryDraft).not.toHaveProperty('entryMode');
     expect(parsed.diagnostics).toEqual([
       expect.objectContaining({
         code: 'invalid-entry-draft',
-        message: expect.stringContaining('experienceMode'),
+        message: expect.stringContaining('entryMode'),
       }),
     ]);
   });

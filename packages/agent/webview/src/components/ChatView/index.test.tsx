@@ -23,7 +23,11 @@ vi.mock('../../i18n/I18nContext', () => ({
 }));
 
 vi.mock('./DropZone', () => ({
-  DropZone: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropZone: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
+    <div data-testid="drop-zone" data-disabled={String(disabled ?? false)}>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('./InputArea', () => ({
@@ -118,6 +122,12 @@ describe('ChatView empty state', () => {
     });
 
     expect(screen.getByTestId('input-area').textContent).toContain('true:tab-a:input:focus-a');
+  });
+
+  it('keeps attachment drop enabled while the current Turn is running', () => {
+    renderChatView({ isThinking: true, isRunActive: true });
+
+    expect(screen.getByTestId('drop-zone').getAttribute('data-disabled')).toBe('false');
   });
 
   it('renders an owning-domain conversation feed while retaining the Agent composer', () => {

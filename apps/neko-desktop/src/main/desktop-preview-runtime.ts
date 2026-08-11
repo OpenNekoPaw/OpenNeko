@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
@@ -74,15 +74,16 @@ export class DesktopPreviewRuntime {
     this.createIdentity = options.createIdentity ?? randomUUID;
   }
 
-  async open(input: {
-    readonly identity: ResourceBrowserIdentity;
-    readonly item: ResourceBrowserItem;
-    readonly absolutePath: string;
-    readonly target?: {
-      readonly viewId: string;
-      readonly presentation: 'temporary' | 'side';
-    };
-  }): Promise<PreviewProjection> {
+  async open(
+    input: {
+      readonly identity: ResourceBrowserIdentity;
+      readonly item: ResourceBrowserItem;
+      readonly target?: {
+        readonly viewId: string;
+        readonly presentation: 'temporary' | 'side';
+      };
+    } & PreviewSourceInput,
+  ): Promise<PreviewProjection> {
     this.requireActive();
     const shellProjection = await this.options.shell.getProjection(input.identity.windowId);
     const project = shellProjection.catalog.projects.find(
@@ -137,9 +138,7 @@ export class DesktopPreviewRuntime {
         },
       });
     } else {
-      const file = await stat(input.absolutePath);
-      if (!file.isFile()) throw new Error('Desktop Preview source is not a file.');
-      const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
+      const source = await resolvePreviewSource(input);
       const descriptorId = `preview:${sessionId}`;
       const contentLocator = resolvePreviewContentLocator(input.item);
       projection = parsePreviewProjection({
@@ -148,14 +147,14 @@ export class DesktopPreviewRuntime {
         status: 'loading',
       });
       pendingSource = {
-        absolutePath: input.absolutePath,
+        source: source.source,
         displayName: input.item.label,
         contentKind,
         mediaType,
-        byteLength: file.size,
+        byteLength: source.byteLength,
         contentLocator,
         descriptorId,
-        sourceFingerprint,
+        sourceFingerprint: source.sourceFingerprint,
         identity: runtimeIdentity,
         presentation,
         abortController: new AbortController(),
@@ -436,7 +435,7 @@ export class DesktopPreviewRuntime {
           sessionId: source.identity.sessionId,
           rendererSessionId: source.identity.rendererSessionId,
         },
-        absolutePath: source.absolutePath,
+        source: source.source,
         displayName: source.displayName,
         contentKind: source.contentKind,
         mediaType: source.mediaType,
@@ -603,8 +602,44 @@ interface PublishedPreviewResource {
   readonly resourceUris?: Readonly<Record<string, string>>;
 }
 
+type PreviewSourceInput =
+  | {
+      readonly absolutePath: string;
+      readonly bytes?: never;
+    }
+  | {
+      readonly absolutePath?: never;
+      readonly bytes: Uint8Array;
+    };
+
+type PreviewSource =
+  | { readonly kind: 'file'; readonly absolutePath: string }
+  | { readonly kind: 'bytes'; readonly bytes: Uint8Array };
+
+async function resolvePreviewSource(input: PreviewSourceInput): Promise<{
+  readonly source: PreviewSource;
+  readonly byteLength: number;
+  readonly sourceFingerprint: string;
+}> {
+  if (input.absolutePath !== undefined) {
+    const file = await stat(input.absolutePath);
+    if (!file.isFile()) throw new Error('Desktop Preview source is not a file.');
+    return {
+      source: { kind: 'file', absolutePath: input.absolutePath },
+      byteLength: file.size,
+      sourceFingerprint: `${file.mtimeMs}:${file.size}`,
+    };
+  }
+  const bytes = input.bytes.slice();
+  return {
+    source: { kind: 'bytes', bytes },
+    byteLength: bytes.byteLength,
+    sourceFingerprint: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+  };
+}
+
 interface PendingPreviewSource {
-  readonly absolutePath: string;
+  readonly source: PreviewSource;
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
   readonly mediaType: string;
@@ -623,15 +658,35 @@ async function publishPreviewResource(input: {
     'registerFile' | 'registerResourceSet' | 'registerResourceTree'
   >;
   readonly owner: Parameters<DesktopResourceRegistry['registerFile']>[0];
-  readonly absolutePath: string;
+  readonly source: PreviewSource;
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
   readonly mediaType: string;
   readonly signal: AbortSignal;
 }): Promise<PublishedPreviewResource> {
   input.signal.throwIfAborted();
+  if (input.source.kind === 'bytes') {
+    const bytes = input.source.bytes;
+    const lease = input.resources.registerResourceTree(input.owner, {
+      entries: [
+        {
+          virtualPath: 'content',
+          byteLength: bytes.byteLength,
+          contentType: input.mediaType,
+          read: async (signal) => {
+            signal.throwIfAborted();
+            return bytes;
+          },
+        },
+      ],
+      release: () => undefined,
+    });
+    releaseLeaseIfAborted(lease, input.signal);
+    return { url: new URL('content', lease.url).toString() };
+  }
+  const absolutePath = input.source.absolutePath;
   if (input.mediaType === 'application/epub+zip') {
-    const archive = await createNodeArchiveResource(input.absolutePath, {
+    const archive = await createNodeArchiveResource(absolutePath, {
       signal: input.signal,
     });
     try {
@@ -661,20 +716,20 @@ async function publishPreviewResource(input: {
     path.extname(input.displayName).toLocaleLowerCase() !== '.gltf'
   ) {
     const lease = await input.resources.registerFile(input.owner, {
-      absolutePath: input.absolutePath,
+      absolutePath,
       mediaType: input.mediaType,
     });
     releaseLeaseIfAborted(lease, input.signal);
     return lease;
   }
-  const dependencies = await resolveGltfDependencies(input.absolutePath);
-  const entryPath = path.basename(input.absolutePath);
+  const dependencies = await resolveGltfDependencies(absolutePath);
+  const entryPath = path.basename(absolutePath);
   const lease = await input.resources.registerResourceSet(
     input.owner,
     [
       {
         virtualPath: entryPath,
-        path: input.absolutePath,
+        path: absolutePath,
         contentType: input.mediaType,
       },
       ...dependencies.map((dependency) => ({

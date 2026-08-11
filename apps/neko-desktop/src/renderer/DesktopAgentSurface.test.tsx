@@ -788,12 +788,18 @@ function installBridge(
         attach: launch?.attach ?? vi.fn(),
         authorizeResource: vi.fn(),
         bindTarget: vi.fn(),
+        configureEntryTarget: vi.fn(),
         updateConfiguration: vi.fn(),
         searchWorkspaceMentions: vi.fn(),
         submitDraft: vi.fn(),
         detach: launch?.detach ?? vi.fn(),
       },
-      workspaceGrants: { chooseDirectory: vi.fn(), selectProject: vi.fn() },
+      workspaceGrants: {
+        chooseDirectory: vi.fn(),
+        createContentProject: vi.fn(),
+        selectProject: vi.fn(),
+        selectAuthoringLibrary: vi.fn(),
+      },
       agent: {
         getBootstrap,
         getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),
@@ -839,8 +845,12 @@ function installBridge(
             dialogueRuns: [],
             rooms: [],
             roomRuns: [],
+            storylineVersions: [],
+            storylineRuns: [],
+            storylineObservationCandidates: [],
+            memoryScopes: [],
+            presentationConfigurations: [],
           },
-          world: { projects: [], versions: [], runtimes: [] },
           diagnostics: [],
         })),
         execute: vi.fn(async () => ({
@@ -852,16 +862,56 @@ function installBridge(
             dialogueRuns: [],
             rooms: [],
             roomRuns: [],
+            storylineVersions: [],
+            storylineRuns: [],
+            storylineObservationCandidates: [],
+            memoryScopes: [],
+            presentationConfigurations: [],
           },
+          diagnostics: [],
+        })),
+      },
+      characterAuthoring: {
+        getSnapshot: vi.fn(async () => {
+          throw new Error('Character authoring is not expected by this test.');
+        }),
+        execute: vi.fn(async () => {
+          throw new Error('Character authoring is not expected by this test.');
+        }),
+      },
+      worldFoundation: {
+        getSnapshot: vi.fn(async () => ({
           world: { projects: [], versions: [], runtimes: [] },
           diagnostics: [],
         })),
+        execute: vi.fn(async () => ({
+          world: { projects: [], versions: [], runtimes: [] },
+          diagnostics: [],
+        })),
+      },
+      worldAuthoring: {
+        getSnapshot: vi.fn(async () => {
+          throw new Error('World authoring is not expected by this test.');
+        }),
+        execute: vi.fn(async () => {
+          throw new Error('World authoring is not expected by this test.');
+        }),
+      },
+      characterAvatar: {
+        openSurface: vi.fn(),
+        releaseSurface: vi.fn(),
       },
       characterRoomWorkbench: {
         getSnapshot: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
       resources: createResourceBridgeMock(),
+      projectAuthoring: {
+        getNavigation: vi.fn(),
+      },
+      projectLocalAuthoring: {
+        createTarget: vi.fn(),
+      },
       projectPortability: {
         inspect: vi.fn(),
         plan: vi.fn(),
@@ -875,6 +925,7 @@ function installBridge(
       canvas: {
         getSnapshot: vi.fn(),
         resolveMaterialActions: vi.fn(),
+        readTextFilePreview: vi.fn(),
         executeIntent: vi.fn(),
         resolvePreviewVariant: vi.fn(),
         executeMediaRequest: vi.fn(),

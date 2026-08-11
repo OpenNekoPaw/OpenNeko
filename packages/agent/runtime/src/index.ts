@@ -128,6 +128,7 @@ export {
   DEFAULT_INJECTION_CONFIG,
   CORE_TOOLS,
   createContentReadCapabilityProvider,
+  createImageUnderstandingCapabilityProvider,
 } from './tools';
 
 // Export logger

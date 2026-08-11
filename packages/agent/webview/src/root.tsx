@@ -89,6 +89,9 @@ export function AgentWebviewRoot({
 }
 
 export type {
+  AgentComposerAuthoringCatalog,
+  AgentComposerAuthoringCreationContext,
+  AgentComposerAuthoringTargetOption,
   AgentComposerWorkspacePresentation,
   AgentComposerWorkspaceTarget,
 } from './components/ComposerWorkspaceContext';

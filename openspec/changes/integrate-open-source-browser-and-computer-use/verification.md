@@ -284,3 +284,22 @@ agent-runtime.external-automation`：Tool/Skill snapshot 与 canonical registry 
   通过正常用户操作捕获这一真实 Desktop 状态。
 - Result：`blocked`（advisory visual evidence）。没有观察到功能或 contract 缺陷；仅缺少可安装隔离 artifact 的
   Desktop 像素和完整 enable/disable/reopen 用户路径。
+
+## UI Validation：localized extension introduction
+
+- Scope：Extensions 管理面板中的 manifest 简介本地化；覆盖英语与简体中文的网格/列表项、搜索和选中后的配置
+  详情，以及未声明 locale 的 canonical default。适用 `neko-ui-validation`。
+- Runtime：简介由 extension manifest 经 Agent extension application service、catalog contract 和现有 Desktop
+  IPC 唯一路径投影，Agent Webview 按当前 Desktop locale 解析；权威运行时是可见 Electron Desktop。
+- Inventory：英语简介在列表与详情一致且可按 `approved domains` 搜索；切换 `zh-cn` 后列表与详情显示同一中文
+  简介且可按 `已授权域名` 搜索；非法 locale/localization 仅使当前 manifest 失效并保留有效 sibling；未声明 locale
+  使用 canonical default。
+- Evidence：`pnpm test:local:ui --scenario desktop-extension-localization --target development` 通过，报告位于
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-10T18-14-12.689Z-desktop-extension-localization-development/report.json`。
+  英文截图为 `screenshots/01-extension-introduction-en.png`，中文截图为
+  `screenshots/02-extension-introduction-zh-cn.png`；场景无 console error、warning 或 exception。
+- Visual findings：英文与中文详情均完整可读且无重叠或裁切；中文在 `1000x700` 紧凑窗口下布局正常。卡片简介
+  继续遵循既有单行省略规则，配置详情显示全文。
+- Result：`passed`。
+- Residual risk：Settings 页面在 `1000x700` 下存在既有导航按钮与 H1 覆盖，因此场景在正常窗口切换 locale 后再
+  缩小 Extensions 页面验收，并在返回 Settings 前恢复窗口；该 Settings 响应式缺陷与本次扩展简介本地化无关。

@@ -32,6 +32,26 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
       };
       readonly relationships: {
         create(input: CommandInput<'relationship-create'>, signal?: AbortSignal): Promise<unknown>;
+        propose(
+          input: CommandInput<'relationship-memory-candidate-propose'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        accept(
+          input: CommandInput<'relationship-memory-candidate-accept'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        reject(
+          input: CommandInput<'relationship-memory-candidate-reject'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        correctMemory(
+          input: CommandInput<'relationship-memory-correct'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        deleteMemory(
+          input: CommandInput<'relationship-memory-delete'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
       };
       readonly interactions: {
         createDialogue(
@@ -48,26 +68,59 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
       readonly roomInteractions: {
         createRun(input: CommandInput<'room-run-create'>, signal?: AbortSignal): Promise<unknown>;
       };
-      readonly worldAuthoring: {
-        createProject(
-          input: CommandInput<'world-project-create'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        updateDraft(
-          input: CommandInput<'world-project-update-draft'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        setReviewStatus(
-          input: CommandInput<'world-project-set-review'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        publish(
-          input: CommandInput<'world-version-publish'>,
+      readonly presentation: {
+        updateConfigurations(
+          input: readonly CommandInput<'character-presentation-configure'>[],
           signal?: AbortSignal,
         ): Promise<unknown>;
       };
-      readonly worldRuntime: {
-        createRun(input: CommandInput<'world-run-create'>, signal?: AbortSignal): Promise<unknown>;
+      readonly storylines: {
+        publish(
+          input: CommandInput<'character-storyline-publish'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        createRun(
+          input: CommandInput<'character-storyline-run-create'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        proposeObservation(
+          input: CommandInput<'character-storyline-observation-propose'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        acceptObservation(
+          input: CommandInput<'character-storyline-observation-accept'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        rejectObservation(
+          input: CommandInput<'character-storyline-observation-reject'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+      };
+      readonly memories: {
+        createScope(
+          input: CommandInput<'character-memory-scope-create'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        propose(
+          input: CommandInput<'character-memory-candidate-propose'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        accept(
+          input: CommandInput<'character-memory-candidate-accept'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        reject(
+          input: CommandInput<'character-memory-candidate-reject'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        correct(
+          input: CommandInput<'character-memory-candidate-correct'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        delete(
+          input: CommandInput<'character-memory-entry-delete'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
       };
     },
   ) {}
@@ -90,6 +143,21 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
       case 'relationship-create':
         await this.services.relationships.create(command.input, signal);
         return;
+      case 'relationship-memory-candidate-propose':
+        await this.services.relationships.propose(command.input, signal);
+        return;
+      case 'relationship-memory-candidate-accept':
+        await this.services.relationships.accept(command.input, signal);
+        return;
+      case 'relationship-memory-candidate-reject':
+        await this.services.relationships.reject(command.input, signal);
+        return;
+      case 'relationship-memory-correct':
+        await this.services.relationships.correctMemory(command.input, signal);
+        return;
+      case 'relationship-memory-delete':
+        await this.services.relationships.deleteMemory(command.input, signal);
+        return;
       case 'dialogue-create':
         await this.services.interactions.createDialogue(command.input, signal);
         return;
@@ -99,20 +167,41 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
       case 'room-run-create':
         await this.services.roomInteractions.createRun(command.input, signal);
         return;
-      case 'world-project-create':
-        await this.services.worldAuthoring.createProject(command.input, signal);
+      case 'character-presentation-configure':
+        await this.services.presentation.updateConfigurations([command.input], signal);
         return;
-      case 'world-project-update-draft':
-        await this.services.worldAuthoring.updateDraft(command.input, signal);
+      case 'character-storyline-publish':
+        await this.services.storylines.publish(command.input, signal);
         return;
-      case 'world-project-set-review':
-        await this.services.worldAuthoring.setReviewStatus(command.input, signal);
+      case 'character-storyline-run-create':
+        await this.services.storylines.createRun(command.input, signal);
         return;
-      case 'world-version-publish':
-        await this.services.worldAuthoring.publish(command.input, signal);
+      case 'character-storyline-observation-propose':
+        await this.services.storylines.proposeObservation(command.input, signal);
         return;
-      case 'world-run-create':
-        await this.services.worldRuntime.createRun(command.input, signal);
+      case 'character-storyline-observation-accept':
+        await this.services.storylines.acceptObservation(command.input, signal);
+        return;
+      case 'character-storyline-observation-reject':
+        await this.services.storylines.rejectObservation(command.input, signal);
+        return;
+      case 'character-memory-scope-create':
+        await this.services.memories.createScope(command.input, signal);
+        return;
+      case 'character-memory-candidate-propose':
+        await this.services.memories.propose(command.input, signal);
+        return;
+      case 'character-memory-candidate-accept':
+        await this.services.memories.accept(command.input, signal);
+        return;
+      case 'character-memory-candidate-reject':
+        await this.services.memories.reject(command.input, signal);
+        return;
+      case 'character-memory-candidate-correct':
+        await this.services.memories.correct(command.input, signal);
+        return;
+      case 'character-memory-entry-delete':
+        await this.services.memories.delete(command.input, signal);
         return;
     }
   }

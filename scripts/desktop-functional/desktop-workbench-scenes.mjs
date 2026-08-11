@@ -855,6 +855,253 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
   },
 });
 
+export const desktopAgentMessageQueueScenario = Object.freeze({
+  id: 'desktop-agent-message-queue',
+  owner: '@neko/agent-runtime',
+  prepare: desktopWorkbenchScenesScenario.prepare,
+  async run({
+    checkpoint,
+    click,
+    evaluate,
+    prepared,
+    pressKey,
+    screenshot,
+    type,
+    waitForSelector,
+  }) {
+    const providerServer = await startFunctionalProviderServer(
+      prepared.providerPort,
+      (requestIndex) => (requestIndex === 1 ? 60_000 : 5_000),
+      { streamImmediately: true },
+    );
+    const initialPrompt = 'Initial response that will be stopped after follow-ups are queued.';
+    const ordinaryPrompt = 'Ordinary queued follow-up that will be deleted.';
+    const editPrompt = 'Queued follow-up that will be restored for editing.';
+    const priorityPrompt = 'Priority queued follow-up that must be sent immediately.';
+    try {
+      await resizeWindow(evaluate, 1440, 960);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      await waitForSelector('.agent-model-config-trigger');
+      await waitForCondition(
+        evaluate,
+        `document.querySelector('.agent-model-config-trigger') instanceof HTMLButtonElement &&
+          !document.querySelector('.agent-model-config-trigger').disabled`,
+        'Queue scenario did not expose an executable Assistant model.',
+      );
+
+      await replaceActiveAgentComposerText({ evaluate, pressKey, type }, initialPrompt);
+      await click(ACTIVE_AGENT_SEND_SELECTOR);
+      try {
+        await waitForCondition(
+          evaluate,
+          `(() => {
+            const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+            const textarea = surface?.querySelector('.agent-composer-textarea');
+            const attachment = surface?.querySelector('.agent-composer-tool-button');
+            const stop = surface?.querySelector('.agent-composer-stop');
+            return textarea instanceof HTMLTextAreaElement && !textarea.disabled &&
+              attachment instanceof HTMLButtonElement && !attachment.disabled &&
+              stop instanceof HTMLButtonElement && !stop.disabled &&
+              stop.getAttribute('aria-label') === '停止回答 (Esc)' &&
+              !textarea.placeholder.includes('等待') && !textarea.placeholder.includes('取消后');
+          })()`,
+          'Running Conversation did not expose the editable full-capability composer and stop control.',
+        );
+      } catch (error) {
+        const state = await inspectMessageQueueUi(evaluate);
+        const visibleText = await evaluate(
+          `document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}')?.textContent?.slice(0, 2400)`,
+        );
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} State: ${JSON.stringify({ state, visibleText, provider: providerServer.snapshot() })}`,
+        );
+      }
+      await waitForFunctionalProviderRequests(providerServer, 1);
+      const activeScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'agent-message-queue-running-composer',
+      );
+      checkpoint('agent-message-queue-running-composer', await inspectMessageQueueUi(evaluate));
+
+      for (const [queueIndex, prompt] of [ordinaryPrompt, editPrompt, priorityPrompt].entries()) {
+        await replaceActiveAgentComposerText({ evaluate, pressKey, type }, prompt);
+        await waitForCondition(
+          evaluate,
+          `(() => {
+            const button = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue');
+            return button instanceof HTMLButtonElement && !button.disabled;
+          })()`,
+          `Running composer did not enable queue submit for ${JSON.stringify(prompt)}.`,
+        );
+        await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue`);
+        await waitForCondition(
+          evaluate,
+          `document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}')?.value === ''`,
+          `Queue submission ${String(queueIndex + 1)} did not clear the Composer.`,
+        );
+      }
+      await waitForCondition(
+        evaluate,
+        `document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-panel') instanceof HTMLElement`,
+        'Running queued messages were not projected into the queue panel.',
+      );
+      const denseScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'agent-message-queue-running-pending',
+      );
+      checkpoint('agent-message-queue-running-pending', await inspectMessageQueueUi(evaluate));
+
+      await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-stop`);
+      try {
+        await waitForCondition(
+          evaluate,
+          `(() => {
+            const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+            const firstRow = surface?.querySelector('.agent-composer-queue-row');
+            return surface?.querySelector('.agent-composer-queue-title')
+                ?.textContent?.includes('3') === true &&
+              firstRow?.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length === 3;
+          })()`,
+          'Explicit stop did not leave all pending queue items available.',
+          10_000,
+        );
+      } catch (error) {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} State: ${JSON.stringify(await inspectMessageQueueUi(evaluate))}`,
+        );
+      }
+      const pausedToggleVisible = await evaluate(
+        `document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-toggle') instanceof HTMLButtonElement`,
+      );
+      if (pausedToggleVisible) {
+        await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-toggle`);
+      }
+      await waitForCondition(
+        evaluate,
+        `document.querySelectorAll('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row').length === 3`,
+        'Paused queue could not expand all three retained items.',
+      );
+      const pausedScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'agent-message-queue-paused-after-stop',
+      );
+      checkpoint('agent-message-queue-paused-after-stop', await inspectMessageQueueUi(evaluate));
+
+      await clickQueuedMessageAction(evaluate, editPrompt, 1);
+      await waitForCondition(
+        evaluate,
+        `document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}')?.value === ${JSON.stringify(editPrompt)} &&
+          document.querySelectorAll('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row').length === 2`,
+        'Queued edit did not restore the selected message into the owning Composer.',
+      );
+      const edited = await inspectMessageQueueUi(evaluate);
+      checkpoint('agent-message-queue-edit-restored', edited);
+      await replaceActiveAgentComposerText({ evaluate, pressKey, type }, '');
+      await evaluate(
+        `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`,
+      );
+
+      await clickQueuedMessageAction(evaluate, ordinaryPrompt, 2);
+      try {
+        await waitForCondition(
+          evaluate,
+          `(() => {
+            const rows = [...document.querySelectorAll(
+              '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row',
+            )];
+            return rows.length === 1 && rows[0]?.textContent?.includes(${JSON.stringify(priorityPrompt)});
+          })()`,
+          'Queue delete did not remove only the selected pending message.',
+        );
+      } catch (error) {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} State: ${JSON.stringify({ state: await inspectMessageQueueUi(evaluate), provider: providerServer.snapshot() })}`,
+        );
+      }
+      checkpoint('agent-message-queue-item-deleted', await inspectMessageQueueUi(evaluate));
+
+      await clickQueuedMessageAction(evaluate, priorityPrompt, 0);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+          return surface?.querySelector('.agent-composer-stop') instanceof HTMLButtonElement &&
+            [...surface.querySelectorAll('.agent-user-prompt')].some(
+              (item) => item.textContent?.trim() === ${JSON.stringify(priorityPrompt)},
+            ) && !surface.querySelector('.agent-composer-queue-panel');
+        })()`,
+        'Send-now did not resume the queue with the selected exact message.',
+      );
+      const sendNowScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'agent-message-queue-send-now-running',
+      );
+      checkpoint('agent-message-queue-send-now-running', await inspectMessageQueueUi(evaluate));
+
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+          const userPrompts = [...surface.querySelectorAll('.agent-user-prompt')]
+            .map((item) => item.textContent?.trim() ?? '');
+          const body = surface.textContent ?? '';
+          return body.includes('OPENNEKO_FUNCTIONAL_RESPONSE_2') &&
+            userPrompts.includes(${JSON.stringify(initialPrompt)}) &&
+            userPrompts.includes(${JSON.stringify(priorityPrompt)}) &&
+            !userPrompts.includes(${JSON.stringify(ordinaryPrompt)}) &&
+            !userPrompts.includes(${JSON.stringify(editPrompt)}) &&
+            !surface.querySelector('.agent-composer-stop') &&
+            !surface.querySelector('.agent-composer-queue-panel') &&
+            !surface.querySelector('.agent-execution-activity') &&
+            !surface.querySelector('.agent-run-status') &&
+            !document.querySelector('[role="alert"]');
+        })()`,
+        'Selected queued message did not reach a clean terminal response.',
+        45_000,
+      );
+      const providerEvidence = providerServer.snapshot();
+      assertFunctionalProviderEvidence(providerEvidence, 2);
+      if (providerEvidence.requests.length !== 2) {
+        throw new Error(
+          `Queue mutations issued an unexpected provider request count: ${JSON.stringify(providerEvidence)}`,
+        );
+      }
+      const completedScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'agent-message-queue-completed',
+      );
+      await resizeWindow(evaluate, 980, 760);
+      const narrowScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'agent-message-queue-completed-narrow',
+      );
+      const completed = await inspectMessageQueueUi(evaluate);
+      checkpoint('agent-message-queue-completed', { completed, provider: providerEvidence });
+      return {
+        initialPrompt,
+        ordinaryPrompt,
+        editPrompt,
+        priorityPrompt,
+        edited,
+        completed,
+        provider: providerEvidence,
+        screenshots: [
+          activeScreenshot,
+          denseScreenshot,
+          pausedScreenshot,
+          sendNowScreenshot,
+          completedScreenshot,
+          narrowScreenshot,
+        ],
+      };
+    } finally {
+      await providerServer.close();
+    }
+  },
+});
+
 export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
   id: 'desktop-agent-linked-media-mention',
   owner: '@neko/agent-runtime',
@@ -5267,7 +5514,7 @@ async function reserveFunctionalProviderPort() {
   return port;
 }
 
-async function startFunctionalProviderServer(port, responseDelayMs) {
+async function startFunctionalProviderServer(port, responseDelay, options = {}) {
   const requests = [];
   const server = createServer((request, response) => {
     const requestIndex = requests.length + 1;
@@ -5286,17 +5533,30 @@ async function startFunctionalProviderServer(port, responseDelayMs) {
       const body = Buffer.concat(chunks);
       evidence.bodyBytes = body.byteLength;
       evidence.nativeImageCount = countNativeImageParts(body);
-      setTimeout(() => {
+      const responseDelayMs =
+        typeof responseDelay === 'function' ? responseDelay(requestIndex) : responseDelay;
+      const contentChunk = `data: {"id":"functional-${String(requestIndex)}","object":"chat.completion.chunk","created":1,"model":"functional-chat","choices":[{"index":0,"delta":{"role":"assistant","content":"OPENNEKO_FUNCTIONAL_RESPONSE_${String(requestIndex)}"},"finish_reason":null}]}\n\n`;
+      const terminalChunks =
+        `data: {"id":"functional-${String(requestIndex)}","object":"chat.completion.chunk","created":1,"model":"functional-chat","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n` +
+        'data: [DONE]\n\n';
+      if (options.streamImmediately === true) {
         response.writeHead(200, {
           'content-type': 'text/event-stream',
           connection: 'close',
         });
-        response.end(
-          `data: {"id":"functional-${String(requestIndex)}","object":"chat.completion.chunk","created":1,"model":"functional-chat","choices":[{"index":0,"delta":{"role":"assistant","content":"OPENNEKO_FUNCTIONAL_RESPONSE_${String(requestIndex)}"},"finish_reason":null}]}\n\n` +
-            `data: {"id":"functional-${String(requestIndex)}","object":"chat.completion.chunk","created":1,"model":"functional-chat","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n` +
-            'data: [DONE]\n\n',
-        );
+        response.write(contentChunk);
+      }
+      const timer = setTimeout(() => {
+        if (options.streamImmediately !== true) {
+          response.writeHead(200, {
+            'content-type': 'text/event-stream',
+            connection: 'close',
+          });
+          response.write(contentChunk);
+        }
+        response.end(terminalChunks);
       }, responseDelayMs);
+      response.once('close', () => clearTimeout(timer));
     });
   });
   await new Promise((resolve, reject) => {
@@ -5307,6 +5567,82 @@ async function startFunctionalProviderServer(port, responseDelayMs) {
     snapshot: () => ({ requests: requests.map((request) => ({ ...request })) }),
     close: () => closeServer(server),
   };
+}
+
+async function waitForFunctionalProviderRequests(providerServer, minimumCount) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (providerServer.snapshot().requests.length >= minimumCount) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Functional provider did not receive ${String(minimumCount)} request(s).`);
+}
+
+async function inspectMessageQueueUi(evaluate) {
+  return evaluate(`(() => {
+    const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const textarea = surface?.querySelector('.agent-composer-textarea');
+    const panel = surface?.querySelector('.agent-composer-queue-panel');
+    const stop = surface?.querySelector('.agent-composer-stop');
+    const stopStyle = stop instanceof HTMLButtonElement ? getComputedStyle(stop) : undefined;
+    const stopBounds = stop instanceof HTMLButtonElement ? stop.getBoundingClientRect() : undefined;
+    const rows = [...(surface?.querySelectorAll('.agent-composer-queue-row') ?? [])];
+    const rect = surface?.getBoundingClientRect();
+    return {
+      surfaceBounds: rect
+        ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
+        : undefined,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      composerValue: textarea instanceof HTMLTextAreaElement ? textarea.value : undefined,
+      composerPlaceholder: textarea?.getAttribute('placeholder') ?? undefined,
+      composerDisabled: textarea instanceof HTMLTextAreaElement ? textarea.disabled : undefined,
+      attachmentDisabled: surface?.querySelector('.agent-composer-tool-button')?.disabled,
+      stopVisible: stop instanceof HTMLButtonElement,
+      stopLabel: stop?.getAttribute('aria-label'),
+      stopPresentation: stopStyle && stopBounds ? {
+        width: stopBounds.width,
+        height: stopBounds.height,
+        display: stopStyle.display,
+        visibility: stopStyle.visibility,
+        opacity: stopStyle.opacity,
+        backgroundColor: stopStyle.backgroundColor,
+        color: stopStyle.color,
+      } : undefined,
+      queueTitle: panel?.querySelector('.agent-composer-queue-title')?.textContent?.trim(),
+      queueItems: rows.map((row) => ({
+        text: row.querySelector('.agent-composer-queue-text')?.textContent?.trim() ?? '',
+        actionCount: row.querySelectorAll('.agent-composer-queue-action').length,
+        enabledActionCount: row.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length,
+        actions: [...row.querySelectorAll('.agent-composer-queue-action')].map((action) => ({
+          label: action.getAttribute('aria-label'),
+          disabled: action instanceof HTMLButtonElement ? action.disabled : undefined,
+        })),
+      })),
+      alerts: [...document.querySelectorAll('[role="alert"]')]
+        .map((item) => item.textContent?.trim() ?? '')
+        .filter(Boolean),
+    };
+  })()`);
+}
+
+async function clickQueuedMessageAction(evaluate, content, actionIndex) {
+  await evaluate(`(() => {
+    const rows = [...document.querySelectorAll(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-queue-row',
+    )];
+    const row = rows.find(
+      (candidate) => candidate.querySelector('.agent-composer-queue-text')?.textContent?.trim() ===
+        ${JSON.stringify(content)},
+    );
+    const action = row?.querySelectorAll('.agent-composer-queue-action')[${String(actionIndex)}];
+    if (!(action instanceof HTMLButtonElement) || action.disabled) {
+      throw new Error(
+        'Exact queued message action is unavailable: ' +
+          ${JSON.stringify(content)} + ':' + ${String(actionIndex)},
+      );
+    }
+    action.click();
+  })()`);
 }
 
 function countNativeImageParts(body) {

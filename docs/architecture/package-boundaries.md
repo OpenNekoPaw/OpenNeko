@@ -89,6 +89,15 @@ runtime 入口。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
 - 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 分别返回语义 `DocumentLocator` 与内容 `ContentLocator`，不拥有 SQLite projection。
 
+### `@neko/project`
+
+`@neko/project` 只拥有 Content Project composition：项目本地 Character/World target membership、精确外部 publication reference、组合校验与 target-tree projection。它不拥有 Content、Character 或 World payload，也不解释 Workspace raw path。
+
+- `@neko/project-node` 只在 Host 已授权的 Workspace root 内原子读写 `neko/project-composition.json`，不得扫描其他 Workspace、读取用户级 SQLite 或提供 fallback repository。
+- `@neko/project-webview` 拥有 Project catalog 和 composition browser presentation；Desktop 只组合其 public Root。
+- standalone Character/World library root 由 Host settings 授权，portable locator 分别为 `${NEKO_HOME}/libraries/characters` 与 `${NEKO_HOME}/libraries/worlds`；Renderer 和领域事实不得接收展开后的绝对路径。
+- Project-local Character/World facts 仍由 `@neko/chara` / `@neko/world` 及其 Node repositories 拥有，Project composition 只保存 exact identity。
+
 ### `@neko/generation`
 
 `@neko/generation` 根入口只暴露 renderer-safe 请求、结果、Job contract 与领域 contract。
@@ -234,7 +243,8 @@ Agent 能力按 owning package 职责分层：
 | `@neko/ai-sdk`               | provider/AI SDK adapter                                                                                                    |
 | `@neko/host`                 | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
 | `@neko/agent-webview`        | Chat/Agent UI、消息投影和用户输入                                                                                          |
-| `@neko/chara-webview`        | Character、Dialogue、Chatroom 与 World Foundation 的 browser-only 产品视图和可丢弃展示状态                                 |
+| `@neko/chara-webview`        | Character、Dialogue 与 Chatroom 的 browser-only 产品视图和可丢弃展示状态                                                   |
+| `@neko/world-webview`        | World Foundation Library、Studio、确定性预览与可丢弃展示状态；不实现完整 World Experience                                  |
 
 Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime 与 Host 不导入 Electron、React
 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
@@ -298,60 +308,63 @@ Tools media-diff 原型因没有 Desktop producer、产品入口或运行态验�
 
 ## Character / World 顶级领域聚合包
 
-Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 Agent、应用根或现有 Assets/Preview 内部。`@neko/chara` 已完成第一阶段 owner 迁移；World package 仍未实现：
+Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 Agent、应用根或现有 Assets/Preview 内部。`@neko/chara` 与 `@neko/world` 均已建立 Foundation owner；完整 Character Storyline/Memory 和 AI-native World Story/Gameplay/Experience/Presentation 仍按各自活跃 OpenSpec 演进：
 
-| 包                                                         | 状态                                   | 聚合主线                                                          | 主要职责                                                                                       | 关键边界                                                                                                         |
-| ---------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion -> narrative/companion run` | 角色创作与发布、关系记忆、Dialogue/Chatroom 运行、持久化和 package-owned 产品视图              | 完全复用 Agent/Pi；World、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合 |
-| `@neko/world` / `@neko/world-node`                         | Foundation / Node adapter              | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`    | 世界书、事实、规则/事件、运行、存档、分支、WorldView；Node 包只拥有 durable repository adapter | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实           |
+| 包                                                         | 状态                                   | 聚合主线                                                       | 主要职责                                                                                                                       | 关键边界                                                                                                                                                                    |
+| ---------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion -> Storyline/Memory/Run` | 角色背景故事与原生背景设定、角色创作与发布、个人故事线、角色/关系记忆、Dialogue/Chatroom 运行、持久化和 package-owned 产品视图 | 完全复用 Agent/Pi；外部 Composition、World、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合，Chara 不拥有外部 authoring/runtime/save |
+| `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Foundation / Node adapter / browser UI | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` | 世界书、事实、规则/事件、运行、存档、分支、WorldView、Foundation 创作与确定性检查；Node/Webview 分别只拥有 adapter 与展示状态  | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；基础预览不得冒充需要 Story/Experience/实时 AI 的完整 World 成功路径                                 |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
 Agent、Renderer、Device、表现 runtime 和 host adapter。Agent package 不导入 Character/World；
 Character core 不导入 World 私有实现；运行期环境交互通过窄 port 或 host-owned adapter 组合。
 
-角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character Project/Version、World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为基础 package 已建立就宣称支持。
+角色拥有背景故事、原生背景设定、canon、个人成长弧、主观记忆、说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略。`CharacterOriginSetting` 只是角色 lore，不是 WorldProject、WorldRun 或 WorldSave；共享地图和世界事件归 World Definition/Runtime，世界级冲突与章节进度归 World Story，作品内玩法的目标、任务、战斗、经济、席位和胜负归 World Gameplay，外部游戏的同类事实归外部 Game authority。当前缺失的 Character lore/storyline/memory、World Story/Gameplay/Experience、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为 Foundation package 已建立就宣称支持。
 
-角色互动体验按 `single-character | multi-character` topology 与 `dialogue | play` interaction
-两个维度组合成单角色对话、多角色对话、单角色 Play 和多角色 Play 四个产品预设。Play-use 只是
-Play 的内部执行机制。预设只组合共享 contract，不建立四套
+角色互动产品可以按 `single-character | multi-character` topology 与 `dialogue | play` interaction
+组合成单角色对话、多角色对话、单角色 Play 和多角色 Play 预设，但 Play 是 Agent 的通用参与能力，不是 Chara aggregate。Chara 只提供角色身份、策略、授权上下文与参与 ref。预设只组合共享 contract，不建立四套
 session/controller。每个 agent-controlled character 映射独立 CharacterRun 和 primary
 AgentSession；room 只共享带 actor/visibility/revision 的有序 event projection，不共享 responder、
 transcript、模型配置或 memory view。human-controlled participant 不创建隐藏角色 Agent。
 
-Play-use 表示角色通过 Game Activity 进行代打、陪玩、观战或指导。`commentator` / `coach` 只读，
+Agent Play 表示 Agent 代表角色或用户进行理解、规划、行动 proposal、代打、陪玩、观战或指导。`commentator` / `coach` 只读，
 `co-player` / `delegate` 必须绑定明确 ActivitySession、seat 和 per-seat exclusive control lease；
-同一 seat 不得由多个 Agent 并发输入。Game/World owner 拥有规则、状态、席位、动作验证和结果，
+同一 seat 不得由多个 Agent 并发输入。World 内创作玩法由 World Gameplay owner 拥有规则、状态、席位、动作验证和结果；外部游戏由外部 Game owner 拥有同类事实；
 Desktop Host 拥有精确 app/process/window binding、OS 权限、授权 observation 与输入原语，Chara
-只拥有角色参与策略、稳定 Activity ref 和经筛选的记忆候选。Computer Use 只能作为显式、资格化、
+只拥有角色参与策略、稳定 Activity ref 和经筛选的记忆候选，Agent Play 不拥有 Game state。Computer Use 只能作为显式、资格化、
 有 step budget 且可 Pause/Stop/Take over 的 transport，不能在 adapter/API 失败后静默接管键鼠。
 
 Play 的模型分工固定为：LLM/AgentSession 负责角色表达、规则理解、长期策略、协作、记忆和上下文
 编排；VLA 或等价低延迟 control policy 负责实时游戏的短时 observation-to-action chunk；Game
-Activity owner 负责 action/state/revision/outcome 验证。回合制策略游戏可以只用结构化 LLM
+World Gameplay 或外部 Game owner 负责 action/state/revision/outcome 验证。回合制策略游戏可以只用结构化 LLM
 planning，实时动作游戏使用 VLA 短时闭环，多人游戏增加 seat/team/visibility 和 room coordination，
-但都复用同一 Activity contract。
+但都复用 Agent Play 的通用参与 contract 与各自 owner-qualified Game contract。
 
-新游戏通过 versioned GameCapabilityProfile、规则/教程检索、安全校准、可选用户示范、有限 episode
+新游戏通过 canonical GameCapabilityProfile、规则/教程检索、安全校准、可选用户示范、有限 episode
 试玩、结果验证和 retrieval/in-context experience 快速适应。Game-specific adapter 只表达目标、
 observation/action/verification seam；Chara、Agent 和 Desktop 不得按游戏名称增加专用 controller，
 常规接入不得要求重新训练基础模型。游戏经验属于 Game Activity 的可重建 projection，不得写入
 CharacterVersion、relationship memory 或 Agent compaction。
 
-角色创作与运行使用以下 canonical split：
+角色创作、故事线、记忆与运行使用以下 canonical split：
 
 ```text
 CharacterProject
+  -> CharacterBackgroundStory + CharacterOriginSetting
   -> immutable CharacterVersion
-       -> NarrativeCharacterBinding -> NarrativeCharacterRun
-            memory owner: NarrativeSave / WorldSave
-       -> CompanionBinding -> UserCharacterRelationship -> CompanionRun
-            memory owner: UserCharacterRelationship
+       -> CharacterStorylineVersion -> CharacterStorylineRun
+       -> CharacterRun -> CharacterMemoryScope
+       -> UserCharacterRelationship -> CompanionRun
 ```
 
-产品“剧情模式 / 日常模式”分别对应 `narrative / companion` runtime kind。Kind 在 run 创建时
-固定，不能通过 active tab、共享 responder 或参数切换修改。剧情运行绑定显式 save、branch、
-checkpoint/timepoint 和 actor identity；日常运行只接受发布 CharacterVersion，并通过独立
-relationship identity 保存跨会话互动记忆。
+`CharacterBackgroundStory` 描述角色个人历史，`CharacterOriginSetting` 描述角色原生时代、文化、
+社会环境和角色视角下的背景认知；二者都随 CharacterVersion 发布，但不可运行、不可存档，也不得
+转换成 WorldProject。CharacterStoryline 只拥有角色个人弧线与进度；CharacterMemoryScope 只拥有
+角色主观运行记忆；UserCharacterRelationship 只拥有用户—角色 companion 关系记忆。
+
+内容创作时的 Character/CharacterStoryline + World/WorldStory 关联由 WorldExperienceProject/Version 保存精确版本引用；运行时由 WorldExperienceRun 绑定精确 CharacterRun/StorylineRun/MemoryScope 与 WorldRun/WorldStoryRun。Chara 不定义对方 aggregate shape，
+不复制外部存档，也不通过 active/recent/latest identity 推断绑定。Composition provider 缺失时只让
+当前 composed launch unavailable，不能影响独立 Character authoring 和 companion/Room 能力。
 
 两个聚合包内部必须保持以下依赖层级：
 
@@ -363,35 +376,28 @@ adapters/chara|world -> public cross-domain contracts + owning ports
 host-* -> public package entry + concrete host adapters
 ```
 
-`core` 不得导入 Agent、Electron、React、Renderer、Device、表现 runtime、Media/Game
-Activity 或另一领域私有 runtime。应用 Host 只构造、注入和释放 adapter；Chara application
-service 拥有 mode-specific run、context、relationship binding 和 memory candidate 编排；
-World/Narrative application service 拥有剧情 event/save/branch/replay；Activity owner 拥有
-媒体、游戏和设备执行。上述依赖必须通过 public/subpath exports 和 architecture test 强制
-执行，不能只依赖目录命名。
+`core` 不得导入 Agent、Electron、React、Renderer、Device、表现 runtime、Media/Game Activity
+或另一领域私有 runtime。应用 Host 只构造、注入和释放 adapter；Chara application service 拥有
+Character authoring、Storyline、Memory、Run、Room 和 relationship 编排；外部 Composition、World、
+Activity owner 拥有各自关联、事实、存档和执行。上述依赖必须通过 public/subpath exports 和
+architecture test 强制执行，不能只依赖目录命名。
 
-同一 published narrative actor 的运行路径固定为
-`WorldActorInstance -> NarrativeCharacterRun -> primary AgentSession`，World 不得再创建
-第二个 actor-level session；Ambient NPC 和 World Director 使用独立显式 scope。日常路径固定
-为 `UserCharacterRelationship -> CompanionRun -> primary AgentSession`；relationship 可顺序
-创建多个 run，但同一 active run 至多一个 primary session。
+同一 agent-controlled CharacterRun 至多一个 primary AgentSession。narrative composition 只能引用
+一个 exact CharacterRun/CharacterStorylineRun/CharacterMemoryScope；外部 owner 不得再创建第二个
+actor-level Character session。日常路径固定为 `UserCharacterRelationship -> CompanionRun ->
+primary AgentSession`；relationship 可顺序创建多个 run，但不能共享 mutable responder、transcript
+或 memory view。
 
-剧情有效能力是 Host permission、workspace trust、CharacterVersion policy、World binding
-policy 与 NarrativeRun scope 的交集；日常有效能力是 Host permission、workspace trust、
-CharacterVersion policy、relationship policy 与 Activity scope 的交集。副作用提交时由 owner
-重验 permission、identity、revision 和 Approval。
+角色有效能力是 Host permission、workspace trust、CharacterVersion policy、CharacterRun scope、
+memory/relationship policy 与可选 owning Composition scope 的交集。任何层只能收窄授权，副作用
+提交时由对应 owner 重验 permission、identity、revision 和 Approval。
 
-Character 不直接写 World store；跨域 mutation 必须通过显式 world run/actor/action identity
-与 expected revision 的 WorldAction contract，由 World runtime 原子提交 WorldEvent/revision
-或返回 typed rejection。CharacterVersion canon、NarrativeSave/WorldSave 剧情记忆、
-UserCharacterRelationship 日常长期记忆、CharacterRun 短期状态与 Memory infrastructure
-派生索引必须保持独立。
-
-剧情检索必须先由 save owner 按 branch ancestry、checkpoint/timepoint、actor knowledge 和
-revision 过滤；日常 RealityContext、Tool result 和 Activity state 只能产生受 policy 管理的
-关系记忆候选。跨模式记忆默认隔离，版本更新通过新 save/relationship revision 显式迁移，
-不得改写 CharacterVersion。Device/Renderer/Media/Game live handle 和本机路径不得进入持久
-项目、版本、存档或关系记忆。
+Character 不直接写外部 store。外部 event、RoomEvent、Tool result 和 Activity result 只能以稳定
+source ref 产生 CharacterStorylineObservationCandidate、CharacterMemoryCandidate 或
+RelationshipMemoryCandidate；Chara owner 分别接受、纠正、拒绝或删除。CharacterVersion canon、
+CharacterStoryline、CharacterMemoryScope、UserCharacterRelationship、AgentSession transcript 与
+外部存档必须保持独立。跨 scope 导入默认禁止；Device/Renderer/Media/Game live handle 和本机路径
+不得进入持久 Character project、version、storyline 或 memory。
 
 ## 路径、缓存与用户数据
 

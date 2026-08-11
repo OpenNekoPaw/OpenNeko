@@ -5,6 +5,7 @@ import {
   parseAgentConversationConfiguration,
   parseAgentConversationTurnConfigurationSnapshot,
   parseAgentDraftInputIntent,
+  parseAgentEntryTargetReceipt,
   parseAgentFlatPurposeModelRefs,
   parseAgentInputReferenceReceipt,
   parseMessageContextReference,
@@ -17,6 +18,7 @@ import {
   type AgentScratchArtifactRef,
   type AgentContextPayload,
   type AgentDraftInputIntent,
+  type AgentEntryTargetReceipt,
   type AgentFlatPurposeModelRefs,
   type AgentInputReferenceReceipt,
   type Message,
@@ -47,6 +49,7 @@ export interface AgentConversationLifecycleRecord {
   readonly createdAt: string;
   readonly initialInput: {
     readonly messageId: string;
+    readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
     readonly intent: AgentDraftInputIntent;
     readonly references: readonly AgentInputReferenceReceipt[];
     readonly contextReferences: readonly MessageContextReference[];
@@ -66,8 +69,10 @@ export interface AgentConversationLifecycleRecord {
 
 export interface AgentFirstSubmitInput {
   readonly requestId: string;
+  readonly conversationId?: string;
   readonly context: AgentBoundDomainBinding;
   readonly input: AgentDraftInputIntent;
+  readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
   readonly references: readonly AgentInputReferenceReceipt[];
   readonly contextReferences: readonly MessageContextReference[];
   readonly resourceGrantIds: readonly string[];
@@ -178,6 +183,7 @@ export interface AgentProviderExecutionPort {
     readonly conversationId: string;
     readonly context: AgentBoundDomainBinding;
     readonly input: AgentDraftInputIntent;
+    readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
     readonly resourceGrantIds: readonly string[];
     readonly contextPayloads: readonly AgentContextPayload[];
     readonly configuration: AgentConversationTurnConfigurationSnapshot;
@@ -205,6 +211,9 @@ export interface AgentConversationLifecycleService {
     requestId: string,
   ): Promise<AgentConversationLifecycleRecord | undefined>;
   readConversationContext(conversationId: string): Promise<AgentBoundDomainBinding>;
+  readConversationEntryTargetReceipt(
+    conversationId: string,
+  ): Promise<AgentEntryTargetReceipt | null>;
   readConversationConfiguration(conversationId: string): Promise<AgentConversationConfiguration>;
   updateConfiguration(input: {
     readonly conversationId: string;
@@ -270,8 +279,16 @@ export function createAgentConversationLifecycleService(options: {
     input: AgentFirstSubmitInput,
   ): Promise<AgentConversationLifecycleRecord> => {
     const requestId = requireIdentity(input.requestId, 'Agent first-submit request');
+    const requestedConversationId =
+      input.conversationId === undefined
+        ? undefined
+        : requireIdentity(input.conversationId, 'Agent Conversation');
     const context = parseAgentBoundDomainBinding(input.context);
     const inputIntent = parseAgentDraftInputIntent(input.input);
+    const entryTargetReceipt =
+      input.entryTargetReceipt === null
+        ? null
+        : parseAgentEntryTargetReceipt(input.entryTargetReceipt);
     const references = input.references.map(parseAgentInputReferenceReceipt);
     const contextReferences = input.contextReferences.map(parseMessageContextReference);
     const resourceGrantIds = requireUniqueIdentities(
@@ -292,8 +309,17 @@ export function createAgentConversationLifecycleService(options: {
     }
     const existing = await options.repository.readFirstSubmitByRequest(requestId);
     if (existing) {
+      if (
+        requestedConversationId !== undefined &&
+        existing.conversationId !== requestedConversationId
+      ) {
+        throw new Error(
+          `Agent first-submit request '${requestId}' is already committed to another Conversation.`,
+        );
+      }
       assertSameFirstSubmit(existing, {
         context,
+        entryTargetReceipt,
         input: inputIntent,
         references,
         contextReferences,
@@ -312,7 +338,7 @@ export function createAgentConversationLifecycleService(options: {
       });
       return existing;
     }
-    const conversationId = `conversation:${options.createIdentity()}`;
+    const conversationId = requestedConversationId ?? `conversation:${options.createIdentity()}`;
     const turnId = `turn:${options.createIdentity()}`;
     const configuration = parseAgentConversationConfiguration({
       conversationId,
@@ -331,6 +357,7 @@ export function createAgentConversationLifecycleService(options: {
       createdAt: options.now(),
       initialInput: {
         messageId: `message:${options.createIdentity()}`,
+        entryTargetReceipt,
         intent: inputIntent,
         references,
         contextReferences,
@@ -350,6 +377,7 @@ export function createAgentConversationLifecycleService(options: {
     }
     assertSameFirstSubmit(exact, {
       context,
+      entryTargetReceipt,
       input: inputIntent,
       references,
       contextReferences,
@@ -398,6 +426,7 @@ export function createAgentConversationLifecycleService(options: {
         turnId: exact.pendingTurn.turnId,
         conversationId: exact.conversationId,
         context: exact.context,
+        entryTargetReceipt: exact.initialInput.entryTargetReceipt,
         input: exact.initialInput.intent,
         resourceGrantIds: exact.initialInput.resourceGrantIds,
         ...(exact.initialInput.purposeModels === undefined
@@ -512,6 +541,9 @@ export function createAgentConversationLifecycleService(options: {
         requireIdentity(requestId, 'Agent first-submit request'),
       ),
     readConversationContext,
+    async readConversationEntryTargetReceipt(conversationId) {
+      return (await readConversation(conversationId)).initialInput.entryTargetReceipt;
+    },
     readConversationConfiguration,
     async updateConfiguration(input) {
       const conversationId = requireIdentity(input.conversationId, 'Agent Conversation');
@@ -715,6 +747,10 @@ function cloneRecord(record: AgentConversationLifecycleRecord): AgentConversatio
         : { ...record.context },
     initialInput: {
       ...record.initialInput,
+      entryTargetReceipt:
+        record.initialInput.entryTargetReceipt === null
+          ? null
+          : structuredClone(record.initialInput.entryTargetReceipt),
       intent: { ...record.initialInput.intent },
       references: record.initialInput.references.map((reference) => ({ ...reference })),
       contextReferences: record.initialInput.contextReferences.map((reference) => ({
@@ -762,6 +798,7 @@ function assertSameFirstSubmit(
   record: AgentConversationLifecycleRecord,
   input: {
     readonly context: AgentBoundDomainBinding;
+    readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
     readonly input: AgentDraftInputIntent;
     readonly references: readonly AgentInputReferenceReceipt[];
     readonly contextReferences: readonly MessageContextReference[];
@@ -772,6 +809,8 @@ function assertSameFirstSubmit(
 ): void {
   if (
     JSON.stringify(record.context) !== JSON.stringify(input.context) ||
+    JSON.stringify(record.initialInput.entryTargetReceipt) !==
+      JSON.stringify(input.entryTargetReceipt) ||
     JSON.stringify(record.initialInput.intent) !== JSON.stringify(input.input) ||
     JSON.stringify(record.initialInput.references) !== JSON.stringify(input.references) ||
     JSON.stringify(record.initialInput.contextReferences) !==

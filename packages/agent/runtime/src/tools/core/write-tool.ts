@@ -72,6 +72,10 @@ export class WriteTool extends BuiltinTool {
   readonly category: ToolCategory = 'file';
   override readonly requiresConfirmation = true;
   override readonly isDestructive = true;
+  readonly requirements = {
+    writableProject: true,
+    authoringTargetKind: 'content-project',
+  } as const;
 
   async execute(args: Record<string, unknown>, options?: ToolExecuteOptions): Promise<ToolResult> {
     const validation = this.validateArgs(args);

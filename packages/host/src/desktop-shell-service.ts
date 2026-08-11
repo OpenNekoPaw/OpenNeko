@@ -25,6 +25,7 @@ import {
   openOrFocusMainView,
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
+  type DesktopWorkbenchViewRef,
 } from './desktop-workbench-contract';
 import {
   createDesktopWindowComposition,
@@ -45,6 +46,7 @@ import {
   type DesktopSceneTransitionRequest,
   type DesktopSceneTransitionResult,
   type DesktopWorkbenchSceneProjection,
+  type DesktopWorkbenchMainSurfaceRef,
 } from './desktop-scene-contract';
 import type {
   DesktopShellStateRepositoryPort,
@@ -291,17 +293,21 @@ export class DesktopShellService {
           )
         : restoredWindow;
       const cutDraftCleanup = discardExpiredCutDraftPresentations(agentQualifiedWindow);
-      const restorableWorkbench = restoreWindowWorkbench(
-        state,
+      const experimentalSceneReset = resetExperimentalScenePresentation(
         cutDraftCleanup.window,
         this.createIdentity,
       );
+      const restorableWorkbench = restoreWindowWorkbench(
+        state,
+        experimentalSceneReset.window,
+        this.createIdentity,
+      );
       const restorableScene = synchronizeWorkspaceSceneWithWorkbench(
-        activeDesktopWorkbench(cutDraftCleanup.window).scene,
+        activeDesktopWorkbench(experimentalSceneReset.window).scene,
         restorableWorkbench,
       );
       const qualifiedWindow = captureActiveProjectPresentation(
-        replaceActiveDesktopWorkbench(cutDraftCleanup.window, {
+        replaceActiveDesktopWorkbench(experimentalSceneReset.window, {
           layout: restorableWorkbench,
           scene: restorableScene,
         }),
@@ -318,6 +324,12 @@ export class DesktopShellService {
             message:
               'Expired unnamed Cut draft presentation was removed because its in-memory document ended with the previous application process.',
           },
+        ];
+      }
+      if (experimentalSceneReset.diagnostic) {
+        this.isolatedWindowDiagnostics = [
+          ...this.isolatedWindowDiagnostics,
+          experimentalSceneReset.diagnostic,
         ];
       }
       const entryScene = createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`);
@@ -570,17 +582,12 @@ export class DesktopShellService {
       const interaction = current.slots.interaction;
       if (
         current.context.kind === 'character-interaction' &&
-        (input.context.kind === 'character' || input.context.kind === 'room') &&
-        current.context.scope.draftId === input.draftId &&
+        input.context.kind !== 'world' &&
         current.context.scope.conversationId === input.conversationId &&
         isSameAgentConversationOwner(
           current.context.owner,
-          characterConversationOwnerFromContext(input.context),
-        ) &&
-        interaction?.kind === 'agent' &&
-        interaction.phase === 'session' &&
-        interaction.scope.kind !== 'unbound' &&
-        interaction.scope.conversationId === input.conversationId
+          conversationOwnerFromContext(input.context),
+        )
       ) {
         return current;
       }
@@ -623,12 +630,11 @@ export class DesktopShellService {
         current.context.scope.kind === 'unbound' &&
         (input.context.kind === 'character' || input.context.kind === 'room')
       ) {
-        scene = createCharacterInteractionScene({
+        scene = createCharacterInteractionConversationScene({
           current,
-          draftId: input.draftId,
-          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          interaction,
+          context: input.context,
           conversationId: input.conversationId,
-          owner: characterConversationOwnerFromContext(input.context),
         });
       } else if (current.context.scope.kind === 'unbound' && input.context.kind === 'workspace') {
         const workspaceGrantAuthority = this.options.workspaceGrantAuthority;
@@ -740,7 +746,7 @@ export class DesktopShellService {
         return unavailableConversationSceneTransition(
           request,
           context.kind,
-          `Desktop ${context.kind} Conversation scene provider is unavailable.`,
+          'Complete World Experience capabilities are unavailable until the WorldExperienceVersion owner is composed.',
         );
       }
       const contextOwner = conversationOwnerFromContext(context);
@@ -750,20 +756,23 @@ export class DesktopShellService {
           `Agent Conversation '${conversationId}' lifecycle context does not match its navigation owner.`,
         );
       }
-      let draft: DesktopWorkbenchSceneProjection;
-      let workspaceAttachment:
-        | {
-            readonly tab: DesktopStoredWindow['tabs'][number];
-            readonly workbench: DesktopWorkbenchLayoutProjection;
-          }
-        | undefined;
       if (context.kind === 'character' || context.kind === 'room') {
-        const scene = createCharacterInteractionScene({
-          current: activeDesktopWorkbench(window).scene,
-          draftId: `draft:${this.createIdentity()}`,
-          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+        const fresh = createDefaultDesktopAgentScene(
+          request.windowId,
+          `draft:${this.createIdentity()}`,
+        );
+        const interaction = fresh.slots.interaction;
+        if (!interaction) {
+          throw new DesktopSceneContractError(
+            'desktop-scene-scope-mismatch',
+            'Character Conversation restore could not create an Agent Interaction Surface.',
+          );
+        }
+        const scene = createCharacterInteractionConversationScene({
+          current: fresh,
+          interaction,
+          context,
           conversationId,
-          owner: characterConversationOwnerFromContext(context),
         });
         this.assertMutationContext(request.windowId, request.rendererSessionId);
         const committed = await this.options.stateRepository.commit({
@@ -777,6 +786,13 @@ export class DesktopShellService {
         await this.emitAll(committed);
         return { status: 'transitioned', requestId: request.requestId, scene };
       }
+      let draft: DesktopWorkbenchSceneProjection;
+      let workspaceAttachment:
+        | {
+            readonly tab: DesktopStoredWindow['tabs'][number];
+            readonly workbench: DesktopWorkbenchLayoutProjection;
+          }
+        | undefined;
       if (context.kind === 'assistant') {
         draft = createAssistantAgentScene({
           current: activeDesktopWorkbench(window).scene,
@@ -1290,6 +1306,29 @@ export class DesktopShellService {
         projection: this.projectWindow(committed, windowId),
         workspace,
       };
+    });
+  }
+
+  async registerContentProject(
+    windowId: string,
+    workspacePath: string,
+    rendererSessionId: string,
+  ): Promise<DesktopShellOpenContentResult> {
+    return this.enqueue(async () => {
+      this.requireActive();
+      this.assertMutationContext(windowId, rendererSessionId);
+      const workspace = await this.options.workspaceRegistry.resolve(workspacePath);
+      const state = await this.options.stateRepository.read();
+      requireStoredWindow(state, windowId);
+      const existing = state.projects.find(
+        (project) => project.workspaceId === workspace.workspaceId,
+      );
+      const project = existing ?? createStoredProject(workspace, this.now());
+      const next = existing ? state : { ...state, projects: [...state.projects, project] };
+      this.assertMutationContext(windowId, rendererSessionId);
+      const committed = next === state ? state : await this.options.stateRepository.commit(next);
+      await this.emitAll(committed);
+      return { projection: this.projectWindow(committed, windowId), workspace };
     });
   }
 
@@ -2267,6 +2306,43 @@ function unavailableSceneTransition(
   return undefined;
 }
 
+function resetExperimentalScenePresentation(
+  window: DesktopStoredWindow,
+  createIdentity: () => string,
+): {
+  readonly window: DesktopStoredWindow;
+  readonly diagnostic?: DesktopShellStateDiagnosticProjection;
+} {
+  const scene = activeDesktopWorkbench(window).scene;
+  const owner =
+    scene.context.kind === 'creative-management' && scene.context.catalog === 'characters'
+      ? 'character'
+      : scene.context.kind === 'creative-management' && scene.context.catalog === 'worlds'
+        ? 'world'
+        : undefined;
+  if (!owner) return { window };
+  const nextScene = createDefaultDesktopAgentScene(window.windowId, `draft:${createIdentity()}`);
+  return {
+    window: {
+      ...window,
+      activeTarget: { kind: 'home' },
+      workbench: createDesktopWindowComposition({
+        workbenchInstanceId: window.workbench.workbenchInstanceId,
+        layout: createDefaultDesktopWorkbenchLayout(window.windowId),
+        scene: nextScene,
+      }),
+    },
+    diagnostic: {
+      code: 'desktop-presentation-reset',
+      severity: 'warning',
+      windowId: window.windowId,
+      owner,
+      resetSceneId: scene.sceneId,
+      message: `${owner === 'character' ? 'Character' : 'World'} experimental presentation was reset because the capability has not passed product promotion. Durable records and protected background runtime were preserved.`,
+    },
+  };
+}
+
 function unavailableWorkspaceSceneTransition(
   request: DesktopSceneTransitionRequest,
   message = 'Workspace scene requires a validated Workspace authority grant.',
@@ -2340,32 +2416,20 @@ function conversationContextMatchesSceneScope(
   return false;
 }
 
-function conversationOwnerFromContext(context: AgentBoundDomainBinding): AgentConversationOwnerRef {
+function conversationOwnerFromContext(
+  context: Exclude<AgentBoundDomainBinding, { readonly kind: 'world' }>,
+): AgentConversationOwnerRef {
   if (context.kind === 'assistant') {
     return { kind: 'assistant', assistantSpaceId: context.assistantSpaceId };
   }
-  if (context.kind === 'workspace') {
-    return { kind: 'workspace', workspaceId: context.workspaceId };
-  }
-  if (context.kind === 'world') {
-    throw new DesktopSceneContractError(
-      'desktop-scene-scope-mismatch',
-      'World Conversation scene provider is unavailable.',
-    );
-  }
-  return characterConversationOwnerFromContext(context);
-}
-
-function characterConversationOwnerFromContext(
-  context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>,
-): Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }> {
+  if (context.kind === 'workspace') return { kind: 'workspace', workspaceId: context.workspaceId };
   if (context.kind === 'room') {
     return { kind: 'room', roomId: context.roomId, roomRunId: context.roomRunId };
   }
-  if (context.characterRunId === undefined || context.dialogueRunId === undefined) {
+  if (!context.characterRunId || !context.dialogueRunId) {
     throw new DesktopSceneContractError(
       'desktop-scene-scope-mismatch',
-      'Character Conversation requires exact Character Run and Dialogue Run identities.',
+      'Character Conversation requires an exact CharacterRun and DialogueRun owner.',
     );
   }
   return {
@@ -2374,6 +2438,57 @@ function characterConversationOwnerFromContext(
     characterRunId: context.characterRunId,
     dialogueRunId: context.dialogueRunId,
   };
+}
+
+function createCharacterInteractionConversationScene(input: {
+  readonly current: DesktopWorkbenchSceneProjection;
+  readonly interaction: DesktopAgentInteractionSurfaceRef;
+  readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>;
+  readonly conversationId: string;
+}): DesktopWorkbenchSceneProjection {
+  if (
+    input.current.context.kind !== 'agent' ||
+    input.current.context.scope.kind !== 'unbound' ||
+    input.interaction.phase !== 'draft'
+  ) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'Character Interaction can only replace the exact active unbound Agent Draft.',
+    );
+  }
+  const owner = conversationOwnerFromContext(input.context);
+  if (owner.kind !== 'character' && owner.kind !== 'room') {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'Character Interaction requires a Character or Room owner.',
+    );
+  }
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: input.current.context.scope.draftId,
+    assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+    conversationId: input.conversationId,
+  };
+  const sceneId = `scene:${input.current.windowId}:character-interaction:${input.conversationId}`;
+  return parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: input.current.windowId,
+    context: {
+      kind: 'character-interaction',
+      agentViewId: input.interaction.agentViewId,
+      owner,
+      scope,
+    },
+    slots: {
+      interaction: { ...input.interaction, phase: 'session', scope },
+      main: { kind: 'character-avatar', owner },
+      rightManager: { kind: 'character-runtime-manager', owner },
+      ...(owner.kind === 'room'
+        ? { cutPanel: { kind: 'character-room-timeline' as const, owner } }
+        : {}),
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
 }
 
 function createAssistantConversationScope(
@@ -2418,48 +2533,6 @@ function attachConversationToDraftScene(
     slots: {
       ...draft.slots,
       interaction: { ...draft.slots.interaction, phase: 'session', scope },
-    },
-  });
-}
-
-function createCharacterInteractionScene(input: {
-  readonly current: DesktopWorkbenchSceneProjection;
-  readonly draftId: string;
-  readonly assistantSpaceId: string;
-  readonly conversationId: string;
-  readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
-}): DesktopWorkbenchSceneProjection {
-  const sceneId = `scene:${input.current.windowId}:character-interaction:${input.conversationId}`;
-  const agentViewId = `agent-view:${input.current.windowId}:${input.conversationId}`;
-  const scope = {
-    kind: 'assistant' as const,
-    draftId: input.draftId,
-    assistantSpaceId: input.assistantSpaceId,
-    conversationId: input.conversationId,
-  };
-  return parseDesktopWorkbenchSceneProjection({
-    sceneId,
-    windowId: input.current.windowId,
-    context: {
-      kind: 'character-interaction',
-      agentViewId,
-      owner: input.owner,
-      scope,
-    },
-    slots: {
-      interaction: {
-        kind: 'agent',
-        agentSurfaceId: `agent-surface:${input.current.windowId}:${input.conversationId}`,
-        agentViewId,
-        phase: 'session',
-        scope,
-      },
-      main: { kind: 'character-avatar', owner: input.owner },
-      rightManager: { kind: 'character-runtime-manager', owner: input.owner },
-      ...(input.owner.kind === 'room'
-        ? { cutPanel: { kind: 'character-room-timeline', owner: input.owner } }
-        : {}),
-      status: { kind: 'scene-status', sceneId },
     },
   });
 }
@@ -2559,12 +2632,7 @@ function createWorkspaceAgentScene(input: {
         phase: 'draft',
         scope,
       },
-      main: {
-        kind: 'workspace-main',
-        workspaceId: input.workspaceId,
-        viewId: mainView.viewId,
-        viewInstanceId: mainView.viewInstanceId,
-      },
+      main: projectWorkspaceMainSurface(mainView),
       ...(cutView
         ? {
             cutPanel: {
@@ -2617,14 +2685,7 @@ function synchronizeWorkspaceSceneWithWorkbench(
     );
   }
 
-  const main = activeView
-    ? {
-        kind: 'workspace-main' as const,
-        workspaceId,
-        viewId: activeView.viewId,
-        viewInstanceId: activeView.viewInstanceId,
-      }
-    : undefined;
+  const main = activeView ? projectWorkspaceMainSurface(activeView) : undefined;
   const cutPanel = cutView
     ? {
         kind: 'workspace-cut' as const,
@@ -2637,12 +2698,7 @@ function synchronizeWorkspaceSceneWithWorkbench(
   const currentMain = scene.slots.main;
   const currentCutPanel = scene.slots.cutPanel;
   if (
-    ((!currentMain && !main) ||
-      (currentMain?.kind === 'workspace-main' &&
-        main &&
-        currentMain.workspaceId === main.workspaceId &&
-        currentMain.viewId === main.viewId &&
-        currentMain.viewInstanceId === main.viewInstanceId)) &&
+    sameWorkspaceMainSurface(currentMain, main) &&
     ((!currentCutPanel && !cutPanel) ||
       (currentCutPanel?.kind === 'workspace-cut' &&
         cutPanel &&
@@ -2663,6 +2719,103 @@ function synchronizeWorkspaceSceneWithWorkbench(
       ...(cutPanel ? { cutPanel } : {}),
     },
   });
+}
+
+function sameWorkspaceMainSurface(
+  left: DesktopWorkbenchMainSurfaceRef | undefined,
+  right: DesktopWorkbenchMainSurfaceRef | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  if (!isWorkspaceMainSurface(left) || !isWorkspaceMainSurface(right) || left.kind !== right.kind) {
+    return false;
+  }
+  if (
+    left.workspaceId !== right.workspaceId ||
+    left.viewId !== right.viewId ||
+    left.viewInstanceId !== right.viewInstanceId
+  ) {
+    return false;
+  }
+  if (left.kind === 'character-authoring') {
+    return (
+      right.kind === 'character-authoring' &&
+      left.projectId === right.projectId &&
+      left.characterProjectId === right.characterProjectId
+    );
+  }
+  if (left.kind === 'world-authoring') {
+    return (
+      right.kind === 'world-authoring' &&
+      left.projectId === right.projectId &&
+      left.worldProjectId === right.worldProjectId
+    );
+  }
+  return right.kind === 'workspace-main';
+}
+
+function isWorkspaceMainSurface(
+  surface: DesktopWorkbenchMainSurfaceRef,
+): surface is Extract<
+  DesktopWorkbenchMainSurfaceRef,
+  { readonly kind: 'workspace-main' | 'character-authoring' | 'world-authoring' }
+> {
+  return (
+    surface.kind === 'workspace-main' ||
+    surface.kind === 'character-authoring' ||
+    surface.kind === 'world-authoring'
+  );
+}
+
+function projectWorkspaceMainSurface(
+  view: DesktopWorkbenchViewRef,
+): Extract<
+  DesktopWorkbenchMainSurfaceRef,
+  { readonly kind: 'workspace-main' | 'character-authoring' | 'world-authoring' }
+> {
+  if (view.kind === 'character-authoring') {
+    if (!view.characterProjectId) {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        `Character authoring View '${view.viewId}' has no exact CharacterProject.`,
+      );
+    }
+    return {
+      kind: 'character-authoring',
+      workspaceId: view.workspaceId,
+      projectId: view.projectId,
+      viewId: view.viewId,
+      viewInstanceId: view.viewInstanceId,
+      characterProjectId: view.characterProjectId,
+    };
+  }
+  if (view.kind === 'world-authoring') {
+    if (!view.worldProjectId) {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        `World authoring View '${view.viewId}' has no exact WorldProject.`,
+      );
+    }
+    return {
+      kind: 'world-authoring',
+      workspaceId: view.workspaceId,
+      projectId: view.projectId,
+      viewId: view.viewId,
+      viewInstanceId: view.viewInstanceId,
+      worldProjectId: view.worldProjectId,
+    };
+  }
+  if (view.kind === 'cut') {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      `Cut View '${view.viewId}' cannot be projected into the Workspace Main slot.`,
+    );
+  }
+  return {
+    kind: 'workspace-main',
+    workspaceId: view.workspaceId,
+    viewId: view.viewId,
+    viewInstanceId: view.viewInstanceId,
+  };
 }
 
 function requireWorkspaceProject(
@@ -2729,32 +2882,60 @@ function createTransitionedScene(
       },
     });
   }
-  if (intent.kind === 'open-character-management') {
-    const sceneId = `scene:${windowId}:character-management`;
+  if (intent.kind === 'open-creative-management') {
+    const sceneId = `scene:${windowId}:creative-management`;
     return parseDesktopWorkbenchSceneProjection({
       sceneId,
       windowId,
-      context: { kind: 'character-management' },
+      context: { kind: 'creative-management', catalog: intent.catalog },
       slots: {
-        main: { kind: 'character-management' },
+        main: { kind: 'creative-management', catalog: intent.catalog },
         status: { kind: 'scene-status', sceneId },
       },
     });
   }
   if (intent.kind === 'select-character-detail') {
-    if (current.context.kind !== 'character-management') {
+    if (
+      current.context.kind !== 'creative-management' ||
+      current.context.catalog !== 'characters'
+    ) {
       throw new DesktopSceneContractError(
         'desktop-scene-scope-mismatch',
-        'Character detail selection requires the active Character Management Scene.',
+        'Character detail selection requires the Character Creative Management catalog.',
       );
     }
     return parseDesktopWorkbenchSceneProjection({
       ...current,
-      context: { kind: 'character-management', detail: intent.selection },
+      context: {
+        kind: 'creative-management',
+        catalog: 'characters',
+        detail: intent.selection,
+      },
       slots: {
         ...current.slots,
-        main: { kind: 'character-management' },
+        main: { kind: 'creative-management', catalog: 'characters' },
         secondaryMain: { kind: 'character-detail', selection: intent.selection },
+      },
+    });
+  }
+  if (intent.kind === 'select-world-detail') {
+    if (current.context.kind !== 'creative-management' || current.context.catalog !== 'worlds') {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        'World detail selection requires the World Creative Management catalog.',
+      );
+    }
+    return parseDesktopWorkbenchSceneProjection({
+      ...current,
+      context: {
+        kind: 'creative-management',
+        catalog: 'worlds',
+        detail: intent.selection,
+      },
+      slots: {
+        ...current.slots,
+        main: { kind: 'creative-management', catalog: 'worlds' },
+        secondaryMain: { kind: 'world-detail', selection: intent.selection },
       },
     });
   }
@@ -2767,18 +2948,6 @@ function createTransitionedScene(
       slots: {
         main: { kind: 'extension-management' },
         secondaryMain: { kind: 'extension-detail' },
-        status: { kind: 'scene-status', sceneId },
-      },
-    });
-  }
-  if (intent.kind === 'open-project-management') {
-    const sceneId = `scene:${windowId}:project-management`;
-    return parseDesktopWorkbenchSceneProjection({
-      sceneId,
-      windowId,
-      context: { kind: 'project-management' },
-      slots: {
-        main: { kind: 'project-management' },
         status: { kind: 'scene-status', sceneId },
       },
     });

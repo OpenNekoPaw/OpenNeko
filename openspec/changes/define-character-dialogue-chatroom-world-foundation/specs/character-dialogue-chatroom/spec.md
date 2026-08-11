@@ -33,8 +33,24 @@ Every RoomRun participant SHALL have a stable participant identity, explicit con
 #### Scenario: Two Characters respond in one Room
 
 - **WHEN** two agent-controlled participants are eligible to respond
-- **THEN** each participant receives its own visibility-filtered RoomView, memory view and optional WorldView
+- **THEN** each participant receives its own visibility-filtered RoomView, Character/relationship memory view and optional immutable external-composition view
 - **AND** each response is produced by that participant's exact primary AgentSession
+
+### Requirement: Chat and TTS configuration is participant- and turn-scoped
+
+Each agent-controlled CharacterRun or Room participant SHALL own an independent effective Chat and TTS configuration. CharacterVersion MAY provide voice identity and default preferences, but changing a runtime provider, model, voice, speed or automatic-read setting SHALL affect only turns that have not started. Each started turn SHALL freeze the actual Chat/TTS execution receipt, and Room SHALL NOT create a shared mutable model or voice configuration.
+
+#### Scenario: User changes one participant while another is speaking
+
+- **WHEN** a Room participant has an active response and the user selects a different Chat model or TTS voice for a later response
+- **THEN** the active turn keeps its frozen Chat/TTS receipt and the selected participant applies the change only to its next eligible turn
+- **AND** other participants keep their own configuration unless the user explicitly applies a bounded per-participant batch update
+
+#### Scenario: TTS drives an Avatar
+
+- **WHEN** an accepted Character response is synthesized and played with timing or viseme evidence
+- **THEN** Voice/Media owns the generated audio artifact and the exact turn records its TTS receipt
+- **AND** the Avatar renderer may consume timing/viseme projection without owning TTS configuration, audio facts or the Agent turn
 
 ### Requirement: Room timeline has one Chara authority
 
@@ -66,25 +82,25 @@ A companion DialogueRun or RoomRun SHALL bind exact UserCharacterRelationship id
 - **THEN** Chara creates a sourced relationship memory candidate under the exact relationship identity
 - **AND** acceptance, correction or deletion is controlled by UserCharacterRelationship rather than AgentSession or Room projection
 
-### Requirement: Narrative runs require exact World authority
+### Requirement: Narrative runs require exact external Composition authority
 
-A narrative DialogueRun or RoomRun SHALL bind an exact WorldVersion, WorldRun, WorldSave and branch identity before creating participant CharacterRuns or AgentSessions. Missing or invalid World authority SHALL keep only that narrative run unavailable.
+A narrative DialogueRun or RoomRun SHALL bind the exact typed narrative Composition ref supplied by its owning external domain before creating participant CharacterRuns, CharacterStorylineRuns, CharacterMemoryScopes or AgentSessions. Chara SHALL NOT define, expand or infer the external storyline/runtime/save shape. Missing or invalid Composition authority SHALL keep only that narrative launch unavailable.
 
-#### Scenario: Narrative Chatroom starts without a valid World binding
+#### Scenario: Narrative Chatroom starts without a valid Composition binding
 
-- **WHEN** the requested WorldVersion, WorldRun, WorldSave or branch cannot be resolved
-- **THEN** creation returns a visible narrative-world-unavailable diagnostic
-- **AND** it does not downgrade to companion mode, select a recent World or use the Room transcript as narrative state
+- **WHEN** the requested owning Composition ref cannot be resolved or validated
+- **THEN** creation returns a visible external-composition-unavailable diagnostic
+- **AND** it does not downgrade to companion mode, select active/recent external state or use the Room transcript as narrative authority
 
 ### Requirement: Runtime kind and authority do not change in place
 
-An active DialogueRun or RoomRun SHALL keep its runtime kind, CharacterVersion, memory owner and narrative World binding fixed. Changing any of these facts SHALL create a new run or use an explicit owning-domain transaction defined for that fact.
+An active DialogueRun or RoomRun SHALL keep its runtime kind, CharacterVersion, CharacterStorylineRun, memory owner and narrative Composition binding fixed. Changing any of these facts SHALL create a new run or use an explicit owning-domain transaction defined for that fact.
 
 #### Scenario: User changes a companion Room to narrative
 
 - **WHEN** the user requests narrative interaction from an active companion RoomRun
-- **THEN** the system requires creation of a new narrative RoomRun with an exact World binding
-- **AND** it does not copy relationship memory into WorldSave or reinterpret old Room events as World facts
+- **THEN** the system requires creation of a new narrative RoomRun, CharacterStorylineRun and CharacterMemoryScope with an exact external Composition binding
+- **AND** it does not copy relationship memory into CharacterMemory or reinterpret old Room events as accepted storyline progress
 
 ### Requirement: UI lifetime does not own Character activity
 

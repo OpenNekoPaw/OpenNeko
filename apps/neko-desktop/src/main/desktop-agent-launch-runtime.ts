@@ -126,6 +126,11 @@ export interface DesktopAgentLaunchRuntime {
     connection: AgentLaunchConnectionIdentity,
     binding: AgentDomainBinding,
   ): Promise<AgentLaunchCatalogProjection>;
+  configureEntryTarget(
+    connection: AgentLaunchConnectionIdentity,
+    mode: import('@neko/agent-contracts').AgentEntryMode,
+    binding?: import('@neko/agent-contracts').AgentEntryTargetBinding,
+  ): Promise<import('@neko/agent-contracts').AgentEntryIntentProjection>;
   updateConfiguration(
     connection: AgentLaunchConnectionIdentity,
     configuration: AgentConfigurationRequest,
@@ -207,6 +212,9 @@ export function createDesktopAgentLaunchRuntime(input: {
     readonly binding: Extract<AgentDomainBinding, { readonly kind: 'workspace' }>;
     readonly reference: DesktopAgentWorkspaceReference;
   }) => Promise<AgentContextPayload>;
+  readonly entryTargets?: Parameters<
+    typeof createAgentLaunchApplicationService
+  >[0]['entryTargets'];
 }): DesktopAgentLaunchRuntime {
   const createIdentity = input.createIdentity ?? randomUUID;
   const grants = new Map<string, DesktopAgentResourceGrant>();
@@ -285,6 +293,7 @@ export function createDesktopAgentLaunchRuntime(input: {
       },
     },
     workspaceMentions: input.workspaceMentions,
+    ...(input.entryTargets === undefined ? {} : { entryTargets: input.entryTargets }),
   });
   return {
     attach: (attachInput) => service.attach(attachInput),
@@ -292,6 +301,8 @@ export function createDesktopAgentLaunchRuntime(input: {
     authorizeResource: (connection, resourceKind) =>
       service.authorizeResource(connection, resourceKind),
     bindTarget: (connection, binding) => service.replaceBinding(connection, binding),
+    configureEntryTarget: (connection, mode, binding) =>
+      service.configureEntryTarget(connection, mode, binding),
     updateConfiguration: (connection, configuration) =>
       service.updateConfiguration(connection, configuration),
     searchWorkspaceMentions: async (connection, bindingReceiptId, filter) => {

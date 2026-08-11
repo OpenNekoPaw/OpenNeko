@@ -66,6 +66,9 @@ describe('Desktop extension manager', () => {
         interface: {
           displayName: 'Computer Use',
           shortDescription: 'Control desktop apps',
+          localization: {
+            'zh-cn': { shortDescription: '控制桌面应用' },
+          },
           developerName: 'OpenNeko',
           category: 'Productivity',
         },
@@ -116,6 +119,9 @@ describe('Desktop extension manager', () => {
           runtimeDiagnosticCode: '',
           declaredPermissions: ['accessibility', 'screen-recording'],
           acceptedPermissions: [],
+          localization: {
+            'zh-cn': { description: '控制桌面应用' },
+          },
           mcpServerIds: ['computer-use'],
           hasSkills: true,
         }),
@@ -191,6 +197,49 @@ describe('Desktop extension manager', () => {
             agentStatus: 'ready',
           }),
         ],
+      });
+    });
+  });
+
+  it('isolates invalid localized interface metadata to its plugin manifest', async () => {
+    await withRepository(async (fixture) => {
+      const validRoot = join(fixture.marketplaceRoot, 'plugins', 'valid');
+      const invalidRoot = join(fixture.marketplaceRoot, 'plugins', 'invalid');
+      await writePlugin(validRoot, {
+        name: 'valid',
+        version: '1.0.0',
+        skills: './skills',
+        interface: {
+          shortDescription: 'Valid description',
+          localization: { 'zh-cn': { shortDescription: '有效介绍' } },
+        },
+      });
+      await writePlugin(invalidRoot, {
+        name: 'invalid',
+        version: '1.0.0',
+        skills: './skills',
+        interface: {
+          shortDescription: 'Invalid description',
+          localization: { zh_CN: { shortDescription: '无效介绍' } },
+        },
+      });
+      await Promise.all([
+        mkdir(join(validRoot, 'skills'), { recursive: true }),
+        mkdir(join(invalidRoot, 'skills'), { recursive: true }),
+      ]);
+      await writeMarketplace(fixture.marketplaceRoot, [
+        { name: 'valid', version: '1.0.0', path: 'plugins/valid' },
+        { name: 'invalid', version: '1.0.0', path: 'plugins/invalid' },
+      ]);
+
+      await expect(createManager(fixture).readCatalog()).resolves.toMatchObject({
+        records: [
+          expect.objectContaining({
+            id: 'valid@openneko',
+            localization: { 'zh-cn': { description: '有效介绍' } },
+          }),
+        ],
+        diagnostics: [{ code: 'manifest_invalid', count: 1 }],
       });
     });
   });

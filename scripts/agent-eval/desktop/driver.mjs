@@ -31,6 +31,9 @@ export function createDesktopAgentDriver(input) {
     async queue(command) {
       return evaluate({ kind: 'queue', ...command });
     },
+    async sendQueuedMessageNow(command) {
+      return evaluate({ kind: 'send-queued-now', ...command });
+    },
     async cancel(identity) {
       return evaluate({ kind: 'cancel', identity });
     },
@@ -568,8 +571,7 @@ export function driverExpression(command) {
         globalThis[stateKey] = state;
         return { connection: bootstrap.connection };
       }
-      case 'submit':
-      case 'queue': {
+      case 'submit': {
         const state = requireState();
         const eventOffset = state.events.length;
         const submissionCount = state.submissionCount;
@@ -586,6 +588,89 @@ export function driverExpression(command) {
           ...(command.llmConfig ? { llmConfig: command.llmConfig } : {}),
         });
         return { accepted: true, eventOffset, submissionCount };
+      }
+      case 'queue': {
+        const state = requireState();
+        const conversationId = requireText(command.conversationId, 'Conversation identity');
+        const baselineOffset = state.events.length;
+        bridge.send(state.connection, { type: 'getMessageQueue', conversationId });
+        const baseline = await waitForEvent(
+          state,
+          baselineOffset,
+          command.timeoutMs,
+          (event) => findMessageQueueSnapshot(event, conversationId, 'messageQueueSnapshot'),
+          'Desktop Agent queue baseline was not projected.',
+        );
+        const priorItemIds = new Set(
+          Array.isArray(baseline.items) ? baseline.items.map((item) => item?.id) : [],
+        );
+        const eventOffset = state.events.length;
+        const submissionCount = state.submissionCount;
+        state.submissionCount += 1;
+        bridge.send(state.connection, {
+          type: 'sendMessage',
+          conversationId,
+          message: requireText(command.prompt, 'Agent prompt'),
+          sessionMode: 'agent',
+          ...(command.chatModel ? { chatModel: command.chatModel } : {}),
+          ...(command.llmConfig ? { llmConfig: command.llmConfig } : {}),
+        });
+        const queued = await waitForEvent(
+          state,
+          eventOffset,
+          command.timeoutMs,
+          (event) => {
+            const snapshot = findMessageQueueSnapshot(
+              event,
+              conversationId,
+              'messageQueueSnapshot',
+            );
+            if (!snapshot || !Array.isArray(snapshot.items)) return undefined;
+            const added = snapshot.items.filter(
+              (item) =>
+                item?.source === 'user' &&
+                typeof item?.id === 'string' &&
+                !priorItemIds.has(item.id),
+            );
+            return added.length === 1 ? { item: added[0], snapshot } : undefined;
+          },
+          'Desktop Agent queue submission did not project one exact pending user item.',
+        );
+        return {
+          accepted: true,
+          eventOffset,
+          submissionCount,
+          queueItemId: queued.item.id,
+        };
+      }
+      case 'send-queued-now': {
+        const state = requireState();
+        const conversationId = requireText(command.conversationId, 'Conversation identity');
+        const queueItemId = requireText(command.queueItemId, 'Queued message identity');
+        const eventOffset = state.events.length;
+        bridge.send(state.connection, {
+          type: 'sendQueuedMessageNow',
+          conversationId,
+          queueItemId,
+        });
+        await waitForEvent(
+          state,
+          eventOffset,
+          command.timeoutMs,
+          (event) => {
+            const snapshot = findMessageQueueSnapshot(
+              event,
+              conversationId,
+              'messageQueueSnapshot',
+            );
+            if (!snapshot || snapshot.paused !== false || !Array.isArray(snapshot.items)) {
+              return undefined;
+            }
+            return snapshot.items.some((item) => item?.id === queueItemId) ? undefined : snapshot;
+          },
+          'Desktop Agent send-now operation did not release the exact queued message.',
+        );
+        return { accepted: true, eventOffset, queueItemId };
       }
       case 'create-conversation': {
         const state = requireState();
@@ -870,7 +955,7 @@ export function driverExpression(command) {
             : eventOffset;
         const actionEvents = state.events.slice(actionOffset);
         const queuedSnapshot = actionEvents
-          .map((event) => findMessageQueueSnapshot(event, conversationId, 'messageQueued'))
+          .map((event) => findMessageQueueSnapshot(event, conversationId, 'messageQueueSnapshot'))
           .find((snapshot) => snapshot?.pendingCount > 0);
         const projectionEvents = state.events.filter(
           (event) => belongsToConversation(event, conversationId) && isProjectionEvent(event),

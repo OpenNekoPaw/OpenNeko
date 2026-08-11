@@ -5,7 +5,7 @@
   "target": {
     "kind": "capability",
     "id": "perception-routing",
-    "contractHash": "sha256:a660bc6814e908a6ddc7534cf957f768e9d7d74583e4c2523949a36e62eb5e5f"
+    "contractHash": "sha256:7f3fe0a5b76ab079a9027616050805d5a57e21db40b37387529d0e17231601a0"
   },
   "runtimeProfiles": [
     {
@@ -30,6 +30,15 @@
       "selection": "explicit",
       "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
       "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe"
+    },
+    {
+      "id": "deepseek-missing-image-understanding",
+      "selection": "explicit",
+      "chat": { "providerId": "deepseek-chat", "modelId": "deepseek-chat" },
+      "purposes": {
+        "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" }
+      },
+      "configurationHash": "sha256:a11061bf8992c2f50b30dea14bf135d40fb89be652ebd8abfb73ee0cad748a68"
     }
   ],
   "judgeProfiles": [],
@@ -52,6 +61,12 @@
     {
       "id": "native-vision-without-perception-tool",
       "file": "cases/native-vision-without-perception-tool.json",
+      "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "missing-image-understanding-binding",
+      "file": "cases/missing-image-understanding-binding.json",
       "group": "boundary",
       "visibility": "public"
     }

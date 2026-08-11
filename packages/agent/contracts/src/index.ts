@@ -21,6 +21,7 @@ export * from './agent-conversation-context';
 export * from './assistant-resource-host';
 export * from './agent-draft-submit';
 export * from './agent-draft-mention-search';
+export * from './agent-entry-intent';
 export * from './agent-token-budget';
 export * from './creative-ai-invocation';
 export * from './config';
@@ -434,6 +435,8 @@ export type {
   AgentReasoningPreset,
   AgentContinuationMetadata,
   AgentQueuedMessageDisplayKind,
+  AgentQueuedMessageConfigurationDraft,
+  AgentQueuedMessageDraft,
   AgentQueuedMessageItem,
   AgentQueuedMessageSource,
   AgentTurnSource,

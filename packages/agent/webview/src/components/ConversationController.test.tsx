@@ -48,6 +48,8 @@ const hostMocks = vi.hoisted(() => ({
   getContextTokenCount: vi.fn(),
   getMessageQueue: vi.fn(),
   readLaunchCatalog: vi.fn(),
+  readEntryIntent: vi.fn(),
+  configureEntryTarget: vi.fn(),
   bindTarget: vi.fn(),
   updateDraftConfiguration: vi.fn(),
   submitDraft: vi.fn(),
@@ -71,6 +73,8 @@ vi.mock('../host-runtime-context', () => ({
     getState: hostRuntimeMocks.getState,
     setState: hostRuntimeMocks.setState,
     readLaunchCatalog: hostMocks.readLaunchCatalog,
+    readEntryIntent: hostMocks.readEntryIntent,
+    configureEntryTarget: hostMocks.configureEntryTarget,
     bindTarget: hostMocks.bindTarget,
     updateDraftConfiguration: hostMocks.updateDraftConfiguration,
     submitDraft: hostMocks.submitDraft,
@@ -89,6 +93,20 @@ vi.mock('../host-runtime-context', () => ({
 beforeEach(() => {
   hostRuntimeMocks.getState.mockReturnValue(undefined);
   hostMocks.readLaunchCatalog.mockReturnValue(createBoundAssistantLaunchCatalog('draft-default'));
+  hostMocks.readEntryIntent.mockReturnValue({ mode: 'assistant', targetReceipt: null });
+  hostMocks.configureEntryTarget.mockImplementation(async (mode, binding) => ({
+    mode,
+    targetReceipt:
+      binding === undefined
+        ? null
+        : {
+            targetReceiptId: 'entry-target:connection-1:test',
+            draftId: 'draft-default',
+            connectionId: 'launch-1',
+            mode,
+            binding,
+          },
+  }));
   hostMocks.updateDraftConfiguration.mockImplementation(
     async (request: AgentConfigurationRequest) => {
       const current = hostMocks.readLaunchCatalog() as AgentLaunchCatalogProjection;
@@ -129,17 +147,17 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.emptyState.scope.activeDescription': 'Start a conversation.',
         'chat.entryExperience.label': 'Choose an experience',
         'chat.entryExperience.mode.assistant': 'Assistant',
-        'chat.entryExperience.mode.workspace': 'Workspace',
-        'chat.entryExperience.mode.character': 'Character',
-        'chat.entryExperience.mode.world': 'World',
+        'chat.entryExperience.mode.authoring': 'Authoring',
+        'chat.entryExperience.mode.characterDialogue': 'Character Dialogue',
+        'chat.entryExperience.mode.worldExperience': 'World Experience',
         'chat.entryExperience.assistant.title': 'What would you like to explore?',
         'chat.entryExperience.assistant.description': 'Start without a project.',
-        'chat.entryExperience.workspace.title': 'What should we work on?',
-        'chat.entryExperience.workspace.description': 'Choose a project.',
-        'chat.entryExperience.character.title': 'Enter a character conversation',
-        'chat.entryExperience.character.description': 'Character owner required.',
-        'chat.entryExperience.world.title': 'Enter an interactive world',
-        'chat.entryExperience.world.description': 'World owner required.',
+        'chat.entryExperience.authoring.title': 'What should we create?',
+        'chat.entryExperience.authoring.description': 'Choose a target.',
+        'chat.entryExperience.characterDialogue.title': 'Enter a character dialogue',
+        'chat.entryExperience.characterDialogue.description': 'Character owner required.',
+        'chat.entryExperience.worldExperience.title': 'Enter a world experience',
+        'chat.entryExperience.worldExperience.description': 'World owner required.',
         'chat.entryExperience.validation.bindingPending': 'Updating the selected experience…',
         'chat.entryExperience.validation.configurationRequired': 'Choose a configured model.',
         'chat.entryExperience.validation.assistantBindingMismatch': 'Release Workspace binding.',
@@ -587,9 +605,10 @@ vi.mock('./ChatView/InputArea', async () => {
 describe('ConversationController entry state', () => {
   it('keeps Home modes in Draft configuration and out of management Scene navigation', () => {
     expect(conversationControllerSource).toContain('HomeExperienceModeSelector');
-    expect(conversationControllerSource).toContain('entryExperienceMode');
+    expect(conversationControllerSource).toContain('entryMode');
     expect(conversationControllerSource).not.toContain('start-chat');
-    expect(conversationControllerSource).toContain('.bindTarget(');
+    expect(conversationControllerSource).toContain('.configureEntryTarget(');
+    expect(conversationControllerSource).not.toContain('.bindTarget(');
     expect(conversationControllerSource).not.toContain('open-project-management');
     expect(conversationControllerSource).not.toContain('open-character-management');
     expect(inputAreaSource).toContain('onChooseDirectory');
@@ -710,7 +729,7 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('switches Workspace as Draft configuration without leaving the entry or clearing text', async () => {
+  it('switches to Authoring as Draft configuration without leaving the entry or clearing text', async () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-mode-config', { kind: 'unbound' });
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
@@ -731,11 +750,13 @@ describe('ConversationController entry state', () => {
 
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'preserve this request' } });
-    fireEvent.click(screen.getByRole('tab', { name: 'Workspace' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Authoring' }));
 
-    await waitFor(() => expect(hostMocks.bindTarget).toHaveBeenCalledWith({ kind: 'unbound' }));
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('authoring', undefined),
+    );
     expect(input).toHaveProperty('value', 'preserve this request');
-    expect(screen.getByRole('tab', { name: 'Workspace' }).getAttribute('aria-selected')).toBe(
+    expect(screen.getByRole('tab', { name: 'Authoring' }).getAttribute('aria-selected')).toBe(
       'true',
     );
     expect(screen.getByTestId('entry-submission-blocked').textContent).toBe(
@@ -764,6 +785,50 @@ describe('ConversationController entry state', () => {
       'Choose a configured model.',
     );
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+  });
+
+  it('rejects restored Character selections before the Character launch port', () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-character-launch', { kind: 'unbound' });
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    render(
+      <ConversationController
+        {...createProps({
+          mentionItems: [
+            {
+              id: 'character-version-a',
+              kind: 'entity',
+              label: 'A',
+              characterLaunchSelection: {
+                characterProjectId: 'character-project-a',
+                characterVersionId: 'character-version-a',
+              },
+            },
+            {
+              id: 'character-version-b',
+              kind: 'entity',
+              label: 'B',
+              characterLaunchSelection: {
+                characterProjectId: 'character-project-b',
+                characterVersionId: 'character-version-b',
+              },
+            },
+          ],
+        })}
+        agentPresentation={launchCatalog.interaction}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Character B' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Speak together' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room capabilities remain experimental',
+    );
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+    expect(hostMocks.bindTarget).not.toHaveBeenCalled();
   });
 
   it('does not route unbound Entry @ discovery through Workspace search', () => {
@@ -951,6 +1016,7 @@ describe('ConversationController entry state', () => {
     await act(async () => undefined);
     expect(hostMocks.submitDraft).toHaveBeenCalledWith({
       draft: launchCatalog.interaction,
+      entryTargetReceipt: null,
       input: { kind: 'message', text: 'Help with this idea' },
       references: [],
       resourceGrantIds: [],
@@ -967,6 +1033,57 @@ describe('ConversationController entry state', () => {
     await waitFor(() => expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({ drafts: [] }));
     expect(screen.getByRole('textbox')).toHaveProperty('value', '');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('submits the exact configured Authoring target receipt', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-authoring-submit', {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
+    const targetReceipt = {
+      targetReceiptId: 'target-receipt:authoring-1',
+      draftId: launchCatalog.interaction.draftId,
+      connectionId: launchCatalog.connection.connectionId,
+      mode: 'authoring' as const,
+      binding: {
+        kind: 'authoring' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+        target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+      },
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.readEntryIntent.mockReturnValue({ mode: 'authoring', targetReceipt });
+    hostMocks.submitDraft.mockResolvedValue({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-authoring-1',
+        binding: launchCatalog.interaction.binding,
+      },
+      turnId: 'turn-authoring-1',
+      turnStatus: 'running',
+    });
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={launchCatalog.interaction}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Refine this character' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.submitDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft: launchCatalog.interaction,
+        entryTargetReceipt: targetReceipt,
+        input: { kind: 'message', text: 'Refine this character' },
+      }),
+    );
   });
 
   it('submits the configured image generation model with the Entry Draft', async () => {
@@ -995,7 +1112,7 @@ describe('ConversationController entry state', () => {
                 modelId: 'image-model',
                 label: 'Image Model',
                 category: 'image',
-                capabilities: ['image.generate'],
+                capabilities: ['text_to_image'],
               },
             ],
             defaultMediaModels: { image: 'image-provider:image-model' },
@@ -1131,6 +1248,41 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
+  it('keeps Character roleplay unavailable from an unbound Entry Draft', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-entry-roleplay', { kind: 'unbound' });
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.bindTarget.mockResolvedValue(launchCatalog);
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Character Dialogue' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('entry-submission-blocked').textContent).toBe(
+        'Character is unavailable.',
+      ),
+    );
+    expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('character-dialogue', undefined);
+    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
   it('removes Entry Draft owner choices after Workspace activation', () => {
     render(
       <ConversationController
@@ -1146,7 +1298,7 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Workspace' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Authoring' })).toBeNull();
   });
 
   it('resets prior presentation state when the same controller receives a fresh draft identity', () => {

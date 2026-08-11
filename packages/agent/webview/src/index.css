@@ -1172,6 +1172,68 @@ body {
   white-space: nowrap;
 }
 
+.agent-composer-workspace-menu button > span,
+.agent-composer-workspace-menu button > small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-composer-workspace-menu button > small {
+  margin-top: 2px;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+}
+
+.agent-composer-workspace-menu-status {
+  padding: 7px 8px;
+  color: var(--agent-fg-secondary);
+  font-size: 12px;
+}
+
+.agent-composer-workspace-menu-status.is-error {
+  color: var(--agent-danger);
+}
+
+.agent-composer-workspace-menu-separator {
+  height: 1px;
+  margin: 4px;
+  background: var(--agent-overlay-border);
+}
+
+.agent-composer-workspace-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 4px;
+  padding: 4px;
+  border-top: 1px solid var(--agent-overlay-border);
+}
+
+.agent-composer-workspace-create select,
+.agent-composer-workspace-create input {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--agent-control-border);
+  border-radius: 4px;
+  background: var(--agent-control-bg);
+  color: var(--agent-fg);
+  font: inherit;
+}
+
+.agent-composer-workspace-create select {
+  grid-column: 1 / -1;
+}
+
+.agent-composer-workspace-create button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
 .agent-composer-workspace-menu button:hover,
 .agent-composer-workspace-menu button:focus-visible {
   background: var(--agent-control-hover-bg);
@@ -2658,8 +2720,8 @@ body {
 }
 
 .agent-composer-stop {
-  border-color: color-mix(in srgb, var(--neko-errorForeground) 70%, transparent);
-  background: var(--neko-errorForeground);
+  border-color: color-mix(in srgb, var(--agent-danger) 70%, transparent);
+  background: var(--agent-danger);
   color: #ffffff;
 }
 

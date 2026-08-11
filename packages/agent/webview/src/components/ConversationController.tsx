@@ -120,7 +120,7 @@ import {
   useComposerWorkspacePresentation,
   type AgentComposerWorkspaceTarget,
 } from './ComposerWorkspaceContext';
-import type { AgentEntryExperienceMode } from '../entry-experience-mode';
+import type { AgentEntryIntentProjection, AgentEntryMode } from '@neko/agent-contracts';
 import { projectHomeExperienceEntry } from '../presenters/home-experience-entry-presenter';
 
 // =============================================================================
@@ -284,8 +284,11 @@ export function ConversationController({
   const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<SelectedCharacterLaunch[]>(
     [],
   );
-  const [entryExperienceMode, setEntryExperienceMode] =
-    useState<AgentEntryExperienceMode>('assistant');
+  const [entryMode, setEntryMode] = useState<AgentEntryMode>('assistant');
+  const [entryIntent, setEntryIntent] = useState<AgentEntryIntentProjection>({
+    mode: 'assistant',
+    targetReceipt: null,
+  });
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
   const [isEntryBindingPending, setIsEntryBindingPending] = useState(false);
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
@@ -440,11 +443,11 @@ export function ConversationController({
     setActiveConversationId(null);
     clearVisibleState();
     setActiveTab('chat');
-    const launchCatalog =
-      requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog();
-    setEntryExperienceMode(
-      entryDraft?.experienceMode ?? projectEntryExperienceMode(launchCatalog.interaction.binding),
-    );
+    const draftAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
+    const launchCatalog = draftAdapter.readLaunchCatalog();
+    const authoritativeEntryIntent = draftAdapter.readEntryIntent();
+    setEntryMode(authoritativeEntryIntent.mode);
+    setEntryIntent(authoritativeEntryIntent);
     setEntryWorkspaceTarget(entryDraft?.workspaceTarget);
     setIsEntryBindingPending(false);
     updateEntryInputValue(entryDraft?.inputValue ?? '');
@@ -499,14 +502,14 @@ export function ConversationController({
       selectedModel: entrySelectedModel,
       mediaModelSelection: entryMediaModelSelection,
       executionMode: entryExecutionMode,
-      experienceMode: entryExperienceMode,
+      entryMode,
     });
   }, [
     agentPresentation,
     entryContextReferences,
     entryCharacterLaunches,
     entryExecutionMode,
-    entryExperienceMode,
+    entryMode,
     entryInputValue,
     entryMediaModelSelection,
     entrySelectedModel,
@@ -622,7 +625,8 @@ export function ConversationController({
   const homeExperienceProjection =
     draftLaunchCatalog && composerWorkspace?.kind === 'entry'
       ? projectHomeExperienceEntry({
-          mode: entryExperienceMode,
+          mode: entryMode,
+          intent: entryIntent,
           draft: draftLaunchCatalog.interaction,
           ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
           workspaceChooserAvailable: !composerWorkspace.disabled,
@@ -1120,19 +1124,30 @@ export function ConversationController({
     startNewForegroundConversation();
   }, [conversationKind, startNewForegroundConversation]);
 
-  const handleEntryExperienceModeChange = useCallback(
-    (mode: AgentEntryExperienceMode) => {
-      if (mode === entryExperienceMode || isEntryBindingPending) return;
+  const handleEntryModeChange = useCallback(
+    (mode: AgentEntryMode) => {
+      if (mode === entryMode || isEntryBindingPending) return;
       if (agentPresentation?.phase !== 'draft' || composerWorkspace?.kind !== 'entry') {
         throw new Error('Agent Entry mode requires an exact Draft presentation.');
       }
-      const nextTarget = mode === 'workspace' ? entryWorkspaceTarget : undefined;
+      const nextTarget = mode === 'authoring' ? entryWorkspaceTarget : undefined;
       setIsEntryBindingPending(true);
       void requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter)
-        .bindTarget(nextTarget?.context ?? { kind: 'unbound' })
-        .then(() => {
-          setEntryExperienceMode(mode);
-          if (mode !== 'workspace') setEntryWorkspaceTarget(undefined);
+        .configureEntryTarget(
+          mode,
+          nextTarget?.target
+            ? {
+                kind: 'authoring',
+                workspaceId: nextTarget.context.workspaceId,
+                workspaceGrantId: nextTarget.context.workspaceGrantId,
+                target: nextTarget.target,
+              }
+            : undefined,
+        )
+        .then((intent) => {
+          setEntryMode(mode);
+          setEntryIntent(intent);
+          if (mode !== 'authoring') setEntryWorkspaceTarget(undefined);
           setEntrySessionMode('agent');
           setEntryContextReferences([]);
           setEntryCharacterLaunches([]);
@@ -1148,7 +1163,7 @@ export function ConversationController({
     [
       agentPresentation,
       composerWorkspace,
-      entryExperienceMode,
+      entryMode,
       entryWorkspaceTarget,
       hostRuntimeAdapter,
       isEntryBindingPending,
@@ -1182,9 +1197,16 @@ export function ConversationController({
         if (!agentPresentation) throw new Error('Agent Draft presentation is unavailable.');
         const launchCatalog = draftHostRuntimeAdapter.readLaunchCatalog();
         const authoritativeDraft = launchCatalog.interaction;
+        if (entryCharacterLaunches.length > 0) {
+          setGlobalError(
+            'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+          );
+          return;
+        }
         if (composerWorkspace?.kind === 'entry') {
           const validation = projectHomeExperienceEntry({
-            mode: entryExperienceMode,
+            mode: entryMode,
+            intent: entryIntent,
             draft: authoritativeDraft,
             ...(entryWorkspaceTarget === undefined
               ? {}
@@ -1238,6 +1260,7 @@ export function ConversationController({
         void draftHostRuntimeAdapter
           .submitDraft({
             draft: authoritativeDraft,
+            entryTargetReceipt: entryIntent.targetReceipt,
             input: inputIntent,
             references,
             resourceGrantIds,
@@ -1278,7 +1301,8 @@ export function ConversationController({
       activeSettings.chatModelOptions,
       composerWorkspace,
       entryContextReferences,
-      entryExperienceMode,
+      entryIntent,
+      entryMode,
       entryInputValue,
       entryModelState.agentMediaModels,
       entrySelectedModel,
@@ -1286,6 +1310,7 @@ export function ConversationController({
       entryWorkspaceTarget,
       handleSendWithoutConversation,
       hasConfigSnapshot,
+      entryCharacterLaunches,
       hostRuntimeAdapter,
       isEntryBindingPending,
       isDraftPresentation,
@@ -1620,7 +1645,7 @@ export function ConversationController({
               <HomeExperienceModeSelector
                 projection={homeExperienceProjection}
                 selectionPending={isEntryBindingPending}
-                onChange={handleEntryExperienceModeChange}
+                onChange={handleEntryModeChange}
               />
             ) : null}
             <EmptyState
@@ -1686,7 +1711,7 @@ export function ConversationController({
                 showDraftWorkspaceControl={homeExperienceProjection?.showWorkspaceControl ?? false}
                 draftTargetSelectionPending={isEntryBindingPending}
                 onDraftWorkspaceTargetChange={
-                  composerWorkspace?.kind === 'entry' && entryExperienceMode === 'workspace'
+                  composerWorkspace?.kind === 'entry' && entryMode === 'authoring'
                     ? async (target) => {
                         setEntryContextReferences([]);
                         setEntryCharacterLaunches([]);
@@ -1695,9 +1720,20 @@ export function ConversationController({
                         updateMentionSearchFilter('');
                         setIsEntryBindingPending(true);
                         try {
-                          await requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).bindTarget(
-                            target?.context ?? { kind: 'unbound' },
+                          const intent = await requireAgentDraftHostRuntimeAdapter(
+                            hostRuntimeAdapter,
+                          ).configureEntryTarget(
+                            'authoring',
+                            target?.target
+                              ? {
+                                  kind: 'authoring',
+                                  workspaceId: target.context.workspaceId,
+                                  workspaceGrantId: target.context.workspaceGrantId,
+                                  target: target.target,
+                                }
+                              : undefined,
                           );
+                          setEntryIntent(intent);
                           setEntryWorkspaceTarget(target);
                           setGlobalError(null);
                         } catch (error) {
@@ -1900,23 +1936,6 @@ function projectDraftInputIntent(input: {
     phase: 'draft',
     bindingKind: input.bindingKind,
   });
-}
-
-function projectEntryExperienceMode(
-  binding: import('@neko/agent-contracts').AgentDomainBinding,
-): AgentEntryExperienceMode {
-  switch (binding.kind) {
-    case 'unbound':
-    case 'assistant':
-      return 'assistant';
-    case 'workspace':
-      return 'workspace';
-    case 'character':
-    case 'room':
-      return 'character';
-    case 'world':
-      return 'world';
-  }
 }
 
 function projectDraftReferenceReceipt(payload: AgentContextPayload): AgentInputReferenceReceipt {

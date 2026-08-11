@@ -32,6 +32,7 @@ import {
   type CharacterDialogueSessionProjection,
   type EmbodyCharacterSessionProjection,
   type AgentQueuedMessageItem,
+  type AgentFlatPurposeModelRefs,
   type AgentInputCatalogMessage,
   type AmbientCanvasNode,
   parseAmbientCanvasUpdateNodes,
@@ -356,6 +357,10 @@ export function ChatWorkspace({
 
   const tabConversationId = tabRenderSnapshot.conversationId;
   const isCharacterRoleSession = isCharacterRoleConversationKind(conversationKind);
+  const isRunActive =
+    isThinking ||
+    streamingMessageId !== null ||
+    (agentState !== null && agentState.phase !== 'idle');
   const isModelConfigurationReady =
     isCharacterRoleSession || tabState.modelConfigurationInitialized;
   const sessionMutationConversationId = isVisible ? tabConversationId : null;
@@ -407,7 +412,7 @@ export function ChatWorkspace({
 
   const { handleSend, triggerSend, handleCancelMessage, copyLastResponse } = useChatActions({
     inputValue,
-    isThinking,
+    isThinking: isRunActive,
     inputCatalog,
     reportInputDiagnostic: onInputDiagnostic,
     selectedModel,
@@ -513,36 +518,57 @@ export function ChatWorkspace({
 
   useEffect(() => {
     if (!queuedEdit) return;
-
-    const currentInputValue = inputValueRef.current;
-    if (currentInputValue.trim().length === 0) {
-      inputValueRef.current = queuedEdit.item.content;
-      updateTabRenderState((state) =>
-        state.queuedEdit?.requestId === queuedEdit.requestId
-          ? { inputValue: queuedEdit.item.content, queuedEdit: null }
-          : {},
-      );
-      return;
-    }
-
-    updateTabRenderState((state) =>
-      state.queuedEdit?.requestId === queuedEdit.requestId
-        ? {
-            queuedEdit: null,
-            diagnostics: [
-              ...state.diagnostics,
-              {
-                type: 'sessionDiagnostic',
-                code: 'queued-edit-draft-conflict',
-                severity: 'warning',
-                message: queuedEditDraftConflictMessage,
-                conversationId: tabRenderSnapshot.conversationId,
-                tabId: tabRenderSnapshot.tabId,
-              },
-            ],
-          }
-        : {},
-    );
+    updateTabRenderState((state) => {
+      if (state.queuedEdit?.requestId !== queuedEdit.requestId) return {};
+      const hasComposerDraft =
+        state.inputValue.trim().length > 0 ||
+        state.attachedFiles.length > 0 ||
+        state.selectedFileReferences.length > 0 ||
+        state.contextReferences.length > 0;
+      if (hasComposerDraft) {
+        return {
+          queuedEdit: null,
+          diagnostics: [
+            ...state.diagnostics,
+            {
+              type: 'sessionDiagnostic',
+              code: 'queued-edit-draft-conflict',
+              severity: 'warning',
+              message: queuedEditDraftConflictMessage,
+              conversationId: tabRenderSnapshot.conversationId,
+              tabId: tabRenderSnapshot.tabId,
+            },
+          ],
+        };
+      }
+      const draft = queuedEdit.item.draft;
+      const restoredInput = projectQueuedEditInput(queuedEdit.item);
+      const primaryModel =
+        draft?.configuration?.agentModels?.primary ?? draft?.configuration?.chatModel;
+      const purposeModels = draft?.configuration?.purposeModels;
+      inputValueRef.current = restoredInput;
+      return {
+        inputValue: restoredInput,
+        attachedFiles: [...(draft?.attachments ?? [])],
+        selectedFileReferences: [...(draft?.fileReferences ?? [])],
+        contextReferences: [...(draft?.contextPayloads ?? [])],
+        ...(draft === undefined ? {} : { sessionMode: draft.sessionMode }),
+        ...(primaryModel === undefined ? {} : { selectedModel: primaryModel.modelId }),
+        ...(purposeModels === undefined
+          ? {}
+          : {
+              mediaModelSelection: restoreQueuedMediaModelSelection(
+                state.mediaModelSelection,
+                purposeModels,
+              ),
+              mediaUnderstandingSelection: restoreQueuedUnderstandingModelSelection(
+                state.mediaUnderstandingSelection,
+                purposeModels,
+              ),
+            }),
+        queuedEdit: null,
+      };
+    });
   }, [
     queuedEdit,
     queuedEditDraftConflictMessage,
@@ -721,12 +747,12 @@ export function ChatWorkspace({
     sessionMutationConversationId,
   ]);
   const isModelConfigurationBusy =
-    modelCatalogStatus === 'loading' || isThinking || workItems.some(isActiveWorkItem);
+    modelCatalogStatus === 'loading' || isRunActive || workItems.some(isActiveWorkItem);
 
-  const handlePromoteQueuedMessage = useCallback(
+  const handleSendQueuedMessageNow = useCallback(
     (queueItemId: string) => {
       if (!sessionMutationConversationId || isCharacterRoleSession) return;
-      agentHostMessages.promoteQueuedMessage(sessionMutationConversationId, queueItemId);
+      agentHostMessages.sendQueuedMessageNow(sessionMutationConversationId, queueItemId);
     },
     [sessionMutationConversationId, isCharacterRoleSession],
   );
@@ -811,7 +837,7 @@ export function ChatWorkspace({
         messages={visibleMessages}
         inputValue={inputValue}
         isThinking={isThinking}
-        isRunActive={isThinking || streamingMessageId !== null}
+        isRunActive={isRunActive}
         queuedMessageCount={queuedMessageCount}
         queuedMessages={queuedMessages}
         streamingMessageId={streamingMessageId}
@@ -830,7 +856,7 @@ export function ChatWorkspace({
         onInputChange={setInputValue}
         onSend={handleSend}
         onCancel={handleCancelMessage}
-        onPromoteQueuedMessage={handlePromoteQueuedMessage}
+        onSendQueuedMessageNow={handleSendQueuedMessageNow}
         onCancelQueuedMessage={handleCancelQueuedMessage}
         onEditQueuedMessage={handleEditQueuedMessage}
         entryPromptMenu={entryPromptMenu}
@@ -855,6 +881,40 @@ export function ChatWorkspace({
 
 function resolveSetStateAction<T>(value: React.SetStateAction<T>, current: T): T {
   return typeof value === 'function' ? (value as (previous: T) => T)(current) : value;
+}
+
+function projectQueuedEditInput(item: AgentQueuedMessageItem): string {
+  const draft = item.draft;
+  const input = draft?.input;
+  if (!input) return draft?.message ?? item.content;
+  const name = input.kind === 'skill' ? input.skillName : input.commandId;
+  return `${input.kind === 'skill' ? '$' : '/'}${name}${input.args ? ` ${input.args}` : ''}`;
+}
+
+function restoreQueuedMediaModelSelection(
+  current: Readonly<MediaModelSelection>,
+  purposes: AgentFlatPurposeModelRefs,
+): MediaModelSelection {
+  return {
+    image: purposes['image.generate']?.modelId ?? purposes['image.edit']?.modelId ?? current.image,
+    video: purposes['video.generate']?.modelId ?? current.video,
+    audio:
+      purposes['audio.generate']?.modelId ??
+      purposes['audio.tts']?.modelId ??
+      purposes['audio.music.generate']?.modelId ??
+      current.audio,
+  };
+}
+
+function restoreQueuedUnderstandingModelSelection(
+  current: Readonly<MediaUnderstandingSelection>,
+  purposes: AgentFlatPurposeModelRefs,
+): MediaUnderstandingSelection {
+  return {
+    image: purposes['image.understand']?.modelId ?? current.image,
+    video: purposes['video.understand']?.modelId ?? current.video,
+    audio: purposes['audio.understand']?.modelId ?? current.audio,
+  };
 }
 
 function isActiveWorkItem(item: AgentWorkItem): boolean {

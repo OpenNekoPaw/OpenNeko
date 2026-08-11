@@ -1,84 +1,88 @@
-## 1. Architecture and canonical contracts
+## 1. Chara ownership and canonical contracts
 
-- [x] 1.1 Reconcile the Character proposal so current scope is Character, Dialogue, Chatroom and minimum World Foundation, while Browser Use, Computer Use, Play-use, external games and VLA remain owned by independent changes.
-- [x] 1.2 Define canonical CharacterProject, immutable CharacterVersion, authoring-test snapshot, CharacterRun and UserCharacterRelationship contracts with strict codecs and fail-local diagnostics.
-- [x] 1.3 Define canonical CharacterRoom, RoomRun, participant/controller, RoomEvent, scheduling policy and exact AgentSession mapping contracts.
-- [x] 1.4 Define canonical WorldProject, immutable WorldVersion, WorldBook, WorldRun, WorldActionIntent, WorldEvent, WorldState, WorldView, WorldSave and branch binding contracts.
-- [x] 1.5 Define companion/narrative DialogueRun and RoomRun discriminated contracts: companion World binding optional, narrative WorldVersion/Run/Save/branch binding required.
-- [x] 1.6 Add architecture and contract tests proving unique owners, exact subpath imports, no internal contract versions, no alternate handlers and fail-local invalid-record isolation.
+- [x] 1.1 Define canonical CharacterProject, immutable CharacterVersion, authoring-test snapshot, CharacterRun and UserCharacterRelationship contracts with strict codecs and fail-local diagnostics.
+- [x] 1.2 Define canonical CharacterRoom, RoomRun, participant/controller, RoomEvent, scheduling policy and exact AgentSession mapping contracts.
+- [x] 1.3 Add CharacterBackgroundStory and CharacterOriginSetting to CharacterDefinition/Project/Version, explicitly forbidding runnable-world, state, save and branch fields.
+- [x] 1.4 Define CharacterStorylineVersion, CharacterStorylineRun, observation candidate, accepted transition and evidence-backed storyline CAS revision.
+- [x] 1.5 Define CharacterMemoryScope, CharacterMemoryCandidate and CharacterMemoryEntry with independent accept/correct/reject/delete semantics and exact CharacterRun/StorylineRun binding.
+- [x] 1.6 Define exact public Chara refs for external Composition consumers without declaring external storyline/runtime/save shape or storing active/latest fallback identity.
+- [x] 1.7 Add architecture/contract tests proving Chara owns only Character lore/storyline/memory/run/room, imports no external-domain private implementation and keeps invalid records fail-local.
 
 ## 2. Character authoring and publication
 
 - [x] 2.1 Implement CharacterProject draft, evidence/candidate review, canon validation and representation-ref orchestration in `@neko/chara`.
-- [x] 2.2 Implement publication of immutable, user-managed CharacterVersion records without provider secret, runtime handle, raw local path, transcript or dynamic World state.
-- [x] 2.3 Keep Dialogue/Embody authoring-test snapshots distinct from published CharacterVersion and reject their use in formal companion/narrative runs.
-- [x] 2.4 Add producer tests for draft update, review, publication immutability, invalid record isolation and exact version selection.
+- [x] 2.2 Implement publication of immutable, user-managed CharacterVersion records without provider secret, runtime handle, raw local path or transcript.
+- [x] 2.3 Keep Dialogue/Embody authoring-test snapshots distinct from published CharacterVersion and reject their use in formal CharacterRuns.
+- [x] 2.4 Implement BackgroundStory/OriginSetting authoring, source review and publication while keeping long-form content bytes under Content owner.
+- [x] 2.5 Add producer tests for background/origin draft update, publication immutability, invalid lore isolation and proof that publication cannot create an external runtime/save.
 
-## 3. Canonical AgentSession composition
+## 3. Character storyline and memory
 
-- [x] 3.1 Define a narrow Chara consumer port that maps each agent-controlled CharacterRun to exactly one primary Pi AgentSession.
-- [x] 3.2 Materialize frozen CharacterVersion, authorized memory, RoomView and optional WorldView into the Agent turn context without creating a Chara responder/transcript loop.
-- [x] 3.3 Ensure human-controlled characters do not create hidden AgentSessions and that participant sessions never share mutable transcript, model config or memory view.
-- [x] 3.4 Add path tests proving product Dialogue/Chatroom uses Pi turn, Tool Call, Approval, cancellation, transcript and compaction, with existing local session kernels restricted to authoring tests.
-- [ ] 3.5 Run focused real Agent evaluations for companion dialogue, narrative knowledge boundaries, multi-participant identity and context isolation.
-  - Blocked: the isolated Desktop fixture has no configured Agent provider/model, and the complete-session Evaluation driver does not yet expose Character-specific operations and neutral owner/context facts. The visible product path fails with `Choose a configured Desktop Agent provider and model before sending.`; mock or direct-runtime evidence is not counted as completion.
+- [x] 3.1 Implement CharacterStoryline authoring/publication with exact CharacterVersion binding and multiple explicitly selectable personal arcs.
+- [x] 3.2 Implement CharacterStorylineRun creation and expected-revision transition acceptance; reject stale, wrong-run and unreviewed external observation candidates.
+- [x] 3.3 Implement CharacterMemoryScope/Candidate/Entry lifecycle and source diagnostics independently from UserCharacterRelationship.
+- [x] 3.4 Keep companion relationship memory and Character-subjective memory separate even when they share one transcript/event source; require independent review operations.
+- [x] 3.5 Add path tests proving external evidence can only create candidates, external save/branch/delete operations cannot mutate Character memory, and cross-run/storyline recall cannot succeed.
 
-## 4. Dialogue and Chatroom application runtime
+## 4. Canonical AgentSession and Room runtime
 
-- [x] 4.1 Implement companion and narrative DialogueRun creation with frozen CharacterVersion, memory owner and exact primary AgentSession identity.
-- [x] 4.2 Implement CharacterRoom durable records and RoomRun lifecycle with stable participant/controller identities.
-- [x] 4.3 Implement the RoomEvent timeline and `expectedRoomRevision` commit invariant for messages, membership, mentions, moderation, scheduling and accepted participant responses.
-- [x] 4.4 Implement bounded mentioned, turn-based and autonomous scheduling without shared responders or continuous hidden execution.
-- [x] 4.5 Implement participant-scoped RoomView filtering and tests preventing private events or another participant's memory from entering an ineligible AgentSession.
-- [x] 4.6 Implement UserCharacterRelationship candidate/accept/reject/correct/delete semantics for companion runs without promoting searchable transcript to accepted memory.
+- [x] 4.1 Map each agent-controlled CharacterRun to exactly one primary Pi AgentSession; keep local Character session kernels restricted to authoring tests.
+- [x] 4.2 Ensure human-controlled Characters do not create hidden AgentSessions and participants never share mutable transcript, model config or memory view.
+- [x] 4.3 Implement CharacterRoom durable records, RoomRun lifecycle, ordered RoomEvent commit, bounded scheduling and participant-scoped RoomView filtering.
+- [x] 4.4 Implement UserCharacterRelationship candidate/accept/reject/correct/delete semantics without promoting searchable transcript to accepted memory.
+- [x] 4.5 Remove external world/version fields from CharacterRoom and Chara-owned run contracts; bind narrative runs only through the exact typed Composition ref once its owning provider exists, otherwise fail unavailable before partial creation.
+- [x] 4.6 Materialize frozen CharacterVersion, CharacterStorylineRun, Character/relationship memory and RoomView into Agent turns without adding a Chara responder/transcript loop.
+- [x] 4.7 Connect Agent Entry CharacterVersion Draft selections to one canonical submit-time `CharacterConversationLaunchService` path: one Character creates Dialogue, multiple Characters create Room, the returned primary AgentSession owns the Interaction Surface, and no generic Assistant first-submit Conversation is created.
+- [x] 4.8 Add Desktop producer/consumer/path tests for exact Draft/Scene validation, unpublished/duplicate selection rejection, launch cleanup before commit, Character/Room Workbench handoff, first-message dispatch and exact-owner reopen.
+- [ ] 4.9 Run focused real Agent evaluations for background/origin adherence, storyline progression, memory isolation, companion Dialogue and multi-participant identity/context isolation.
+  - Current blocker: the isolated Desktop fixture has no configured Agent provider/model, and the complete-session Evaluation driver lacks Character-specific lore/storyline/memory facts. Mock or direct-runtime evidence does not complete this task.
 
-## 5. Minimum World Foundation
+## 5. Chat, TTS, Avatar and presentation
 
-- [x] 5.1 Establish the host-neutral World package with explicit contracts, core, application and testing public subpaths; do not add empty Node/Webview/provider/control packages.
-- [x] 5.2 Implement WorldProject authoring for WorldBook, background, locations, organizations, rules, initial facts and reviewed source refs.
-- [x] 5.3 Implement immutable WorldVersion publication and exact dependency validation without internal format versioning.
-- [x] 5.4 Implement WorldRun, strict WorldActionIntent validation, `expectedWorldStateRevision` commit, ordered WorldEvent and WorldState derivation.
-- [x] 5.5 Implement participant/actor-scoped WorldView using branch, timepoint, knowledge and visibility hard filters before any Agent context materialization.
-- [x] 5.6 Implement durable WorldSave and branch identity sufficient for current narrative continuation; defer advanced checkpoint/replay UX to the future World change.
-- [x] 5.7 Implement RoomWorldBinding: optional for companion runs and mandatory for narrative runs, with no active/recent World fallback or runtime-kind downgrade.
-- [x] 5.8 Add tests proving Room utterances do not mutate WorldState, only committed WorldEvent changes state, and one invalid World record leaves sibling Rooms/Worlds available.
+- [x] 5.1 Implement per-CharacterRun/participant Chat and TTS configuration with CharacterVersion voice defaults, next-turn-only updates and immutable per-turn receipts.
+- [x] 5.2 Define strict portrait, Live2D, VRM, MMD and PNGTuber representation refs using stable authorized resource identities rather than raw paths.
+- [x] 5.3 Add package-owned Avatar Surface contract and exact renderer selection; unavailable formats fail locally without first-compatible or portrait fallback.
+- [x] 5.4 Mount one dynamic Avatar runtime in Workbench Main, consume Voice timing/viseme projection and prove resource disposal on scene exit.
+  - Completed with one package-owned Three/GLTF VRM runtime, an exact Main/preload-authorized opaque resource lease, timing-driven morph-target projection and scene-exit disposal tests. Missing or unsupported resources remain local diagnostics and never select another representation.
+- [x] 5.5 Add deterministic tests for participant-isolated Chat/TTS, active-turn freezing, explicit bounded batch updates, provider failure isolation and no shared Room model/voice state.
 
-## 6. Desktop and Webview composition
+## 6. Character Foundation boundary replacement
 
-- [x] 6.1 Add sender-bound typed IPC and concrete repository adapters for Character, Room and minimum World public services while keeping all host-neutral workflow out of `apps/neko-desktop`.
-- [x] 6.2 Replace the four-tab Character Foundation product surface with a Project Management-style Character catalog Main and exact Character detail Secondary Main; delete the old successful navigation and hidden-root path.
-  - Follow-up layout convergence: Character catalog/detail and Character Interaction surfaces use the same edge-to-edge Workbench composition as Workspace; shared Shell tests also protect the adjacent Asset management/preview split from reintroducing scene gutters.
-- [ ] 6.3 Move Dialogue/Chatroom creation out of Character Management. Add typed Agent Entry `@CharacterVersion` selection so one role atomically creates Dialogue and multiple roles atomically create Room without treating the selection as prompt context.
-  - Partial: Agent Entry now keeps Character launch tokens separate from ordinary context, one exact published CharacterVersion creates a companion Dialogue, and multiple ordered CharacterVersions atomically create a companion Room with isolated participant AgentSessions. Narrative Entry remains incomplete because no exact WorldVersion/WorldRun/WorldSave/branch selector or participant actor mapping is available; the product does not infer either authority.
-- [x] 6.4 Keep incomplete narrative, World and Character routes registered as explicit unavailable diagnostics; do not create empty project, implicit owner or no-op success paths.
-- [x] 6.5 Add exact `character-interaction` Desktop scene composition with Agent Interaction, Avatar/Scene Main, Character/World Manager, optional Timeline and Status slots; switching scene must unmount every Root without cancelling protected runtimes.
-- [x] 6.6 Add the canonical Room message/participant-turn command path through package application service, typed Host command and Agent participant sessions; remove the disabled Room submission placeholder.
-  - Completed: first and subsequent Room messages enter one Chara-owned submission service. It atomically commits the human message and scheduling event, materializes each exact participant context, invokes that participant's primary AgentSession, and accepts responses through the observed `roomRevision`; provider failures and stale provisional responses remain local and diagnostic. The Agent Interaction feed and Room Timeline now consume the same rebuildable, user-filtered `RoomView` through a sender-bound Host subscription, while composer, Tool Call and Approval remain owned by Agent. Renderer reload replaces the prior subscription; snapshot and projection events share an exact request identity and sequence baseline, so request-time updates are buffered while stale callbacks are rejected.
-- [ ] 6.7 Add the minimum WorldActionIntent product bridge through the World application service and show accepted WorldEvent in the combined projection; remove the World evolution read-only placeholder without inventing free-form event commits.
+- [x] 6.1 Remove WorldProject/Version/Run/Save commands, parsers and types from `CharacterFoundationCommand` and its Host/preload contract.
+- [x] 6.2 Remove the full external world catalog from `CharacterFoundationSnapshot` and `CharacterFoundationService`; retain only Chara records and record-local diagnostics.
+- [x] 6.3 Remove `worldAuthoring`, `worldRuntime` and `worldCatalog` dependencies from Chara application services and Desktop Character composition.
+- [x] 6.4 Update Chara Webview, Desktop fixtures and IPC tests atomically; poison removed operations and prove they cannot return success, route through Character IPC or reappear through optional old snapshot fields.
+- [x] 6.5 Keep external Composition unavailable until its owning public contract/producer exists; do not add Chara-local external DTO, string bag, compatibility alias or successful no-op adapter.
 
-## 7. Character Avatar and runtime management
+## 7. Character Studio and Runtime Workbench
 
-- [ ] 7.1 Define strict Character representation kinds and active-selection contract for portrait, Live2D, VRM, MMD and PNGTuber using stable authorized resource identities rather than raw paths.
-- [ ] 7.2 Add a package-owned Avatar Surface contract and exact renderer selection. Implement only formats with a real renderer; return a local unavailable diagnostic for every unimplemented kind and prohibit renderer fallback.
-- [ ] 7.3 Mount the first real Avatar representation in Character Workbench Main, prove disposal on scene exit and preserve only viewport/camera/pose/layout in the package-owned presentation snapshot.
-- [ ] 7.4 Add Character Runtime Management projections for relationship memory, Dialogue/Room runs, Agent Conversation status, narrative WorldSave/branch and representation state without copying their authoritative data.
-- [ ] 7.5 Add explicit continue/branch/archive/delete operations only where the owning domain already supports them; keep unsupported memory/story/save controls unavailable rather than successful no-ops.
+- [x] 7.1 Replace the four-tab Character Foundation surface with Character catalog Main and exact Character detail Secondary Main; delete the hidden-root navigation path.
+- [x] 7.2 Add exact `character-interaction` scene with Agent Interaction/Room, Avatar/Scene Main, Character Runtime Configuration, optional Room Timeline and Status slots; scene exit unmounts Roots without cancelling protected Agent turns.
+- [x] 7.3 Expand Character Studio detail into overview, background story, origin setting, cognition/behavior, editable Character storyline publication, Character memory review, relationship memory, presentation resources, editable voice defaults, runtime history and published versions. Summary counters alone do not complete authoring or review behavior.
+- [x] 7.4 Add Character Runtime projections for CharacterStorylineRun, CharacterMemoryScope, relationship memory, Dialogue/Room, Agent Conversation status, Chat/TTS and representation state without copying authority.
+- [x] 7.5 Replace generic `storyline / saves / world` Character capability placeholders with Chara-owned storyline/memory sections and an optional owning-Composition read-only summary/navigation slot.
+- [x] 7.6 Add Room cover/participant portrait identity projection and prove dynamic Avatar mounts only once in Main; CharacterOriginSetting must never become a runnable scene state.
+  - Completed with exact Room cover and author-selected portrait projections, one owner-qualified dynamic Avatar mount/release path, and path tests proving CharacterOriginSetting never becomes runtime scene authority.
+- [x] 7.7 Wire CharacterStorylineService, CharacterMemoryService and CharacterPresentationService through strict Chara Host commands and Main composition; keep each invalid record/operation fail-local and preserve exact CAS revisions.
 
 ## 8. Verification and delivery
 
-- [ ] 8.1 Update isolated fixtures for Character catalog/detail, single-mention Dialogue, multi-mention Room, Workbench slots, companion room without World, narrative room with World, invalid Avatar renderer and scene recovery.
-  - Partial: focused Renderer fixtures cover Character catalog/detail selection, single/multiple Character launch projection, Character/Room Workbench slots, the shared Room Interaction/Timeline projection, Room-only Timeline and Root unmount on navigation. Main/preload fixtures also cover exact Room Scene authorization, subscription replacement, request-time event buffering, stale request callback rejection and event-sequence restart after renderer reload. Visible Electron evidence, narrative World binding and real Avatar renderer states remain incomplete.
-- [ ] 8.2 Add producer/consumer/path tests for exact launch selection, atomic no-partial failure, single AgentSession per CharacterRun, exact Avatar renderer, Room/World timeline separation, memory isolation, stale CAS rejection and fail-local Surface errors.
-  - Partial: exact launch selection, atomic aggregate failure, distinct AgentSession identity, Character/Room scene contract, unavailable Surface isolation, canonical Room message/scheduling, participant provider failure isolation, stale-response CAS rejection, user-scoped Room projection and one authoritative projection feeding both Room surfaces are covered. Exact Avatar renderer, combined Room/World timeline and runtime-management projection tests remain incomplete.
-- [ ] 8.3 Run focused package tests/typechecks, `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:application-boundaries`, `pnpm check:legacy-debt` and `pnpm check:unused` after the replacement path is complete.
-  - Passed: all workspace tests, production Desktop build/package, quality orchestration, OpenSpec, dependency, application/Webview boundary, legacy-debt and internal-versioning gates. The full run recorded Chara at 18 files / 97 tests, World at 3 files / 15 tests and Desktop at 70 files / 443 tests; the final review then added a command-failure visibility regression and reran Chara Webview at 2 files / 6 tests plus its strict typecheck.
-  - Repository baseline: `pnpm check` / `pnpm check:unused` still reports the existing Knip baseline of 3 unused files and 149 unused exports. All new Chara/World unused findings were removed; the unrelated baseline remains visible rather than being changed by this proposal.
-  - Replacement review: focused Chara, Chara Webview, Agent contracts/Webview, Host and Desktop tests/typechecks passed. Application/Webview boundaries, dependency direction, package roles, OpenSpec, legacy-debt and internal-versioning checks passed; internal versioning reports zero new occurrences.
-  - Room projection review: Chara passed 20 files / 106 tests and typecheck; Chara Webview passed 2 files / 7 tests and typecheck; Agent Webview passed 90 files / 711 tests and typecheck; focused Desktop Main/preload passed 2 files / 45 tests and Desktop typecheck. A preceding full Desktop run passed 71 files / 451 tests.
-- [ ] 8.4 Run visible real Electron flows through Character catalog -> detail/publication -> Agent Entry `@角色` -> Dialogue/Room Workbench -> Avatar/Scene -> World-bound narrative -> close/reopen, recording exact commands, evidence and residual risks.
-  - Partial: the isolated visible Electron fixture completed Character creation/publication, relationship creation, human-controlled companion Dialogue, World publication/save, companion Chatroom without World, scene unmount and full application restart recovery. Normal and smaller window states showed no clipping or overlap; the restarted 1229 x 768 Chatroom capture is `${FIXTURE_HOME}/character-room-restart.jpg`.
-  - Blocked: Agent Dialogue, RoomRun and World-bound narrative require a configured real provider/model. The visible diagnostic is preserved and these flows are not counted as passed.
-- [ ] 8.5 Update the Character-focused Evaluation authoring for first-submit owner selection and Workbench restore, run the applicable real Agent subset, and classify any unexecuted matrix as residual risk rather than replacing it with mock or direct-runtime evidence.
-  - Blocked: `pnpm test:agent:eval` passed its key-free harness (44 files / 285 tests; 23 suites / 54 dry-run cases), but no provider-backed Character case could run. The exact missing provider/model configuration and Character complete-session observability gap remain release residual risks.
-- [ ] 8.6 Repeat `neko-quality-review` and `neko-ui-validation` after the replacement implementation, including canonical-path proof, normal/small/dense/diagnostic Avatar states and direct visual evidence.
-  - Current replacement review: no blocking code-quality finding remains after focused typechecks, component/contract tests, canonical Room subscription race tests and repository architecture gates. The UI inventory now covers Room loading/empty/update/private-filter/reload/error states and adjacent Agent controls, but visible Electron screenshots for the replacement layout have not yet been produced, so UI review remains `blocked`, not passed. Real-provider Agent, narrative, Avatar renderer and runtime-management states remain unverified.
+- [x] 8.1 Update fixtures for Character background/origin authoring, storyline selection/progression, Character/relationship memory isolation, single/multiple Character launch, Workbench restore, Chat/TTS and invalid Avatar renderer.
+- [x] 8.2 Run focused Chara, Chara Node/Webview, Agent consumer and Desktop Character producer/consumer tests/typechecks; include deletion/poison proof for the removed Character-owned external path.
+- [x] 8.3 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:application-boundaries`, `pnpm check:no-internal-versioning`, `pnpm check:legacy-debt` and `pnpm check:unused`, recording exact results and repository baseline separately.
+- [ ] 8.4 Run visible real Electron flows through Character Studio background/origin/storyline/memory authoring -> publication -> Agent Entry -> Dialogue/Room Workbench -> Avatar/Voice -> close/reopen.
+  - Current evidence: isolated visible Electron passed Character create, background/origin, editable Voice defaults, exact VRM-resource authoring, review-ready publication, Storyline authoring/publication, capability/history inspection, Agent Entry Character roleplay access, scene switching, and standard/small/dense layout review. The actual user composer then failed visibly with `Choose a configured provider and model before sending.` A runtime-created CharacterMemory candidate was unavailable without that provider-backed turn, and provider-backed Dialogue/Room, Voice timing and runtime close/reopen therefore remain unverified; mock or direct-runtime evidence does not complete this task.
+- [ ] 8.5 Update `agent-runtime.character-interaction` Evaluation authoring for lore/storyline/memory evidence, run the applicable real provider subset and classify unavailable Composition cases as blocked rather than replacing them with mock output.
+  - Current blocker: the product now has a real visible Character search/selection/launch path, but the strict Evaluation Desktop workflow cannot yet drive its roleplay selector or project Character lore/storyline/memory/effective-presentation facts from the complete session owner. The required provider/model/cost authorization is also absent. Indexing a prompt-only or unsupported Scenario would make the key-free suite invalid rather than provide evidence.
+- [x] 8.6 Repeat `neko-quality-review` and `neko-ui-validation` after implementation, including normal/small/dense/diagnostic Character states and direct visible Electron evidence.
+  - Evidence: full quality gates passed; isolated visible Electron fixtures covered normal and long/dense Character Studio, approximately 900 × 650 small-window layout, immutable publication, Storyline publication and Agent Entry roleplay access. Direct image review found and fixed narrow Storyline title wrapping, unbound Entry action suppression, inconsistent flex-item content widths and the flat long-form hierarchy. The final Studio uses one aligned content track, persistent essentials, collapsible Definition/Presentation/Storyline/Memory regions and a responsive single-column publication path. Room cover/portrait/speaker projection and Avatar resource/disposal states have deterministic UI/runtime coverage. The provider-backed end-to-end lane remains explicitly blocked under 8.4 and 8.5 rather than being treated as UI evidence.
+
+## 9. P0 experimental-product gate
+
+- [x] 9.1 Mark the implemented Chara package, scenes and surfaces as an isolated experimental prototype; do not treat implementation or fixture evidence as roadmap promotion.
+- [x] 9.2 Make production Host reject Character Management transitions with an owner-qualified unavailable diagnostic while preserving the current scene and every durable Character/Room record.
+- [x] 9.3 Make production Agent Entry Roleplay fail visibly before Character search or launch; poison both ports and prove no CharacterRun, Room, AgentSession or first turn is created.
+  - Agent Evaluation disposition: `excluded`. The production action is rejected before AgentSession materialization or provider behavior, and deterministic Webview/Desktop tests poison Character search, Character launch and generic first-submit ports.
+- [x] 9.4 Reset persisted `character-management` and `character-interaction` presentations to a fresh canonical Agent Entry scene during Window claim, emit a presentation-reset diagnostic, and prove durable records and protected Agent runtime ownership are untouched.
+- [x] 9.5 Update Desktop and Agent Webview producer/consumer tests, run focused typecheck/tests and architecture gates, then validate visible unavailable feedback in the real Electron product path at standard and small window sizes.
+  - Evidence: the visible isolated Electron product path retained one exact Agent Entry scene, mounted no Character Root, created no Conversation and displayed the complete unavailable diagnostic at 1440 x 960 and 900 x 650. Direct screenshot review found no clipping, overlap or horizontal overflow after animation settlement.

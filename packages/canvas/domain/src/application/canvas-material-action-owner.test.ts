@@ -9,6 +9,7 @@ import {
   CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_ADD_TO_CUT_ACTION_ID,
+  CANVAS_EDIT_TEXT_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
@@ -84,6 +85,26 @@ describe('Desktop Canvas material action owner', () => {
     });
 
     expect(preview).toHaveBeenCalledWith({ identity, target });
+    expect(reveal).not.toHaveBeenCalled();
+  });
+
+  it('omits Reveal when the Desktop owner cannot resolve an independent Host file', async () => {
+    const embeddedTarget: CanvasMaterialActionTarget = {
+      nodeId: 'embedded-image-1',
+      mediaKind: 'image',
+      origin: 'referenced',
+      locator: {
+        kind: 'document-entry',
+        source: { kind: 'workspace-file', path: 'books/story.epub' },
+        entryPath: 'OPS/images/cover.jpg',
+      },
+    };
+    const resolveReveal = vi.fn(async () => false);
+    const reveal = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({ resolveReveal, reveal });
+
+    await expect(owner.resolve({ identity, targets: [embeddedTarget] })).resolves.toEqual([]);
+    expect(resolveReveal).toHaveBeenCalledWith({ identity, target: embeddedTarget });
     expect(reveal).not.toHaveBeenCalled();
   });
 
@@ -222,6 +243,69 @@ describe('Desktop Canvas material action owner', () => {
     });
     expect(resolveCut).toHaveBeenCalledWith({ identity, target: cutTarget });
     expect(openInCut).toHaveBeenCalledWith({ identity, target: cutTarget });
+  });
+
+  it('does not probe the referenced-document Cut owner for generated Image material', async () => {
+    const resolveCut = vi.fn(async () => {
+      throw new Error('Image material must not enter Cut document resolution.');
+    });
+    const owner = createCanvasMaterialActionOwner({
+      preview: async () => undefined,
+      resolveCut,
+      openInCut: async () => undefined,
+    });
+
+    await expect(owner.resolve({ identity, targets: [generatedTarget] })).resolves.toEqual([
+      expect.objectContaining({ id: CANVAS_PREVIEW_ACTION_ID, ownerId: 'preview' }),
+    ]);
+    expect(resolveCut).not.toHaveBeenCalled();
+  });
+
+  it('contributes Text Editor only for an admitted referenced document target', async () => {
+    const textTarget: CanvasMaterialActionTarget = {
+      nodeId: 'notes-1',
+      mediaKind: 'document',
+      origin: 'referenced',
+      locator: { kind: 'workspace-file', path: 'notes/scene.md' },
+    };
+    const generatedTextTarget: CanvasMaterialActionTarget = {
+      nodeId: 'prompt-output-1',
+      mediaKind: 'document',
+      origin: 'generated',
+      locator: {
+        kind: 'generated-output',
+        outputId: 'prompt-output-1',
+        digest: 'sha256:prompt-output-1',
+        path: 'neko/generated/prompt-output-1.txt',
+      },
+    };
+    const resolveEditText = vi.fn(async () => true);
+    const editText = vi.fn(async () => undefined);
+    const owner = createCanvasMaterialActionOwner({ resolveEditText, editText });
+
+    const descriptors = await owner.resolve({ identity, targets: [textTarget] });
+    await expect(owner.resolve({ identity, targets: [generatedTextTarget] })).resolves.toEqual([]);
+
+    expect(descriptors.map((descriptor) => descriptor.id)).toEqual([CANVAS_EDIT_TEXT_ACTION_ID]);
+    expect(resolveEditText).toHaveBeenCalledTimes(1);
+    const descriptor = descriptors[0];
+    if (!descriptor) throw new Error('Text Editor descriptor is missing.');
+    await owner.execute({
+      identity,
+      descriptor,
+      action: {
+        identity: {
+          projectId: identity.projectId,
+          canvasId: identity.documentId,
+          canvasSessionId: identity.sessionId,
+        },
+        actionId: descriptor.id,
+        selectedNodeIds: [textTarget.nodeId],
+        payload: {},
+      },
+      targets: [textTarget],
+    });
+    expect(editText).toHaveBeenCalledWith({ identity, target: textTarget });
   });
 
   it('contributes Add to Cut only for audio/video and preserves the exact owner payload', async () => {

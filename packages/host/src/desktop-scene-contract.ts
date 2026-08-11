@@ -38,10 +38,15 @@ export type DesktopWorkbenchSceneContext =
       readonly scope: Extract<DesktopAgentScopeProjection, { readonly kind: 'assistant' }>;
     }
   | { readonly kind: 'asset-center'; readonly assetCenterSessionId: string }
-  | { readonly kind: 'character-management'; readonly detail?: DesktopCharacterDetailSelection }
+  | {
+      readonly kind: 'creative-management';
+      readonly catalog: DesktopCreativeManagementCatalog;
+      readonly detail?: DesktopCharacterDetailSelection | DesktopWorldDetailSelection;
+    }
   | { readonly kind: 'extensions' }
-  | { readonly kind: 'project-management' }
   | { readonly kind: 'settings'; readonly settingsSectionId: string };
+
+export type DesktopCreativeManagementCatalog = 'content-projects' | 'characters' | 'worlds';
 
 export interface DesktopAgentInteractionSurfaceRef {
   readonly kind: 'agent';
@@ -53,6 +58,9 @@ export interface DesktopAgentInteractionSurfaceRef {
 
 export type DesktopCharacterDetailSelection =
   { readonly kind: 'create' } | { readonly kind: 'project'; readonly characterProjectId: string };
+
+export type DesktopWorldDetailSelection =
+  { readonly kind: 'create' } | { readonly kind: 'project'; readonly worldProjectId: string };
 
 export type DesktopWorkbenchMainSurfaceRef =
   | {
@@ -69,20 +77,36 @@ export type DesktopWorkbenchMainSurfaceRef =
       readonly viewInstanceId: string;
     }
   | {
+      readonly kind: 'character-authoring';
+      readonly workspaceId: string;
+      readonly projectId: string;
+      readonly viewId: string;
+      readonly viewInstanceId: string;
+      readonly characterProjectId: string;
+    }
+  | {
+      readonly kind: 'world-authoring';
+      readonly workspaceId: string;
+      readonly projectId: string;
+      readonly viewId: string;
+      readonly viewInstanceId: string;
+      readonly worldProjectId: string;
+    }
+  | {
       readonly kind: 'asset-preview';
       readonly assetCenterSessionId: string;
       readonly previewSessionId: string;
     }
   | { readonly kind: 'asset-management'; readonly assetCenterSessionId: string }
-  | { readonly kind: 'character-management' }
+  | { readonly kind: 'creative-management'; readonly catalog: DesktopCreativeManagementCatalog }
   | { readonly kind: 'character-detail'; readonly selection: DesktopCharacterDetailSelection }
+  | { readonly kind: 'world-detail'; readonly selection: DesktopWorldDetailSelection }
   | {
       readonly kind: 'character-avatar';
       readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
     }
   | { readonly kind: 'extension-management' }
   | { readonly kind: 'extension-detail' }
-  | { readonly kind: 'project-management' }
   | { readonly kind: 'project-detail' }
   | { readonly kind: 'settings-main'; readonly settingsSectionId: string };
 
@@ -139,13 +163,19 @@ export type DesktopSceneTransitionIntent =
   | { readonly kind: 'open-workspace'; readonly workspaceGrantId: string }
   | { readonly kind: 'open-project-workspace'; readonly projectId: string }
   | { readonly kind: 'open-asset-center' }
-  | { readonly kind: 'open-character-management' }
+  | {
+      readonly kind: 'open-creative-management';
+      readonly catalog: DesktopCreativeManagementCatalog;
+    }
   | {
       readonly kind: 'select-character-detail';
       readonly selection: DesktopCharacterDetailSelection;
     }
+  | {
+      readonly kind: 'select-world-detail';
+      readonly selection: DesktopWorldDetailSelection;
+    }
   | { readonly kind: 'open-extensions' }
-  | { readonly kind: 'open-project-management' }
   | { readonly kind: 'open-settings'; readonly sectionId?: string }
   | { readonly kind: 'restore-conversation'; readonly navigation: AgentHomeNavigationIdentity };
 
@@ -162,7 +192,11 @@ export interface DesktopSceneUnavailableDiagnostic {
   readonly severity: 'error';
   readonly message: string;
   readonly metadata: {
-    readonly owner: 'workspace-authority' | 'agent-conversation-authority';
+    readonly owner:
+      | 'workspace-authority'
+      | 'agent-conversation-authority'
+      | 'character-product'
+      | 'world-product';
     readonly intentKind: 'open-workspace' | 'open-project-workspace' | 'restore-conversation';
     readonly conversationOwnerKind?: AgentConversationOwnerRef['kind'] | 'world';
   };
@@ -241,7 +275,12 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
     const owner = metadata['owner'];
     const intentKind = metadata['intentKind'];
     const conversationOwnerKind = metadata['conversationOwnerKind'];
-    if (owner !== 'workspace-authority' && owner !== 'agent-conversation-authority') {
+    if (
+      owner !== 'workspace-authority' &&
+      owner !== 'agent-conversation-authority' &&
+      owner !== 'character-product' &&
+      owner !== 'world-product'
+    ) {
       throw invalid(`Unknown Desktop Scene unavailable owner '${String(owner)}'.`);
     }
     if (
@@ -545,21 +584,27 @@ function parseSceneContext(value: unknown): DesktopWorkbenchSceneContext {
       assetCenterSessionId: requireIdentity(record['assetCenterSessionId'], 'Asset Center Session'),
     };
   }
-  if (kind === 'character-management') {
-    requireExactKeys(record, ['kind', 'detail'], 'Character Management Scene context', ['detail']);
+  if (kind === 'creative-management') {
+    requireExactKeys(record, ['kind', 'catalog', 'detail'], 'Creative Management Scene context', [
+      'detail',
+    ]);
+    const catalog = parseCreativeManagementCatalog(record['catalog']);
     return {
       kind,
+      catalog,
       ...(record['detail'] === undefined
         ? {}
-        : { detail: parseCharacterDetailSelection(record['detail']) }),
+        : catalog === 'characters'
+          ? { detail: parseCharacterDetailSelection(record['detail']) }
+          : catalog === 'worlds'
+            ? { detail: parseWorldDetailSelection(record['detail']) }
+            : (() => {
+                throw invalid('Content Project management does not accept a detail selection.');
+              })()),
     };
   }
   if (kind === 'extensions') {
     requireExactKeys(record, ['kind'], 'Extensions Scene context');
-    return { kind };
-  }
-  if (kind === 'project-management') {
-    requireExactKeys(record, ['kind'], 'Project Management Scene context');
     return { kind };
   }
   if (kind === 'settings') {
@@ -691,6 +736,36 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
       viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
     };
   }
+  if (kind === 'character-authoring') {
+    requireExactKeys(
+      record,
+      ['kind', 'workspaceId', 'projectId', 'viewId', 'viewInstanceId', 'characterProjectId'],
+      'Character authoring Surface ref',
+    );
+    return {
+      kind,
+      workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+      projectId: requireIdentity(record['projectId'], 'Content Project'),
+      viewId: requireIdentity(record['viewId'], 'Workspace View'),
+      viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
+      characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+    };
+  }
+  if (kind === 'world-authoring') {
+    requireExactKeys(
+      record,
+      ['kind', 'workspaceId', 'projectId', 'viewId', 'viewInstanceId', 'worldProjectId'],
+      'World authoring Surface ref',
+    );
+    return {
+      kind,
+      workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+      projectId: requireIdentity(record['projectId'], 'Content Project'),
+      viewId: requireIdentity(record['viewId'], 'Workspace View'),
+      viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
+      worldProjectId: requireIdentity(record['worldProjectId'], 'WorldProject'),
+    };
+  }
   if (kind === 'asset-preview') {
     requireExactKeys(
       record,
@@ -710,13 +785,17 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
       assetCenterSessionId: requireIdentity(record['assetCenterSessionId'], 'Asset Center Session'),
     };
   }
-  if (kind === 'character-management') {
-    requireExactKeys(record, ['kind'], 'Character Management Surface ref');
-    return { kind };
+  if (kind === 'creative-management') {
+    requireExactKeys(record, ['kind', 'catalog'], 'Creative Management Surface ref');
+    return { kind, catalog: parseCreativeManagementCatalog(record['catalog']) };
   }
   if (kind === 'character-detail') {
     requireExactKeys(record, ['kind', 'selection'], 'Character Detail Surface ref');
     return { kind, selection: parseCharacterDetailSelection(record['selection']) };
+  }
+  if (kind === 'world-detail') {
+    requireExactKeys(record, ['kind', 'selection'], 'World Detail Surface ref');
+    return { kind, selection: parseWorldDetailSelection(record['selection']) };
   }
   if (kind === 'character-avatar') {
     requireExactKeys(record, ['kind', 'owner'], 'Character Avatar Surface ref');
@@ -736,10 +815,6 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
   }
   if (kind === 'project-detail') {
     requireExactKeys(record, ['kind'], 'Project Detail Surface ref');
-    return { kind };
-  }
-  if (kind === 'project-management') {
-    requireExactKeys(record, ['kind'], 'Project Management Surface ref');
     return { kind };
   }
   if (kind === 'settings-main') {
@@ -820,16 +895,22 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
     kind === 'open-agent-entry' ||
     kind === 'new-agent-conversation' ||
     kind === 'open-asset-center' ||
-    kind === 'open-character-management' ||
-    kind === 'open-extensions' ||
-    kind === 'open-project-management'
+    kind === 'open-extensions'
   ) {
     requireExactKeys(record, ['kind'], 'Desktop Scene transition intent');
     return { kind };
   }
+  if (kind === 'open-creative-management') {
+    requireExactKeys(record, ['kind', 'catalog'], 'Open Creative Management intent');
+    return { kind, catalog: parseCreativeManagementCatalog(record['catalog']) };
+  }
   if (kind === 'select-character-detail') {
     requireExactKeys(record, ['kind', 'selection'], 'Select Character Detail intent');
     return { kind, selection: parseCharacterDetailSelection(record['selection']) };
+  }
+  if (kind === 'select-world-detail') {
+    requireExactKeys(record, ['kind', 'selection'], 'Select World Detail intent');
+    return { kind, selection: parseWorldDetailSelection(record['selection']) };
   }
   if (kind === 'open-workspace') {
     requireExactKeys(record, ['kind', 'workspaceGrantId'], 'Open Workspace intent');
@@ -953,21 +1034,34 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     }
     return;
   }
-  if (context.kind === 'character-management') {
+  if (context.kind === 'creative-management') {
     assertManagerKinds(slots, []);
-    assertMainKinds(slots, ['character-management', 'character-detail']);
-    if (slots.main?.kind !== 'character-management') {
-      throw mismatch('Character Management Scene requires its catalog Main Surface.');
+    assertMainKinds(slots, ['creative-management', 'character-detail', 'world-detail']);
+    if (slots.main?.kind !== 'creative-management' || slots.main.catalog !== context.catalog) {
+      throw mismatch('Creative Management Scene requires its exact catalog Main Surface.');
     }
     if (context.detail === undefined) {
       if (slots.secondaryMain !== undefined) {
-        throw mismatch('Character Management Scene without selection cannot mount Detail.');
+        throw mismatch('Creative Management Scene without selection cannot mount Detail.');
       }
-    } else if (
-      slots.secondaryMain?.kind !== 'character-detail' ||
-      !equalCharacterDetailSelection(slots.secondaryMain.selection, context.detail)
-    ) {
-      throw mismatch('Character Detail Surface does not match Scene selection.');
+    } else if (context.catalog === 'characters') {
+      if (
+        slots.secondaryMain?.kind !== 'character-detail' ||
+        !isCharacterDetailSelection(context.detail) ||
+        !equalCharacterDetailSelection(slots.secondaryMain.selection, context.detail)
+      ) {
+        throw mismatch('Character Detail Surface does not match Scene selection.');
+      }
+    } else if (context.catalog === 'worlds') {
+      if (
+        slots.secondaryMain?.kind !== 'world-detail' ||
+        !isWorldDetailSelection(context.detail) ||
+        !equalWorldDetailSelection(slots.secondaryMain.selection, context.detail)
+      ) {
+        throw mismatch('World Detail Surface does not match Scene selection.');
+      }
+    } else {
+      throw mismatch('Content Project management cannot mount a Detail Surface.');
     }
     return;
   }
@@ -979,14 +1073,6 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     }
     if (slots.secondaryMain?.kind !== 'extension-detail') {
       throw mismatch('Extensions Scene requires its Extension Detail Secondary Main Surface.');
-    }
-    return;
-  }
-  if (context.kind === 'project-management') {
-    assertManagerKinds(slots, []);
-    assertMainKinds(slots, ['project-management', 'project-detail']);
-    if (slots.main?.kind !== 'project-management') {
-      throw mismatch('Project Management Scene requires its Management Main Surface.');
     }
     return;
   }
@@ -1012,6 +1098,28 @@ function parseCharacterDetailSelection(value: unknown): DesktopCharacterDetailSe
   throw unsupported(`Unknown Character Detail selection '${String(kind)}'.`);
 }
 
+function parseWorldDetailSelection(value: unknown): DesktopWorldDetailSelection {
+  const record = requireRecord(value, 'World Detail selection must be an object.');
+  const kind = record['kind'];
+  if (kind === 'create') {
+    requireExactKeys(record, ['kind'], 'Create World Detail selection');
+    return { kind };
+  }
+  if (kind === 'project') {
+    requireExactKeys(record, ['kind', 'worldProjectId'], 'Project World Detail selection');
+    return {
+      kind,
+      worldProjectId: requireIdentity(record['worldProjectId'], 'WorldProject'),
+    };
+  }
+  throw unsupported(`Unknown World Detail selection '${String(kind)}'.`);
+}
+
+function parseCreativeManagementCatalog(value: unknown): DesktopCreativeManagementCatalog {
+  if (value === 'content-projects' || value === 'characters' || value === 'worlds') return value;
+  throw invalid(`Unknown Creative Management catalog '${String(value)}'.`);
+}
+
 function equalCharacterDetailSelection(
   left: DesktopCharacterDetailSelection,
   right: DesktopCharacterDetailSelection,
@@ -1020,6 +1128,29 @@ function equalCharacterDetailSelection(
     left.kind === right.kind &&
     (left.kind === 'create' ||
       (right.kind === 'project' && left.characterProjectId === right.characterProjectId))
+  );
+}
+
+function isCharacterDetailSelection(
+  selection: DesktopCharacterDetailSelection | DesktopWorldDetailSelection,
+): selection is DesktopCharacterDetailSelection {
+  return selection.kind === 'create' || 'characterProjectId' in selection;
+}
+
+function isWorldDetailSelection(
+  selection: DesktopCharacterDetailSelection | DesktopWorldDetailSelection,
+): selection is DesktopWorldDetailSelection {
+  return selection.kind === 'create' || 'worldProjectId' in selection;
+}
+
+function equalWorldDetailSelection(
+  left: DesktopWorldDetailSelection,
+  right: DesktopWorldDetailSelection,
+): boolean {
+  return (
+    left.kind === right.kind &&
+    (left.kind === 'create' ||
+      (right.kind === 'project' && left.worldProjectId === right.worldProjectId))
   );
 }
 
@@ -1041,7 +1172,12 @@ function validateAgentMain(
     }
     return;
   }
-  if (ref.kind !== 'workspace-main' || ref.workspaceId !== scope.workspaceId) {
+  if (
+    (ref.kind !== 'workspace-main' &&
+      ref.kind !== 'character-authoring' &&
+      ref.kind !== 'world-authoring') ||
+    ref.workspaceId !== scope.workspaceId
+  ) {
     throw mismatch('Workspace Scene Main Surface does not match Workspace identity.');
   }
 }

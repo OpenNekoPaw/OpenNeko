@@ -24,6 +24,11 @@ describe('Canvas creative workbench layout boundary', () => {
     resolve(__dirname, 'utils/canvasAddActions.ts'),
     'utf8',
   );
+  const miniMapSource = readFileSync(resolve(__dirname, 'components/controls/MiniMap.tsx'), 'utf8');
+  const zoomControlsSource = readFileSync(
+    resolve(__dirname, 'components/controls/ZoomControls.tsx'),
+    'utf8',
+  );
   const cssSource = readFileSync(resolve(__dirname, 'index.css'), 'utf8');
   const baseNodeSource = readFileSync(resolve(__dirname, 'components/nodes/BaseNode.tsx'), 'utf8');
   const canvasStoreSource = readFileSync(resolve(__dirname, 'stores/canvasStore.ts'), 'utf8');
@@ -90,19 +95,23 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(baseNodeSource).not.toMatch(/right: -4/);
   });
 
-  it('keeps foundational nodes on one neutral white or glass card surface', () => {
+  it('keeps foundational nodes on the shared solid content surface', () => {
     expect(cssSource).toMatch(
-      /\.node-card--foundational\s*\{[^}]*background:\s*var\(--canvas-card-surface\);[^}]*border:\s*1px solid var\(--node-border\);[^}]*box-shadow:\s*var\(--canvas-card-shadow\);/s,
+      /\.node-card\s*\{[^}]*background:\s*var\(--node-bg\);[^}]*border:\s*1px solid var\(--node-border\);[^}]*box-shadow:\s*var\(--node-shadow\);[^}]*backdrop-filter:\s*none;/s,
     );
-    expect(cssSource).not.toMatch(/\.node-card--foundational\s*\{[^}]*background:\s*transparent;/s);
+    expect(cssSource).toMatch(/\.node-card--foundational\s*\{[^}]*overflow:\s*visible;/s);
+    expect(cssSource).not.toMatch(/\.node-card--foundational\s*\{[^}]*backdrop-filter:/s);
   });
 
-  it('uses one elevated Canvas surface hierarchy without persistent child fills', () => {
+  it('uses one restrained Canvas surface hierarchy without persistent child fills', () => {
+    expect(cssSource).toMatch(/--canvas-card-surface:\s*var\(--neko-elevated\);/);
+    expect(cssSource).toMatch(/--canvas-card-shadow-hover:/);
+    expect(cssSource).toMatch(/--canvas-card-shadow-selected:/);
     expect(cssSource).toMatch(
-      /--canvas-card-surface:\s*color-mix\(in srgb, var\(--neko-elevated\) 97%, transparent\);/,
+      /\.selection-context-toolbar\s*\{[^}]*background:\s*var\(--canvas-overlay-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);/s,
     );
     expect(cssSource).toMatch(
-      /\.selection-generation-input-panel\s*\{[^}]*background:\s*var\(--canvas-overlay-surface\);[^}]*box-shadow:\s*var\(--canvas-overlay-shadow\);/s,
+      /\.selection-generation-input-panel\s*\{[^}]*background:\s*var\(--canvas-card-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);[^}]*backdrop-filter:\s*none;/s,
     );
     expect(cssSource).toMatch(
       /\.selection-generation-input-panel__footer\s*\{[^}]*margin:\s*0;[^}]*background:\s*transparent;/s,
@@ -112,6 +121,34 @@ describe('Canvas creative workbench layout boundary', () => {
     );
     expect(cssSource).toMatch(
       /\.selection-action-overflow \[data-danger='true'\]\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--neko-desktop-danger-foreground, var\(--neko-danger\)\);/s,
+    );
+    expect(baseNodeSource).toContain("'node-card--transforming'");
+    expect(baseNodeSource).toContain("'node-card--connection-valid'");
+    expect(baseNodeSource).not.toContain("(isDragging || isResizing) && 'shadow-2xl'");
+    expect(baseNodeSource).not.toContain(
+      "targetState?.validity === 'valid' && 'ring-2 ring-blue-500'",
+    );
+    expect(baseNodeSource).not.toContain(
+      "targetState?.validity === 'invalid' && 'ring-2 ring-red-500'",
+    );
+  });
+
+  it('keeps the Canvas background plain and gives each HUD surface one shadow owner', () => {
+    expect(cssSource).toMatch(/\.canvas-main-surface\s*\{[^}]*background:\s*var\(--canvas-bg\);/s);
+    expect(cssSource).not.toMatch(/\.canvas-main-surface::after/);
+    expect(cssSource).toMatch(/\.canvas-hud-controls\s*\{[^}]*filter:\s*none;/s);
+    expect(miniMapSource).toContain('className="minimap-card relative cursor-pointer"');
+    expect(zoomControlsSource).toContain('className="zoom-pill"');
+    expect(miniMapSource).not.toMatch(/shadow-lg/);
+    expect(zoomControlsSource).not.toMatch(/shadow-lg/);
+  });
+
+  it('keeps compact generation controls clear of the Canvas HUD', () => {
+    expect(cssSource).toMatch(
+      /@media \(max-width: 920px\)[\s\S]*?\.canvas-main-surface:has\(\.selection-generation-input-panel\) \.canvas-hud-controls\s*\{[^}]*top:\s*16px;[^}]*bottom:\s*auto;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-main-surface:has\(\.selection-generation-input-panel\) \.canvas-hud-controls \.minimap-card\s*\{[^}]*display:\s*none;/s,
     );
   });
 
@@ -420,7 +457,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(addActionPopoverSource).toContain('className="canvas-add-action-popover__icon"');
     expect(addActionPopoverSource).not.toMatch(/\bw-72\b|\bh-11\b|\bw-11\b|\brounded-xl\b/);
     expect(cssSource).toMatch(
-      /\.canvas-add-action-popover-surface\s*\{[^}]*--neko-menu-background:\s*color-mix\(in srgb, var\(--neko-elevated\) 96%, transparent\);[^}]*--neko-menu-border:\s*var\(--neko-border\);[^}]*--neko-menu-foreground:\s*var\(--neko-fg\);[^}]*--neko-menu-selectionBackground:\s*var\(--neko-hover\);[^}]*--neko-popover-background:\s*var\(--neko-menu-background\);[^}]*--neko-popover-border:\s*var\(--neko-menu-border\);[^}]*--neko-popover-shadow:\s*var\(--neko-desktop-shadow-overlay, var\(--neko-shadow-md\)\);/s,
+      /\.canvas-add-action-popover-surface\s*\{[^}]*--neko-menu-background:\s*var\(--neko-desktop-overlay, var\(--neko-elevated\)\);[^}]*--neko-menu-border:\s*var\(--neko-desktop-border, var\(--neko-border\)\);[^}]*--neko-menu-foreground:\s*var\(--neko-fg\);[^}]*--neko-menu-selectionBackground:\s*var\(--neko-hover\);[^}]*--neko-popover-background:\s*var\(--neko-menu-background\);[^}]*--neko-popover-border:\s*var\(--neko-menu-border\);[^}]*--neko-popover-shadow:\s*var\(--neko-desktop-shadow-overlay, var\(--neko-shadow-md\)\);/s,
     );
     expect(cssSource).toMatch(
       /\.canvas-add-action-popover\s*\{[^}]*width:\s*236px;[^}]*color:\s*var\(--neko-fg\);/s,

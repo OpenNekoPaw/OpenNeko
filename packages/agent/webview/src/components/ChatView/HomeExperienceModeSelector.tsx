@@ -1,12 +1,12 @@
 import { SegmentedControl } from '@neko/ui';
-import type { AgentEntryExperienceMode } from '../../entry-experience-mode';
+import { isAgentEntryMode, type AgentEntryMode } from '@neko/agent-contracts';
 import type { HomeExperienceEntryProjection } from '../../presenters/home-experience-entry-presenter';
 import { useTranslation } from '../../i18n/I18nContext';
 
 interface HomeExperienceModeSelectorProps {
   readonly projection: HomeExperienceEntryProjection;
   readonly selectionPending?: boolean;
-  readonly onChange?: (mode: AgentEntryExperienceMode) => void;
+  readonly onChange?: (mode: AgentEntryMode) => void;
 }
 
 export function HomeExperienceModeSelector({
@@ -24,7 +24,7 @@ export function HomeExperienceModeSelector({
         label={label}
         maxWidth={544}
         value={projection.mode}
-        onValueChange={(value) => onChange?.(parseAgentEntryExperienceMode(value))}
+        onValueChange={(value) => onChange?.(parseAgentEntryMode(value))}
         options={projection.options.map((option) => ({
           value: option.mode,
           label: t(option.labelKey),
@@ -36,14 +36,7 @@ export function HomeExperienceModeSelector({
   );
 }
 
-function parseAgentEntryExperienceMode(value: string): AgentEntryExperienceMode {
-  if (
-    value === 'assistant' ||
-    value === 'workspace' ||
-    value === 'character' ||
-    value === 'world'
-  ) {
-    return value;
-  }
+function parseAgentEntryMode(value: string): AgentEntryMode {
+  if (isAgentEntryMode(value)) return value;
   throw new Error(`Unsupported Agent Entry experience mode '${value}'.`);
 }

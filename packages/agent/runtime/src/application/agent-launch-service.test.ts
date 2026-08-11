@@ -351,6 +351,226 @@ describe('Agent launch application service', () => {
     expect(releaseConnection).toHaveBeenCalledTimes(2);
   });
 
+  it('owns Entry receipts per connection and clears incompatible authority on mode switch', async () => {
+    let identity = 0;
+    const releaseConnection = vi.fn(async () => undefined);
+    const service = createAgentLaunchApplicationService({
+      createIdentity: () => `launch-${++identity}`,
+      catalog: { readCatalog: async () => emptyCatalog },
+      authorization: {
+        authorize: async () => ({ status: 'cancelled' }),
+        releaseConnection,
+      },
+      workspaceMentions: noWorkspaceMentions,
+      entryTargets: {
+        configure: async ({ connection, draftId, mode, binding }) => ({
+          mode,
+          targetReceipt:
+            binding === undefined
+              ? null
+              : {
+                  targetReceiptId: `target:${connection.connectionId}`,
+                  draftId,
+                  connectionId: connection.connectionId,
+                  mode: 'authoring',
+                  binding,
+                },
+        }),
+      },
+    });
+    const catalog = await service.attach({
+      applicationInstanceId: 'application-1',
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
+      viewId: 'agent-view-1',
+      draft: {
+        phase: 'draft',
+        draftId: 'draft-1',
+        binding: { kind: 'unbound' },
+        bindingReceipt: null,
+      },
+    });
+    const binding = {
+      kind: 'authoring' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+    };
+
+    await expect(
+      service.configureEntryTarget(catalog.connection, 'authoring', binding),
+    ).resolves.toMatchObject({ mode: 'authoring', targetReceipt: { binding } });
+    const firstCapabilityReceipt = service.readCatalog(catalog.connection).interaction
+      .bindingReceipt?.bindingReceiptId;
+    expect(service.readCatalog(catalog.connection).interaction.binding).toEqual({
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+    });
+
+    const replacementBinding = {
+      ...binding,
+      target: { kind: 'content-project' as const, contentProjectId: 'content-2' },
+    };
+    await service.configureEntryTarget(catalog.connection, 'authoring', replacementBinding);
+    expect(
+      service.readCatalog(catalog.connection).interaction.bindingReceipt?.bindingReceiptId,
+    ).not.toBe(firstCapabilityReceipt);
+    expect(releaseConnection).toHaveBeenCalledTimes(2);
+
+    await expect(
+      service.configureEntryTarget(catalog.connection, 'character-dialogue'),
+    ).resolves.toEqual({ mode: 'character-dialogue', targetReceipt: null });
+    expect(service.readEntryIntent(catalog.connection).targetReceipt).toBeNull();
+    expect(service.readCatalog(catalog.connection).interaction.binding).toEqual({
+      kind: 'unbound',
+    });
+    expect(releaseConnection).toHaveBeenCalledTimes(3);
+  });
+
+  it('requires the exact current Entry target receipt on Draft submit', async () => {
+    const model: AgentModelCatalogEntry = {
+      id: 'openai:gpt-5',
+      label: 'GPT-5',
+      providerId: 'openai',
+      modelId: 'gpt-5',
+      modelType: 'llm',
+      contextWindow: 128_000,
+      maximumOutputTokens: 16_384,
+      purposeCapabilities: ['agent.main'],
+      availability: { status: 'available' },
+    };
+    let identity = 0;
+    const service = createAgentLaunchApplicationService({
+      createIdentity: () => `launch-target-${++identity}`,
+      catalog: {
+        readCatalog: async () => ({
+          models: [model],
+          defaultMediaModels: {},
+          mediaUnderstandingModels: mediaUnderstandingModels(),
+          configuration: availableConfiguration([model]),
+          inputs: [],
+        }),
+      },
+      authorization: {
+        authorize: async () => ({ status: 'cancelled' }),
+        releaseConnection: async () => undefined,
+      },
+      workspaceMentions: noWorkspaceMentions,
+      entryTargets: {
+        configure: async ({ connection, draftId, mode, binding }) => ({
+          mode,
+          targetReceipt:
+            binding === undefined
+              ? null
+              : {
+                  targetReceiptId: 'target-receipt-1',
+                  draftId,
+                  connectionId: connection.connectionId,
+                  mode: 'authoring',
+                  binding,
+                },
+        }),
+      },
+    });
+    const attached = await service.attach({
+      applicationInstanceId: 'application-1',
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
+      viewId: 'agent-view-1',
+      draft: {
+        phase: 'draft',
+        draftId: 'draft-1',
+        binding: { kind: 'unbound' },
+        bindingReceipt: null,
+      },
+    });
+    const binding = {
+      kind: 'authoring' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+    };
+    const intent = await service.configureEntryTarget(attached.connection, 'authoring', binding);
+    if (intent.targetReceipt === null) throw new Error('Expected an Authoring target receipt.');
+    const current = service.readCatalog(attached.connection);
+    const input = {
+      draft: current.interaction,
+      entryTargetReceipt: intent.targetReceipt,
+      input: { kind: 'message' as const, text: 'Update the exact Content Project' },
+      references: [],
+      resourceGrantIds: [],
+      configuration: current.configuration.request!,
+    };
+
+    expect(() => service.validateDraftSubmit(attached.connection, input)).not.toThrow();
+    for (const entryTargetReceipt of [
+      null,
+      { ...intent.targetReceipt, targetReceiptId: 'target-receipt-stale' },
+      { ...intent.targetReceipt, draftId: 'draft-other' },
+      { ...intent.targetReceipt, connectionId: 'connection-other' },
+      {
+        ...intent.targetReceipt,
+        binding: {
+          ...intent.targetReceipt.binding,
+          target: { kind: 'content-project' as const, contentProjectId: 'content-other' },
+        },
+      },
+    ]) {
+      expect(() =>
+        service.validateDraftSubmit(attached.connection, { ...input, entryTargetReceipt }),
+      ).toThrow('does not match its exact Entry target receipt');
+    }
+  });
+
+  it('rejects a stale target result after a newer Entry configuration wins', async () => {
+    let resolveFirst: ((value: { mode: 'authoring'; targetReceipt: null }) => void) | undefined;
+    const firstResult = new Promise<{ mode: 'authoring'; targetReceipt: null }>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const configure = vi
+      .fn()
+      .mockImplementationOnce(() => firstResult)
+      .mockResolvedValueOnce({ mode: 'assistant', targetReceipt: null });
+    const service = createAgentLaunchApplicationService({
+      createIdentity: () => 'launch-1',
+      catalog: { readCatalog: async () => emptyCatalog },
+      authorization: {
+        authorize: async () => ({ status: 'cancelled' }),
+        releaseConnection: async () => undefined,
+      },
+      workspaceMentions: noWorkspaceMentions,
+      entryTargets: { configure },
+    });
+    const catalog = await service.attach({
+      applicationInstanceId: 'application-1',
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
+      viewId: 'agent-view-1',
+      draft: {
+        phase: 'draft',
+        draftId: 'draft-1',
+        binding: { kind: 'unbound' },
+        bindingReceipt: null,
+      },
+    });
+
+    const stale = service.configureEntryTarget(catalog.connection, 'authoring');
+    await expect(service.configureEntryTarget(catalog.connection, 'assistant')).resolves.toEqual({
+      mode: 'assistant',
+      targetReceipt: null,
+    });
+    resolveFirst?.({ mode: 'authoring', targetReceipt: null });
+    await expect(stale).rejects.toThrow('stale for its launch connection');
+    expect(service.readEntryIntent(catalog.connection)).toEqual({
+      mode: 'assistant',
+      targetReceipt: null,
+    });
+  });
+
   it('searches mentions through the exact Workspace binding receipt', async () => {
     let identity = 0;
     const search = vi.fn(async ({ binding, filter }) => ({
@@ -641,6 +861,7 @@ describe('Agent launch application service', () => {
     if (!receiptId) throw new Error('Expected a Workspace binding receipt.');
     const baseInput = {
       draft: catalog.interaction,
+      entryTargetReceipt: null,
       input: { kind: 'message' as const, text: 'Use the reference' },
       references: [],
       resourceGrantIds: [],
@@ -837,6 +1058,7 @@ describe('Agent launch application service', () => {
     expect(() =>
       service.validateDraftSubmit(catalog.connection, {
         draft: service.readCatalog(catalog.connection).interaction,
+        entryTargetReceipt: null,
         input: { kind: 'message', text: 'hello' },
         references: [],
         resourceGrantIds: [],

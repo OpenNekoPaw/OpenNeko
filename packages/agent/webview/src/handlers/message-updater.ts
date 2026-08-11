@@ -23,6 +23,8 @@ export interface ConversationUpdateResult {
   queuedMessageCount?: number;
   /** If provided, update authoritative queued user message items */
   queuedMessages?: readonly AgentQueuedMessageItem[];
+  /** If provided, update whether explicit cancellation paused the queue. */
+  queuePaused?: boolean;
   /** If provided, update live queue event order. */
   messageQueueSequence?: number;
 }
@@ -68,6 +70,8 @@ export function updateConversation(
           result.queuedMessages !== undefined
             ? result.queuedMessages
             : (streaming.queuedMessages ?? []),
+        queuePaused:
+          result.queuePaused !== undefined ? result.queuePaused : (streaming.queuePaused ?? false),
         messageQueueSequence:
           result.messageQueueSequence !== undefined
             ? result.messageQueueSequence

@@ -1999,6 +1999,16 @@
       "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
       "path": "packages/automation/node/src/endpoint-management.ts",
       "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Configured DeepSeek-compatible model provider",
+      "fieldScope": "Agent Evaluation explicit chat model identity",
+      "id": "64f6226d7f5103f7193b",
+      "isolationRule": "The value preserves the exact externally configured model identity for one Evaluation profile and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
+      "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
+      "path": "scripts/agent-eval/suites/agent-runtime/creative-media-workflow/suite.json",
+      "token": "-v4-"
     }
   ]
 }

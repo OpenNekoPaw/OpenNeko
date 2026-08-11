@@ -476,15 +476,22 @@ describe('Desktop Agent external driver adapter', () => {
     });
     try {
       await driver.connect(owner());
-      const queued = await driver.queue({
+      const queuedPromise = driver.queue({
         conversationId: 'conversation-1',
         prompt: 'follow up',
+        timeoutMs: 1000,
+      });
+      await Promise.resolve();
+      publish({ type: 'messageQueueSnapshot', snapshot: queueSnapshot(0, 2) });
+      await vi.waitFor(() => {
+        expect(sent).toContainEqual(expect.objectContaining({ type: 'sendMessage' }));
       });
       publish({
-        type: 'messageQueued',
-        conversationId: 'conversation-1',
-        snapshot: queueSnapshot(1, 3),
+        type: 'messageQueueSnapshot',
+        snapshot: queueSnapshot(1, 3, [queuedItem('queue-1', 'follow up')]),
       });
+      const queued = await queuedPromise;
+      expect(queued.queueItemId).toBe('queue-1');
       const observed = driver.observeWorkflowStep({
         conversationId: 'conversation-1',
         afterEventOffset: queued.eventOffset,
@@ -507,9 +514,62 @@ describe('Desktop Agent external driver adapter', () => {
         messages: [{ id: 'user-1', role: 'user' }],
       });
       expect(sent).toEqual([
+        { type: 'getMessageQueue', conversationId: 'conversation-1' },
         expect.objectContaining({ type: 'sendMessage' }),
         { type: 'getConversationSnapshot', conversationId: 'conversation-1' },
         { type: 'getMessageQueue', conversationId: 'conversation-1' },
+      ]);
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
+  it('sends one exact queued item now and observes its unpaused release', async () => {
+    let publish;
+    const sent = [];
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: connection('app-1', 'connection-1'),
+          })),
+          subscribe: vi.fn((_connection, listener) => {
+            publish = listener;
+            return () => {};
+          }),
+          send: vi.fn((_connection, message) => sent.push(message)),
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect(owner());
+      const released = driver.sendQueuedMessageNow({
+        conversationId: 'conversation-1',
+        queueItemId: 'queue-priority',
+        timeoutMs: 1000,
+      });
+      await Promise.resolve();
+      publish({
+        type: 'messageQueueSnapshot',
+        snapshot: queueSnapshot(1, 4, [queuedItem('queue-ordinary', 'ordinary')]),
+      });
+
+      await expect(released).resolves.toMatchObject({
+        accepted: true,
+        queueItemId: 'queue-priority',
+      });
+      expect(sent).toEqual([
+        {
+          type: 'sendQueuedMessageNow',
+          conversationId: 'conversation-1',
+          queueItemId: 'queue-priority',
+        },
       ]);
     } finally {
       await driver.dispose();
@@ -604,12 +664,16 @@ function connection(applicationInstanceId, connectionId) {
   };
 }
 
-function queueSnapshot(pendingCount, sequence) {
+function queueSnapshot(pendingCount, sequence, items = []) {
   return {
     conversationId: 'conversation-1',
     pendingCount,
     sequence,
-    pausedAfterCancel: false,
-    items: [],
+    paused: false,
+    items,
   };
+}
+
+function queuedItem(id, content) {
+  return { id, conversationId: 'conversation-1', content, createdAt: 1, source: 'user' };
 }

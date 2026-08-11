@@ -110,4 +110,4 @@ jobs:
           DMG_PATH="apps/neko-desktop/out/make/OpenNeko-${VERSION}-arm64.dmg"
           CHECKSUM_PATH="apps/neko-desktop/out/release/SHASUMS256.txt"
           PREVIEW_WARNING=$'> [!WARNING]\n> This preview DMG is ad-hoc signed. It is not Developer ID signed or notarized by Apple.\n> If macOS blocks the first launch, open System Settings > Privacy & Security and choose Open Anyway.'
-          gh release create "$RELEASE_TAG" "$DMG_PATH" "$CHECKSUM_PATH" --verify-tag --generate-notes --notes "$PREVIEW_WARNING" --prerelease --latest=false --title "OpenNeko ${RELEASE_TAG} Preview"
+          gh release create "$RELEASE_TAG" "$DMG_PATH" "$CHECKSUM_PATH" --verify-tag --generate-notes --notes "$PREVIEW_WARNING" --prerelease --latest=false --title "$RELEASE_TAG"

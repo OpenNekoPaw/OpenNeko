@@ -261,9 +261,28 @@ Existing Markdown, Media, File and Job nodes SHALL remain readable and editable 
 - **THEN** Canvas displays only the basename in the compact label above the node using the same label grammar as a Generation Node
 - **AND** the card body does not repeat the path, title or media type while the durable File node facts remain unchanged
 
-### Requirement: Material actions are media-specific and capability-owned
+### Requirement: Content actions are kind-specific and capability-owned
 
-Canvas SHALL present selected ordinary Image, Video and Audio materials, plus a Generation Node's exact selected successful media output, with a compact media-specific action layout. Stable action identities SHALL map real owner-contributed capabilities into direct and overflow positions without Canvas inferring executable behavior from the media type. Existing Cut, Preview and project Media Library operations SHALL retain their canonical owners and execution paths when presented as Edit, full-screen preview and Save Material. Cut-owned audio separation SHALL import the exact selected Video material into the exact Cut target and apply Cut's canonical `separate-audio` command. An unavailable advanced operation SHALL be absent rather than disabled, no-op or routed through Agent/provider fallback.
+Canvas SHALL present selected referenced File/Media content, plus a Generation Node's exact selected successful output, with a compact kind-specific action layout. Stable action identities SHALL map real owner-contributed capabilities into direct and overflow positions without Canvas inferring executable behavior from a file extension. A generic File without an explicit `mediaKind` SHALL use the File contract's canonical `document` meaning; an explicit kind remains authoritative. Prompt output SHALL project as a document target, while an empty Generation Node SHALL contribute no content target. Existing Text Editor, Cut, Preview and project Media Library operations SHALL retain their canonical owners and execution paths when presented as Edit, full-screen preview and Save Material. Cut-owned audio separation SHALL import the exact selected Video material into the exact Cut target and apply Cut's canonical `separate-audio` command. An unavailable advanced operation SHALL be absent rather than disabled, no-op or routed through Agent/provider fallback.
+
+#### Scenario: Referenced text or document content is selected
+
+- **WHEN** the exact selected File has a canonical locator and either explicit `document` kind or no more specific media kind
+- **THEN** Canvas projects the document target without reporting the optional kind as an error
+- **AND** Edit appears only for an admitted Workspace text file whose Text Editor owner contributes, while Preview, Finder and Save Material remain owned by their exact available capabilities
+- **AND** Canvas does not infer Image, Audio, Video or Model capability from the file extension
+
+#### Scenario: A generated Prompt output is selected
+
+- **WHEN** the exact selected Generation Node has a successful selected Prompt output
+- **THEN** Canvas resolves its immutable locator as a generated document target and exposes available Preview, Finder and Save Material actions
+- **AND** it does not offer mutable Workspace text editing for that immutable output or rewrite the generated artifact
+
+#### Scenario: An empty Generation Node is selected
+
+- **WHEN** a Text, Image, Audio or Video Generation Node has no selected successful output
+- **THEN** its composer remains the only generation-authoring surface and the toolbar keeps only real Canvas-local actions
+- **AND** Canvas does not fabricate content editing, preview, Cut or Media Library actions before content exists
 
 #### Scenario: An Audio material is selected
 

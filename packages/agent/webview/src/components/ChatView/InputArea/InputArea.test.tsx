@@ -29,7 +29,7 @@ const translations: Record<string, string> = {
   'chat.input.control.params': '工具参数',
   'chat.input.placeholder': '输入任何问题...',
   'chat.input.entryPlaceholder': '描述你想要完成的内容...',
-  'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
+  'chat.input.thinkingPlaceholder': '输入下一条消息',
   'chat.input.attach': '添加附件',
   'chat.input.attachUnavailableWhileRunning': '当前回复结束后可添加附件',
   'chat.input.attachFile': '添加附件',
@@ -40,17 +40,17 @@ const translations: Record<string, string> = {
   'chat.input.send': '发送',
   'chat.input.queue': '加入队列',
   'chat.input.skills': '技能',
-  'chat.input.queuePlaceholder': '正在回答... {count} 条排队消息待处理',
+  'chat.input.queuePlaceholder': '输入下一条消息 · {count} 条待处理',
   'chat.input.queuedMessages': '消息队列（{count} 条待处理）',
   'chat.input.queueItemLabel': '排队消息 {index}',
-  'chat.input.queueSendNext': '设为下一条发送',
+  'chat.input.queueSendNow': '立即发送',
   'chat.input.queueCancel': '取消排队消息',
   'chat.input.queueEdit': '重新编辑排队消息',
   'chat.input.queueExpand': '展开',
   'chat.input.queueCollapse': '收起',
   'chat.input.queueMore': '还有 {count} 条',
   'chat.input.queueAwaitingSnapshot': '正在同步队列...',
-  'chat.input.cancel': '取消 (Esc)',
+  'chat.input.cancel': '停止回答 (Esc)',
   'chat.input.commands': '命令',
   'chat.input.canvasContext.kicker': '画布选中上下文',
   'chat.input.canvasContext.multiTitle': '已选 {count} 个画布节点',
@@ -784,6 +784,7 @@ describe('InputArea composer controls', () => {
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
       },
+      target: { kind: 'content-project' as const, contentProjectId: 'project-1' },
     };
     const onSelectProject = vi.fn(async () => target);
     const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
@@ -813,6 +814,80 @@ describe('InputArea composer controls', () => {
 
     await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
     expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(target);
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
+  });
+
+  it('loads, selects, and creates owner-qualified authoring targets in the Entry menu', async () => {
+    const selected = {
+      label: 'Characters / Aster',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'character-library',
+        workspaceGrantId: 'grant-character',
+      },
+      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+    };
+    const option = {
+      optionId: 'standalone-character:character-1',
+      label: 'Aster',
+      workspaceLabel: 'Characters',
+      target: selected.target,
+      placement: { kind: 'standalone-library' as const, library: 'character' as const },
+    };
+    const creation = {
+      creationId: 'project-1:world',
+      label: 'Novel / Worlds',
+      targetKind: 'world-project' as const,
+      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
+    };
+    const onSelectAuthoringTarget = vi.fn(async () => selected);
+    const onCreateAuthoringTarget = vi.fn(async () => ({
+      ...selected,
+      target: { kind: 'world-project' as const, worldProjectId: 'world-1' },
+    }));
+    const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
+    render(
+      <Harness
+        composerWorkspace={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [option],
+            creationContexts: [creation],
+            diagnostics: [],
+          })),
+          onSelectAuthoringTarget,
+          onCreateAuthoringTarget,
+        }}
+      >
+        <InputArea
+          presentation="entry"
+          inputValue="preserved"
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          showDraftWorkspaceControl
+          onDraftWorkspaceTargetChange={onDraftWorkspaceTargetChange}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Aster/u }));
+    await waitFor(() => expect(onSelectAuthoringTarget).toHaveBeenCalledWith(option));
+    expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(selected);
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.change(await screen.findByLabelText('chat.input.workspace.createScope'), {
+      target: { value: creation.creationId },
+    });
+    fireEvent.change(screen.getByLabelText('chat.input.workspace.targetName'), {
+      target: { value: 'Arcadia' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'chat.input.workspace.createTarget' }));
+    await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledWith(creation, 'Arcadia'));
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
   });
 
@@ -1378,7 +1453,7 @@ describe('InputArea composer controls', () => {
   it('opens the entry prompt only for exact published Character selections', () => {
     const onSend = vi.fn();
     const onEntryPromptMenuChange = vi.fn();
-    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1392,6 +1467,10 @@ describe('InputArea composer controls', () => {
               characterId: 'char-xiaoju',
               characterVersionId: 'character-version-xiaoju',
               roleProfileId: 'role-profile-xiaoju',
+            },
+            characterLaunchSelection: {
+              characterProjectId: 'char-xiaoju',
+              characterVersionId: 'character-version-xiaoju',
             },
           },
           {
@@ -1413,6 +1492,10 @@ describe('InputArea composer controls', () => {
               characterVersionId: 'character-version-cn',
               roleProfileId: 'role-profile-cn',
             },
+            characterLaunchSelection: {
+              characterProjectId: 'char-cn',
+              characterVersionId: 'character-version-cn',
+            },
           },
           {
             id: 'scene-1',
@@ -1427,7 +1510,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={onEntryPromptMenuChange}
-          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
+          onAddCharacterLaunch={onAddCharacterLaunch}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
@@ -1443,18 +1526,17 @@ describe('InputArea composer controls', () => {
     fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(onDraftCharacterTargetSelect).toHaveBeenCalledWith({
-      kind: 'character',
-      characterId: 'char-xiaoju',
+    expect(onAddCharacterLaunch).toHaveBeenCalledWith({
+      characterProjectId: 'char-xiaoju',
       characterVersionId: 'character-version-xiaoju',
-      roleProfileId: 'role-profile-xiaoju',
+      label: '小橘',
     });
     expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
   });
 
   it('preserves prefilled Draft text while binding the exact Character target', () => {
     const onSend = vi.fn();
-    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1468,6 +1550,10 @@ describe('InputArea composer controls', () => {
               characterVersionId: 'character-version-xiaoju',
               roleProfileId: 'role-profile-xiaoju',
             },
+            characterLaunchSelection: {
+              characterProjectId: 'char-xiaoju',
+              characterVersionId: 'character-version-xiaoju',
+            },
           },
         ]}
       >
@@ -1476,7 +1562,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
-          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
+          onAddCharacterLaunch={onAddCharacterLaunch}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
@@ -1486,7 +1572,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /小橘/ }));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(onDraftCharacterTargetSelect).toHaveBeenCalledWith(
+    expect(onAddCharacterLaunch).toHaveBeenCalledWith(
       expect.objectContaining({ characterVersionId: 'character-version-xiaoju' }),
     );
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('你还记得昨晚的雨吗？');
@@ -1494,7 +1580,7 @@ describe('InputArea composer controls', () => {
 
   it('keeps an Entity candidate unavailable until Chara publishes exact identities', () => {
     const onSend = vi.fn();
-    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
+    const onAddCharacterLaunch = vi.fn();
     render(
       <Harness
         mentionItems={[
@@ -1516,7 +1602,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
-          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
+          onAddCharacterLaunch={onAddCharacterLaunch}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -1525,7 +1611,7 @@ describe('InputArea composer controls', () => {
 
     expect(screen.getByText('未找到可用于角色扮演的角色实体。')).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /小橘/ })).toBeNull();
-    expect(onDraftCharacterTargetSelect).not.toHaveBeenCalled();
+    expect(onAddCharacterLaunch).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
   });
 
@@ -1846,7 +1932,7 @@ describe('InputArea composer controls', () => {
   it('queues plain text while a response is running and keeps stop available', () => {
     const onSend = vi.fn();
     const onCancel = vi.fn();
-    const onPromoteQueuedMessage = vi.fn();
+    const onSendQueuedMessageNow = vi.fn();
     const onCancelQueuedMessage = vi.fn();
     const onEditQueuedMessage = vi.fn();
 
@@ -1866,7 +1952,7 @@ describe('InputArea composer controls', () => {
             },
           ]}
           onInputChange={vi.fn()}
-          onPromoteQueuedMessage={onPromoteQueuedMessage}
+          onSendQueuedMessageNow={onSendQueuedMessageNow}
           onCancelQueuedMessage={onCancelQueuedMessage}
           onEditQueuedMessage={onEditQueuedMessage}
           onSend={onSend}
@@ -1875,15 +1961,13 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const textarea = screen.getByPlaceholderText('正在回答... 2 条排队消息待处理');
+    const textarea = screen.getByPlaceholderText('输入下一条消息 · 2 条待处理');
     expect(textarea).toBeTruthy();
     expect((textarea as HTMLTextAreaElement).disabled).toBe(false);
     (textarea as HTMLTextAreaElement).focus();
     expect(document.activeElement).toBe(textarea);
-    expect((screen.getByTitle('当前回复结束后可添加附件') as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    expect(screen.getByTitle('取消 (Esc)').className).toContain('agent-composer-stop');
+    expect((screen.getByTitle('添加附件') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTitle('停止回答 (Esc)').className).toContain('agent-composer-stop');
     expect(document.querySelector('.agent-composer-queue-count')).toBeNull();
     const queuePanel = document.querySelector('.agent-composer-queue-panel');
     expect(queuePanel?.className).toContain('agent-composer-pending-panel');
@@ -1894,8 +1978,8 @@ describe('InputArea composer controls', () => {
     );
     expect(screen.getByTitle('加入队列').className).toContain('agent-composer-queue');
 
-    fireEvent.click(screen.getByTitle('设为下一条发送'));
-    expect(onPromoteQueuedMessage).toHaveBeenCalledWith('queued-1');
+    fireEvent.click(screen.getByTitle('立即发送'));
+    expect(onSendQueuedMessageNow).toHaveBeenCalledWith('queued-1');
     fireEvent.click(screen.getByTitle('重新编辑排队消息'));
     expect(onEditQueuedMessage).toHaveBeenCalledWith('queued-1');
     fireEvent.click(screen.getByTitle('取消排队消息'));
@@ -1908,7 +1992,7 @@ describe('InputArea composer controls', () => {
       }),
     );
 
-    fireEvent.click(screen.getByTitle('取消 (Esc)'));
+    fireEvent.click(screen.getByTitle('停止回答 (Esc)'));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -1930,7 +2014,7 @@ describe('InputArea composer controls', () => {
     );
 
     expect(screen.getByTitle('加入队列').className).toContain('agent-composer-queue');
-    expect(screen.getByTitle('取消 (Esc)').className).toContain('agent-composer-stop');
+    expect(screen.getByTitle('停止回答 (Esc)').className).toContain('agent-composer-stop');
 
     fireEvent.click(screen.getByTitle('加入队列'));
     expect(onSend).toHaveBeenCalledWith(
@@ -1939,7 +2023,7 @@ describe('InputArea composer controls', () => {
       }),
     );
 
-    fireEvent.click(screen.getByTitle('取消 (Esc)'));
+    fireEvent.click(screen.getByTitle('停止回答 (Esc)'));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -2094,7 +2178,7 @@ describe('InputArea composer controls', () => {
             },
           ]}
           onInputChange={vi.fn()}
-          onPromoteQueuedMessage={vi.fn()}
+          onSendQueuedMessageNow={vi.fn()}
           onCancelQueuedMessage={vi.fn()}
           onEditQueuedMessage={vi.fn()}
           onSend={vi.fn()}
@@ -2103,9 +2187,9 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const promoteButton = screen.getByRole('button', { name: '设为下一条发送' });
-    promoteButton.focus();
-    expect(document.activeElement).toBe(promoteButton);
+    const sendNowButton = screen.getByRole('button', { name: '立即发送' });
+    sendNowButton.focus();
+    expect(document.activeElement).toBe(sendNowButton);
   });
 
   it('hides the queue panel when there are no queued items or pending count', () => {
@@ -2127,7 +2211,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('shows optimistic queued text but waits for runtime ids before enabling item actions', () => {
-    const onPromoteQueuedMessage = vi.fn();
+    const onSendQueuedMessageNow = vi.fn();
 
     render(
       <Harness>
@@ -2144,7 +2228,7 @@ describe('InputArea composer controls', () => {
             },
           ]}
           onInputChange={vi.fn()}
-          onPromoteQueuedMessage={onPromoteQueuedMessage}
+          onSendQueuedMessageNow={onSendQueuedMessageNow}
           onSend={vi.fn()}
           onCancel={vi.fn()}
         />
@@ -2152,13 +2236,13 @@ describe('InputArea composer controls', () => {
     );
 
     expect(screen.getByText('等待运行时确认')).toBeTruthy();
-    const promoteButton = screen.getByTitle('设为下一条发送');
-    expect(promoteButton.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(promoteButton);
-    expect(onPromoteQueuedMessage).not.toHaveBeenCalled();
+    const sendNowButton = screen.getByTitle('立即发送');
+    expect(sendNowButton.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(sendNowButton);
+    expect(onSendQueuedMessageNow).not.toHaveBeenCalled();
   });
 
-  it('does not queue rich context while a response is running', () => {
+  it('queues rich context while a response is running', () => {
     const onSend = vi.fn();
 
     render(
@@ -2181,9 +2265,19 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    expect(screen.queryByTitle('加入队列')).toBeNull();
-    expect(screen.getByTitle('取消 (Esc)')).toBeTruthy();
-    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTitle('加入队列'));
+    expect(screen.getByTitle('停止回答 (Esc)')).toBeTruthy();
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageText: '参考',
+        fileReferences: [
+          expect.objectContaining({
+            id: 'file-ref:assets/ref.png',
+            contentLocator: { kind: 'workspace-file', path: 'assets/ref.png' },
+          }),
+        ],
+      }),
+    );
   });
 
   it('locks model configuration while background work is active without blocking send', () => {

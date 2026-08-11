@@ -5,6 +5,7 @@ import { createOpenNekoPiModels } from '@neko/agent-runtime/pi';
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
 import type {
   AgentHostToWebviewMessage,
+  AgentEntryTargetReceipt,
   AgentTurnTimelineToolCallItem,
   ConversationProjectionSnapshot,
 } from '@neko/agent-contracts';
@@ -358,6 +359,7 @@ describe('Agent controller composition', () => {
         workspaceId: workspace.workspaceId,
         workspaceGrantId: 'workspace-grant-1',
       },
+      entryTargetReceipt: authoringReceipt(),
       locale: 'en',
       purposeModels: {
         'image.generate': {
@@ -370,6 +372,7 @@ describe('Agent controller composition', () => {
 
     expect(workspace.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
+        entryTargetReceipt: authoringReceipt(),
         modelPolicy: expect.objectContaining({
           'agent.main': expect.objectContaining({ execution: 'pi' }),
           'image.generate': {
@@ -721,6 +724,7 @@ describe('Agent controller composition', () => {
         workspaceId: workspace.workspaceId,
         workspaceGrantId: 'workspace-grant-1',
       }),
+      readConversationEntryTargetReceipt: async () => authoringReceipt(),
     });
     const posted: AgentHostToWebviewMessage[] = [];
     effects.conversation.submitTurn(
@@ -756,6 +760,9 @@ describe('Agent controller composition', () => {
         action: 'workspace-board-delivery',
         conversationId: turnIdentity.conversationId,
       }),
+    );
+    expect(workspace.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ entryTargetReceipt: authoringReceipt() }),
     );
     const facts = effects.automation?.readFacts(turnIdentity);
     expect(facts).toMatchObject({
@@ -981,6 +988,12 @@ describe('Agent controller composition', () => {
         viewId: 'view-1',
         connectionId: 'connection-1',
       },
+      readConversationContext: async () => ({
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      }),
+      personalSkillOwnerId: 'assistant:default',
     });
     const context = {
       identity: {
@@ -1011,6 +1024,45 @@ describe('Agent controller composition', () => {
       title: 'Owner conversation',
       conversationId: 'conversation-owner-1',
     };
+    vi.mocked(workspace.readRuntimeResidency).mockReturnValue({
+      workspaceId: workspace.workspaceId,
+      visibleBindingCount: 1,
+      releaseRequested: false,
+      releasable: false,
+      conversations: [
+        {
+          conversationId: activeTab.conversationId,
+          resident: true,
+          visibleBindingCount: 1,
+          running: true,
+          queued: true,
+          waitingForInput: false,
+          releasable: false,
+        },
+      ],
+    });
+    await expect(
+      effects.skill.invokeInput(
+        {
+          conversationId: activeTab.conversationId,
+          input: {
+            kind: 'command',
+            catalogEntryId: 'command:builtin:clear',
+            commandId: 'clear',
+            handlerId: 'builtin:clear',
+          },
+        },
+        context,
+      ),
+    ).rejects.toThrow('cannot run while Conversation');
+    expect(workspace.clearContext).not.toHaveBeenCalled();
+    vi.mocked(workspace.readRuntimeResidency).mockReturnValue({
+      workspaceId: workspace.workspaceId,
+      visibleBindingCount: 1,
+      releaseRequested: false,
+      releasable: false,
+      conversations: [],
+    });
     await effects.conversation.listConversations(context);
     await effects.conversation.activateConversation(
       {
@@ -1029,7 +1081,7 @@ describe('Agent controller composition', () => {
       'activeConversation',
     ]);
     await effects.conversation.readMessageQueue(activeTab.conversationId, context);
-    await effects.conversation.promoteQueuedMessage(
+    await effects.conversation.sendQueuedMessageNow(
       { conversationId: activeTab.conversationId, queueItemId: 'queued-turn-1' },
       context,
     );
@@ -1038,7 +1090,7 @@ describe('Agent controller composition', () => {
       context,
     );
     expect(workspace.readMessageQueue).toHaveBeenCalledWith(activeTab.conversationId);
-    expect(workspace.promoteQueuedMessage).toHaveBeenCalledWith(
+    expect(workspace.sendQueuedMessageNow).toHaveBeenCalledWith(
       activeTab.conversationId,
       'queued-turn-1',
     );
@@ -1046,9 +1098,10 @@ describe('Agent controller composition', () => {
       activeTab.conversationId,
       'queued-turn-1',
     );
-    expect(posted.slice(-3).map((message) => message.type)).toEqual([
+    expect(posted.slice(-4).map((message) => message.type)).toEqual([
       'messageQueueSnapshot',
       'messageQueueSnapshot',
+      'agentStateSnapshot',
       'messageQueueSnapshot',
     ]);
     const cutContext = {
@@ -1197,6 +1250,21 @@ describe('Agent controller composition', () => {
   });
 });
 
+function authoringReceipt(): AgentEntryTargetReceipt {
+  return {
+    targetReceiptId: 'target-receipt-1',
+    draftId: 'draft-1',
+    connectionId: 'connection-1',
+    mode: 'authoring',
+    binding: {
+      kind: 'authoring',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+      target: { kind: 'content-project', contentProjectId: 'content-1' },
+    },
+  };
+}
+
 function createWorkspace(
   workspacePath = '/workspace/demo',
   projection: ConversationProjectionSnapshot = {
@@ -1283,18 +1351,21 @@ function createWorkspace(
       conversationId,
       items: [],
       pendingCount: 0,
+      paused: false,
       sequence: 0,
     })),
-    promoteQueuedMessage: vi.fn((conversationId: string) => ({
+    sendQueuedMessageNow: vi.fn((conversationId: string) => ({
       conversationId,
       items: [],
       pendingCount: 0,
+      paused: false,
       sequence: 0,
     })),
     cancelQueuedMessage: vi.fn(async (conversationId: string) => ({
       conversationId,
       items: [],
       pendingCount: 0,
+      paused: false,
       sequence: 0,
     })),
     takeQueuedMessageForEdit: vi.fn(),
@@ -1302,6 +1373,7 @@ function createWorkspace(
       conversationId,
       items: [],
       pendingCount: 0,
+      paused: false,
       sequence: 0,
     })),
     cancelTurn: vi.fn(),

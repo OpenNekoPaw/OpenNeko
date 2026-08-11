@@ -5,14 +5,13 @@ import type {
   TabRenderStateUpdate,
 } from './tab-render-runtime';
 import {
+  isAgentEntryMode,
+  parseAgentAuthoringTargetRef,
   parseAgentBoundDomainBinding,
   type AgentBoundDomainBinding,
   type AgentContextPayload,
+  type AgentEntryMode,
 } from '@neko/agent-contracts';
-import {
-  isAgentEntryExperienceMode,
-  type AgentEntryExperienceMode,
-} from '../entry-experience-mode';
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly inputValue: string;
@@ -31,11 +30,12 @@ export interface AgentEntryDraftSnapshot {
   readonly workspaceTarget?: {
     readonly label: string;
     readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+    readonly target?: import('@neko/agent-contracts').AgentAuthoringTargetRef;
   };
   readonly selectedModel: string;
   readonly mediaModelSelection?: Readonly<Record<'image' | 'video' | 'audio', string>>;
   readonly executionMode: 'plan' | 'ask' | 'auto';
-  readonly experienceMode?: AgentEntryExperienceMode;
+  readonly entryMode?: AgentEntryMode;
 }
 
 export interface TabRenderRealmState {
@@ -125,15 +125,15 @@ export function parseTabRenderRealmState(value: unknown): ParsedTabRenderRealmSt
   let entryDraft: AgentEntryDraftSnapshot | undefined;
   if (value.entryDraft !== undefined) {
     try {
-      const invalidExperienceMode =
+      const invalidEntryMode =
         isRecord(value.entryDraft) &&
-        value.entryDraft.experienceMode !== undefined &&
-        !isAgentEntryExperienceMode(value.entryDraft.experienceMode);
-      entryDraft = parseEntryDraft(value.entryDraft, invalidExperienceMode);
-      if (invalidExperienceMode) {
+        value.entryDraft.entryMode !== undefined &&
+        !isAgentEntryMode(value.entryDraft.entryMode);
+      entryDraft = parseEntryDraft(value.entryDraft, invalidEntryMode);
+      if (invalidEntryMode) {
         diagnostics.push({
           code: 'invalid-entry-draft',
-          message: 'Agent entry draft snapshot experienceMode is invalid and was reset.',
+          message: 'Agent entry draft snapshot entryMode is invalid and was reset.',
         });
       }
     } catch (error) {
@@ -343,10 +343,7 @@ function parseDraft(value: unknown, index: number): TabRenderDraftSnapshot {
   };
 }
 
-function parseEntryDraft(
-  value: unknown,
-  recoverInvalidExperienceMode = false,
-): AgentEntryDraftSnapshot {
+function parseEntryDraft(value: unknown, recoverInvalidEntryMode = false): AgentEntryDraftSnapshot {
   const path = 'Agent entry draft snapshot';
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   const contextReferences = value.contextReferences;
@@ -367,13 +364,9 @@ function parseEntryDraft(
     throw new Error(`${path}.characterLaunches must not contain duplicate CharacterVersions.`);
   }
   const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
-  const experienceMode = value.experienceMode;
-  if (
-    experienceMode !== undefined &&
-    !isAgentEntryExperienceMode(experienceMode) &&
-    !recoverInvalidExperienceMode
-  ) {
-    throw new Error(`${path}.experienceMode is invalid.`);
+  const entryMode = value.entryMode;
+  if (entryMode !== undefined && !isAgentEntryMode(entryMode) && !recoverInvalidEntryMode) {
+    throw new Error(`${path}.entryMode is invalid.`);
   }
   return {
     draftId: nonEmptyString(value.draftId, `${path}.draftId`),
@@ -393,7 +386,7 @@ function parseEntryDraft(
           ),
         }),
     executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
-    ...(isAgentEntryExperienceMode(experienceMode) ? { experienceMode } : {}),
+    ...(isAgentEntryMode(entryMode) ? { entryMode } : {}),
   };
 }
 
@@ -431,6 +424,7 @@ function parseEntryWorkspaceTarget(
   return {
     label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
     context,
+    ...(value.target === undefined ? {} : { target: parseAgentAuthoringTargetRef(value.target) }),
   };
 }
 

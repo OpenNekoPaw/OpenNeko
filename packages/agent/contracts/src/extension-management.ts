@@ -280,6 +280,7 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'name',
       'displayName',
       'description',
+      'localization',
       'version',
       'developer',
       'marketplace',
@@ -449,6 +450,7 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       record['description'],
       'Agent Extension Management description must be a string.',
     ),
+    localization: parseExtensionLocalization(record['localization']),
     version: requireString(
       record['version'],
       'Agent Extension Management version must be a string.',
@@ -496,6 +498,41 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'Agent Extension Management App ids are invalid.',
     ),
   };
+}
+
+function parseExtensionLocalization(value: unknown): AgentExtensionCatalogItem['localization'] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Agent Extension Management localization is invalid.');
+  }
+  const entries = Object.entries(value).map(([locale, localized]) => {
+    if (!isLocalizationLocale(locale)) {
+      throw new Error('Agent Extension Management localization locale is invalid.');
+    }
+    const record = requireExactRecord(
+      localized,
+      ['description'],
+      'Agent Extension Management localized description is invalid.',
+    );
+    return [
+      locale,
+      {
+        description: requireNonEmptyString(
+          record['description'],
+          'Agent Extension Management localized description is invalid.',
+        ),
+      },
+    ] as const;
+  });
+  return Object.fromEntries(entries);
+}
+
+function isLocalizationLocale(value: string): boolean {
+  const [language, ...subtags] = value.split('-');
+  return (
+    language !== undefined &&
+    /^[a-z]{2,3}$/u.test(language) &&
+    subtags.every((subtag) => /^[a-z0-9]{2,8}$/u.test(subtag))
+  );
 }
 
 function parseExtensionDiscovery(

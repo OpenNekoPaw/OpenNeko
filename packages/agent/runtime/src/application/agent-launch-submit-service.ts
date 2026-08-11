@@ -5,6 +5,7 @@ import {
   type AgentDraftInputIntent,
   type AgentDraftSubmitInput,
   type AgentDraftSubmitProjection,
+  type AgentEntryTargetReceipt,
   type AgentLaunchConnectionIdentity,
   type MessageContextReference,
 } from '@neko/agent-contracts';
@@ -46,6 +47,28 @@ export interface AgentEntryConversationBindingPort {
   materialize(): Promise<Extract<AgentBoundDomainBinding, { readonly kind: 'assistant' }>>;
 }
 
+type AgentRuntimeEntryTargetReceipt = AgentEntryTargetReceipt & {
+  readonly binding: Extract<
+    AgentEntryTargetReceipt['binding'],
+    { readonly kind: 'character-dialogue' | 'world-experience' }
+  >;
+};
+
+export interface AgentEntryRuntimeMaterializationPort {
+  materialize(input: {
+    readonly requestId: string;
+    readonly connection: AgentLaunchConnectionIdentity;
+    readonly receipt: AgentRuntimeEntryTargetReceipt;
+    readonly input: AgentDraftInputIntent;
+  }): Promise<{
+    readonly conversationId: string;
+    readonly context: Extract<
+      AgentBoundDomainBinding,
+      { readonly kind: 'character' | 'room' | 'world' }
+    >;
+  }>;
+}
+
 export interface AgentLaunchCommandPreparationPort {
   validate(intent: Extract<AgentDraftInputIntent, { readonly kind: 'command' }>): void;
 }
@@ -71,6 +94,7 @@ export function isAgentLaunchConversationCreationCommand(intent: AgentDraftInput
 export function createAgentLaunchDraftSubmissionApplicationService(options: {
   readonly launch: Pick<AgentLaunchApplicationService, 'validateDraftSubmit'>;
   readonly entry: AgentEntryConversationBindingPort;
+  readonly runtimeEntry: AgentEntryRuntimeMaterializationPort;
   readonly bindings: AgentDomainBindingApplicationService;
   readonly lifecycle: AgentConversationLifecycleService;
   readonly resources: AgentLaunchResourceCommitPort;
@@ -98,19 +122,35 @@ export function createAgentLaunchDraftSubmissionApplicationService(options: {
         binding: requestedBinding,
         ...(existing === undefined ? {} : { conversationId: existing.conversationId }),
       });
+      const runtimeMaterialization =
+        existing === undefined && isRuntimeEntryTargetReceipt(draftInput.entryTargetReceipt)
+          ? await options.runtimeEntry.materialize({
+              requestId,
+              connection,
+              receipt: draftInput.entryTargetReceipt,
+              input: draftInput.input,
+            })
+          : undefined;
       const context =
         existing?.context ??
+        runtimeMaterialization?.context ??
         (requestedBinding.kind === 'unbound'
           ? await options.entry.materialize()
           : await resolveBinding(options.bindings, requestedBinding));
-      if (!bindingMaterializesRequestedOwner(requestedBinding, context)) {
+      if (
+        !entryMaterializesRequestedOwner(draftInput.entryTargetReceipt, requestedBinding, context)
+      ) {
         throw new Error(
           `Agent first-submit request '${requestId}' is already committed to another domain owner.`,
         );
       }
       const record = await options.lifecycle.firstSubmit({
         requestId,
+        ...(runtimeMaterialization === undefined
+          ? {}
+          : { conversationId: runtimeMaterialization.conversationId }),
         context,
+        entryTargetReceipt: draftInput.entryTargetReceipt,
         input: draftInput.input,
         references: draftInput.references,
         contextReferences,
@@ -150,6 +190,47 @@ export function createAgentLaunchDraftSubmissionApplicationService(options: {
       };
     },
   };
+}
+
+function isRuntimeEntryTargetReceipt(
+  receipt: AgentEntryTargetReceipt | null,
+): receipt is AgentRuntimeEntryTargetReceipt {
+  return (
+    receipt?.binding.kind === 'character-dialogue' || receipt?.binding.kind === 'world-experience'
+  );
+}
+
+function entryMaterializesRequestedOwner(
+  receipt: AgentEntryTargetReceipt | null,
+  requested: AgentDomainBinding,
+  committed: AgentBoundDomainBinding,
+): boolean {
+  if (!isRuntimeEntryTargetReceipt(receipt)) {
+    return bindingMaterializesRequestedOwner(requested, committed);
+  }
+  if (requested.kind !== 'unbound') return false;
+  if (receipt.binding.kind === 'character-dialogue') {
+    if (receipt.binding.participants.length > 1) return committed.kind === 'room';
+    const participant = receipt.binding.participants[0]!;
+    return (
+      committed.kind === 'character' &&
+      committed.characterId === participant.characterProjectId &&
+      committed.characterVersionId === participant.characterVersionId &&
+      committed.roleProfileId === participant.roleProfileId &&
+      committed.characterRunId !== undefined &&
+      committed.dialogueRunId !== undefined
+    );
+  }
+  return (
+    committed.kind === 'world' &&
+    committed.worldExperienceId === receipt.binding.worldExperienceId &&
+    committed.worldExperienceVersionId === receipt.binding.worldExperienceVersionId &&
+    committed.worldRunId !== undefined &&
+    (receipt.binding.launch.kind === 'new'
+      ? committed.participantId === receipt.binding.launch.participantId &&
+        committed.roleScopeId === receipt.binding.launch.roleScopeId
+      : committed.worldRunId === receipt.binding.launch.worldRunId)
+  );
 }
 
 async function resolveBinding(

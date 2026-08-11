@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { AGENT_ENTRY_MODES } from '@neko/agent-contracts';
 import { describe, expect, it } from 'vitest';
 import { desktopFuseConfig } from '../fuse.config.js';
 import desktopRendererConfig, {
@@ -103,6 +104,65 @@ describe('Desktop architecture boundaries', () => {
       expect(source).not.toMatch(/\btryNext\b/u);
       expect(source).not.toMatch(/\b(?:merge|resolve)Model/u);
     }
+  });
+
+  it('keeps one canonical Agent Entry mode and submit path', () => {
+    const agentRuntimeRoot = path.join(repositoryRoot, 'packages/agent/runtime/src/application');
+    const agentWebviewRoot = path.join(repositoryRoot, 'packages/agent/webview/src');
+    const charaLaunchContract = readFileSync(
+      path.join(repositoryRoot, 'packages/chara/src/contracts/character-conversation-launch.ts'),
+      'utf8',
+    );
+    const sources = [
+      readFileSync(path.join(sourceRoot, 'main', 'app-host.ts'), 'utf8'),
+      readFileSync(path.join(sourceRoot, 'main', 'ipc.ts'), 'utf8'),
+      readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8'),
+      readFileSync(path.join(sourceRoot, 'shared', 'global.d.ts'), 'utf8'),
+      readFileSync(path.join(agentWebviewRoot, 'root.tsx'), 'utf8'),
+      readFileSync(path.join(agentWebviewRoot, 'components', 'AppShell.tsx'), 'utf8'),
+      readFileSync(path.join(agentWebviewRoot, 'components', 'ConversationController.tsx'), 'utf8'),
+      readFileSync(path.join(agentRuntimeRoot, 'agent-entry-target-service.ts'), 'utf8'),
+      readFileSync(path.join(agentRuntimeRoot, 'agent-launch-submit-service.ts'), 'utf8'),
+      charaLaunchContract,
+    ];
+
+    expect(AGENT_ENTRY_MODES).toEqual([
+      'assistant',
+      'authoring',
+      'character-dialogue',
+      'world-experience',
+    ]);
+    expect(existsSync(path.join(agentWebviewRoot, 'entry-experience-mode.ts'))).toBe(false);
+    for (const source of sources) {
+      expect(source).not.toContain('CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL');
+      expect(source).not.toContain('OpenNekoDesktopCharacterConversationBridge');
+      expect(source).not.toContain('executeCharacterConversationLaunchRequest');
+      expect(source).not.toContain('onSubmitCharacterLaunch');
+      expect(source).not.toMatch(/\b(?:active|current|recent|first)(?:Workspace|Target)\b/u);
+    }
+  });
+
+  it('keeps domain management routing in the application sidebar only', () => {
+    const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
+
+    expect(shell).not.toContain('CreativeManagementShell');
+    expect(shell).not.toContain('creative-management__catalog-switcher');
+    expect(shell).not.toContain('parseCreativeManagementCatalog');
+    expect(shell).not.toContain('<WorldFoundationRoot');
+    expect(shell).toContain('<WorldCatalogSurface');
+    expect(shell).toContain('<WorldDetailSurface');
+  });
+
+  it('composes Content, Character, and World authoring through one Workbench Main path', () => {
+    const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
+
+    expect(shell).toContain('<ProjectAuthoringTargetSwitchRoot');
+    expect(shell).toContain('renderTarget={(item) =>');
+    expect(shell).toContain('return renderWorkbenchMainView({');
+    expect(shell).toContain('<DesktopTextEditorSurface');
+    expect(shell).toContain('<CharacterAuthoringStudioRoot');
+    expect(shell).toContain('<WorldAuthoringStudioRoot');
+    expect(shell.match(/<ControlledWorkbenchShell/gu)).toHaveLength(1);
   });
 
   it('keeps provider credentials in Host secret and protected native UI boundaries', () => {

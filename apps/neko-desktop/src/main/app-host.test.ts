@@ -29,7 +29,11 @@ import {
 } from '@neko/host/desktop-shell-contract';
 import { DesktopAppHost, type DesktopAppHostOptions } from './app-host';
 import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
-import { createDesktopWorkspaceDirectoryTargetRequest } from '@neko/host/desktop-workspace-grant-contract';
+import {
+  createDesktopContentProjectTargetRequest,
+  createDesktopWorkspaceAuthoringLibraryTargetRequest,
+  createDesktopWorkspaceDirectoryTargetRequest,
+} from '@neko/host/desktop-workspace-grant-contract';
 import { createAssetCenterHostRequest } from '@neko/assets-domain/asset-center';
 import {
   AgentConversationLifecycleUnavailableError,
@@ -49,7 +53,7 @@ import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DESKTOP_APP_ORIGIN } from './security';
 import { DesktopShellService } from '@neko/host/desktop-shell-service';
-import { DesktopProjectManagementService } from '@neko/host/desktop-project-management-service';
+import { DesktopProjectRegistrationService } from '@neko/host/desktop-project-registration-service';
 import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import {
   DesktopApplicationSettingsService,
@@ -72,9 +76,69 @@ import {
 import { DesktopWorkbenchContractError } from '@neko/host/desktop-workbench-contract';
 import type { ResourceBrowserNodeRuntime } from '@neko/assets-node';
 import { CharacterFoundationService } from '@neko/chara/application';
-import type { RoomView } from '@neko/chara/contracts';
+import { WorldFoundationService } from '@neko/world/application';
+import type { RoomRun, RoomView } from '@neko/chara/contracts';
+import {
+  createCharacterAuthoringCommandRequest,
+  createCharacterAuthoringSnapshotRequest,
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+} from '@neko/chara/contracts';
+import {
+  createWorldAuthoringCommandRequest,
+  createWorldAuthoringSnapshotRequest,
+} from '@neko/world/contracts';
+import {
+  createProjectAuthoringNavigationHostRequest,
+  createProjectLocalAuthoringHostRequest,
+} from '@neko/project/contracts';
 
 describe('DesktopAppHost', () => {
+  it('delegates Character Foundation commands to the package owner and returns its projection', async () => {
+    const commands = { execute: vi.fn(async () => undefined) };
+    const fixture = await createShellAppHost({ characterFoundationCommands: commands });
+    await expect(
+      fixture.appHost.executeCharacterFoundationRequest(fixture.sender, {
+        requestId: 'character-request-1',
+        operation: 'character-project-set-review',
+        input: { characterProjectId: 'character-project:a', reviewStatus: 'ready' },
+      }),
+    ).resolves.toMatchObject({
+      requestId: 'character-request-1',
+      snapshot: { character: { projects: [], versions: [] }, diagnostics: [] },
+    });
+    expect(commands.execute).toHaveBeenCalledOnce();
+    await fixture.appHost.dispose();
+  });
+
+  it('delegates World Foundation commands to the package owner and returns its projection', async () => {
+    const commands = { execute: vi.fn(async () => undefined) };
+    const fixture = await createShellAppHost({ worldFoundationCommands: commands });
+    await expect(
+      fixture.appHost.executeWorldFoundationRequest(fixture.sender, {
+        requestId: 'world-request-1',
+        operation: 'world-project-create',
+        input: {
+          worldProjectId: 'world-project:a',
+          title: 'Archive City',
+          draft: {
+            background: 'A city of archives.',
+            worldBook: [],
+            locations: [],
+            organizations: [],
+            rules: [],
+            initialFacts: [],
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      requestId: 'world-request-1',
+      snapshot: { world: { projects: [], versions: [], runtimes: [] }, diagnostics: [] },
+    });
+    expect(commands.execute).toHaveBeenCalledOnce();
+    await fixture.appHost.dispose();
+  });
+
   it('maps only Main View capacity failures to an owner-bound Resource Browser rejection', async () => {
     const identity = {
       projectId: 'project-1',
@@ -147,11 +211,13 @@ describe('DesktopAppHost', () => {
       logger,
       shell,
       projectManagement: createProjectManagementService(shell, agent),
+      projectAuthoring: createProjectAuthoring(),
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
+      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
@@ -161,7 +227,9 @@ describe('DesktopAppHost', () => {
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      characterConversations: createCharacterConversations(),
+      worldFoundation: createWorldFoundationService(),
+      worldFoundationCommands: createWorldFoundationCommands(),
+      characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings,
@@ -235,11 +303,13 @@ describe('DesktopAppHost', () => {
       logger,
       shell,
       projectManagement: createProjectManagementService(shell, agent),
+      projectAuthoring: createProjectAuthoring(),
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
+      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
@@ -249,7 +319,9 @@ describe('DesktopAppHost', () => {
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      characterConversations: createCharacterConversations(),
+      worldFoundation: createWorldFoundationService(),
+      worldFoundationCommands: createWorldFoundationCommands(),
+      characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings: createSettingsService(),
@@ -306,11 +378,13 @@ describe('DesktopAppHost', () => {
       logger,
       shell,
       projectManagement: createProjectManagementService(shell, agent),
+      projectAuthoring: createProjectAuthoring(),
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
+      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
@@ -320,7 +394,9 @@ describe('DesktopAppHost', () => {
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      characterConversations: createCharacterConversations(),
+      worldFoundation: createWorldFoundationService(),
+      worldFoundationCommands: createWorldFoundationCommands(),
+      characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
       settings: createSettingsService(),
@@ -467,6 +543,7 @@ describe('DesktopAppHost', () => {
       connection: entryConnection.connection,
       input: {
         draft: entryConnection.interaction,
+        entryTargetReceipt: null,
         input: { kind: 'message' as const, text: 'Continue in the selected workspace' },
         references: [],
         resourceGrantIds: [],
@@ -534,6 +611,57 @@ describe('DesktopAppHost', () => {
     expect(
       (await fixture.appHost.shell.getProjection(fixture.windowId)).agentHome.conversations,
     ).toHaveLength(workspaceConversationCount);
+  });
+
+  it('registers Entry Content targets and authorizes configured libraries without navigation', async () => {
+    const fixture = await createShellAppHost();
+    const initialScene = activeScene(fixture.projection);
+    fixture.registry.resolve.mockImplementation(async (hostResource) => ({
+      workspaceId: hostResource.includes('characters') ? 'library-characters' : 'workspace-novel',
+      workspacePath: hostResource,
+      displayName: hostResource.includes('characters') ? 'Characters' : 'Novel',
+      locator: { kind: 'variable' as const, value: '${HOME}/target' },
+    }));
+    const created = await fixture.appHost.resolveWorkspaceTarget(
+      fixture.sender,
+      createDesktopContentProjectTargetRequest({
+        requestId: 'content-create-1',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      }),
+      async () => ({ label: 'Novel', hostResource: '/Users/fixture/novel' }),
+    );
+    expect(created).toMatchObject({
+      status: 'authorized-project',
+      workspaceId: 'workspace-novel',
+      projectId: 'content:workspace-novel',
+    });
+    const afterCreate = await fixture.appHost.shell.getProjection(fixture.windowId);
+    expect(activeScene(afterCreate)).toEqual(initialScene);
+    expect(afterCreate.window.tabs).toHaveLength(0);
+    expect(afterCreate.catalog.projects).toHaveLength(1);
+    expect(fixture.appHost.projectAuthoring.ensureComposition).toHaveBeenCalledWith({
+      workspace: expect.objectContaining({ workspaceId: 'workspace-novel' }),
+      contentProjectId: 'content:workspace-novel',
+    });
+
+    const library = await fixture.appHost.resolveWorkspaceTarget(
+      fixture.sender,
+      createDesktopWorkspaceAuthoringLibraryTargetRequest({
+        requestId: 'library-select-1',
+        rendererSessionId: afterCreate.rendererSessionId,
+        windowId: fixture.windowId,
+        library: 'character',
+      }),
+      async () => {
+        throw new Error('Configured library selection must not open the native picker.');
+      },
+    );
+    expect(library).toMatchObject({ status: 'authorized', workspaceId: 'library-characters' });
+    expect(JSON.stringify(library)).not.toContain('/Users/fixture');
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(
+      initialScene,
+    );
   });
 
   it('binds Agent launch attach to the exact unbound Entry Draft identity', async () => {
@@ -694,6 +822,72 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('delegates Entry target configuration only for the sender-bound launch connection', async () => {
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ agentLaunch });
+    const scene = activeScene(fixture.projection);
+    if (scene.context.kind !== 'agent') throw new Error('Expected an Agent Scene.');
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: scene.context.agentViewId,
+      connectionId: 'launch-entry-target',
+      draftId: scene.context.scope.draftId,
+      binding: { kind: 'unbound' },
+    });
+    const binding = {
+      kind: 'authoring' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+    };
+    const intent = {
+      mode: 'authoring' as const,
+      targetReceipt: {
+        targetReceiptId: 'target-receipt-1',
+        draftId: catalog.connection.draftId,
+        connectionId: catalog.connection.connectionId,
+        mode: 'authoring' as const,
+        binding,
+      },
+    };
+    vi.mocked(agentLaunch.configureEntryTarget).mockResolvedValueOnce(intent);
+    vi.mocked(agentLaunch.readCatalog).mockReturnValue(catalog);
+
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        requestId: 'configure-entry-target-1',
+        operation: 'configure-entry-target',
+        connection: catalog.connection,
+        mode: 'authoring',
+        binding,
+      }),
+    ).resolves.toEqual({
+      requestId: 'configure-entry-target-1',
+      status: 'entry-configured',
+      intent,
+      catalog,
+    });
+    expect(agentLaunch.configureEntryTarget).toHaveBeenCalledWith(
+      catalog.connection,
+      'authoring',
+      binding,
+    );
+
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        requestId: 'configure-entry-target-cross-window',
+        operation: 'configure-entry-target',
+        connection: { ...catalog.connection, windowId: 'window-other' },
+        mode: 'assistant',
+        binding: null,
+      }),
+    ).rejects.toThrow('sender-bound Desktop identity');
+    await fixture.appHost.dispose();
+  });
+
   it('routes Draft mention search through the sender-bound launch connection and receipt', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
@@ -783,6 +977,7 @@ describe('DesktopAppHost', () => {
         connection: catalog.connection,
         input: {
           draft: catalog.interaction,
+          entryTargetReceipt: null,
           input: { kind: 'message', text: 'Create a plan' },
           references: [],
           resourceGrantIds: [],
@@ -823,6 +1018,102 @@ describe('DesktopAppHost', () => {
         },
       },
       slots: { interaction: { phase: 'session' } },
+    });
+    await fixture.appHost.conversationLifecycle.waitForProviderIdle();
+    await fixture.appHost.dispose();
+  });
+
+  it('commits a Character Dialogue receipt into its exact runtime Conversation and Scene', async () => {
+    const agentLaunch = createAgentLaunchRuntime();
+    const materialize = vi.fn(async () => ({
+      conversationId: 'conversation:character:character-run-entry-1',
+      context: {
+        kind: 'character' as const,
+        characterId: 'character-project-entry-1',
+        characterVersionId: 'character-version-entry-1',
+        characterRunId: 'character-run-entry-1',
+        dialogueRunId: 'dialogue-run-entry-1',
+      },
+    }));
+    const fixture = await createShellAppHost({
+      agentLaunch,
+      runtimeEntry: { materialize },
+    });
+    const scene = activeScene(fixture.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Character first-submit fixture requires an Entry Draft.');
+    }
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: scene.context.agentViewId,
+      connectionId: 'launch-character-submit',
+      draftId: scene.context.scope.draftId,
+      binding: { kind: 'unbound' },
+    });
+    vi.mocked(agentLaunch.readCatalog).mockReturnValue(catalog);
+    const entryTargetReceipt = {
+      targetReceiptId: 'target-receipt-character-entry-1',
+      draftId: catalog.interaction.draftId,
+      connectionId: catalog.connection.connectionId,
+      mode: 'character-dialogue' as const,
+      binding: {
+        kind: 'character-dialogue' as const,
+        participants: [
+          {
+            characterProjectId: 'character-project-entry-1',
+            characterVersionId: 'character-version-entry-1',
+          },
+        ],
+      },
+    };
+
+    const result = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+      requestId: 'character-first-submit',
+      operation: 'submit-draft',
+      connection: catalog.connection,
+      input: {
+        draft: catalog.interaction,
+        entryTargetReceipt,
+        input: { kind: 'message', text: 'Hello character' },
+        references: [],
+        resourceGrantIds: [],
+        configuration: {
+          modelCatalogEntryId: 'openai:gpt-5',
+          providerId: 'openai',
+          modelId: 'gpt-5',
+          executionMode: 'ask',
+        },
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'committed',
+      projection: {
+        session: {
+          conversationId: 'conversation:character:character-run-entry-1',
+          binding: {
+            kind: 'character',
+            characterRunId: 'character-run-entry-1',
+            dialogueRunId: 'dialogue-run-entry-1',
+          },
+        },
+      },
+    });
+    expect(materialize).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'character-first-submit', receipt: entryTargetReceipt }),
+    );
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
+      context: {
+        kind: 'character-interaction',
+        owner: {
+          kind: 'character',
+          characterRunId: 'character-run-entry-1',
+          dialogueRunId: 'dialogue-run-entry-1',
+        },
+      },
     });
     await fixture.appHost.conversationLifecycle.waitForProviderIdle();
     await fixture.appHost.dispose();
@@ -886,6 +1177,7 @@ describe('DesktopAppHost', () => {
       connection,
       input: {
         draft: launchCatalog.interaction,
+        entryTargetReceipt: null,
         input: { kind: 'message' as const, text: 'Create a plan' },
         references: [],
         resourceGrantIds: ['grant:entry-1'],
@@ -1059,6 +1351,7 @@ describe('DesktopAppHost', () => {
     }
     const committed = await conversationLifecycle.firstSubmit({
       requestId: 'invalid-lifecycle-first-submit',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -1200,6 +1493,7 @@ describe('DesktopAppHost', () => {
       connection: catalog.connection,
       input: {
         draft: catalog.interaction,
+        entryTargetReceipt: null,
         input: { kind: 'message' as const, text: 'Use only this provider' },
         references: [],
         resourceGrantIds: [],
@@ -1269,6 +1563,7 @@ describe('DesktopAppHost', () => {
     });
     const record = await conversationLifecycle.firstSubmit({
       requestId: 'restore-submit-1',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -1369,10 +1664,22 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('returns owner-qualified unavailable before reading Character conversation context', async () => {
+  it('restores a persisted Character conversation without dispatching a new turn', async () => {
     const conversationLifecycle = createConversationLifecycle();
-    const readConversationContext = vi.spyOn(conversationLifecycle, 'readConversationContext');
-    const fixture = await createShellAppHost({ conversationLifecycle });
+    const submitTurn = vi.fn(async () => ({ turnId: 'turn-character-restored', content: 'Reply' }));
+    const readConversationContext = vi
+      .spyOn(conversationLifecycle, 'readConversationContext')
+      .mockResolvedValue({
+        kind: 'character',
+        characterId: 'character-1',
+        characterVersionId: 'character-version-1',
+        characterRunId: 'character-run-1',
+        dialogueRunId: 'dialogue-run-1',
+      });
+    const fixture = await createShellAppHost({
+      conversationLifecycle,
+      characterInteractions: { submitTurn },
+    });
     const navigation = {
       conversationId: 'conversation-character-1',
       owner: {
@@ -1397,16 +1704,62 @@ describe('DesktopAppHost', () => {
     );
 
     expect(result).toMatchObject({
-      status: 'unavailable',
-      diagnostic: {
-        metadata: {
-          owner: 'agent-conversation-authority',
-          intentKind: 'restore-conversation',
-          conversationOwnerKind: 'character',
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'character-interaction',
+          owner: navigation.owner,
+          scope: { conversationId: navigation.conversationId },
         },
       },
     });
-    expect(readConversationContext).not.toHaveBeenCalled();
+    expect(readConversationContext).toHaveBeenCalledWith('conversation-character-1');
+    expect(submitTurn).not.toHaveBeenCalled();
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
+      context: { kind: 'character-interaction', owner: navigation.owner },
+    });
+    await fixture.appHost.dispose();
+  });
+
+  it('restores a persisted Room conversation without dispatching a message', async () => {
+    const conversationLifecycle = createConversationLifecycle();
+    vi.spyOn(conversationLifecycle, 'readConversationContext').mockResolvedValue({
+      kind: 'room',
+      roomId: 'character-room-1',
+      roomRunId: 'room-run-1',
+    });
+    const submitUserMessage = vi.fn(async () => ({ run: {} as RoomRun, outcomes: [] }));
+    const fixture = await createShellAppHost({
+      conversationLifecycle,
+      characterRoomConversations: { submitUserMessage },
+    });
+    const navigation = {
+      conversationId: 'conversation-room-1',
+      owner: { kind: 'room' as const, roomId: 'character-room-1', roomRunId: 'room-run-1' },
+    };
+    setAgentHomeConversation(fixture.agent, navigation);
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const restored = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'restore-room-conversation',
+        rendererSessionId: projection.rendererSessionId,
+        windowId: fixture.windowId,
+        sceneId: activeScene(projection).sceneId,
+        intent: { kind: 'restore-conversation', navigation },
+      }),
+    );
+    expect(restored).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: { kind: 'character-interaction', owner: navigation.owner },
+        slots: { cutPanel: { kind: 'character-room-timeline', owner: navigation.owner } },
+      },
+    });
+    expect(submitUserMessage).not.toHaveBeenCalled();
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
+      context: { kind: 'character-interaction', owner: navigation.owner },
+    });
     await fixture.appHost.dispose();
   });
 
@@ -1414,6 +1767,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createConversationLifecycle();
     const record = await conversationLifecycle.firstSubmit({
       requestId: 'restore-owner-mismatch-submit',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -1455,6 +1809,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createConversationLifecycle();
     const record = await conversationLifecycle.firstSubmit({
       requestId: 'assistant-resource-submit',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -1615,6 +1970,7 @@ describe('DesktopAppHost', () => {
     if (opened.status !== 'transitioned') throw new Error('Expected Workspace Scene.');
     const record = await conversationLifecycle.firstSubmit({
       requestId: 'restore-workspace-submit',
+      entryTargetReceipt: null,
       context: {
         kind: 'workspace',
         workspaceId: workspace.workspaceId,
@@ -1859,6 +2215,7 @@ describe('DesktopAppHost', () => {
     const conversationId = (
       await conversationLifecycle.firstSubmit({
         requestId: 'canonical-assistant-submit',
+        entryTargetReceipt: null,
         context: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
         input: { kind: 'message', text: 'Continue this Assistant conversation' },
         references: [],
@@ -2035,6 +2392,280 @@ describe('DesktopAppHost', () => {
       `content:${resolution.workspaceId}`,
     ]);
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
+  });
+
+  it('delegates Project authoring navigation only for the exact sender grant and registered Project', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    vi.mocked(projectAuthoring.getNavigation).mockResolvedValue([
+      {
+        kind: 'authoring-target',
+        target: { kind: 'content-project', contentProjectId: 'content:placeholder' },
+        identity: 'content-project:content:placeholder',
+        label: 'Demo',
+      },
+    ]);
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'project-authoring-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const scene = activeScene(opened.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Project authoring fixture requires an exact Workspace Scene.');
+    }
+    vi.mocked(projectAuthoring.getNavigation).mockResolvedValue([
+      {
+        kind: 'authoring-target',
+        target: { kind: 'content-project', contentProjectId: project.projectId },
+        identity: `content-project:${project.projectId}`,
+        label: project.displayName,
+      },
+    ]);
+    const request = createProjectAuthoringNavigationHostRequest({
+      requestId: 'project-authoring-navigation',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding: {
+        workspaceId: resolution.workspaceId,
+        workspaceGrantId: scene.context.scope.workspaceGrantId,
+        contentProjectId: project.projectId,
+      },
+    });
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, request),
+    ).resolves.toMatchObject({
+      requestId: request.requestId,
+      workspaceId: resolution.workspaceId,
+      contentProjectId: project.projectId,
+      navigation: [{ identity: `content-project:${project.projectId}` }],
+    });
+    expect(projectAuthoring.getNavigation).toHaveBeenCalledWith({
+      workspace: resolution,
+      contentProjectId: project.projectId,
+      contentLabel: project.displayName,
+    });
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
+        ...request,
+        requestId: 'project-authoring-workspace-mismatch',
+        workspaceId: 'workspace-other',
+      }),
+    ).rejects.toThrow('grant resolves to another Workspace');
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
+        ...request,
+        requestId: 'project-authoring-unregistered',
+        contentProjectId: 'content:unregistered',
+      }),
+    ).rejects.toThrow('is not registered for this Workspace');
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
+        ...request,
+        requestId: 'project-authoring-after-sibling-failure',
+      }),
+    ).resolves.toMatchObject({ contentProjectId: project.projectId });
+    await fixture.appHost.dispose();
+  });
+
+  it('rejects a Project authoring grant from another Window without consuming the owner port', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'project-authoring-window-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const scene = activeScene(opened.projection);
+    const project = opened.projection.catalog.projects[0]!;
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Project authoring fixture requires an exact Workspace Scene.');
+    }
+    const otherWindowId = await fixture.appHost.shell.claimWindowId();
+    fixture.appHost.windows.register({
+      windowId: otherWindowId,
+      webContentsId: 11,
+      allowedOrigin: DESKTOP_APP_ORIGIN,
+    });
+    const otherLifecycle = fixture.appHost.windows.rendererLoading(otherWindowId, 'app-1');
+    fixture.appHost.shell.setRendererSessionId(otherWindowId, otherLifecycle.rendererSessionId);
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(
+        { webContentsId: 11, frameUrl: `${DESKTOP_APP_ORIGIN}/index.html` },
+        createProjectAuthoringNavigationHostRequest({
+          requestId: 'project-authoring-cross-window',
+          rendererSessionId: otherLifecycle.rendererSessionId,
+          windowId: otherWindowId,
+          binding: {
+            workspaceId: resolution.workspaceId,
+            workspaceGrantId: scene.context.scope.workspaceGrantId,
+            contentProjectId: project.projectId,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(projectAuthoring.getNavigation).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('delegates exact project-local Character and World authoring requests to owner ports', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    vi.mocked(projectAuthoring.getCharacterSnapshot).mockResolvedValue(
+      characterAuthoringSnapshot(),
+    );
+    vi.mocked(projectAuthoring.executeCharacter).mockResolvedValue(characterAuthoringSnapshot());
+    vi.mocked(projectAuthoring.getWorldSnapshot).mockResolvedValue(worldAuthoringSnapshot());
+    vi.mocked(projectAuthoring.executeWorld).mockResolvedValue(worldAuthoringSnapshot());
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'domain-authoring-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const scene = activeScene(opened.projection);
+    const project = opened.projection.catalog.projects[0]!;
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Domain authoring fixture requires an exact Workspace Scene.');
+    }
+    const characterBinding = {
+      workspaceId: resolution.workspaceId,
+      workspaceGrantId: scene.context.scope.workspaceGrantId,
+      contentProjectId: project.projectId,
+      characterProjectId: 'character-1',
+    };
+    const worldBinding = {
+      workspaceId: resolution.workspaceId,
+      workspaceGrantId: scene.context.scope.workspaceGrantId,
+      contentProjectId: project.projectId,
+      worldProjectId: 'world-1',
+    };
+
+    await expect(
+      fixture.appHost.executeCharacterAuthoringRequest(
+        fixture.sender,
+        createCharacterAuthoringSnapshotRequest({
+          requestId: 'character-authoring-snapshot',
+          rendererSessionId: opened.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: characterBinding,
+        }),
+      ),
+    ).resolves.toMatchObject({
+      ...characterBinding,
+      snapshot: { project: { characterProjectId: 'character-1' } },
+    });
+    await fixture.appHost.executeCharacterAuthoringRequest(
+      fixture.sender,
+      createCharacterAuthoringCommandRequest({
+        requestId: 'character-authoring-command',
+        rendererSessionId: opened.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        binding: characterBinding,
+        command: {
+          operation: 'character-project-set-review',
+          input: { characterProjectId: 'character-1', reviewStatus: 'ready' },
+        },
+      }),
+    );
+    expect(projectAuthoring.executeCharacter).toHaveBeenCalledWith({
+      workspace: resolution,
+      contentProjectId: project.projectId,
+      characterProjectId: 'character-1',
+      command: {
+        operation: 'character-project-set-review',
+        input: { characterProjectId: 'character-1', reviewStatus: 'ready' },
+      },
+    });
+
+    await expect(
+      fixture.appHost.executeWorldAuthoringRequest(
+        fixture.sender,
+        createWorldAuthoringSnapshotRequest({
+          requestId: 'world-authoring-snapshot',
+          rendererSessionId: opened.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: worldBinding,
+        }),
+      ),
+    ).resolves.toMatchObject({
+      ...worldBinding,
+      snapshot: { project: { worldProjectId: 'world-1' } },
+    });
+    await fixture.appHost.executeWorldAuthoringRequest(
+      fixture.sender,
+      createWorldAuthoringCommandRequest({
+        requestId: 'world-authoring-command',
+        rendererSessionId: opened.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        binding: worldBinding,
+        command: {
+          operation: 'world-project-set-review',
+          input: { worldProjectId: 'world-1', reviewStatus: 'ready' },
+        },
+      }),
+    );
+    expect(projectAuthoring.executeWorld).toHaveBeenCalledWith({
+      workspace: resolution,
+      contentProjectId: project.projectId,
+      worldProjectId: 'world-1',
+      command: {
+        operation: 'world-project-set-review',
+        input: { worldProjectId: 'world-1', reviewStatus: 'ready' },
+      },
+    });
+    await expect(
+      fixture.appHost.createProjectLocalAuthoringTarget(
+        fixture.sender,
+        createProjectLocalAuthoringHostRequest({
+          requestId: 'project-local-character-create',
+          rendererSessionId: opened.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: {
+            workspaceId: resolution.workspaceId,
+            workspaceGrantId: scene.context.scope.workspaceGrantId,
+            contentProjectId: project.projectId,
+          },
+          create: {
+            kind: 'character-project',
+            characterProjectId: 'character-created',
+            displayName: 'Created Character',
+            draft: characterAuthoringSnapshot().project.draft,
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      target: { kind: 'character-project', characterProjectId: 'character-created' },
+    });
+    expect(projectAuthoring.createLocalTarget).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      contentProjectId: project.projectId,
+      create: expect.objectContaining({
+        kind: 'character-project',
+        characterProjectId: 'character-created',
+      }),
+    });
+    await fixture.appHost.dispose();
   });
 
   it('reopens a catalog Project and reattaches its exact Agent workspace', async () => {
@@ -2452,6 +3083,7 @@ describe('DesktopAppHost', () => {
           name: 'computer-use',
           displayName: 'Computer Use',
           description: 'Control Mac apps.',
+          localization: {},
           version: '1.0.2',
           developer: 'OpenAI',
           marketplace: 'openneko',
@@ -3437,14 +4069,19 @@ async function createShellAppHost(options?: {
   readonly assetCenter?: AssetCenterNodeRuntime;
   readonly resourceBrowser?: ResourceBrowserNodeRuntime;
   readonly textEditor?: DesktopAppHostOptions['textEditor'];
+  readonly projectAuthoring?: DesktopAppHostOptions['projectAuthoring'];
   readonly characterFoundationCommands?: DesktopAppHostOptions['characterFoundationCommands'];
-  readonly characterConversations?: DesktopAppHostOptions['characterConversations'];
+  readonly worldFoundationCommands?: DesktopAppHostOptions['worldFoundationCommands'];
+  readonly characterInteractions?: DesktopAppHostOptions['characterInteractions'];
   readonly characterRoomConversations?: DesktopAppHostOptions['characterRoomConversations'];
   readonly characterRoomWorkbench?: DesktopAppHostOptions['characterRoomWorkbench'];
   readonly automationEndpoints?: DesktopAppHostOptions['automationEndpoints'];
   readonly automationPermissions?: DesktopAppHostOptions['automationPermissions'];
   readonly automationTargetSelections?: DesktopAppHostOptions['automationTargetSelections'];
   readonly automationSessions?: DesktopAppHostOptions['automationSessions'];
+  readonly runtimeEntry?: Parameters<
+    typeof createAgentLaunchDraftSubmissionApplicationService
+  >[0]['runtimeEntry'];
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -3474,6 +4111,11 @@ async function createShellAppHost(options?: {
         assistantSpaceId: 'assistant-space:local-user',
         baseGrantIds: [],
       }),
+    },
+    runtimeEntry: options?.runtimeEntry ?? {
+      materialize: async () => {
+        throw new Error('Formal runtime Entry owner is unavailable in this fixture.');
+      },
     },
     bindings: agentDomainBindings,
     lifecycle: conversationLifecycle,
@@ -3536,11 +4178,13 @@ async function createShellAppHost(options?: {
     logger,
     shell: fixture.service,
     projectManagement: createProjectManagementService(fixture.service, agent),
+    projectAuthoring: options?.projectAuthoring ?? createProjectAuthoring(),
     agent,
     assistantWorkspace: createAssistantWorkspaceResolution(),
     agentLaunch,
     agentLaunchSubmission,
     workspaceGrants: fixture.workspaceGrants,
+    authoringLibraryRoots: createAuthoringLibraryRoots(),
     conversationLifecycle,
     assistantResources: options?.assistantResources,
     assetCenter: options?.assetCenter,
@@ -3559,7 +4203,9 @@ async function createShellAppHost(options?: {
     characterFoundation: createCharacterFoundationService(),
     characterFoundationCommands:
       options?.characterFoundationCommands ?? createCharacterFoundationCommands(),
-    characterConversations: options?.characterConversations ?? createCharacterConversations(),
+    worldFoundation: createWorldFoundationService(),
+    worldFoundationCommands: options?.worldFoundationCommands ?? createWorldFoundationCommands(),
+    characterInteractions: options?.characterInteractions ?? createCharacterInteractions(),
     characterRoomConversations:
       options?.characterRoomConversations ?? createCharacterRoomConversations(),
     characterRoomWorkbench: options?.characterRoomWorkbench ?? createCharacterRoomWorkbench(),
@@ -3600,28 +4246,68 @@ function createCharacterFoundationService(): CharacterFoundationService {
         dialogueRuns: [],
         rooms: [],
         roomRuns: [],
-        diagnostics: [],
-      }),
-    },
-    worldCatalog: {
-      readCatalog: async () => ({
-        projects: [],
-        versions: [],
-        runtimes: [],
+        storylineVersions: [],
+        storylineRuns: [],
+        storylineObservationCandidates: [],
+        memoryScopes: [],
+        presentationConfigurations: [],
         diagnostics: [],
       }),
     },
   });
 }
 
+function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
+  return {
+    ensureComposition: vi.fn(async () => undefined),
+    getNavigation: vi.fn(async () => []),
+    createLocalTarget: vi.fn(async ({ create }) =>
+      create.kind === 'character-project'
+        ? { kind: 'character-project' as const, characterProjectId: create.characterProjectId }
+        : { kind: 'world-project' as const, worldProjectId: create.worldProjectId },
+    ),
+    getCharacterSnapshot: vi.fn(async () => {
+      throw new Error('Character authoring snapshot is not expected by this test.');
+    }),
+    executeCharacter: vi.fn(async () => {
+      throw new Error('Character authoring command is not expected by this test.');
+    }),
+    getWorldSnapshot: vi.fn(async () => {
+      throw new Error('World authoring snapshot is not expected by this test.');
+    }),
+    executeWorld: vi.fn(async () => {
+      throw new Error('World authoring command is not expected by this test.');
+    }),
+  };
+}
+
+function createAuthoringLibraryRoots(): DesktopAppHostOptions['authoringLibraryRoots'] {
+  return {
+    character: { label: 'Characters', hostResource: '/libraries/characters' },
+    world: { label: 'Worlds', hostResource: '/libraries/worlds' },
+  };
+}
+
 function createCharacterFoundationCommands() {
   return { execute: vi.fn(async () => undefined) };
 }
 
-function createCharacterConversations() {
+function createWorldFoundationService(): WorldFoundationService {
+  return new WorldFoundationService({
+    catalog: {
+      readCatalog: async () => ({ projects: [], versions: [], runtimes: [], diagnostics: [] }),
+    },
+  });
+}
+
+function createWorldFoundationCommands() {
+  return { execute: vi.fn(async () => undefined) };
+}
+
+function createCharacterInteractions() {
   return {
-    launch: vi.fn(async () => {
-      throw new Error('Character conversation launch is not expected by this test.');
+    submitTurn: vi.fn(async () => {
+      throw new Error('Character interaction submission is not expected by this test.');
     }),
   };
 }
@@ -3928,6 +4614,9 @@ function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {
     bindTarget: vi.fn(async () => {
       throw new Error('Agent launch target binding is not expected by this AppHost test.');
     }),
+    configureEntryTarget: vi.fn(async () => {
+      throw new Error('Agent Entry target configuration is not expected by this AppHost test.');
+    }),
     updateConfiguration: vi.fn(() => {
       throw new Error('Agent launch configuration update is not expected by this AppHost test.');
     }),
@@ -3962,8 +4651,8 @@ function createAgentLaunchSubmission() {
 function createProjectManagementService(
   shell: DesktopShellService,
   agent: AgentAppHost,
-): DesktopProjectManagementService {
-  return new DesktopProjectManagementService({
+): DesktopProjectRegistrationService {
+  return new DesktopProjectRegistrationService({
     shell,
     conversations: {
       deleteConversations: async (conversations) => {
@@ -4001,10 +4690,11 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
       conversationId,
       items: [],
       pendingCount: 0,
+      paused: false,
       sequence: 0,
     }),
-    promoteQueuedMessage: () => {
-      throw new Error('Agent queue promotion is not expected by this AppHost test.');
+    sendQueuedMessageNow: () => {
+      throw new Error('Agent queued send-now is not expected by this AppHost test.');
     },
     cancelQueuedMessage: unavailable,
     takeQueuedMessageForEdit: unavailable,
@@ -4087,6 +4777,55 @@ function createWorkspaceResolution(): AssetWorkspaceResolution {
     workspacePath: '/workspace/demo',
     displayName: 'Demo',
     locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
+  };
+}
+
+function characterAuthoringSnapshot() {
+  return {
+    project: {
+      characterProjectId: 'character-1',
+      displayName: 'Character',
+      draft: {
+        summary: 'Summary',
+        backgroundStory: createEmptyCharacterBackgroundStory(),
+        originSetting: createEmptyCharacterOriginSetting(),
+        canon: [],
+        knowledgeBoundary: [],
+        behaviorPolicy: [],
+        expressionPolicy: [],
+        representationRefs: [],
+      },
+      evidence: [],
+      candidates: [],
+      reviewStatus: 'ready' as const,
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+    },
+    versions: [],
+    diagnostics: [],
+  };
+}
+
+function worldAuthoringSnapshot() {
+  return {
+    project: {
+      worldProjectId: 'world-1',
+      title: 'World',
+      draft: {
+        background: 'Background',
+        worldBook: [],
+        locations: [],
+        organizations: [],
+        rules: [],
+        initialFacts: [],
+      },
+      sourceRefs: [],
+      reviewStatus: 'ready' as const,
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+    },
+    versions: [],
+    diagnostics: [],
   };
 }
 

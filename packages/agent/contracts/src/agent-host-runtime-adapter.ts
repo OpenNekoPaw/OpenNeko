@@ -21,6 +21,11 @@ export interface AgentHostRuntimeAdapter {
 
 export interface AgentDraftHostRuntimeAdapter extends AgentHostRuntimeAdapter {
   readLaunchCatalog(): import('./agent-launch').AgentLaunchCatalogProjection;
+  readEntryIntent(): import('./agent-entry-intent').AgentEntryIntentProjection;
+  configureEntryTarget(
+    mode: import('./agent-entry-intent').AgentEntryMode,
+    binding?: import('./agent-entry-intent').AgentEntryTargetBinding,
+  ): Promise<import('./agent-entry-intent').AgentEntryIntentProjection>;
   bindTarget(
     binding: import('./agent-interaction-binding').AgentDomainBinding,
   ): Promise<import('./agent-launch').AgentLaunchCatalogProjection>;
@@ -43,6 +48,8 @@ export function requireAgentDraftHostRuntimeAdapter(
     typeof candidate.submitDraft !== 'function' ||
     typeof candidate.authorizeResource !== 'function' ||
     typeof candidate.bindTarget !== 'function' ||
+    typeof candidate.configureEntryTarget !== 'function' ||
+    typeof candidate.readEntryIntent !== 'function' ||
     typeof candidate.updateDraftConfiguration !== 'function' ||
     typeof candidate.readLaunchCatalog !== 'function'
   ) {
@@ -126,7 +133,7 @@ export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
   getContextTokenCount: 'implemented',
   compressContext: 'implemented',
   getMessageQueue: 'implemented',
-  promoteQueuedMessage: 'implemented',
+  sendQueuedMessageNow: 'implemented',
   cancelQueuedMessage: 'implemented',
   editQueuedMessage: 'implemented',
   deleteConversation: 'implemented',
@@ -167,13 +174,12 @@ export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
 } as const satisfies AgentHostRouteSupportRecord;
 
 const LAUNCH_ANY = { connection: 'launch-or-session', scope: 'any' } as const;
-const LAUNCH_WORKSPACE = { connection: 'launch-or-session', scope: 'workspace' } as const;
 const SESSION_ANY = { connection: 'session', scope: 'any' } as const;
 const SESSION_WORKSPACE = { connection: 'session', scope: 'workspace' } as const;
 
 export const AGENT_HOST_ROUTE_AUTHORITY = {
   sendMessage: SESSION_ANY,
-  searchProjectFiles: LAUNCH_WORKSPACE,
+  searchProjectFiles: LAUNCH_ANY,
   confirmTool: SESSION_ANY,
   activateConversation: SESSION_ANY,
   clearHistory: SESSION_ANY,
@@ -181,7 +187,7 @@ export const AGENT_HOST_ROUTE_AUTHORITY = {
   getContextTokenCount: SESSION_ANY,
   compressContext: SESSION_ANY,
   getMessageQueue: SESSION_ANY,
-  promoteQueuedMessage: SESSION_ANY,
+  sendQueuedMessageNow: SESSION_ANY,
   cancelQueuedMessage: SESSION_ANY,
   editQueuedMessage: SESSION_ANY,
   deleteConversation: SESSION_ANY,

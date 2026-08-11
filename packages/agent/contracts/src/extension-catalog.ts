@@ -9,11 +9,16 @@ export type AgentExtensionHostPermissionStatus =
   'not-applicable' | 'unknown' | 'granted' | 'needs-permission' | 'unsupported';
 export type AgentExtensionQualificationStatus = 'unqualified' | 'qualified' | 'partial' | 'failed';
 
+export interface AgentExtensionCatalogLocalization {
+  readonly description: string;
+}
+
 export interface AgentExtensionCatalogItem {
   readonly id: string;
   readonly name: string;
   readonly displayName: string;
   readonly description: string;
+  readonly localization: Readonly<Record<string, AgentExtensionCatalogLocalization>>;
   readonly version: string;
   readonly developer: string;
   readonly marketplace: string;

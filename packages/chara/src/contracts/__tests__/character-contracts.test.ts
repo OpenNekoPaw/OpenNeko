@@ -1,4 +1,8 @@
 import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+} from '../character-lore-storyline-memory';
+import {
   decodeCharacterRecords,
   parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
@@ -13,17 +17,54 @@ const now = '2026-08-09T10:00:00.000Z';
 function definition() {
   return {
     summary: 'A careful archivist.',
+    backgroundStory: createEmptyCharacterBackgroundStory(),
+    originSetting: createEmptyCharacterOriginSetting(),
     canon: ['Keeps promises.'],
     knowledgeBoundary: ['Does not know the sealed archive.'],
     behaviorPolicy: ['Ask before changing a record.'],
     expressionPolicy: ['Uses concise language.'],
     representationRefs: [
-      { representationId: 'portrait-main', role: 'portrait', targetRef: 'asset:portrait-a' },
+      { representationId: 'portrait-main', kind: 'portrait', resourceRef: 'asset:portrait-a' },
     ],
   };
 }
 
 describe('Character canonical contracts', () => {
+  it('requires author defaults to select exact compatible representations', () => {
+    const selected = parseCharacterVersion({
+      characterVersionId: 'character-version-avatar',
+      characterProjectId: 'character-project-a',
+      label: 'Avatar publication',
+      definition: {
+        ...definition(),
+        representationRefs: [
+          { representationId: 'portrait-main', kind: 'portrait', resourceRef: 'asset:portrait-a' },
+          { representationId: 'avatar-main', kind: 'vrm', resourceRef: 'asset:avatar-a' },
+        ],
+        representationDefaults: {
+          portraitRepresentationId: 'portrait-main',
+          avatarRepresentationId: 'avatar-main',
+        },
+      },
+      acceptedEvidenceIds: [],
+      publishedAt: now,
+    });
+
+    expect(selected.definition.representationDefaults).toEqual({
+      portraitRepresentationId: 'portrait-main',
+      avatarRepresentationId: 'avatar-main',
+    });
+    expect(() =>
+      parseCharacterVersion({
+        ...selected,
+        definition: {
+          ...selected.definition,
+          representationDefaults: { avatarRepresentationId: 'portrait-main' },
+        },
+      }),
+    ).toThrow(/exact compatible representation/u);
+  });
+
   it('parses a reviewed CharacterProject and immutable publication record', () => {
     const project = parseCharacterProject({
       characterProjectId: 'character-project-a',
@@ -94,14 +135,7 @@ describe('Character canonical contracts', () => {
       characterVersionId: 'character-version-a',
       participantId: 'participant-human',
       controller: { kind: 'human', userId: 'user-a' },
-      runtimeBinding: {
-        kind: 'narrative',
-        worldVersionId: 'world-version-a',
-        worldRunId: 'world-run-a',
-        worldSaveId: 'world-save-a',
-        branchId: 'branch-main',
-        actorId: 'actor-a',
-      },
+      runtimeBinding: { kind: 'companion', relationshipId: 'relationship-a' },
       createdAt: now,
     });
 
@@ -110,6 +144,12 @@ describe('Character canonical contracts', () => {
       primaryAgentSessionId: 'agent-session-a',
     });
     expect(humanRun.controller).toEqual({ kind: 'human', userId: 'user-a' });
+    expect(() =>
+      parseCharacterRun({
+        ...humanRun,
+        runtimeBinding: { kind: 'narrative', externalCompositionRef: 'composition:run-a' },
+      }),
+    ).toThrow(/unsupported fields|kind/u);
     expect(() =>
       parseCharacterRun({
         ...humanRun,

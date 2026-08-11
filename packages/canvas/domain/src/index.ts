@@ -5,6 +5,7 @@ export * from './canvas-generation-inputs';
 export * from './canvas-node-sizing';
 export * from './canvas-drop';
 export * from './canvas-markdown-capabilities';
+export * from './canvas-text-file-preview';
 export * from './canvas-projection';
 export * from './canvas-semantic-storyboard';
 export * from './types/index';
@@ -74,6 +75,7 @@ export {
   CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID,
   CANVAS_ADD_TO_CUT_ACTION_ID,
   CANVAS_EDIT_AND_GENERATE_ACTION_ID,
+  CANVAS_EDIT_TEXT_ACTION_ID,
   CANVAS_IMAGE_COLOR_GRADE_ACTION_ID,
   CANVAS_IMAGE_CROP_ACTION_ID,
   CANVAS_IMAGE_ERASE_ACTION_ID,

@@ -15,12 +15,14 @@ import {
   CharacterInteractionService,
   type CharacterInteractionRepository,
   type CharacterRoomViewPort,
-  type CharacterWorldViewPort,
 } from '@neko/chara/application';
 import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
   parseCharacterRun,
   parseRoomRun,
   type CharacterRun,
+  type CharacterRunPresentationConfiguration,
   type CharacterVersion,
   type DialogueRun,
   type RoomRun,
@@ -76,6 +78,7 @@ describe('Character primary AgentSession adapter', () => {
     const approval = deferred<boolean>();
     let approvalRequested = false;
     let toolExecutions = 0;
+    const frozenPresentationTurns: string[] = [];
     const prompts: string[] = [];
     const fixture = await createFixture((model, context) => {
       if ((context.systemPrompt ?? '').includes('context summarization assistant')) {
@@ -101,22 +104,34 @@ describe('Character primary AgentSession adapter', () => {
       'relationship-a',
       relationship('relationship-a', 'character-version-a'),
     );
-    const service = interactionService(repository, fixture, async () => ({
-      ...turnRuntime(),
-      permissionPolicy: {
-        preflight: async ({ signal }) => {
-          approvalRequested = true;
-          if (signal?.aborted) return { allowed: false, reason: 'cancelled' };
-          const allowed = await Promise.race([
-            approval.promise,
-            new Promise<false>((resolve) =>
-              signal?.addEventListener('abort', () => resolve(false), { once: true }),
-            ),
-          ]);
-          return allowed ? { allowed: true } : { allowed: false, reason: 'fixture-denied' };
+    const service = interactionService(
+      repository,
+      fixture,
+      async () => ({
+        ...turnRuntime(),
+        permissionPolicy: {
+          preflight: async ({ signal }) => {
+            approvalRequested = true;
+            if (signal?.aborted) return { allowed: false, reason: 'cancelled' };
+            const allowed = await Promise.race([
+              approval.promise,
+              new Promise<false>((resolve) =>
+                signal?.addEventListener('abort', () => resolve(false), { once: true }),
+              ),
+            ]);
+            return allowed ? { allowed: true } : { allowed: false, reason: 'fixture-denied' };
+          },
+        },
+      }),
+      {
+        async prepareNextTurn(characterRunId) {
+          return presentationConfiguration(characterRunId);
+        },
+        async freezePreparedTurn(input) {
+          frozenPresentationTurns.push(input.turnId);
         },
       },
-    }));
+    );
     const created = await service.createDialogue({
       dialogueRunId: 'dialogue-run-a',
       characterRunId: 'character-run-a',
@@ -150,6 +165,8 @@ describe('Character primary AgentSession adapter', () => {
     expect(toolExecutions).toBe(1);
     expect(prompts[0]).toContain('"characterVersionId":"character-version-a"');
     expect(prompts[0]).toContain('"relationshipId":"relationship-a"');
+    expect(prompts[0]).toContain('"modelRef":"model:character-a"');
+    expect(frozenPresentationTurns).toHaveLength(1);
     const transcript = JSON.stringify(
       await fixture.workspace.readConversationEntries(primaryAgentSessionId),
     );
@@ -212,7 +229,6 @@ describe('Character primary AgentSession adapter', () => {
       repository,
       agentSessions: adapter,
       roomViews: roomViews(repository),
-      worldViews: noWorldViews(),
       now: () => NOW,
     });
     const sibling = await service.createDialogue({
@@ -388,6 +404,15 @@ function interactionService(
     characterRunId: string,
     signal?: AbortSignal,
   ) => Promise<CharacterPrimaryAgentTurnRuntimeSnapshot>,
+  presentationTurns?: {
+    prepareNextTurn(
+      characterRunId: string,
+    ): Promise<CharacterRunPresentationConfiguration | undefined>;
+    freezePreparedTurn(input: {
+      readonly turnId: string;
+      readonly configuration: CharacterRunPresentationConfiguration;
+    }): Promise<unknown>;
+  },
 ): CharacterInteractionService {
   return new CharacterInteractionService({
     repository,
@@ -398,9 +423,24 @@ function interactionService(
       baseSystemPrompt: (characterRunId) => `Primary Character Agent for ${characterRunId}`,
     }),
     roomViews: roomViews(repository),
-    worldViews: noWorldViews(),
+    ...(presentationTurns === undefined ? {} : { presentationTurns }),
     now: () => NOW,
   });
+}
+
+function presentationConfiguration(characterRunId: string): CharacterRunPresentationConfiguration {
+  return {
+    characterRunId,
+    participantId: 'participant-character-a',
+    chat: { providerRef: 'provider:character-a', modelRef: 'model:character-a' },
+    tts: {
+      providerRef: 'provider:tts-a',
+      voiceRepresentationId: 'voice-a',
+      speed: 1,
+      autoRead: true,
+    },
+    updatedAt: NOW,
+  };
 }
 
 function memoryConversationContexts() {
@@ -477,6 +517,15 @@ function interactionRepository() {
     async readRoomRun(roomRunId: string) {
       return cloneOptional(this.rooms.get(roomRunId));
     }
+    async readStorylineVersion() {
+      return undefined;
+    }
+    async readStorylineRun() {
+      return undefined;
+    }
+    async readMemoryScope() {
+      return undefined;
+    }
   })();
 }
 
@@ -496,15 +545,6 @@ function roomViews(repository: ReturnType<typeof interactionRepository>): Charac
   };
 }
 
-function noWorldViews(): CharacterWorldViewPort {
-  return {
-    validateBinding: async () => undefined,
-    materializeWorldView: async () => {
-      throw new Error('WorldView is not expected in the companion fixture.');
-    },
-  };
-}
-
 function publication(characterVersionId: string): CharacterVersion {
   return {
     characterVersionId,
@@ -512,6 +552,8 @@ function publication(characterVersionId: string): CharacterVersion {
     label: characterVersionId,
     definition: {
       summary: `Profile ${characterVersionId}`,
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
       canon: [],
       knowledgeBoundary: [],
       behaviorPolicy: [],

@@ -57,17 +57,13 @@ import { isOptimisticQueuedMessageItem } from '../../../presenters/message-queue
 import { projectClipboardTextToContextPayload } from '../../../presenters/clipboard-context-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
 import { contentLocatorKey, type ContentLocator } from '@neko/content';
-import type { AgentContextPayload } from '@neko/agent-contracts';
+import type { AgentContextPayload, AgentDomainBinding } from '@neko/agent-contracts';
 import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
-import type {
-  AgentModelSlots,
-  AgentQueuedMessageItem,
-  AgentDomainBinding,
-  SessionMode,
-} from '@neko/agent-contracts';
-import { projectCharacterDraftBindingFromRoleplayItem } from '../roleplay-entry-action';
+import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';
 import {
   useComposerWorkspacePresentation,
+  type AgentComposerAuthoringCatalog,
+  type AgentComposerAuthoringTargetOption,
   type AgentComposerWorkspaceTarget,
 } from '../../ComposerWorkspaceContext';
 
@@ -83,7 +79,7 @@ interface InputAreaProps {
   droppedFiles?: MessageAttachment[];
   onDroppedFilesProcessed?: () => void;
   onInputChange: (value: string) => void;
-  onPromoteQueuedMessage?: (queueItemId: string) => void;
+  onSendQueuedMessageNow?: (queueItemId: string) => void;
   onCancelQueuedMessage?: (queueItemId: string) => void;
   onEditQueuedMessage?: (queueItemId: string) => void;
   onSend: (input?: {
@@ -211,7 +207,7 @@ export function InputArea({
   droppedFiles,
   onDroppedFilesProcessed,
   onInputChange,
-  onPromoteQueuedMessage,
+  onSendQueuedMessageNow,
   onCancelQueuedMessage,
   onEditQueuedMessage,
   onSend,
@@ -229,8 +225,8 @@ export function InputArea({
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
-  onDraftCharacterTargetSelect,
   selectedCharacterLaunches = [],
+  onAddCharacterLaunch,
   onRemoveCharacterLaunch,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
@@ -243,6 +239,75 @@ export function InputArea({
 }: InputAreaProps) {
   const composerWorkspace = useComposerWorkspacePresentation();
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [authoringCatalog, setAuthoringCatalog] = useState<AgentComposerAuthoringCatalog>();
+  const [authoringCatalogLoading, setAuthoringCatalogLoading] = useState(false);
+  const [authoringCatalogDiagnostic, setAuthoringCatalogDiagnostic] = useState<string>();
+  const [authoringCreationId, setAuthoringCreationId] = useState('');
+  const [authoringCreationName, setAuthoringCreationName] = useState('');
+  const authoringCreationContext = authoringCatalog?.creationContexts.find(
+    (candidate) => candidate.creationId === authoringCreationId,
+  );
+  const openWorkspaceMenu = useCallback(() => {
+    const open = !workspaceMenuOpen;
+    setWorkspaceMenuOpen(open);
+    if (
+      !open ||
+      composerWorkspace?.kind !== 'entry' ||
+      !composerWorkspace.loadAuthoringCatalog ||
+      authoringCatalogLoading
+    ) {
+      return;
+    }
+    setAuthoringCatalogLoading(true);
+    setAuthoringCatalogDiagnostic(undefined);
+    void composerWorkspace
+      .loadAuthoringCatalog()
+      .then(setAuthoringCatalog)
+      .catch((error: unknown) =>
+        setAuthoringCatalogDiagnostic(error instanceof Error ? error.message : String(error)),
+      )
+      .finally(() => setAuthoringCatalogLoading(false));
+  }, [authoringCatalogLoading, composerWorkspace, workspaceMenuOpen]);
+  const selectAuthoringTarget = useCallback(
+    (option: AgentComposerAuthoringTargetOption) => {
+      if (composerWorkspace?.kind !== 'entry' || !composerWorkspace.onSelectAuthoringTarget) {
+        throw new Error('Agent Entry authoring target selector is unavailable.');
+      }
+      void composerWorkspace.onSelectAuthoringTarget(option).then((target) => {
+        if (target) void onDraftWorkspaceTargetChange?.(target);
+        setWorkspaceMenuOpen(false);
+      });
+    },
+    [composerWorkspace, onDraftWorkspaceTargetChange],
+  );
+  const createAuthoringTarget = useCallback(() => {
+    if (composerWorkspace?.kind !== 'entry' || !composerWorkspace.onCreateAuthoringTarget) {
+      throw new Error('Agent Entry authoring target creation is unavailable.');
+    }
+    const context = authoringCreationContext;
+    if (!context || (context.targetKind !== 'content-project' && !authoringCreationName.trim())) {
+      return;
+    }
+    setAuthoringCatalogLoading(true);
+    setAuthoringCatalogDiagnostic(undefined);
+    void composerWorkspace
+      .onCreateAuthoringTarget(context, authoringCreationName.trim())
+      .then((target) => {
+        if (target) void onDraftWorkspaceTargetChange?.(target);
+        setAuthoringCreationName('');
+        setWorkspaceMenuOpen(false);
+      })
+      .catch((error: unknown) =>
+        setAuthoringCatalogDiagnostic(error instanceof Error ? error.message : String(error)),
+      )
+      .finally(() => setAuthoringCatalogLoading(false));
+  }, [
+    authoringCreationContext,
+    authoringCreationId,
+    authoringCreationName,
+    composerWorkspace,
+    onDraftWorkspaceTargetChange,
+  ]);
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -918,10 +983,18 @@ export function InputArea({
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    if (!onDraftCharacterTargetSelect) {
-      throw new Error('Character selection requires an exact Agent Draft target handler.');
+    const selection = item.characterLaunchSelection;
+    if (!selection || !onAddCharacterLaunch) {
+      throw new Error('Character selection requires an exact Character launch handler.');
     }
-    void onDraftCharacterTargetSelect(projectCharacterDraftBindingFromRoleplayItem(item));
+    onAddCharacterLaunch({
+      characterProjectId: selection.characterProjectId,
+      characterVersionId: selection.characterVersionId,
+      ...(selection.characterStorylineVersionId === undefined
+        ? {}
+        : { characterStorylineVersionId: selection.characterStorylineVersionId }),
+      label: item.label,
+    });
     textareaRef.current?.focus();
   };
 
@@ -944,7 +1017,7 @@ export function InputArea({
     submissionBlocked: submissionBlockedReason !== undefined,
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
-  const attachmentInputDisabled = disabled || isRunActive;
+  const attachmentInputDisabled = disabled;
   return (
     <div className="flex-shrink-0">
       {/* ── Suggestion chips — float above border-t, at bottom of message list ── */}
@@ -961,7 +1034,7 @@ export function InputArea({
             pendingCount={queuePanelCount}
             expanded={isQueueExpanded}
             onExpandedChange={setIsQueueExpanded}
-            onPromote={onPromoteQueuedMessage}
+            onSendNow={onSendQueuedMessageNow}
             onCancel={onCancelQueuedMessage}
             onEdit={onEditQueuedMessage}
             t={t}
@@ -1099,9 +1172,7 @@ export function InputArea({
               }}
               disabled={attachmentInputDisabled}
               className="agent-composer-tool-button"
-              title={
-                isRunActive ? t('chat.input.attachUnavailableWhileRunning') : t('chat.input.attach')
-              }
+              title={t('chat.input.attach')}
             >
               <PlusIcon className="w-4 h-4" />
             </button>
@@ -1133,7 +1204,7 @@ export function InputArea({
                       type="button"
                       className="agent-composer-workspace-button"
                       disabled={composerWorkspace.disabled || draftTargetSelectionPending}
-                      onClick={() => setWorkspaceMenuOpen((open) => !open)}
+                      onClick={openWorkspaceMenu}
                       aria-expanded={workspaceMenuOpen}
                     >
                       {draftWorkspaceTarget?.label ?? t('chat.input.workspace.openProject')}
@@ -1151,6 +1222,85 @@ export function InputArea({
                     ) : null}
                     {workspaceMenuOpen ? (
                       <div className="agent-composer-workspace-menu" role="menu">
+                        {authoringCatalogLoading ? (
+                          <span className="agent-composer-workspace-menu-status" role="status">
+                            {t('chat.input.workspace.loadingTargets')}
+                          </span>
+                        ) : null}
+                        {authoringCatalogDiagnostic ? (
+                          <span
+                            className="agent-composer-workspace-menu-status is-error"
+                            role="alert"
+                          >
+                            {authoringCatalogDiagnostic}
+                          </span>
+                        ) : null}
+                        {authoringCatalog?.targets.map((option) => (
+                          <button
+                            key={option.optionId}
+                            type="button"
+                            role="menuitem"
+                            disabled={option.disabled || draftTargetSelectionPending}
+                            onClick={() => selectAuthoringTarget(option)}
+                          >
+                            <span>{option.label}</span>
+                            <small>{option.workspaceLabel}</small>
+                          </button>
+                        ))}
+                        {authoringCatalog?.diagnostics.map((diagnostic) => (
+                          <span
+                            className="agent-composer-workspace-menu-status is-error"
+                            key={diagnostic}
+                            role="status"
+                          >
+                            {diagnostic}
+                          </span>
+                        ))}
+                        {authoringCatalog?.creationContexts.length &&
+                        composerWorkspace.onCreateAuthoringTarget ? (
+                          <div className="agent-composer-workspace-create">
+                            <select
+                              aria-label={t('chat.input.workspace.createScope')}
+                              value={authoringCreationId}
+                              onChange={(event) =>
+                                setAuthoringCreationId(event.currentTarget.value)
+                              }
+                            >
+                              <option value="">{t('chat.input.workspace.createTarget')}</option>
+                              {authoringCatalog.creationContexts.map((context) => (
+                                <option key={context.creationId} value={context.creationId}>
+                                  {context.label}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              aria-label={t('chat.input.workspace.targetName')}
+                              placeholder={t('chat.input.workspace.targetName')}
+                              value={authoringCreationName}
+                              disabled={authoringCreationContext?.targetKind === 'content-project'}
+                              onChange={(event) =>
+                                setAuthoringCreationName(event.currentTarget.value)
+                              }
+                            />
+                            <button
+                              aria-label={t('chat.input.workspace.createTarget')}
+                              disabled={
+                                authoringCatalogLoading ||
+                                !authoringCreationId ||
+                                (authoringCreationContext?.targetKind !== 'content-project' &&
+                                  !authoringCreationName.trim())
+                              }
+                              title={t('chat.input.workspace.createTarget')}
+                              type="button"
+                              onClick={createAuthoringTarget}
+                            >
+                              <PlusIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : null}
+                        {authoringCatalog?.targets.length ? (
+                          <span className="agent-composer-workspace-menu-separator" />
+                        ) : null}
                         {composerWorkspace.projects.map((project) => (
                           <button
                             key={project.projectId}
@@ -1401,7 +1551,7 @@ function MessageQueueControls({
   pendingCount,
   expanded,
   onExpandedChange,
-  onPromote,
+  onSendNow,
   onCancel,
   onEdit,
   t,
@@ -1410,7 +1560,7 @@ function MessageQueueControls({
   pendingCount: number;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
-  onPromote?: (queueItemId: string) => void;
+  onSendNow?: (queueItemId: string) => void;
   onCancel?: (queueItemId: string) => void;
   onEdit?: (queueItemId: string) => void;
   t: InputAreaTranslator;
@@ -1455,7 +1605,7 @@ function MessageQueueControls({
               key={item.id}
               item={item}
               position={index + 1}
-              onPromote={onPromote}
+              onSendNow={onSendNow}
               onCancel={onCancel}
               onEdit={onEdit}
               t={t}
@@ -1477,14 +1627,14 @@ function MessageQueueControls({
 function QueuedMessageRow({
   item,
   position,
-  onPromote,
+  onSendNow,
   onCancel,
   onEdit,
   t,
 }: {
   item: AgentQueuedMessageItem;
   position: number;
-  onPromote?: (queueItemId: string) => void;
+  onSendNow?: (queueItemId: string) => void;
   onCancel?: (queueItemId: string) => void;
   onEdit?: (queueItemId: string) => void;
   t: InputAreaTranslator;
@@ -1502,9 +1652,9 @@ function QueuedMessageRow({
       </span>
       <div className="agent-composer-queue-actions" aria-label={label}>
         <QueueActionButton
-          title={t('chat.input.queueSendNext')}
-          disabled={isOptimistic || !onPromote}
-          onClick={() => onPromote?.(item.id)}
+          title={t('chat.input.queueSendNow')}
+          disabled={isOptimistic || !onSendNow}
+          onClick={() => onSendNow?.(item.id)}
         >
           <SendIcon size={13} strokeWidth={2.1} />
         </QueueActionButton>

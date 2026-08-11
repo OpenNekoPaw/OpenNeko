@@ -184,7 +184,7 @@ class CreativeEntityHeadlessCapabilityProvider implements AgentCapabilityProvide
           reason:
             'Confirm the target entity identity and kind before writing a representation fact.',
         },
-        requirements: { writableProject: true },
+        requirements: { writableProject: true, authoringTargetKind: 'content-project' },
         execute: async (args) => this.bindEntityRepresentation(args),
       },
     ];

@@ -9,7 +9,11 @@ describe('Desktop Agent workflow interpreter', () => {
         .fn()
         .mockResolvedValueOnce({ accepted: true, eventOffset: 3 })
         .mockResolvedValueOnce({ accepted: true, eventOffset: 9 }),
-      queue: vi.fn(async () => ({ accepted: true, eventOffset: 4 })),
+      queue: vi.fn(async () => ({
+        accepted: true,
+        eventOffset: 4,
+        queueItemId: 'queue-1',
+      })),
       waitForIdentity: vi.fn(async () => identity),
       cancel: vi.fn(async () => ({ accepted: true, identity })),
       waitForIdle: vi.fn(async () => ({ identity })),
@@ -26,7 +30,7 @@ describe('Desktop Agent workflow interpreter', () => {
           conversationId: 'conversation-1',
           pendingCount: afterEventOffset === 4 ? 1 : 0,
           sequence: 1,
-          pausedAfterCancel: false,
+          paused: false,
           items: [],
         },
         queued: afterEventOffset === 4,
@@ -55,6 +59,11 @@ describe('Desktop Agent workflow interpreter', () => {
     });
 
     expect(driver.waitForIdentity).toHaveBeenCalledWith('conversation-1', 4, 30_000);
+    expect(driver.queue).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      prompt: 'queued',
+      timeoutMs: 30_000,
+    });
     expect(driver.submit).toHaveBeenLastCalledWith({
       conversationId: 'conversation-1',
       prompt: 'Improve: previous answer',
@@ -70,6 +79,66 @@ describe('Desktop Agent workflow interpreter', () => {
       snapshot: { messageQueue: { pendingCount: 1 } },
     });
     expect(checkpoints).toHaveLength(6);
+  });
+
+  it('releases the exact queued item through send-now after cancellation reaches idle', async () => {
+    const identity = { conversationId: 'conversation-1', turnId: 'turn-2', runId: 'run-2' };
+    const driver = {
+      submit: vi.fn(async () => ({ accepted: true, eventOffset: 1 })),
+      queue: vi.fn(async () => ({
+        accepted: true,
+        eventOffset: 2,
+        queueItemId: 'queue-priority',
+      })),
+      waitForIdentity: vi.fn(async () => identity),
+      cancel: vi.fn(async () => ({ accepted: true, identity })),
+      sendQueuedMessageNow: vi.fn(async () => ({
+        accepted: true,
+        eventOffset: 5,
+        queueItemId: 'queue-priority',
+      })),
+      waitForIdle: vi.fn(async () => ({ identity })),
+      observeWorkflowStep: vi.fn(async () => ({
+        conversationId: 'conversation-1',
+        messages: [],
+        messageQueue: {
+          conversationId: 'conversation-1',
+          pendingCount: 0,
+          sequence: 2,
+          paused: false,
+          items: [],
+        },
+        queued: false,
+        projectionEvents: [],
+      })),
+    };
+
+    const result = await executeDesktopAgentWorkflow({
+      driver,
+      conversationId: 'conversation-1',
+      defaultTimeoutMs: 30_000,
+      steps: [
+        { id: 'submit', kind: 'submit', prompt: 'start' },
+        { id: 'priority', kind: 'queue', afterStepId: 'submit', prompt: 'priority' },
+        { id: 'cancel', kind: 'cancel', afterStepId: 'priority' },
+        { id: 'cancelled-idle', kind: 'wait-for-idle', timeoutMs: 1000 },
+        { id: 'send-now', kind: 'send-queued-now', queueStepId: 'priority' },
+        { id: 'recovered-idle', kind: 'wait-for-idle', timeoutMs: 1000 },
+      ],
+    });
+
+    expect(driver.sendQueuedMessageNow).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      queueItemId: 'queue-priority',
+      timeoutMs: 30_000,
+    });
+    expect(result.steps[4]).toMatchObject({
+      id: 'send-now',
+      method: 'message.queue.send-now',
+      accepted: true,
+      queueItemId: 'queue-priority',
+      queueStepId: 'priority',
+    });
   });
 
   it('binds a visible first submission and application restart to the established conversation', async () => {

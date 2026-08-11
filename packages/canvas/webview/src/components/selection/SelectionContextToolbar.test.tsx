@@ -341,6 +341,58 @@ describe('SelectionContextToolbar', () => {
     expect(markup).not.toContain('node:open-content-overlay');
   });
 
+  it('keeps referenced text editing and preview visible while placing Finder in More', async () => {
+    const node = fileNode('notes', 'notes/scene.md');
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        descriptor('text:edit', 'Edit text', 'handoff'),
+        descriptor('preview:open', 'Full-screen preview', 'read'),
+        descriptor('desktop:reveal', 'Reveal in Finder', 'handoff'),
+      ],
+    );
+
+    expect(
+      Array.from(
+        toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
+      ).map((element) => element.getAttribute('data-selection-action')),
+    ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
+    expect(
+      toolbar.container
+        .querySelector('[data-selection-overflow]')
+        ?.getAttribute('data-selection-overflow-actions'),
+    ).toBe('desktop:reveal');
+    expect(toolbar.container.querySelector('[data-selection-kind-label]')?.textContent).toBe(
+      'File',
+    );
+    await toolbar.dispose();
+  });
+
+  it.each([
+    ['image', 'Image', 'image:crop'] as const,
+    ['audio', 'Audio', 'audio:voice-denoise'] as const,
+    ['video', 'Video', 'video:separate-audio'] as const,
+  ])(
+    'labels an explicit %s File by its material kind and renders its owner action',
+    async (mediaKind, expectedLabel, actionId) => {
+      const node = fileNode(`${mediaKind}-file`, `opaque/${mediaKind}.source`, mediaKind);
+      const toolbar = await renderToolbar(
+        [node],
+        [node.id],
+        [descriptor(actionId, 'Edit material', 'derive')],
+      );
+
+      expect(toolbar.container.querySelector('[data-selection-kind-label]')?.textContent).toBe(
+        expectedLabel,
+      );
+      expect(
+        toolbar.container.querySelector(`[data-selection-action="${actionId}"]`),
+      ).not.toBeNull();
+      await toolbar.dispose();
+    },
+  );
+
   it('labels a Generation Node as its base content kind', () => {
     const node: CanvasNode = {
       id: 'generation-image',
@@ -362,6 +414,59 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-kind-label="true"');
     expect(markup).toContain('>Image</span>');
     expect(markup).toContain('data-selection-action="node:duplicate"');
+    expect(markup).not.toContain('preview:open');
+    expect(markup).not.toContain('text:edit');
+    expect(markup).not.toContain('cut:add-resource');
+  });
+
+  it('renders immutable Prompt output actions without inventing Text Editor ownership', async () => {
+    const node: CanvasNode = {
+      id: 'generation-prompt',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 320, height: 240 },
+      zIndex: 1,
+      data: {
+        recipe: { kind: 'prompt', prompt: 'Write a scene outline' },
+        outputs: [
+          {
+            outputId: 'prompt-output-1',
+            jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+            locator: {
+              kind: 'generated-output',
+              outputId: 'prompt-output-1',
+              digest: 'sha256:prompt-output-1',
+              path: 'neko/generated/prompt-output-1.txt',
+            },
+            kind: 'prompt',
+            recipeInputFingerprint: 'recipe-fingerprint-1',
+          },
+        ],
+        selectedOutputId: 'prompt-output-1',
+      },
+    };
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [
+        descriptor('preview:open', 'Full-screen preview', 'read'),
+        descriptor('desktop:reveal', 'Reveal in Finder', 'handoff'),
+        descriptor('media-library:copy-to-project', 'Save material', 'copy'),
+      ],
+    );
+
+    expect(
+      Array.from(
+        toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
+      ).map((element) => element.getAttribute('data-selection-action')),
+    ).toEqual(['media-library:copy-to-project', 'node:duplicate', 'preview:open']);
+    expect(toolbar.container.innerHTML).not.toContain('data-selection-action="text:edit"');
+    expect(
+      toolbar.container
+        .querySelector('[data-selection-overflow]')
+        ?.getAttribute('data-selection-overflow-actions'),
+    ).toBe('desktop:reveal');
+    await toolbar.dispose();
   });
 
   it('refreshes material actions when a selected Generation node receives its first output', async () => {
@@ -435,6 +540,68 @@ describe('SelectionContextToolbar', () => {
     ).not.toBeNull();
     await act(async () => root.unmount());
     container.remove();
+  });
+
+  it('keeps material action resolution failures visible on the selected node toolbar', async () => {
+    const node = mediaNode('image-error', 'image', 'media/still.png');
+    const host = {
+      ...createMaterialHost([]),
+      resolveMaterialActions: vi.fn(async () => {
+        throw new Error('Image action owner is unavailable.');
+      }),
+    };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider host={host}>
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+        </CanvasHostProvider>,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const diagnostic = container.querySelector('[data-material-actions-status="error"]');
+    expect(diagnostic?.getAttribute('role')).toBe('alert');
+    expect(diagnostic?.getAttribute('title')).toBe('Image action owner is unavailable.');
+    expect(diagnostic?.textContent).toContain('Actions unavailable');
+    expect(container.querySelector('[data-selection-action="node:duplicate"]')).not.toBeNull();
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('reports exact material action execution failures instead of dropping the toolbar', async () => {
+    const node = mediaNode('video-error', 'video', 'media/clip.mp4');
+    const executeMaterialAction = vi.fn(async () => {
+      throw new Error('Cut target changed before execution.');
+    });
+    const toolbar = await renderToolbar(
+      [node],
+      [node.id],
+      [descriptor('cut:add-resource', 'Edit', 'handoff')],
+      executeMaterialAction,
+    );
+
+    await act(async () => {
+      toolbar.container
+        .querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
+        ?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const diagnostic = toolbar.container.querySelector('[data-material-actions-status="error"]');
+    expect(diagnostic?.getAttribute('title')).toBe('Cut target changed before execution.');
+    expect(
+      toolbar.container.querySelector('[data-selection-action="cut:add-resource"]'),
+    ).not.toBeNull();
+    await toolbar.dispose();
   });
 
   it('keeps Group visible without rendering Delete for multi-selection', () => {
@@ -558,6 +725,11 @@ function createMaterialHost(
     },
     previewResource: async () => undefined,
     revealResource: async () => undefined,
+    readTextFilePreview: async (nodeId) => ({
+      requestId: 'fixture-text-preview',
+      nodeId,
+      status: 'unsupported',
+    }),
     getAuthoringCapabilities: () => ({
       sourceModes: [],
       generationKinds: [],
@@ -585,7 +757,11 @@ function descriptor(
   };
 }
 
-function fileNode(id: string, path: string): CanvasNode {
+function fileNode(
+  id: string,
+  path: string,
+  mediaKind: 'image' | 'audio' | 'video' | 'document' = 'document',
+): CanvasNode {
   return {
     id,
     type: 'file',
@@ -595,7 +771,7 @@ function fileNode(id: string, path: string): CanvasNode {
     data: {
       title: path,
       path,
-      mediaKind: 'document',
+      mediaKind,
       contentLocator: { kind: 'workspace-file', path },
     },
   } as CanvasNode;
@@ -620,13 +796,14 @@ async function renderToolbar(
   nodes: readonly CanvasNode[],
   selectedNodeIds: readonly string[],
   descriptors: readonly CanvasMaterialActionDescriptor[],
+  executeMaterialAction?: CanvasWebviewHostPort['executeMaterialAction'],
 ): Promise<{ readonly container: HTMLDivElement; readonly dispose: () => Promise<void> }> {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
   await act(async () => {
     root.render(
-      <CanvasHostProvider host={createMaterialHost(descriptors)}>
+      <CanvasHostProvider host={createMaterialHost(descriptors, executeMaterialAction)}>
         <SelectionContextToolbar
           nodes={nodes}
           selectedNodeIds={selectedNodeIds}

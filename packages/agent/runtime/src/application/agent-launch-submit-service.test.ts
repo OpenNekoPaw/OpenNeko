@@ -35,6 +35,7 @@ const draftInput = {
       binding,
     },
   },
+  entryTargetReceipt: null,
   input: { kind: 'message' as const, text: 'Hello' },
   references: [],
   resourceGrantIds: [],
@@ -159,6 +160,116 @@ describe('Agent launch Draft submission application service', () => {
     expect(fixture.bindings.resolve).toHaveBeenCalledOnce();
     expect(fixture.provider.start).toHaveBeenCalledOnce();
     expect(fixture.scene.handoff).toHaveBeenCalledTimes(2);
+  });
+
+  it('materializes one exact Character Dialogue runtime before committing its Conversation', async () => {
+    const fixture = createFixture();
+    const characterBinding = {
+      kind: 'character' as const,
+      characterId: 'character-project-1',
+      characterVersionId: 'character-version-1',
+      characterRunId: 'character-run-1',
+      roleProfileId: 'role-profile-1',
+      dialogueRunId: 'dialogue-run-1',
+    };
+    fixture.runtimeEntry.materialize.mockImplementationOnce(async () => {
+      fixture.events.push('runtime-materialize');
+      return {
+        conversationId: 'conversation:character:character-run-1',
+        context: characterBinding,
+      };
+    });
+    const runtimeInput = {
+      ...draftInput,
+      draft: {
+        phase: 'draft' as const,
+        draftId: draftInput.draft.draftId,
+        binding: { kind: 'unbound' as const },
+        bindingReceipt: null,
+      },
+      entryTargetReceipt: {
+        targetReceiptId: 'target-receipt:character-1',
+        draftId: draftInput.draft.draftId,
+        connectionId: connection.connectionId,
+        mode: 'character-dialogue' as const,
+        binding: {
+          kind: 'character-dialogue' as const,
+          participants: [
+            {
+              characterProjectId: 'character-project-1',
+              characterVersionId: 'character-version-1',
+              roleProfileId: 'role-profile-1',
+            },
+          ],
+        },
+      },
+    };
+
+    const first = await fixture.service.submit({
+      requestId: 'request:character-1',
+      connection,
+      draftInput: runtimeInput,
+    });
+    await fixture.lifecycle.waitForProviderIdle();
+    const replay = await fixture.service.submit({
+      requestId: 'request:character-1',
+      connection,
+      draftInput: runtimeInput,
+    });
+
+    expect(first.session.binding).toEqual(characterBinding);
+    expect(first.session.conversationId).toBe('conversation:character:character-run-1');
+    expect(replay.session.conversationId).toBe(first.session.conversationId);
+    expect(fixture.runtimeEntry.materialize).toHaveBeenCalledOnce();
+    expect(fixture.entry.materialize).not.toHaveBeenCalled();
+    expect(fixture.bindings.resolve).not.toHaveBeenCalled();
+    expect(fixture.events.slice(0, 2)).toEqual(['runtime-materialize', 'materialize']);
+  });
+
+  it('blocks an unavailable formal runtime owner before Conversation or provider commit', async () => {
+    const fixture = createFixture();
+    fixture.runtimeEntry.materialize.mockRejectedValueOnce(
+      new Error(
+        '[world/world-experience-provider-unavailable] World Experience launch is unavailable.',
+      ),
+    );
+    const worldInput = {
+      ...draftInput,
+      draft: {
+        phase: 'draft' as const,
+        draftId: draftInput.draft.draftId,
+        binding: { kind: 'unbound' as const },
+        bindingReceipt: null,
+      },
+      entryTargetReceipt: {
+        targetReceiptId: 'target-receipt:world-1',
+        draftId: draftInput.draft.draftId,
+        connectionId: connection.connectionId,
+        mode: 'world-experience' as const,
+        binding: {
+          kind: 'world-experience' as const,
+          worldExperienceId: 'world-experience-1',
+          worldExperienceVersionId: 'world-experience-version-1',
+          launch: {
+            kind: 'new' as const,
+            participantId: 'participant-1',
+            roleScopeId: 'role-scope-1',
+          },
+        },
+      },
+    };
+
+    await expect(
+      fixture.service.submit({
+        requestId: 'request:world-unavailable',
+        connection,
+        draftInput: worldInput,
+      }),
+    ).rejects.toThrow('[world/world-experience-provider-unavailable]');
+    expect(fixture.session.materialize).not.toHaveBeenCalled();
+    expect(fixture.provider.start).not.toHaveBeenCalled();
+    expect(fixture.resources.commit).not.toHaveBeenCalled();
+    expect(fixture.scene.handoff).not.toHaveBeenCalled();
   });
 
   it('rejects unavailable owners and unregistered commands before any local commit', async () => {
@@ -290,6 +401,11 @@ function createFixture() {
   const entry = {
     materialize: vi.fn(async () => binding),
   };
+  const runtimeEntry = {
+    materialize: vi.fn(async () => {
+      throw new Error('Formal runtime Entry owner is unavailable.');
+    }),
+  };
   const session = {
     materialize: vi.fn(async () => {
       events.push('materialize');
@@ -336,6 +452,7 @@ function createFixture() {
     events,
     launch,
     entry,
+    runtimeEntry,
     bindings,
     lifecycle,
     session,
@@ -346,6 +463,7 @@ function createFixture() {
     service: createAgentLaunchDraftSubmissionApplicationService({
       launch,
       entry,
+      runtimeEntry,
       bindings,
       lifecycle,
       resources,

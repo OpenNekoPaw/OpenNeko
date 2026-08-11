@@ -54,6 +54,9 @@ function createProjection() {
         name: 'computer-use',
         displayName: 'Computer Use',
         description: 'Control Mac apps.',
+        localization: {
+          'zh-cn': { description: '控制 Mac 应用。' },
+        },
         version: '1.0.2',
         developer: 'OpenAI',
         marketplace: 'openneko',
@@ -189,6 +192,23 @@ describe('Agent Extension Management Host contract', () => {
         request,
       ),
     ).toThrow('extension item is invalid');
+    expect(() =>
+      parseAgentExtensionManagementHostResult(
+        {
+          ...result,
+          projection: {
+            ...result.projection,
+            extensions: [
+              {
+                ...result.projection.extensions[0],
+                localization: { zh_CN: { description: '无效语言标识' } },
+              },
+            ],
+          },
+        },
+        request,
+      ),
+    ).toThrow('localization locale is invalid');
   });
 
   it('rejects inconsistent management capabilities and discovery diagnostics', () => {

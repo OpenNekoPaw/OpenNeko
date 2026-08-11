@@ -2,6 +2,7 @@ import {
   parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
   parseCharacterVersion,
+  collectCharacterLoreEvidenceIds,
   type CharacterAuthoringTestSnapshot,
   type CharacterCanonCandidate,
   type CharacterDefinition,
@@ -23,6 +24,13 @@ export interface CharacterAuthoringRepository {
     snapshot: CharacterAuthoringTestSnapshot,
     signal?: AbortSignal,
   ): Promise<void>;
+}
+
+export interface CharacterPublicationReader {
+  readPublication(
+    characterVersionId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterVersion | undefined>;
 }
 
 export interface CharacterAuthoringServiceOptions {
@@ -343,11 +351,12 @@ export class CharacterAuthoringService {
         project.characterProjectId,
       );
     }
-    const acceptedEvidenceIds = new Set(
-      project.candidates
+    const acceptedEvidenceIds = new Set([
+      ...project.candidates
         .filter((candidate) => candidate.status === 'accepted')
         .flatMap((candidate) => candidate.evidenceIds),
-    );
+      ...collectCharacterLoreEvidenceIds(project.draft),
+    ]);
     const published = deepFreeze(
       parseCharacterVersion({
         characterVersionId: input.characterVersionId,
@@ -362,7 +371,7 @@ export class CharacterAuthoringService {
     return published;
   }
 
-  private async requireProject(
+  async requireProject(
     characterProjectId: string,
     signal?: AbortSignal,
   ): Promise<CharacterProject> {

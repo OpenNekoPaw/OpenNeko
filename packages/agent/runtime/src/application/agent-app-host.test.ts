@@ -24,9 +24,13 @@ import {
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
   TOOL_NAMES_CANVAS,
   TOOL_NAMES_CUT,
+  TOOL_NAMES_PERCEPTION,
+  TOOL_NAMES_SYSTEM,
   type Tool,
   type ToolResult,
   type EffectiveAgentConfigurationProjection,
+  type AgentAuthoringTargetRef,
+  type AgentEntryTargetReceipt,
 } from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -66,6 +70,12 @@ const VISION_MODEL: Model<'openai-completions'> = {
   input: ['text', 'image'],
 };
 
+const IMAGE_UNDERSTANDING_MODEL: Model<'openai-completions'> = {
+  ...VISION_MODEL,
+  id: 'image-understanding',
+  name: 'Image Understanding',
+};
+
 describe('AgentAppHost', () => {
   const roots: string[] = [];
   const compositions: AgentAppHost[] = [];
@@ -88,12 +98,14 @@ describe('AgentAppHost', () => {
 
     expect(transport.list().map((entry) => entry.message)).toEqual([
       'Provider "neko-content-read" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
+      'Provider "neko-image-understanding" registered: 1 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
       'Provider "neko-canvas-project-authoring" registered: 7 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
       'Provider "neko-cut-project-authoring" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
       'Workspace runtime attached.',
       'Conversation created.',
       'Conversation deleted.',
       'Provider "neko-content-read" unregistered',
+      'Provider "neko-image-understanding" unregistered',
       'Provider "neko-canvas-project-authoring" unregistered',
       'Provider "neko-cut-project-authoring" unregistered',
       'Workspace runtime disposed.',
@@ -251,6 +263,157 @@ describe('AgentAppHost', () => {
       success: false,
       error: 'Tool not found: cut_unknown_operation',
     });
+  });
+
+  it('binds Content mutations to the exact receipt per Turn and withholds them from Character and World', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'neko-agent-authoring-target-'));
+    roots.push(root);
+    const userHome = join(root, 'home');
+    const userDataRoot = join(userHome, '.neko');
+    const workspacePath = join(root, 'workspace');
+    await mkdir(workspacePath, { recursive: true });
+    const authorize = vi.fn(async ({ receipt }) => {
+      if (receipt.binding.kind !== 'authoring') throw new Error('Expected Authoring binding.');
+      if (
+        receipt.binding.target.kind === 'content-project' &&
+        receipt.binding.target.contentProjectId === 'content-denied'
+      ) {
+        throw new Error('Content owner denied the exact target.');
+      }
+      return receipt.binding;
+    });
+    const composition = createAgentAppHost({
+      userDataRoot,
+      userHome,
+      hostId: 'desktop-host-authoring-target',
+      credentialRuntime: createTestCredentialRuntime(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
+      catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
+      authoringMutationAuthority: { authorize },
+    });
+    compositions.push(composition);
+    const workspace = await composition.attachWorkspace({
+      workspaceId: 'workspace-authoring',
+      workspacePath,
+      displayName: 'Authoring',
+      locator: { kind: 'variable', value: '${HOME}/workspace' },
+    });
+    const executeMutation = vi.fn(async () => ({ success: true, data: { updated: true } }));
+    workspace.tools.register({
+      name: 'ContentMutationFixture',
+      description: 'Exercises exact per-Turn authoring mutation authority.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      category: 'project',
+      requirements: { writableProject: true, authoringTargetKind: 'content-project' },
+      execute: executeMutation,
+    });
+    const mutationNames = workspace.tools
+      .list()
+      .filter((tool) => tool.requirements?.authoringTargetKind !== undefined)
+      .map((tool) => tool.name);
+    expect(mutationNames).toEqual(expect.arrayContaining(['Write', 'ContentMutationFixture']));
+    const seenTools = new Map<string, readonly string[]>();
+    const models = createFixtureModels((_model, context) => {
+      const prompt = lastUserPrompt(context);
+      const toolNames = context.tools?.map((tool) => tool.name) ?? [];
+      seenTools.set(prompt, toolNames);
+      if (prompt === 'write content' || prompt === 'write denied content') {
+        return context.messages.some((message) => message.role === 'toolResult')
+          ? completedStream(assistant('Write handled.'))
+          : completedStream(assistantToolCall('ContentMutationFixture'));
+      }
+      return completedStream(assistant('No Content mutation available.'));
+    });
+    const policy = fixturePolicy();
+    for (const conversationId of [
+      'conversation-content-target',
+      'conversation-character-target',
+      'conversation-world-target',
+      'conversation-inferred-target',
+      'conversation-content-denied',
+    ]) {
+      await workspace.openConversation({
+        conversationId,
+        models,
+        initialModelPolicy: policy,
+        baseSystemPrompt: 'Exact authoring target fixture',
+      });
+    }
+
+    const contentResult = await workspace.executeTurn({
+      conversationId: 'conversation-content-target',
+      prompt: 'write content',
+      entryTargetReceipt: authoringTargetReceipt('content-project', 'content-1'),
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    expect(seenTools.get('write content')).toEqual(expect.arrayContaining(mutationNames));
+    expect(JSON.stringify(contentResult.projection)).not.toContain('"success":false');
+    expect(executeMutation).toHaveBeenCalledOnce();
+    expect(authorize).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedTargetKind: 'content-project' }),
+    );
+
+    await workspace.executeTurn({
+      conversationId: 'conversation-character-target',
+      prompt: 'inspect character tools',
+      entryTargetReceipt: authoringTargetReceipt('character-project', 'character-1'),
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await workspace.executeTurn({
+      conversationId: 'conversation-world-target',
+      prompt: 'inspect world tools',
+      entryTargetReceipt: authoringTargetReceipt('world-project', 'world-1'),
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    for (const prompt of ['inspect character tools', 'inspect world tools']) {
+      for (const mutationName of mutationNames) {
+        expect(seenTools.get(prompt)).not.toContain(mutationName);
+      }
+    }
+    const inferredPrompt =
+      'Use prompt mention selectedRow mountedSurface currentProject recentProject to write Content';
+    await workspace.executeTurn({
+      conversationId: 'conversation-inferred-target',
+      prompt: inferredPrompt,
+      entryTargetReceipt: null,
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    for (const mutationName of mutationNames) {
+      expect(seenTools.get(inferredPrompt)).not.toContain(mutationName);
+    }
+    expect(authorize).toHaveBeenCalledTimes(1);
+
+    const denied = await workspace.executeTurn({
+      conversationId: 'conversation-content-denied',
+      prompt: 'write denied content',
+      entryTargetReceipt: authoringTargetReceipt('content-project', 'content-denied'),
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    expect(executeMutation).toHaveBeenCalledOnce();
+    expect(JSON.stringify(denied.projection)).toContain(
+      'Agent authoring authority rejected ContentMutationFixture: Content owner denied the exact target.',
+    );
+    expect(authorize).toHaveBeenCalledTimes(2);
   });
 
   it('keeps structured project authoring providers out of Assistant Space runtimes', async () => {
@@ -839,6 +1002,14 @@ describe('AgentAppHost', () => {
     });
 
     expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.tools?.some((tool) => tool.name === TOOL_NAMES_SYSTEM.READ_IMAGE)).toBe(
+      true,
+    );
+    expect(
+      contexts[0]?.tools?.some((tool) =>
+        tool.description.includes('configured external image understanding model'),
+      ),
+    ).toBe(false);
     expect(contexts[0]?.messages).toContainEqual(
       expect.objectContaining({
         role: 'user',
@@ -894,6 +1065,137 @@ describe('AgentAppHost', () => {
         locale: 'en',
       }),
     ).rejects.toThrow('does not support image input');
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it('routes a text-only main model through the exact external image understanding Tool', async () => {
+    const fixture = await createFixture();
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'external.png'),
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const mainContexts: Context[] = [];
+    const purposeContexts: Context[] = [];
+    const models = createFixtureModels(
+      (model, context) => {
+        if (model.id === IMAGE_UNDERSTANDING_MODEL.id) {
+          purposeContexts.push(context);
+          return completedStream(assistantFor(model, 'The image contains one white pixel.'));
+        }
+        mainContexts.push(context);
+        if (context.messages.some((message) => message.role === 'toolResult')) {
+          return completedStream(assistant('External evidence received.'));
+        }
+        const tool = context.tools?.find((candidate) =>
+          candidate.description.includes('configured external image understanding model'),
+        );
+        if (!tool) throw new Error('External image understanding Tool was not projected to Pi.');
+        expect(
+          context.tools?.some((candidate) => candidate.name === TOOL_NAMES_SYSTEM.READ_IMAGE),
+        ).toBe(false);
+        expect(context.systemPrompt).toContain('External Image Understanding');
+        expect(context.systemPrompt).toContain('Never construct paths or locators');
+        const inputRef = /input_[a-z0-9]{6,}/u.exec(lastUserPrompt(context))?.[0];
+        if (!inputRef) throw new Error('Image input short reference was not projected.');
+        return completedStream(
+          assistantToolCall(tool.name, { image_refs: [inputRef], focus: 'Inspect the pixels.' }),
+        );
+      },
+      [MODEL, IMAGE_UNDERSTANDING_MODEL],
+    );
+    const policy = externalImagePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-external-image-understanding',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-external-image-understanding',
+        prompt: 'Analyze the selected image',
+        contextPayloads: [
+          {
+            type: 'image',
+            id: 'file:external.png',
+            label: 'external.png',
+            summary: 'Workspace image: external.png',
+            data: {
+              kind: 'authorized-content-reference',
+              locator: { kind: 'workspace-file', path: 'external.png' },
+              mediaType: 'image',
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).resolves.toMatchObject({ durability: 'durable' });
+
+    expect(mainContexts).toHaveLength(2);
+    const continuation = JSON.stringify(mainContexts[1]);
+    expect(continuation).toContain(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND);
+    expect(continuation).toContain('The image contains one white pixel.');
+    expect(continuation).toContain(IMAGE_UNDERSTANDING_MODEL.id);
+    expect(continuation).not.toContain('workspace-file');
+    expect(continuation).not.toContain('iVBORw0KGgo');
+    expect(purposeContexts).toHaveLength(1);
+    expect(purposeContexts[0]?.messages).toContainEqual(
+      expect.objectContaining({
+        role: 'user',
+        content: expect.arrayContaining([expect.objectContaining({ type: 'image' })]),
+      }),
+    );
+  });
+
+  it('rejects the external image route when the configured Tool is absent from the Turn snapshot', async () => {
+    const fixture = await createFixture();
+    const provider = vi.fn(() => completedStream(assistant('must not run')));
+    const models = createFixtureModels(provider, [MODEL, IMAGE_UNDERSTANDING_MODEL]);
+    const policy = externalImagePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    expect(workspace.tools.has(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND)).toBe(true);
+    workspace.tools.unregister(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND);
+    expect(workspace.tools.has(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND)).toBe(false);
+    await workspace.openConversation({
+      conversationId: 'conversation-configured-image-tool-absent',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-configured-image-tool-absent',
+        prompt: 'Analyze the selected image',
+        contextPayloads: [
+          {
+            type: 'image',
+            id: 'file:missing.png',
+            label: 'missing.png',
+            summary: 'Workspace image: missing.png',
+            data: {
+              kind: 'authorized-content-reference',
+              locator: { kind: 'workspace-file', path: 'missing.png' },
+              mediaType: 'image',
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).rejects.toThrow('no image perception capability is registered');
     expect(provider).not.toHaveBeenCalled();
   });
 
@@ -1343,7 +1645,7 @@ describe('AgentAppHost', () => {
     let maximumActive = 0;
     const started: string[] = [];
     const finish = new Map<string, () => void>();
-    const models = createFixtureModels((_model, context) => {
+    const models = createFixtureModels((_model, context, _options) => {
       const prompt = lastUserPrompt(context);
       const stream = createAssistantMessageEventStream();
       active += 1;
@@ -1438,6 +1740,18 @@ describe('AgentAppHost', () => {
         stream.push({ type: 'done', reason: 'stop', message });
         stream.end();
       });
+      options?.signal?.addEventListener(
+        'abort',
+        () => {
+          stream.push({
+            type: 'error',
+            reason: 'aborted',
+            error: { ...assistant(`cancelled ${prompt}`), stopReason: 'aborted' },
+          });
+          stream.end();
+        },
+        { once: true },
+      );
       return stream;
     });
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -1581,11 +1895,11 @@ describe('AgentAppHost', () => {
     await binding.dispose();
   });
 
-  it('uses the Conversation execution queue as the only read, promote, cancel and edit owner', async () => {
+  it('pauses pending turns after explicit cancellation until one exact item is sent now', async () => {
     const fixture = await createFixture();
     const started: string[] = [];
     const finish = new Map<string, () => void>();
-    const models = createFixtureModels((_model, context) => {
+    const models = createFixtureModels((_model, context, options) => {
       const prompt = lastUserPrompt(context);
       const stream = createAssistantMessageEventStream();
       started.push(prompt);
@@ -1595,6 +1909,101 @@ describe('AgentAppHost', () => {
         stream.push({ type: 'done', reason: 'stop', message });
         stream.end();
       });
+      options?.signal?.addEventListener(
+        'abort',
+        () => {
+          stream.push({
+            type: 'error',
+            reason: 'aborted',
+            error: { ...assistant(`cancelled ${prompt}`), stopReason: 'aborted' },
+          });
+          stream.end();
+        },
+        { once: true },
+      );
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-paused-queue',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const turn = (prompt: string) =>
+      workspace.startTurn({
+        conversationId: 'conversation-paused-queue',
+        prompt,
+        modelPolicy: fixturePolicy(),
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      });
+    const active = turn('active turn');
+    const queued = turn('queued turn');
+    await vi.waitFor(() => expect(started).toEqual(['active turn']));
+
+    expect(() =>
+      workspace.cancelTurn('conversation-paused-queue', {
+        turnId: 'stale-turn',
+        runId: 'stale-run',
+      }),
+    ).toThrow();
+    expect(workspace.readMessageQueue('conversation-paused-queue')).toMatchObject({
+      paused: false,
+      pendingCount: 1,
+    });
+
+    workspace.cancelTurn('conversation-paused-queue', active.identity);
+    expect(workspace.readMessageQueue('conversation-paused-queue')).toMatchObject({
+      paused: true,
+      pendingCount: 1,
+    });
+    await active.completion;
+    await Promise.resolve();
+    expect(started).toEqual(['active turn']);
+
+    const queuedItem = workspace.readMessageQueue('conversation-paused-queue').items[0];
+    if (!queuedItem) throw new Error('Paused queue fixture lost its queued item.');
+    expect(
+      workspace.sendQueuedMessageNow('conversation-paused-queue', queuedItem.id),
+    ).toMatchObject({ paused: false });
+    await vi.waitFor(() => expect(started).toEqual(['active turn', 'queued turn']));
+    finish.get('queued turn')?.();
+    await queued.completion;
+    expect(workspace.readMessageQueue('conversation-paused-queue')).toMatchObject({
+      paused: false,
+      pendingCount: 0,
+    });
+  });
+
+  it('uses the Conversation execution queue as the only read, send-now, cancel and edit owner', async () => {
+    const fixture = await createFixture();
+    const started: string[] = [];
+    const finish = new Map<string, () => void>();
+    const models = createFixtureModels((_model, context, options) => {
+      const prompt = lastUserPrompt(context);
+      const stream = createAssistantMessageEventStream();
+      started.push(prompt);
+      const message = assistant(`completed ${prompt}`);
+      stream.push({ type: 'start', partial: message });
+      finish.set(prompt, () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      });
+      options?.signal?.addEventListener(
+        'abort',
+        () => {
+          stream.push({
+            type: 'error',
+            reason: 'aborted',
+            error: { ...assistant(`cancelled ${prompt}`), stopReason: 'aborted' },
+          });
+          stream.end();
+        },
+        { once: true },
+      );
       return stream;
     });
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -1647,7 +2056,7 @@ describe('AgentAppHost', () => {
 
     expect(
       workspace
-        .promoteQueuedMessage('conversation-owned-queue', promoteItem.id)
+        .sendQueuedMessageNow('conversation-owned-queue', promoteItem.id)
         .items.map((item) => item.content),
     ).toEqual(['promote queued turn', 'cancel queued turn', 'edit queued turn']);
     const editedResult = await workspace.takeQueuedMessageForEdit(
@@ -1666,10 +2075,10 @@ describe('AgentAppHost', () => {
     ).toEqual(['promote queued turn']);
     await Promise.all([cancelledCompletion, editedCompletion]);
 
-    finish.get('active turn')?.();
+    await active.completion;
     await vi.waitFor(() => expect(started).toEqual(['active turn', 'promote queued turn']));
     finish.get('promote queued turn')?.();
-    await expect(Promise.all([active.completion, promoted.completion])).resolves.toHaveLength(2);
+    await promoted.completion;
     expect(started).not.toContain('cancel queued turn');
     expect(started).not.toContain('edit queued turn');
     expect(workspace.readMessageQueue('conversation-owned-queue')).toMatchObject({
@@ -3031,6 +3440,26 @@ function fixturePolicy(
   });
 }
 
+function externalImagePolicy() {
+  return resolveAgentModelPolicy({
+    catalog: [
+      { model: MODEL, capabilities: ['llm.chat', 'tools'], credentialState: 'configured' },
+      {
+        model: IMAGE_UNDERSTANDING_MODEL,
+        capabilities: ['llm.chat', 'vision'],
+        credentialState: 'configured',
+      },
+    ],
+    userBindings: {
+      'agent.main': { providerId: MODEL.provider, modelId: MODEL.id },
+      'image.understand': {
+        providerId: IMAGE_UNDERSTANDING_MODEL.provider,
+        modelId: IMAGE_UNDERSTANDING_MODEL.id,
+      },
+    },
+  });
+}
+
 function allowTools() {
   return { preflight: () => ({ allowed: true as const }) };
 }
@@ -3123,13 +3552,13 @@ function createFixtureModels(
     context: Context,
     options?: SimpleStreamOptions,
   ) => ReturnType<typeof createAssistantMessageEventStream>,
-  model: Model<'openai-completions'> = MODEL,
+  model: Model<'openai-completions'> | readonly Model<'openai-completions'>[] = MODEL,
 ) {
   const models = createModels();
   models.setProvider(
     createProvider({
       id: MODEL.provider,
-      models: [model],
+      models: Array.isArray(model) ? [...model] : [model],
       auth: {
         apiKey: {
           name: 'Fixture',
@@ -3143,6 +3572,15 @@ function createFixtureModels(
     }),
   );
   return models;
+}
+
+function assistantFor(model: Model<Api>, text: string): AssistantMessage {
+  return {
+    ...assistant(text),
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+  };
 }
 
 function fixtureConfiguration(): AgentTurnConfigurationSnapshot {
@@ -3202,6 +3640,30 @@ function assistantToolCall(
     ...assistant(''),
     content: [{ type: 'toolCall', id: 'fixture-tool-call', name, arguments: argumentsValue }],
     stopReason: 'toolUse',
+  };
+}
+
+function authoringTargetReceipt(
+  kind: AgentAuthoringTargetRef['kind'],
+  targetId: string,
+): AgentEntryTargetReceipt {
+  const target: AgentAuthoringTargetRef =
+    kind === 'content-project'
+      ? { kind, contentProjectId: targetId }
+      : kind === 'character-project'
+        ? { kind, characterProjectId: targetId }
+        : { kind, worldProjectId: targetId };
+  return {
+    targetReceiptId: `target-receipt:${kind}:${targetId}`,
+    draftId: 'draft-authoring',
+    connectionId: 'connection-authoring',
+    mode: 'authoring',
+    binding: {
+      kind: 'authoring',
+      workspaceId: 'workspace-authoring',
+      workspaceGrantId: 'workspace-grant-authoring',
+      target,
+    },
   };
 }
 
