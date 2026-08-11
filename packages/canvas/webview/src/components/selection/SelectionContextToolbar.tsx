@@ -47,7 +47,6 @@ import {
   LoadingIcon,
   MoreHorizontalIcon,
   OpenIcon,
-  PackageIcon,
   PlayIcon,
   RefreshIcon,
   RemoveIcon,
@@ -67,6 +66,10 @@ import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
 import { getNodeLabel } from '../nodes/nodeTypeDescriptor';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
+import {
+  resolveCanvasImagePreviewSource,
+  type CanvasImagePreviewSource,
+} from './CanvasImagePreviewOverlay';
 import { resolveSelectionToolbarTop } from './selectionAttachmentGeometry';
 
 const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
@@ -77,6 +80,7 @@ interface SelectionContextToolbarProps {
   readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
   readonly hidden?: boolean;
+  readonly onCanvasImagePreview?: (source: CanvasImagePreviewSource) => void;
 }
 
 interface ToolbarAction {
@@ -88,8 +92,7 @@ interface ToolbarAction {
   readonly placement: 'visible' | 'overflow';
   readonly priority: number;
   readonly display: 'icon' | 'label';
-  readonly section: 'edit' | 'asset' | 'utility' | 'canvas';
-  readonly overflowGroup?: 'file' | 'media-edit' | 'media-library' | 'other';
+  readonly section: 'edit' | 'utility' | 'canvas';
 }
 
 type MaterialActionState =
@@ -106,6 +109,7 @@ export function SelectionContextToolbar({
   viewport,
   viewportSize,
   hidden = false,
+  onCanvasImagePreview,
 }: SelectionContextToolbarProps): ReactNode {
   const host = useOptionalCanvasHost();
   const canvasStore = useCanvasStoreApi();
@@ -163,6 +167,7 @@ export function SelectionContextToolbar({
         clipboardStore,
         historyStore,
         setExecutionDiagnostic,
+        onCanvasImagePreview,
       ),
     [
       canvasStore,
@@ -170,6 +175,7 @@ export function SelectionContextToolbar({
       historyStore,
       host,
       materialActionState.descriptors,
+      onCanvasImagePreview,
       selectedNodes,
     ],
   );
@@ -177,7 +183,6 @@ export function SelectionContextToolbar({
 
   const position = resolveToolbarPosition(selectedNodes, viewport, viewportSize);
   const { primary, overflow } = partitionActions(actions);
-  const overflowGroups = groupOverflowActions(overflow);
   const selectionLabel = resolveSelectionLabel(selectedNodes);
 
   return (
@@ -252,37 +257,24 @@ export function SelectionContextToolbar({
           }
         >
           <div className="selection-action-overflow" role="menu">
-            {overflowGroups.map((group) => (
-              <div
-                key={group.id}
-                className="selection-action-overflow__group"
-                data-selection-overflow-group={group.id}
-                role="group"
-                aria-label={overflowGroupLabel(group.id)}
+            {overflow.map((action) => (
+              <Button
+                key={action.key}
+                data-selection-action={action.key}
+                data-selection-action-location="overflow"
+                size="xs"
+                variant="ghost"
+                data-danger={action.danger ? 'true' : undefined}
+                leadingIcon={action.icon}
+                className="justify-start"
+                role="menuitem"
+                onClick={() => {
+                  action.run();
+                  setOverflowOpen(false);
+                }}
               >
-                <div className="selection-action-overflow__label">
-                  {overflowGroupLabel(group.id)}
-                </div>
-                {group.actions.map((action) => (
-                  <Button
-                    key={action.key}
-                    data-selection-action={action.key}
-                    data-selection-action-location="overflow"
-                    size="xs"
-                    variant="ghost"
-                    data-danger={action.danger ? 'true' : undefined}
-                    leadingIcon={action.icon}
-                    className="justify-start"
-                    role="menuitem"
-                    onClick={() => {
-                      action.run();
-                      setOverflowOpen(false);
-                    }}
-                  >
-                    {action.label}
-                  </Button>
-                ))}
-              </div>
+                {action.label}
+              </Button>
             ))}
           </div>
         </Popover>
@@ -330,6 +322,7 @@ function resolveActions(
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
+  onCanvasImagePreview?: (source: CanvasImagePreviewSource) => void,
 ): ToolbarAction[] {
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
@@ -355,6 +348,8 @@ function resolveActions(
     selectedIds,
     host,
     reportExecutionDiagnostic,
+    resolveCanvasImagePreviewSource(node),
+    onCanvasImagePreview,
   );
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
     const path = node.data.canvasPath;
@@ -407,25 +402,49 @@ function resolveOwnerActions(
   selectedNodeIds: readonly string[],
   host: ReturnType<typeof useOptionalCanvasHost>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
+  canvasImagePreviewSource?: CanvasImagePreviewSource,
+  onCanvasImagePreview?: (source: CanvasImagePreviewSource) => void,
 ): ToolbarAction[] {
   if (!host) return [];
-  return descriptors.map((descriptor) => {
-    const presentation = materialActionPresentation(descriptor.id);
-    return {
-      key: descriptor.id,
-      label: descriptor.label,
-      icon: materialActionIcon(descriptor),
-      ...presentation,
-      run: () => {
-        reportExecutionDiagnostic(undefined);
-        void host
-          .executeMaterialAction(descriptor.id, selectedNodeIds, descriptor.executionPayload ?? {})
-          .catch((error: unknown) => {
-            reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
-          });
-      },
-    };
-  });
+  return descriptors
+    .filter((descriptor) => !isResourceManagementAction(descriptor.id))
+    .map((descriptor) => {
+      const presentation = materialActionPresentation(descriptor.id);
+      return {
+        key: descriptor.id,
+        label: descriptor.label,
+        icon: materialActionIcon(descriptor),
+        ...presentation,
+        run: () => {
+          reportExecutionDiagnostic(undefined);
+          if (
+            descriptor.id === CANVAS_PREVIEW_ACTION_ID &&
+            canvasImagePreviewSource &&
+            onCanvasImagePreview
+          ) {
+            onCanvasImagePreview(canvasImagePreviewSource);
+            return;
+          }
+          void host
+            .executeMaterialAction(
+              descriptor.id,
+              selectedNodeIds,
+              descriptor.executionPayload ?? {},
+            )
+            .catch((error: unknown) => {
+              reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
+            });
+        },
+      };
+    });
+}
+
+function isResourceManagementAction(actionId: string): boolean {
+  return (
+    actionId === CANVAS_REVEAL_ACTION_ID ||
+    actionId === CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID ||
+    actionId === CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID
+  );
 }
 
 function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNode {
@@ -440,9 +459,6 @@ function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNo
       return <FullscreenIcon size={14} />;
     case CANVAS_EDIT_TEXT_ACTION_ID:
       return <EditIcon size={14} />;
-    case CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID:
-    case CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID:
-      return <PackageIcon size={14} />;
     case CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID:
       return <VolumeOffIcon size={14} />;
     case CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID:
@@ -487,7 +503,7 @@ function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNo
 
 function materialActionPresentation(
   actionId: string,
-): Pick<ToolbarAction, 'placement' | 'priority' | 'display' | 'section' | 'overflowGroup'> {
+): Pick<ToolbarAction, 'placement' | 'priority' | 'display' | 'section'> {
   switch (actionId) {
     case CANVAS_ADD_TO_CUT_ACTION_ID:
     case CANVAS_OPEN_IN_CUT_ACTION_ID:
@@ -509,26 +525,8 @@ function materialActionPresentation(
     case CANVAS_REGENERATE_ACTION_ID:
     case CANVAS_EDIT_AND_GENERATE_ACTION_ID:
       return { placement: 'visible', priority: 40, display: 'label', section: 'edit' };
-    case CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID:
-      return { placement: 'visible', priority: 70, display: 'label', section: 'asset' };
     case CANVAS_PREVIEW_ACTION_ID:
       return { placement: 'visible', priority: 100, display: 'icon', section: 'utility' };
-    case CANVAS_REVEAL_ACTION_ID:
-      return {
-        placement: 'overflow',
-        priority: 10,
-        display: 'label',
-        section: 'utility',
-        overflowGroup: 'file',
-      };
-    case CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID:
-      return {
-        placement: 'overflow',
-        priority: 20,
-        display: 'label',
-        section: 'asset',
-        overflowGroup: 'media-library',
-      };
     case CANVAS_VIDEO_ENHANCE_ACTION_ID:
     case CANVAS_VIDEO_EXTRACT_FRAME_ACTION_ID:
     case CANVAS_VIDEO_REMOVE_SUBTITLES_ACTION_ID:
@@ -547,7 +545,6 @@ function materialActionPresentation(
         priority: mediaEditOverflowPriority(actionId),
         display: 'label',
         section: 'edit',
-        overflowGroup: 'media-edit',
       };
     default:
       return {
@@ -555,7 +552,6 @@ function materialActionPresentation(
         priority: 30,
         display: 'label',
         section: 'utility',
-        overflowGroup: 'other',
       };
   }
 }
@@ -672,40 +668,8 @@ function partitionActions(actions: readonly ToolbarAction[]): {
       .sort((left, right) => left.priority - right.priority),
     overflow: actions
       .filter((action) => action.placement === 'overflow')
-      .sort(
-        (left, right) =>
-          overflowGroupOrder(left.overflowGroup) - overflowGroupOrder(right.overflowGroup) ||
-          left.priority - right.priority,
-      ),
+      .sort((left, right) => left.priority - right.priority),
   };
-}
-
-function overflowGroupOrder(group: ToolbarAction['overflowGroup']): number {
-  return ['media-edit', 'file', 'media-library', 'other'].indexOf(group ?? 'other');
-}
-
-function groupOverflowActions(actions: readonly ToolbarAction[]): readonly {
-  readonly id: NonNullable<ToolbarAction['overflowGroup']>;
-  readonly actions: readonly ToolbarAction[];
-}[] {
-  const order = ['media-edit', 'file', 'media-library', 'other'] as const;
-  return order.flatMap((id) => {
-    const groupActions = actions.filter((action) => (action.overflowGroup ?? 'other') === id);
-    return groupActions.length === 0 ? [] : [{ id, actions: groupActions }];
-  });
-}
-
-function overflowGroupLabel(group: NonNullable<ToolbarAction['overflowGroup']>): string {
-  switch (group) {
-    case 'file':
-      return t('selection.group.file');
-    case 'media-edit':
-      return t('selection.group.mediaEdit');
-    case 'media-library':
-      return t('selection.group.mediaLibrary');
-    case 'other':
-      return t('selection.group.other');
-  }
 }
 
 function resolveToolbarPosition(

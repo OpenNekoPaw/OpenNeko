@@ -30,6 +30,10 @@ import {
 } from '../utils/renderRefreshTiering';
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
 import {
+  CanvasImagePreviewOverlay,
+  type CanvasImagePreviewSource,
+} from './selection/CanvasImagePreviewOverlay';
+import {
   resolveGenerationSelectionSafePan,
   SelectionGenerationInputPanel,
 } from './selection/SelectionGenerationInputPanel';
@@ -125,6 +129,7 @@ export function InfiniteCanvas({
     readonly nodeId: string;
     readonly height: number;
   }>();
+  const [imagePreviewSource, setImagePreviewSource] = useState<CanvasImagePreviewSource>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
@@ -501,6 +506,7 @@ export function InfiniteCanvas({
         viewport={viewport}
         viewportSize={containerSize}
         hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
+        onCanvasImagePreview={setImagePreviewSource}
       />
       <SelectionGenerationInputPanel
         nodes={interactionNodes}
@@ -548,6 +554,12 @@ export function InfiniteCanvas({
           </span>
         )}
       </div>
+      {imagePreviewSource ? (
+        <CanvasImagePreviewOverlay
+          source={imagePreviewSource}
+          onClose={() => setImagePreviewSource(undefined)}
+        />
+      ) : null}
     </div>
   );
 }

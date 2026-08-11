@@ -84,6 +84,27 @@ describe('Canvas ContextMenu builders', () => {
     expect(items.some((item) => !('separator' in item) && item.label === 'Delete')).toBe(false);
   });
 
+  it('keeps copy, cut, duplicate and media editing out of the node context menu', () => {
+    const items = buildNodeMenuItems({
+      canvasPosition: { x: 0, y: 0 },
+      hasSelection: true,
+      selectedCount: 1,
+      contextNodeId: 'image-1',
+      onAddAction: vi.fn(),
+      onSelectAll: vi.fn(),
+      onFitContent: vi.fn(),
+      onResetView: vi.fn(),
+    });
+    const labels = items.flatMap((item) => ('separator' in item ? [] : [item.label]));
+
+    expect(labels).not.toContain('Copy');
+    expect(labels).not.toContain('Cut');
+    expect(labels).not.toContain('Duplicate');
+    expect(labels).not.toContain('Crop');
+    expect(labels).toContain('Set as Playback Start');
+    expect(labels).toContain('Send to Agent');
+  });
+
   it('projects the canonical add catalog without an empty Job action', () => {
     const onAddAction = vi.fn();
     const canvasPosition = { x: 18, y: 42 };

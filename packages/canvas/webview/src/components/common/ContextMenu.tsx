@@ -11,7 +11,6 @@ import {
   LayersIcon,
   PlusIcon,
   RefreshIcon,
-  ScissorsIcon,
   SendIcon,
   UndoIcon,
   RedoIcon,
@@ -61,11 +60,8 @@ export interface CanvasMenuContext {
   onSelectAll: () => void;
   onFitContent: () => void;
   onResetView: () => void;
-  onCopy?: () => void;
-  onCut?: () => void;
   onPaste?: () => void;
   onPasteInPlace?: () => void;
-  onDuplicate?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onGroup?: () => void;
@@ -169,25 +165,6 @@ function buildCanvasAddActionMenu(ctx: CanvasMenuContext): MenuAction {
  */
 export function buildNodeMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
   return [
-    {
-      label: t('menu.copy'),
-      icon: menuIcon(<CopyIcon size={MENU_ICON_SIZE} />),
-      shortcut: '⌘C',
-      onClick: () => ctx.onCopy?.(),
-    },
-    {
-      label: t('menu.cut'),
-      icon: menuIcon(<ScissorsIcon size={MENU_ICON_SIZE} />),
-      shortcut: '⌘X',
-      onClick: () => ctx.onCut?.(),
-    },
-    {
-      label: t('menu.duplicate'),
-      icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
-      shortcut: '⌘D',
-      onClick: () => ctx.onDuplicate?.(),
-    },
-    { separator: true },
     {
       label: t('menu.group'),
       icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),

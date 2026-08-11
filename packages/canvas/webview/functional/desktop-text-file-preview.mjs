@@ -91,11 +91,6 @@ export const canvasTextFilePreviewScenario = Object.freeze({
     checkpoint('canvas-text-file-actions-desktop', desktopActions);
     checkpoint('canvas-text-file-preview-desktop', desktop);
     const desktopScreenshot = await screenshot('canvas-text-file-preview-desktop-selected');
-    await click(`${view} [data-selection-overflow="true"]`);
-    await waitForSelector('[data-selection-overflow-group="file"]');
-    const desktopOverflowScreenshot = await screenshot('canvas-text-file-actions-desktop-overflow');
-
-    await pressKey('Escape');
     await click(`${view} [data-canvas-viewport-root="true"]`, 0, {
       xRatio: 0.96,
       yRatio: 0.16,
@@ -142,7 +137,6 @@ export const canvasTextFilePreviewScenario = Object.freeze({
       desktop,
       desktopActions,
       desktopScreenshot,
-      desktopOverflowScreenshot,
       narrow,
       narrowActions,
       narrowScreenshot,
@@ -330,9 +324,8 @@ function inspectTextFileActions(evaluate) {
 
 function assertTextFileActions(evidence) {
   if (
-    evidence.actionIds.join('|') !==
-      'text:edit|media-library:copy-to-project|node:duplicate|preview:open' ||
-    evidence.overflowActionIds.join('|') !== 'desktop:reveal|media-library:copy-to-global' ||
+    evidence.actionIds.join('|') !== 'text:edit|node:duplicate|preview:open' ||
+    evidence.overflowActionIds.length !== 0 ||
     !['File', '文件'].includes(evidence.label) ||
     evidence.hasError
   ) {

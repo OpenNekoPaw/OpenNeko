@@ -439,24 +439,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       videoActions.actionIds.join('|') !==
         'cut:add-resource|video:separate-audio|node:duplicate|preview:open' ||
-      videoActions.overflowActionIds.join('|') !== 'desktop:reveal'
+      videoActions.overflowActionIds.length !== 0
     ) {
       throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
     }
-    await click('[data-owner-view-id="canvas:functional:video"] [data-selection-overflow="true"]');
-    await waitForSelector('[data-selection-overflow-group="file"]');
-    const videoOverflow = await inspectCanvasOverflow(evaluate);
-    if (
-      videoOverflow.groups.join('|') !== 'file' ||
-      videoOverflow.actionIds.join('|') !== 'desktop:reveal' ||
-      videoOverflow.text.some((text) => ['删除', 'Delete'].includes(text))
-    ) {
-      throw new Error(
-        `Canvas video overflow grouping is invalid: ${JSON.stringify(videoOverflow)}`,
-      );
-    }
-    const videoOverflowScreenshot = await screenshot('canvas-video-actions-overflow');
-    await pressKey('Escape');
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"]',
     );
@@ -475,6 +461,75 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     checkpoint('canvas-image-owner-actions', imageActions);
     const imageActionsScreenshot = await screenshot('canvas-image-owner-actions');
+    const imageNodeCountBeforeDuplicate = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      return view?.querySelectorAll('[data-node-presentation]').length ?? 0;
+    })()`);
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="node:duplicate"]',
+    );
+    await evaluate(`new Promise((resolve, reject) => {
+      const deadline = Date.now() + 3000;
+      const inspect = () => {
+        const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+        const toolbar = view?.querySelector('[data-selection-context-toolbar="true"]');
+        const error = toolbar?.querySelector('[data-material-actions-status="error"]');
+        if (error) {
+          reject(new Error('Duplicated Canvas image actions failed: ' + (error.textContent ?? '')));
+          return;
+        }
+        const nodeCount = view?.querySelectorAll('[data-node-presentation]').length ?? 0;
+        const loading = toolbar?.querySelector('[data-material-actions-status="loading"]');
+        if (nodeCount === ${String(imageNodeCountBeforeDuplicate + 1)} && !loading) {
+          resolve(undefined);
+          return;
+        }
+        if (Date.now() >= deadline) {
+          reject(new Error('Duplicated Canvas image actions did not converge.'));
+          return;
+        }
+        window.setTimeout(inspect, 25);
+      };
+      inspect();
+    })`);
+    const duplicatedImageActions = await inspectCanvasSelectionActions(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      duplicatedImageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      duplicatedImageActions.overflowActionIds.length !== 0 ||
+      duplicatedImageActions.hasError
+    ) {
+      throw new Error(
+        `Duplicated Canvas image actions are invalid: ${JSON.stringify(duplicatedImageActions)}`,
+      );
+    }
+    checkpoint('canvas-duplicated-image-actions', duplicatedImageActions);
+    const duplicatedImageActionsScreenshot = await screenshot('canvas-duplicated-image-actions');
+    const imagePreviewContextBefore = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:video',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-image-preview="true"] [data-preview-surface="visual"]',
+    );
+    const imagePreviewScreenshot = await screenshot('canvas-image-fullscreen-preview');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-image-preview="true"] button',
+    );
+    const imagePreviewContextAfter = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (JSON.stringify(imagePreviewContextAfter) !== JSON.stringify(imagePreviewContextBefore)) {
+      throw new Error(
+        `Canvas image preview changed selection or viewport: ${JSON.stringify({ imagePreviewContextBefore, imagePreviewContextAfter })}`,
+      );
+    }
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
       0,
@@ -630,7 +685,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const audioActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:audio');
     if (
       audioActions.actionIds.join('|') !== 'cut:add-resource|node:duplicate|preview:open' ||
-      audioActions.overflowActionIds.join('|') !== 'desktop:reveal' ||
+      audioActions.overflowActionIds.length !== 0 ||
       audioActions.actionIds.some((actionId) =>
         ['video:separate-audio', 'audio:voice-denoise'].includes(actionId),
       )
@@ -819,10 +874,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       selectedNodePresentation,
       selectedNodeScreenshot,
       videoActions,
-      videoOverflow,
-      videoOverflowScreenshot,
       imageActions,
       imageActionsScreenshot,
+      duplicatedImageActions,
+      duplicatedImageActionsScreenshot,
+      imagePreviewScreenshot,
       audioActions,
       audioActionsScreenshot,
       newDraftHandoff,
@@ -918,9 +974,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         'cut:add-resource|video:separate-audio|node:duplicate|preview:open' ||
       evidence.imageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
       evidence.imageActions.overflowActionIds.length !== 0 ||
+      evidence.duplicatedImageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      evidence.duplicatedImageActions.overflowActionIds.length !== 0 ||
+      evidence.duplicatedImageActions.hasError ||
       evidence.audioActions.actionIds.join('|') !==
         'cut:add-resource|node:duplicate|preview:open' ||
-      evidence.audioActions.overflowActionIds.join('|') !== 'desktop:reveal' ||
+      evidence.audioActions.overflowActionIds.length !== 0 ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||
       evidence.audioAdvancedTo <= 0
@@ -2192,21 +2251,21 @@ function inspectCanvasSelectionActions(evaluate, viewId) {
       overflowActionIds: (overflow?.getAttribute('data-selection-overflow-actions') ?? '')
         .split(' ')
         .filter(Boolean),
+      hasError: root?.querySelector('[data-material-actions-status="error"]') !== null,
     };
   })()`);
 }
 
-function inspectCanvasOverflow(evaluate) {
-  return evaluate(`(() => ({
-    groups: [...document.querySelectorAll('[data-selection-overflow-group]')]
-      .map((group) => group.getAttribute('data-selection-overflow-group')),
-    actionIds: [...document.querySelectorAll(
-      '[data-selection-overflow-group] [data-selection-action]'
-    )].map((action) => action.getAttribute('data-selection-action')),
-    text: [...document.querySelectorAll(
-      '[data-selection-overflow-group] [data-selection-action]'
-    )].map((action) => action.textContent?.trim() ?? ''),
-  }))()`);
+function inspectCanvasSelectionAndViewport(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    return {
+      selectedNodeIds: [...(root?.querySelectorAll('[data-node-selected="true"]') ?? [])]
+        .map((node) => node.getAttribute('data-node-id')),
+      viewportTransform:
+        root?.querySelector('[data-canvas-viewport-layer]')?.getAttribute('style') ?? '',
+    };
+  })()`);
 }
 
 function inspectCanvasCutHandoff(evaluate) {

@@ -33,11 +33,8 @@ export interface UseContextMenuOptions {
   addActionAt: (actionId: CanvasAddActionId, pos: { x: number; y: number }) => void;
   handleFitContent: () => void;
   handleResetViewport: () => void;
-  handleCopy: () => void;
-  handleCut: () => void;
   handlePaste: () => void;
   handlePasteInPlace: () => void;
-  handleDuplicate: () => void;
   handleGroup: () => void;
   handleUngroup: () => void;
   undo: () => void;
@@ -68,11 +65,8 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     addActionAt,
     handleFitContent,
     handleResetViewport,
-    handleCopy,
-    handleCut,
     handlePaste,
     handlePasteInPlace,
-    handleDuplicate,
     handleGroup,
     handleUngroup,
     undo,
@@ -114,11 +108,8 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         },
         onFitContent: handleFitContent,
         onResetView: handleResetViewport,
-        onCopy: handleCopy,
-        onCut: handleCut,
         onPaste: handlePaste,
         onPasteInPlace: handlePasteInPlace,
-        onDuplicate: handleDuplicate,
         onGroup: handleGroup,
         onUngroup: handleUngroup,
         onSetPlaybackEntry,
@@ -149,11 +140,8 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       addActionAt,
       handleFitContent,
       handleResetViewport,
-      handleCopy,
-      handleCut,
       handlePaste,
       handlePasteInPlace,
-      handleDuplicate,
       handleGroup,
       handleUngroup,
       undo,

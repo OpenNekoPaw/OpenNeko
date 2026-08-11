@@ -58,36 +58,42 @@ describe('GenerationNode', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('presents one Job image batch as a compact stack and selects within an in-node comparison', async () => {
+  it('presents one Job image batch side by side and selects a visible member without hiding siblings', async () => {
     const selectGenerationOutput = vi.fn(async () => snapshot());
     const node = imageNodeWithBatch();
 
     render(node, createHost(undefined, { selectGenerationOutput }));
 
     expect(container.querySelector('[data-generation-result-count="2"]')).not.toBeNull();
-    expect(
-      container.querySelector('.canvas-generation-node__result-stack--multiple'),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-generation-layout="grid"]')).not.toBeNull();
     expect(container.textContent).toContain('2 outputs');
-    expect(container.textContent).toContain('2/2');
+    const choices = container.querySelectorAll<HTMLButtonElement>(
+      '.canvas-generation-node__result-grid-item',
+    );
+    expect(choices).toHaveLength(2);
+    expect(choices[0]?.getAttribute('data-generation-output-id')).toBe('image-output-1');
+    expect(choices[1]?.getAttribute('data-generation-output-id')).toBe('image-output-2');
+    expect(choices[1]?.getAttribute('aria-pressed')).toBe('true');
     const frame = container.querySelector<HTMLElement>('.canvas-generation-node-frame');
     expect(frame?.style.width).toBe('320px');
     expect(frame?.style.height).toBe('240px');
 
-    const toggle = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Compare generated outputs"]',
-    );
-    await act(async () => toggle?.click());
-
-    expect(container.querySelector('[data-generation-comparison="open"]')).not.toBeNull();
-    const choices = container.querySelectorAll<HTMLButtonElement>(
-      '.canvas-generation-node__comparison-item',
-    );
-    expect(choices).toHaveLength(2);
-    expect(frame?.style.width).toBe('320px');
-    expect(frame?.style.height).toBe('240px');
     await act(async () => choices[0]?.click());
     expect(selectGenerationOutput).toHaveBeenCalledWith('generation-image', 'image-output-1');
+    expect(container.querySelectorAll('.canvas-generation-node__result-grid-item')).toHaveLength(2);
+    expect(frame?.style.width).toBe('320px');
+    expect(frame?.style.height).toBe('240px');
+  });
+
+  it('keeps four outputs in one bounded two-column result grid', () => {
+    render(imageNodeWithBatch(4), createHost());
+
+    expect(container.querySelectorAll('.canvas-generation-node__result-grid-item')).toHaveLength(4);
+    expect(container.querySelector('.canvas-generation-node__result-grid--dense')).not.toBeNull();
+    expect(container.textContent).toContain('4 outputs');
+    const frame = container.querySelector<HTMLElement>('.canvas-generation-node-frame');
+    expect(frame?.style.width).toBe('320px');
+    expect(frame?.style.height).toBe('240px');
   });
 
   it('preserves an earlier image group and reports a later Job failure only at group level', () => {
@@ -111,7 +117,7 @@ describe('GenerationNode', () => {
     expect(container.querySelectorAll('[data-generation-phase="failed"]')).toHaveLength(1);
     expect(container.textContent).toContain('Failed');
     expect(container.textContent).toContain('3s');
-    expect(container.querySelectorAll('.canvas-generation-node__comparison-item')).toHaveLength(0);
+    expect(container.querySelectorAll('.canvas-generation-node__result-grid-item')).toHaveLength(2);
   });
 
   it('shows authoritative progress stage, percentage and elapsed time', () => {
@@ -147,7 +153,7 @@ describe('GenerationNode', () => {
     expect(
       container.querySelector('.canvas-generation-node__result-stack--pending'),
     ).not.toBeNull();
-    expect(container.querySelector('.canvas-generation-node__result-stack--multiple')).toBeNull();
+    expect(container.querySelector('.canvas-generation-node__result-grid')).toBeNull();
   });
 
   it('centers a failed Image placeholder in the full content surface without result stack layers', () => {
@@ -183,9 +189,7 @@ describe('GenerationNode', () => {
     expect(
       empty?.parentElement?.classList.contains('canvas-generation-node__result-stack--pending'),
     ).toBe(false);
-    expect(
-      empty?.parentElement?.classList.contains('canvas-generation-node__result-stack--multiple'),
-    ).toBe(false);
+    expect(container.querySelector('.canvas-generation-node__result-grid')).toBeNull();
     expect(container.querySelector('[data-generation-phase="outcome-unknown"]')).not.toBeNull();
   });
 
@@ -268,9 +272,10 @@ function nodeWithHistory(): GenerationCanvasNode {
   };
 }
 
-function imageNodeWithBatch(): GenerationCanvasNode {
-  const first = imageOutput('image-output-1');
-  const second = imageOutput('image-output-2');
+function imageNodeWithBatch(count = 2): GenerationCanvasNode {
+  const outputs = Array.from({ length: count }, (_, index) =>
+    imageOutput(`image-output-${index + 1}`),
+  );
   return {
     id: 'generation-image',
     type: 'generation',
@@ -279,8 +284,8 @@ function imageNodeWithBatch(): GenerationCanvasNode {
     zIndex: 1,
     data: {
       recipe: { kind: 'image', prompt: 'Two quiet frames', count: 2 },
-      outputs: [first, second],
-      selectedOutputId: second.outputId,
+      outputs,
+      selectedOutputId: outputs[outputs.length - 1]?.outputId,
     },
   };
 }

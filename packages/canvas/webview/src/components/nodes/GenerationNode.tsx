@@ -39,12 +39,7 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
         : [],
     [node.data.outputs, selected],
   );
-  const [comparisonOpen, setComparisonOpen] = useState(false);
   const elapsed = useGenerationElapsed(projection, active);
-
-  useEffect(() => {
-    if (imageGroup.length < 2) setComparisonOpen(false);
-  }, [imageGroup.length]);
 
   return (
     <BaseNode
@@ -78,14 +73,12 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
             )
           ) : previewSource ? (
             recipe.kind === 'image' && imageGroup.length > 1 ? (
-              <ImageResultGroup
+              <ImageResultGrid
                 nodeId={node.id}
                 outputs={imageGroup}
                 selectedOutputId={selected?.outputId}
                 title={title}
-                comparisonOpen={comparisonOpen}
                 active={active}
-                onToggleComparison={() => setComparisonOpen((open) => !open)}
                 onSelect={(outputId) => {
                   void host?.selectGenerationOutput(node.id, outputId);
                 }}
@@ -127,86 +120,56 @@ export function GenerationNode({ node, isSelected, ...baseProps }: GenerationNod
   );
 }
 
-function ImageResultGroup({
+function ImageResultGrid({
   nodeId,
   outputs,
   selectedOutputId,
   title,
-  comparisonOpen,
   active,
-  onToggleComparison,
   onSelect,
 }: {
   readonly nodeId: string;
   readonly outputs: readonly CanvasGenerationOutputBinding[];
   readonly selectedOutputId?: string;
   readonly title: string;
-  readonly comparisonOpen: boolean;
   readonly active: boolean;
-  readonly onToggleComparison: () => void;
   readonly onSelect: (outputId: string) => void;
 }) {
-  const selectedIndex = Math.max(
-    0,
-    outputs.findIndex((output) => output.outputId === selectedOutputId),
-  );
-  const selected = outputs[selectedIndex];
-
   return (
     <div
-      className="canvas-generation-node__result-stack canvas-generation-node__result-stack--multiple"
+      className={`canvas-generation-node__result-grid${
+        outputs.length > 2 ? ' canvas-generation-node__result-grid--dense' : ''
+      }`}
       data-generation-result-count={outputs.length}
-      data-generation-comparison={comparisonOpen ? 'open' : 'closed'}
+      data-generation-layout="grid"
+      role="group"
+      aria-label={t('generation.outputCount', { count: outputs.length })}
     >
-      {comparisonOpen ? (
-        <div className="canvas-generation-node__comparison" role="list">
-          {outputs.map((output, index) => (
-            <button
-              key={output.outputId}
-              type="button"
-              className="canvas-generation-node__comparison-item nodrag nowheel"
-              aria-current={output.outputId === selectedOutputId ? 'true' : undefined}
-              aria-label={t('generation.selectOutput', { number: index + 1 })}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelect(output.outputId);
-              }}
-            >
-              <PreviewSurface
-                source={previewSourceFor(nodeId, output, title)!}
-                surfaceKind="inline"
-                chrome="full-bleed"
-              />
-              <span>{index + 1}</span>
-            </button>
-          ))}
-        </div>
-      ) : selected ? (
-        <div className="canvas-generation-node__group-primary">
+      {outputs.map((output, index) => (
+        <button
+          key={output.outputId}
+          type="button"
+          className="canvas-generation-node__result-grid-item nodrag nowheel"
+          data-generation-output-id={output.outputId}
+          aria-pressed={output.outputId === selectedOutputId}
+          aria-label={t('generation.selectOutput', { number: index + 1 })}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect(output.outputId);
+          }}
+        >
           <PreviewSurface
-            source={previewSourceFor(nodeId, selected, title)!}
+            source={previewSourceFor(nodeId, output, title)!}
             surfaceKind="inline"
             chrome="full-bleed"
           />
-        </div>
-      ) : null}
+          <span>{index + 1}</span>
+        </button>
+      ))}
       {active ? <ActivityScan /> : null}
-      <button
-        type="button"
-        className="canvas-generation-node__count-badge nodrag"
-        aria-expanded={comparisonOpen}
-        aria-label={t(comparisonOpen ? 'generation.collapseOutputs' : 'generation.compareOutputs')}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleComparison();
-        }}
-      >
+      <span className="canvas-generation-node__count-badge">
         {t('generation.outputCount', { count: outputs.length })}
-      </button>
-      <span className="canvas-generation-node__result-index">
-        {selectedIndex + 1}/{outputs.length}
       </span>
     </div>
   );

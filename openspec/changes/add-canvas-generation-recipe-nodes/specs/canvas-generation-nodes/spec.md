@@ -83,10 +83,10 @@ A terminal successful GenerationJob SHALL commit durable outputs before Canvas a
 #### Scenario: Multiple image outputs are presented as one result group
 
 - **GIVEN** one Image GenerationJob committed two or more outputs
-- **WHEN** Canvas presents the originating Generation Node in its collapsed state
-- **THEN** the selected output is the primary preview with a bounded stacked-card cue, exact group count and current index
-- **AND** opening the transient comparison view presents every output from that Job without changing the durable node size
-- **AND** selecting one result updates the canonical selected-output identity while no Media, File or Group sibling node is created
+- **WHEN** Canvas presents the originating Generation Node
+- **THEN** every output from that Job is simultaneously visible in a bounded two-column grid, with two outputs side by side and three or four outputs using compact rows
+- **AND** the exact group count remains visible without changing the durable node size or requiring a collapsed stack, carousel index or comparison toggle
+- **AND** selecting one visible result updates the canonical selected-output identity and selected outline while no sibling preview disappears and no Media, File or Group sibling node is created
 
 #### Scenario: An image result group contains no per-output failure facts
 
@@ -300,19 +300,20 @@ Existing Markdown, Media, File and Job nodes SHALL remain readable and editable 
 
 ### Requirement: Content actions are kind-specific and capability-owned
 
-Canvas SHALL present selected referenced File/Media content, plus a Generation Node's exact selected successful output, with a compact kind-specific action layout. Stable action identities SHALL map real owner-contributed capabilities into direct and overflow positions without Canvas inferring executable behavior from a file extension. A generic File without an explicit `mediaKind` SHALL use the File contract's canonical `document` meaning; an explicit kind remains authoritative. Prompt output SHALL project as a document target, while an empty Generation Node SHALL contribute no content target. Existing Text Editor, Cut, Preview and project Media Library operations SHALL retain their canonical owners and execution paths when presented as Edit, full-screen preview and Save Material. Cut-owned audio separation SHALL import the exact selected Video material into the exact Cut target and apply Cut's canonical `separate-audio` command. An unavailable advanced operation SHALL be absent rather than disabled, no-op or routed through Agent/provider fallback.
+Canvas SHALL present selected referenced File/Media content, plus a Generation Node's exact selected successful output, with a compact kind-specific action layout. Stable action identities SHALL map real owner-contributed capabilities into direct and overflow positions without Canvas inferring executable behavior from a file extension. A generic File without an explicit `mediaKind` SHALL use the File contract's canonical `document` meaning; an explicit kind remains authoritative. Prompt output SHALL project as a document target, while an empty Generation Node SHALL contribute no content target. Existing Text Editor and Cut operations SHALL retain their canonical owners and execution paths when presented as Edit. Image full-screen preview SHALL open as a Canvas-owned immersive overlay using the exact selected authorized locator rather than switching the main editor/Preview scene. Save Material, Finder reveal and copy-to-project/global-Media-Library actions SHALL be managed by Resource Management and SHALL NOT render in the Canvas primary toolbar or overflow. Canvas overflow SHALL render one flat ordered list of executable actions without file, edit, Media Library or other category labels. The selected-node toolbar SHALL own duplicate and content-editing operations; the node context menu SHALL omit copy, cut, duplicate and media editing so it retains only graph/layout/workflow commands. Cut-owned audio separation SHALL import the exact selected Video material into the exact Cut target and apply Cut's canonical `separate-audio` command. An unavailable advanced operation SHALL be absent rather than disabled, no-op or routed through Agent/provider fallback.
 
 #### Scenario: Referenced text or document content is selected
 
 - **WHEN** the exact selected File has a canonical locator and either explicit `document` kind or no more specific media kind
 - **THEN** Canvas projects the document target without reporting the optional kind as an error
-- **AND** Edit appears only for an admitted Workspace text file whose Text Editor owner contributes, while Preview, Finder and Save Material remain owned by their exact available capabilities
+- **AND** Edit appears only for an admitted Workspace text file whose Text Editor owner contributes, while Resource Management retains Finder reveal authority outside Canvas
+- **AND** Save Material, Finder reveal and project/global Media Library copy actions remain absent from the Canvas toolbar and overflow
 - **AND** Canvas does not infer Image, Audio, Video or Model capability from the file extension
 
 #### Scenario: A generated Prompt output is selected
 
 - **WHEN** the exact selected Generation Node has a successful selected Prompt output
-- **THEN** Canvas resolves its immutable locator as a generated document target and exposes available Preview, Finder and Save Material actions
+- **THEN** Canvas resolves its immutable locator as a generated document target and exposes only actions owned by Canvas content presentation
 - **AND** it does not offer mutable Workspace text editing for that immutable output or rewrite the generated artifact
 
 #### Scenario: An empty Generation Node is selected
@@ -323,14 +324,14 @@ Canvas SHALL present selected referenced File/Media content, plus a Generation N
 
 #### Scenario: An Audio material is selected
 
-- **WHEN** the exact selected Audio material has Cut, project Media Library and Preview owners
-- **THEN** Canvas presents Edit, Save Material and full-screen preview through those exact owner descriptors
+- **WHEN** the exact selected Audio material has Cut and Preview owners
+- **THEN** Canvas presents Edit and full-screen preview through those exact owner descriptors
 - **AND** voice denoise appears only when its exact Audio operation owner contributes and executes that descriptor
 
 #### Scenario: A Video material is selected
 
 - **WHEN** the exact selected Video material has owner-contributed actions
-- **THEN** Canvas keeps Edit and audio separation directly reachable, groups enhance/frame interpolation, frame extraction, subtitle removal/generation, color grading and editor tools under More, and keeps Save Material plus full-screen preview in the common trailing group
+- **THEN** Canvas keeps Edit and audio separation directly reachable, lists enhance/frame interpolation, frame extraction, subtitle removal/generation, color grading and editor tools as flat operation rows under More, and keeps full-screen preview directly reachable
 - **AND** each absent owner removes only its own action without disabling the remaining toolbar
 
 #### Scenario: A generated Video output is selected
@@ -343,8 +344,32 @@ Canvas SHALL present selected referenced File/Media content, plus a Generation N
 #### Scenario: An Image material is selected
 
 - **WHEN** the exact selected Image material has owner-contributed actions
-- **THEN** Canvas keeps crop, upscale and redraw directly reachable, groups erase, outpaint, background removal, color grading, rotate, grid split and editor tools under More, and keeps Save Material plus full-screen preview in the common trailing group
+- **THEN** Canvas keeps crop, upscale and redraw directly reachable, lists erase, outpaint, background removal, color grading, rotate, grid split and editor tools as flat operation rows under More, and keeps full-screen preview directly reachable
 - **AND** Canvas does not present image operations whose exact owner is unavailable
+
+#### Scenario: A selected Image opens Canvas full-screen preview
+
+- **WHEN** the user activates full-screen preview for an ordinary Image or the exact selected generated Image output
+- **THEN** Canvas opens an immersive preview over the Canvas viewport using that exact authorized locator without navigating the main editor or Preview scene
+- **AND** Escape, the close control or the overlay backdrop closes the preview while preserving the current Canvas viewport and node selection
+
+#### Scenario: A node context menu opens
+
+- **WHEN** the user right-clicks a selected content node
+- **THEN** the context menu omits copy, cut, duplicate and media-edit actions already owned by the selected-node toolbar
+- **AND** graph/layout/workflow operations may remain when their exact Canvas owners are available
+
+#### Scenario: A referenced or generated Image is duplicated
+
+- **WHEN** the selected-node toolbar creates a duplicate and selects its new node identity
+- **THEN** Canvas commits the updated document and selection into the canonical Host command queue before resolving material actions for that identity
+- **AND** the duplicate retains its immutable content locator and available operations without a transient Actions unavailable state, retry path or active-node fallback
+
+#### Scenario: Resource-management descriptors are contributed to Canvas
+
+- **WHEN** the Host action catalog includes Save Material, Finder reveal or project/global Media Library copy descriptors for the selected content
+- **THEN** Canvas omits those descriptors from both primary and overflow actions while preserving unrelated executable actions
+- **AND** opening More displays only flat operation rows without category headings or grouped containers
 
 ### Requirement: Node deletion is keyboard-only from the selected-node surface
 

@@ -466,7 +466,7 @@ describe('createCanvasWebviewHost', () => {
     };
     const session = new CanvasHostRuntimeSession({
       identity,
-      initialCanvas: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+      initialCanvas: DEFAULT_CANVAS_DATA,
       effects: {
         resolveMaterialActions: vi.fn(async () => [descriptor]),
       },
@@ -490,7 +490,7 @@ describe('createCanvasWebviewHost', () => {
     await vi.waitFor(() => {
       expect(messages).toContainEqual({
         type: 'update',
-        data: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+        data: DEFAULT_CANVAS_DATA,
       });
     });
 

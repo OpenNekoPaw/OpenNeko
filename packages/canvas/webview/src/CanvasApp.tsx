@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   getKeyboardBoundaryMetadata,
   useFocusedWebviewRoot,
@@ -645,11 +645,8 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     addActionAt,
     handleFitContent,
     handleResetViewport,
-    handleCopy,
-    handleCut,
     handlePaste,
     handlePasteInPlace,
-    handleDuplicate,
     handleGroup,
     handleUngroup,
     undo,
@@ -780,7 +777,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hostPort || !canvasData) return;
     const projectionStatus = (canvasData as { projectionStatus?: ProjectedCanvasStatus })
       .projectionStatus;

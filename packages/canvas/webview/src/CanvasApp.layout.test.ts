@@ -177,6 +177,13 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/readCanvasViewportSnapshot/);
   });
 
+  it('queues whole-document synchronization before selected-node passive action resolution', () => {
+    expect(appSource).toContain('useLayoutEffect(() => {');
+    expect(appSource).toMatch(
+      /useLayoutEffect\(\(\) => \{[\s\S]*?type: 'canvasStatus'[\s\S]*?\}, \[nodes\.length, connections\.length, selectedNodeIds, canvasData, nodeTypeSummary\]\);/,
+    );
+  });
+
   it('keeps derived projection dependencies memoized and degradable', () => {
     expect(infiniteCanvasSource).toMatch(/const renderedNodes = useMemo/);
     expect(infiniteCanvasSource).toMatch(/const renderedNodeIds = useMemo/);
