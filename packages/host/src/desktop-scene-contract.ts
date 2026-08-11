@@ -62,6 +62,17 @@ export type DesktopCharacterDetailSelection =
 export type DesktopWorldDetailSelection =
   { readonly kind: 'create' } | { readonly kind: 'project'; readonly worldProjectId: string };
 
+export type DesktopCharacterPresentationSurfaceKind =
+  'avatar' | 'authorized-web' | 'dynamic-scene' | 'gameplay';
+
+export interface DesktopCharacterPresentationSurfaceRef {
+  readonly kind: 'character-presentation';
+  readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
+  readonly surfaceKind: DesktopCharacterPresentationSurfaceKind;
+  readonly providerId: string;
+  readonly surfaceId: string;
+}
+
 export type DesktopWorkbenchMainSurfaceRef =
   | {
       readonly kind: 'assistant-preview';
@@ -101,10 +112,7 @@ export type DesktopWorkbenchMainSurfaceRef =
   | { readonly kind: 'creative-management'; readonly catalog: DesktopCreativeManagementCatalog }
   | { readonly kind: 'character-detail'; readonly selection: DesktopCharacterDetailSelection }
   | { readonly kind: 'world-detail'; readonly selection: DesktopWorldDetailSelection }
-  | {
-      readonly kind: 'character-avatar';
-      readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
-    }
+  | DesktopCharacterPresentationSurfaceRef
   | { readonly kind: 'extension-management' }
   | { readonly kind: 'extension-detail' }
   | { readonly kind: 'project-detail' }
@@ -118,6 +126,18 @@ export type DesktopWorkbenchManagerSurfaceRef =
     }
   | { readonly kind: 'settings-navigation'; readonly settingsSectionId: string };
 
+export type DesktopCharacterTimelineSurfaceRef =
+  | {
+      readonly kind: 'character-storyline-timeline';
+      readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
+      readonly timelineId: string;
+    }
+  | {
+      readonly kind: 'character-room-event-timeline';
+      readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'room' }>;
+      readonly timelineId: string;
+    };
+
 export type DesktopWorkbenchCutPanelSurfaceRef =
   | {
       readonly kind: 'workspace-cut';
@@ -127,8 +147,9 @@ export type DesktopWorkbenchCutPanelSurfaceRef =
       readonly ownerId: string;
     }
   | {
-      readonly kind: 'character-room-timeline';
-      readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'room' }>;
+      readonly kind: 'character-timeline-stack';
+      readonly owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>;
+      readonly timelines: readonly DesktopCharacterTimelineSurfaceRef[];
     };
 
 export interface DesktopWorkbenchStatusSurfaceRef {
@@ -797,13 +818,23 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
     requireExactKeys(record, ['kind', 'selection'], 'World Detail Surface ref');
     return { kind, selection: parseWorldDetailSelection(record['selection']) };
   }
-  if (kind === 'character-avatar') {
-    requireExactKeys(record, ['kind', 'owner'], 'Character Avatar Surface ref');
+  if (kind === 'character-presentation') {
+    requireExactKeys(
+      record,
+      ['kind', 'owner', 'surfaceKind', 'providerId', 'surfaceId'],
+      'Character Presentation Surface ref',
+    );
     const owner = parseAgentConversationOwnerRef(record['owner']);
     if (owner.kind !== 'character' && owner.kind !== 'room') {
-      throw invalid('Character Avatar Surface requires a Character or Room owner.');
+      throw invalid('Character Presentation Surface requires a Character or Room owner.');
     }
-    return { kind, owner };
+    return {
+      kind,
+      owner,
+      surfaceKind: parseCharacterPresentationSurfaceKind(record['surfaceKind']),
+      providerId: requireIdentity(record['providerId'], 'Character Presentation provider'),
+      surfaceId: requireIdentity(record['surfaceId'], 'Character Presentation surface'),
+    };
   }
   if (kind === 'extension-management') {
     requireExactKeys(record, ['kind'], 'Extension Management Surface ref');
@@ -825,6 +856,20 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
     };
   }
   throw unsupported(`Unknown Main Surface kind '${String(kind)}'.`);
+}
+
+function parseCharacterPresentationSurfaceKind(
+  value: unknown,
+): DesktopCharacterPresentationSurfaceKind {
+  if (
+    value !== 'avatar' &&
+    value !== 'authorized-web' &&
+    value !== 'dynamic-scene' &&
+    value !== 'gameplay'
+  ) {
+    throw unsupported(`Unknown Character Presentation surface kind '${String(value)}'.`);
+  }
+  return value;
 }
 
 function parseManagerSurface(value: unknown): DesktopWorkbenchManagerSurfaceRef {
@@ -854,13 +899,35 @@ function parseManagerSurface(value: unknown): DesktopWorkbenchManagerSurfaceRef 
 
 function parseCutPanelSurface(value: unknown): DesktopWorkbenchCutPanelSurfaceRef {
   const record = requireRecord(value, 'Cut Panel Surface ref must be an object.');
-  if (record['kind'] === 'character-room-timeline') {
-    requireExactKeys(record, ['kind', 'owner'], 'Character Room Timeline Surface ref');
+  if (record['kind'] === 'character-timeline-stack') {
+    requireExactKeys(
+      record,
+      ['kind', 'owner', 'timelines'],
+      'Character Timeline Stack Surface ref',
+    );
     const owner = parseAgentConversationOwnerRef(record['owner']);
-    if (owner.kind !== 'room') {
-      throw invalid('Character Room Timeline requires a Room owner.');
+    if (owner.kind !== 'character' && owner.kind !== 'room') {
+      throw invalid('Character Timeline Stack requires a Character or Room owner.');
     }
-    return { kind: 'character-room-timeline', owner };
+    if (!Array.isArray(record['timelines']) || record['timelines'].length === 0) {
+      throw invalid('Character Timeline Stack requires at least one exact Timeline ref.');
+    }
+    const timelines = record['timelines'].map(parseCharacterTimelineSurface);
+    const timelineIds = new Set(timelines.map((timeline) => timeline.timelineId));
+    const timelineKinds = new Set(timelines.map((timeline) => timeline.kind));
+    if (timelineIds.size !== timelines.length || timelineKinds.size !== timelines.length) {
+      throw invalid('Character Timeline Stack requires unique Timeline identities and kinds.');
+    }
+    if (timelines.some((timeline) => !isSameAgentConversationOwner(timeline.owner, owner))) {
+      throw mismatch('Character Timeline ref does not match its Stack owner.');
+    }
+    if (
+      owner.kind !== 'room' &&
+      timelines.some((timeline) => timeline.kind === 'character-room-event-timeline')
+    ) {
+      throw mismatch('Character Dialogue cannot mount a RoomEvent Timeline.');
+    }
+    return { kind: 'character-timeline-stack', owner, timelines };
   }
   requireExactKeys(
     record,
@@ -877,6 +944,26 @@ function parseCutPanelSurface(value: unknown): DesktopWorkbenchCutPanelSurfaceRe
     viewInstanceId: requireIdentity(record['viewInstanceId'], 'Cut View instance identity'),
     ownerId: requireIdentity(record['ownerId'], 'Cut owner'),
   };
+}
+
+function parseCharacterTimelineSurface(value: unknown): DesktopCharacterTimelineSurfaceRef {
+  const record = requireRecord(value, 'Character Timeline Surface ref must be an object.');
+  requireExactKeys(record, ['kind', 'owner', 'timelineId'], 'Character Timeline Surface ref');
+  const owner = parseAgentConversationOwnerRef(record['owner']);
+  const timelineId = requireIdentity(record['timelineId'], 'Character Timeline');
+  if (record['kind'] === 'character-storyline-timeline') {
+    if (owner.kind !== 'character' && owner.kind !== 'room') {
+      throw invalid('Storyline Timeline requires a Character or Room owner.');
+    }
+    return { kind: 'character-storyline-timeline', owner, timelineId };
+  }
+  if (record['kind'] === 'character-room-event-timeline') {
+    if (owner.kind !== 'room') {
+      throw invalid('RoomEvent Timeline requires a Room owner.');
+    }
+    return { kind: 'character-room-event-timeline', owner, timelineId };
+  }
+  throw unsupported(`Unknown Character Timeline kind '${String(record['kind'])}'.`);
 }
 
 function parseStatusSurface(value: unknown): DesktopWorkbenchStatusSurfaceRef {
@@ -988,10 +1075,10 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
       throw mismatch('Character Interaction Scene requires its exact Agent session Surface.');
     }
     if (
-      slots.main?.kind !== 'character-avatar' ||
+      slots.main?.kind !== 'character-presentation' ||
       !isSameAgentConversationOwner(slots.main.owner, context.owner)
     ) {
-      throw mismatch('Character Interaction Scene requires its exact Avatar Main Surface.');
+      throw mismatch('Character Interaction Scene requires its exact Presentation Main Surface.');
     }
     if (
       slots.rightManager?.kind !== 'character-runtime-manager' ||
@@ -1002,15 +1089,16 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     if (slots.leftManager || slots.secondaryMain) {
       throw mismatch('Character Interaction Scene cannot mount unrelated manager or detail slots.');
     }
-    if (context.owner.kind === 'room') {
+    if (slots.cutPanel) {
       if (
-        slots.cutPanel?.kind !== 'character-room-timeline' ||
-        !isSameAgentConversationOwner(slots.cutPanel.owner, context.owner)
+        slots.cutPanel.kind !== 'character-timeline-stack' ||
+        !isSameAgentConversationOwner(slots.cutPanel.owner, context.owner) ||
+        !slots.cutPanel.timelines.some(
+          (timeline) => timeline.kind === 'character-storyline-timeline',
+        )
       ) {
-        throw mismatch('Room Interaction Scene requires its exact Room Timeline Surface.');
+        throw mismatch('Character Interaction Timeline must include its exact Storyline ref.');
       }
-    } else if (slots.cutPanel) {
-      throw mismatch('Character Dialogue Scene cannot mount a Room Timeline Surface.');
     }
     return;
   }

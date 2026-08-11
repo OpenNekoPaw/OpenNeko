@@ -18,6 +18,7 @@
     "./desktop-workspace-grant-contract": "./src/desktop-workspace-grant-contract.ts",
     "./desktop-workbench-contract": "./src/desktop-workbench-contract.ts",
     "./desktop-window-composition-contract": "./src/desktop-window-composition-contract.ts",
+    "./character-presentation-surface-registry": "./src/character-presentation-surface-registry.ts",
     "./testing/desktop-shell-state": "./src/testing/in-memory-desktop-shell-state-repository.ts",
     "./files": "./src/files/index.ts",
     "./ports": "./src/ports.ts",

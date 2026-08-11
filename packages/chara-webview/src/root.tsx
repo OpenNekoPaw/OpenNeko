@@ -32,6 +32,7 @@ export {
   type CharacterRoomIdentityProjection,
   type CharacterRoomWorkbenchLoadState,
 } from './room-workbench';
+export { CharacterStorylineTimelineSurface } from './storyline-timeline';
 
 type LoadState =
   | { readonly kind: 'idle' | 'loading' }
@@ -452,10 +453,10 @@ function projectAuthoringFoundationSnapshot(
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylines: [],
+      storylineDrafts: [],
       storylineVersions: [],
-      storylineRuns: [],
-      storylineObservationCandidates: [],
-      memoryScopes: [],
+      companionContinuities: [],
       presentationConfigurations: [],
     },
     diagnostics: snapshot.diagnostics,

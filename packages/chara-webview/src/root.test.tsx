@@ -32,10 +32,10 @@ function emptySnapshot(): CharacterFoundationSnapshot {
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylines: [],
+      storylineDrafts: [],
       storylineVersions: [],
-      storylineRuns: [],
-      storylineObservationCandidates: [],
-      memoryScopes: [],
+      companionContinuities: [],
       presentationConfigurations: [],
     },
     diagnostics: [],
@@ -310,50 +310,199 @@ describe('Character Management surfaces', () => {
     fireEvent.change(screen.getByLabelText('Premise'), {
       target: { value: 'The sealed archive opens.' },
     });
-    fireEvent.change(screen.getByLabelText('Desire'), {
+    fireEvent.change(screen.getByLabelText('Character state'), {
       target: { value: 'Protect its record.' },
     });
-    fireEvent.change(screen.getByLabelText('Conflict'), {
+    fireEvent.change(screen.getByLabelText('Relationship state'), {
       target: { value: 'The record must be shared.' },
     });
-    fireEvent.change(screen.getByLabelText('Growth arc'), {
+    fireEvent.change(screen.getByLabelText('Narrative memories'), {
       target: { value: 'Learn to trust a witness.' },
     });
-    fireEvent.change(screen.getByLabelText('Initial stage'), {
+    fireEvent.change(screen.getByLabelText('Node title'), {
       target: { value: 'Guarded' },
     });
-    fireEvent.change(screen.getByLabelText('Stage description'), {
+    fireEvent.change(screen.getByLabelText('Current situation'), {
       target: { value: 'Keeps distance.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Publish storyline' }));
 
-    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
-    expect(execute).toHaveBeenCalledWith({
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      operation: 'character-storyline-create',
+      input: {
+        characterStorylineId: 'character-storyline:00000000-0000-4000-8000-000000000002',
+        characterProjectId: project.characterProjectId,
+        displayName: 'Trust arc',
+        draft: {
+          characterVersionId: 'character-version:lin',
+          premise: 'The sealed archive opens.',
+          constraints: [],
+          nodeOrder: ['storyline-node:00000000-0000-4000-8000-000000000002'],
+          nodes: [
+            {
+              storylineNodeId: 'storyline-node:00000000-0000-4000-8000-000000000002',
+              title: 'Guarded',
+              spoilerVisibility: 'visible',
+              context: {
+                situation: 'Keeps distance.',
+                characterState: 'Protect its record.',
+                relationshipState: 'The record must be shared.',
+                allowedStoryFacts: [],
+                forbiddenStoryFacts: [],
+                narrativeMemories: ['Learn to trust a witness.'],
+                knowledgeBoundary: [],
+                behaviorConstraints: [],
+                expressionConstraints: [],
+                authorOnlyNotes: [],
+              },
+            },
+          ],
+          edges: [],
+        },
+      },
+    });
+    expect(execute).toHaveBeenNthCalledWith(2, {
       operation: 'character-storyline-publish',
       input: {
+        characterStorylineId: 'character-storyline:00000000-0000-4000-8000-000000000002',
         characterStorylineVersionId:
           'character-storyline-version:00000000-0000-4000-8000-000000000002',
-        characterVersionId: 'character-version:lin',
         label: 'Trust arc',
-        premise: 'The sealed archive opens.',
-        desire: 'Protect its record.',
-        conflict: 'The record must be shared.',
-        growthArc: 'Learn to trust a witness.',
-        stages: [
-          {
-            stageId: 'character-storyline-stage:00000000-0000-4000-8000-000000000002',
-            title: 'Guarded',
-            description: 'Keeps distance.',
-          },
-        ],
-        turningPoints: [],
-        constraints: [],
-        acceptedEvidenceIds: [],
       },
     });
   });
 
-  it('accepts a Character memory candidate with the exact CAS revision', async () => {
+  it('edits a stable Storyline draft and compares, restores, and deletes authored publications', async () => {
+    const base = projectSnapshot();
+    const project = base.character.projects[0];
+    if (!project) throw new Error('Storyline catalog fixture requires a CharacterProject.');
+    const firstNode = {
+      storylineNodeId: 'storyline-node:opening',
+      title: 'Opening',
+      spoilerVisibility: 'visible' as const,
+      context: {
+        situation: 'The archive is sealed.',
+        characterState: 'Guarded',
+        relationshipState: 'Distant',
+        allowedStoryFacts: [],
+        forbiddenStoryFacts: [],
+        narrativeMemories: ['The seal has never opened.'],
+        knowledgeBoundary: [],
+        behaviorConstraints: [],
+        expressionConstraints: [],
+        authorOnlyNotes: [],
+      },
+    };
+    const secondNode = {
+      ...firstNode,
+      title: 'Opening revised',
+      context: { ...firstNode.context, situation: 'The archive seal is breaking.' },
+    };
+    const snapshot: CharacterFoundationSnapshot = {
+      ...base,
+      character: {
+        ...base.character,
+        versions: [
+          {
+            characterVersionId: 'character-version:lin',
+            characterProjectId: project.characterProjectId,
+            label: 'Published Lin',
+            definition: project.draft,
+            acceptedEvidenceIds: [],
+            publishedAt: '2026-08-09T00:00:00.000Z',
+          },
+        ],
+        storylines: [
+          {
+            characterStorylineId: 'character-storyline:trust',
+            characterProjectId: project.characterProjectId,
+            displayName: 'Trust arc',
+            createdAt: '2026-08-09T00:00:00.000Z',
+            updatedAt: '2026-08-10T00:00:00.000Z',
+          },
+        ],
+        storylineDrafts: [
+          {
+            characterStorylineId: 'character-storyline:trust',
+            characterVersionId: 'character-version:lin',
+            premise: 'A guarded archive.',
+            constraints: [],
+            nodeOrder: ['storyline-node:opening'],
+            nodes: [secondNode],
+            edges: [],
+            updatedAt: '2026-08-10T00:00:00.000Z',
+          },
+        ],
+        storylineVersions: [
+          {
+            characterStorylineVersionId: 'character-storyline-version:first',
+            characterStorylineId: 'character-storyline:trust',
+            characterVersionId: 'character-version:lin',
+            label: 'First publication',
+            premise: 'A sealed archive.',
+            constraints: [],
+            nodeOrder: ['storyline-node:opening'],
+            nodes: [firstNode],
+            edges: [],
+            publishedAt: '2026-08-09T00:00:00.000Z',
+          },
+          {
+            characterStorylineVersionId: 'character-storyline-version:second',
+            characterStorylineId: 'character-storyline:trust',
+            characterVersionId: 'character-version:lin',
+            label: 'Second publication',
+            premise: 'A guarded archive.',
+            constraints: [],
+            nodeOrder: ['storyline-node:opening'],
+            nodes: [secondNode],
+            edges: [],
+            publishedAt: '2026-08-10T00:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const execute = vi.fn(async () => snapshot);
+    render(<Harness host={createHost(execute, snapshot)} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+    fireEvent.click(screen.getByText('Publish a character storyline'));
+    fireEvent.change(screen.getByLabelText('Character storyline'), {
+      target: { value: 'character-storyline:trust' },
+    });
+
+    expect(screen.getByLabelText('Node title')).toHaveProperty('value', 'Opening revised');
+    expect(screen.queryByText(/progress|transition|complete/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Left publication'), {
+      target: { value: 'character-storyline-version:first' },
+    });
+    fireEvent.change(screen.getByLabelText('Right publication'), {
+      target: { value: 'character-storyline-version:second' },
+    });
+    expect(screen.getByText('Opening')).toBeTruthy();
+    expect(screen.getAllByText('Opening revised').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Restore as draft' })[0]!);
+    await waitFor(() =>
+      expect(execute).toHaveBeenCalledWith({
+        operation: 'character-storyline-restore-as-draft',
+        input: {
+          characterStorylineId: 'character-storyline:trust',
+          characterStorylineVersionId: 'character-storyline-version:first',
+        },
+      }),
+    );
+    expect(screen.getByLabelText('Node title')).toHaveProperty('value', 'Opening');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected storyline' }));
+    await waitFor(() =>
+      expect(execute).toHaveBeenCalledWith({
+        operation: 'character-storyline-delete',
+        input: { characterStorylineId: 'character-storyline:trust' },
+      }),
+    );
+  });
+
+  it('accepts a Companion continuity candidate with the exact CAS revision', async () => {
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
       '00000000-0000-4000-8000-000000000003',
     );
@@ -378,29 +527,43 @@ describe('Character Management surfaces', () => {
           {
             characterRunId: 'character-run:lin',
             characterVersionId: 'character-version:lin',
-            characterMemoryScopeId: 'character-memory-scope:lin',
             participantId: 'participant:lin',
             controller: { kind: 'agent', primaryAgentSessionId: 'conversation:character:lin' },
-            runtimeBinding: { kind: 'companion', relationshipId: 'relationship:lin' },
+            runtimeBinding: {
+              kind: 'companion',
+              companionContinuityId: 'companion-continuity:lin',
+              relationshipId: 'relationship:lin',
+            },
             createdAt: '2026-08-09T00:00:00.000Z',
           },
         ],
-        memoryScopes: [
+        companionContinuities: [
           {
-            characterMemoryScopeId: 'character-memory-scope:lin',
-            characterRunId: 'character-run:lin',
-            memoryRevision: 4,
+            companionContinuityId: 'companion-continuity:lin',
+            userId: 'user:local',
+            characterProjectId: project.characterProjectId,
+            continuityRevision: 4,
             candidates: [
               {
-                characterMemoryCandidateId: 'character-memory-candidate:rain',
-                characterMemoryScopeId: 'character-memory-scope:lin',
+                companionMemoryCandidateId: 'companion-memory-candidate:rain',
+                companionContinuityId: 'companion-continuity:lin',
+                sourceCharacterVersionId: 'character-version:lin',
+                provenance: {
+                  kind: 'room-event',
+                  roomRunId: 'room-run:rain',
+                  roomEventId: 'room-event:rain',
+                },
                 content: 'The user waited in the rain.',
-                sourceRef: 'room-event:rain',
-                observedAt: '2026-08-09T01:00:00.000Z',
+                compatibility: {
+                  requiredCanonFacts: [],
+                  prohibitedKnowledgeBoundaries: [],
+                  requiredBehaviorPolicies: [],
+                },
                 sensitivityTraits: [],
                 retentionTraits: ['long-term'],
-                expectedMemoryRevision: 4,
+                expectedContinuityRevision: 4,
                 status: 'pending',
+                createdAt: '2026-08-09T01:00:00.000Z',
               },
             ],
             entries: [],
@@ -418,12 +581,12 @@ describe('Character Management surfaces', () => {
 
     await waitFor(() => expect(execute).toHaveBeenCalledOnce());
     expect(execute).toHaveBeenCalledWith({
-      operation: 'character-memory-candidate-accept',
+      operation: 'companion-memory-candidate-accept',
       input: {
-        characterMemoryScopeId: 'character-memory-scope:lin',
-        characterMemoryCandidateId: 'character-memory-candidate:rain',
-        characterMemoryEntryId: 'character-memory-entry:00000000-0000-4000-8000-000000000003',
-        expectedMemoryRevision: 4,
+        companionContinuityId: 'companion-continuity:lin',
+        companionMemoryCandidateId: 'companion-memory-candidate:rain',
+        companionMemoryEntryId: 'companion-memory-entry:00000000-0000-4000-8000-000000000003',
+        expectedContinuityRevision: 4,
       },
     });
   });
@@ -433,7 +596,15 @@ describe('Character Management surfaces', () => {
       .fn<OpenNekoDesktopCharacterBridge['characterFoundation']['getSnapshot']>()
       .mockRejectedValueOnce(new Error('Character catalog unavailable'))
       .mockResolvedValueOnce(emptySnapshot());
-    render(<Harness host={{ getSnapshot, execute: vi.fn() }} />);
+    render(
+      <Harness
+        host={{
+          getSnapshot,
+          getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          execute: vi.fn(),
+        }}
+      />,
+    );
 
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Character catalog unavailable',
@@ -587,7 +758,11 @@ function createHost(
   ),
   snapshot: CharacterFoundationSnapshot = emptySnapshot(),
 ): OpenNekoDesktopCharacterBridge['characterFoundation'] {
-  return { getSnapshot: vi.fn(async () => snapshot), execute };
+  return {
+    getSnapshot: vi.fn(async () => snapshot),
+    getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+    execute,
+  };
 }
 
 function projectSnapshot(): CharacterFoundationSnapshot {

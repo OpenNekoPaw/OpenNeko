@@ -2,6 +2,7 @@ import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
   type CharacterBackgroundStory,
+  type CompanionMemoryProvenance,
   type CharacterDefinition,
   type CharacterFoundationCommand,
   type CharacterFoundationSnapshot,
@@ -10,6 +11,8 @@ import {
   type CharacterRepresentationRef,
   type CharacterRepresentationDefaults,
   type CharacterRepresentationKind,
+  type CharacterStorylineDraft,
+  type CharacterStorylineVersion,
   type CharacterVoiceDefaults,
 } from '@neko/chara/contracts';
 import type { SupportedLocale } from '@neko/ui/i18n';
@@ -45,29 +48,17 @@ interface CharacterDraftFields {
 }
 
 interface StorylineDraftFields {
+  readonly characterStorylineId: string;
+  readonly storylineNodeId: string;
   readonly characterVersionId: string;
   readonly label: string;
   readonly premise: string;
-  readonly desire: string;
-  readonly conflict: string;
-  readonly growthArc: string;
-  readonly stageTitle: string;
-  readonly stageDescription: string;
+  readonly characterState: string;
+  readonly relationshipState: string;
+  readonly narrativeMemories: string;
+  readonly nodeTitle: string;
+  readonly situation: string;
   readonly constraints: string;
-}
-
-interface MemoryDraftFields {
-  readonly characterMemoryScopeId: string;
-  readonly content: string;
-  readonly sourceRef: string;
-  readonly sensitivityTraits: string;
-  readonly retentionTraits: string;
-}
-
-interface RelationshipMemoryDraftFields {
-  readonly relationshipId: string;
-  readonly content: string;
-  readonly sourceRef: string;
 }
 
 const emptyFields: CharacterDraftFields = {
@@ -89,29 +80,17 @@ const emptyFields: CharacterDraftFields = {
 };
 
 const emptyStorylineFields: StorylineDraftFields = {
+  characterStorylineId: '',
+  storylineNodeId: '',
   characterVersionId: '',
   label: '',
   premise: '',
-  desire: '',
-  conflict: '',
-  growthArc: '',
-  stageTitle: '',
-  stageDescription: '',
+  characterState: '',
+  relationshipState: '',
+  narrativeMemories: '',
+  nodeTitle: '',
+  situation: '',
   constraints: '',
-};
-
-const emptyMemoryFields: MemoryDraftFields = {
-  characterMemoryScopeId: '',
-  content: '',
-  sourceRef: 'user-authored:character-studio',
-  sensitivityTraits: '',
-  retentionTraits: '',
-};
-
-const emptyRelationshipMemoryFields: RelationshipMemoryDraftFields = {
-  relationshipId: '',
-  content: '',
-  sourceRef: 'user-authored:character-studio',
 };
 
 export function CharacterPanel({
@@ -137,9 +116,7 @@ export function CharacterPanel({
   const [versionLabel, setVersionLabel] = useState('');
   const [storylineFields, setStorylineFields] =
     useState<StorylineDraftFields>(emptyStorylineFields);
-  const [memoryFields, setMemoryFields] = useState<MemoryDraftFields>(emptyMemoryFields);
-  const [relationshipMemoryFields, setRelationshipMemoryFields] =
-    useState<RelationshipMemoryDraftFields>(emptyRelationshipMemoryFields);
+  const [comparisonVersionIds, setComparisonVersionIds] = useState<readonly string[]>(['', '']);
   const selectedProject = snapshot.character.projects.find(
     (project) => project.characterProjectId === selectedProjectId,
   );
@@ -157,28 +134,29 @@ export function CharacterPanel({
   const characterRuns = snapshot.character.characterRuns.filter((run) =>
     versionIds.has(run.characterVersionId),
   );
-  const characterRunIds = new Set(characterRuns.map((run) => run.characterRunId));
+  const storylines = snapshot.character.storylines.filter(
+    (storyline) => storyline.characterProjectId === selectedProject?.characterProjectId,
+  );
   const storylineVersions = snapshot.character.storylineVersions.filter((storyline) =>
     versionIds.has(storyline.characterVersionId),
   );
-  const storylineVersionIds = new Set(
-    storylineVersions.map((storyline) => storyline.characterStorylineVersionId),
+  const selectedStorylineVersions = storylineVersions.filter(
+    (version) => version.characterStorylineId === storylineFields.characterStorylineId,
   );
-  const storylineRuns = snapshot.character.storylineRuns.filter((run) =>
-    storylineVersionIds.has(run.characterStorylineVersionId),
+  const comparisonVersions = comparisonVersionIds.map((versionId) =>
+    selectedStorylineVersions.find((version) => version.characterStorylineVersionId === versionId),
   );
-  const memoryScopes = snapshot.character.memoryScopes.filter((scope) =>
-    characterRunIds.has(scope.characterRunId),
+  const companionContinuities = snapshot.character.companionContinuities.filter(
+    (continuity) => continuity.characterProjectId === selectedProject?.characterProjectId,
   );
-  const relationships = snapshot.character.relationships.filter((relationship) =>
-    versionIds.has(relationship.characterVersionId),
+  const relationships = snapshot.character.relationships.filter(
+    (relationship) => relationship.characterProjectId === selectedProject?.characterProjectId,
   );
 
   useEffect(() => {
     setVersionLabel('');
     setStorylineFields(emptyStorylineFields);
-    setMemoryFields(emptyMemoryFields);
-    setRelationshipMemoryFields(emptyRelationshipMemoryFields);
+    setComparisonVersionIds(['', '']);
     if (creating) {
       setFields(emptyFields);
       return;
@@ -233,80 +211,113 @@ export function CharacterPanel({
     if (!storylineFields.characterVersionId) {
       throw new Error('CharacterVersion selection is required for storyline publication.');
     }
+    if (!selectedProject) throw new Error('CharacterProject selection is required.');
+    const characterStorylineId =
+      storylineFields.characterStorylineId || createDomainIdentity('character-storyline');
+    const storylineNodeId =
+      storylineFields.storylineNodeId || createDomainIdentity('storyline-node');
+    const draft = {
+      characterVersionId: storylineFields.characterVersionId,
+      premise: storylineFields.premise,
+      constraints: lines(storylineFields.constraints),
+      nodeOrder: [storylineNodeId],
+      nodes: [
+        {
+          storylineNodeId,
+          title: storylineFields.nodeTitle,
+          spoilerVisibility: 'visible' as const,
+          context: {
+            situation: storylineFields.situation,
+            characterState: storylineFields.characterState,
+            relationshipState: storylineFields.relationshipState,
+            allowedStoryFacts: [],
+            forbiddenStoryFacts: [],
+            narrativeMemories: lines(storylineFields.narrativeMemories),
+            knowledgeBoundary: [],
+            behaviorConstraints: [],
+            expressionConstraints: [],
+            authorOnlyNotes: [],
+          },
+        },
+      ],
+      edges: [],
+    };
+    await execute(
+      storylineFields.characterStorylineId
+        ? {
+            operation: 'character-storyline-update-draft',
+            input: {
+              characterStorylineId,
+              displayName: storylineFields.label,
+              draft,
+            },
+          }
+        : {
+            operation: 'character-storyline-create',
+            input: {
+              characterStorylineId,
+              characterProjectId: selectedProject.characterProjectId,
+              displayName: storylineFields.label,
+              draft,
+            },
+          },
+    );
     await execute({
       operation: 'character-storyline-publish',
       input: {
+        characterStorylineId,
         characterStorylineVersionId: createDomainIdentity('character-storyline-version'),
-        characterVersionId: storylineFields.characterVersionId,
         label: storylineFields.label,
-        premise: storylineFields.premise,
-        desire: storylineFields.desire,
-        conflict: storylineFields.conflict,
-        growthArc: storylineFields.growthArc,
-        stages: [
-          {
-            stageId: createDomainIdentity('character-storyline-stage'),
-            title: storylineFields.stageTitle,
-            description: storylineFields.stageDescription,
-          },
-        ],
-        turningPoints: [],
-        constraints: lines(storylineFields.constraints),
-        acceptedEvidenceIds: [],
       },
     });
     setStorylineFields(emptyStorylineFields);
+    setComparisonVersionIds(['', '']);
   };
-  const createMemoryScope = async (characterRunId: string) => {
-    await execute({
-      operation: 'character-memory-scope-create',
-      input: {
-        characterMemoryScopeId: createDomainIdentity('character-memory-scope'),
-        characterRunId,
-      },
-    });
-  };
-  const proposeMemory = async () => {
-    const scope = memoryScopes.find(
-      (item) => item.characterMemoryScopeId === memoryFields.characterMemoryScopeId,
+  const selectStoryline = (characterStorylineId: string) => {
+    if (!characterStorylineId) {
+      setStorylineFields(emptyStorylineFields);
+      setComparisonVersionIds(['', '']);
+      return;
+    }
+    const storyline = storylines.find(
+      (candidate) => candidate.characterStorylineId === characterStorylineId,
     );
-    if (!scope) throw new Error('CharacterMemoryScope selection is required.');
+    const draft = snapshot.character.storylineDrafts.find(
+      (candidate) => candidate.characterStorylineId === characterStorylineId,
+    );
+    if (!storyline || !draft) {
+      throw new Error(`CharacterStoryline '${characterStorylineId}' draft is unavailable.`);
+    }
+    setStorylineFields(storylineFieldsFromDraft(storyline.displayName, draft));
+    setComparisonVersionIds(['', '']);
+  };
+  const restoreStorylineVersion = async (version: CharacterStorylineVersion) => {
     await execute({
-      operation: 'character-memory-candidate-propose',
+      operation: 'character-storyline-restore-as-draft',
       input: {
-        characterMemoryScopeId: scope.characterMemoryScopeId,
-        characterMemoryCandidateId: createDomainIdentity('character-memory-candidate'),
-        content: memoryFields.content,
-        sourceRef: memoryFields.sourceRef,
-        observedAt: new Date().toISOString(),
-        sensitivityTraits: lines(memoryFields.sensitivityTraits),
-        retentionTraits: lines(memoryFields.retentionTraits),
-        expectedMemoryRevision: scope.memoryRevision,
+        characterStorylineId: version.characterStorylineId,
+        characterStorylineVersionId: version.characterStorylineVersionId,
       },
     });
-    setMemoryFields({ ...emptyMemoryFields, characterMemoryScopeId: scope.characterMemoryScopeId });
+    const storyline = storylines.find(
+      (candidate) => candidate.characterStorylineId === version.characterStorylineId,
+    );
+    if (!storyline) {
+      throw new Error(`CharacterStoryline '${version.characterStorylineId}' is unavailable.`);
+    }
+    setStorylineFields(storylineFieldsFromVersion(storyline.displayName, version));
   };
-  const proposeRelationshipMemory = async () => {
-    if (
-      !relationships.some((item) => item.relationshipId === relationshipMemoryFields.relationshipId)
-    ) {
-      throw new Error('UserCharacterRelationship selection is required.');
+  const deleteStoryline = async () => {
+    if (!storylineFields.characterStorylineId) {
+      throw new Error('CharacterStoryline selection is required.');
     }
     await execute({
-      operation: 'relationship-memory-candidate-propose',
-      input: {
-        relationshipId: relationshipMemoryFields.relationshipId,
-        candidateId: createDomainIdentity('relationship-memory-candidate'),
-        content: relationshipMemoryFields.content,
-        sourceRef: relationshipMemoryFields.sourceRef,
-      },
+      operation: 'character-storyline-delete',
+      input: { characterStorylineId: storylineFields.characterStorylineId },
     });
-    setRelationshipMemoryFields({
-      ...emptyRelationshipMemoryFields,
-      relationshipId: relationshipMemoryFields.relationshipId,
-    });
+    setStorylineFields(emptyStorylineFields);
+    setComparisonVersionIds(['', '']);
   };
-
   if (!creating && !selectedProject) {
     return (
       <div className="character-management__detail-empty" role="status">
@@ -675,6 +686,26 @@ export function CharacterPanel({
                     onSubmit={(event) => submitForm(event, publishStoryline)}
                   >
                     <FoundationField
+                      label={foundationLabel(locale, '故事线', 'Character storyline')}
+                    >
+                      <select
+                        value={storylineFields.characterStorylineId}
+                        onChange={(event) => selectStoryline(event.target.value)}
+                      >
+                        <option value="">
+                          {foundationLabel(locale, '创建新故事线', 'Create a new storyline')}
+                        </option>
+                        {storylines.map((storyline) => (
+                          <option
+                            key={storyline.characterStorylineId}
+                            value={storyline.characterStorylineId}
+                          >
+                            {storyline.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    </FoundationField>
+                    <FoundationField
                       label={foundationLabel(locale, '角色版本', 'Character version')}
                     >
                       <select
@@ -721,55 +752,69 @@ export function CharacterPanel({
                         }
                       />
                     </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '欲望', 'Desire')}>
+                    <FoundationField label={foundationLabel(locale, '角色状态', 'Character state')}>
                       <textarea
                         required
                         rows={3}
-                        value={storylineFields.desire}
+                        value={storylineFields.characterState}
                         onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, desire: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '冲突', 'Conflict')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.conflict}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, conflict: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '成长弧', 'Growth arc')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.growthArc}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, growthArc: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '初始阶段', 'Initial stage')}>
-                      <input
-                        required
-                        value={storylineFields.stageTitle}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, stageTitle: event.target.value })
+                          setStorylineFields({
+                            ...storylineFields,
+                            characterState: event.target.value,
+                          })
                         }
                       />
                     </FoundationField>
                     <FoundationField
-                      label={foundationLabel(locale, '阶段说明', 'Stage description')}
+                      label={foundationLabel(locale, '关系状态', 'Relationship state')}
                     >
                       <textarea
+                        required
                         rows={3}
-                        value={storylineFields.stageDescription}
+                        value={storylineFields.relationshipState}
                         onChange={(event) =>
                           setStorylineFields({
                             ...storylineFields,
-                            stageDescription: event.target.value,
+                            relationshipState: event.target.value,
+                          })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '叙事记忆', 'Narrative memories')}
+                    >
+                      <textarea
+                        required
+                        rows={3}
+                        value={storylineFields.narrativeMemories}
+                        onChange={(event) =>
+                          setStorylineFields({
+                            ...storylineFields,
+                            narrativeMemories: event.target.value,
+                          })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField label={foundationLabel(locale, '节点标题', 'Node title')}>
+                      <input
+                        required
+                        value={storylineFields.nodeTitle}
+                        onChange={(event) =>
+                          setStorylineFields({ ...storylineFields, nodeTitle: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '当前情境', 'Current situation')}
+                    >
+                      <textarea
+                        required
+                        rows={3}
+                        value={storylineFields.situation}
+                        onChange={(event) =>
+                          setStorylineFields({
+                            ...storylineFields,
+                            situation: event.target.value,
                           })
                         }
                       />
@@ -792,6 +837,15 @@ export function CharacterPanel({
                     <FoundationSubmit pending={pendingOperation !== undefined}>
                       {foundationLabel(locale, '发布故事线', 'Publish storyline')}
                     </FoundationSubmit>
+                    {storylineFields.characterStorylineId ? (
+                      <button
+                        disabled={pendingOperation !== undefined}
+                        type="button"
+                        onClick={() => void deleteStoryline().catch(() => undefined)}
+                      >
+                        {foundationLabel(locale, '删除所选故事线', 'Delete selected storyline')}
+                      </button>
+                    ) : null}
                   </form>
                 )}
                 <div className="character-foundation__review-list">
@@ -803,9 +857,99 @@ export function CharacterPanel({
                       <strong>{storyline.label}</strong>
                       <span>{storyline.premise}</span>
                       <code>{storyline.characterStorylineVersionId}</code>
+                      <button
+                        disabled={pendingOperation !== undefined}
+                        type="button"
+                        onClick={() =>
+                          void restoreStorylineVersion(storyline).catch(() => undefined)
+                        }
+                      >
+                        {foundationLabel(locale, '恢复为草稿', 'Restore as draft')}
+                      </button>
                     </div>
                   ))}
                 </div>
+                {selectedStorylineVersions.length >= 2 ? (
+                  <section
+                    aria-label={foundationLabel(
+                      locale,
+                      '故事线版本比较',
+                      'Compare storyline publications',
+                    )}
+                  >
+                    <FoundationField
+                      label={foundationLabel(locale, '左侧版本', 'Left publication')}
+                    >
+                      <select
+                        value={comparisonVersionIds[0]}
+                        onChange={(event) =>
+                          setComparisonVersionIds([
+                            event.target.value,
+                            comparisonVersionIds[1] ?? '',
+                          ])
+                        }
+                      >
+                        <option value="">
+                          {foundationLabel(locale, '选择版本', 'Select publication')}
+                        </option>
+                        {selectedStorylineVersions.map((version) => (
+                          <option
+                            key={version.characterStorylineVersionId}
+                            value={version.characterStorylineVersionId}
+                          >
+                            {version.label}
+                          </option>
+                        ))}
+                      </select>
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '右侧版本', 'Right publication')}
+                    >
+                      <select
+                        value={comparisonVersionIds[1]}
+                        onChange={(event) =>
+                          setComparisonVersionIds([
+                            comparisonVersionIds[0] ?? '',
+                            event.target.value,
+                          ])
+                        }
+                      >
+                        <option value="">
+                          {foundationLabel(locale, '选择版本', 'Select publication')}
+                        </option>
+                        {selectedStorylineVersions.map((version) => (
+                          <option
+                            key={version.characterStorylineVersionId}
+                            value={version.characterStorylineVersionId}
+                          >
+                            {version.label}
+                          </option>
+                        ))}
+                      </select>
+                    </FoundationField>
+                    <div className="character-foundation__review-list">
+                      {comparisonVersions.map((version, index) =>
+                        version ? (
+                          <div key={`${index}:${version.characterStorylineVersionId}`}>
+                            <strong>{version.label}</strong>
+                            <span>{version.premise}</span>
+                            <span>
+                              {formatCount(
+                                locale,
+                                version.nodes.length,
+                                '个节点',
+                                'storyline node',
+                              )}
+                            </span>
+                            {version.nodes.map((node) => (
+                              <span key={node.storylineNodeId}>{node.title}</span>
+                            ))}
+                          </div>
+                        ) : null,
+                      )}
+                    </div>
+                  </section>
+                ) : null}
               </details>
               <details
                 className="character-foundation__studio-authoring character-foundation__studio-disclosure"
@@ -823,134 +967,49 @@ export function CharacterPanel({
                         )}
                       </h4>
                     </div>
-                    <strong>{memoryScopes.length}</strong>
+                    <strong>{companionContinuities.length}</strong>
                   </div>
                 </summary>
                 <div className="character-foundation__review-list">
-                  {characterRuns.map((run) => {
-                    const scope = memoryScopes.find(
-                      (item) => item.characterRunId === run.characterRunId,
-                    );
-                    return (
-                      <div key={run.characterRunId}>
-                        <code>{run.characterRunId}</code>
-                        {scope ? (
-                          <span>{`${scope.entries.filter((entry) => entry.status === 'active').length} active · ${scope.candidates.filter((candidate) => candidate.status === 'pending').length} pending`}</span>
-                        ) : (
-                          <button
-                            disabled={pendingOperation !== undefined}
-                            type="button"
-                            onClick={() =>
-                              void createMemoryScope(run.characterRunId).catch(() => undefined)
-                            }
-                          >
-                            {foundationLabel(locale, '创建记忆域', 'Create memory scope')}
-                          </button>
+                  {companionContinuities.map((continuity) => (
+                    <div key={continuity.companionContinuityId}>
+                      <code>{continuity.companionContinuityId}</code>
+                      <span>{`${continuity.entries.filter((entry) => entry.status === 'active').length} active · ${continuity.candidates.filter((candidate) => candidate.status === 'pending').length} pending`}</span>
+                    </div>
+                  ))}
+                  {companionContinuities.length === 0 ? (
+                    <div>
+                      <span>
+                        {foundationLabel(
+                          locale,
+                          '角色进入日常对话后，会按用户与角色创建长期连续性记录。',
+                          'Companion dialogue creates long-term continuity for this user and character.',
                         )}
-                      </div>
-                    );
-                  })}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-                {memoryScopes.length > 0 ? (
-                  <form
-                    className="character-foundation__form-grid"
-                    onSubmit={(event) => submitForm(event, proposeMemory)}
-                  >
-                    <FoundationField label={foundationLabel(locale, '记忆域', 'Memory scope')}>
-                      <select
-                        required
-                        value={memoryFields.characterMemoryScopeId}
-                        onChange={(event) =>
-                          setMemoryFields({
-                            ...memoryFields,
-                            characterMemoryScopeId: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="">
-                          {foundationLabel(locale, '选择记忆域', 'Select a scope')}
-                        </option>
-                        {memoryScopes.map((scope) => (
-                          <option
-                            key={scope.characterMemoryScopeId}
-                            value={scope.characterMemoryScopeId}
-                          >
-                            {scope.characterMemoryScopeId}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '记忆内容', 'Memory content')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={memoryFields.content}
-                        onChange={(event) =>
-                          setMemoryFields({ ...memoryFields, content: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '来源引用', 'Source reference')}
-                    >
-                      <input
-                        required
-                        value={memoryFields.sourceRef}
-                        onChange={(event) =>
-                          setMemoryFields({ ...memoryFields, sourceRef: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '敏感标签', 'Sensitivity traits')}
-                    >
-                      <textarea
-                        rows={2}
-                        value={memoryFields.sensitivityTraits}
-                        onChange={(event) =>
-                          setMemoryFields({
-                            ...memoryFields,
-                            sensitivityTraits: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '保留标签', 'Retention traits')}
-                    >
-                      <textarea
-                        rows={2}
-                        value={memoryFields.retentionTraits}
-                        onChange={(event) =>
-                          setMemoryFields({ ...memoryFields, retentionTraits: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationSubmit pending={pendingOperation !== undefined}>
-                      {foundationLabel(locale, '提出记忆候选', 'Propose memory candidate')}
-                    </FoundationSubmit>
-                  </form>
-                ) : null}
                 <div className="character-foundation__review-list">
-                  {memoryScopes.flatMap((scope) =>
-                    scope.candidates.map((candidate) => (
-                      <div key={candidate.characterMemoryCandidateId}>
+                  {companionContinuities.flatMap((continuity) => [
+                    ...continuity.candidates.map((candidate) => (
+                      <div key={candidate.companionMemoryCandidateId}>
                         <strong>{candidate.content}</strong>
                         <span>{candidate.status}</span>
+                        <code>{formatMemoryProvenance(candidate.provenance)}</code>
                         {candidate.status === 'pending' ? (
                           <span className="character-foundation__review-actions">
                             <button
                               type="button"
                               onClick={() =>
                                 void execute({
-                                  operation: 'character-memory-candidate-accept',
+                                  operation: 'companion-memory-candidate-accept',
                                   input: {
-                                    characterMemoryScopeId: scope.characterMemoryScopeId,
-                                    characterMemoryCandidateId:
-                                      candidate.characterMemoryCandidateId,
-                                    characterMemoryEntryId:
-                                      createDomainIdentity('character-memory-entry'),
-                                    expectedMemoryRevision: scope.memoryRevision,
+                                    companionContinuityId: continuity.companionContinuityId,
+                                    companionMemoryCandidateId:
+                                      candidate.companionMemoryCandidateId,
+                                    companionMemoryEntryId:
+                                      createDomainIdentity('companion-memory-entry'),
+                                    expectedContinuityRevision: continuity.continuityRevision,
                                   },
                                 }).catch(() => undefined)
                               }
@@ -961,12 +1020,12 @@ export function CharacterPanel({
                               type="button"
                               onClick={() =>
                                 void execute({
-                                  operation: 'character-memory-candidate-reject',
+                                  operation: 'companion-memory-candidate-reject',
                                   input: {
-                                    characterMemoryScopeId: scope.characterMemoryScopeId,
-                                    characterMemoryCandidateId:
-                                      candidate.characterMemoryCandidateId,
-                                    expectedMemoryRevision: scope.memoryRevision,
+                                    companionContinuityId: continuity.companionContinuityId,
+                                    companionMemoryCandidateId:
+                                      candidate.companionMemoryCandidateId,
+                                    expectedContinuityRevision: continuity.continuityRevision,
                                   },
                                 }).catch(() => undefined)
                               }
@@ -977,7 +1036,31 @@ export function CharacterPanel({
                         ) : null}
                       </div>
                     )),
-                  )}
+                    ...continuity.entries.map((entry) => (
+                      <div key={entry.companionMemoryEntryId}>
+                        <strong>{entry.content}</strong>
+                        <span>{entry.status}</span>
+                        <code>{formatMemoryProvenance(entry.provenance)}</code>
+                        {entry.status === 'active' ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void execute({
+                                operation: 'companion-memory-entry-delete',
+                                input: {
+                                  companionContinuityId: continuity.companionContinuityId,
+                                  companionMemoryEntryId: entry.companionMemoryEntryId,
+                                  expectedContinuityRevision: continuity.continuityRevision,
+                                },
+                              }).catch(() => undefined)
+                            }
+                          >
+                            {foundationLabel(locale, '删除', 'Delete')}
+                          </button>
+                        ) : null}
+                      </div>
+                    )),
+                  ])}
                 </div>
               </details>
               <details
@@ -999,69 +1082,7 @@ export function CharacterPanel({
                     <strong>{relationships.length}</strong>
                   </div>
                 </summary>
-                {relationships.length > 0 ? (
-                  <form
-                    className="character-foundation__form-grid"
-                    onSubmit={(event) => submitForm(event, proposeRelationshipMemory)}
-                  >
-                    <FoundationField label={foundationLabel(locale, '角色关系', 'Relationship')}>
-                      <select
-                        required
-                        value={relationshipMemoryFields.relationshipId}
-                        onChange={(event) =>
-                          setRelationshipMemoryFields({
-                            ...relationshipMemoryFields,
-                            relationshipId: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="">
-                          {foundationLabel(locale, '选择关系', 'Select a relationship')}
-                        </option>
-                        {relationships.map((relationship) => (
-                          <option
-                            key={relationship.relationshipId}
-                            value={relationship.relationshipId}
-                          >
-                            {relationship.relationshipId}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '关系记忆内容', 'Relationship memory content')}
-                    >
-                      <textarea
-                        required
-                        rows={3}
-                        value={relationshipMemoryFields.content}
-                        onChange={(event) =>
-                          setRelationshipMemoryFields({
-                            ...relationshipMemoryFields,
-                            content: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '来源引用', 'Source reference')}
-                    >
-                      <input
-                        required
-                        value={relationshipMemoryFields.sourceRef}
-                        onChange={(event) =>
-                          setRelationshipMemoryFields({
-                            ...relationshipMemoryFields,
-                            sourceRef: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationSubmit pending={pendingOperation !== undefined}>
-                      {foundationLabel(locale, '提出关系记忆', 'Propose relationship memory')}
-                    </FoundationSubmit>
-                  </form>
-                ) : (
+                {relationships.length === 0 ? (
                   <p>
                     {foundationLabel(
                       locale,
@@ -1069,7 +1090,7 @@ export function CharacterPanel({
                       'Companion dialogue creates relationship records that can be reviewed independently.',
                     )}
                   </p>
-                )}
+                ) : null}
                 <div className="character-foundation__review-list">
                   {relationships.flatMap((relationship) => [
                     ...relationship.candidates.map((candidate) => (
@@ -1087,6 +1108,7 @@ export function CharacterPanel({
                                     relationshipId: relationship.relationshipId,
                                     candidateId: candidate.candidateId,
                                     memoryId: createDomainIdentity('relationship-memory'),
+                                    expectedRelationshipRevision: relationship.relationshipRevision,
                                   },
                                 }).catch(() => undefined)
                               }
@@ -1101,6 +1123,7 @@ export function CharacterPanel({
                                   input: {
                                     relationshipId: relationship.relationshipId,
                                     candidateId: candidate.candidateId,
+                                    expectedRelationshipRevision: relationship.relationshipRevision,
                                   },
                                 }).catch(() => undefined)
                               }
@@ -1114,21 +1137,24 @@ export function CharacterPanel({
                     ...relationship.memories.map((memory) => (
                       <div key={`${relationship.relationshipId}:${memory.memoryId}`}>
                         <strong>{memory.content}</strong>
-                        <span>{memory.sourceRef}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void execute({
-                              operation: 'relationship-memory-delete',
-                              input: {
-                                relationshipId: relationship.relationshipId,
-                                memoryId: memory.memoryId,
-                              },
-                            }).catch(() => undefined)
-                          }
-                        >
-                          {foundationLabel(locale, '删除', 'Delete')}
-                        </button>
+                        <code>{formatMemoryProvenance(memory.provenance)}</code>
+                        {memory.status === 'active' ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void execute({
+                                operation: 'relationship-memory-delete',
+                                input: {
+                                  relationshipId: relationship.relationshipId,
+                                  memoryId: memory.memoryId,
+                                  expectedRelationshipRevision: relationship.relationshipRevision,
+                                },
+                              }).catch(() => undefined)
+                            }
+                          >
+                            {foundationLabel(locale, '删除', 'Delete')}
+                          </button>
+                        ) : null}
                       </div>
                     )),
                   ])}
@@ -1144,11 +1170,11 @@ export function CharacterPanel({
                 <div className="character-foundation__studio-grid">
                   <StudioSummary
                     label={foundationLabel(locale, '个人故事线', 'Character storylines')}
-                    value={`${storylineVersions.length} / ${storylineRuns.length}`}
+                    value={`${storylines.length} / ${storylineVersions.length}`}
                   />
                   <StudioSummary
                     label={foundationLabel(locale, '角色主观记忆', 'Character memory')}
-                    value={`${memoryScopes.length}`}
+                    value={`${companionContinuities.length}`}
                   />
                   <StudioSummary
                     label={foundationLabel(locale, '关系记忆', 'Relationship memory')}
@@ -1214,6 +1240,56 @@ function projectFields(project: CharacterProject): CharacterDraftFields {
     voiceResourceRef: voice?.kind === 'voice' ? voice.resourceRef : '',
     voiceSpeed: project.draft.voiceDefaults?.speed ?? 1,
     voiceAutoRead: project.draft.voiceDefaults?.autoRead ?? false,
+  };
+}
+
+function storylineFieldsFromDraft(
+  label: string,
+  draft: CharacterStorylineDraft,
+): StorylineDraftFields {
+  const nodeId = draft.nodeOrder[0];
+  const node = draft.nodes.find((candidate) => candidate.storylineNodeId === nodeId);
+  if (!nodeId || !node) {
+    throw new Error(`CharacterStoryline '${draft.characterStorylineId}' has no editable node.`);
+  }
+  return storylineFieldsFromContent(label, draft, nodeId, node);
+}
+
+function storylineFieldsFromVersion(
+  displayName: string,
+  version: CharacterStorylineVersion,
+): StorylineDraftFields {
+  const nodeId = version.nodeOrder[0];
+  const node = version.nodes.find((candidate) => candidate.storylineNodeId === nodeId);
+  if (!nodeId || !node) {
+    throw new Error(
+      `CharacterStorylineVersion '${version.characterStorylineVersionId}' has no editable node.`,
+    );
+  }
+  return storylineFieldsFromContent(displayName, version, nodeId, node);
+}
+
+function storylineFieldsFromContent(
+  displayName: string,
+  content: Pick<
+    CharacterStorylineDraft,
+    'characterStorylineId' | 'characterVersionId' | 'premise' | 'constraints'
+  >,
+  storylineNodeId: string,
+  node: CharacterStorylineDraft['nodes'][number],
+): StorylineDraftFields {
+  return {
+    characterStorylineId: content.characterStorylineId,
+    storylineNodeId,
+    characterVersionId: content.characterVersionId,
+    label: displayName,
+    premise: content.premise,
+    characterState: node.context.characterState ?? '',
+    relationshipState: node.context.relationshipState ?? '',
+    narrativeMemories: node.context.narrativeMemories.join('\n'),
+    nodeTitle: node.title,
+    situation: node.context.situation,
+    constraints: content.constraints.join('\n'),
   };
 }
 
@@ -1320,6 +1396,12 @@ function selectedRepresentation(
   return representationId === undefined
     ? undefined
     : refs.find((ref) => ref.representationId === representationId);
+}
+
+function formatMemoryProvenance(provenance: CompanionMemoryProvenance): string {
+  return provenance.kind === 'conversation-turn'
+    ? `${provenance.conversationId} / ${provenance.turnId}`
+    : `${provenance.roomRunId} / ${provenance.roomEventId}`;
 }
 
 function StudioSummary({ label, value }: { readonly label: string; readonly value: string }) {

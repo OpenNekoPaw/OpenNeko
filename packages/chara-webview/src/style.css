@@ -1090,6 +1090,40 @@
   }
 }
 
+.character-storyline-timeline {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 10px;
+}
+
+.character-storyline-timeline header,
+.character-storyline-timeline article {
+  display: grid;
+  gap: 4px;
+}
+
+.character-storyline-timeline ol {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.character-storyline-timeline li {
+  min-width: max-content;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.character-storyline-timeline li[aria-current='step'] {
+  background: color-mix(in srgb, var(--accent-color, #7c6cff) 24%, transparent);
+}
+
 @media (max-width: 720px) {
   .character-management--catalog {
     width: min(100% - 24px, 1020px);

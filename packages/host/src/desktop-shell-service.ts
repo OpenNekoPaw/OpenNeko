@@ -2481,11 +2481,34 @@ function createCharacterInteractionConversationScene(input: {
     },
     slots: {
       interaction: { ...input.interaction, phase: 'session', scope },
-      main: { kind: 'character-avatar', owner },
+      main: {
+        kind: 'character-presentation',
+        owner,
+        surfaceKind: 'avatar',
+        providerId: 'chara.representation',
+        surfaceId: `character-presentation:${input.conversationId}`,
+      },
       rightManager: { kind: 'character-runtime-manager', owner },
-      ...(owner.kind === 'room'
-        ? { cutPanel: { kind: 'character-room-timeline' as const, owner } }
-        : {}),
+      cutPanel: {
+        kind: 'character-timeline-stack',
+        owner,
+        timelines: [
+          {
+            kind: 'character-storyline-timeline',
+            owner,
+            timelineId: `character-storyline-timeline:${input.conversationId}`,
+          },
+          ...(owner.kind === 'room'
+            ? [
+                {
+                  kind: 'character-room-event-timeline' as const,
+                  owner,
+                  timelineId: `character-room-event-timeline:${input.conversationId}`,
+                },
+              ]
+            : []),
+        ],
+      },
       status: { kind: 'scene-status', sceneId },
     },
   });

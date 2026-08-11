@@ -793,13 +793,16 @@ describe('DesktopShellService', () => {
               },
             },
             main: {
-              kind: 'character-avatar',
+              kind: 'character-presentation',
               owner: {
                 kind: 'character',
                 characterId: 'character-project-a',
                 characterRunId: 'character-run-a',
                 dialogueRunId: 'dialogue-run-a',
               },
+              surfaceKind: 'avatar',
+              providerId: 'chara.representation',
+              surfaceId: 'character-presentation:conversation-a',
             },
             rightManager: {
               kind: 'character-runtime-manager',
@@ -809,6 +812,27 @@ describe('DesktopShellService', () => {
                 characterRunId: 'character-run-a',
                 dialogueRunId: 'dialogue-run-a',
               },
+            },
+            cutPanel: {
+              kind: 'character-timeline-stack',
+              owner: {
+                kind: 'character',
+                characterId: 'character-project-a',
+                characterRunId: 'character-run-a',
+                dialogueRunId: 'dialogue-run-a',
+              },
+              timelines: [
+                {
+                  kind: 'character-storyline-timeline',
+                  owner: {
+                    kind: 'character',
+                    characterId: 'character-project-a',
+                    characterRunId: 'character-run-a',
+                    dialogueRunId: 'dialogue-run-a',
+                  },
+                  timelineId: 'character-storyline-timeline:conversation-a',
+                },
+              ],
             },
             status: {
               kind: 'scene-status',
@@ -1636,11 +1660,26 @@ describe('DesktopShellService', () => {
       },
       slots: {
         interaction: { phase: 'session' },
-        main: { kind: 'character-avatar' },
+        main: {
+          kind: 'character-presentation',
+          surfaceKind: 'avatar',
+          providerId: 'chara.representation',
+        },
         rightManager: { kind: 'character-runtime-manager' },
       },
     });
-    expect(attached.slots.cutPanel).toBeUndefined();
+    expect(attached.slots.cutPanel).toMatchObject({
+      kind: 'character-timeline-stack',
+      timelines: [{ kind: 'character-storyline-timeline' }],
+    });
+    expect(
+      (await fixture.service.getProjection(windowId)).domains.find(
+        (domain) => domain.surface === 'character',
+      ),
+    ).toMatchObject({ status: 'unavailable', ownerSlice: 'P1.6' });
+    expect(
+      (fixture.service as unknown as Record<string, unknown>)['setCharacterCapabilityReady'],
+    ).toBeUndefined();
     await expect(fixture.service.attachAgentConversation(input)).resolves.toEqual(attached);
   });
 
@@ -1670,9 +1709,19 @@ describe('DesktopShellService', () => {
       },
       slots: {
         interaction: { phase: 'session' },
-        main: { kind: 'character-avatar' },
+        main: {
+          kind: 'character-presentation',
+          surfaceKind: 'avatar',
+          providerId: 'chara.representation',
+        },
         rightManager: { kind: 'character-runtime-manager' },
-        cutPanel: { kind: 'character-room-timeline' },
+        cutPanel: {
+          kind: 'character-timeline-stack',
+          timelines: [
+            { kind: 'character-storyline-timeline' },
+            { kind: 'character-room-event-timeline' },
+          ],
+        },
       },
     });
   });

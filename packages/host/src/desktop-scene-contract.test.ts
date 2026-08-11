@@ -282,6 +282,86 @@ describe('Desktop Scene contract', () => {
     ).toThrow("Unknown Manager Surface kind 'extension-catalog'");
   });
 
+  it('binds Character Presentation and separate Timeline refs to one exact owner', () => {
+    const projection = characterRoomScene();
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          interaction: projection.slots.interaction,
+          main: projection.slots.main,
+          rightManager: projection.slots.rightManager,
+          status: projection.slots.status,
+        },
+      }),
+    ).toEqual({
+      ...projection,
+      slots: {
+        interaction: projection.slots.interaction,
+        main: projection.slots.main,
+        rightManager: projection.slots.rightManager,
+        status: projection.slots.status,
+      },
+    });
+
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          main: {
+            ...projection.slots.main,
+            owner: { kind: 'room', roomId: 'room-other', roomRunId: 'room-run-other' },
+          },
+        },
+      }),
+    ).toThrow('exact Presentation Main Surface');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: {
+            ...projection.slots.cutPanel,
+            timelines: projection.slots.cutPanel.timelines.map((timeline, index) =>
+              index === 0
+                ? { ...timeline, timelineId: 'timeline-duplicate' }
+                : { ...timeline, timelineId: 'timeline-duplicate' },
+            ),
+          },
+        },
+      }),
+    ).toThrow('unique Timeline identities');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: {
+            ...projection.slots.cutPanel,
+            timelines: [
+              {
+                ...projection.slots.cutPanel.timelines[0],
+                owner: { kind: 'room', roomId: 'room-other', roomRunId: 'room-run-other' },
+              },
+              projection.slots.cutPanel.timelines[1],
+            ],
+          },
+        },
+      }),
+    ).toThrow('does not match its Stack owner');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: { kind: 'character-room-timeline', owner: projection.context.owner },
+        },
+      }),
+    ).toThrow("contains unknown field 'owner'");
+  });
+
   it('owns Creative Management Character catalog and exact detail as one Window scene', () => {
     const sceneId = 'scene:window-1:creative-management';
     const detail = { kind: 'project' as const, characterProjectId: 'character-project:lin' };
@@ -622,6 +702,61 @@ function workspaceScene() {
         ownerId: 'cut-owner-1',
       },
       status: { kind: 'scene-status' as const, sceneId: 'scene:window-1:workspace-1' },
+    },
+  };
+}
+
+function characterRoomScene() {
+  const sceneId = 'scene:window-1:character-interaction:conversation-room-1';
+  const owner = { kind: 'room' as const, roomId: 'room-1', roomRunId: 'room-run-1' };
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: 'draft-room-1',
+    assistantSpaceId: 'assistant-space:user',
+    conversationId: 'conversation-room-1',
+  };
+  return {
+    sceneId,
+    windowId: 'window-1',
+    context: {
+      kind: 'character-interaction' as const,
+      agentViewId: 'agent-view-room-1',
+      owner,
+      scope,
+    },
+    slots: {
+      interaction: {
+        kind: 'agent' as const,
+        agentSurfaceId: 'agent-surface-room-1',
+        agentViewId: 'agent-view-room-1',
+        phase: 'session' as const,
+        scope,
+      },
+      main: {
+        kind: 'character-presentation' as const,
+        owner,
+        surfaceKind: 'avatar' as const,
+        providerId: 'chara.representation',
+        surfaceId: 'character-presentation:conversation-room-1',
+      },
+      rightManager: { kind: 'character-runtime-manager' as const, owner },
+      cutPanel: {
+        kind: 'character-timeline-stack' as const,
+        owner,
+        timelines: [
+          {
+            kind: 'character-storyline-timeline' as const,
+            owner,
+            timelineId: 'storyline-timeline:conversation-room-1',
+          },
+          {
+            kind: 'character-room-event-timeline' as const,
+            owner,
+            timelineId: 'room-event-timeline:conversation-room-1',
+          },
+        ],
+      },
+      status: { kind: 'scene-status' as const, sceneId },
     },
   };
 }
