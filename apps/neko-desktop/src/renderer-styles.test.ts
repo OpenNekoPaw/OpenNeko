@@ -4,14 +4,7 @@ import { describe, expect, it } from 'vitest';
 const styles = readFileSync(new URL('./renderer/styles.css', import.meta.url), 'utf8');
 
 describe('Desktop renderer styles', () => {
-  it('keeps Creative Management and target navigation constrained at narrow widths', () => {
-    expect(styles).toContain('@media (max-width: 720px)');
-    expect(styles).toMatch(
-      /\.creative-management__catalog-switcher\s*\{[\s\S]*?overflow-x:\s*auto/u,
-    );
-    expect(styles).toMatch(
-      /\.project-authoring-navigation__row\s*\{[\s\S]*?grid-template-columns:\s*18px minmax\(0, 1fr\) 24px/u,
-    );
+  it('keeps authoring surfaces constrained', () => {
     expect(styles).toMatch(
       /\.project-authoring-target-switch,[\s\S]*?min-width:\s*0;[\s\S]*?min-height:\s*0;/u,
     );
@@ -398,6 +391,9 @@ describe('Desktop renderer styles', () => {
     const rootRule = styles.match(
       /\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
+    const desktopExtensionRootRule = styles.match(
+      /\.desktop-extension-management-composition\s*>\s*\.agent-extension-management-root\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
     const managementListRule = styles.match(/\.management-surface-list\s*\{(?<body>[\s\S]*?)\n\}/u);
     const projectRootRule = styles.match(
       /\.project-management-catalog\s*\{\n(?<body>\s+height\s*:\s*100%;[\s\S]*?)\n\}/u,
@@ -408,6 +404,10 @@ describe('Desktop renderer styles', () => {
     expect(rootRule?.groups?.body).toMatch(/width\s*:\s*min\(1020px, calc\(100% - 64px\)\)/u);
     expect(rootRule?.groups?.body).toMatch(/margin\s*:\s*0 auto/u);
     expect(rootRule?.groups?.body).toMatch(/padding\s*:\s*clamp\(66px, 10vh, 104px\) 0 52px/u);
+    expect(desktopExtensionRootRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(desktopExtensionRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+    expect(desktopExtensionRootRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
+    expect(desktopExtensionRootRule?.groups?.body).not.toMatch(/\b(?:width|margin|padding)\s*:/u);
     expect(styles).toMatch(/\.management-surface-list\s*\{[\s\S]*?display\s*:\s*grid/u);
     expect(managementListRule?.groups?.body).toMatch(/padding\s*:\s*0/u);
     expect(managementListRule?.groups?.body).not.toMatch(/border|background|border-radius/u);

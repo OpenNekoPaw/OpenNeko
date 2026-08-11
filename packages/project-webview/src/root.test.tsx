@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ProjectAuthoringNavigationItem } from '@neko/project/contracts';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  ProjectAuthoringNavigationRoot,
   ProjectAuthoringTargetSwitchRoot,
   ProjectCatalogRoot,
   filterAndSortProjectCatalog,
@@ -69,76 +67,6 @@ describe('ProjectCatalogRoot', () => {
       filterAndSortProjectCatalog(projects, '', 'name-ascending').map((x) => x.projectId),
     ).toEqual(['project-a', 'project-b']);
     expect(projects[0].projectId).toBe('project-b');
-  });
-
-  it('separates writable authoring targets from external read-only dependencies', () => {
-    const onActivate = vi.fn();
-    const onOpenSource = vi.fn();
-    render(
-      <ProjectAuthoringNavigationRoot
-        activeIdentity="character-project:character-1"
-        items={navigationItems()}
-        labels={{
-          authoring: 'Authoring',
-          dependencies: 'Dependencies',
-          openSource: 'Open source',
-          readOnly: 'Read only',
-        }}
-        onActivate={onActivate}
-        onOpenSource={onOpenSource}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Lead' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open source: Published world' }));
-    expect(onActivate).toHaveBeenCalledWith(
-      expect.objectContaining({ identity: 'character-project:character-1' }),
-    );
-    expect(onOpenSource).toHaveBeenCalledWith(
-      expect.objectContaining({ identity: 'world-experience-version:world-1' }),
-    );
-    expect(
-      screen
-        .getByText('Published world')
-        .closest('[data-external-dependency]')
-        ?.classList.contains('is-read-only'),
-    ).toBe(true);
-    const lead = screen.getByRole('button', { name: 'Lead' });
-    lead.focus();
-    expect(document.activeElement).toBe(lead);
-  });
-
-  it('disables only an invalid authoring row and preserves sibling keyboard focus', () => {
-    const items: readonly ProjectAuthoringNavigationItem[] = [
-      ...writableNavigationItems(),
-      {
-        kind: 'authoring-target',
-        target: { kind: 'world-project', worldProjectId: 'world-invalid' },
-        identity: 'world-project:world-invalid',
-        label: 'Broken world',
-        diagnostic: 'World record cannot decode.',
-      },
-    ];
-    render(
-      <ProjectAuthoringNavigationRoot
-        items={items}
-        labels={{
-          authoring: 'Authoring',
-          dependencies: 'Dependencies',
-          openSource: 'Open source',
-          readOnly: 'Read only',
-        }}
-        onActivate={vi.fn()}
-        onOpenSource={vi.fn()}
-      />,
-    );
-    const broken = screen.getByRole('button', { name: /Broken world/u }) as HTMLButtonElement;
-    const story = screen.getByRole('button', { name: 'Story' }) as HTMLButtonElement;
-    expect(broken.disabled).toBe(true);
-    expect(broken.title).toBe('World record cannot decode.');
-    expect(story.disabled).toBe(false);
-    story.focus();
-    expect(document.activeElement).toBe(story);
   });
 
   it('commits, unmounts, validates, and then mounts when switching targets', async () => {
@@ -255,23 +183,6 @@ describe('ProjectCatalogRoot', () => {
     });
   });
 });
-
-function navigationItems(): readonly ProjectAuthoringNavigationItem[] {
-  return [
-    ...writableNavigationItems(),
-    {
-      kind: 'external-dependency',
-      dependency: {
-        kind: 'world-experience-version',
-        worldExperienceVersionId: 'world-1',
-      },
-      identity: 'world-experience-version:world-1',
-      label: 'Published world',
-      readOnly: true,
-      sourceStudioTarget: { kind: 'world-studio', worldProjectId: 'world-project-1' },
-    },
-  ];
-}
 
 function writableNavigationItems(): readonly ProjectWritableNavigationItem[] {
   return [

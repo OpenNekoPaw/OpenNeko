@@ -82,15 +82,11 @@ import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementS
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
 import { WorkbenchMainPanelSurface } from './WorkbenchMainPanelSurface';
 import {
-  ProjectAuthoringNavigationRoot,
   ProjectAuthoringTargetSwitchRoot,
   ProjectCatalogRoot,
   type ProjectWritableNavigationItem,
 } from '@neko/project-webview/root';
-import type {
-  ProjectAuthoringNavigationHostResult,
-  ProjectAuthoringPresentationSnapshotRef,
-} from '@neko/project/contracts';
+import type { ProjectAuthoringPresentationSnapshotRef } from '@neko/project/contracts';
 import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
@@ -1537,6 +1533,7 @@ function DesktopSceneWorkbench({
           actions={actions}
           characterManagement={characterManagement}
           composition={activeWorkbench}
+          extensionDetailVisible={extensionDetailVisible}
           interactive={interactive}
           onExtensionDetailVisibilityChange={onExtensionDetailVisibilityChange}
           portalTargets={portalTargets}
@@ -1586,6 +1583,7 @@ function DesktopWorkbenchRuntimePortals({
   actions,
   characterManagement,
   composition,
+  extensionDetailVisible,
   interactive,
   onExtensionDetailVisibilityChange,
   portalTargets,
@@ -1597,6 +1595,7 @@ function DesktopWorkbenchRuntimePortals({
   readonly actions: ShellActions;
   readonly characterManagement: CharacterManagementRuntime;
   readonly composition: DesktopWindowCompositionProjection;
+  readonly extensionDetailVisible: boolean;
   readonly interactive: boolean;
   readonly onExtensionDetailVisibilityChange: (visible: boolean) => void;
   readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
@@ -1769,7 +1768,7 @@ function DesktopWorkbenchRuntimePortals({
         label={t('home.capabilities')}
         panelId="extension-management"
         role="management"
-        size="compact"
+        size={extensionDetailVisible ? 'compact' : 'full'}
       >
         {mainContent}
       </StaticWorkbenchMainPanelSurface>
@@ -2542,19 +2541,12 @@ function useContentProjectWorkbenchSlots({
   readonly projection: DesktopShellProjection;
   readonly project?: DesktopProjectCatalogItem;
 }): ContentProjectWorkbenchSlots {
-  const { locale, t } = useTranslation();
+  const { t } = useTranslation();
   const workbench = instance.layout;
   const workspaceScope =
     instance.scene.context.kind === 'agent' && instance.scene.context.scope.kind === 'workspace'
       ? instance.scene.context.scope
       : undefined;
-  const authoringNavigation = useProjectAuthoringNavigation({
-    active: project !== undefined && workspaceScope !== undefined,
-    contentProjectId: project?.projectId,
-    windowId: instance.scene.windowId,
-    workspaceGrantId: workspaceScope?.workspaceGrantId,
-    workspaceId: workspaceScope?.workspaceId,
-  });
   const resourceDockPresentation = useResourceDockPresentation(workbench.resourceDock.presentation);
   if (!project) {
     return { main: <SceneSurfaceUnavailable owner="workspace-authority" /> };
@@ -2588,38 +2580,6 @@ function useContentProjectWorkbenchSlots({
               </span>
             </header>
             <div className="project-resource-dock__content">
-              <div className="project-authoring-navigation-host">
-                {authoringNavigation.kind === 'ready' ? (
-                  <ProjectAuthoringNavigationRoot
-                    activeIdentity={activeProjectAuthoringIdentity(workbench)}
-                    items={authoringNavigation.result.navigation}
-                    labels={{
-                      authoring: locale.startsWith('zh') ? '创作目标' : 'Authoring targets',
-                      dependencies: locale.startsWith('zh') ? '外部依赖' : 'External dependencies',
-                      openSource: locale.startsWith('zh') ? '打开来源' : 'Open source',
-                      readOnly: locale.startsWith('zh') ? '只读' : 'Read only',
-                    }}
-                    onActivate={(item) =>
-                      actions.onUpdateWorkbench(
-                        instance.workbenchInstanceId,
-                        openProjectAuthoringTarget(workbench, project, item),
-                      )
-                    }
-                    onOpenSource={(item) =>
-                      actions.onTransitionScene({
-                        kind: 'open-creative-management',
-                        catalog:
-                          item.dependency.kind === 'character-version' ? 'characters' : 'worlds',
-                      })
-                    }
-                  />
-                ) : authoringNavigation.kind === 'failed' ? (
-                  <div className="project-authoring-navigation__diagnostic" role="alert">
-                    <WarningIcon size={14} />
-                    <span>{authoringNavigation.message}</span>
-                  </div>
-                ) : null}
-              </div>
               {assetsCapability?.status === 'ready' ? (
                 <DesktopResourceBrowserSurface
                   project={project}
@@ -2697,126 +2657,6 @@ function useContentProjectWorkbenchSlots({
     ) : undefined,
     rightDock: resourceDock?.content,
   };
-}
-
-type ProjectAuthoringNavigationLoadState =
-  | { readonly kind: 'idle' | 'loading' }
-  | { readonly kind: 'failed'; readonly message: string }
-  | { readonly kind: 'ready'; readonly result: ProjectAuthoringNavigationHostResult };
-
-function useProjectAuthoringNavigation(input: {
-  readonly active: boolean;
-  readonly windowId: string;
-  readonly workspaceId?: string;
-  readonly workspaceGrantId?: string;
-  readonly contentProjectId?: string;
-}): ProjectAuthoringNavigationLoadState {
-  const [state, setState] = useState<ProjectAuthoringNavigationLoadState>({ kind: 'idle' });
-  useEffect(() => {
-    if (!input.active) {
-      setState({ kind: 'idle' });
-      return;
-    }
-    if (!input.workspaceId || !input.workspaceGrantId || !input.contentProjectId) {
-      setState({ kind: 'failed', message: 'Project authoring authority is incomplete.' });
-      return;
-    }
-    let cancelled = false;
-    setState({ kind: 'loading' });
-    void window.openNekoDesktop.projectAuthoring
-      .getNavigation(input.windowId, {
-        workspaceId: input.workspaceId,
-        workspaceGrantId: input.workspaceGrantId,
-        contentProjectId: input.contentProjectId,
-      })
-      .then((result) => {
-        if (!cancelled) setState({ kind: 'ready', result });
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setState({ kind: 'failed', message: describeError(error) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    input.active,
-    input.contentProjectId,
-    input.windowId,
-    input.workspaceGrantId,
-    input.workspaceId,
-  ]);
-  return state;
-}
-
-function activeProjectAuthoringIdentity(
-  workbench: DesktopWorkbenchLayoutProjection,
-): string | undefined {
-  const group = workbench.main.groups.find(
-    (candidate) => candidate.groupId === workbench.main.activeGroupId,
-  );
-  const view = workbench.main.views.find((candidate) => candidate.viewId === group?.activeViewId);
-  if (!view) return undefined;
-  if (view.kind === 'character-authoring' && view.characterProjectId) {
-    return `character-project:${view.characterProjectId}`;
-  }
-  if (view.kind === 'world-authoring' && view.worldProjectId) {
-    return `world-project:${view.worldProjectId}`;
-  }
-  return `content-project:${view.projectId}`;
-}
-
-function openProjectAuthoringTarget(
-  workbench: DesktopWorkbenchLayoutProjection,
-  project: DesktopProjectCatalogItem,
-  item: ProjectWritableNavigationItem,
-): DesktopWorkbenchLayoutProjection {
-  if (item.diagnostic) {
-    throw new Error(`Project authoring target '${item.identity}' is unavailable.`);
-  }
-  if (item.target.kind === 'content-project') {
-    if (item.target.contentProjectId !== project.projectId) {
-      throw new Error('Content authoring target does not match the current Project.');
-    }
-    const contentView = workbench.main.views.find(
-      (view) =>
-        view.projectId === project.projectId &&
-        view.workspaceId === project.workspaceId &&
-        view.kind !== 'character-authoring' &&
-        view.kind !== 'world-authoring',
-    );
-    if (!contentView) throw new Error('Content Project has no exact authoring View.');
-    return openOrFocusMainView(workbench, contentView);
-  }
-  let existing: DesktopWorkbenchViewRef | undefined;
-  if (item.target.kind === 'character-project') {
-    const characterProjectId = item.target.characterProjectId;
-    existing = workbench.main.views.find(
-      (view) =>
-        view.kind === 'character-authoring' && view.characterProjectId === characterProjectId,
-    );
-  } else if (item.target.kind === 'world-project') {
-    const worldProjectId = item.target.worldProjectId;
-    existing = workbench.main.views.find(
-      (view) => view.kind === 'world-authoring' && view.worldProjectId === worldProjectId,
-    );
-  }
-  if (existing) return openOrFocusMainView(workbench, existing);
-  const targetId =
-    item.target.kind === 'character-project'
-      ? item.target.characterProjectId
-      : item.target.worldProjectId;
-  return openOrFocusMainView(workbench, {
-    viewId: `authoring:${item.target.kind}:${targetId}`,
-    viewInstanceId: `authoring-view-instance:${globalThis.crypto.randomUUID()}`,
-    projectId: project.projectId,
-    workspaceId: project.workspaceId,
-    kind: item.target.kind === 'character-project' ? 'character-authoring' : 'world-authoring',
-    ownerId: item.target.kind === 'character-project' ? 'character' : 'world',
-    displayLabel: item.label,
-    ...(item.target.kind === 'character-project'
-      ? { characterProjectId: item.target.characterProjectId }
-      : { worldProjectId: item.target.worldProjectId }),
-  });
 }
 
 function CutPanelSurface({

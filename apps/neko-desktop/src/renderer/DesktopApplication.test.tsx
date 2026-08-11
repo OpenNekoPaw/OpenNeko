@@ -1437,6 +1437,11 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(shell?.dataset.mainComposition).toBe('continuous');
     expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).toBeNull();
     expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
+    expect(
+      container
+        .querySelector('[data-workbench-main-panel="extension-management"]')
+        ?.getAttribute('data-panel-size'),
+    ).toBe('full');
 
     const select = container.querySelector<HTMLButtonElement>('[data-select-extension-detail]');
     await act(async () => select?.click());
@@ -1445,12 +1450,22 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).not.toBeNull();
     expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
     expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-workbench-main-panel="extension-management"]')
+        ?.getAttribute('data-panel-size'),
+    ).toBe('compact');
 
     const clear = container.querySelector<HTMLButtonElement>('[data-clear-extension-detail]');
     await act(async () => clear?.click());
     expect(shell?.dataset.mainSplit).toBe('none');
     expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).toBeNull();
     expect(container.querySelector('[aria-label="Resize Main split"]')).toBeNull();
+    expect(
+      container
+        .querySelector('[data-workbench-main-panel="extension-management"]')
+        ?.getAttribute('data-panel-size'),
+    ).toBe('full');
     await act(async () => root.unmount());
   });
 
@@ -2685,6 +2700,20 @@ describe('DesktopApplication scene lifecycle', () => {
       isolated.container.querySelector('[data-neko-controlled-workbench="true"]'),
     ).not.toBeNull();
     await act(async () => isolated.root.unmount());
+  });
+
+  it('keeps Workspace Resources focused on files without loading authoring target navigation', async () => {
+    const projection = createTextEditorShellProjection();
+    const projectAuthoringGetNavigation = vi.fn();
+    installBridge({ projection, projectAuthoringGetNavigation });
+
+    const { container, root } = await renderApplication();
+
+    expect(container.querySelector('.project-resource-dock__content')).not.toBeNull();
+    expect(container.querySelector('.project-authoring-navigation')).toBeNull();
+    expect(container.querySelector('[data-authoring-target]')).toBeNull();
+    expect(projectAuthoringGetNavigation).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
   });
 });
 
