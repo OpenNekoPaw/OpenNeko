@@ -5,6 +5,9 @@ import {
 import {
   worldFactSemanticRef,
   type OpenNekoDesktopWorldBridge,
+  type OpenNekoDesktopWorldAuthoringBridge,
+  type WorldAuthoringBinding,
+  type WorldAuthoringSnapshot,
   type WorldDefinition,
   type WorldFact,
   type WorldFoundationCommand,
@@ -14,16 +17,115 @@ import {
   type WorldSaveBranch,
   type WorldSemanticDiffEntry,
   type WorldTransformationCandidate,
+  isWorldAuthoringCommand,
 } from '@neko/world/contracts';
-import { EmptyState, GridIcon, PlusIcon, RefreshIcon, WarningIcon } from '@neko/ui';
+import {
+  EmptyState,
+  GridIcon,
+  LayersIcon,
+  PlusIcon,
+  RefreshIcon,
+  SearchIcon,
+  WarningIcon,
+} from '@neko/ui';
 import type { SupportedLocale } from '@neko/ui/i18n';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 type LoadState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
   | { readonly kind: 'failed'; readonly message: string }
   | { readonly kind: 'ready'; readonly snapshot: WorldFoundationSnapshot };
+
+export interface WorldManagementRuntime {
+  readonly loadState: LoadState;
+  readonly pendingOperation?: string;
+  readonly diagnostic?: string;
+  readonly reload: () => Promise<void>;
+  readonly execute: (command: WorldFoundationCommand) => Promise<WorldFoundationSnapshot>;
+}
+
+export type WorldDetailSelection =
+  { readonly kind: 'create' } | { readonly kind: 'project'; readonly worldProjectId: string };
+
+export function useWorldManagementRuntime(input: {
+  readonly active: boolean;
+  readonly host?: OpenNekoDesktopWorldBridge['worldFoundation'];
+}): WorldManagementRuntime {
+  const [loadState, setLoadState] = useState<LoadState>({ kind: 'idle' });
+  const [pendingOperation, setPendingOperation] = useState<string>();
+  const [diagnostic, setDiagnostic] = useState<string>();
+  const activeRef = useRef(input.active);
+  const projectionRequestRef = useRef(0);
+  const operationRequestRef = useRef(0);
+
+  const reload = useCallback(async () => {
+    const requestId = projectionRequestRef.current + 1;
+    projectionRequestRef.current = requestId;
+    setLoadState({ kind: 'loading' });
+    setDiagnostic(undefined);
+    try {
+      if (!input.host) throw new Error('World Foundation Host port is unavailable.');
+      const snapshot = await input.host.getSnapshot();
+      if (activeRef.current && projectionRequestRef.current === requestId) {
+        setLoadState({ kind: 'ready', snapshot });
+      }
+    } catch (error) {
+      if (activeRef.current && projectionRequestRef.current === requestId) {
+        setLoadState({ kind: 'failed', message: describeError(error) });
+      }
+    }
+  }, [input.host]);
+
+  useEffect(() => {
+    activeRef.current = input.active;
+    if (!input.active) {
+      projectionRequestRef.current += 1;
+      operationRequestRef.current += 1;
+      setLoadState({ kind: 'idle' });
+      setPendingOperation(undefined);
+      setDiagnostic(undefined);
+    } else {
+      void reload();
+    }
+    return () => {
+      activeRef.current = false;
+      projectionRequestRef.current += 1;
+      operationRequestRef.current += 1;
+    };
+  }, [input.active, reload]);
+
+  const execute = useCallback(
+    async (command: WorldFoundationCommand): Promise<WorldFoundationSnapshot> => {
+      const requestId = projectionRequestRef.current + 1;
+      projectionRequestRef.current = requestId;
+      const operationId = operationRequestRef.current + 1;
+      operationRequestRef.current = operationId;
+      setPendingOperation(command.operation);
+      setDiagnostic(undefined);
+      try {
+        if (!input.host) throw new Error('World Foundation Host port is unavailable.');
+        const snapshot = await input.host.execute(command);
+        if (activeRef.current && projectionRequestRef.current === requestId) {
+          setLoadState({ kind: 'ready', snapshot });
+        }
+        return snapshot;
+      } catch (error) {
+        if (activeRef.current && projectionRequestRef.current === requestId) {
+          setDiagnostic(describeError(error));
+        }
+        throw error;
+      } finally {
+        if (activeRef.current && operationRequestRef.current === operationId) {
+          setPendingOperation(undefined);
+        }
+      }
+    },
+    [input.host],
+  );
+
+  return { loadState, pendingOperation, diagnostic, reload, execute };
+}
 
 export function WorldFoundationRoot({
   active,
@@ -34,42 +136,94 @@ export function WorldFoundationRoot({
   readonly host?: OpenNekoDesktopWorldBridge['worldFoundation'];
   readonly locale: SupportedLocale;
 }): JSX.Element {
-  const [loadState, setLoadState] = useState<LoadState>({ kind: 'idle' });
+  const runtime = useWorldManagementRuntime({ active, host });
+  const [selection, setSelection] = useState<WorldDetailSelection>();
+  const effectiveSelection =
+    selection ??
+    (runtime.loadState.kind === 'ready' && runtime.loadState.snapshot.world.projects[0]
+      ? {
+          kind: 'project' as const,
+          worldProjectId: runtime.loadState.snapshot.world.projects[0].worldProjectId,
+        }
+      : { kind: 'create' as const });
+
+  return (
+    <section className="world-foundation" data-world-foundation="true">
+      <div className="world-foundation__workspace">
+        <WorldCatalogSurface
+          locale={locale}
+          onCreate={() => setSelection({ kind: 'create' })}
+          onSelect={(worldProjectId) => setSelection({ kind: 'project', worldProjectId })}
+          runtime={runtime}
+          selectedProjectId={
+            effectiveSelection.kind === 'project' ? effectiveSelection.worldProjectId : undefined
+          }
+        />
+        <WorldDetailSurface
+          locale={locale}
+          onCreated={(worldProjectId) => setSelection({ kind: 'project', worldProjectId })}
+          runtime={runtime}
+          selection={effectiveSelection}
+        />
+      </div>
+    </section>
+  );
+}
+
+type AuthoringLoadState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string }
+  | { readonly kind: 'ready'; readonly snapshot: WorldAuthoringSnapshot };
+
+export function WorldAuthoringStudioRoot({
+  binding,
+  host,
+  initialSnapshot,
+  locale,
+  windowId,
+}: {
+  readonly binding: WorldAuthoringBinding;
+  readonly host?: OpenNekoDesktopWorldAuthoringBridge['worldAuthoring'];
+  readonly initialSnapshot?: WorldAuthoringSnapshot;
+  readonly locale: SupportedLocale;
+  readonly windowId: string;
+}): JSX.Element {
+  const [loadState, setLoadState] = useState<AuthoringLoadState>(() =>
+    initialSnapshot ? { kind: 'ready', snapshot: initialSnapshot } : { kind: 'loading' },
+  );
+  const initialSnapshotConsumed = useRef(initialSnapshot !== undefined);
   const [pending, setPending] = useState<string>();
   const [diagnostic, setDiagnostic] = useState<string>();
-  const [selectedProjectId, setSelectedProjectId] = useState<string>();
-  const [selectedRunId, setSelectedRunId] = useState<string>();
-  const [creating, setCreating] = useState(false);
-
   const reload = useCallback(async () => {
     setLoadState({ kind: 'loading' });
     setDiagnostic(undefined);
     try {
-      if (!host) throw new Error('World Foundation Host port is unavailable.');
-      const snapshot = await host.getSnapshot();
-      setLoadState({ kind: 'ready', snapshot });
+      if (!host) throw new Error('World authoring Host port is unavailable.');
+      setLoadState({ kind: 'ready', snapshot: await host.getSnapshot(windowId, binding) });
     } catch (error) {
       setLoadState({ kind: 'failed', message: describeError(error) });
     }
-  }, [host]);
-
+  }, [binding, host, windowId]);
   useEffect(() => {
-    if (!active) {
-      setLoadState({ kind: 'idle' });
+    if (initialSnapshotConsumed.current) {
+      initialSnapshotConsumed.current = false;
       return;
     }
     void reload();
-  }, [active, reload]);
+  }, [reload]);
 
   const execute = useCallback(
-    async (command: WorldFoundationCommand) => {
+    async (command: WorldFoundationCommand): Promise<WorldFoundationSnapshot> => {
+      if (!isWorldAuthoringCommand(command)) {
+        throw new Error(`World Studio command '${command.operation}' is not authoring-only.`);
+      }
       setPending(command.operation);
       setDiagnostic(undefined);
       try {
-        if (!host) throw new Error('World Foundation Host port is unavailable.');
-        const snapshot = await host.execute(command);
+        if (!host) throw new Error('World authoring Host port is unavailable.');
+        const snapshot = await host.execute(windowId, binding, command);
         setLoadState({ kind: 'ready', snapshot });
-        return snapshot;
+        return projectAuthoringFoundationSnapshot(snapshot);
       } catch (error) {
         setDiagnostic(describeError(error));
         throw error;
@@ -77,11 +231,11 @@ export function WorldFoundationRoot({
         setPending(undefined);
       }
     },
-    [host],
+    [binding, host, windowId],
   );
 
-  if (loadState.kind === 'idle' || loadState.kind === 'loading') {
-    return <Status>{label(locale, '正在读取世界资料…', 'Loading World Foundation…')}</Status>;
+  if (loadState.kind === 'loading') {
+    return <Status>{label(locale, '正在读取世界创作目标...', 'Loading world target...')}</Status>;
   }
   if (loadState.kind === 'failed') {
     return (
@@ -93,184 +247,295 @@ export function WorldFoundationRoot({
       </Status>
     );
   }
+  return (
+    <section className="world-authoring-studio" data-world-authoring-studio="true">
+      {diagnostic ? <Diagnostic>{diagnostic}</Diagnostic> : null}
+      {loadState.snapshot.diagnostics.map((item) => (
+        <Diagnostic key={`${item.recordKind}:${item.recordId}`}>{item.message}</Diagnostic>
+      ))}
+      <WorldStudio
+        creating={false}
+        execute={execute}
+        locale={locale}
+        pending={pending}
+        project={loadState.snapshot.project}
+        snapshot={projectAuthoringFoundationSnapshot(loadState.snapshot)}
+        onCreated={() => {
+          throw new Error('Project-local World creation must use the Project workflow.');
+        }}
+      />
+    </section>
+  );
+}
 
-  const snapshot = loadState.snapshot;
-  const selectedProject =
-    snapshot.world.projects.find((item) => item.worldProjectId === selectedProjectId) ??
-    snapshot.world.projects[0];
+function projectAuthoringFoundationSnapshot(
+  snapshot: WorldAuthoringSnapshot,
+): WorldFoundationSnapshot {
+  return {
+    world: { projects: [snapshot.project], versions: snapshot.versions, runtimes: [] },
+    diagnostics: snapshot.diagnostics,
+  };
+}
+
+export function WorldCatalogSurface({
+  locale,
+  onCreate,
+  onSelect,
+  runtime,
+  selectedProjectId,
+}: {
+  readonly locale: SupportedLocale;
+  readonly onCreate: () => void;
+  readonly onSelect: (worldProjectId: string) => void;
+  readonly runtime: WorldManagementRuntime;
+  readonly selectedProjectId?: string;
+}): JSX.Element {
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'updated' | 'name'>('updated');
+  const [view, setView] = useState<'list' | 'grid'>('list');
+  const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
+  const projects = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    return [...(snapshot?.world.projects ?? [])]
+      .filter((project) => project.title.toLocaleLowerCase().includes(normalized))
+      .sort((left, right) =>
+        sort === 'name'
+          ? left.title.localeCompare(right.title) ||
+            left.worldProjectId.localeCompare(right.worldProjectId)
+          : right.updatedAt.localeCompare(left.updatedAt) ||
+            left.worldProjectId.localeCompare(right.worldProjectId),
+      );
+  }, [query, snapshot?.world.projects, sort]);
+
+  return (
+    <section
+      className="world-foundation world-management world-management--catalog"
+      data-world-management-catalog="true"
+    >
+      <header className="world-management__header">
+        <div className="world-management__header-copy">
+          <span>{label(locale, '世界管理', 'World management')}</span>
+          <h1>{label(locale, '世界', 'Worlds')}</h1>
+          <p>
+            {label(
+              locale,
+              '管理用于创作与互动体验的世界。',
+              'Manage worlds used for authoring and interactive experiences.',
+            )}
+          </p>
+        </div>
+        <button className="world-management__create" type="button" onClick={onCreate}>
+          <PlusIcon size={15} />
+          <span>{label(locale, '新建世界', 'New world')}</span>
+        </button>
+      </header>
+      <div className="world-management__toolbar">
+        <label className="world-management__search">
+          <SearchIcon size={16} />
+          <input
+            aria-label={label(locale, '搜索世界', 'Search worlds')}
+            placeholder={label(locale, '搜索世界', 'Search worlds')}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+        </label>
+        <select
+          aria-label={label(locale, '世界排序', 'World sort')}
+          value={sort}
+          onChange={(event) => setSort(event.currentTarget.value === 'name' ? 'name' : 'updated')}
+        >
+          <option value="updated">{label(locale, '最近更新', 'Recently updated')}</option>
+          <option value="name">{label(locale, '名称', 'Name')}</option>
+        </select>
+        <div className="world-management__view-switcher">
+          <button
+            aria-label={label(locale, '列表视图', 'List view')}
+            aria-pressed={view === 'list'}
+            title={label(locale, '列表视图', 'List view')}
+            type="button"
+            onClick={() => setView('list')}
+          >
+            <LayersIcon size={15} />
+          </button>
+          <button
+            aria-label={label(locale, '网格视图', 'Grid view')}
+            aria-pressed={view === 'grid'}
+            title={label(locale, '网格视图', 'Grid view')}
+            type="button"
+            onClick={() => setView('grid')}
+          >
+            <GridIcon size={15} />
+          </button>
+        </div>
+        <button
+          aria-label={label(locale, '刷新世界', 'Refresh worlds')}
+          disabled={runtime.loadState.kind === 'loading'}
+          title={label(locale, '刷新', 'Refresh')}
+          type="button"
+          onClick={() => void runtime.reload()}
+        >
+          <RefreshIcon size={16} />
+        </button>
+      </div>
+      {runtime.loadState.kind === 'idle' || runtime.loadState.kind === 'loading' ? (
+        <Status>{label(locale, '正在读取世界资料...', 'Loading worlds...')}</Status>
+      ) : runtime.loadState.kind === 'failed' ? (
+        <Status error>
+          <span>{runtime.loadState.message}</span>
+          <button type="button" onClick={() => void runtime.reload()}>
+            {label(locale, '重试', 'Retry')}
+          </button>
+        </Status>
+      ) : (
+        <div
+          className={`world-management__catalog is-${view}${projects.length === 0 ? ' is-empty' : ''}`}
+        >
+          {snapshot?.diagnostics.map((item) => (
+            <Diagnostic key={`${item.recordKind}:${item.recordId}`}>
+              {`${item.recordKind} / ${item.recordId}: ${item.message}`}
+            </Diagnostic>
+          ))}
+          {projects.length === 0 ? (
+            <EmptyState
+              fill
+              icon={<GridIcon size={22} />}
+              title={
+                query
+                  ? label(locale, '没有匹配的世界', 'No matching worlds')
+                  : label(locale, '创建第一个世界', 'Create your first world')
+              }
+              action={
+                query ? undefined : (
+                  <button type="button" onClick={onCreate}>
+                    {label(locale, '新建世界', 'New world')}
+                  </button>
+                )
+              }
+            />
+          ) : null}
+          {projects.map((project) => {
+            const count =
+              snapshot?.world.versions.filter(
+                (version) => version.worldProjectId === project.worldProjectId,
+              ).length ?? 0;
+            return (
+              <button
+                aria-pressed={project.worldProjectId === selectedProjectId}
+                className="world-management__catalog-item"
+                key={project.worldProjectId}
+                type="button"
+                onClick={() => onSelect(project.worldProjectId)}
+              >
+                <span className="world-management__icon-placeholder">
+                  <GridIcon size={20} />
+                </span>
+                <span className="world-management__catalog-copy">
+                  <strong>{project.title}</strong>
+                  <small>
+                    {project.draft.background || label(locale, '暂无背景', 'No background')}
+                  </small>
+                  <span>
+                    {reviewLabel(locale, project.reviewStatus)} · {count}{' '}
+                    {label(locale, '个版本', 'versions')}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function WorldDetailSurface({
+  locale,
+  onCreated,
+  runtime,
+  selection,
+}: {
+  readonly locale: SupportedLocale;
+  readonly onCreated: (worldProjectId: string) => void;
+  readonly runtime: WorldManagementRuntime;
+  readonly selection?: WorldDetailSelection;
+}): JSX.Element {
+  const [selectedRunId, setSelectedRunId] = useState<string>();
+  if (runtime.loadState.kind !== 'ready') {
+    return (
+      <section
+        className="world-foundation world-management world-management--detail"
+        data-world-management-detail="true"
+      >
+        <Status error={runtime.loadState.kind === 'failed'}>
+          {runtime.loadState.kind === 'failed'
+            ? runtime.loadState.message
+            : label(locale, '正在读取世界详情...', 'Loading world details...')}
+        </Status>
+      </section>
+    );
+  }
+
+  const snapshot = runtime.loadState.snapshot;
+  const project =
+    selection?.kind === 'project'
+      ? snapshot.world.projects.find(
+          (candidate) => candidate.worldProjectId === selection.worldProjectId,
+        )
+      : undefined;
   const selectedRuntime =
     snapshot.world.runtimes.find((item) => item.run.worldRunId === selectedRunId) ??
     snapshot.world.runtimes[0];
 
   return (
-    <section className="world-foundation" data-world-foundation="true">
-      <header className="world-foundation__header">
-        <div>
-          <span>WORLD FOUNDATION</span>
-          <h1>{label(locale, '世界', 'Worlds')}</h1>
-          <p>
-            {label(
-              locale,
-              '创作世界定义，发布版本，并检查确定性的状态、事件与分支。',
-              'Author world definitions, publish versions, and inspect deterministic state, events, and branches.',
-            )}
-          </p>
+    <section
+      className="world-foundation world-management world-management--detail"
+      data-world-management-detail="true"
+    >
+      {runtime.diagnostic ? <Diagnostic>{runtime.diagnostic}</Diagnostic> : null}
+      {!selection ? (
+        <div className="world-management__detail-empty">
+          <GridIcon size={26} />
+          <strong>{label(locale, '选择一个世界', 'Select a world')}</strong>
+          <span>{label(locale, '世界配置会显示在这里。', 'World details appear here.')}</span>
         </div>
-        <div className="world-foundation__header-actions">
-          <span className="world-foundation__scope-badge">
-            {label(locale, '基础预览', 'Foundation preview')}
-          </span>
-          <button
-            aria-label={label(locale, '刷新', 'Refresh')}
-            type="button"
-            onClick={() => void reload()}
-          >
-            <RefreshIcon size={15} />
-          </button>
-          <button type="button" onClick={() => setCreating(true)}>
-            <PlusIcon size={15} /> {label(locale, '新建世界', 'New world')}
-          </button>
-        </div>
-      </header>
-
-      {diagnostic ? <Diagnostic>{diagnostic}</Diagnostic> : null}
-      {snapshot.diagnostics.map((item) => (
-        <Diagnostic key={`${item.recordKind}:${item.recordId}`}>
-          {`${item.recordKind} / ${item.recordId}: ${item.message}`}
-        </Diagnostic>
-      ))}
-
-      <div className="world-foundation__notice">
-        <WarningIcon size={15} />
-        <span>
-          {label(
-            locale,
-            '完整 World Experience、Story、Gameplay、实时 AI、游戏引擎和世界模型尚未启用。',
-            'Complete World Experience, Story, Gameplay, realtime AI, game engines, and world models are not enabled.',
-          )}
-        </span>
-      </div>
-
-      <div className="world-foundation__workspace">
-        <WorldLibrary
-          locale={locale}
-          onCreate={() => setCreating(true)}
-          onSelectProject={(id) => {
-            setCreating(false);
-            setSelectedProjectId(id);
-          }}
-          onSelectRun={setSelectedRunId}
-          selectedProjectId={selectedProject?.worldProjectId}
-          selectedRunId={selectedRuntime?.run.worldRunId}
-          snapshot={snapshot}
-        />
-        <WorldStudio
-          creating={creating || !selectedProject}
-          execute={execute}
-          locale={locale}
-          pending={pending}
-          project={creating ? undefined : selectedProject}
-          snapshot={snapshot}
-          onCreated={(id) => {
-            setCreating(false);
-            setSelectedProjectId(id);
-          }}
-        />
-        <WorldPreview
-          execute={execute}
-          locale={locale}
-          pending={pending}
-          runtime={selectedRuntime}
-          snapshot={snapshot}
-          onRunCreated={setSelectedRunId}
-        />
-      </div>
-    </section>
-  );
-}
-
-function WorldLibrary({
-  locale,
-  onCreate,
-  onSelectProject,
-  onSelectRun,
-  selectedProjectId,
-  selectedRunId,
-  snapshot,
-}: {
-  readonly locale: SupportedLocale;
-  readonly onCreate: () => void;
-  readonly onSelectProject: (id: string) => void;
-  readonly onSelectRun: (id: string) => void;
-  readonly selectedProjectId?: string;
-  readonly selectedRunId?: string;
-  readonly snapshot: WorldFoundationSnapshot;
-}): JSX.Element {
-  return (
-    <aside className="world-foundation__library">
-      <section>
-        <div className="world-foundation__section-title">
-          <span>{label(locale, '世界资料库', 'World library')}</span>
-          <strong>{snapshot.world.projects.length}</strong>
-        </div>
-        {snapshot.world.projects.length === 0 ? (
-          <EmptyState
-            fill
-            icon={<GridIcon size={22} />}
-            title={label(locale, '创建第一个世界', 'Create your first world')}
-            action={
-              <button type="button" onClick={onCreate}>
-                {label(locale, '新建世界', 'New world')}
-              </button>
-            }
+      ) : selection.kind === 'project' && !project ? (
+        <Diagnostic>{`WorldProject '${selection.worldProjectId}' is unavailable.`}</Diagnostic>
+      ) : (
+        <div className="world-management__detail-content">
+          <WorldStudio
+            creating={selection.kind === 'create'}
+            execute={runtime.execute}
+            locale={locale}
+            onCreated={onCreated}
+            pending={runtime.pendingOperation}
+            project={project}
+            snapshot={snapshot}
           />
-        ) : (
-          <div className="world-foundation__list">
-            {snapshot.world.projects.map((project) => {
-              const count = snapshot.world.versions.filter(
-                (version) => version.worldProjectId === project.worldProjectId,
-              ).length;
-              return (
-                <button
-                  className={project.worldProjectId === selectedProjectId ? 'is-active' : undefined}
-                  key={project.worldProjectId}
-                  type="button"
-                  onClick={() => onSelectProject(project.worldProjectId)}
-                >
-                  <span>{project.title}</span>
-                  <small>
-                    {reviewLabel(locale, project.reviewStatus)} · {count}{' '}
-                    {label(locale, '个版本', 'versions')}
-                  </small>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
-      <section>
-        <div className="world-foundation__section-title">
-          <span>{label(locale, '预览记录', 'Preview runs')}</span>
-          <strong>{snapshot.world.runtimes.length}</strong>
+          {project ? (
+            <div className="world-management__preview-region">
+              <div className="world-foundation__notice">
+                <WarningIcon size={15} />
+                <span>
+                  {label(
+                    locale,
+                    '完整 World Experience、Story、Gameplay、实时 AI、游戏引擎和世界模型尚未启用。',
+                    'Complete World Experience, Story, Gameplay, realtime AI, game engines, and world models are not enabled.',
+                  )}
+                </span>
+              </div>
+              <WorldPreview
+                execute={runtime.execute}
+                locale={locale}
+                onRunCreated={setSelectedRunId}
+                pending={runtime.pendingOperation}
+                runtime={selectedRuntime}
+                snapshot={snapshot}
+              />
+            </div>
+          ) : null}
         </div>
-        <div className="world-foundation__list">
-          {snapshot.world.runtimes.map(({ run, save }) => (
-            <button
-              className={run.worldRunId === selectedRunId ? 'is-active' : undefined}
-              key={run.worldRunId}
-              type="button"
-              onClick={() => onSelectRun(run.worldRunId)}
-            >
-              <span>{save.label}</span>
-              <small>
-                {save.branches.length} {label(locale, '个分支', 'branches')} · r
-                {run.worldStateRevision}
-              </small>
-            </button>
-          ))}
-        </div>
-      </section>
-    </aside>
+      )}
+    </section>
   );
 }
 

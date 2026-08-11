@@ -1,7 +1,19 @@
-import type { WorldFoundationCommand, WorldFoundationSnapshot } from '@neko/world/contracts';
+import type {
+  WorldAuthoringSnapshot,
+  WorldFoundationCommand,
+  WorldFoundationSnapshot,
+} from '@neko/world/contracts';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useMemo, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WorldFoundationRoot } from './root';
+import {
+  WorldAuthoringStudioRoot,
+  WorldCatalogSurface,
+  WorldDetailSurface,
+  WorldFoundationRoot,
+  useWorldManagementRuntime,
+  type WorldDetailSelection,
+} from './root';
 
 const now = '2026-08-10T10:00:00.000Z';
 
@@ -49,6 +61,96 @@ describe('WorldFoundationRoot', () => {
         },
       },
     });
+  });
+
+  it('shares one management runtime across list/grid catalog and exact detail surfaces', async () => {
+    const snapshot = runtimeSnapshot();
+    const execute = vi.fn(async () => snapshot);
+    const { container } = render(
+      <SplitWorldManagementHarness
+        host={{ getSnapshot: async () => snapshot, execute }}
+        locale="en"
+      />,
+    );
+
+    await screen.findByRole('button', { name: /Archive City/u });
+    expect(container.querySelector('[data-world-management-catalog="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-world-management-detail="true"]')).not.toBeNull();
+    expect(screen.getByText('Select a world')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Grid view' }));
+    expect(container.querySelector('.world-management__catalog')?.className).toContain('is-grid');
+
+    fireEvent.click(screen.getByRole('button', { name: /Archive City/u }));
+    expect(await screen.findByRole('heading', { name: 'Archive City' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Foundation preview' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New world' }));
+    expect(await screen.findByRole('heading', { name: 'Define world' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Foundation preview' })).toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not retain a late catalog snapshot after the management runtime is deactivated', async () => {
+    let resolveSnapshot: ((snapshot: WorldFoundationSnapshot) => void) | undefined;
+    const getSnapshot = vi.fn(
+      () =>
+        new Promise<WorldFoundationSnapshot>((resolve) => {
+          resolveSnapshot = resolve;
+        }),
+    );
+    render(<WorldManagementLifecycleHarness getSnapshot={getSnapshot} />);
+
+    await waitFor(() => expect(getSnapshot).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('world-management-load-state').textContent).toBe('loading');
+    fireEvent.click(screen.getByRole('button', { name: 'Deactivate world management' }));
+    expect(screen.getByTestId('world-management-load-state').textContent).toBe('idle');
+
+    resolveSnapshot?.(runtimeSnapshot());
+    await waitFor(() =>
+      expect(screen.getByTestId('world-management-load-state').textContent).toBe('idle'),
+    );
+  });
+
+  it('mounts the project-local authoring-only Studio from validated authority', async () => {
+    const foundation = runtimeSnapshot();
+    const project = foundation.world.projects[0]!;
+    const snapshot: WorldAuthoringSnapshot = {
+      project,
+      versions: foundation.world.versions,
+      diagnostics: [],
+    };
+    const getSnapshot = vi.fn(async () => snapshot);
+    const execute = vi.fn(async () => snapshot);
+    const { container, unmount } = render(
+      <WorldAuthoringStudioRoot
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          contentProjectId: 'content-project-1',
+          worldProjectId: project.worldProjectId,
+        }}
+        host={{ getSnapshot, execute }}
+        initialSnapshot={snapshot}
+        locale="en"
+        windowId="window-1"
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Archive City' })).toBeTruthy();
+    expect(getSnapshot).not.toHaveBeenCalled();
+    expect(screen.queryByText('Preview runs')).toBeNull();
+    expect(screen.queryByText(/Complete World Experience/u)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Background'), { target: { value: 'Updated world' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(execute).toHaveBeenCalledWith(
+      'window-1',
+      expect.objectContaining({ worldProjectId: project.worldProjectId }),
+      expect.objectContaining({ operation: 'world-project-update-draft' }),
+    );
+    unmount();
+    expect(container.querySelector('[data-world-authoring-studio="true"]')).toBeNull();
   });
 
   it('reviews a sourced transformation candidate before the canonical commit', async () => {
@@ -167,6 +269,55 @@ describe('WorldFoundationRoot', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 });
+
+function SplitWorldManagementHarness({
+  host,
+  locale,
+}: {
+  readonly host: NonNullable<Parameters<typeof useWorldManagementRuntime>[0]['host']>;
+  readonly locale: 'en';
+}): JSX.Element {
+  const runtime = useWorldManagementRuntime({ active: true, host });
+  const [selection, setSelection] = useState<WorldDetailSelection>();
+  return (
+    <div>
+      <WorldCatalogSurface
+        locale={locale}
+        onCreate={() => setSelection({ kind: 'create' })}
+        onSelect={(worldProjectId) => setSelection({ kind: 'project', worldProjectId })}
+        runtime={runtime}
+        selectedProjectId={selection?.kind === 'project' ? selection.worldProjectId : undefined}
+      />
+      <WorldDetailSurface
+        locale={locale}
+        onCreated={(worldProjectId) => setSelection({ kind: 'project', worldProjectId })}
+        runtime={runtime}
+        selection={selection}
+      />
+    </div>
+  );
+}
+
+function WorldManagementLifecycleHarness({
+  getSnapshot,
+}: {
+  readonly getSnapshot: () => Promise<WorldFoundationSnapshot>;
+}): JSX.Element {
+  const [active, setActive] = useState(true);
+  const host = useMemo(
+    () => ({ getSnapshot, execute: async () => emptySnapshot() }),
+    [getSnapshot],
+  );
+  const runtime = useWorldManagementRuntime({ active, host });
+  return (
+    <>
+      <button type="button" onClick={() => setActive(false)}>
+        Deactivate world management
+      </button>
+      <span data-testid="world-management-load-state">{runtime.loadState.kind}</span>
+    </>
+  );
+}
 
 function runtimeSnapshot(): WorldFoundationSnapshot {
   const definition = {

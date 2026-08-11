@@ -12,6 +12,7 @@ import {
   closeMainView,
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
   openOrFocusCutView,
+  openOrFocusMainView,
 } from './desktop-workbench-contract';
 import {
   createDefaultDesktopApplicationSidebar,
@@ -654,7 +655,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('keeps Character Management unavailable without changing the active Scene', async () => {
+  it('opens the Character catalog through the Creative Management scene', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -666,28 +667,21 @@ describe('DesktopShellService', () => {
         rendererSessionId: projection.rendererSessionId,
         windowId,
         sceneId: activeScene(projection.window).sceneId,
-        intent: { kind: 'open-character-management' },
+        intent: { kind: 'open-creative-management', catalog: 'characters' },
       }),
     );
 
-    expect(transitioned).toEqual({
-      status: 'unavailable',
+    expect(transitioned).toMatchObject({
+      status: 'transitioned',
       requestId: 'character-management-1',
-      diagnostic: {
-        code: 'desktop-scene-owner-unavailable',
-        severity: 'error',
-        message:
-          'Character and Room capabilities remain experimental and are not available in the production Desktop.',
-        metadata: {
-          owner: 'character-product',
-          intentKind: 'open-character-management',
-        },
+      scene: {
+        context: { kind: 'creative-management', catalog: 'characters' },
+        slots: { main: { kind: 'creative-management', catalog: 'characters' } },
       },
     });
-    expect(await fixture.service.getProjection(windowId)).toEqual(projection);
   });
 
-  it('keeps World Management unavailable without changing the active Scene', async () => {
+  it('opens the World catalog through the same Creative Management scene', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -699,41 +693,67 @@ describe('DesktopShellService', () => {
         rendererSessionId: projection.rendererSessionId,
         windowId,
         sceneId: activeScene(projection.window).sceneId,
-        intent: { kind: 'open-world-management' },
+        intent: { kind: 'open-creative-management', catalog: 'worlds' },
       }),
     );
 
-    expect(transitioned).toEqual({
-      status: 'unavailable',
+    expect(transitioned).toMatchObject({
+      status: 'transitioned',
       requestId: 'world-management-1',
-      diagnostic: {
-        code: 'desktop-scene-owner-unavailable',
-        severity: 'error',
-        message:
-          'Interactive World capabilities remain experimental and are not available in the production Desktop.',
-        metadata: {
-          owner: 'world-product',
-          intentKind: 'open-world-management',
+      scene: {
+        context: { kind: 'creative-management', catalog: 'worlds' },
+        slots: { main: { kind: 'creative-management', catalog: 'worlds' } },
+      },
+    });
+
+    if (transitioned.status !== 'transitioned') {
+      throw new Error('Expected the World management transition to succeed.');
+    }
+    const selected = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'world-detail-1',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: transitioned.scene.sceneId,
+        intent: {
+          kind: 'select-world-detail',
+          selection: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+        },
+      }),
+    );
+    expect(selected).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'creative-management',
+          catalog: 'worlds',
+          detail: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+        },
+        slots: {
+          main: { kind: 'creative-management', catalog: 'worlds' },
+          secondaryMain: {
+            kind: 'world-detail',
+            selection: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+          },
         },
       },
     });
-    expect(await fixture.service.getProjection(windowId)).toEqual(projection);
   });
 
-  it('resets persisted experimental scenes without changing durable Project records', async () => {
+  it('preserves qualified Character Interaction while resetting unavailable management scenes', async () => {
     const windowId = 'window-experimental';
     const cases = [
       {
         owner: 'character' as const,
         scene: parseDesktopWorkbenchSceneProjection({
-          sceneId: `scene:${windowId}:character-management`,
+          sceneId: `scene:${windowId}:creative-management`,
           windowId,
-          context: { kind: 'character-management' },
+          context: { kind: 'creative-management', catalog: 'characters' },
           slots: {
-            main: { kind: 'character-management' },
+            main: { kind: 'creative-management', catalog: 'characters' },
             status: {
               kind: 'scene-status',
-              sceneId: `scene:${windowId}:character-management`,
+              sceneId: `scene:${windowId}:creative-management`,
             },
           },
         }),
@@ -800,14 +820,14 @@ describe('DesktopShellService', () => {
       {
         owner: 'world' as const,
         scene: parseDesktopWorkbenchSceneProjection({
-          sceneId: `scene:${windowId}:world-management`,
+          sceneId: `scene:${windowId}:creative-management`,
           windowId,
-          context: { kind: 'world-management' },
+          context: { kind: 'creative-management', catalog: 'worlds' },
           slots: {
-            main: { kind: 'world-management' },
+            main: { kind: 'creative-management', catalog: 'worlds' },
             status: {
               kind: 'scene-status',
-              sceneId: `scene:${windowId}:world-management`,
+              sceneId: `scene:${windowId}:creative-management`,
             },
           },
         }),
@@ -844,25 +864,62 @@ describe('DesktopShellService', () => {
         ],
       });
       const fixture = createFixture(repository);
+      const persistedContext = testCase.scene.context;
+      if (persistedContext.kind === 'character-interaction') {
+        fixture.service.setAgentHomeProjectionSource({
+          readHomeProjection: () => ({
+            conversations: [
+              {
+                navigation: {
+                  conversationId: persistedContext.scope.conversationId!,
+                  owner: persistedContext.owner,
+                },
+                title: 'Character conversation',
+                updatedAt: '2026-08-10T00:00:00.000Z',
+                attention: 'none',
+                lastActivity: {
+                  kind: 'conversation-updated',
+                  occurredAt: '2026-08-10T00:00:00.000Z',
+                },
+              },
+            ],
+            attention: { needsInput: 0, needsReview: 0, running: 0 },
+          }),
+          subscribeHomeProjection: () => () => undefined,
+        });
+      }
       const claimedWindowId = await fixture.service.claimWindowId();
       fixture.service.setRendererSessionId(claimedWindowId, 'renderer-session-restored');
       const projection = await fixture.service.getProjection(claimedWindowId);
 
-      expect(activeScene(projection.window).context).toMatchObject({
-        kind: 'agent',
-        scope: { kind: 'unbound' },
-      });
+      if (testCase.scene.context.kind === 'character-interaction') {
+        expect(activeScene(projection.window).context).toMatchObject({
+          kind: 'agent',
+          scope: { kind: 'unbound' },
+        });
+        expect(projection.stateDiagnostics).not.toContainEqual(
+          expect.objectContaining({
+            code: 'desktop-presentation-reset',
+            resetSceneId: testCase.scene.sceneId,
+          }),
+        );
+      } else {
+        expect(activeScene(projection.window).context).toMatchObject({
+          kind: 'agent',
+          scope: { kind: 'unbound' },
+        });
+        expect(projection.stateDiagnostics).toContainEqual({
+          code: 'desktop-presentation-reset',
+          severity: 'warning',
+          windowId,
+          owner: testCase.owner,
+          resetSceneId: testCase.scene.sceneId,
+          message: expect.stringContaining(
+            'Durable records and protected background runtime were preserved',
+          ),
+        });
+      }
       expect(projection.catalog.projects).toHaveLength(1);
-      expect(projection.stateDiagnostics).toContainEqual({
-        code: 'desktop-presentation-reset',
-        severity: 'warning',
-        windowId,
-        owner: testCase.owner,
-        resetSceneId: testCase.scene.sceneId,
-        message: expect.stringContaining(
-          'Durable records and protected background runtime were preserved',
-        ),
-      });
       expect((await repository.read()).projects).toHaveLength(1);
       await fixture.service.dispose();
     }
@@ -1541,6 +1598,147 @@ describe('DesktopShellService', () => {
     expect(await fixture.service.getSceneProjection(windowId)).toEqual(attached);
   });
 
+  it('commits an unbound Entry Draft into the exact Character Interaction scene', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await fixture.service.getProjection(windowId);
+    const entryScene = activeScene(initial.window);
+    if (entryScene.context.kind !== 'agent' || entryScene.context.scope.kind !== 'unbound') {
+      throw new Error('Character first-submit fixture requires an unbound Entry Draft.');
+    }
+    const input = {
+      windowId,
+      rendererSessionId: initial.rendererSessionId,
+      agentViewId: entryScene.context.agentViewId,
+      draftId: entryScene.context.scope.draftId,
+      context: {
+        kind: 'character' as const,
+        characterId: 'character-project-1',
+        characterVersionId: 'character-version-1',
+        characterRunId: 'character-run-1',
+        dialogueRunId: 'dialogue-run-1',
+      },
+      conversationId: 'conversation-character-1',
+    };
+
+    const attached = await fixture.service.attachAgentConversation(input);
+    expect(attached).toMatchObject({
+      context: {
+        kind: 'character-interaction',
+        owner: {
+          kind: 'character',
+          characterId: 'character-project-1',
+          characterRunId: 'character-run-1',
+          dialogueRunId: 'dialogue-run-1',
+        },
+        scope: { conversationId: 'conversation-character-1' },
+      },
+      slots: {
+        interaction: { phase: 'session' },
+        main: { kind: 'character-avatar' },
+        rightManager: { kind: 'character-runtime-manager' },
+      },
+    });
+    expect(attached.slots.cutPanel).toBeUndefined();
+    await expect(fixture.service.attachAgentConversation(input)).resolves.toEqual(attached);
+  });
+
+  it('commits multiple Characters into one exact Room Interaction scene', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await fixture.service.getProjection(windowId);
+    const entryScene = activeScene(initial.window);
+    if (entryScene.context.kind !== 'agent' || entryScene.context.scope.kind !== 'unbound') {
+      throw new Error('Room first-submit fixture requires an unbound Entry Draft.');
+    }
+
+    const attached = await fixture.service.attachAgentConversation({
+      windowId,
+      rendererSessionId: initial.rendererSessionId,
+      agentViewId: entryScene.context.agentViewId,
+      draftId: entryScene.context.scope.draftId,
+      context: { kind: 'room', roomId: 'character-room-1', roomRunId: 'room-run-1' },
+      conversationId: 'conversation-room-1',
+    });
+
+    expect(attached).toMatchObject({
+      context: {
+        kind: 'character-interaction',
+        owner: { kind: 'room', roomId: 'character-room-1', roomRunId: 'room-run-1' },
+      },
+      slots: {
+        interaction: { phase: 'session' },
+        main: { kind: 'character-avatar' },
+        rightManager: { kind: 'character-runtime-manager' },
+        cutPanel: { kind: 'character-room-timeline' },
+      },
+    });
+  });
+
+  it('restores an exact Character Conversation after its prior Root was unloaded', async () => {
+    const fixture = createFixture();
+    const navigation = {
+      conversationId: 'conversation-character-restore',
+      owner: {
+        kind: 'character' as const,
+        characterId: 'character-project-restore',
+        characterRunId: 'character-run-restore',
+        dialogueRunId: 'dialogue-run-restore',
+      },
+    };
+    fixture.service.setAgentHomeProjectionSource({
+      readHomeProjection: () => ({
+        conversations: [
+          {
+            navigation,
+            title: 'Restored Character',
+            updatedAt: '2026-08-11T00:00:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-08-11T00:00:00.000Z',
+            },
+          },
+        ],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+
+    const restored = await fixture.service.restoreAgentConversation({
+      request: createDesktopSceneTransitionRequest({
+        requestId: 'restore-character-conversation',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: activeScene(projection.window).sceneId,
+        intent: { kind: 'restore-conversation', navigation },
+      }),
+      context: {
+        kind: 'character',
+        characterId: 'character-project-restore',
+        characterVersionId: 'character-version-restore',
+        characterRunId: 'character-run-restore',
+        dialogueRunId: 'dialogue-run-restore',
+      },
+    });
+
+    expect(restored).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'character-interaction',
+          owner: navigation.owner,
+          scope: { conversationId: navigation.conversationId },
+        },
+      },
+    });
+  });
+
   it('treats the active Workspace Project Draft as an idempotent Scene transition', async () => {
     const repository = createInMemoryDesktopShellStateRepository();
     const workspace = {
@@ -1851,6 +2049,71 @@ describe('DesktopShellService', () => {
     expect(activeWorkbench(opened.projection.window).main.groups[0]).toMatchObject({
       viewIds: [activeWorkbench(opened.projection.window).main.views[0]?.viewId],
       activeViewId: activeWorkbench(opened.projection.window).main.views[0]?.viewId,
+    });
+  });
+
+  it('projects exact Character and World authoring targets from the active Workspace View', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await fixture.service.getProjection(windowId);
+    const opened = await openContent(
+      fixture,
+      windowId,
+      '/workspace/demo',
+      initial.rendererSessionId,
+    );
+    const current = activeWorkbench(opened.projection.window);
+    const project = opened.projection.catalog.projects[0];
+    if (!project) throw new Error('Expected a Content Project.');
+    const characterLayout = openOrFocusMainView(current, {
+      viewId: 'view:character-1',
+      viewInstanceId: 'view-instance:character-1',
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      kind: 'character-authoring',
+      ownerId: 'character',
+      displayLabel: 'Lead',
+      characterProjectId: 'character-project-1',
+    });
+    const character = await fixture.service.updateWorkbench(
+      windowId,
+      opened.projection.rendererSessionId,
+      activeInstance(opened.projection.window).workbenchInstanceId,
+      characterLayout,
+    );
+    expect(activeScene(character.window).slots.main).toEqual({
+      kind: 'character-authoring',
+      workspaceId: project.workspaceId,
+      projectId: project.projectId,
+      viewId: 'view:character-1',
+      viewInstanceId: 'view-instance:character-1',
+      characterProjectId: 'character-project-1',
+    });
+
+    const worldLayout = openOrFocusMainView(activeWorkbench(character.window), {
+      viewId: 'view:world-1',
+      viewInstanceId: 'view-instance:world-1',
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      kind: 'world-authoring',
+      ownerId: 'world',
+      displayLabel: 'Setting',
+      worldProjectId: 'world-project-1',
+    });
+    const world = await fixture.service.updateWorkbench(
+      windowId,
+      character.rendererSessionId,
+      activeInstance(character.window).workbenchInstanceId,
+      worldLayout,
+    );
+    expect(activeScene(world.window).slots.main).toEqual({
+      kind: 'world-authoring',
+      workspaceId: project.workspaceId,
+      projectId: project.projectId,
+      viewId: 'view:world-1',
+      viewInstanceId: 'view-instance:world-1',
+      worldProjectId: 'world-project-1',
     });
   });
 
