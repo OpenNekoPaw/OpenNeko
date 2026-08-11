@@ -4,8 +4,10 @@ import {
   createEmptyCharacterOriginSetting,
 } from '@neko/chara/contracts';
 import {
+  createProjectAuthoringCatalogHostRequest,
   createProjectAuthoringNavigationHostRequest,
   parseContentProjectComposition,
+  parseProjectAuthoringCatalogHostResult,
   parseProjectAuthoringNavigationHostResult,
   type ContentProjectComposition,
 } from './contracts';
@@ -198,6 +200,46 @@ describe('Content Project composition', () => {
         'request-1',
       ),
     ).toThrow('does not match its exact target ref');
+  });
+
+  it('encodes one read-only aggregate catalog without raw Workspace paths', () => {
+    const request = createProjectAuthoringCatalogHostRequest({
+      requestId: 'catalog-request-1',
+      rendererSessionId: 'renderer-1',
+      windowId: 'window-1',
+    });
+    expect(request).toEqual({
+      requestId: 'catalog-request-1',
+      rendererSessionId: 'renderer-1',
+      windowId: 'window-1',
+      operation: 'catalog-get',
+    });
+    const result = parseProjectAuthoringCatalogHostResult(
+      {
+        requestId: request.requestId,
+        projects: [
+          {
+            workspaceId: 'workspace-1',
+            contentProjectId: 'content-project-1',
+            label: 'Story',
+            navigation: [
+              {
+                kind: 'authoring-target',
+                target: { kind: 'world-project', worldProjectId: 'world-1' },
+                identity: 'world-project:world-1',
+                label: 'Cinder Sea',
+              },
+            ],
+          },
+        ],
+        diagnostics: [{ contentProjectId: 'content-project-2', message: 'Unavailable.' }],
+      },
+      request.requestId,
+    );
+    expect(result.projects[0]?.navigation[0]).toMatchObject({
+      target: { kind: 'world-project', worldProjectId: 'world-1' },
+    });
+    expect(JSON.stringify(result)).not.toContain('workspacePath');
   });
 });
 

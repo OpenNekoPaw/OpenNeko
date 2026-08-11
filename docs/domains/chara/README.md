@@ -59,11 +59,13 @@ CharacterMemoryScopeRef
 
 一个显式 `@CharacterVersion` 选择启动 Dialogue，多个选择启动 Room。每个 agent-controlled participant 拥有独立 CharacterRun、primary AgentSession、Chat/TTS 配置和 memory view；human-controlled Character 不创建隐藏 AgentSession。Room 只拥有参与者、调度和有序 RoomEvent，不拥有外部共享状态或存档。
 
+Agent Entry 通过 Chara-owned conversation launch catalog 读取已发布 CharacterVersion 的精确项目、版本与可选 CharacterStorylineVersion 展示投影。单角色选择可附带一条精确故事线，多角色选择不携带故事线并在首次提交时创建 Room。Entry 目录不暴露 CharacterDefinition 等完整事实，也不复用 Workspace 文件搜索、Entity mention 或 prompt 编码角色身份；Desktop Main 在提交前仍通过 Chara publication authority 重新校验全部版本。
+
 Character Studio 管理概览、背景故事、原生背景设定、认知与行为、个人故事线、角色/关系记忆、表现资源、声音、运行历史和发布版本。Character Runtime Workbench 组合 Agent Interaction/Room、唯一 Avatar Main、Character Runtime 配置和按需 Room timeline。图片、模型和音频 bytes 继续由 Assets/Content/Media/Voice owner 管理，Chara 只保存稳定引用与角色语义。
 
 ## 当前状态
 
-当前已实现 CharacterProject/Version、UserCharacterRelationship、CharacterRun、Dialogue/Room durable records、Character catalog/detail、Agent Entry Character selection、Room 调度/投影和基础 Character Workbench。尚未实现 CharacterBackgroundStory、CharacterOriginSetting、CharacterStoryline、narrative CharacterMemory、完整 Avatar/Voice/Chat-TTS 产品路径。
+当前已实现 CharacterProject/Version、UserCharacterRelationship、CharacterRun、Dialogue/Room durable records、Character catalog/detail、Agent Entry 已发布版本/可选故事线选择、首次提交 Dialogue/Room、Room 调度/投影和基础 Character Workbench。World Experience 仍由 World owner 保持 unavailable。尚未实现完整 Avatar/Voice/Chat-TTS 产品路径及 provider-backed 的可见 UI 验收。
 
 现有 Character Foundation Host 仍包含外部 World CRUD 和完整 catalog，这是待删除的架构漂移，不构成 Chara 能力。相关收敛任务见当前 Character OpenSpec；World Story/Gameplay/Experience 与 Character + World composition/binding 由 `define-ai-native-interactive-world` 处理。
 

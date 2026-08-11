@@ -25,6 +25,19 @@ export interface AgentCharacterDialogueParticipant {
   readonly roleProfileId?: string;
 }
 
+export interface AgentCharacterDialogueStorylineOption {
+  readonly storylineVersionId: string;
+  readonly label: string;
+}
+
+export interface AgentCharacterDialogueTargetOption {
+  readonly characterProjectId: string;
+  readonly characterVersionId: string;
+  readonly displayName: string;
+  readonly versionLabel: string;
+  readonly storylines: readonly AgentCharacterDialogueStorylineOption[];
+}
+
 export interface AgentCharacterDialogueLaunchBinding {
   readonly kind: 'character-dialogue';
   readonly participants: readonly AgentCharacterDialogueParticipant[];
@@ -185,6 +198,54 @@ export function parseAgentEntryTargetBinding(value: unknown): AgentEntryTargetBi
     default:
       throw new Error(`Unknown Agent Entry target binding '${String(record['kind'])}'.`);
   }
+}
+
+export function parseAgentCharacterDialogueTargetOptions(
+  value: unknown,
+): readonly AgentCharacterDialogueTargetOption[] {
+  if (!Array.isArray(value)) {
+    throw new Error('Agent Character Dialogue target options must be an array.');
+  }
+  const options = value.map((item) => {
+    const record = requireRecord(item, 'Agent Character Dialogue target option');
+    requireExactKeys(
+      record,
+      ['characterProjectId', 'characterVersionId', 'displayName', 'versionLabel', 'storylines'],
+      'Agent Character Dialogue target option',
+    );
+    if (!Array.isArray(record['storylines'])) {
+      throw new Error('Agent Character Dialogue storyline options must be an array.');
+    }
+    const storylines = record['storylines'].map((storylineValue) => {
+      const storyline = requireRecord(storylineValue, 'Agent Character Dialogue storyline option');
+      requireExactKeys(
+        storyline,
+        ['storylineVersionId', 'label'],
+        'Agent Character Dialogue storyline option',
+      );
+      return {
+        storylineVersionId: requireIdentity(storyline['storylineVersionId'], 'Storyline Version'),
+        label: requireIdentity(storyline['label'], 'storyline label'),
+      };
+    });
+    if (
+      new Set(storylines.map((storyline) => storyline.storylineVersionId)).size !==
+      storylines.length
+    ) {
+      throw new Error('Agent Character Dialogue storyline options must use unique versions.');
+    }
+    return {
+      characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+      characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
+      displayName: requireIdentity(record['displayName'], 'Character display name'),
+      versionLabel: requireIdentity(record['versionLabel'], 'Character version label'),
+      storylines,
+    };
+  });
+  if (new Set(options.map((option) => option.characterVersionId)).size !== options.length) {
+    throw new Error('Agent Character Dialogue target options must use unique CharacterVersions.');
+  }
+  return options;
 }
 
 function parseAgentEntryMode(value: unknown): AgentEntryMode {

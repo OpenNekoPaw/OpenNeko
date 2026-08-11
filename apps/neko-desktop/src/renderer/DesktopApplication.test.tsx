@@ -2760,6 +2760,11 @@ function installBridge({
       },
     ],
   })),
+  projectAuthoringGetCatalog = vi.fn(async () => ({
+    requestId: 'test-project-authoring-catalog',
+    projects: [],
+    diagnostics: [],
+  })),
   characterAvatarOpenSurface = vi.fn(),
   characterAvatarReleaseSurface = vi.fn(),
   characterRoomGetSnapshot = vi.fn(async (roomRunId: string) => roomWorkbenchView(roomRunId)),
@@ -2785,6 +2790,7 @@ function installBridge({
   readonly worldAuthoringGetSnapshot?: typeof window.openNekoDesktop.worldAuthoring.getSnapshot;
   readonly worldAuthoringExecute?: typeof window.openNekoDesktop.worldAuthoring.execute;
   readonly projectAuthoringGetNavigation?: typeof window.openNekoDesktop.projectAuthoring.getNavigation;
+  readonly projectAuthoringGetCatalog?: typeof window.openNekoDesktop.projectAuthoring.getCatalog;
   readonly characterAvatarOpenSurface?: typeof window.openNekoDesktop.characterAvatar.openSurface;
   readonly characterAvatarReleaseSurface?: typeof window.openNekoDesktop.characterAvatar.releaseSurface;
   readonly characterRoomGetSnapshot?: (roomRunId: string) => Promise<RoomView>;
@@ -2803,6 +2809,7 @@ function installBridge({
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },
       characterFoundation: {
+        getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
         getSnapshot: characterFoundationGetSnapshot,
         execute: vi.fn(async () => emptyCharacterFoundationSnapshot()),
       },
@@ -2829,7 +2836,10 @@ function installBridge({
         getSnapshot: characterRoomGetSnapshot,
         subscribe: characterRoomSubscribe,
       },
-      projectAuthoring: { getNavigation: projectAuthoringGetNavigation },
+      projectAuthoring: {
+        getCatalog: projectAuthoringGetCatalog,
+        getNavigation: projectAuthoringGetNavigation,
+      },
       textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
       agentLaunch: {
         attach: vi.fn(() => new Promise(() => undefined)),

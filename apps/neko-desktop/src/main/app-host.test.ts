@@ -89,6 +89,7 @@ import {
   createWorldAuthoringSnapshotRequest,
 } from '@neko/world/contracts';
 import {
+  createProjectAuthoringCatalogHostRequest,
   createProjectAuthoringNavigationHostRequest,
   createProjectLocalAuthoringHostRequest,
 } from '@neko/project/contracts';
@@ -108,6 +109,23 @@ describe('DesktopAppHost', () => {
       snapshot: { character: { projects: [], versions: [] }, diagnostics: [] },
     });
     expect(commands.execute).toHaveBeenCalledOnce();
+    await fixture.appHost.dispose();
+  });
+
+  it('returns the Chara-owned conversation launch catalog without executing a command', async () => {
+    const commands = { execute: vi.fn(async () => undefined) };
+    const fixture = await createShellAppHost({ characterFoundationCommands: commands });
+
+    await expect(
+      fixture.appHost.executeCharacterFoundationRequest(fixture.sender, {
+        requestId: 'character-launch-catalog-request-1',
+        operation: 'conversation-launch-catalog-get',
+      }),
+    ).resolves.toEqual({
+      requestId: 'character-launch-catalog-request-1',
+      catalog: { targets: [], diagnostics: [] },
+    });
+    expect(commands.execute).not.toHaveBeenCalled();
     await fixture.appHost.dispose();
   });
 
@@ -2520,6 +2538,105 @@ describe('DesktopAppHost', () => {
       ),
     ).rejects.toThrow();
     expect(projectAuthoring.getNavigation).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('aggregates every registered Project target and isolates one Project catalog failure', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const firstWorkspace = {
+      ...createWorkspaceResolution(),
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/first',
+      displayName: 'First',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace/first' },
+    };
+    const secondWorkspace = {
+      ...createWorkspaceResolution(),
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      workspacePath: '/workspace/second',
+      displayName: 'Second',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace/second' },
+    };
+    fixture.registry.resolve.mockImplementation(async (identity: string) => {
+      if (identity === firstWorkspace.workspacePath || identity === firstWorkspace.workspaceId) {
+        return firstWorkspace;
+      }
+      if (identity === secondWorkspace.workspacePath || identity === secondWorkspace.workspaceId) {
+        return secondWorkspace;
+      }
+      throw new Error(`Unknown Workspace '${identity}'.`);
+    });
+    const firstOpened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'aggregate-project-first',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => firstWorkspace.workspacePath,
+    );
+    const secondOpened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'aggregate-project-second',
+        firstOpened.projection.rendererSessionId,
+      ),
+      async () => secondWorkspace.workspacePath,
+    );
+    const [firstProject, secondProject] = secondOpened.projection.catalog.projects;
+    if (!firstProject || !secondProject) throw new Error('Expected two registered Projects.');
+    vi.mocked(projectAuthoring.getNavigation).mockImplementation(async (input) => {
+      if (input.contentProjectId === firstProject.projectId) {
+        throw new Error('First Project catalog is unreadable.');
+      }
+      return [
+        {
+          kind: 'authoring-target',
+          target: { kind: 'content-project', contentProjectId: secondProject.projectId },
+          identity: `content-project:${secondProject.projectId}`,
+          label: secondProject.displayName,
+        },
+        {
+          kind: 'authoring-target',
+          target: { kind: 'character-project', characterProjectId: 'character-1' },
+          identity: 'character-project:character-1',
+          label: 'Aster',
+        },
+        {
+          kind: 'authoring-target',
+          target: { kind: 'world-project', worldProjectId: 'world-1' },
+          identity: 'world-project:world-1',
+          label: 'Cinder Sea',
+        },
+      ];
+    });
+
+    const request = createProjectAuthoringCatalogHostRequest({
+      requestId: 'project-authoring-catalog',
+      rendererSessionId: secondOpened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+    });
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, request),
+    ).resolves.toMatchObject({
+      requestId: request.requestId,
+      projects: [
+        {
+          contentProjectId: secondProject.projectId,
+          navigation: [
+            { identity: `content-project:${secondProject.projectId}` },
+            { identity: 'character-project:character-1' },
+            { identity: 'world-project:world-1' },
+          ],
+        },
+      ],
+      diagnostics: [
+        {
+          contentProjectId: firstProject.projectId,
+          message: 'First Project catalog is unreadable.',
+        },
+      ],
+    });
     await fixture.appHost.dispose();
   });
 

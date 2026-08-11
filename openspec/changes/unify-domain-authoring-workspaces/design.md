@@ -212,6 +212,24 @@ mode switch 保留未发送文本与通用模型 presentation，但清除不兼�
 
 Agent capability composition 按 exact receipt向 owner请求 typed catalog/tool snapshot。所有 mutation必须再次携带 target identity并由 owner校验。Prompt文字、mention、当前树行和 mounted editor只可作为内容证据，不能授权写入。现有 `Workspace` launch label与只表达 Assistant/Workspace的成功分支在同一 contract update中替换；不得保留 alias mode或文本编码的 Character/World handler。
 
+#### 8.1 Agent Entry 的快速操作区与全局导航分工
+
+应用左侧栏继续拥有 Window 级全局导航，只回答“去哪里”：Projects、Conversations、Characters、Worlds 的轻量目录行可以切换到 exact management、Conversation 或 runtime Scene。全局 Agent Entry 保留现有 Assistant、Authoring、Character Dialogue 与 World Experience segmented mode selector；输入框下方的快速操作不再承担 mode 切换，只显示当前 mode 明确提供的入口操作。Assistant Entry 可以展示 Agent catalog 明确提供且当前 Draft 可执行的全局 Skill 快速操作，不从项目、侧栏或最近记录推断；Authoring 提供“选择创作目标”，Character Dialogue 提供“选择角色”，World Experience 在 owner provider 合格前不制造可执行操作。快速操作区不复制完整管理目录，不持久化“已打开”状态，也不因选择 target 导航离开 Entry。
+
+Composer 的 DOM、宽度、内部工具栏和定位保持不变，并保持最小信息密度：输入、附件、模型/审批和发送属于 Composer；只有 Authoring mode 可以在工具栏增加一个“打开目录”授权动作，创作目标、角色、素材、项目和可见发送阻塞说明不进入 Composer 内部。文件、素材和其他逐消息引用仅在用户实际选择后继续显示为输入框上方的 reference chips。Composer 上方只显示居中的当前模式标题，不显示说明段落、状态副标题、带边框介绍卡片或 Skill 气泡；标题采用接近 Codex Entry 层级的 28px welcome-heading scale，但不得扩张为占据页面的超大 Hero。顶部模式选择器使用共享控件的 compact density、480px 最大宽度和与相邻界面一致的 12px 字号。Composer 下方显示一个默认展开、可折叠的当前模式资源/操作组件；Assistant body 明确命名为 Skills，并只显示 catalog-qualified executable Skills；Authoring body 在首次展开时读取一个只读聚合目录，同时纳入所有已注册且可访问 Content Project、这些 Project 内的 Character/World target，以及 standalone Character/World target，并把它们作为同一层资源卡横向优先排列。用户只点击最终资源卡完成 Draft target 选择，不需要先点 Project 或类别卡触发第二次候选读取，也不在 Entry 内展开新建表单；新 target 继续由对应 management/Workbench 创建。聚合读取由 Host 与各 owner 使用已注册的 exact Workspace identity 完成，不向 Renderer 投影 raw path，也不为未选择的 target 创建可写 binding receipt；单个 Project 或 owner 读取失败只产生局部 diagnostic，不能隐藏其他资源卡。每张卡保留稳定的 media、标题、说明/metadata 和状态/动作区域，方便 owner 后续投影真实缩略图；当前 contract 没有 thumbnail 时只显示类型图标或中性占位，不生成假素材或 raw path。目录授权与 Content Project、Character、World 和新多人 Room 配置不得混成一个列表或一个含混的“选择目标”动作；目录入口直接调用 Host 授权，新多人 Room 只通过多选已发布 Character 配置。未选择目标、空角色库和未接入 World 不再渲染说明性提示句；发送按钮保持不可用，空或不可用内容可以折叠、禁用或省略。已有 Conversation/Room/Run/Save 的“继续”入口只有在对应 owner 提供 exact durable identity 时才能出现；“在 Workbench 打开”是显式次级导航动作，不能代替“加入当前 Draft”。新 Dialogue/Room/Run 仍只在首次提交事务提交时 materialize，不能由展开组件或空 Workbench 预创建。
+
+快速操作 frame 是 Agent Webview 拥有的 L2 presentation，按当前 Entry mode 组合 owner-projected body；Chara、World、Project 和 Content 继续拥有 catalog、validation、creation 与 launch commands，Desktop 只做 typed bridge/wiring。Authoring Workspace、Assistant Conversation、Character Dialogue/Room 和 World Runtime 一旦创建或恢复，就不再渲染全局 Entry 快速操作，只加载该精确业务实例 owner 提供的模式信息和局部操作；没有 owner-defined 信息时直接省略，不制造占位面板。不得引入跨领域可写 catalog、通用 Workbench/session registry、active target inference 或保留隐藏 domain Root。收起详情、切换 mode 或离开 Entry 时卸载当前 body；Draft receipt、未发送文本和 owner facts 分别由其 canonical owner 保留。
+
+响应式布局不再依赖 Entry 或 Window 宽度阈值，也不使用右侧 Overlay、drawer、sheet 或 backdrop。标题、Composer 和可折叠组件由一个 Entry-only normal-flow wrapper 组成，并通过 safe center 在可用高度内整体上下居中，避免只居中 Composer 或让下方展开体把 Composer 压向视口底部；内容超过可用高度时由 Entry 从顶部开始滚动。可折叠组件在 Composer 下方的同一内容流内展示，折叠头始终保持单行可读；Authoring 的 exact Project、Character、World 资源卡和 Assistant Skills 均按可用宽度在唯一网格中自然换行，catalog loading 期间继续显示已有 Project 卡片但不插入改变组件高度的临时提示文案，真实 owner failure 仍显示明确 diagnostic。展开内容保持动态高度并在 Entry 的可滚动区域中继续向下，不横向挤压、缩放或重排 Composer。宽度变化和折叠切换不能清除 target、receipt、Draft 文本或选择状态。Character Interaction、World Runtime 等非 Entry Scene 不渲染该组件，也不得替换其 owner-defined `rightManager`。
+
+五层边界如下：
+
+1. **职责**：Agent Webview 决定 Entry 快速操作与内联详情的展示、焦点和换行；owner package 决定候选、资格、创建和运行结果。
+2. **依赖**：Renderer 只消费 typed、只读 projection 与 command callbacks；Workspace 授权、文件读取和 durable mutation 保留在 Host/owner boundary。
+3. **接口**：共享 frame 只接收 mode-qualified action、expanded state 和 owner body；mode-specific body 使用现有 exact receipts，不发明跨领域 target union 作为第二事实来源。
+4. **扩展**：新增 owner category 时组合新的 body/provider；不得扩展为全局导航、retained Workbench deck 或 fallback catalog。
+5. **测试**：覆盖窄/宽自然换行、Composer 几何稳定、mode switch、选择保留、body 卸载、exact receipt、一次聚合展示全部 Project/Character/World、单 Project 读取失败的 sibling 隔离、未选择资源不创建 write receipt、无 management navigation 和无 runtime 预创建。
+
 ### 9. Authoring test、preview 与正式 runtime 使用独立 owner和持久化
 
 Content authoring只有编辑、preview/export/job，不创建 ContentRun。Character draft可以生成 immutable authoring-test snapshot，但该 snapshot不能创建正式 memory、relationship或Dialogue/Room。World draft可以生成确定性 preview/test state，但不能创建WorldRun/Save。

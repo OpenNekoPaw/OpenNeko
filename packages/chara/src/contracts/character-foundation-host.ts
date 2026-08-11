@@ -1,4 +1,8 @@
 import {
+  parseCharacterConversationLaunchCatalog,
+  type CharacterConversationLaunchCatalog,
+} from './character-conversation-launch';
+import {
   parseCharacterProject,
   parseCharacterDefinition,
   parseCharacterRun,
@@ -37,10 +41,9 @@ import {
 } from './room';
 export const CHARACTER_FOUNDATION_HOST_CHANNEL = 'neko:character:foundation' as const;
 
-export interface CharacterFoundationHostRequest {
-  readonly requestId: string;
-  readonly operation: 'snapshot-get';
-}
+export type CharacterFoundationHostRequest =
+  | { readonly requestId: string; readonly operation: 'snapshot-get' }
+  | { readonly requestId: string; readonly operation: 'conversation-launch-catalog-get' };
 
 type CharacterFoundationDialogueController =
   { readonly kind: 'agent' } | { readonly kind: 'human'; readonly userId: string };
@@ -270,30 +273,43 @@ export interface CharacterFoundationHostResult {
   readonly snapshot: CharacterFoundationSnapshot;
 }
 
+export interface CharacterConversationLaunchCatalogHostResult {
+  readonly requestId: string;
+  readonly catalog: CharacterConversationLaunchCatalog;
+}
+
 export interface OpenNekoDesktopCharacterBridge {
   readonly characterFoundation: {
     getSnapshot(): Promise<CharacterFoundationSnapshot>;
+    getConversationLaunchCatalog(): Promise<CharacterConversationLaunchCatalog>;
     execute(command: CharacterFoundationCommand): Promise<CharacterFoundationSnapshot>;
   };
 }
 
 export function createCharacterFoundationHostRequest(
   requestId: string,
+  operation: CharacterFoundationHostRequest['operation'] = 'snapshot-get',
 ): CharacterFoundationHostRequest {
-  return { requestId: requireIdentity(requestId, 'request'), operation: 'snapshot-get' };
+  const canonicalRequestId = requireIdentity(requestId, 'request');
+  return operation === 'snapshot-get'
+    ? { requestId: canonicalRequestId, operation: 'snapshot-get' }
+    : { requestId: canonicalRequestId, operation: 'conversation-launch-catalog-get' };
 }
 
 export function parseCharacterFoundationHostRequest(
   value: unknown,
 ): CharacterFoundationHostRequest {
   const record = exactRecord(value, ['requestId', 'operation'], 'Character Foundation request');
-  if (record['operation'] !== 'snapshot-get') {
+  if (
+    record['operation'] !== 'snapshot-get' &&
+    record['operation'] !== 'conversation-launch-catalog-get'
+  ) {
     throw new Error(`Unknown Character Foundation operation '${String(record['operation'])}'.`);
   }
-  return {
-    requestId: requireIdentity(record['requestId'], 'request'),
-    operation: 'snapshot-get',
-  };
+  const requestId = requireIdentity(record['requestId'], 'request');
+  return record['operation'] === 'snapshot-get'
+    ? { requestId, operation: 'snapshot-get' }
+    : { requestId, operation: 'conversation-launch-catalog-get' };
 }
 
 export function createCharacterFoundationCommandHostRequest(
@@ -310,7 +326,8 @@ export function parseCharacterFoundationAnyHostRequest(
   value: unknown,
 ): CharacterFoundationAnyHostRequest {
   const record = recordValue(value, 'Character Foundation request');
-  return record['operation'] === 'snapshot-get'
+  return record['operation'] === 'snapshot-get' ||
+    record['operation'] === 'conversation-launch-catalog-get'
     ? parseCharacterFoundationHostRequest(value)
     : parseCharacterFoundationCommandHostRequest(value);
 }
@@ -459,6 +476,25 @@ export function parseCharacterFoundationHostResult(
     throw new Error('Character Foundation response request identity mismatch.');
   }
   return { requestId, snapshot: parseCharacterFoundationSnapshot(record['snapshot']) };
+}
+
+export function parseCharacterConversationLaunchCatalogHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): CharacterConversationLaunchCatalogHostResult {
+  const record = exactRecord(
+    value,
+    ['requestId', 'catalog'],
+    'Character conversation launch catalog result',
+  );
+  const requestId = requireIdentity(record['requestId'], 'response request');
+  if (requestId !== expectedRequestId) {
+    throw new Error('Character conversation launch catalog response request identity mismatch.');
+  }
+  return {
+    requestId,
+    catalog: parseCharacterConversationLaunchCatalog(record['catalog']),
+  };
 }
 
 export function parseCharacterFoundationSnapshot(value: unknown): CharacterFoundationSnapshot {

@@ -1,5 +1,7 @@
 import {
+  parseCharacterConversationLaunchCatalog,
   parseCharacterFoundationSnapshot,
+  type CharacterConversationLaunchCatalog,
   type CharacterFoundationSnapshot,
 } from '@neko/chara/contracts';
 import type { CharacterDurableCatalogPort } from './character-durable-catalog';
@@ -34,5 +36,45 @@ export class CharacterFoundationService {
         ...diagnostic,
       })),
     });
+  }
+
+  async getConversationLaunchCatalog(
+    signal?: AbortSignal,
+  ): Promise<CharacterConversationLaunchCatalog> {
+    signal?.throwIfAborted();
+    const character = await this.options.characterCatalog.readCatalog(signal);
+    const projects = new Map(
+      character.projects.map((project) => [project.characterProjectId, project] as const),
+    );
+    const storylinesByPublicationId = new Map<string, typeof character.storylineVersions>();
+    for (const storyline of character.storylineVersions) {
+      const current = storylinesByPublicationId.get(storyline.characterVersionId) ?? [];
+      storylinesByPublicationId.set(storyline.characterVersionId, [...current, storyline]);
+    }
+    const targets: CharacterConversationLaunchCatalog['targets'][number][] = [];
+    const diagnostics: CharacterConversationLaunchCatalog['diagnostics'][number][] = [];
+    for (const publication of character.versions) {
+      const project = projects.get(publication.characterProjectId);
+      if (!project) {
+        diagnostics.push({
+          characterVersionId: publication.characterVersionId,
+          message: `CharacterVersion '${publication.characterVersionId}' references unavailable CharacterProject '${publication.characterProjectId}'.`,
+        });
+        continue;
+      }
+      targets.push({
+        characterProjectId: project.characterProjectId,
+        characterVersionId: publication.characterVersionId,
+        displayName: project.displayName,
+        versionLabel: publication.label,
+        storylines: (storylinesByPublicationId.get(publication.characterVersionId) ?? []).map(
+          (storyline) => ({
+            characterStorylineVersionId: storyline.characterStorylineVersionId,
+            label: storyline.label,
+          }),
+        ),
+      });
+    }
+    return parseCharacterConversationLaunchCatalog({ targets, diagnostics });
   }
 }

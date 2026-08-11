@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_ENTRY_MODES,
+  parseAgentCharacterDialogueTargetOptions,
   parseAgentEntryIntentProjection,
   parseAgentEntryTargetReceipt,
 } from '../agent-entry-intent';
@@ -116,5 +117,39 @@ describe('Agent Entry intent contract', () => {
     expect(() => parseAgentEntryTargetReceipt({ ...receipt, schemaVersion: 1 })).toThrow(
       'unsupported field',
     );
+  });
+
+  it('parses a compact secret-free Character Dialogue target catalog', () => {
+    expect(
+      parseAgentCharacterDialogueTargetOptions([
+        {
+          characterProjectId: 'character-project-1',
+          characterVersionId: 'character-version-1',
+          displayName: 'Lin',
+          versionLabel: 'Published Lin',
+          storylines: [{ storylineVersionId: 'storyline-version-1', label: 'Archive arc' }],
+        },
+      ]),
+    ).toEqual([
+      {
+        characterProjectId: 'character-project-1',
+        characterVersionId: 'character-version-1',
+        displayName: 'Lin',
+        versionLabel: 'Published Lin',
+        storylines: [{ storylineVersionId: 'storyline-version-1', label: 'Archive arc' }],
+      },
+    ]);
+    expect(() =>
+      parseAgentCharacterDialogueTargetOptions([
+        {
+          characterProjectId: 'character-project-1',
+          characterVersionId: 'character-version-1',
+          displayName: 'Lin',
+          versionLabel: 'Published Lin',
+          storylines: [],
+          definition: { secret: true },
+        },
+      ]),
+    ).toThrow('unsupported field');
   });
 });

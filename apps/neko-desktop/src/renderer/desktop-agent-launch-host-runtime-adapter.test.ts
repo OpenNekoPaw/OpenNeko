@@ -7,6 +7,42 @@ import { createElectronAgentLaunchHostRuntimeAdapter } from './desktop-agent-lau
 import type { DesktopAgentPresentationStorage } from './desktop-agent-host-runtime-adapter';
 
 describe('Electron Agent launch Host runtime adapter', () => {
+  it('maps the Chara-owned launch catalog without exposing full Character facts', async () => {
+    const bridge = createBridge();
+    bridge.characterFoundation.getConversationLaunchCatalog.mockResolvedValueOnce({
+      targets: [
+        {
+          characterProjectId: 'character-project-a',
+          characterVersionId: 'character-version-a',
+          displayName: 'A',
+          versionLabel: 'Published A',
+          storylines: [
+            {
+              characterStorylineVersionId: 'storyline-version-a',
+              label: 'Arc A',
+            },
+          ],
+        },
+      ],
+      diagnostics: [],
+    });
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
+
+    await expect(adapter.loadCharacterDialogueTargets()).resolves.toEqual([
+      {
+        characterProjectId: 'character-project-a',
+        characterVersionId: 'character-version-a',
+        displayName: 'A',
+        versionLabel: 'Published A',
+        storylines: [{ storylineVersionId: 'storyline-version-a', label: 'Arc A' }],
+      },
+    ]);
+  });
+
   it('projects secret-free launch catalogs and rejects Project search in Assistant scope', () => {
     const adapter = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
@@ -74,7 +110,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(messages[0]).toEqual({
       type: 'globalError',
       message:
-        'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+        'Workspace roleplay search is unavailable. Choose published Characters in Character Dialogue.',
     });
   });
 
@@ -377,6 +413,16 @@ describe('Electron Agent launch Host runtime adapter', () => {
 
 function createBridge() {
   return {
+    characterFoundation: {
+      getSnapshot: vi.fn(),
+      getConversationLaunchCatalog: vi.fn(
+        async (): Promise<import('@neko/chara/contracts').CharacterConversationLaunchCatalog> => ({
+          targets: [],
+          diagnostics: [],
+        }),
+      ),
+      execute: vi.fn(),
+    },
     agentLaunch: {
       attach: vi.fn(),
       authorizeResource: vi.fn(),

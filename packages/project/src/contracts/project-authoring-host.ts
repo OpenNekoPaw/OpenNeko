@@ -18,6 +18,16 @@ export interface ProjectAuthoringNavigationHostRequest extends ProjectAuthoringN
   readonly operation: 'navigation-get';
 }
 
+export interface ProjectAuthoringCatalogHostRequest {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly operation: 'catalog-get';
+}
+
+export type ProjectAuthoringHostRequest =
+  ProjectAuthoringNavigationHostRequest | ProjectAuthoringCatalogHostRequest;
+
 export interface ProjectAuthoringNavigationHostResult {
   readonly requestId: string;
   readonly workspaceId: string;
@@ -25,13 +35,40 @@ export interface ProjectAuthoringNavigationHostResult {
   readonly navigation: readonly ProjectAuthoringNavigationItem[];
 }
 
+export interface ProjectAuthoringCatalogEntry {
+  readonly workspaceId: string;
+  readonly contentProjectId: string;
+  readonly label: string;
+  readonly navigation: readonly ProjectAuthoringNavigationItem[];
+}
+
+export interface ProjectAuthoringCatalogDiagnostic {
+  readonly contentProjectId: string;
+  readonly message: string;
+}
+
+export interface ProjectAuthoringCatalogHostResult {
+  readonly requestId: string;
+  readonly projects: readonly ProjectAuthoringCatalogEntry[];
+  readonly diagnostics: readonly ProjectAuthoringCatalogDiagnostic[];
+}
+
 export interface OpenNekoDesktopProjectAuthoringBridge {
   readonly projectAuthoring: {
+    getCatalog(windowId: string): Promise<ProjectAuthoringCatalogHostResult>;
     getNavigation(
       windowId: string,
       binding: ProjectAuthoringNavigationBinding,
     ): Promise<ProjectAuthoringNavigationHostResult>;
   };
+}
+
+export function createProjectAuthoringCatalogHostRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+}): ProjectAuthoringCatalogHostRequest {
+  return parseProjectAuthoringCatalogHostRequest({ ...input, operation: 'catalog-get' });
 }
 
 export function createProjectAuthoringNavigationHostRequest(input: {
@@ -76,6 +113,34 @@ export function parseProjectAuthoringNavigationHostRequest(
   };
 }
 
+export function parseProjectAuthoringCatalogHostRequest(
+  value: unknown,
+): ProjectAuthoringCatalogHostRequest {
+  const request = parseProjectAuthoringHostRequest(value);
+  if (request.operation !== 'catalog-get') {
+    throw new Error(`Project authoring request is '${request.operation}', not 'catalog-get'.`);
+  }
+  return request;
+}
+
+export function parseProjectAuthoringHostRequest(value: unknown): ProjectAuthoringHostRequest {
+  const record = requireRecord(value, 'Project authoring request');
+  const operation = record['operation'];
+  if (operation === 'catalog-get') {
+    requireExactKeys(record, ['requestId', 'rendererSessionId', 'windowId', 'operation']);
+    return {
+      requestId: requireIdentity(record['requestId'], 'Project authoring request'),
+      rendererSessionId: requireIdentity(record['rendererSessionId'], 'Renderer session'),
+      windowId: requireIdentity(record['windowId'], 'Desktop Window'),
+      operation,
+    };
+  }
+  if (operation === 'navigation-get') {
+    return parseProjectAuthoringNavigationHostRequest(record);
+  }
+  throw new Error(`Unknown Project authoring operation: ${String(operation)}`);
+}
+
 export function parseProjectAuthoringNavigationHostResult(
   value: unknown,
   expectedRequestId: string,
@@ -93,6 +158,42 @@ export function parseProjectAuthoringNavigationHostResult(
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
     navigation: parseProjectAuthoringNavigation(record['navigation']),
+  };
+}
+
+export function parseProjectAuthoringCatalogHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): ProjectAuthoringCatalogHostResult {
+  const record = requireRecord(value, 'Project authoring catalog result');
+  requireExactKeys(record, ['requestId', 'projects', 'diagnostics']);
+  const requestId = requireMatchingRequestId(record['requestId'], expectedRequestId);
+  if (!Array.isArray(record['projects'])) {
+    throw new Error('Project authoring catalog projects must be an array.');
+  }
+  if (!Array.isArray(record['diagnostics'])) {
+    throw new Error('Project authoring catalog diagnostics must be an array.');
+  }
+  return {
+    requestId,
+    projects: record['projects'].map((value) => {
+      const project = requireRecord(value, 'Project authoring catalog entry');
+      requireExactKeys(project, ['workspaceId', 'contentProjectId', 'label', 'navigation']);
+      return {
+        workspaceId: requireIdentity(project['workspaceId'], 'Workspace'),
+        contentProjectId: requireIdentity(project['contentProjectId'], 'Content Project'),
+        label: requireIdentity(project['label'], 'Content Project label'),
+        navigation: parseProjectAuthoringNavigation(project['navigation']),
+      };
+    }),
+    diagnostics: record['diagnostics'].map((value) => {
+      const diagnostic = requireRecord(value, 'Project authoring catalog diagnostic');
+      requireExactKeys(diagnostic, ['contentProjectId', 'message']);
+      return {
+        contentProjectId: requireIdentity(diagnostic['contentProjectId'], 'Content Project'),
+        message: requireIdentity(diagnostic['message'], 'Project authoring diagnostic'),
+      };
+    }),
   };
 }
 
@@ -116,4 +217,14 @@ function requireIdentity(value: unknown, label: string): string {
     throw new Error(`${label} must be a non-empty string.`);
   }
   return value;
+}
+
+function requireMatchingRequestId(value: unknown, expectedRequestId: string): string {
+  const requestId = requireIdentity(value, 'Project authoring request');
+  if (requestId !== expectedRequestId) {
+    throw new Error(
+      `Project authoring result '${requestId}' does not match '${expectedRequestId}'.`,
+    );
+  }
+  return requestId;
 }

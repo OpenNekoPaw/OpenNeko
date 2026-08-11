@@ -233,6 +233,29 @@ describe('Desktop Workspace grant preload bridge', () => {
     ).resolves.toMatchObject({ navigation: [{ identity: 'content-project:project-1' }] });
   });
 
+  it('requests the aggregate Project authoring catalog without minting Renderer grants', async () => {
+    electron.invoke.mockImplementation(
+      async (channel: string, request: Record<string, unknown>) => {
+        expect(channel).toBe(PROJECT_AUTHORING_HOST_CHANNEL);
+        expect(request).toEqual(
+          expect.objectContaining({
+            operation: 'catalog-get',
+            rendererSessionId: 'application-1:window-1:1',
+            windowId: 'window-1',
+          }),
+        );
+        expect(request).not.toHaveProperty('workspaceGrantId');
+        expect(request).not.toHaveProperty('path');
+        return { requestId: request['requestId'], projects: [], diagnostics: [] };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    await expect(bridge.projectAuthoring.getCatalog('window-1')).resolves.toEqual(
+      expect.objectContaining({ projects: [], diagnostics: [] }),
+    );
+  });
+
   it('binds Character Studio reads and commands to the exact project-local target', async () => {
     const binding = {
       workspaceId: 'workspace-1',

@@ -204,6 +204,7 @@ import {
   parseCharacterAvatarHostRequest,
   parseCharacterRoomWorkbenchSnapshotRequest,
   type CharacterAvatarHostResult,
+  type CharacterConversationLaunchCatalogHostResult,
   type CharacterFoundationHostResult,
   type CharacterAuthoringCommand,
   type CharacterAuthoringHostRequest,
@@ -232,7 +233,8 @@ import {
 import type { WorldFoundationCommandPort, WorldFoundationService } from '@neko/world/application';
 import {
   parseProjectLocalAuthoringHostRequest,
-  parseProjectAuthoringNavigationHostRequest,
+  parseProjectAuthoringHostRequest,
+  type ProjectAuthoringCatalogHostResult,
   type ProjectLocalAuthoringCreateInput,
   type ProjectLocalAuthoringHostResult,
   type ProjectLocalTargetRef,
@@ -463,16 +465,25 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseCharacterFoundationHostRequest(payload);
     this.windows.resolveSender(sender);
+    if (request.operation !== 'snapshot-get') {
+      throw new Error('Character Foundation snapshot route requires snapshot-get.');
+    }
     return { requestId: request.requestId, snapshot: await this.characterFoundation.getSnapshot() };
   }
 
   async executeCharacterFoundationRequest(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<CharacterFoundationHostResult> {
+  ): Promise<CharacterFoundationHostResult | CharacterConversationLaunchCatalogHostResult> {
     this.requireActive();
     const request = parseCharacterFoundationAnyHostRequest(payload);
     this.windows.resolveSender(sender);
+    if (request.operation === 'conversation-launch-catalog-get') {
+      return {
+        requestId: request.requestId,
+        catalog: await this.characterFoundation.getConversationLaunchCatalog(),
+      };
+    }
     if (request.operation !== 'snapshot-get') {
       const { requestId: _requestId, ...command } = request;
       await this.characterFoundationCommands.execute(command);
@@ -497,12 +508,50 @@ export class DesktopAppHost {
   async getProjectAuthoringNavigation(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<ProjectAuthoringNavigationHostResult> {
+  ): Promise<ProjectAuthoringNavigationHostResult | ProjectAuthoringCatalogHostResult> {
     this.requireActive();
-    const request = parseProjectAuthoringNavigationHostRequest(payload);
+    const request = parseProjectAuthoringHostRequest(payload);
     const window = this.windows.resolveSender(sender);
     if (request.windowId !== window.windowId) {
       throw new Error('Project authoring request belongs to another Window.');
+    }
+    if (request.operation === 'catalog-get') {
+      await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
+      const projection = await this.shell.getProjection(window.windowId);
+      const availableProjects = projection.catalog.projects.filter(
+        (project) => !project.unavailable,
+      );
+      const results = await Promise.allSettled(
+        availableProjects.map(async (project) => {
+          const workspace = await this.shell.resolveAgentWorkspace(project.workspaceId);
+          return {
+            workspaceId: workspace.workspaceId,
+            contentProjectId: project.projectId,
+            label: project.displayName,
+            navigation: await this.projectAuthoring.getNavigation({
+              workspace,
+              contentProjectId: project.projectId,
+              contentLabel: project.displayName,
+            }),
+          };
+        }),
+      );
+      return {
+        requestId: request.requestId,
+        projects: results.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        ),
+        diagnostics: results.flatMap((result, index) =>
+          result.status === 'rejected'
+            ? [
+                {
+                  contentProjectId: availableProjects[index]!.projectId,
+                  message: describeError(result.reason),
+                },
+              ]
+            : [],
+        ),
+      };
     }
     const { project, workspace } = await this.resolveProjectAuthoringAuthority(request);
     return {

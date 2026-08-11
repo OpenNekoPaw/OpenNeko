@@ -731,6 +731,18 @@ describe('Desktop scene Workbench', () => {
     expect(desktopShellSource).not.toContain('@neko/world-node');
     expect(desktopShellSource).not.toMatch(/node:fs|readFile|writeFile|workspacePath/u);
   });
+
+  it('loads the aggregate project-local catalog without a Project-first selection step', () => {
+    const start = desktopShellSource.indexOf('onLoadAuthoringTargets: async () =>');
+    const end = desktopShellSource.indexOf('onSelectAuthoringTarget: async', start);
+    const catalogLoaderSource = desktopShellSource.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(catalogLoaderSource).toContain('projectAuthoring.getCatalog');
+    expect(catalogLoaderSource).toContain("kind: 'project-local'");
+    expect(catalogLoaderSource).not.toContain('workspaceGrants.selectProject');
+    expect(desktopShellSource).not.toContain('onLoadProjectAuthoringTargets');
+  });
 });
 
 function renderShell(node: JSX.Element): string {

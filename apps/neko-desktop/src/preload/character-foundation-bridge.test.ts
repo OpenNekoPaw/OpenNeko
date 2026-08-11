@@ -82,6 +82,39 @@ describe('Desktop Character Foundation preload bridge', () => {
     );
   });
 
+  it('returns the strictly parsed Character conversation launch catalog', async () => {
+    electron.invoke.mockImplementation(
+      async (channel: string, request: { readonly requestId: string }) => {
+        expect(channel).toBe(CHARACTER_FOUNDATION_HOST_CHANNEL);
+        expect(request).toEqual({
+          requestId: expect.stringMatching(/^character-conversation-launch-catalog-/u),
+          operation: 'conversation-launch-catalog-get',
+        });
+        return {
+          requestId: request.requestId,
+          catalog: {
+            targets: [
+              {
+                characterProjectId: 'character-project-a',
+                characterVersionId: 'character-version-a',
+                displayName: 'A',
+                versionLabel: 'Published A',
+                storylines: [],
+              },
+            ],
+            diagnostics: [],
+          },
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(bridge.characterFoundation.getConversationLaunchCatalog()).resolves.toMatchObject({
+      targets: [{ characterVersionId: 'character-version-a' }],
+    });
+  });
+
   it('strictly binds a Character command to its response identity', async () => {
     electron.invoke.mockImplementation(
       async (channel: string, request: { readonly requestId: string }) => {

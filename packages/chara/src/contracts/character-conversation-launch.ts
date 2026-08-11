@@ -6,6 +6,29 @@ import {
   requireUniqueIdentities,
 } from './codec';
 
+export interface CharacterConversationLaunchStorylineOption {
+  readonly characterStorylineVersionId: string;
+  readonly label: string;
+}
+
+export interface CharacterConversationLaunchTarget {
+  readonly characterProjectId: string;
+  readonly characterVersionId: string;
+  readonly displayName: string;
+  readonly versionLabel: string;
+  readonly storylines: readonly CharacterConversationLaunchStorylineOption[];
+}
+
+export interface CharacterConversationLaunchCatalogDiagnostic {
+  readonly characterVersionId: string;
+  readonly message: string;
+}
+
+export interface CharacterConversationLaunchCatalog {
+  readonly targets: readonly CharacterConversationLaunchTarget[];
+  readonly diagnostics: readonly CharacterConversationLaunchCatalogDiagnostic[];
+}
+
 export interface CharacterLaunchParticipantSelection {
   readonly characterVersionId: string;
   readonly characterStorylineVersionId?: string;
@@ -25,6 +48,102 @@ export interface CharacterConversationLaunchInput {
   readonly userId: string;
   readonly userDisplayName: string;
   readonly selection: CharacterConversationLaunchSelection;
+}
+
+export function parseCharacterConversationLaunchCatalog(
+  value: unknown,
+): CharacterConversationLaunchCatalog {
+  const record = requireExactRecord(
+    value,
+    ['targets', 'diagnostics'],
+    'Character conversation launch catalog',
+  );
+  const targets = requireUniqueIdentities(
+    requireArray(
+      record['targets'],
+      parseCharacterConversationLaunchTarget,
+      'Character conversation launch targets',
+    ),
+    (target) => target.characterVersionId,
+    'Character conversation launch targets',
+  );
+  const diagnostics = requireUniqueIdentities(
+    requireArray(
+      record['diagnostics'],
+      (item) => {
+        const diagnostic = requireExactRecord(
+          item,
+          ['characterVersionId', 'message'],
+          'Character conversation launch catalog diagnostic',
+        );
+        return {
+          characterVersionId: requireIdentity(
+            diagnostic['characterVersionId'],
+            'Character conversation launch diagnostic CharacterVersion',
+          ),
+          message: requireIdentity(
+            diagnostic['message'],
+            'Character conversation launch diagnostic message',
+          ),
+        };
+      },
+      'Character conversation launch catalog diagnostics',
+    ),
+    (diagnostic) => diagnostic.characterVersionId,
+    'Character conversation launch catalog diagnostics',
+  );
+  return { targets, diagnostics };
+}
+
+function parseCharacterConversationLaunchTarget(value: unknown): CharacterConversationLaunchTarget {
+  const record = requireExactRecord(
+    value,
+    ['characterProjectId', 'characterVersionId', 'displayName', 'versionLabel', 'storylines'],
+    'Character conversation launch target',
+  );
+  return {
+    characterProjectId: requireIdentity(
+      record['characterProjectId'],
+      'Character conversation launch CharacterProject',
+    ),
+    characterVersionId: requireIdentity(
+      record['characterVersionId'],
+      'Character conversation launch CharacterVersion',
+    ),
+    displayName: requireIdentity(
+      record['displayName'],
+      'Character conversation launch display name',
+    ),
+    versionLabel: requireIdentity(
+      record['versionLabel'],
+      'Character conversation launch version label',
+    ),
+    storylines: requireUniqueIdentities(
+      requireArray(
+        record['storylines'],
+        (item) => {
+          const storyline = requireExactRecord(
+            item,
+            ['characterStorylineVersionId', 'label'],
+            'Character conversation launch storyline option',
+          );
+          return {
+            characterStorylineVersionId: requireIdentity(
+              storyline['characterStorylineVersionId'],
+              'Character conversation launch StorylineVersion',
+            ),
+            label: requireIdentity(
+              storyline['label'],
+              'Character conversation launch storyline label',
+            ),
+          };
+        },
+        'Character conversation launch storylines',
+      ),
+      (storyline) => storyline.characterStorylineVersionId,
+      'Character conversation launch storylines',
+    ),
+  };
 }
 
 export type CharacterConversationLaunchResult =

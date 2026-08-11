@@ -836,6 +836,7 @@ function installBridge(
       applicationSidebar: { update: vi.fn() },
       scenes: { transition: vi.fn() },
       characterFoundation: {
+        getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
         getSnapshot: vi.fn(async () => ({
           character: {
             projects: [],
@@ -907,6 +908,11 @@ function installBridge(
       },
       resources: createResourceBridgeMock(),
       projectAuthoring: {
+        getCatalog: vi.fn(async () => ({
+          requestId: 'project-authoring-catalog',
+          projects: [],
+          diagnostics: [],
+        })),
         getNavigation: vi.fn(),
       },
       projectLocalAuthoring: {

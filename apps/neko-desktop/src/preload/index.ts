@@ -206,8 +206,10 @@ import {
 import {
   PROJECT_AUTHORING_HOST_CHANNEL,
   PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
+  createProjectAuthoringCatalogHostRequest,
   createProjectLocalAuthoringHostRequest,
   createProjectAuthoringNavigationHostRequest,
+  parseProjectAuthoringCatalogHostResult,
   parseProjectLocalAuthoringHostResult,
   parseProjectAuthoringNavigationHostResult,
   type OpenNekoDesktopProjectAuthoringBridge,
@@ -258,6 +260,7 @@ import {
   createCharacterAvatarReleaseRequest,
   createCharacterRoomWorkbenchSnapshotRequest,
   parseCharacterFoundationHostResult,
+  parseCharacterConversationLaunchCatalogHostResult,
   parseCharacterAuthoringHostResult,
   parseCharacterAvatarHostResult,
   parseCharacterRoomWorkbenchProjectionEvent,
@@ -409,6 +412,17 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseCharacterFoundationHostResult(response, request.requestId).snapshot;
+    },
+    async getConversationLaunchCatalog() {
+      const request = createCharacterFoundationHostRequest(
+        nextRequestId('character-conversation-launch-catalog'),
+        'conversation-launch-catalog-get',
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_FOUNDATION_HOST_CHANNEL,
+        request,
+      );
+      return parseCharacterConversationLaunchCatalogHostResult(response, request.requestId).catalog;
     },
     async execute(command) {
       const request = createCharacterFoundationCommandHostRequest(
@@ -689,6 +703,16 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   projectAuthoring: {
+    async getCatalog(windowId) {
+      const context = requireShellMutationContext();
+      const request = createProjectAuthoringCatalogHostRequest({
+        requestId: nextRequestId('project-authoring-catalog'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+      });
+      const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
+      return parseProjectAuthoringCatalogHostResult(response, request.requestId);
+    },
     async getNavigation(windowId, binding) {
       const context = requireShellMutationContext();
       const request = createProjectAuthoringNavigationHostRequest({

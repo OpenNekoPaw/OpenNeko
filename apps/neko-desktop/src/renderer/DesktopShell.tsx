@@ -752,79 +752,86 @@ export function DesktopApplication(): JSX.Element {
               contentProjectId: project.projectId,
             },
           }));
-      const [characterSnapshot, worldSnapshot] = await Promise.all([
+      const [characterResult, worldResult, projectCatalogResult] = await Promise.allSettled([
         window.openNekoDesktop.characterFoundation.getSnapshot(),
         window.openNekoDesktop.worldFoundation.getSnapshot(),
+        window.openNekoDesktop.projectAuthoring.getCatalog(projection.window.windowId),
       ]);
-      targets.push(
-        ...characterSnapshot.character.projects.map((project) => ({
-          optionId: `standalone-character:${project.characterProjectId}`,
-          label: project.displayName,
-          workspaceLabel: t('home.characters'),
-          target: {
-            kind: 'character-project' as const,
-            characterProjectId: project.characterProjectId,
-          },
-          placement: { kind: 'standalone-library' as const, library: 'character' as const },
-        })),
-        ...worldSnapshot.world.projects.map((project) => ({
-          optionId: `standalone-world:${project.worldProjectId}`,
-          label: project.title,
-          workspaceLabel: t('home.worlds'),
-          target: { kind: 'world-project' as const, worldProjectId: project.worldProjectId },
-          placement: { kind: 'standalone-library' as const, library: 'world' as const },
-        })),
-      );
-      diagnostics.push(
-        ...characterSnapshot.diagnostics.map(
-          (item) => `Character ${item.recordKind} '${item.recordId}': ${item.message}`,
-        ),
-        ...worldSnapshot.diagnostics.map(
-          (item) => `World ${item.recordKind} '${item.recordId}': ${item.message}`,
-        ),
-      );
-      for (const project of projection.catalog.projects) {
-        if (project.unavailable) continue;
-        try {
-          const authorized = await window.openNekoDesktop.workspaceGrants.selectProject(
-            projection.window.windowId,
-            project.projectId,
-          );
-          if (authorized.status === 'cancelled') continue;
-          const navigation = await window.openNekoDesktop.projectAuthoring.getNavigation(
-            projection.window.windowId,
-            {
-              workspaceId: authorized.workspaceId,
-              workspaceGrantId: authorized.grant.workspaceGrantId,
-              contentProjectId: project.projectId,
+      if (characterResult.status === 'fulfilled') {
+        targets.push(
+          ...characterResult.value.character.projects.map((project) => ({
+            optionId: `standalone-character:${project.characterProjectId}`,
+            label: project.displayName,
+            workspaceLabel: t('home.characters'),
+            target: {
+              kind: 'character-project' as const,
+              characterProjectId: project.characterProjectId,
             },
-          );
-          targets.push(
-            ...navigation.navigation
-              .filter(
-                (item) =>
-                  item.kind === 'authoring-target' && item.target.kind !== 'content-project',
-              )
-              .map((item) => {
-                if (item.kind !== 'authoring-target' || item.target.kind === 'content-project') {
-                  throw new Error('Project authoring navigation target narrowed incorrectly.');
-                }
-                return {
-                  optionId: `${project.projectId}:${item.identity}`,
+            placement: { kind: 'standalone-library' as const, library: 'character' as const },
+          })),
+        );
+        diagnostics.push(
+          ...characterResult.value.diagnostics.map(
+            (item) => `Character ${item.recordKind} '${item.recordId}': ${item.message}`,
+          ),
+        );
+      } else {
+        diagnostics.push(`Character: ${describeError(characterResult.reason)}`);
+      }
+      if (worldResult.status === 'fulfilled') {
+        targets.push(
+          ...worldResult.value.world.projects.map((project) => ({
+            optionId: `standalone-world:${project.worldProjectId}`,
+            label: project.title,
+            workspaceLabel: t('home.worlds'),
+            target: { kind: 'world-project' as const, worldProjectId: project.worldProjectId },
+            placement: { kind: 'standalone-library' as const, library: 'world' as const },
+          })),
+        );
+        diagnostics.push(
+          ...worldResult.value.diagnostics.map(
+            (item) => `World ${item.recordKind} '${item.recordId}': ${item.message}`,
+          ),
+        );
+      } else {
+        diagnostics.push(`World: ${describeError(worldResult.reason)}`);
+      }
+      if (projectCatalogResult.status === 'fulfilled') {
+        const projectCatalog = projectCatalogResult.value;
+        targets.push(
+          ...projectCatalog.projects.flatMap((project) =>
+            project.navigation.flatMap((item) => {
+              if (item.kind !== 'authoring-target' || item.target.kind === 'content-project') {
+                return [];
+              }
+              return [
+                {
+                  optionId: `${project.contentProjectId}:${item.identity}`,
                   label: item.label,
-                  workspaceLabel: project.displayName,
+                  workspaceLabel: project.label,
                   target: item.target,
                   placement: {
                     kind: 'project-local' as const,
-                    contentProjectId: project.projectId,
+                    contentProjectId: project.contentProjectId,
                   },
                   ...(item.diagnostic ? { disabled: true } : {}),
-                };
-              }),
-          );
-        } catch (error: unknown) {
-          diagnostics.push(`${project.displayName}: ${describeError(error)}`);
-        }
+                },
+              ];
+            }),
+          ),
+        );
+        diagnostics.push(
+          ...projectCatalog.diagnostics.map(
+            (item) => `Project '${item.contentProjectId}': ${item.message}`,
+          ),
+          ...projectCatalog.projects.flatMap((project) =>
+            project.navigation.flatMap((item) =>
+              item.diagnostic ? [`${project.label} / ${item.identity}: ${item.diagnostic}`] : [],
+            ),
+          ),
+        );
+      } else {
+        diagnostics.push(`Projects: ${describeError(projectCatalogResult.reason)}`);
       }
       return {
         targets,
