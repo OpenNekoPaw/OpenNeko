@@ -36,7 +36,7 @@ Available generation and understanding features depend on your configured APIs, 
 ## Project Status
 
 - **Alpha**: currently intended for source-based previews and product validation; interfaces and project formats may change.
-- **Platform**: Apple Silicon macOS only; preview builds are not Developer ID signed or Apple notarized.
+- **Platform**: Apple Silicon macOS only; distributed DMGs are not Developer ID signed or Apple notarized.
 - **Product focus**: Projects and Personal Assistant are available now; Character, Room, and World remain future directions and are not exposed as product sections yet.
 - **In development**: the complete end-to-end workflow, stable release channel, and professional-tool integrations.
 

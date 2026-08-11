@@ -4,7 +4,7 @@
       build path
 - [x] 1.2 Update the supported Desktop host contract to accept only `darwin-arm64` and reject
       Windows, Linux, Intel macOS, and unknown targets
-- [x] 1.3 Update CI graph coverage for one native macOS package job plus required Windows/Linux
+- [x] 1.3 Update CI graph coverage for local-only native macOS packaging plus required Windows/Linux
       test-only jobs and aggregate-gate dependencies
 - [x] 1.4 Cover required unit/headless-functional CI evidence and local-only Agent
       Evaluation/graphical UI reachability
@@ -16,12 +16,12 @@
 - [x] 2.2 Keep the Ubuntu static build command free of Electron Forge packaging
 - [x] 2.3 Restrict Desktop build/package/make and pinned Electron archives/makers to
       `darwin-arm64`
-- [x] 2.4 Run Desktop package only on the Apple Silicon macOS runner and keep Windows/Linux on
-      deterministic tests without artifact upload
+- [x] 2.4 Keep Desktop package on an explicitly operated local Apple Silicon host and keep GitHub
+      runners on deterministic validation without native artifact upload
 - [x] 2.5 Keep credential-free headless Desktop functional CI and the isolated local graphical UI
       launcher as separate evidence classes
-- [x] 2.6 Keep native packaging bounded by the 4 GiB CI heap, matching-host Sharp execution, and a
-      fail-visible post-Forge executable assertion
+- [x] 2.6 Keep native packaging on the matching local host with Sharp execution and a fail-visible
+      post-Forge executable assertion
 
 ## 3. Platform Closure
 
@@ -49,4 +49,5 @@
       Sharp, media, and local-metadata tests
 - [x] 5.2 Run Desktop typecheck, root build/check gates, legacy/unused checks, and `git diff --check`
 - [x] 5.3 Produce and inspect the sole `darwin-arm64` package locally
-- [ ] 5.4 Re-run the GitHub Manual Gate and record macOS package plus Windows/Linux test-only results
+- [x] 5.4 Remove native package evidence from GitHub Manual Gate and retain Windows/Linux test-only
+      results plus explicit local macOS package evidence

@@ -89,7 +89,7 @@ OpenNeko 使用本地开发、手动远程验证和合并验收三类入口。�
 | 入口                    | 稳定入口           | 验证范围                                                                                                              | 权威信号                     |
 | ----------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
 | 开发分支本地提交前      | `pnpm gate:local`  | format、lint、build、普通 workspace tests（无 coverage）和仓库质量门禁                                                | 本地命令退出码               |
-| 手动 GitHub runner 验证 | `pnpm gate:remote` | coverage 源码门禁、完整 Proto/OpenSpec 和仓库质量；不包含 GUI、真实 API 或 PR-only dependency review                  | GitHub Actions `Manual Gate` |
+| 手动 GitHub runner 验证 | `pnpm gate:remote` | coverage 源码门禁、完整 Proto/OpenSpec 和仓库质量；不包含原生 Desktop 构建、GUI、真实 API 或 PR-only dependency review | GitHub Actions `Manual Gate` |
 | 开发分支合入 main       | 开发分支到 main PR | 与 Manual Gate 相同的共享 job graph，加唯一 promotion source 和 dependency review；任一 required job 不成功都阻止合并 | GitHub Actions `Merge Gate`  |
 
 `gate:local` 不收集 coverage，用于提交前完整反馈；`check:fast` 只是迭代期快速检查，不能替代提交前门禁。`gate:remote` 提供 Manual/Merge 源码部分的串行本地复现。
@@ -127,10 +127,10 @@ coverage 和静态质量；不得启动 Electron GUI、依赖真实用户 fixtur
 | GitHub Actions 形状预检        | `pnpm ci:act`                                                       |
 
 `ci:local` 是 `gate:local` 的别名，`ci:remote` 是 `gate:remote` 的别名，`check:ci` 是远程
-源码门禁的基础组合。`act` 只能预检 Linux host-neutral job 形状，不替代 GitHub Actions
-中的真实 `darwin-arm64` package job。Windows/Linux 只提供 platform-test 证据，不生成
-artifact。原生 macOS package 是 Manual/Merge Gate 的必要证据，但仍不替代真实 GUI、安装、
-凭据与媒体场景。
+源码门禁的基础组合。`act` 只能预检 Linux host-neutral job 形状。GitHub Actions 不运行 Forge，
+不构建或上传 Desktop 原生 artifact；Windows/Linux 只提供 platform-test 证据。原生 macOS
+package 是本地发布与资格验收的显式证据，不属于 Manual/Merge Gate，也不替代真实 GUI、
+安装、凭据与媒体场景。
 
 CI 的测试证据分为全仓库 unit/contract coverage 与固定的 Desktop headless functional
 流程。后者可跨 Main/preload/composition 验证产品路径，但不得启动 Electron GUI、读取真实

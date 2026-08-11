@@ -8,20 +8,20 @@ native Desktop packaging and SHALL fail when that check fails.
 #### Scenario: Desktop contract is invalid
 
 - **WHEN** `apps/neko-desktop` fails `tsc --noEmit`
-- **THEN** local and remote build gates SHALL fail before reporting a successful Desktop package
+- **THEN** local and remote source build gates SHALL fail
 - **AND** Forge/Vite transpilation SHALL NOT substitute for the typecheck result
 
 ### Requirement: Host-neutral validation does not create native Desktop artifacts
 
-The repository SHALL provide deterministic Windows/Linux validation paths for format, lint,
-TypeScript, orchestration, runtime compatibility, and browser-safe package builds without invoking
+The repository SHALL provide deterministic GitHub validation paths for format, lint, TypeScript,
+orchestration, runtime compatibility, tests, and browser-safe package builds without invoking
 Electron Forge packaging.
 
 #### Scenario: Static CI runs on Linux
 
 - **WHEN** the host-neutral build job runs on an Ubuntu runner
 - **THEN** it SHALL validate source and browser-safe outputs
-- **AND** it SHALL NOT create or upload a Linux Desktop application
+- **AND** it SHALL NOT create or upload a Desktop application
 
 #### Scenario: Platform compatibility runs on Windows
 
@@ -29,43 +29,50 @@ Electron Forge packaging.
 - **THEN** it SHALL validate Desktop types and deterministic native-runtime contracts
 - **AND** it SHALL NOT invoke Forge package, make, publish, or Desktop artifact upload
 
-### Requirement: Native package is built on the matching macOS host
+### Requirement: Native package is built on the matching local macOS host
 
-Remote native package validation SHALL build only `darwin-arm64` on an Apple Silicon macOS runner.
+Native package validation SHALL build only `darwin-arm64` on an explicitly operated local Apple
+Silicon macOS host. GitHub Actions SHALL NOT produce or upload that package.
 
-#### Scenario: Native package job runs
+#### Scenario: Native package validation runs
 
-- **WHEN** the remote build workflow executes
-- **THEN** the macOS job SHALL run `@neko/app-desktop` typecheck, native Sharp closure, and package
-- **AND** it SHALL upload only the matching Forge package output
+- **WHEN** a developer or release operator validates the native package
+- **THEN** the local host SHALL run `@neko/app-desktop` typecheck, native Sharp closure, and package
+- **AND** no GitHub workflow SHALL represent native package bytes as its output
 
 #### Scenario: Forge returns without the canonical package output
 
 - **WHEN** the native package process returns but the macOS executable is absent
-- **THEN** the repository-owned package command SHALL fail before artifact upload
+- **THEN** the repository-owned package command SHALL fail
 - **AND** the missing package SHALL NOT be represented as successful native evidence
 
-### Requirement: Aggregate gates require macOS package and platform tests
+### Requirement: Aggregate gates require deterministic source and platform tests
 
-Manual and pull-request aggregate gates SHALL require the macOS native package plus deterministic
-Windows/Linux test evidence.
+Manual and pull-request aggregate gates SHALL require deterministic source, unit/contract,
+headless-functional, quality, OpenSpec, and Windows/Linux test evidence without requiring or
+creating a native Desktop package.
 
-#### Scenario: Required package or platform test fails
+#### Scenario: Required source or platform test fails
 
-- **WHEN** the macOS package or a required Windows/Linux test job fails or is skipped
+- **WHEN** a required deterministic source or Windows/Linux test job fails or is skipped
 - **THEN** the aggregate gate SHALL fail rather than treating the missing evidence as optional
+
+#### Scenario: Aggregate gate succeeds
+
+- **WHEN** Manual Gate or Merge Gate succeeds
+- **THEN** no native package, signing, DMG, installation, or release qualification SHALL be inferred
 
 ### Requirement: CI validation classes are explicit and deterministic
 
-The remote gate SHALL validate the macOS native package, deterministic unit/contract tests, and a
-named headless Desktop functional subset as separate required evidence.
+The remote gate SHALL validate deterministic unit/contract tests and a named headless Desktop
+functional subset as separate required evidence. It SHALL NOT build a native macOS package.
 
 #### Scenario: Headless functional CI runs
 
 - **WHEN** the remote test graph executes
 - **THEN** it SHALL exercise bounded Desktop Main, preload, and application-composition flows
 - **AND** it SHALL NOT start a graphical Electron process, access real user data, consume provider
-  credentials, or call a real AI API
+  credentials, call a real AI API, or invoke Forge
 
 #### Scenario: Unit or functional evidence is missing
 

@@ -7,8 +7,8 @@ added Windows packaging before product qualification existed.
 
 The current product decision is narrower: `darwin-arm64` is the only package and release target.
 Windows and Linux remain useful deterministic test environments, but neither may invoke Forge or
-stage a release-native runtime. Native package evidence must come from the matching Apple Silicon
-host, and every unsupported host must fail before Forge.
+stage a release-native runtime. Native package evidence must come from an explicitly operated local
+Apple Silicon host rather than GitHub Actions, and every unsupported host must fail before Forge.
 
 ## Goals / Non-Goals
 
@@ -16,7 +16,7 @@ host, and every unsupported host must fail before Forge.
 
 - Make Desktop `tsc --noEmit` an unavoidable build-gate dependency.
 - Keep deterministic checks runnable on Ubuntu and Windows without packaging an application.
-- Package only `darwin-arm64` on a matching CI runner.
+- Package only `darwin-arm64` on a matching local Apple Silicon host.
 - Run deterministic unit/contract and headless Desktop functional paths in CI without a graphical
   Electron process or provider credentials.
 - Define one closed release target and project it into Forge, runtime staging, metadata matrices,
@@ -58,17 +58,18 @@ Intel macOS, and unknown targets fail without spawning Forge.
 The guard belongs to repository/Desktop build orchestration. It has no user-data effect and does
 not own domain behavior.
 
-### 4. Use one real native package job
+### 4. Keep the real native package path local
 
-The remote graph contains one native job:
+The native package path is explicit and local:
 
-| Target         | Runner              | Command                |
-| -------------- | ------------------- | ---------------------- |
-| `darwin-arm64` | Apple Silicon macOS | `pnpm package:desktop` |
+| Target         | Host                      | Command                |
+| -------------- | ------------------------- | ---------------------- |
+| `darwin-arm64` | Local Apple Silicon macOS | `pnpm package:desktop` |
 
-The job runs Desktop typecheck and the matching Sharp executable closure, gives Forge/Vite a 4 GiB
-heap budget, asserts the canonical `.app` executable after Forge, and uploads only the exact macOS
-package directory. Aggregate gates require this job plus Windows/Linux deterministic tests.
+The operator runs Desktop typecheck and the matching Sharp executable closure, then asserts the
+canonical `.app` executable after Forge. GitHub Actions does not run Forge or upload the package.
+Aggregate gates require deterministic source and Windows/Linux tests without representing native
+package evidence.
 
 ### 5. Native release-runtime closures contain only macOS
 
@@ -81,19 +82,19 @@ Windows/Linux tests can still exercise host-neutral media logic, runtime parsing
 semantics, and diagnostics. Typed runtime snapshots may retain `win32`, `linux`, `browser`, and
 `unknown` observation vocabulary; observation does not imply package support.
 
-### 6. Separate deterministic CI from local behavior acceptance
+### 6. Separate deterministic CI from local native and behavior acceptance
 
-CI owns native macOS package construction, deterministic unit/contract coverage, Windows/Linux
-platform compatibility, and a credential-free headless Desktop functional subset. Provider-backed
-Agent Evaluation and graphical Electron acceptance remain explicit local commands with isolated
-fixtures and are unreachable from generic CI composition.
+CI owns deterministic unit/contract coverage, Windows/Linux platform compatibility, and a
+credential-free headless Desktop functional subset. Native macOS packaging, provider-backed Agent
+Evaluation, and graphical Electron acceptance remain explicit local commands and are unreachable
+from generic CI composition.
 
 ## Risks / Trade-offs
 
 - [Windows/Linux code regresses despite no package] → Their test jobs remain required aggregate-gate
   evidence, but passing tests are never described as product qualification.
-- [macOS package duration or memory grows] → Native packaging remains uncached and uses a bounded
-  4 GiB CI heap; missing output fails before artifact upload.
+- [A green GitHub gate is mistaken for package evidence] → Gate documentation explicitly excludes
+  native package, signing, DMG, installation, and release qualification.
 - [Active historical designs mention Windows/Linux packages] → Current architecture and active
   delivery facts are rebased; archived dated evidence remains unchanged.
 - [Formal release is mistaken for package CI] → Signing/notarization/tag/publication requirements
@@ -103,13 +104,13 @@ fixtures and are unreachable from generic CI composition.
 
 ## Migration Plan
 
-1. Change orchestration tests to require macOS-only packaging and Windows/Linux test-only jobs.
+1. Change orchestration tests to require local-only macOS packaging and Windows/Linux test-only jobs.
 2. Restrict host/output guards, Forge, Sharp, media, and local-metadata release matrices to macOS.
 3. Remove obsolete Windows/Linux native package/runtime paths and their positive tests.
 4. Rebase current architecture, README, roadmap, and active OpenSpec facts.
 5. Run focused orchestration/runtime tests, Desktop typecheck/package, and repository gates.
-6. Push the updated branch and rerun the GitHub Manual Gate for real macOS and platform-test
-   evidence.
+6. Run the local macOS package evidence and the GitHub Manual Gate deterministic source/platform
+   evidence separately.
 
 Rollback must restore one previous target matrix atomically; it must not retain simultaneous
 macOS-only and multi-platform release success paths.

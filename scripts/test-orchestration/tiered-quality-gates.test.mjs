@@ -5,7 +5,6 @@ import { parse } from 'yaml';
 
 const SHARED_GATE_JOBS = Object.freeze([
   'static-build',
-  'desktop-package',
   'platform-test',
   'test-ts',
   'functional-test',
@@ -80,6 +79,7 @@ describe('development/main quality gate orchestration', () => {
 
     assert.equal(manualGate?.name, 'Manual Gate');
     assert.equal(mergeGate?.name, 'Merge Gate');
+    assert.equal(workflow.jobs?.['desktop-package'], undefined);
     assert.deepEqual(manualGate?.needs, SHARED_GATE_JOBS);
     assert.deepEqual(mergeGate?.needs, [
       ...SHARED_GATE_JOBS,

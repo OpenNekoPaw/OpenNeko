@@ -35,7 +35,7 @@ OpenNeko 是一款本地优先的桌面应用，用于管理项目与内容，�
 ## 当前状态
 
 - **Alpha**：目前以源码体验和产品验证为主，界面与项目格式仍可能变化。
-- **平台**：当前只支持 Apple Silicon macOS；预览版尚未进行 Developer ID 签名和 Apple 公证。
+- **平台**：当前只支持 Apple Silicon macOS；发布的 DMG 尚未进行 Developer ID 签名和 Apple 公证。
 - **产品重点**：当前提供项目与个人助手入口；Character、Room 与 World 是未来方向，尚未开放对应产品栏目。
 - **开发中**：完整端到端创作闭环、稳定发布通道和专业工具集成尚未完成。
 
