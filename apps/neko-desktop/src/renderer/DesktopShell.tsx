@@ -62,10 +62,12 @@ import {
   type DesktopAgentInteractionSurfaceRef,
   type DesktopApplicationSidebarProjection,
   type DesktopCreativeManagementCatalog,
+  type DesktopCharacterPresentationSurfaceRef,
   type DesktopSceneTransitionIntent,
   type DesktopWorkbenchMainSurfaceRef,
   type DesktopWorkbenchSceneProjection,
 } from '@neko/host/desktop-scene-contract';
+import { DesktopCharacterPresentationSurfaceRegistry } from '@neko/host/character-presentation-surface-registry';
 import { DesktopAgentSurface, type DesktopAgentSurfaceProps } from './DesktopAgentSurface';
 import { DesktopResourceBrowserSurface } from './DesktopResourceBrowserSurface';
 import { DesktopPreviewSurface } from './DesktopPreviewSurface';
@@ -118,6 +120,7 @@ import {
   CharacterAuthoringStudioRoot,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface as CharacterRoomTimelineProjectionSurface,
+  CharacterStorylineTimelineSurface,
   projectCharacterRoomIdentity,
   type CharacterManagementRuntime,
   useCharacterManagementRuntime,
@@ -1177,6 +1180,27 @@ function DesktopSceneWorkbench({
           roomInteractionOwner.roomRunId,
         )
       : undefined;
+  const characterTimelineStack =
+    characterInteractionScene && scene.slots.cutPanel?.kind === 'character-timeline-stack'
+      ? scene.slots.cutPanel
+      : undefined;
+  const characterTimelineRuns =
+    characterInteractionScene && characterManagement.loadState.kind === 'ready'
+      ? resolveOwnerCharacterRuns(
+          characterManagement.loadState.snapshot,
+          scene.context.owner,
+        )
+      : [];
+  const storylineTimelineVisible = Boolean(
+    characterTimelineStack?.timelines.some(
+      (timeline) => timeline.kind === 'character-storyline-timeline',
+    ) && characterTimelineRuns.some((run) => run.runtimeBinding.kind === 'narrative'),
+  );
+  const roomEventTimelineVisible = Boolean(
+    characterTimelineStack?.timelines.some(
+      (timeline) => timeline.kind === 'character-room-event-timeline',
+    ),
+  );
   const launchScope = characterInteractionScene
     ? scene.context.scope
     : scene.context.kind === 'agent' && scene.context.scope.kind !== 'workspace'
@@ -1359,9 +1383,8 @@ function DesktopSceneWorkbench({
   const characterManagerVisible =
     characterInteractionScene && scene.slots.rightManager?.kind === 'character-runtime-manager';
   const rightDockVisible = resourceDockVisible || characterManagerVisible;
-  const roomTimelineVisible =
-    characterInteractionScene && scene.slots.cutPanel?.kind === 'character-room-timeline';
-  const bottomPanelVisible = cutPanelVisible || roomTimelineVisible;
+  const characterTimelineVisible = storylineTimelineVisible || roomEventTimelineVisible;
+  const bottomPanelVisible = cutPanelVisible || characterTimelineVisible;
   const interactionResize =
     workspaceScene && interactionPresentation === 'docked' && !interactionLocks.workbench
       ? createProjectDockResizeBinding({
@@ -1510,13 +1533,13 @@ function DesktopSceneWorkbench({
         }
         mainSplitResize={mainSplitResize}
         bottomPanel={
-          cutPanel || roomTimelineVisible
+          cutPanel || characterTimelineVisible
             ? portalDeck('bottomPanel', bottomPanelVisible)
             : undefined
         }
         bottomPanelVisible={bottomPanelVisible}
         bottomPanelPresentation={cutPanelExpanded ? 'expanded' : 'docked'}
-        bottomPanelHeight={cutPanel?.height ?? (roomTimelineVisible ? 260 : undefined)}
+        bottomPanelHeight={cutPanel?.height ?? (characterTimelineVisible ? 260 : undefined)}
         bottomPanelResize={cutPanelResize}
         leftDock={portalDeck('leftDock', scene.context.kind === 'settings')}
         leftDockPresentation={scene.context.kind === 'settings' ? 'docked' : 'hidden'}
@@ -1648,6 +1671,10 @@ function DesktopWorkbenchRuntimePortals({
       : undefined;
   const characterInteraction =
     scene.context.kind === 'character-interaction' ? scene.context : undefined;
+  const characterPresentation =
+    characterInteraction && scene.slots.main?.kind === 'character-presentation'
+      ? scene.slots.main
+      : undefined;
   const assistantPreviewRef =
     assistantScope && scene.slots.main?.kind === 'assistant-preview' ? scene.slots.main : undefined;
   const assistantPreview =
@@ -1748,11 +1775,17 @@ function DesktopWorkbenchRuntimePortals({
         />
       )
     ) : characterInteraction ? (
-      <CharacterAvatarSurface
-        owner={characterInteraction.owner}
-        runtime={characterManagement}
-        workbenchInstanceId={composition.workbenchInstanceId}
-      />
+      characterPresentation ? (
+        <DesktopCharacterPresentationSurface
+          runtime={characterManagement}
+          surface={characterPresentation}
+          workbenchInstanceId={composition.workbenchInstanceId}
+        />
+      ) : (
+        <SceneSurfaceUnavailable
+          owner="character-presentation:unavailable"
+        />
+      )
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
       workspaceSlots.main
     ) : assistantScope ? (
@@ -1795,7 +1828,7 @@ function DesktopWorkbenchRuntimePortals({
             ? 'character.workbench.roomScene'
             : 'character.workbench.avatarScene',
         )}
-        panelId="character-avatar"
+        panelId="character-presentation"
         role="workspace"
       >
         {mainContent}
@@ -1872,10 +1905,46 @@ function DesktopWorkbenchRuntimePortals({
         runtime={characterManagement}
       />
     ) : undefined;
+  const characterSnapshot =
+    characterManagement.loadState.kind === 'ready'
+      ? characterManagement.loadState.snapshot
+      : undefined;
+  const characterOwnerRuns =
+    characterInteraction && characterSnapshot
+      ? resolveOwnerCharacterRuns(characterSnapshot, characterInteraction.owner)
+      : [];
+  const storylineTimeline =
+    characterSnapshot && characterOwnerRuns.some((run) => run.runtimeBinding.kind === 'narrative') ? (
+      <CharacterStorylineTimelineSurface
+        characterRunIds={characterOwnerRuns.map((run) => run.characterRunId)}
+        locale={locale}
+        snapshot={characterSnapshot}
+      />
+    ) : null;
+  const characterTimelineStack =
+    characterInteraction && scene.slots.cutPanel?.kind === 'character-timeline-stack'
+      ? scene.slots.cutPanel
+      : undefined;
+  const storylineTimelineRef = characterTimelineStack?.timelines.find(
+    (timeline) => timeline.kind === 'character-storyline-timeline',
+  );
+  const roomEventTimelineRef = characterTimelineStack?.timelines.find(
+    (timeline) => timeline.kind === 'character-room-event-timeline',
+  );
   const bottomPanel =
-    characterInteraction?.owner.kind === 'room' &&
-    scene.slots.cutPanel?.kind === 'character-room-timeline' ? (
-      <CharacterRoomTimelineProjectionSurface locale={locale} state={roomWorkbench} />
+    characterTimelineStack && (storylineTimeline || roomEventTimelineRef) ? (
+      <div data-character-timelines="true">
+        {storylineTimelineRef && storylineTimeline ? (
+          <div data-character-timeline-id={storylineTimelineRef.timelineId}>
+            {storylineTimeline}
+          </div>
+        ) : null}
+        {roomEventTimelineRef ? (
+          <div data-character-timeline-id={roomEventTimelineRef.timelineId}>
+            <CharacterRoomTimelineProjectionSurface locale={locale} state={roomWorkbench} />
+          </div>
+        ) : null}
+      </div>
     ) : (
       workspaceSlots.bottomPanel
     );
@@ -1910,6 +1979,40 @@ function DesktopWorkbenchRuntimePortals({
       )}
     </>
   );
+}
+
+type DesktopCharacterPresentationRenderer = (input: {
+  readonly runtime: CharacterManagementRuntime;
+  readonly surface: DesktopCharacterPresentationSurfaceRef;
+  readonly workbenchInstanceId: string;
+}) => ReactNode;
+
+const desktopCharacterPresentationRenderers =
+  new DesktopCharacterPresentationSurfaceRegistry<DesktopCharacterPresentationRenderer>();
+
+desktopCharacterPresentationRenderers.register({
+  providerId: 'chara.representation',
+  surfaceKind: 'avatar',
+  resolve: () => ({ runtime, surface, workbenchInstanceId }) => (
+    <CharacterAvatarSurface
+      owner={surface.owner}
+      runtime={runtime}
+      workbenchInstanceId={workbenchInstanceId}
+    />
+  ),
+});
+
+function DesktopCharacterPresentationSurface({
+  runtime,
+  surface,
+  workbenchInstanceId,
+}: {
+  readonly runtime: CharacterManagementRuntime;
+  readonly surface: DesktopCharacterPresentationSurfaceRef;
+  readonly workbenchInstanceId: string;
+}): JSX.Element {
+  const render = desktopCharacterPresentationRenderers.resolve(surface);
+  return <>{render({ runtime, surface, workbenchInstanceId })}</>;
 }
 
 function StaticWorkbenchMainPanelSurface({
@@ -2092,35 +2195,14 @@ function CharacterRuntimeManagerSurface({
   const { t } = useTranslation();
   const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
   const runs = snapshot ? resolveOwnerCharacterRuns(snapshot, owner) : [];
-  const runIds = new Set(runs.map((run) => run.characterRunId));
-  const versionIds = new Set(runs.map((run) => run.characterVersionId));
-  const storylineRuns =
-    snapshot?.character.storylineRuns.filter((run) => runIds.has(run.characterRunId)) ?? [];
-  const memoryScopes =
-    snapshot?.character.memoryScopes.filter((scope) => runIds.has(scope.characterRunId)) ?? [];
-  const relationships =
-    snapshot?.character.relationships.filter((item) => versionIds.has(item.characterVersionId)) ??
-    [];
-  const configurations =
-    snapshot?.character.presentationConfigurations.filter((item) =>
-      runIds.has(item.characterRunId),
-    ) ?? [];
-  const representations =
-    snapshot?.character.versions
-      .filter((version) => versionIds.has(version.characterVersionId))
-      .flatMap((version) => version.definition.representationRefs) ?? [];
-  const capabilities = [
-    ['storyline', t('character.workbench.storyline'), `${storylineRuns.length}`],
-    ['memory', t('character.workbench.memory'), `${memoryScopes.length}`],
-    ['relationship-memory', t('character.workbench.relationshipMemory'), `${relationships.length}`],
-    ['chat-tts', t('character.workbench.chatTts'), `${configurations.length}`],
-    ['representation', t('character.workbench.representation'), `${representations.length}`],
-    ['composition', t('character.workbench.composition'), t('character.workbench.notConnected')],
-  ] as const;
+  const roomRun =
+    owner.kind === 'room'
+      ? snapshot?.character.roomRuns.find((run) => run.roomRunId === owner.roomRunId)
+      : undefined;
   return (
     <section
       className="character-workbench-manager project-dock-panel"
-      data-character-runtime-manager="true"
+      data-character-context-manager="true"
       data-character-owner-kind={owner.kind}
     >
       <header className="character-workbench-panel-header">
@@ -2132,16 +2214,83 @@ function CharacterRuntimeManagerSurface({
         <strong>{owner.kind === 'room' ? owner.roomId : owner.characterId}</strong>
       </div>
       <div className="character-workbench-manager__capabilities">
-        {capabilities.map(([kind, label, value]) => (
-          <div
-            key={kind}
-            className="character-workbench-manager__row"
-            data-runtime-capability={kind}
-          >
-            <span>{label}</span>
-            <small>{value}</small>
+        {runs.map((run) => {
+          const publication = snapshot?.character.versions.find(
+            (version) => version.characterVersionId === run.characterVersionId,
+          );
+          const configuration = snapshot?.character.presentationConfigurations.find(
+            (item) => item.characterRunId === run.characterRunId,
+          );
+          const storylineBinding =
+            run.runtimeBinding.kind === 'narrative' ? run.runtimeBinding.storyline : undefined;
+          const storylineVersion =
+            storylineBinding === undefined
+              ? undefined
+              : snapshot?.character.storylineVersions.find(
+                  (version) =>
+                    version.characterStorylineVersionId ===
+                    storylineBinding.characterStorylineVersionId,
+                );
+          const storylineNode = storylineVersion?.nodes.find(
+            (node) => node.storylineNodeId === storylineBinding?.storylineNodeId,
+          );
+          const schedulingEligible =
+            roomRun?.schedulingPolicy.kind !== 'bounded-autonomous' ||
+            roomRun.schedulingPolicy.eligibleParticipantIds.includes(run.participantId);
+          return (
+            <article
+              key={run.characterRunId}
+              className="character-workbench-manager__participant"
+              data-character-participant={run.participantId}
+              data-character-mode={run.runtimeBinding.kind}
+            >
+              <strong>{publication?.label ?? run.characterVersionId}</strong>
+              <code>{run.characterVersionId}</code>
+              <span>{run.runtimeBinding.kind}</span>
+              <span>{run.controller.kind}</span>
+              {run.controller.kind === 'agent' ? (
+                <code>{run.controller.primaryAgentSessionId}</code>
+              ) : null}
+              {configuration?.tts.voiceRepresentationId ? (
+                <span>{configuration.tts.voiceRepresentationId}</span>
+              ) : null}
+              {storylineBinding ? (
+                <div data-character-storyline-context="true">
+                  <code>{storylineBinding.characterStorylineVersionId}</code>
+                  <strong>{storylineNode?.title ?? storylineBinding.storylineNodeId}</strong>
+                  {storylineNode ? (
+                    <>
+                      <span>{storylineNode.context.situation}</span>
+                      {storylineNode.context.time ? <span>{storylineNode.context.time}</span> : null}
+                      {storylineNode.context.location ? (
+                        <span>{storylineNode.context.location}</span>
+                      ) : null}
+                      {storylineNode.context.characterState ? (
+                        <span>{storylineNode.context.characterState}</span>
+                      ) : null}
+                      {storylineNode.context.relationshipState ? (
+                        <span>{storylineNode.context.relationshipState}</span>
+                      ) : null}
+                      {storylineNode.context.knowledgeBoundary.map((boundary) => (
+                        <span key={boundary}>{boundary}</span>
+                      ))}
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+              {roomRun ? (
+                <span data-character-scheduling-eligible={String(schedulingEligible)}>
+                  {schedulingEligible ? 'eligible' : 'paused'}
+                </span>
+              ) : null}
+            </article>
+          );
+        })}
+        {runs.length === 0 ? (
+          <div className="character-workbench-manager__row" role="status">
+            <span>{t('character.workbench.notConnected')}</span>
           </div>
-        ))}
+        ) : null}
       </div>
     </section>
   );

@@ -894,13 +894,8 @@ describe('DesktopApplication scene lifecycle', () => {
         .querySelector('[data-character-avatar-surface="true"]')
         ?.getAttribute('data-character-owner-id'),
     ).toBe('character-run-1');
-    expect(container.querySelector('[data-character-runtime-manager="true"]')).not.toBeNull();
-    expect(container.querySelector('[data-runtime-capability="storyline"]')).not.toBeNull();
-    expect(container.querySelector('[data-runtime-capability="memory"]')).not.toBeNull();
-    expect(container.querySelector('[data-runtime-capability="chat-tts"]')).not.toBeNull();
-    expect(container.querySelector('[data-runtime-capability="representation"]')).not.toBeNull();
-    expect(container.querySelector('[data-runtime-capability="saves"]')).toBeNull();
-    expect(container.querySelector('[data-runtime-capability="world"]')).toBeNull();
+    expect(container.querySelector('[data-character-context-manager="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-runtime-capability]')).toBeNull();
     expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
     expect(
       container.querySelector('.desktop-scene-workbench--character-interaction'),
@@ -941,7 +936,7 @@ describe('DesktopApplication scene lifecycle', () => {
     });
     await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
     expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
-    expect(container.querySelector('[data-character-runtime-manager="true"]')).toBeNull();
+    expect(container.querySelector('[data-character-context-manager="true"]')).toBeNull();
     expect(container.querySelector('[data-character-room-timeline="true"]')).toBeNull();
     await act(async () => root.unmount());
   });
@@ -1000,6 +995,29 @@ describe('DesktopApplication scene lifecycle', () => {
     await waitFor(() => releaseSurface.mock.calls.length === 1);
     expect(releaseSurface).toHaveBeenCalledWith('avatar-lease-a');
     expect(container.querySelector('[data-character-vrm-runtime]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('isolates an unknown Character Presentation provider to Main without renderer fallback', async () => {
+    const scene = characterInteractionScene();
+    if (scene.slots.main?.kind !== 'character-presentation') {
+      throw new Error('Character Presentation fixture requires an exact Main surface.');
+    }
+    const projection = withActiveScene(createProjection(), {
+      ...scene,
+      slots: {
+        ...scene.slots,
+        main: { ...scene.slots.main, providerId: 'unknown.presentation' },
+      },
+    });
+    const openSurface = vi.fn();
+    installBridge({ projection, characterAvatarOpenSurface: openSurface });
+    const { container, root } = await renderApplication();
+
+    await waitFor(() => container.textContent?.includes("unknown.presentation"));
+    expect(container.querySelector('[data-character-context-manager="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
+    expect(openSurface).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
@@ -3192,8 +3210,25 @@ function characterInteractionScene() {
         phase: 'session',
         scope,
       },
-      main: { kind: 'character-avatar', owner },
+      main: {
+        kind: 'character-presentation',
+        owner,
+        surfaceKind: 'avatar',
+        providerId: 'chara.representation',
+        surfaceId: 'character-presentation:conversation-character-1',
+      },
       rightManager: { kind: 'character-runtime-manager', owner },
+      cutPanel: {
+        kind: 'character-timeline-stack',
+        owner,
+        timelines: [
+          {
+            kind: 'character-storyline-timeline',
+            owner,
+            timelineId: 'character-storyline-timeline:conversation-character-1',
+          },
+        ],
+      },
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -3220,9 +3255,30 @@ function characterRoomInteractionScene() {
         phase: 'session',
         scope,
       },
-      main: { kind: 'character-avatar', owner },
+      main: {
+        kind: 'character-presentation',
+        owner,
+        surfaceKind: 'avatar',
+        providerId: 'chara.representation',
+        surfaceId: 'character-presentation:conversation-room-1',
+      },
       rightManager: { kind: 'character-runtime-manager', owner },
-      cutPanel: { kind: 'character-room-timeline', owner },
+      cutPanel: {
+        kind: 'character-timeline-stack',
+        owner,
+        timelines: [
+          {
+            kind: 'character-storyline-timeline',
+            owner,
+            timelineId: 'character-storyline-timeline:conversation-room-1',
+          },
+          {
+            kind: 'character-room-event-timeline',
+            owner,
+            timelineId: 'character-room-event-timeline:conversation-room-1',
+          },
+        ],
+      },
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -3238,10 +3294,10 @@ function emptyCharacterFoundationSnapshot() {
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylines: [],
+      storylineDrafts: [],
       storylineVersions: [],
-      storylineRuns: [],
-      storylineObservationCandidates: [],
-      memoryScopes: [],
+      companionContinuities: [],
       presentationConfigurations: [],
     },
     diagnostics: [],
@@ -3300,7 +3356,11 @@ function avatarCharacterFoundationSnapshot() {
           characterVersionId: 'character-version-1',
           participantId: 'participant-1',
           controller: { kind: 'agent' as const, primaryAgentSessionId: 'agent-session-1' },
-          runtimeBinding: { kind: 'companion' as const, relationshipId: 'relationship-1' },
+          runtimeBinding: {
+            kind: 'companion' as const,
+            companionContinuityId: 'continuity-1',
+            relationshipId: 'relationship-1',
+          },
           createdAt: '2026-08-10T00:00:00.000Z',
         },
       ],
@@ -3360,7 +3420,11 @@ function roomIdentityArtFoundationSnapshot() {
           characterVersionId: 'character-version-lin',
           participantId: 'participant-lin',
           controller: { kind: 'agent' as const, primaryAgentSessionId: 'agent-session-lin' },
-          runtimeBinding: { kind: 'companion' as const, relationshipId: 'relationship-lin' },
+          runtimeBinding: {
+            kind: 'companion' as const,
+            companionContinuityId: 'continuity-lin',
+            relationshipId: 'relationship-lin',
+          },
           createdAt: '2026-08-10T00:00:00.000Z',
         },
       ],
@@ -3395,7 +3459,7 @@ function roomIdentityArtFoundationSnapshot() {
           ],
           schedulingPolicy: { kind: 'mentioned' as const },
           events: [],
-          runtimeKind: 'companion' as const,
+          mode: 'companion' as const,
           relationshipIds: ['relationship-lin'],
           createdAt: '2026-08-10T00:00:00.000Z',
         },

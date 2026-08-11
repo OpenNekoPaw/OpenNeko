@@ -64,8 +64,10 @@ import {
   createAgentAppHost,
   createAgentAuthoringMutationAuthority,
   createAgentConversationLifecycleService,
+  createAgentDomainConversationService,
   createAgentDomainBindingApplicationService,
   createAgentLaunchDraftSubmissionApplicationService,
+  createAgentProviderExecutionRouter,
   createAgentRuntimeSettingsAuthority,
   createAgentRuntimeSettingsRepository,
   createAssistantResourceService,
@@ -73,8 +75,14 @@ import {
   createPersistentAgentConversationContextAuthority,
   initializeAgentConversationLifecycleTables,
   projectAgentDraftInputText,
+  type AgentDomainConversationService,
 } from '@neko/agent-runtime/application';
-import { createCharacterPrimaryAgentSessionAdapter } from './character-primary-agent-session-adapter';
+import { createCharacterAgentConversationAdapter } from './character-agent-conversation-adapter';
+import {
+  prepareCharacterAgentTurnContext,
+  prepareCharacterRoomAgentTurnContext,
+  resolveCharacterAgentTurnContext,
+} from './character-agent-domain-context-adapter';
 import { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-runtime';
 import { setRootLogger as setAgentRootLogger } from '@neko/agent-runtime';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
@@ -146,10 +154,10 @@ import {
   CharacterAuthoringHostService,
   CharacterAvatarAuthorityService,
   CharacterConversationLaunchService,
+  CharacterCompanionContinuityService,
   CharacterFoundationCommandService,
   CharacterFoundationService,
   CharacterInteractionService,
-  CharacterMemoryService,
   CharacterPresentationService,
   CharacterRoomConversationService,
   CharacterRoomInteractionService,
@@ -381,6 +389,7 @@ async function startDesktop(): Promise<void> {
   });
   const characterRuntimeRepositories = createPersistentCharacterRuntimeRepositories({
     metadataStore: localMetadataStore,
+    authoring: characterAuthoringRepository,
   });
   const characterFoundation = new CharacterFoundationService({
     characterCatalog: createCharacterDurableCatalogPort({
@@ -1591,27 +1600,31 @@ async function startDesktop(): Promise<void> {
     },
   });
   const characterRooms = new CharacterRoomService(characterRuntimeRepositories.room);
-  const characterAgentSessions = createCharacterPrimaryAgentSessionAdapter({
-    workspace: assistantAgentWorkspace,
-    conversationContexts: createPersistentAgentConversationContextAuthority({
-      metadataStore: localMetadataStore,
-    }),
-    resolveTurnRuntime: (characterRunId, signal) => {
-      signal?.throwIfAborted();
-      return agentControllerComposition.resolveExternalOwnerTurnRuntime({
-        workspace: assistantAgentWorkspace,
-        conversationId: `conversation:character:${characterRunId}`,
-        locale: app.getLocale().toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en',
-      });
+  const agentConversationContexts = createPersistentAgentConversationContextAuthority({
+    metadataStore: localMetadataStore,
+  });
+  let agentDomainConversations: AgentDomainConversationService | undefined;
+  const requireAgentDomainConversations = (): AgentDomainConversationService => {
+    if (!agentDomainConversations) {
+      throw new Error('Agent domain Conversation service is not composed.');
+    }
+    return agentDomainConversations;
+  };
+  const characterAgentConversations = createCharacterAgentConversationAdapter({
+    conversations: {
+      reserve: (input) => requireAgentDomainConversations().reserve(input),
+      releaseReservation: (conversationId) =>
+        requireAgentDomainConversations().releaseReservation(conversationId),
+      submitTurn: (input) => requireAgentDomainConversations().submitTurn(input),
     },
-    baseSystemPrompt: (characterRunId) =>
-      `You are the primary Character Agent for CharacterRun '${characterRunId}'.`,
   });
   const characterPresentation = new CharacterPresentationService(
     characterRuntimeRepositories.presentation,
   );
   const characterStorylines = new CharacterStorylineService(characterRuntimeRepositories.storyline);
-  const characterMemories = new CharacterMemoryService(characterRuntimeRepositories.memory);
+  const characterCompanionContinuity = new CharacterCompanionContinuityService(
+    characterRuntimeRepositories.companionContinuity,
+  );
   const characterAvatarAuthority = new CharacterAvatarAuthorityService(
     characterRuntimeRepositories.avatarAuthority,
   );
@@ -1623,7 +1636,7 @@ async function startDesktop(): Promise<void> {
   });
   const characterInteractions = new CharacterInteractionService({
     repository: characterRuntimeRepositories.interaction,
-    agentSessions: characterAgentSessions,
+    agentConversations: characterAgentConversations,
     roomViews: {
       materializeRoomView: (roomRunId, participantId, signal) =>
         characterRooms.materializeView({ roomRunId, participantId }, signal),
@@ -1637,20 +1650,19 @@ async function startDesktop(): Promise<void> {
   const characterConversations = new CharacterConversationLaunchService({
     repository: characterRuntimeRepositories.conversationLaunch,
     publications: characterAuthoringRepository,
-    agentSessions: characterAgentSessions,
+    agentConversations: characterAgentConversations,
   });
   const agentRuntimeEntry = createDesktopAgentRuntimeEntryService({
     characterConversations,
     characterInteractions,
     characterRooms,
-    characterRoomConversations,
     userId: 'user:local',
     userDisplayName: 'You',
   });
   const characterRoomInteractions = new CharacterRoomInteractionService({
     repository: characterRuntimeRepositories.roomInteraction,
     roomRuns: characterRooms,
-    agentSessions: characterAgentSessions,
+    agentConversations: characterAgentConversations,
   });
   const characterFoundationCommands = new CharacterFoundationCommandService({
     characterAuthoring: new CharacterAuthoringService({ repository: characterAuthoringRepository }),
@@ -1660,7 +1672,7 @@ async function startDesktop(): Promise<void> {
     roomInteractions: characterRoomInteractions,
     presentation: characterPresentation,
     storylines: characterStorylines,
-    memories: characterMemories,
+    companionContinuity: characterCompanionContinuity,
   });
   const worldRuntime = new WorldRuntimeService({
     repository: worldRuntimeRepositories.runtime,
@@ -1881,6 +1893,43 @@ async function startDesktop(): Promise<void> {
         return { status: 'available', binding, contextPayloads: [] };
       },
     },
+    chara: {
+      resolve: async (binding) => {
+        if (!binding.characterRunId || !binding.dialogueRunId) {
+          throw new Error('Character Conversation has no exact Run and Dialogue authority.');
+        }
+        await characterInteractions.validateDialogueBinding({
+          characterProjectId: binding.characterId,
+          characterVersionId: binding.characterVersionId,
+          characterRunId: binding.characterRunId,
+          dialogueRunId: binding.dialogueRunId,
+        });
+        return { status: 'available', binding, contextPayloads: [] };
+      },
+    },
+    room: {
+      resolve: async (binding) => {
+        const run = await characterRooms.readRun(binding.roomRunId);
+        if (run.characterRoomId !== binding.roomId) {
+          throw new Error('Room Conversation does not match the exact CharacterRoom authority.');
+        }
+        if (binding.scope === 'participant') {
+          const participant = run.participants.find(
+            (candidate) => candidate.participantId === binding.participantId,
+          );
+          if (
+            !participant ||
+            participant.controller.kind !== 'agent' ||
+            participant.controller.characterRunId !== binding.characterRunId
+          ) {
+            throw new Error(
+              'Room participant Conversation does not match its exact CharacterRun authority.',
+            );
+          }
+        }
+        return { status: 'available', binding, contextPayloads: [] };
+      },
+    },
   });
   const resolveScratchRoot = (ref: {
     readonly conversationId: string;
@@ -1888,7 +1937,7 @@ async function startDesktop(): Promise<void> {
   }): string =>
     path.join(globalStorage.root, 'assistant-scratch', ref.conversationId, ref.scratchArtifactId);
   const resolveConversationWorkspace = async (context: AgentBoundDomainBinding) => {
-    if (context.kind === 'assistant') {
+    if (context.kind === 'assistant' || context.kind === 'character') {
       return agentComposition.attachWorkspace(assistantWorkspace);
     }
     if (context.kind !== 'workspace') {
@@ -1906,6 +1955,69 @@ async function startDesktop(): Promise<void> {
       ))
     );
   };
+  const agentProviderExecution = createAgentProviderExecutionRouter({
+    roomInteraction: {
+      start: async (request) => {
+        if (request.input.kind !== 'message') {
+          throw new Error('Character Room first submit requires an ordinary message.');
+        }
+        await agentRuntimeEntry.validateContext(request.context);
+        const result = await characterRoomConversations.submitUserMessage({
+          submissionId: request.requestId,
+          roomRunId: request.context.roomRunId,
+          userId: 'user:local',
+          message: request.input.text,
+        });
+        if (
+          result.outcomes.length > 0 &&
+          result.outcomes.every((outcome) => outcome.status === 'rejected')
+        ) {
+          throw new Error('Every scheduled Room participant response was rejected.');
+        }
+      },
+    },
+    standard: {
+      start: async (request) => {
+        if (isAgentLaunchConversationCreationCommand(request.input)) return;
+        const workspace = await resolveConversationWorkspace(request.context);
+        if (!agentControllerComposition.startInitialTurn) {
+          throw new Error('Agent initial-turn provider adapter is unavailable.');
+        }
+        const commandArtifactActivationId =
+          request.input.kind === 'command'
+            ? parseCommandArtifactHandlerId(request.input.handlerId)
+            : undefined;
+        return agentControllerComposition.startInitialTurn({
+          workspace,
+          conversationId: request.conversationId,
+          turnId: request.turnId,
+          messageText:
+            request.input.kind === 'message' ? request.input.text : (request.input.args ?? ''),
+          presentationText: projectAgentDraftInputText(request.input),
+          configuration: request.configuration,
+          capabilityConstraint: request.capabilityConstraint,
+          context: request.context,
+          entryTargetReceipt: request.entryTargetReceipt,
+          locale: 'en',
+          contextPayloads: request.contextPayloads,
+          ...(request.purposeModels === undefined ? {} : { purposeModels: request.purposeModels }),
+          ...(request.input.kind === 'skill'
+            ? {
+                skillName: request.input.skillName,
+                skillActivationId: request.input.activationId,
+                additionalInstructions: request.input.args,
+              }
+            : request.input.kind === 'command'
+              ? {
+                  skillName: request.input.commandId,
+                  skillActivationId: commandArtifactActivationId,
+                  additionalInstructions: request.input.args,
+                }
+              : {}),
+        });
+      },
+    },
+  });
   const conversationLifecycle = createAgentConversationLifecycleService({
     repository: createPersistentAgentConversationLifecycleRepository({
       metadataStore: localMetadataStore,
@@ -1917,16 +2029,105 @@ async function startDesktop(): Promise<void> {
         agentLaunch.resolveResourceContexts(context, resourceGrantIds),
     },
     domainContext: {
-      resolveForTurn: async ({ conversationId, context, references }) => {
-        if (context.kind === 'character' || context.kind === 'room') {
-          await agentRuntimeEntry.validateContext(context);
-          return [];
+      resolveCapabilityConstraint: async ({ conversationId, context, input, references }) => {
+        let ownerId: string;
+        let characterModeConstraint:
+          | Awaited<ReturnType<CharacterInteractionService['resolveAgentModeConstraint']>>
+          | undefined;
+        switch (context.kind) {
+          case 'assistant':
+            ownerId = context.assistantSpaceId;
+            break;
+          case 'workspace':
+            ownerId = context.workspaceId;
+            break;
+          case 'character': {
+            const characterRunId = context.characterRunId;
+            if (!characterRunId) {
+              throw new Error('Character capability constraint requires an exact Character Run.');
+            }
+            ownerId = characterRunId;
+            characterModeConstraint =
+              await characterInteractions.resolveAgentModeConstraint(characterRunId);
+            break;
+          }
+          case 'room':
+            ownerId =
+              context.scope === 'participant' ? context.characterRunId : context.roomRunId;
+            characterModeConstraint =
+              context.scope === 'participant'
+                ? await characterInteractions.resolveAgentModeConstraint(context.characterRunId)
+                : await characterRooms.resolveAgentModeConstraint(context.roomRunId);
+            break;
+          case 'world': {
+            const worldRunId = context.worldRunId;
+            if (!worldRunId) {
+              throw new Error('World capability constraint requires an exact World Run.');
+            }
+            ownerId = worldRunId;
+            break;
+          }
         }
+        if (characterModeConstraint?.externalReferences === 'none' && references.length > 0) {
+          throw new Error(
+            `Agent ${characterModeConstraint.mode} Character turn forbids external references.`,
+          );
+        }
+        if (characterModeConstraint?.mode === 'narrative' && input.kind !== 'message') {
+          throw new Error('Agent Narrative Character turn requires an ordinary message.');
+        }
+        return {
+          owner: {
+            kind: context.kind,
+            id: context.kind === 'room' && context.scope === 'participant'
+              ? conversationId
+              : ownerId,
+          },
+          skills: characterModeConstraint?.skills ?? ('configured' as const),
+          tools: characterModeConstraint?.tools ?? ('configured' as const),
+          references:
+            characterModeConstraint?.externalReferences ?? ('configured' as const),
+        };
+      },
+      resolveForTurn: async ({ conversationId, turnId, context, references }) => {
         const resolution = await agentDomainBindings.resolve(context);
         if (resolution.status === 'unavailable') {
           throw new Error(
             `[${resolution.diagnostic.owner}/${resolution.diagnostic.code}] ${resolution.diagnostic.message}`,
           );
+        }
+        if (context.kind === 'character') {
+          if (!context.characterRunId || !context.dialogueRunId) {
+            throw new Error('Character Conversation has no exact Run and Dialogue authority.');
+          }
+          const characterContexts = await resolveCharacterAgentTurnContext({
+            interactions: characterInteractions,
+            characterRunId: context.characterRunId,
+            dialogueRunId: context.dialogueRunId,
+            turnId,
+          });
+          const referenceContexts = await agentLaunch.resolveReferenceContexts(
+            conversationId,
+            context,
+            references,
+          );
+          return [...resolution.contextPayloads, ...characterContexts, ...referenceContexts];
+        }
+        if (context.kind === 'room') {
+          if (context.scope === 'interaction') return resolution.contextPayloads;
+          const participant = await prepareCharacterRoomAgentTurnContext({
+            interactions: characterInteractions,
+            roomRunId: context.roomRunId,
+            primaryAgentSessionId: conversationId,
+            characterRunId: context.characterRunId,
+          });
+          await participant.onTurnStarted(turnId);
+          const referenceContexts = await agentLaunch.resolveReferenceContexts(
+            conversationId,
+            context,
+            references,
+          );
+          return [...resolution.contextPayloads, ...participant.contextPayloads, ...referenceContexts];
         }
         const referenceContexts = await agentLaunch.resolveReferenceContexts(
           conversationId,
@@ -1967,7 +2168,7 @@ async function startDesktop(): Promise<void> {
     },
     session: {
       materialize: async (request) => {
-        if (request.context.kind === 'character' || request.context.kind === 'room') {
+        if (request.context.kind === 'room') {
           await agentRuntimeEntry.validateContext(request.context);
           await assistantAgentWorkspace.ensureConversation(request.conversationId, request.title);
           return;
@@ -1976,56 +2177,7 @@ async function startDesktop(): Promise<void> {
         await workspace.ensureConversation(request.conversationId, request.title);
       },
     },
-    provider: {
-      start: async (request) => {
-        if (isAgentLaunchConversationCreationCommand(request.input)) {
-          return;
-        }
-        if (request.context.kind === 'character' || request.context.kind === 'room') {
-          await agentRuntimeEntry.executeInitialInput({
-            requestId: request.requestId,
-            context: request.context,
-            intent: request.input,
-          });
-          return;
-        }
-        const workspace = await resolveConversationWorkspace(request.context);
-        if (!agentControllerComposition.startInitialTurn) {
-          throw new Error('Agent initial-turn provider adapter is unavailable.');
-        }
-        const commandArtifactActivationId =
-          request.input.kind === 'command'
-            ? parseCommandArtifactHandlerId(request.input.handlerId)
-            : undefined;
-        await agentControllerComposition.startInitialTurn({
-          workspace,
-          conversationId: request.conversationId,
-          turnId: request.turnId,
-          messageText:
-            request.input.kind === 'message' ? request.input.text : (request.input.args ?? ''),
-          presentationText: projectAgentDraftInputText(request.input),
-          configuration: request.configuration,
-          context: request.context,
-          entryTargetReceipt: request.entryTargetReceipt,
-          locale: 'en',
-          contextPayloads: request.contextPayloads,
-          ...(request.purposeModels === undefined ? {} : { purposeModels: request.purposeModels }),
-          ...(request.input.kind === 'skill'
-            ? {
-                skillName: request.input.skillName,
-                skillActivationId: request.input.activationId,
-                additionalInstructions: request.input.args,
-              }
-            : request.input.kind === 'command'
-              ? {
-                  skillName: request.input.commandId,
-                  skillActivationId: commandArtifactActivationId,
-                  additionalInstructions: request.input.args,
-                }
-              : {}),
-        });
-      },
-    },
+    provider: agentProviderExecution,
     reportError: (error) => {
       host.diagnostics?.report({
         code: 'desktop-agent-provider-execution-failed',
@@ -2035,6 +2187,60 @@ async function startDesktop(): Promise<void> {
     },
     createIdentity: randomUUID,
     now: () => new Date().toISOString(),
+  });
+  agentDomainConversations = createAgentDomainConversationService({
+    contexts: agentConversationContexts,
+    lifecycle: conversationLifecycle,
+    configuration: {
+      createInitialConfiguration: () =>
+        agentControllerComposition.createInitialConversationConfiguration({
+          workspace: assistantAgentWorkspace,
+        }),
+    },
+    turns: {
+      start: async (request) => {
+        if (!agentControllerComposition.startConversationTurn) {
+          throw new Error('Agent Conversation Turn application service is unavailable.');
+        }
+        return agentControllerComposition.startConversationTurn({
+          workspace: assistantAgentWorkspace,
+          conversationId: request.conversationId,
+          messageText: request.message,
+          configuration: request.configuration,
+          context: request.context,
+          entryTargetReceipt: request.entryTargetReceipt,
+          capabilityConstraint: request.capabilityConstraint,
+          locale: app.getLocale().toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en',
+          resolveConversationDomainTurnContext: {
+            resolve: async ({ conversationId, context }) => {
+              if (context.kind === 'character') {
+                if (!context.characterRunId || !context.dialogueRunId) {
+                  throw new Error(
+                    'Character Conversation has no exact Run and Dialogue authority.',
+                  );
+                }
+                return prepareCharacterAgentTurnContext({
+                  interactions: characterInteractions,
+                  characterRunId: context.characterRunId,
+                  dialogueRunId: context.dialogueRunId,
+                });
+              }
+              if (context.kind === 'room' && context.scope === 'participant') {
+                return prepareCharacterRoomAgentTurnContext({
+                  interactions: characterInteractions,
+                  roomRunId: context.roomRunId,
+                  primaryAgentSessionId: conversationId,
+                  characterRunId: context.characterRunId,
+                });
+              }
+              throw new Error(
+                `Agent domain Conversation '${conversationId}' is not a Character participant owner.`,
+              );
+            },
+          },
+        });
+      },
+    },
   });
   const agentLaunchSubmission = createAgentLaunchDraftSubmissionApplicationService({
     launch: agentLaunch,

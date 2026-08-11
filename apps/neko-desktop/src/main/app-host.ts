@@ -132,7 +132,11 @@ import {
   parseAgentLaunchHostRequest,
   type AgentLaunchHostResult,
 } from '@neko/agent-contracts/agent-launch-host';
-import { type AgentBoundDomainBinding, type AgentDomainBinding } from '@neko/agent-contracts';
+import {
+  type AgentBoundDomainBinding,
+  type AgentContextPayload,
+  type AgentDomainBinding,
+} from '@neko/agent-contracts';
 import {
   parseAgentExtensionManagementHostRequest,
   type AgentExtensionManagementHostResult,
@@ -218,9 +222,11 @@ import type { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-r
 import type {
   CharacterFoundationCommandPort,
   CharacterFoundationService,
+  CharacterInteractionService,
   CharacterRoomMessageSubmissionResult,
   SubmitCharacterRoomMessageInput,
 } from '@neko/chara/application';
+import { prepareCharacterAgentTurnContext } from './character-agent-domain-context-adapter';
 import {
   parseWorldAuthoringHostRequest,
   parseWorldFoundationAnyHostRequest,
@@ -304,17 +310,10 @@ export interface DesktopAppHostOptions {
   readonly worldFoundation: WorldFoundationService;
   readonly worldFoundationCommands: WorldFoundationCommandPort;
   readonly characterAvatar?: DesktopCharacterAvatarRuntime;
-  readonly characterInteractions: {
-    submitTurn(
-      input: {
-        readonly topology: 'dialogue';
-        readonly dialogueRunId: string;
-        readonly characterRunId: string;
-        readonly message: string;
-      },
-      signal?: AbortSignal,
-    ): Promise<{ readonly turnId: string; readonly content: string }>;
-  };
+  readonly characterInteractions: Pick<
+    CharacterInteractionService,
+    'prepareTurn' | 'freezePreparedTurn'
+  >;
   readonly characterRoomConversations: {
     submitUserMessage(
       input: SubmitCharacterRoomMessageInput,
@@ -931,9 +930,14 @@ export class DesktopAppHost {
         publish,
         readConversationContext: (conversationId) =>
           this.conversationLifecycle.readConversationContext(conversationId),
+        readConversationCapabilityConstraint: (conversationId) =>
+          this.conversationLifecycle.readConversationCapabilityConstraint(conversationId),
+        resolveConversationDomainTurnContext: {
+          resolve: (input) => this.resolveConversationDomainTurnContext(input),
+        },
         readConversationEntryTargetReceipt: (conversationId) =>
           this.conversationLifecycle.readConversationEntryTargetReceipt(conversationId),
-        ...(context.kind === 'assistant'
+        ...(context.kind === 'assistant' || context.kind === 'character'
           ? {
               readConversationConfiguration: (conversationId: string) =>
                 this.conversationLifecycle.readConversationConfiguration(conversationId),
@@ -1009,6 +1013,11 @@ export class DesktopAppHost {
       publish,
       readConversationContext: (conversationId) =>
         this.conversationLifecycle.readConversationContext(conversationId),
+      readConversationCapabilityConstraint: (conversationId) =>
+        this.conversationLifecycle.readConversationCapabilityConstraint(conversationId),
+      resolveConversationDomainTurnContext: {
+        resolve: (input) => this.resolveConversationDomainTurnContext(input),
+      },
       readConversationEntryTargetReceipt: (conversationId) =>
         this.conversationLifecycle.readConversationEntryTargetReceipt(conversationId),
       readConversationConfiguration: (conversationId) =>
@@ -1405,31 +1414,6 @@ export class DesktopAppHost {
         }
         return { requestId: request.requestId, status: 'accepted' };
       }
-      if (context.kind === 'character') {
-        const scene = resolveActiveDesktopWindowWorkbench(
-          (await this.shell.getProjection(window.windowId)).window,
-        ).scene;
-        if (
-          !context.characterRunId ||
-          !context.dialogueRunId ||
-          scene.context.kind !== 'character-interaction' ||
-          scene.context.owner.kind !== 'character' ||
-          scene.context.scope.conversationId !== request.message.conversationId ||
-          !isSameAgentConversationOwner(conversationOwnerFromContext(context), scene.context.owner)
-        ) {
-          throw new Error(
-            'Character message does not match the exact active Character Conversation owner.',
-          );
-        }
-        this.agentBridge.assertConnection(request.connection, grant);
-        await this.characterInteractions.submitTurn({
-          topology: 'dialogue',
-          dialogueRunId: context.dialogueRunId,
-          characterRunId: context.characterRunId,
-          message: request.message.message,
-        });
-        return { requestId: request.requestId, status: 'accepted' };
-      }
     }
     if (request.message.type === 'newConversation') {
       const projection = await this.shell.getProjection(window.windowId);
@@ -1446,6 +1430,24 @@ export class DesktopAppHost {
       return { requestId: request.requestId, status: 'accepted' };
     }
     return this.agentBridge.send(request, grant);
+  }
+
+  private async resolveConversationDomainTurnContext(input: {
+    readonly conversationId: string;
+    readonly context: AgentBoundDomainBinding;
+  }): Promise<{
+    readonly contextPayloads: readonly AgentContextPayload[];
+    readonly onTurnStarted?: (turnId: string) => Promise<void>;
+  }> {
+    if (input.context.kind !== 'character') return { contextPayloads: [] };
+    if (!input.context.characterRunId || !input.context.dialogueRunId) {
+      throw new Error('Character Conversation has no exact Run and Dialogue authority.');
+    }
+    return prepareCharacterAgentTurnContext({
+      interactions: this.characterInteractions,
+      characterRunId: input.context.characterRunId,
+      dialogueRunId: input.context.dialogueRunId,
+    });
   }
 
   async detachAgentConnection(

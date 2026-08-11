@@ -104,6 +104,7 @@ describe('Desktop Agent Entry target service', () => {
     const fixture = createFixture();
     const binding = {
       kind: 'character-dialogue' as const,
+      mode: 'companion' as const,
       participants: [{ characterProjectId: 'character-1', characterVersionId: 'version-1' }],
     };
     await expect(
@@ -129,6 +130,7 @@ describe('Desktop Agent Entry target service', () => {
         mode: 'character-dialogue',
         binding: {
           kind: 'character-dialogue',
+          mode: 'companion',
           participants: [
             { characterProjectId: 'character-1', characterVersionId: 'version-stale' },
           ],

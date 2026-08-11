@@ -1,7 +1,6 @@
 import type {
   AgentBoundDomainBinding,
   AgentCharacterDialogueLaunchBinding,
-  AgentDraftInputIntent,
 } from '@neko/agent-contracts';
 import type { AgentEntryRuntimeMaterializationPort } from '@neko/agent-runtime/application';
 import type {
@@ -31,36 +30,16 @@ interface DesktopCharacterInteractionPort {
     readonly characterRunId: string;
     readonly dialogueRunId: string;
   }): Promise<void>;
-  submitTurn(input: {
-    readonly topology: 'dialogue';
-    readonly dialogueRunId: string;
-    readonly characterRunId: string;
-    readonly message: string;
-  }): Promise<unknown>;
 }
 
 interface DesktopCharacterRoomPort {
   readRun(roomRunId: string): Promise<{ readonly characterRoomId: string }>;
 }
 
-interface DesktopCharacterRoomConversationPort {
-  submitUserMessage(input: {
-    readonly submissionId: string;
-    readonly roomRunId: string;
-    readonly userId: string;
-    readonly message: string;
-  }): Promise<{ readonly outcomes: readonly { readonly status: string }[] }>;
-}
-
 export interface DesktopAgentRuntimeEntryService extends AgentEntryRuntimeMaterializationPort {
   validateContext(
     context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>,
   ): Promise<void>;
-  executeInitialInput(input: {
-    readonly requestId: string;
-    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>;
-    readonly intent: AgentDraftInputIntent;
-  }): Promise<void>;
 }
 
 export function createDesktopAgentCharacterDialogueTargetValidator(options: {
@@ -87,11 +66,30 @@ export function createDesktopAgentRuntimeEntryService(options: {
   readonly characterConversations: DesktopCharacterConversationLaunchPort;
   readonly characterInteractions: DesktopCharacterInteractionPort;
   readonly characterRooms: DesktopCharacterRoomPort;
-  readonly characterRoomConversations: DesktopCharacterRoomConversationPort;
   readonly userId: string;
   readonly userDisplayName: string;
 }): DesktopAgentRuntimeEntryService {
   return {
+    async validate({ receipt, input, references, resourceGrantIds }) {
+      if (receipt.binding.kind === 'world-experience') return;
+      if (input.kind !== 'message') {
+        throw new Error('Character Dialogue first submit requires an ordinary message input.');
+      }
+      if (
+        receipt.binding.mode === 'narrative' &&
+        (references.length > 0 || resourceGrantIds.length > 0)
+      ) {
+        throw new Error('Narrative Character Dialogue forbids external references.');
+      }
+      if (
+        receipt.binding.participants.length > 1 &&
+        (references.length > 0 || resourceGrantIds.length > 0)
+      ) {
+        throw new Error(
+          'Character Room references require an exact participant turn and are unavailable.',
+        );
+      }
+    },
     async materialize({ requestId, connection, receipt, input }) {
       if (
         receipt.draftId !== connection.draftId ||
@@ -139,44 +137,12 @@ export function createDesktopAgentRuntimeEntryService(options: {
         throw new Error('Room Conversation does not match the exact CharacterRoom authority.');
       }
     },
-    async executeInitialInput({ requestId, context, intent }) {
-      if (intent.kind !== 'message') {
-        throw new Error('Character Dialogue and Room first submit require an ordinary message.');
-      }
-      await this.validateContext(context);
-      if (context.kind === 'character') {
-        await options.characterInteractions.submitTurn({
-          topology: 'dialogue',
-          dialogueRunId: context.dialogueRunId!,
-          characterRunId: context.characterRunId!,
-          message: intent.text,
-        });
-        return;
-      }
-      const result = await options.characterRoomConversations.submitUserMessage({
-        submissionId: requestId,
-        roomRunId: context.roomRunId,
-        userId: options.userId,
-        message: intent.text,
-      });
-      if (
-        result.outcomes.length > 0 &&
-        result.outcomes.every((outcome) => outcome.status === 'rejected')
-      ) {
-        throw new Error('Every scheduled Room participant response was rejected.');
-      }
-    },
   };
 }
 
 function projectCharacterSelection(
   binding: AgentCharacterDialogueLaunchBinding,
 ): CharacterConversationLaunchSelection {
-  if (binding.storylineVersionId !== undefined && binding.participants.length !== 1) {
-    throw new Error(
-      'Character Dialogue storyline selection requires exactly one Character participant.',
-    );
-  }
   if (
     binding.participants.length > 1 &&
     binding.participants.some((participant) => participant.roleProfileId !== undefined)
@@ -185,16 +151,25 @@ function projectCharacterSelection(
       'Character Room role profile selection is unavailable without participant-level Room authority.',
     );
   }
+  if (binding.mode === 'companion') {
+    return {
+      mode: binding.mode,
+      characters: binding.participants.map((participant) => ({
+        characterVersionId: participant.characterVersionId,
+        ...(participant.roleProfileId === undefined
+          ? {}
+          : { roleProfileId: participant.roleProfileId }),
+      })),
+    };
+  }
   return {
-    runtimeKind: 'companion',
+    mode: binding.mode,
     characters: binding.participants.map((participant) => ({
       characterVersionId: participant.characterVersionId,
+      ...(participant.storyline === undefined ? {} : { storyline: participant.storyline }),
       ...(participant.roleProfileId === undefined
         ? {}
         : { roleProfileId: participant.roleProfileId }),
-      ...(binding.storylineVersionId === undefined
-        ? {}
-        : { characterStorylineVersionId: binding.storylineVersionId }),
     })),
   };
 }
@@ -235,6 +210,7 @@ function projectCharacterContext(
   }
   return {
     kind: 'room',
+    scope: 'interaction',
     roomId: result.characterRoomId,
     roomRunId: result.roomRunId,
   };

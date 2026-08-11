@@ -94,6 +94,15 @@ import {
   createProjectLocalAuthoringHostRequest,
 } from '@neko/project/contracts';
 
+const standardCapabilityConstraint = async (input: {
+  readonly context: { readonly kind: 'assistant' | 'workspace' | 'character' | 'room' | 'world' };
+}) => ({
+  owner: { kind: input.context.kind, id: 'test-binding' },
+  skills: 'configured' as const,
+  tools: 'configured' as const,
+  references: 'configured' as const,
+});
+
 describe('DesktopAppHost', () => {
   it('delegates Character Foundation commands to the package owner and returns its projection', async () => {
     const commands = { execute: vi.fn(async () => undefined) };
@@ -1055,7 +1064,7 @@ describe('DesktopAppHost', () => {
     }));
     const fixture = await createShellAppHost({
       agentLaunch,
-      runtimeEntry: { materialize },
+      runtimeEntry: { validate: vi.fn(async () => undefined), materialize },
     });
     const scene = activeScene(fixture.projection);
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
@@ -1079,6 +1088,7 @@ describe('DesktopAppHost', () => {
       mode: 'character-dialogue' as const,
       binding: {
         kind: 'character-dialogue' as const,
+        mode: 'companion' as const,
         participants: [
           {
             characterProjectId: 'character-project-entry-1',
@@ -1148,7 +1158,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1461,7 +1471,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1560,7 +1570,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1684,7 +1694,7 @@ describe('DesktopAppHost', () => {
 
   it('restores a persisted Character conversation without dispatching a new turn', async () => {
     const conversationLifecycle = createConversationLifecycle();
-    const submitTurn = vi.fn(async () => ({ turnId: 'turn-character-restored', content: 'Reply' }));
+    const characterInteractions = createCharacterInteractions();
     const readConversationContext = vi
       .spyOn(conversationLifecycle, 'readConversationContext')
       .mockResolvedValue({
@@ -1696,7 +1706,7 @@ describe('DesktopAppHost', () => {
       });
     const fixture = await createShellAppHost({
       conversationLifecycle,
-      characterInteractions: { submitTurn },
+      characterInteractions,
     });
     const navigation = {
       conversationId: 'conversation-character-1',
@@ -1732,7 +1742,8 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(readConversationContext).toHaveBeenCalledWith('conversation-character-1');
-    expect(submitTurn).not.toHaveBeenCalled();
+    expect(characterInteractions.prepareTurn).not.toHaveBeenCalled();
+    expect(characterInteractions.freezePreparedTurn).not.toHaveBeenCalled();
     expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
       context: { kind: 'character-interaction', owner: navigation.owner },
     });
@@ -1743,6 +1754,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createConversationLifecycle();
     vi.spyOn(conversationLifecycle, 'readConversationContext').mockResolvedValue({
       kind: 'room',
+      scope: 'interaction',
       roomId: 'character-room-1',
       roomRunId: 'room-run-1',
     });
@@ -1771,7 +1783,16 @@ describe('DesktopAppHost', () => {
       status: 'transitioned',
       scene: {
         context: { kind: 'character-interaction', owner: navigation.owner },
-        slots: { cutPanel: { kind: 'character-room-timeline', owner: navigation.owner } },
+        slots: {
+          cutPanel: {
+            kind: 'character-timeline-stack',
+            owner: navigation.owner,
+            timelines: [
+              { kind: 'character-storyline-timeline' },
+              { kind: 'character-room-event-timeline' },
+            ],
+          },
+        },
       },
     });
     expect(submitUserMessage).not.toHaveBeenCalled();
@@ -1943,7 +1964,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2114,7 +2135,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2211,7 +2232,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository,
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -4043,7 +4064,7 @@ function createConversationLifecycle() {
   return createAgentConversationLifecycleService({
     repository: createInMemoryAgentConversationLifecycleRepository(),
     grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-    domainContext: { resolveForTurn: async () => [] },
+    domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
     scratch: {
       create: async () => undefined,
       release: async () => undefined,
@@ -4170,6 +4191,7 @@ async function createShellAppHost(options?: {
       }),
     },
     runtimeEntry: options?.runtimeEntry ?? {
+      validate: async () => undefined,
       materialize: async () => {
         throw new Error('Formal runtime Entry owner is unavailable in this fixture.');
       },
@@ -4303,10 +4325,10 @@ function createCharacterFoundationService(): CharacterFoundationService {
         dialogueRuns: [],
         rooms: [],
         roomRuns: [],
+        storylines: [],
+        storylineDrafts: [],
         storylineVersions: [],
-        storylineRuns: [],
-        storylineObservationCandidates: [],
-        memoryScopes: [],
+        companionContinuities: [],
         presentationConfigurations: [],
         diagnostics: [],
       }),
@@ -4363,8 +4385,11 @@ function createWorldFoundationCommands() {
 
 function createCharacterInteractions() {
   return {
-    submitTurn: vi.fn(async () => {
-      throw new Error('Character interaction submission is not expected by this test.');
+    prepareTurn: vi.fn(async () => {
+      throw new Error('Character turn preparation is not expected by this test.');
+    }),
+    freezePreparedTurn: vi.fn(async () => {
+      throw new Error('Character turn freezing is not expected by this test.');
     }),
   };
 }

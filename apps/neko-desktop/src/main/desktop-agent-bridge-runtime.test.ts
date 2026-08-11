@@ -46,8 +46,8 @@ describe('Desktop Agent bridge runtime', () => {
             'conversation-effects': true,
           },
           createEffects: () => createEffects(),
-          resolveExternalOwnerTurnRuntime: vi.fn(async () => {
-            throw new Error('Character runtime resolution is not used by this fixture.');
+          createInitialConversationConfiguration: vi.fn(async () => {
+            throw new Error('Character configuration is not used by this fixture.');
           }),
         },
         false,
@@ -742,8 +742,8 @@ function createComposition(effects: AgentControllerEffects): AgentControllerComp
       'projection-effects': true,
     },
     createEffects: () => effects,
-    resolveExternalOwnerTurnRuntime: vi.fn(async () => {
-      throw new Error('Character runtime resolution is not used by this fixture.');
+    createInitialConversationConfiguration: vi.fn(async () => {
+      throw new Error('Character configuration is not used by this fixture.');
     }),
   };
 }
