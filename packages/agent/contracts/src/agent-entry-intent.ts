@@ -19,11 +19,27 @@ export interface AgentAuthoringBinding {
   readonly target: AgentAuthoringTargetRef;
 }
 
-export interface AgentCharacterDialogueParticipant {
+export interface AgentCompanionCharacterDialogueParticipant {
   readonly characterProjectId: string;
   readonly characterVersionId: string;
   readonly roleProfileId?: string;
 }
+
+export interface AgentNarrativeStorylineNodeSelection {
+  readonly characterStorylineId: string;
+  readonly characterStorylineVersionId: string;
+  readonly storylineNodeId: string;
+}
+
+export interface AgentNarrativeCharacterDialogueParticipant {
+  readonly characterProjectId: string;
+  readonly characterVersionId: string;
+  readonly storyline?: AgentNarrativeStorylineNodeSelection;
+  readonly roleProfileId?: string;
+}
+
+export type AgentCharacterDialogueParticipant =
+  AgentCompanionCharacterDialogueParticipant | AgentNarrativeCharacterDialogueParticipant;
 
 export interface AgentCharacterDialogueStorylineOption {
   readonly storylineVersionId: string;
@@ -38,11 +54,17 @@ export interface AgentCharacterDialogueTargetOption {
   readonly storylines: readonly AgentCharacterDialogueStorylineOption[];
 }
 
-export interface AgentCharacterDialogueLaunchBinding {
-  readonly kind: 'character-dialogue';
-  readonly participants: readonly AgentCharacterDialogueParticipant[];
-  readonly storylineVersionId?: string;
-}
+export type AgentCharacterDialogueLaunchBinding =
+  | {
+      readonly kind: 'character-dialogue';
+      readonly mode: 'companion';
+      readonly participants: readonly AgentCompanionCharacterDialogueParticipant[];
+    }
+  | {
+      readonly kind: 'character-dialogue';
+      readonly mode: 'narrative';
+      readonly participants: readonly AgentNarrativeCharacterDialogueParticipant[];
+    };
 
 export type AgentWorldExperienceLaunch =
   | {
@@ -153,32 +175,23 @@ export function parseAgentEntryTargetBinding(value: unknown): AgentEntryTargetBi
         target: parseAgentAuthoringTargetRef(record['target']),
       };
     case 'character-dialogue': {
-      requireAllowedKeys(
+      requireExactKeys(
         record,
-        ['kind', 'participants', 'storylineVersionId'],
-        ['kind', 'participants'],
+        ['kind', 'mode', 'participants'],
         'Agent Character Dialogue binding',
       );
+      const mode = parseCharacterConversationMode(record['mode']);
       if (!Array.isArray(record['participants']) || record['participants'].length === 0) {
         throw new Error('Agent Character Dialogue requires at least one participant.');
       }
-      const participants = record['participants'].map(parseCharacterParticipant);
-      const versionIds = participants.map((participant) => participant.characterVersionId);
-      if (new Set(versionIds).size !== versionIds.length) {
-        throw new Error('Agent Character Dialogue participants must use unique CharacterVersions.');
+      if (mode === 'companion') {
+        const participants = record['participants'].map(parseCompanionCharacterParticipant);
+        requireUniqueCharacterVersions(participants);
+        return { kind: 'character-dialogue', mode, participants };
       }
-      return {
-        kind: 'character-dialogue',
-        participants,
-        ...(record['storylineVersionId'] === undefined
-          ? {}
-          : {
-              storylineVersionId: requireIdentity(
-                record['storylineVersionId'],
-                'Storyline Version',
-              ),
-            }),
-      };
+      const participants = record['participants'].map(parseNarrativeCharacterParticipant);
+      requireUniqueCharacterVersions(participants);
+      return { kind: 'character-dialogue', mode, participants };
     }
     case 'world-experience':
       requireExactKeys(
@@ -281,7 +294,25 @@ export function parseAgentAuthoringTargetRef(value: unknown): AgentAuthoringTarg
   throw new Error(`Unknown Agent authoring target '${String(record['kind'])}'.`);
 }
 
-function parseCharacterParticipant(value: unknown): AgentCharacterDialogueParticipant {
+function parseCharacterConversationMode(value: unknown): 'companion' | 'narrative' {
+  if (value !== 'companion' && value !== 'narrative') {
+    throw new Error(`Unknown Character Conversation mode '${String(value)}'.`);
+  }
+  return value;
+}
+
+function requireUniqueCharacterVersions(
+  participants: readonly AgentCharacterDialogueParticipant[],
+): void {
+  const versionIds = participants.map((participant) => participant.characterVersionId);
+  if (new Set(versionIds).size !== versionIds.length) {
+    throw new Error('Agent Character Dialogue participants must use unique CharacterVersions.');
+  }
+}
+
+function parseCompanionCharacterParticipant(
+  value: unknown,
+): AgentCompanionCharacterDialogueParticipant {
   const record = requireRecord(value, 'Agent Character Dialogue participant');
   requireAllowedKeys(
     record,
@@ -295,6 +326,47 @@ function parseCharacterParticipant(value: unknown): AgentCharacterDialoguePartic
     ...(record['roleProfileId'] === undefined
       ? {}
       : { roleProfileId: requireIdentity(record['roleProfileId'], 'role profile') }),
+  };
+}
+
+function parseNarrativeCharacterParticipant(
+  value: unknown,
+): AgentNarrativeCharacterDialogueParticipant {
+  const record = requireRecord(value, 'Agent Narrative Character participant');
+  requireAllowedKeys(
+    record,
+    ['characterProjectId', 'characterVersionId', 'storyline', 'roleProfileId'],
+    ['characterProjectId', 'characterVersionId'],
+    'Agent Narrative Character participant',
+  );
+  return {
+    characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+    characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
+    ...(record['storyline'] === undefined
+      ? {}
+      : { storyline: parseNarrativeStorylineNodeSelection(record['storyline']) }),
+    ...(record['roleProfileId'] === undefined
+      ? {}
+      : { roleProfileId: requireIdentity(record['roleProfileId'], 'role profile') }),
+  };
+}
+
+function parseNarrativeStorylineNodeSelection(
+  value: unknown,
+): AgentNarrativeStorylineNodeSelection {
+  const record = requireRecord(value, 'Agent Narrative Storyline node selection');
+  requireExactKeys(
+    record,
+    ['characterStorylineId', 'characterStorylineVersionId', 'storylineNodeId'],
+    'Agent Narrative Storyline node selection',
+  );
+  return {
+    characterStorylineId: requireIdentity(record['characterStorylineId'], 'Character Storyline'),
+    characterStorylineVersionId: requireIdentity(
+      record['characterStorylineVersionId'],
+      'Character Storyline Version',
+    ),
+    storylineNodeId: requireIdentity(record['storylineNodeId'], 'Storyline Node'),
   };
 }
 

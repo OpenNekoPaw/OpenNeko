@@ -352,10 +352,7 @@ export function ConversationController({
   const configureEntryCharacterLaunches = useCallback(
     (nextValue: readonly SelectedCharacterLaunch[]) => {
       if (isEntryBindingPending) return;
-      const next: SelectedCharacterLaunch[] =
-        nextValue.length > 1
-          ? nextValue.map(({ characterStorylineVersionId: _storyline, ...selection }) => selection)
-          : [...nextValue];
+      const next: SelectedCharacterLaunch[] = [...nextValue];
       setIsEntryBindingPending(true);
       void requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter)
         .configureEntryTarget(
@@ -364,13 +361,11 @@ export function ConversationController({
             ? undefined
             : {
                 kind: 'character-dialogue',
+                mode: 'companion',
                 participants: next.map((selection) => ({
                   characterProjectId: selection.characterProjectId,
                   characterVersionId: selection.characterVersionId,
                 })),
-                ...(next.length === 1 && next[0]?.characterStorylineVersionId
-                  ? { storylineVersionId: next[0].characterStorylineVersionId }
-                  : {}),
               },
         )
         .then((intent) => {

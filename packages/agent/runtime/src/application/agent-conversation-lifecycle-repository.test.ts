@@ -30,6 +30,7 @@ describe('persistent Agent conversation lifecycle repository', () => {
     };
     const room = {
       kind: 'room' as const,
+      scope: 'interaction' as const,
       roomId: 'room:studio',
       roomRunId: 'room-run:studio:1',
     };
@@ -336,6 +337,12 @@ function createRecord(
       turnId,
       status: 'pending',
       configuration: { conversationId, turnId, request, projection },
+      capabilityConstraint: {
+        owner: { kind: 'assistant', id: 'assistant-space:local-user' },
+        skills: 'configured',
+        tools: 'configured',
+        references: 'configured',
+      },
     },
     scratchArtifacts: [],
   };

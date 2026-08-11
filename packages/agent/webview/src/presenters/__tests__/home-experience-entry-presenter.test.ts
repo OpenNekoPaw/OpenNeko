@@ -108,7 +108,6 @@ describe('home experience entry presenter', () => {
       {
         characterProjectId: 'character-project-a',
         characterVersionId: 'character-version-a',
-        characterStorylineVersionId: 'storyline-version-a',
         label: 'A',
       },
     ];
@@ -121,13 +120,13 @@ describe('home experience entry presenter', () => {
         mode: 'character-dialogue',
         binding: {
           kind: 'character-dialogue',
+          mode: 'companion',
           participants: [
             {
               characterProjectId: 'character-project-a',
               characterVersionId: 'character-version-a',
             },
           ],
-          storylineVersionId: 'storyline-version-a',
         },
       },
     };

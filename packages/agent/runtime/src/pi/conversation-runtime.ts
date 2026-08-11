@@ -362,7 +362,12 @@ export class PiConversationRuntime {
       runId: input.runId,
     });
     const toolBridge = bridgePiCapabilityTools({
-      tools: [...input.capabilityTools, createSkillReadTool(input.skillSnapshot)],
+      tools: [
+        ...input.capabilityTools,
+        ...(input.skillSnapshot.skills.length === 0
+          ? []
+          : [createSkillReadTool(input.skillSnapshot)]),
+      ],
       identity,
       workspaceTrusted: input.workspaceTrusted,
       modelPolicy: input.modelPolicy,

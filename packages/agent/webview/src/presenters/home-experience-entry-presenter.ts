@@ -153,11 +153,10 @@ function hasExactCharacterDialogueReceipt(
     characterProjectId: selection.characterProjectId,
     characterVersionId: selection.characterVersionId,
   }));
-  const expectedStoryline =
-    selections.length === 1 ? selections[0]?.characterStorylineVersionId : undefined;
   return (
+    receipt.binding.mode === 'companion' &&
     JSON.stringify(receipt.binding.participants) === JSON.stringify(expectedParticipants) &&
-    receipt.binding.storylineVersionId === expectedStoryline
+    !receipt.binding.participants.some((participant) => 'storyline' in participant)
   );
 }
 

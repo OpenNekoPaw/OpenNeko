@@ -111,6 +111,7 @@ describe('PiConversationRuntime', () => {
         timeoutMs: DEFAULT_PI_MODEL_REQUEST_TIMEOUT_MS,
       },
     });
+    expect(captured[0]!.context.tools).toEqual([]);
     await expect(
       captured[0]?.options?.onPayload?.({ model: 'main', messages: [] }, captured[0].model),
     ).resolves.toEqual({ model: 'main', messages: [], top_p: 0.95 });

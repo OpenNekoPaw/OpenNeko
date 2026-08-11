@@ -37,10 +37,6 @@ export function CharacterDialogueTargetSelector({
   }, [selected, selectionKind]);
   const activeSelection = selectionKind === 'room' ? roomParticipants : selected;
   const selectedIds = new Set(activeSelection.map((item) => item.characterVersionId));
-  const selectedTarget =
-    selected.length === 1
-      ? targets.find((target) => target.characterVersionId === selected[0]?.characterVersionId)
-      : undefined;
 
   return (
     <section
@@ -73,7 +69,7 @@ export function CharacterDialogueTargetSelector({
           ]}
           onValueChange={(value) => {
             if (value !== 'daily') {
-              throw new Error('Narrative Character runtime owner is not composed.');
+              throw new Error('Narrative configuration is not connected to this Character entry.');
             }
           }}
         />
@@ -105,9 +101,7 @@ export function CharacterDialogueTargetSelector({
           disabled={pending}
           onSelect={() => {
             setSelectionKind('room');
-            const nextParticipants = selected.map(
-              ({ characterStorylineVersionId: _storyline, ...participant }) => participant,
-            );
+            const nextParticipants = [...selected];
             setRoomParticipants(nextParticipants);
             if (selected.length < 2) onChange([]);
           }}
@@ -174,40 +168,6 @@ export function CharacterDialogueTargetSelector({
           })}
         </div>
       )}
-
-      {selectionKind === 'character' &&
-      selected.length === 1 &&
-      selectedTarget &&
-      selectedTarget.storylines.length > 0 ? (
-        <label className="agent-entry-character-storyline">
-          <span>{t('chat.entryExperience.characterDialogue.storylineLabel')}</span>
-          <select
-            value={selected[0]?.characterStorylineVersionId ?? ''}
-            disabled={pending}
-            onChange={(event) => {
-              const storylineVersionId = event.target.value;
-              const current = selected[0]!;
-              onChange([
-                {
-                  characterProjectId: current.characterProjectId,
-                  characterVersionId: current.characterVersionId,
-                  label: current.label,
-                  ...(storylineVersionId === ''
-                    ? {}
-                    : { characterStorylineVersionId: storylineVersionId }),
-                },
-              ]);
-            }}
-          >
-            <option value="">{t('chat.entryExperience.characterDialogue.storylineNone')}</option>
-            {selectedTarget.storylines.map((storyline) => (
-              <option key={storyline.storylineVersionId} value={storyline.storylineVersionId}>
-                {storyline.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
     </section>
   );
 }

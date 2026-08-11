@@ -24,8 +24,17 @@ export type AgentDomainBinding =
     }
   | {
       readonly kind: 'room';
+      readonly scope: 'interaction';
       readonly roomId: string;
       readonly roomRunId: string;
+    }
+  | {
+      readonly kind: 'room';
+      readonly scope: 'participant';
+      readonly roomId: string;
+      readonly roomRunId: string;
+      readonly participantId: string;
+      readonly characterRunId: string;
     }
   | {
       readonly kind: 'world';
@@ -220,12 +229,35 @@ export function parseAgentDomainBinding(value: unknown): AgentDomainBinding {
       }
       return character;
     case 'room':
-      requireExactKeys(record, ['kind', 'roomId', 'roomRunId'], 'Room Agent binding');
-      return {
-        kind: 'room',
-        roomId: requireIdentity(record['roomId'], 'Room'),
-        roomRunId: requireIdentity(record['roomRunId'], 'Room Run'),
-      };
+      if (record['scope'] === 'interaction') {
+        requireExactKeys(
+          record,
+          ['kind', 'scope', 'roomId', 'roomRunId'],
+          'Room interaction Agent binding',
+        );
+        return {
+          kind: 'room',
+          scope: 'interaction',
+          roomId: requireIdentity(record['roomId'], 'Room'),
+          roomRunId: requireIdentity(record['roomRunId'], 'Room Run'),
+        };
+      }
+      if (record['scope'] === 'participant') {
+        requireExactKeys(
+          record,
+          ['kind', 'scope', 'roomId', 'roomRunId', 'participantId', 'characterRunId'],
+          'Room participant Agent binding',
+        );
+        return {
+          kind: 'room',
+          scope: 'participant',
+          roomId: requireIdentity(record['roomId'], 'Room'),
+          roomRunId: requireIdentity(record['roomRunId'], 'Room Run'),
+          participantId: requireIdentity(record['participantId'], 'Room participant'),
+          characterRunId: requireIdentity(record['characterRunId'], 'Character Run'),
+        };
+      }
+      throw new Error(`Unknown Room Agent binding scope '${String(record['scope'])}'.`);
     case 'world':
       requireAllowedKeys(
         record,

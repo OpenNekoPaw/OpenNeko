@@ -1590,6 +1590,42 @@ describe('AgentAppHost', () => {
     expect(fixture.composition.findConversation('conversation-background')).toBeDefined();
   });
 
+  it('omits every Skill and Tool from a turn constrained to empty capabilities', async () => {
+    const fixture = await createFixture();
+    const contexts: Context[] = [];
+    const models = createFixtureModels((_model, context) => {
+      contexts.push(context);
+      return completedStream(assistant('narrative response'));
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-narrative-capabilities',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Narrative fixture',
+    });
+
+    await workspace.startTurn({
+      conversationId: 'conversation-narrative-capabilities',
+      prompt: 'Remain in character',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+      capabilityConstraint: {
+        owner: { kind: 'character', id: 'character-run:narrative' },
+        skills: 'none',
+        tools: 'none',
+        references: 'none',
+      },
+    }).completion;
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.tools).toEqual([]);
+    expect(contexts[0]!.systemPrompt).toBe('Narrative fixture');
+  });
+
   it('releases only after queued and approval protection leases leave the invisible Conversation', async () => {
     const fixture = await createFixture();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -2445,8 +2481,25 @@ describe('AgentAppHost', () => {
         updatedAt: '2026-08-05T00:01:00.000Z',
         context: {
           kind: 'room' as const,
+          scope: 'interaction' as const,
           roomId: 'room:studio',
           roomRunId: 'room-run:studio:1',
+        },
+      },
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-room-participant',
+        title: 'Room participant conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:03:00.000Z',
+        context: {
+          kind: 'room' as const,
+          scope: 'participant' as const,
+          roomId: 'room:studio',
+          roomRunId: 'room-run:studio:1',
+          participantId: 'participant:neko',
+          characterRunId: 'character-run:neko:1',
         },
       },
     ];
@@ -2482,6 +2535,7 @@ describe('AgentAppHost', () => {
         },
       },
     ]);
+    expect(composition.readHomeProjection().conversations).toHaveLength(2);
   });
 
   it('retains a missing-context Conversation as unavailable without opening a runtime', async () => {

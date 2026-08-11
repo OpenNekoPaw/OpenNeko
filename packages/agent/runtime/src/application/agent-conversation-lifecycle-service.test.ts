@@ -155,6 +155,32 @@ describe('Agent Conversation lifecycle service', () => {
     });
   });
 
+  it('awaits one locally claimed provider Turn and returns its exact result', async () => {
+    const fixture = createFixture({
+      providerResult: { turnId: 'turn:identity-2', content: 'Participant response' },
+    });
+    const committed = await fixture.service.firstSubmit(assistantInput('request-exact-provider'));
+
+    await expect(fixture.service.executeProviderTurn(committed.conversationId)).resolves.toEqual({
+      turnId: committed.pendingTurn.turnId,
+      content: 'Participant response',
+    });
+    await expect(fixture.service.readConversation(committed.conversationId)).resolves.toMatchObject(
+      { pendingTurn: { status: 'completed' } },
+    );
+  });
+
+  it('rejects a provider result for another Turn identity', async () => {
+    const fixture = createFixture({
+      providerResult: { turnId: 'turn:other', content: 'Wrong response' },
+    });
+    const committed = await fixture.service.firstSubmit(assistantInput('request-wrong-provider'));
+
+    await expect(fixture.service.executeProviderTurn(committed.conversationId)).rejects.toThrow(
+      'for pending Turn',
+    );
+  });
+
   it('persists and executes the exact first-input Skill intent without prompt re-parsing', async () => {
     const fixture = createFixture();
     const input = {
@@ -182,6 +208,55 @@ describe('Agent Conversation lifecycle service', () => {
     expect(JSON.stringify(fixture.provider.start.mock.calls)).not.toContain(
       'kind":"message","text":"$storyboard',
     );
+  });
+
+  it('freezes an empty domain capability constraint and rejects Skill activation before commit', async () => {
+    const capabilityConstraint = {
+      owner: { kind: 'character' as const, id: 'character-run:1' },
+      skills: 'none' as const,
+      tools: 'none' as const,
+      references: 'none' as const,
+    };
+    const fixture = createFixture({ capabilityConstraint });
+    const message = await fixture.service.firstSubmit({
+      ...assistantInput('request-narrative-message'),
+      context: {
+        kind: 'character' as const,
+        characterId: 'character:1',
+        characterVersionId: 'character-version:1',
+        characterRunId: 'character-run:1',
+        dialogueRunId: 'dialogue-run:1',
+      },
+    });
+
+    expect(message.pendingTurn.capabilityConstraint).toEqual(capabilityConstraint);
+    await expect(
+      fixture.service.readConversationCapabilityConstraint(message.conversationId),
+    ).resolves.toEqual(capabilityConstraint);
+    await fixture.service.startProviderExecution(message.conversationId);
+    await fixture.service.waitForProviderIdle();
+    expect(fixture.provider.start).toHaveBeenCalledWith(
+      expect.objectContaining({ capabilityConstraint }),
+    );
+
+    await expect(
+      fixture.service.firstSubmit({
+        ...assistantInput('request-narrative-skill'),
+        context: {
+          kind: 'character' as const,
+          characterId: 'character:1',
+          characterVersionId: 'character-version:1',
+          characterRunId: 'character-run:1',
+          dialogueRunId: 'dialogue-run:1',
+        },
+        input: {
+          kind: 'skill' as const,
+          catalogEntryId: 'skill:fixture',
+          skillName: 'fixture',
+          activationId: 'skill:fixture',
+        },
+      }),
+    ).rejects.toThrow('forbids Skill or command activation');
   });
 
   it('activates the committed session before provider context resolution completes', async () => {
@@ -599,6 +674,8 @@ function configuration(providerId = 'openai', modelId = 'gpt-5') {
 function createFixture(options?: {
   readonly repository?: ReturnType<typeof createInMemoryAgentConversationLifecycleRepository>;
   readonly providerError?: Error;
+  readonly providerResult?: { readonly turnId: string; readonly content: string };
+  readonly capabilityConstraint?: import('@neko/agent-contracts').AgentTurnCapabilityConstraint;
 }) {
   let identity = 0;
   const repository = options?.repository ?? createInMemoryAgentConversationLifecycleRepository();
@@ -631,7 +708,7 @@ function createFixture(options?: {
       ? vi.fn(async () => {
           throw options.providerError;
         })
-      : vi.fn(async () => undefined),
+      : vi.fn(async () => options?.providerResult),
   };
   const session = {
     materialize: vi.fn(async () => undefined),
@@ -646,7 +723,18 @@ function createFixture(options?: {
     service: createAgentConversationLifecycleService({
       repository,
       grants,
-      domainContext: { resolveForTurn: vi.fn(async () => []) },
+      domainContext: {
+        resolveCapabilityConstraint: vi.fn(
+          async ({ context }) =>
+            options?.capabilityConstraint ?? {
+              owner: { kind: context.kind, id: 'test-binding' },
+              skills: 'configured' as const,
+              tools: 'configured' as const,
+              references: 'configured' as const,
+            },
+        ),
+        resolveForTurn: vi.fn(async () => []),
+      },
       scratch,
       publication,
       session,

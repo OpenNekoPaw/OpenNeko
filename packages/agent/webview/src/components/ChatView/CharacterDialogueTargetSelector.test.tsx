@@ -15,7 +15,7 @@ vi.mock('../../i18n/I18nContext', () => ({
         'chat.entryExperience.characterDialogue.modeDaily': 'Daily',
         'chat.entryExperience.characterDialogue.modeNarrative': 'Narrative',
         'chat.entryExperience.characterDialogue.modeNarrativeUnavailable':
-          'Narrative requires an external composition owner.',
+          'Narrative configuration is not connected to this entry yet.',
         'chat.entryAction.label': 'Entry actions',
         'chat.entryAction.chooseCharacter': 'Choose Character',
         'chat.entryAction.singleCharacterDescription': 'Start Dialogue',
@@ -43,7 +43,7 @@ const targets = [
 ] as const;
 
 describe('CharacterDialogueTargetSelector', () => {
-  it('shows Daily and Narrative for both Dialogue and Room while narrative authority is unavailable', () => {
+  it('shows explicit Daily and Narrative choices without external Composition claims', () => {
     const { rerender } = render(
       <CharacterDialogueTargetSelector
         targets={targets}
@@ -62,7 +62,9 @@ describe('CharacterDialogueTargetSelector', () => {
 
     expect(screen.getByRole('tab', { name: 'Daily' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: 'Narrative' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText('Narrative requires an external composition owner.')).toBeTruthy();
+    expect(
+      screen.getByText('Narrative configuration is not connected to this entry yet.'),
+    ).toBeTruthy();
 
     rerender(
       <CharacterDialogueTargetSelector
@@ -88,7 +90,7 @@ describe('CharacterDialogueTargetSelector', () => {
     expect(screen.getByRole('tab', { name: 'Narrative' }).hasAttribute('disabled')).toBe(true);
   });
 
-  it('selects exact versions and clears a single-character storyline when Room is chosen', () => {
+  it('selects exact Character versions for Dialogue and Room', () => {
     const onChange = vi.fn();
     const { rerender } = render(
       <CharacterDialogueTargetSelector
@@ -97,7 +99,6 @@ describe('CharacterDialogueTargetSelector', () => {
           {
             characterProjectId: 'character-project-a',
             characterVersionId: 'character-version-a',
-            characterStorylineVersionId: 'storyline-version-a',
             label: 'A',
           },
         ]}
@@ -107,10 +108,6 @@ describe('CharacterDialogueTargetSelector', () => {
       />,
     );
 
-    expect(screen.getByRole('combobox', { name: 'Storyline' })).toHaveProperty(
-      'value',
-      'storyline-version-a',
-    );
     fireEvent.click(screen.getByRole('button', { name: /Create Room/u }));
     expect(onChange).toHaveBeenLastCalledWith([]);
     fireEvent.click(screen.getByText('Published B').closest('button')!);

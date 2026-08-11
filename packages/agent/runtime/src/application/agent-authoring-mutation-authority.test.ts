@@ -44,6 +44,7 @@ describe('Agent authoring mutation authority', () => {
       mode: 'character-dialogue',
       binding: {
         kind: 'character-dialogue',
+        mode: 'companion',
         participants: [
           { characterProjectId: 'character-1', characterVersionId: 'character-version-1' },
         ],

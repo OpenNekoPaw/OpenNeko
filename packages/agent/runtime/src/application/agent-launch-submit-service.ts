@@ -55,6 +55,12 @@ type AgentRuntimeEntryTargetReceipt = AgentEntryTargetReceipt & {
 };
 
 export interface AgentEntryRuntimeMaterializationPort {
+  validate(input: {
+    readonly receipt: AgentRuntimeEntryTargetReceipt;
+    readonly input: AgentDraftInputIntent;
+    readonly references: AgentDraftSubmitInput['references'];
+    readonly resourceGrantIds: readonly string[];
+  }): Promise<void>;
   materialize(input: {
     readonly requestId: string;
     readonly connection: AgentLaunchConnectionIdentity;
@@ -122,15 +128,24 @@ export function createAgentLaunchDraftSubmissionApplicationService(options: {
         binding: requestedBinding,
         ...(existing === undefined ? {} : { conversationId: existing.conversationId }),
       });
-      const runtimeMaterialization =
-        existing === undefined && isRuntimeEntryTargetReceipt(draftInput.entryTargetReceipt)
-          ? await options.runtimeEntry.materialize({
-              requestId,
-              connection,
-              receipt: draftInput.entryTargetReceipt,
-              input: draftInput.input,
-            })
-          : undefined;
+      const shouldMaterializeRuntime =
+        existing === undefined && isRuntimeEntryTargetReceipt(draftInput.entryTargetReceipt);
+      if (shouldMaterializeRuntime) {
+        await options.runtimeEntry.validate({
+          receipt: draftInput.entryTargetReceipt,
+          input: draftInput.input,
+          references: draftInput.references,
+          resourceGrantIds: draftInput.resourceGrantIds,
+        });
+      }
+      const runtimeMaterialization = shouldMaterializeRuntime
+        ? await options.runtimeEntry.materialize({
+            requestId,
+            connection,
+            receipt: draftInput.entryTargetReceipt,
+            input: draftInput.input,
+          })
+        : undefined;
       const context =
         existing?.context ??
         runtimeMaterialization?.context ??

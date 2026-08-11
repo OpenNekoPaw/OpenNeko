@@ -33,6 +33,7 @@ describe('Agent Entry intent contract', () => {
       mode: 'character-dialogue' as const,
       binding: {
         kind: 'character-dialogue' as const,
+        mode: 'companion' as const,
         participants: [
           {
             characterProjectId: 'character-project-1',
@@ -107,6 +108,7 @@ describe('Agent Entry intent contract', () => {
       mode: 'character-dialogue',
       binding: {
         kind: 'character-dialogue',
+        mode: 'companion',
         participants: [
           { characterProjectId: 'character-1', characterVersionId: 'version-1' },
           { characterProjectId: 'character-2', characterVersionId: 'version-1' },
@@ -117,6 +119,88 @@ describe('Agent Entry intent contract', () => {
     expect(() => parseAgentEntryTargetReceipt({ ...receipt, schemaVersion: 1 })).toThrow(
       'unsupported field',
     );
+  });
+
+  it('preserves exact Character Conversation mode and participant Storyline nodes', () => {
+    expect(
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'target-receipt-narrative',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'character-dialogue',
+        binding: {
+          kind: 'character-dialogue',
+          mode: 'narrative',
+          participants: [
+            {
+              characterProjectId: 'character-project-1',
+              characterVersionId: 'character-version-1',
+              storyline: {
+                characterStorylineId: 'storyline-1',
+                characterStorylineVersionId: 'storyline-version-1',
+                storylineNodeId: 'storyline-node-1',
+              },
+            },
+          ],
+        },
+      }).binding,
+    ).toEqual({
+      kind: 'character-dialogue',
+      mode: 'narrative',
+      participants: [
+        {
+          characterProjectId: 'character-project-1',
+          characterVersionId: 'character-version-1',
+          storyline: {
+            characterStorylineId: 'storyline-1',
+            characterStorylineVersionId: 'storyline-version-1',
+            storylineNodeId: 'storyline-node-1',
+          },
+        },
+      ],
+    });
+  });
+
+  it('rejects removed Character launch fields instead of reconstructing mode', () => {
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'target-receipt-old',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'character-dialogue',
+        binding: {
+          kind: 'character-dialogue',
+          participants: [
+            { characterProjectId: 'character-project-1', characterVersionId: 'version-1' },
+          ],
+          storylineVersionId: 'storyline-version-1',
+        },
+      }),
+    ).toThrow(/unsupported field|missing field 'mode'/u);
+
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'target-receipt-cross-mode',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'character-dialogue',
+        binding: {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [
+            {
+              characterProjectId: 'character-project-1',
+              characterVersionId: 'version-1',
+              storyline: {
+                characterStorylineId: 'storyline-1',
+                characterStorylineVersionId: 'storyline-version-1',
+                storylineNodeId: 'node-1',
+              },
+            },
+          ],
+        },
+      }),
+    ).toThrow(/unsupported field 'storyline'/u);
   });
 
   it('parses a compact secret-free Character Dialogue target catalog', () => {

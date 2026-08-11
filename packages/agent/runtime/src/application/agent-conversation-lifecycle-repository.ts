@@ -2,6 +2,7 @@ import {
   parseAgentBoundDomainBinding,
   parseAgentConversationConfiguration,
   parseAgentConversationTurnConfigurationSnapshot,
+  parseAgentTurnCapabilityConstraint,
   parseAgentDraftInputIntent,
   parseAgentEntryTargetReceipt,
   parseAgentFlatPurposeModelRefs,
@@ -412,7 +413,7 @@ export function parseAgentConversationLifecycleRecord(
     record['pendingTurn'],
     'Agent pending turn must be an object.',
   );
-  const pendingKeys = ['requestId', 'turnId', 'status', 'configuration'];
+  const pendingKeys = ['requestId', 'turnId', 'status', 'configuration', 'capabilityConstraint'];
   if ('diagnostic' in pendingRecord) pendingKeys.push('diagnostic');
   const pendingTurn = exactRecord(pendingRecord, pendingKeys, 'Agent pending turn');
   const status = pendingTurn['status'];
@@ -483,6 +484,7 @@ export function parseAgentConversationLifecycleRecord(
       turnId: identity(pendingTurn['turnId'], 'Turn'),
       status,
       configuration: parseAgentConversationTurnConfigurationSnapshot(pendingTurn['configuration']),
+      capabilityConstraint: parseAgentTurnCapabilityConstraint(pendingTurn['capabilityConstraint']),
       ...(diagnostic === undefined ? {} : { diagnostic }),
     },
     scratchArtifacts: scratchArtifactsValue.map(parseAgentScratchArtifactRef),

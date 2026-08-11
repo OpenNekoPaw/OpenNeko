@@ -61,6 +61,7 @@ import {
   createNodeDocumentLowLevelAccess,
 } from '@neko/content/document/node';
 import {
+  CONFIGURED_AGENT_TURN_CAPABILITIES,
   isAgentAuthorizedContentReferenceContextData,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
@@ -68,6 +69,7 @@ import {
   TOOL_NAMES_TRANSCRIBE,
   type AgentContextPayload,
   type AgentEntryTargetReceipt,
+  type AgentTurnCapabilityConstraint,
   type IToolRegistry,
   type PromptFragment,
   type Tool,
@@ -145,6 +147,7 @@ export interface AgentTurnInput {
   readonly additionalInstructions?: string;
   readonly queueDraft?: AgentQueuedMessageDraft;
   readonly events?: PiProductEventSink;
+  readonly capabilityConstraint?: AgentTurnCapabilityConstraint;
 }
 
 const MAX_AGENT_TURN_IMAGES = 4;
@@ -545,6 +548,13 @@ class DefaultAgentAppHost implements AgentAppHost {
       const catalogDiagnostic = catalog.diagnostics.find(
         (diagnostic) => diagnostic.conversationId === record.conversationId,
       );
+      if (
+        catalogDiagnostic === undefined &&
+        record.context?.kind === 'room' &&
+        record.context.scope === 'participant'
+      ) {
+        continue;
+      }
       const ownerProjection = projectAgentConversationOwner(
         record,
         this.assistantSpaceIds,
@@ -1365,16 +1375,29 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.requireActive();
     const owner = this.requireConversation(input.conversationId);
     const messageId = this.options.createIdentity();
+    const capabilityConstraint = input.capabilityConstraint ?? CONFIGURED_AGENT_TURN_CAPABILITIES;
+    if (
+      capabilityConstraint.skills === 'none' &&
+      (input.skillName !== undefined || input.skillActivationId !== undefined)
+    ) {
+      throw new Error(
+        `Agent turn capability constraint '${capabilityConstraint.owner.kind}/${capabilityConstraint.owner.id}' forbids Skill activation.`,
+      );
+    }
     const skills = await this.discoverSkills(
       input.workspaceTrusted,
-      runtimeSnapshot.pluginSkillRoots,
+      capabilityConstraint.skills === 'none' ? [] : runtimeSnapshot.pluginSkillRoots,
+      capabilityConstraint.skills === 'none',
     );
     const imageRoute = resolveAgentTurnImageRoute(input.modelPolicy, runtimeSnapshot.tools);
-    const turnTools = bindAgentAuthoringMutationAuthority(
-      filterAgentTurnImageTools(runtimeSnapshot.tools, imageRoute),
-      input.entryTargetReceipt ?? null,
-      this.options.authoringMutationAuthority,
-    );
+    const turnTools =
+      capabilityConstraint.tools === 'none'
+        ? []
+        : bindAgentAuthoringMutationAuthority(
+            filterAgentTurnImageTools(runtimeSnapshot.tools, imageRoute),
+            input.entryTargetReceipt ?? null,
+            this.options.authoringMutationAuthority,
+          );
     const contextPayloads = await materializeAgentTurnContextPayloads({
       contextPayloads: input.contextPayloads,
       contentAccessRuntime: this.contentAccessRuntime,
@@ -1923,6 +1946,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   private async discoverSkills(
     workspaceTrusted: boolean,
     pluginSkillRoots: readonly SkillSourceRoot[] = this.pluginSkillRoots,
+    forceEmpty = false,
   ) {
     const roots = await existingSkillRoots({
       workspacePath: this.options.workspace.workspacePath,
@@ -1937,7 +1961,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         isTrusted: ({ source }) => source.kind !== 'project' || workspaceTrusted,
         isEnabled: () => true,
       },
-    }).discover([...roots, ...pluginSkillRoots]);
+    }).discover(forceEmpty ? [] : [...roots, ...pluginSkillRoots]);
   }
 
   private reconcileRuntimeResidency(): Promise<void> {

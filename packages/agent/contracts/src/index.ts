@@ -23,6 +23,7 @@ export * from './agent-draft-submit';
 export * from './agent-draft-mention-search';
 export * from './agent-entry-intent';
 export * from './agent-token-budget';
+export * from './agent-turn-capability';
 export * from './creative-ai-invocation';
 export * from './config';
 export * from './desktop-agent-connection';

@@ -886,6 +886,7 @@ describe('ConversationController entry state', () => {
     await waitFor(() =>
       expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('character-dialogue', {
         kind: 'character-dialogue',
+        mode: 'companion',
         participants: [
           {
             characterProjectId: 'character-project-a',
@@ -903,6 +904,7 @@ describe('ConversationController entry state', () => {
         mode: 'character-dialogue',
         binding: {
           kind: 'character-dialogue',
+          mode: 'companion',
           participants: [
             {
               characterProjectId: 'character-project-a',
