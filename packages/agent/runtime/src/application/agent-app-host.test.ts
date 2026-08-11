@@ -1581,11 +1581,11 @@ describe('AgentAppHost', () => {
     await binding.dispose();
   });
 
-  it('uses the Conversation execution queue as the only read, promote, cancel and edit owner', async () => {
+  it('pauses pending turns after explicit cancellation until one exact item is sent now', async () => {
     const fixture = await createFixture();
     const started: string[] = [];
     const finish = new Map<string, () => void>();
-    const models = createFixtureModels((_model, context) => {
+    const models = createFixtureModels((_model, context, options) => {
       const prompt = lastUserPrompt(context);
       const stream = createAssistantMessageEventStream();
       started.push(prompt);
@@ -1595,6 +1595,101 @@ describe('AgentAppHost', () => {
         stream.push({ type: 'done', reason: 'stop', message });
         stream.end();
       });
+      options?.signal?.addEventListener(
+        'abort',
+        () => {
+          stream.push({
+            type: 'error',
+            reason: 'aborted',
+            error: { ...assistant(`cancelled ${prompt}`), stopReason: 'aborted' },
+          });
+          stream.end();
+        },
+        { once: true },
+      );
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-paused-queue',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const turn = (prompt: string) =>
+      workspace.startTurn({
+        conversationId: 'conversation-paused-queue',
+        prompt,
+        modelPolicy: fixturePolicy(),
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      });
+    const active = turn('active turn');
+    const queued = turn('queued turn');
+    await vi.waitFor(() => expect(started).toEqual(['active turn']));
+
+    expect(() =>
+      workspace.cancelTurn('conversation-paused-queue', {
+        turnId: 'stale-turn',
+        runId: 'stale-run',
+      }),
+    ).toThrow();
+    expect(workspace.readMessageQueue('conversation-paused-queue')).toMatchObject({
+      paused: false,
+      pendingCount: 1,
+    });
+
+    workspace.cancelTurn('conversation-paused-queue', active.identity);
+    expect(workspace.readMessageQueue('conversation-paused-queue')).toMatchObject({
+      paused: true,
+      pendingCount: 1,
+    });
+    await active.completion;
+    await Promise.resolve();
+    expect(started).toEqual(['active turn']);
+
+    const queuedItem = workspace.readMessageQueue('conversation-paused-queue').items[0];
+    if (!queuedItem) throw new Error('Paused queue fixture lost its queued item.');
+    expect(
+      workspace.sendQueuedMessageNow('conversation-paused-queue', queuedItem.id),
+    ).toMatchObject({ paused: false });
+    await vi.waitFor(() => expect(started).toEqual(['active turn', 'queued turn']));
+    finish.get('queued turn')?.();
+    await queued.completion;
+    expect(workspace.readMessageQueue('conversation-paused-queue')).toMatchObject({
+      paused: false,
+      pendingCount: 0,
+    });
+  });
+
+  it('uses the Conversation execution queue as the only read, send-now, cancel and edit owner', async () => {
+    const fixture = await createFixture();
+    const started: string[] = [];
+    const finish = new Map<string, () => void>();
+    const models = createFixtureModels((_model, context, options) => {
+      const prompt = lastUserPrompt(context);
+      const stream = createAssistantMessageEventStream();
+      started.push(prompt);
+      const message = assistant(`completed ${prompt}`);
+      stream.push({ type: 'start', partial: message });
+      finish.set(prompt, () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      });
+      options?.signal?.addEventListener(
+        'abort',
+        () => {
+          stream.push({
+            type: 'error',
+            reason: 'aborted',
+            error: { ...assistant(`cancelled ${prompt}`), stopReason: 'aborted' },
+          });
+          stream.end();
+        },
+        { once: true },
+      );
       return stream;
     });
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -1647,7 +1742,7 @@ describe('AgentAppHost', () => {
 
     expect(
       workspace
-        .promoteQueuedMessage('conversation-owned-queue', promoteItem.id)
+        .sendQueuedMessageNow('conversation-owned-queue', promoteItem.id)
         .items.map((item) => item.content),
     ).toEqual(['promote queued turn', 'cancel queued turn', 'edit queued turn']);
     const editedResult = await workspace.takeQueuedMessageForEdit(
@@ -1666,10 +1761,10 @@ describe('AgentAppHost', () => {
     ).toEqual(['promote queued turn']);
     await Promise.all([cancelledCompletion, editedCompletion]);
 
-    finish.get('active turn')?.();
+    await active.completion;
     await vi.waitFor(() => expect(started).toEqual(['active turn', 'promote queued turn']));
     finish.get('promote queued turn')?.();
-    await expect(Promise.all([active.completion, promoted.completion])).resolves.toHaveLength(2);
+    await promoted.completion;
     expect(started).not.toContain('cancel queued turn');
     expect(started).not.toContain('edit queued turn');
     expect(workspace.readMessageQueue('conversation-owned-queue')).toMatchObject({

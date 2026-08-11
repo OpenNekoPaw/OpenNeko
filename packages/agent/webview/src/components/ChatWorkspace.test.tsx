@@ -17,7 +17,7 @@ const hostMocks = vi.hoisted(() => ({
   clearHistory: vi.fn(),
   compressContext: vi.fn(),
   cancelMessage: vi.fn(),
-  promoteQueuedMessage: vi.fn(),
+  sendQueuedMessageNow: vi.fn(),
   cancelQueuedMessage: vi.fn(),
   editQueuedMessage: vi.fn(),
   clearActiveSkill: vi.fn(),
@@ -93,7 +93,7 @@ vi.mock('./ChatView', () => ({
     onCancelTask?: (taskId: string) => void;
     onRetryTask?: (taskId: string) => void;
     onViewTaskResult?: (taskId: string, resultRef?: string) => void;
-    onPromoteQueuedMessage?: (queueItemId: string) => void;
+    onSendQueuedMessageNow?: (queueItemId: string) => void;
     onCancelQueuedMessage?: (queueItemId: string) => void;
     onEditQueuedMessage?: (queueItemId: string) => void;
     entryPromptMenu?: 'roleplay' | null;
@@ -116,6 +116,7 @@ vi.mock('./ChatView', () => ({
     composerMenuState?: ComposerMenuState;
     onComposerMenuStateChange?: (state: ComposerMenuState) => void;
     messages?: readonly Message[];
+    isRunActive?: boolean;
   }) => (
     <div>
       <button
@@ -149,7 +150,7 @@ vi.mock('./ChatView', () => ({
       <button
         type="button"
         data-testid="promote-queued"
-        onClick={() => props.onPromoteQueuedMessage?.('queued-1')}
+        onClick={() => props.onSendQueuedMessageNow?.('queued-1')}
       />
       <button
         type="button"
@@ -194,6 +195,7 @@ vi.mock('./ChatView', () => ({
       <span data-testid="visible-messages">
         {props.messages?.map((message) => `${message.role}:${message.content}`).join('|') ?? ''}
       </span>
+      <span data-testid="run-active">{String(props.isRunActive ?? false)}</span>
       <button
         type="button"
         data-testid="open-slash-menu"
@@ -420,6 +422,31 @@ describe('ChatWorkspace pending send', () => {
     });
   });
 
+  it('uses the authoritative Agent phase when a restored running Turn has no streaming flag', () => {
+    const setMessages = vi.fn();
+    const onUserMessageSent = vi.fn();
+    const { getByTestId } = render(
+      <ChatWorkspace
+        {...createProps({
+          isThinking: false,
+          streamingMessageId: null,
+          agentState: { phase: 'thinking', startedAt: 1 },
+          setMessages,
+          onUserMessageSent,
+        })}
+      />,
+    );
+
+    expect(getByTestId('run-active').textContent).toBe('true');
+    fireEvent.click(getByTestId('send'));
+
+    expect(setMessages).not.toHaveBeenCalled();
+    expect(onUserMessageSent).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      message: expect.objectContaining({ isQueued: true }),
+    });
+  });
+
   it('prefills entry text after a new conversation is activated', () => {
     const onInitialInputRequestConsumed = vi.fn();
     const onMentionSearchFilterChange = vi.fn();
@@ -439,7 +466,7 @@ describe('ChatWorkspace pending send', () => {
     expect(onInitialInputRequestConsumed).toHaveBeenCalledWith(3);
   });
 
-  it('restores a queued edit from its owning Tab store into an empty composer', () => {
+  it('restores a complete queued edit from its owning Tab store into an empty composer', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-1', conversationId: 'conv-1' });
     runtime.store.updateState({
       queuedEdit: {
@@ -447,17 +474,71 @@ describe('ChatWorkspace pending send', () => {
         item: {
           id: 'queued-1',
           conversationId: 'conv-1',
-          content: '重新整理这条消息',
+          content: '$review 重新整理这条消息',
           createdAt: 1,
           source: 'composer',
+          draft: {
+            message: '$stale-display',
+            sessionMode: 'agent',
+            input: {
+              kind: 'skill',
+              catalogEntryId: 'skill:review',
+              skillName: 'review',
+              activationId: 'activation-1',
+              args: '重新整理这条消息',
+            },
+            configuration: {
+              agentModels: {
+                primary: { providerId: 'openai', modelId: 'model-b', category: 'llm' },
+              },
+              purposeModels: {
+                'image.generate': {
+                  providerId: 'openai',
+                  modelId: 'image-model-b',
+                  category: 'image',
+                },
+                'image.understand': {
+                  providerId: 'openai',
+                  modelId: 'vision-model-b',
+                  category: 'llm',
+                },
+              },
+            },
+            attachments: [{ id: 'attachment-1', name: 'reference.png', type: 'image' }],
+            contextPayloads: [
+              {
+                type: 'document-selection',
+                id: 'selection-1',
+                label: 'Selection',
+                summary: 'Selected text',
+                data: { selectedText: 'evidence' },
+              },
+            ],
+            fileReferences: [
+              {
+                id: 'reference-1',
+                label: 'reference.png',
+                contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+                mediaType: 'image',
+              },
+            ],
+          },
         },
       },
     });
 
     render(<ChatWorkspace {...createProps({ tabRenderStore: runtime.store })} />);
 
-    expect(screen.getByTestId('input-value').textContent).toBe('重新整理这条消息');
-    expect(runtime.store.getSnapshot().state.queuedEdit).toBeNull();
+    expect(screen.getByTestId('input-value').textContent).toBe('$review 重新整理这条消息');
+    expect(runtime.store.getSnapshot().state).toMatchObject({
+      selectedModel: 'model-b',
+      mediaModelSelection: { image: 'image-model-b' },
+      mediaUnderstandingSelection: { image: 'vision-model-b' },
+      attachedFiles: [{ id: 'attachment-1', name: 'reference.png', type: 'image' }],
+      selectedFileReferences: [{ id: 'reference-1', label: 'reference.png' }],
+      contextReferences: [{ id: 'selection-1', data: { selectedText: 'evidence' } }],
+      queuedEdit: null,
+    });
   });
 
   it('keeps an existing draft and records a Tab-local diagnostic for queued edit conflict', () => {
@@ -497,7 +578,7 @@ describe('ChatWorkspace pending send', () => {
     const { getByTestId } = render(<ChatWorkspace {...createProps()} />);
 
     fireEvent.click(getByTestId('promote-queued'));
-    expect(hostMocks.promoteQueuedMessage).toHaveBeenCalledWith('conv-1', 'queued-1');
+    expect(hostMocks.sendQueuedMessageNow).toHaveBeenCalledWith('conv-1', 'queued-1');
     fireEvent.click(getByTestId('cancel-queued'));
     expect(hostMocks.cancelQueuedMessage).toHaveBeenCalledWith('conv-1', 'queued-1');
     fireEvent.click(getByTestId('edit-queued'));
@@ -766,7 +847,7 @@ describe('ChatWorkspace pending send', () => {
     );
     expect(hostMocks.clearHistory).toHaveBeenCalledWith('conv-b');
     expect(hostMocks.compressContext).toHaveBeenCalledWith('conv-b');
-    expect(hostMocks.promoteQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
+    expect(hostMocks.sendQueuedMessageNow).toHaveBeenCalledWith('conv-b', 'queued-1');
     expect(hostMocks.cancelQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
     expect(hostMocks.editQueuedMessage).toHaveBeenCalledWith('tab-b', 'conv-b', 'queued-1');
     expect(clearMessages).toHaveBeenCalledTimes(1);

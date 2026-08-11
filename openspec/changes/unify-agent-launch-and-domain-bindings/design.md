@@ -374,6 +374,38 @@ Agent Evaluation disposition 为 `create`：现有文档附件和搜索案例没
 route；新增一个 focused complete-session case，硬断言 `ListDirectory -> Read` 文本路径和
 `ListDirectory -> ReadDocument` 结构化路径，并 poison shell、raw locator、absolute path 与 binary-as-text。
 
+### 17. Conversation 队列保存完整输入并串行处理中断
+
+Agent Workspace application 是每个 Conversation 待执行 Turn 的唯一队列 owner。Webview 在当前 Turn
+活动时继续提交与空闲发送相同的 canonical input request，包括文本、附件、context payload、文件引用、
+typed command/Skill identity 和发送时选择的模型配置。队列项向 Renderer 只投影重建 Composer 所需的
+安全 Draft presentation；运行所需的完整 immutable input 仍由 application 保存，不由 UI、Desktop 或
+transcript 充当第二事实来源。
+
+普通完成、失败或 provider 终止后，application 从同一 Conversation 队列释放下一项。用户显式停止当前
+Turn 时，application 先暂停该 Conversation 的待处理队列，再取消 exact turn/run identity；停止不会清空、
+编辑或自动执行队列项。用户对指定队列项执行“立即发送”时，application 原子提升该项、恢复队列，并在
+存在当前 Turn 时取消当前 Turn；只有当前 Turn 达到 terminal 后才启动指定项，不允许同一 Conversation
+并发执行两个 Turn。
+
+删除只移除指定 pending item。编辑原子移除指定项并把其完整 Draft presentation 恢复到 owning Tab；若
+Composer 已有未提交内容，则保留现有 Draft并显示局部冲突 diagnostic，不丢弃或覆盖任一组用户输入。
+所有 queue action 必须绑定 exact Conversation 和 queue item identity；stale、cross-Conversation 或非用户
+continuation item 失败当前操作，不能回退 active Conversation 或改变 sibling 队列。
+
+| 层   | 结论                                                                                                                                                 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Agent application 拥有完整 pending Turn、顺序、暂停和释放；Webview 拥有 Composer Draft；Desktop 只转发 typed queue intent。                         |
+| 依赖 | Queue contract 位于 `@neko/agent-contracts`，application 不依赖 React/Electron，Renderer 不持有 runtime input authority。                            |
+| 接口 | 复用唯一 queue snapshot，原子替换 `promote` 为 `send-now`；queue item 增加有界、可克隆的 Draft presentation，不增加内部版本或平行 handler。          |
+| 扩展 | 普通 message 与会产生 Turn 的 typed Skill/command 共用同一 `startTurn` queue；不产生 Turn 的 Session command 仍由自身 operation contract 串行校验。 |
+| 测试 | 覆盖中断暂停、正常 drain、富输入重建、删除、编辑冲突、指定项立即发送、stale/cross-Conversation 拒绝、Desktop route 和可见控制。                      |
+
+Agent Evaluation disposition 为 `update`：扩充 `agent-runtime.workflow-controller` 的
+`cancel-resume-recovery`，证明 queue submit、active cancel、paused pending、指定项 send-now、exact identity、
+terminal idle 与无并发/无 active-Conversation fallback。可见 Desktop 验收必须通过真实 Composer 控件检查停止
+按钮、运行中输入、富引用排队和队列操作；没有显式 provider 成本授权时记录为 infrastructure-blocked。
+
 ## Risks / Trade-offs
 
 - [Character/World 成熟度不同导致 union 形同假能力] → provider 未实现时只投影 unavailable；任务按 Assistant/Workspace、Character、World 三阶段设 gate，后阶段不得阻塞前阶段正确性。

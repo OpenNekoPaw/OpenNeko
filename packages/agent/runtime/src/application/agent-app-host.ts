@@ -85,6 +85,7 @@ import type {
   AgentHomeProjection,
   AgentConversationOwnerRef,
   AgentMessageQueueSnapshot,
+  AgentQueuedMessageDraft,
   AgentQueuedMessageItem,
 } from '@neko/agent-contracts';
 import type { AgentCredentialRuntime } from '../pi/credential-runtime';
@@ -137,6 +138,7 @@ export interface AgentTurnInput {
   readonly skillName?: string;
   readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
+  readonly queueDraft?: AgentQueuedMessageDraft;
   readonly events?: PiProductEventSink;
 }
 
@@ -254,7 +256,7 @@ export interface AgentWorkspaceRuntime {
   startTurn(input: AgentTurnInput): AgentTurnOperation;
   executeTurn(input: AgentTurnInput): Promise<AgentTurnResult>;
   readMessageQueue(conversationId: string): AgentMessageQueueSnapshot;
-  promoteQueuedMessage(conversationId: string, queueItemId: string): AgentMessageQueueSnapshot;
+  sendQueuedMessageNow(conversationId: string, queueItemId: string): AgentMessageQueueSnapshot;
   cancelQueuedMessage(
     conversationId: string,
     queueItemId: string,
@@ -1059,8 +1061,9 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     if (!settlement) throw new Error('Agent turn completion could not be initialized.');
     const queue = this.getOrCreatePendingConversationTurns(input.conversationId);
     const queueItem = queue.messages.enqueue({
-      content: input.prompt,
+      content: describeQueuedTurn(input),
       source: 'composer',
+      ...(input.queueDraft === undefined ? {} : { draft: input.queueDraft }),
     });
     const pending: PendingAgentTurnOperation = {
       queueItemId: queueItem.id,
@@ -1101,10 +1104,17 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     );
   }
 
-  promoteQueuedMessage(conversationId: string, queueItemId: string): AgentMessageQueueSnapshot {
+  sendQueuedMessageNow(conversationId: string, queueItemId: string): AgentMessageQueueSnapshot {
     this.assertConversationExists(conversationId);
     const queue = this.requirePendingConversationTurns(conversationId);
     queue.messages.promote(queueItemId);
+    queue.messages.resume();
+    const active = this.activeConversationTurns.get(conversationId);
+    if (active) {
+      this.requireConversation(conversationId).cancel(active.identity);
+    } else {
+      this.startNextConversationTurn(conversationId);
+    }
     return queue.messages.snapshot();
   }
 
@@ -1478,6 +1488,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   cancelTurn(conversationId: string, identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void {
     this.requireConversation(conversationId).cancel(identity);
+    this.pendingConversationTurns.get(conversationId)?.messages.pauseAfterActiveTurnCancel();
   }
 
   readActiveTurn(conversationId: string): Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined {
@@ -2767,11 +2778,28 @@ function freezeClone<T>(value: T): T {
   return freezeValue(structuredClone(value));
 }
 
+function describeQueuedTurn(input: AgentTurnInput): string {
+  const text =
+    input.queueDraft?.message.trim() || input.presentationText?.trim() || input.prompt.trim();
+  if (text) return text;
+  const labels = [
+    ...(input.queueDraft?.attachments?.map((attachment) => attachment.name) ?? []),
+    ...(input.queueDraft?.fileReferences?.map((reference) => reference.label) ?? []),
+    ...(input.queueDraft?.contextPayloads?.map((payload) => payload.label) ?? []),
+  ].filter((label) => label.trim().length > 0);
+  if (labels.length > 0) return labels.join(', ');
+  throw new AgentMessageQueueOperationError(
+    'not-queueable',
+    'Queued Agent Turn requires message content or supported input context.',
+  );
+}
+
 function emptyMessageQueueSnapshot(conversationId: string): AgentMessageQueueSnapshot {
   return Object.freeze({
     conversationId,
     items: Object.freeze([]),
     pendingCount: 0,
+    paused: false,
     sequence: 0,
   });
 }

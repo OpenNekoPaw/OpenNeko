@@ -137,6 +137,7 @@ function createNextSnapshot(
           ...base.streaming,
           queuedMessageCount: mutation.queuedMessageCount,
           queuedMessages: [...mutation.queuedMessages],
+          ...(mutation.queuePaused !== undefined ? { queuePaused: mutation.queuePaused } : {}),
           ...(mutation.messageQueueSequence !== undefined
             ? { messageQueueSequence: mutation.messageQueueSequence }
             : {}),
@@ -165,6 +166,7 @@ function emptyStreamingForMutation(mutation: UpdateMutation): ConversationStream
     isThinking: false,
     queuedMessageCount: 0,
     queuedMessages: [],
+    queuePaused: false,
   };
 }
 

@@ -5,24 +5,26 @@
   "caseGroup": "failure",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Cancel an active turn, resume its canonical conversation, and complete a recovery request.",
+    "userBehavior": "Queue two full-capability follow-ups, cancel the active turn without losing them, and immediately send the selected queued item before the other pending item.",
     "canonicalPath": [
       "message.submit",
+      "message.submit:queued",
+      "message.submit:queued",
       "message.cancel",
       "session.waitForIdle",
-      "session.resume",
-      "message.submit"
+      "message.queue.send-now",
+      "session.waitForIdle"
     ],
     "observables": [
       {
         "ref": "recovery-facts",
         "kind": "runtime-fact",
-        "description": "Cancellation acceptance, resume identity, recovery submission, and terminal idle facts.",
+        "description": "Exact queue item identities, cancellation acceptance, paused queue state, selected send-now release, ordered Turns, and terminal idle facts.",
         "required": true
       }
     ],
-    "expectedResult": "Cancellation is accepted, the same conversation resumes, and the recovery turn reaches terminal idle.",
-    "expectedFailure": "Rejected cancellation, changed conversation identity, missing recovery turn, or busy terminal state fails."
+    "expectedResult": "Cancellation pauses both pending items; send-now resumes the same Conversation, runs the selected item first, drains the remaining item, and reaches terminal idle without concurrent Turns.",
+    "expectedFailure": "Rejected cancellation, lost pending input, unpaused cancellation, wrong-item release, reordered queued Turns, changed Conversation identity, concurrent execution, or busy terminal state fails."
   },
   "fixtureRefs": [
     "empty-workspace"
@@ -38,9 +40,21 @@
       "prompt": "Begin writing a 300-row five-column Markdown production table. Do not summarize."
     },
     {
+      "id": "ordinary-follow-up",
+      "kind": "queue",
+      "afterStepId": "long-turn",
+      "prompt": "Ordinary queued follow-up: respond with exactly one concise sentence."
+    },
+    {
+      "id": "priority-follow-up",
+      "kind": "queue",
+      "afterStepId": "ordinary-follow-up",
+      "prompt": "Priority queued recovery: respond with exactly one concise sentence."
+    },
+    {
       "id": "cancel",
       "kind": "cancel",
-      "afterStepId": "long-turn"
+      "afterStepId": "priority-follow-up"
     },
     {
       "id": "cancelled-idle",
@@ -48,14 +62,9 @@
       "timeoutMs": 120000
     },
     {
-      "id": "resume",
-      "kind": "resume",
-      "conversationRef": "current"
-    },
-    {
-      "id": "recover",
-      "kind": "submit",
-      "prompt": "Recovery request: respond with one concise sentence confirming the prior turn was cancelled."
+      "id": "send-priority-now",
+      "kind": "send-queued-now",
+      "queueStepId": "priority-follow-up"
     },
     {
       "id": "recovered-idle",
@@ -72,11 +81,55 @@
       "evidenceRef": "recovery-facts"
     },
     {
-      "id": "recovered",
-      "kind": "recovery",
-      "resumeStepId": "resume",
-      "submitStepId": "recover",
-      "idleStepId": "recovered-idle",
+      "id": "ordinary-queued",
+      "kind": "queue-state",
+      "stepId": "ordinary-follow-up",
+      "status": "queued",
+      "minPending": 1,
+      "evidenceRef": "recovery-facts"
+    },
+    {
+      "id": "priority-queued",
+      "kind": "queue-state",
+      "stepId": "priority-follow-up",
+      "status": "queued",
+      "minPending": 2,
+      "evidenceRef": "recovery-facts"
+    },
+    {
+      "id": "paused",
+      "kind": "queue-state",
+      "stepId": "cancelled-idle",
+      "status": "paused-after-cancel",
+      "minPending": 2,
+      "evidenceRef": "recovery-facts"
+    },
+    {
+      "id": "priority-sent-now",
+      "kind": "queue-state",
+      "stepId": "send-priority-now",
+      "status": "resumed-by-send-now",
+      "queueStepId": "priority-follow-up",
+      "evidenceRef": "recovery-facts"
+    },
+    {
+      "id": "drained",
+      "kind": "queue-state",
+      "stepId": "recovered-idle",
+      "status": "drained",
+      "evidenceRef": "recovery-facts"
+    },
+    {
+      "id": "ordered",
+      "kind": "process-order",
+      "events": [
+        { "kind": "workflow-step", "stepId": "ordinary-follow-up", "method": "message.submit" },
+        { "kind": "workflow-step", "stepId": "priority-follow-up", "method": "message.submit" },
+        { "kind": "workflow-step", "stepId": "cancel", "method": "message.cancel" },
+        { "kind": "workflow-step", "stepId": "send-priority-now", "method": "message.queue.send-now" },
+        { "kind": "turn", "role": "user", "source": "user", "contentContains": "Priority queued recovery" },
+        { "kind": "turn", "role": "user", "source": "user", "contentContains": "Ordinary queued follow-up" }
+      ],
       "evidenceRef": "recovery-facts"
     },
     {

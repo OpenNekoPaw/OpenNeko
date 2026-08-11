@@ -147,7 +147,7 @@ describe('input area presenter', () => {
     );
   });
 
-  it('does not expose queue for rich context while a response is running', () => {
+  it('exposes the same queue path for rich context while a response is running', () => {
     expect(
       projectInputAreaUi({
         inputValue: 'next',
@@ -163,10 +163,10 @@ describe('input area presenter', () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        canSend: false,
-        canQueue: false,
+        canSend: true,
+        canQueue: true,
         canCancel: true,
-        sendTitleKey: 'chat.input.send',
+        sendTitleKey: 'chat.input.queue',
       }),
     );
   });

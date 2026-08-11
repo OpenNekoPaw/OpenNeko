@@ -77,7 +77,7 @@ interface InputAreaProps {
   droppedFiles?: MessageAttachment[];
   onDroppedFilesProcessed?: () => void;
   onInputChange: (value: string) => void;
-  onPromoteQueuedMessage?: (queueItemId: string) => void;
+  onSendQueuedMessageNow?: (queueItemId: string) => void;
   onCancelQueuedMessage?: (queueItemId: string) => void;
   onEditQueuedMessage?: (queueItemId: string) => void;
   onSend: (input?: {
@@ -205,7 +205,7 @@ export function InputArea({
   droppedFiles,
   onDroppedFilesProcessed,
   onInputChange,
-  onPromoteQueuedMessage,
+  onSendQueuedMessageNow,
   onCancelQueuedMessage,
   onEditQueuedMessage,
   onSend,
@@ -946,7 +946,7 @@ export function InputArea({
     submissionBlocked: submissionBlockedReason !== undefined,
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
-  const attachmentInputDisabled = disabled || isRunActive;
+  const attachmentInputDisabled = disabled;
   return (
     <div className="flex-shrink-0">
       {/* ── Suggestion chips — float above border-t, at bottom of message list ── */}
@@ -963,7 +963,7 @@ export function InputArea({
             pendingCount={queuePanelCount}
             expanded={isQueueExpanded}
             onExpandedChange={setIsQueueExpanded}
-            onPromote={onPromoteQueuedMessage}
+            onSendNow={onSendQueuedMessageNow}
             onCancel={onCancelQueuedMessage}
             onEdit={onEditQueuedMessage}
             t={t}
@@ -1101,9 +1101,7 @@ export function InputArea({
               }}
               disabled={attachmentInputDisabled}
               className="agent-composer-tool-button"
-              title={
-                isRunActive ? t('chat.input.attachUnavailableWhileRunning') : t('chat.input.attach')
-              }
+              title={t('chat.input.attach')}
             >
               <PlusIcon className="w-4 h-4" />
             </button>
@@ -1403,7 +1401,7 @@ function MessageQueueControls({
   pendingCount,
   expanded,
   onExpandedChange,
-  onPromote,
+  onSendNow,
   onCancel,
   onEdit,
   t,
@@ -1412,7 +1410,7 @@ function MessageQueueControls({
   pendingCount: number;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
-  onPromote?: (queueItemId: string) => void;
+  onSendNow?: (queueItemId: string) => void;
   onCancel?: (queueItemId: string) => void;
   onEdit?: (queueItemId: string) => void;
   t: InputAreaTranslator;
@@ -1457,7 +1455,7 @@ function MessageQueueControls({
               key={item.id}
               item={item}
               position={index + 1}
-              onPromote={onPromote}
+              onSendNow={onSendNow}
               onCancel={onCancel}
               onEdit={onEdit}
               t={t}
@@ -1479,14 +1477,14 @@ function MessageQueueControls({
 function QueuedMessageRow({
   item,
   position,
-  onPromote,
+  onSendNow,
   onCancel,
   onEdit,
   t,
 }: {
   item: AgentQueuedMessageItem;
   position: number;
-  onPromote?: (queueItemId: string) => void;
+  onSendNow?: (queueItemId: string) => void;
   onCancel?: (queueItemId: string) => void;
   onEdit?: (queueItemId: string) => void;
   t: InputAreaTranslator;
@@ -1504,9 +1502,9 @@ function QueuedMessageRow({
       </span>
       <div className="agent-composer-queue-actions" aria-label={label}>
         <QueueActionButton
-          title={t('chat.input.queueSendNext')}
-          disabled={isOptimistic || !onPromote}
-          onClick={() => onPromote?.(item.id)}
+          title={t('chat.input.queueSendNow')}
+          disabled={isOptimistic || !onSendNow}
+          onClick={() => onSendNow?.(item.id)}
         >
           <SendIcon size={13} strokeWidth={2.1} />
         </QueueActionButton>

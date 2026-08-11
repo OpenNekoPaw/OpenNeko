@@ -32,7 +32,7 @@ function createEffects(): AgentConversationControllerEffectPort {
     readAgentStates: vi.fn(),
     readConversationSnapshot: vi.fn(),
     readMessageQueue: vi.fn(),
-    promoteQueuedMessage: vi.fn(),
+    sendQueuedMessageNow: vi.fn(),
     cancelQueuedMessage: vi.fn(),
     editQueuedMessage: vi.fn(),
     clearHistory: vi.fn(),
@@ -163,7 +163,7 @@ describe('Agent conversation controller', () => {
     await dispatch({ type: 'getMessageQueue', conversationId: 'conversation-1' }, effects, context);
     await dispatch(
       {
-        type: 'promoteQueuedMessage',
+        type: 'sendQueuedMessageNow',
         conversationId: 'conversation-1',
         queueItemId: 'queue-1',
       },
@@ -207,7 +207,7 @@ describe('Agent conversation controller', () => {
     expect(effects.readAgentStates).toHaveBeenCalledWith(context);
     expect(effects.readConversationSnapshot).toHaveBeenCalledWith('conversation-1', context);
     expect(effects.readMessageQueue).toHaveBeenCalledWith('conversation-1', context);
-    expect(effects.promoteQueuedMessage).toHaveBeenCalledWith(
+    expect(effects.sendQueuedMessageNow).toHaveBeenCalledWith(
       { conversationId: 'conversation-1', queueItemId: 'queue-1' },
       context,
     );

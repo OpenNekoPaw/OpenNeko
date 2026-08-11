@@ -112,6 +112,7 @@ export function useConversationState(): UseConversationStateReturn {
         isThinking: false,
         queuedMessageCount: 0,
         queuedMessages: [],
+        queuePaused: false,
       };
       const updated = updater([...currentMessages], currentStreaming);
       const snapshot = ingestConversationRenderSnapshot({

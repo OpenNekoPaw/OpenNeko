@@ -165,9 +165,9 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       postConversationMessage({ type: 'getMessageQueue', conversationId });
     },
 
-    /** Promote a queued message so it runs next after the active turn. */
-    promoteQueuedMessage: (conversationId: string, queueItemId: string) => {
-      postConversationMessage({ type: 'promoteQueuedMessage', conversationId, queueItemId });
+    /** Interrupt the active Turn when needed and send one exact queued message next. */
+    sendQueuedMessageNow: (conversationId: string, queueItemId: string) => {
+      postConversationMessage({ type: 'sendQueuedMessageNow', conversationId, queueItemId });
     },
 
     /** Cancel a queued message without cancelling the active response. */

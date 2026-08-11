@@ -211,3 +211,13 @@
 - [x] 24.3 Make basic `Read` reject known non-text classes before reading and accept unknown extensions only after bounded fatal UTF-8 and NUL validation; reject symlink directory traversal before enumeration and keep linked Media Library discovery on the Assets-owned path.
 - [x] 24.4 Add Core Tool and Pi protocol tests for relative directory-to-text/document/image routing, strict text budgets, binary/protected denial, stable bounds, no absolute path/locator projection, symlink escape and sibling isolation; add the indexed Agent Evaluation case and no-fallback evidence.
 - [x] 24.5 Run focused tests/typechecks, strict OpenSpec and key-free Evaluation validation, then perform `neko-quality-review`; classify visible UI validation as not applicable unless implementation changes Renderer presentation, and keep real-provider execution under task 11.7 without explicit cost authorization.
+
+## 26. Full-capability Conversation Queue And Interruption
+
+- [x] 26.1 Replace the text-only running-send policy with one full canonical input queue contract whose safe Draft presentation preserves supported attachments, context, references, typed input and configuration for exact edit restoration.
+- [x] 26.2 Make explicit Turn cancellation pause pending items, and add one atomic `sendQueuedMessageNow` application operation that promotes the exact item, resumes the queue and cancels the active Turn without same-Conversation concurrency.
+- [x] 26.3 Atomically replace the old promote route across contracts, Host controller, Desktop composition and Webview facade; preserve exact Conversation/item validation and fail-local queue snapshots.
+- [x] 26.4 Restore a queued edit's complete Draft presentation into its owning Tab, preserve an existing non-empty Composer with a local diagnostic, and keep delete scoped to one pending item.
+- [x] 26.5 Keep the Composer editable during active Turns, remove wait-or-cancel placeholder semantics, expose a stable visible stop control and render delete/edit/immediate-send actions for each authoritative queue item.
+- [x] 26.6 Add contract, queue, AppHost, Host controller, Webview hook/component and Desktop composition tests for rich queue parity, normal drain, cancelled pause, send-now ordering, edit/delete, stale identity, Conversation isolation and visible controls.
+- [x] 26.7 Update `agent-runtime.workflow-controller` Evaluation evidence, run key-free and focused deterministic validation, perform visible Desktop UI validation plus `neko-quality-review`, and record real-provider/cost blockers in verification evidence.

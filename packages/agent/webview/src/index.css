@@ -2658,8 +2658,8 @@ body {
 }
 
 .agent-composer-stop {
-  border-color: color-mix(in srgb, var(--neko-errorForeground) 70%, transparent);
-  background: var(--neko-errorForeground);
+  border-color: color-mix(in srgb, var(--agent-danger) 70%, transparent);
+  background: var(--agent-danger);
   color: #ffffff;
 }
 

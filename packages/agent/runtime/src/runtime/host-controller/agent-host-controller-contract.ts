@@ -84,7 +84,7 @@ export interface AgentConversationControllerEffectPort {
     conversationId: string,
     context: AgentHostRouteEffectContext,
   ): void | Promise<void>;
-  promoteQueuedMessage(
+  sendQueuedMessageNow(
     input: {
       readonly conversationId: string;
       readonly queueItemId: string;
@@ -224,7 +224,7 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'getAgentStates',
   'getConversationSnapshot',
   'getMessageQueue',
-  'promoteQueuedMessage',
+  'sendQueuedMessageNow',
   'cancelQueuedMessage',
   'editQueuedMessage',
   'clearHistory',

@@ -106,7 +106,7 @@ const handleAgentPhase: MessageHandler<'agentPhase'> = (message: AgentPhaseMessa
       (messages, _streamingMessageId, streaming) => ({
         messages,
         streamingMessageId: null,
-        isThinking: (streaming.queuedMessageCount ?? 0) > 0,
+        isThinking: (streaming.queuedMessageCount ?? 0) > 0 && streaming.queuePaused !== true,
       }),
     );
   }
@@ -163,12 +163,13 @@ function applyMessageQueueSnapshot(
         }),
     streamingMessageId: streamingId,
     isThinking:
-      snapshot.items.length > 0 || options.releasedItem
+      !snapshot.paused && (snapshot.items.length > 0 || options.releasedItem)
         ? true
         : (context.conversationRenderCoordinator.read(snapshot.conversationId)?.streaming
             .isThinking ?? false),
     queuedMessageCount: snapshot.pendingCount,
     queuedMessages: snapshot.items,
+    queuePaused: snapshot.paused,
     messageQueueSequence: snapshot.sequence,
   }));
 }

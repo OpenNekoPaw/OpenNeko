@@ -57,7 +57,7 @@ interface ChatViewProps {
   onRejectDiff?: (filePath: string) => void;
   // Input callbacks
   onInputChange: (value: string) => void;
-  onPromoteQueuedMessage?: (queueItemId: string) => void;
+  onSendQueuedMessageNow?: (queueItemId: string) => void;
   onCancelQueuedMessage?: (queueItemId: string) => void;
   onEditQueuedMessage?: (queueItemId: string) => void;
   onSend: (input?: {
@@ -117,7 +117,7 @@ export function ChatView({
   onAcceptDiff,
   onRejectDiff,
   onInputChange,
-  onPromoteQueuedMessage,
+  onSendQueuedMessageNow,
   onCancelQueuedMessage,
   onEditQueuedMessage,
   onSend,
@@ -166,9 +166,13 @@ export function ChatView({
   const handleDroppedFilesProcessed = useCallback(() => {
     setDroppedFiles([]);
   }, []);
+  const composerUnavailable =
+    composerDisabled ||
+    isConversationSwitching ||
+    foregroundConversationAvailability.kind !== 'ready';
 
   return (
-    <DropZone onFilesDropped={handleFilesDropped} disabled={isRunActive}>
+    <DropZone onFilesDropped={handleFilesDropped} disabled={composerUnavailable}>
       <div className="agent-chat-view flex-1 flex flex-col overflow-hidden relative h-full">
         {conversationKind === 'character-dialogue' && characterDialogueSession && (
           <CharacterDialogueHeader session={characterDialogueSession} />
@@ -232,7 +236,7 @@ export function ChatView({
           droppedFiles={droppedFiles}
           onDroppedFilesProcessed={handleDroppedFilesProcessed}
           onInputChange={onInputChange}
-          onPromoteQueuedMessage={onPromoteQueuedMessage}
+          onSendQueuedMessageNow={onSendQueuedMessageNow}
           onCancelQueuedMessage={onCancelQueuedMessage}
           onEditQueuedMessage={onEditQueuedMessage}
           onSend={onSend}
@@ -241,11 +245,7 @@ export function ChatView({
           onEntryPromptMenuChange={onEntryPromptMenuChange}
           composerMenuState={composerMenuState}
           onComposerMenuStateChange={onComposerMenuStateChange}
-          disabled={
-            composerDisabled ||
-            isConversationSwitching ||
-            foregroundConversationAvailability.kind !== 'ready'
-          }
+          disabled={composerUnavailable}
           attachedFiles={attachedFiles}
           onAttachedFilesChange={onAttachedFilesChange}
           selectedFileReferences={selectedFileReferences}

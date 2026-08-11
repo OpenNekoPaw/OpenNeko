@@ -4274,10 +4274,11 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
       conversationId,
       items: [],
       pendingCount: 0,
+      paused: false,
       sequence: 0,
     }),
-    promoteQueuedMessage: () => {
-      throw new Error('Agent queue promotion is not expected by this AppHost test.');
+    sendQueuedMessageNow: () => {
+      throw new Error('Agent queued send-now is not expected by this AppHost test.');
     },
     cancelQueuedMessage: unavailable,
     takeQueuedMessageForEdit: unavailable,

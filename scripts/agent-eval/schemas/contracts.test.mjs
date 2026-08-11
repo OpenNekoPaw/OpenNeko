@@ -297,6 +297,25 @@ describe('agent evaluation suite and scenario contracts', () => {
     });
     expect(() => validateScenarioForExecution(submitWhileActive)).toThrow('use queue');
 
+    const sendNow = scenario();
+    sendNow.steps = [
+      { id: 'submit', kind: 'submit', prompt: 'Create a draft.' },
+      { id: 'queue', kind: 'queue', prompt: 'Prioritize this.', afterStepId: 'submit' },
+      { id: 'cancel', kind: 'cancel', afterStepId: 'queue' },
+      { id: 'cancel-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
+      { id: 'send-now', kind: 'send-queued-now', queueStepId: 'queue' },
+      { id: 'send-now-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
+    ];
+    expect(validateScenarioForExecution(sendNow)).toBe(sendNow);
+
+    const invalidSendNow = scenario();
+    invalidSendNow.steps.splice(1, 0, {
+      id: 'send-now',
+      kind: 'send-queued-now',
+      queueStepId: 'submit',
+    });
+    expect(() => validateScenarioForExecution(invalidSendNow)).toThrow('earlier queue step');
+
     const noTerminalIdle = scenario();
     noTerminalIdle.steps.pop();
     expect(() => validateScenarioForExecution(noTerminalIdle)).toThrow('end with wait-for-idle');

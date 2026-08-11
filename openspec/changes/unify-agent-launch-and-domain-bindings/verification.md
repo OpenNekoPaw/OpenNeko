@@ -688,3 +688,61 @@ interaction or presentation. Real visible and hidden complete-session provider e
 under task 11.7 because no provider/model cost authorization was supplied. Repository-wide
 `check:quality` remains externally blocked at `check:no-internal-versioning` by concurrent changes in
 `packages/ai/sdk` and `packages/generation`; none of those findings is in this implementation scope.
+
+## Full-capability Conversation queue and interruption
+
+The Conversation-owned queue was implemented and requalified on 2026-08-11:
+
+- `AgentWorkspaceRuntime` remains the single queue and Turn owner. Every normal message, Skill and
+  command artifact enters the same per-Conversation serial Turn queue; attachments, context
+  payloads, file references, typed input, session mode and selected model configuration are deep
+  cloned into the queue Draft for exact edit restoration.
+- Explicit stop validates and cancels only the exact active Turn, then pauses pending items. A stale
+  cancel cannot mutate queue pause state. `sendQueuedMessageNow` reserves the exact selected user
+  item, resumes a paused queue and cancels the active Turn; the reservation runs before internal
+  continuations once, then normal continuation scheduling resumes. Same-Conversation concurrency is
+  never introduced.
+- The old promote route was removed atomically from contracts, controller partitions, Desktop
+  composition and Webview. Continuations reject edit/delete/send-now, stale and cross-Conversation
+  item identities fail locally, and `/clear`, `/compact` and context compression fail visibly while
+  the exact Conversation has active or queued Turns.
+- The running Composer retains text, attachment, reference, context and typed-input capability.
+  Queue items expose send-now, edit and delete. Edit restores the complete owning-Tab Draft unless a
+  non-empty Composer already exists, in which case that Draft is preserved with a local diagnostic.
+  The stop control now uses the Agent danger token with a canonical fallback instead of an
+  unresolved Desktop theme variable.
+
+Verification performed:
+
+- Agent Contracts passed 42 files / 276 tests and typecheck. Agent Runtime passed 119 files / 1141
+  tests and typecheck; focused queue/AppHost tests passed 2 files / 66 tests. Agent Webview passed 94
+  files / 741 tests; focused rich-send and presenter tests passed 3 files / 39 tests. Desktop Agent
+  bridge/composition/AppHost tests passed 3 files / 81 tests.
+- `pnpm test:agent:eval` passed 45 files / 307 tests and strict dry-run discovery of 25 suites / 74
+  cases. The updated `agent-runtime.workflow-controller/cancel-resume-recovery` case proves two
+  pending messages, exact active cancellation, paused retention, exact send-now selection, remaining
+  serial drain, terminal idle state and absence of same-Conversation concurrency or fallback.
+- Scoped `git diff --check`, old-route scans and forbidden queue fallback scans passed.
+  `pnpm check:unused` passed with configuration hints only. The L3 quality review found and fixed the
+  stale-cancel pause mutation and continuation-over-send-now ordering issues; no blocking queue
+  ownership, dependency-direction, identity, user-data, fail-local or canonical-path issue remains.
+- Repository-wide Desktop tests are currently blocked by concurrent Project authoring work:
+  `DesktopShell` fixtures lack the new `projectAuthoring.getNavigation` port in seven tests. The
+  Agent Webview build is independently blocked by a concurrent discriminated-union error in
+  `packages/chara/src/contracts/character-authoring-host.ts`. `check:legacy-debt` is independently
+  blocked by the concurrent `character-legacy-authoring-transfer.ts`; none is in this queue scope.
+
+Visible Electron validation is advisory `blocked`, with useful partial evidence. The
+`desktop-agent-message-queue` development scenario proved an enabled running Composer and attachment
+control, three retained paused items, all three enabled actions per item, complete edit restoration
+and exact delete. Direct screenshot inspection found no overlap or clipping. The stop button has a
+26 by 26 visible rect, full opacity, `rgb(255, 59, 48)` background and white foreground, and is clear
+in the 1440 by 960 screenshot. Final send-now capture was repeatedly interrupted by concurrent Vite
+reloads of `DesktopShell` and Character Webview files; the replaced connection was correctly rejected
+with `desktop-agent-identity-mismatch`. The strongest retained report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-10T19-53-58.820Z-desktop-agent-message-queue-development/report.json`.
+
+Real provider Evaluation remains `infrastructure-blocked`: `~/.neko/config.toml` is readable, but
+no explicit provider id, model id or cost approval was supplied. No paid provider or hidden Desktop
+run was started. Deterministic Runtime/Evaluation evidence proves exact send-now ordering, but does
+not replace a stable visible final-send screenshot or real-provider acceptance.

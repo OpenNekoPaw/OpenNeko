@@ -173,7 +173,7 @@ export interface GetMessageQueueWebviewMessage {
 }
 
 export interface QueuedMessageActionWebviewMessage {
-  type: 'promoteQueuedMessage' | 'cancelQueuedMessage';
+  type: 'sendQueuedMessageNow' | 'cancelQueuedMessage';
   conversationId: string;
   queueItemId: string;
 }
@@ -510,6 +510,24 @@ export type AgentQueuedMessageSource = AgentTurnSource | 'composer';
 export type AgentQueuedMessageDisplayKind =
   'user-message' | 'subagent-continuation' | 'system-continuation';
 
+export interface AgentQueuedMessageConfigurationDraft {
+  readonly chatModel?: ModelRef<'llm'>;
+  readonly agentModels?: AgentModelSlots;
+  readonly llmConfig?: AgentLlmConfig;
+  readonly mediaModel?: ModelRef<MediaModelCategory>;
+  readonly purposeModels?: AgentFlatPurposeModelRefs;
+}
+
+export interface AgentQueuedMessageDraft {
+  readonly message: string;
+  readonly sessionMode: SessionMode;
+  readonly input?: AgentInputInvocationIntent;
+  readonly configuration?: AgentQueuedMessageConfigurationDraft;
+  readonly attachments?: readonly MessageAttachment[];
+  readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly fileReferences?: readonly AgentFileReference[];
+}
+
 export interface AgentContinuationMetadata {
   readonly subagentId?: string;
   readonly parentMessageId?: string;
@@ -528,12 +546,14 @@ export interface AgentQueuedMessageItem {
   source: AgentQueuedMessageSource;
   displayKind?: AgentQueuedMessageDisplayKind;
   metadata?: AgentContinuationMetadata;
+  draft?: AgentQueuedMessageDraft;
 }
 
 export interface AgentMessageQueueSnapshot {
   conversationId: string;
   items: readonly AgentQueuedMessageItem[];
   pendingCount: number;
+  paused: boolean;
   /** Live event order owned by one in-memory Conversation queue. */
   sequence: number;
 }
@@ -959,7 +979,7 @@ const EMPTY_MESSAGE_TYPES: readonly EmptyWebviewMessage['type'][] = [
   'getTabState',
 ];
 const QUEUED_MESSAGE_ACTION_TYPES: readonly QueuedMessageActionWebviewMessage['type'][] = [
-  'promoteQueuedMessage',
+  'sendQueuedMessageNow',
   'cancelQueuedMessage',
 ];
 export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
@@ -1290,6 +1310,7 @@ function cloneAgentMessageQueueSnapshot(
   return {
     conversationId,
     pendingCount: snapshot.pendingCount,
+    paused: snapshot.paused,
     sequence: snapshot.sequence,
     items: snapshot.items.map((item) =>
       cloneAgentQueuedMessageItem(item, conversationId, messageType),
@@ -1309,7 +1330,15 @@ function cloneAgentQueuedMessageItem(
   if (itemConversationId !== conversationId) {
     throw new Error(`${messageType} item conversationId must match conversationId`);
   }
-  return { ...item, conversationId: itemConversationId };
+  return {
+    ...item,
+    conversationId: itemConversationId,
+    ...(item.draft === undefined ? {} : { draft: cloneAgentQueuedMessageDraft(item.draft) }),
+  };
+}
+
+function cloneAgentQueuedMessageDraft(draft: AgentQueuedMessageDraft): AgentQueuedMessageDraft {
+  return structuredClone(draft);
 }
 
 export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHostMessage | null {

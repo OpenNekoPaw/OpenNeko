@@ -158,6 +158,64 @@ describe('Desktop Agent assertion-driven evidence', () => {
     );
   });
 
+  it('proves cancellation pause and exact queued-item send-now identity', () => {
+    const assertions = [
+      {
+        id: 'paused',
+        kind: 'queue-state',
+        stepId: 'cancelled-idle',
+        status: 'paused-after-cancel',
+        minPending: 2,
+        evidenceRef: 'facts',
+      },
+      {
+        id: 'send-now',
+        kind: 'queue-state',
+        stepId: 'priority-now',
+        status: 'resumed-by-send-now',
+        queueStepId: 'priority',
+        evidenceRef: 'facts',
+      },
+    ];
+    const input = evidenceInput(assertions);
+    input.workflow.steps = [
+      {
+        id: 'priority',
+        kind: 'queue',
+        method: 'message.submit',
+        accepted: true,
+        queued: true,
+        queueItemId: 'queue-priority',
+        snapshot: workflowSnapshot({ pendingCount: 2 }),
+      },
+      {
+        id: 'cancelled-idle',
+        kind: 'wait-for-idle',
+        method: 'session.waitForIdle',
+        snapshot: workflowSnapshot({ pendingCount: 2, paused: true }),
+      },
+      {
+        id: 'priority-now',
+        kind: 'send-queued-now',
+        method: 'message.queue.send-now',
+        accepted: true,
+        queueItemId: 'queue-priority',
+        queueStepId: 'priority',
+        snapshot: workflowSnapshot({ pendingCount: 1, paused: false }),
+      },
+    ];
+
+    expect(run(input)).toEqual([
+      expect.objectContaining({ id: 'paused', status: 'pass' }),
+      expect.objectContaining({ id: 'send-now', status: 'pass' }),
+    ]);
+
+    input.workflow.steps[2].queueItemId = 'queue-other';
+    expect(run(input)[1]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('exact item') }),
+    );
+  });
+
   it('proves denied resource projection without authorizing a render transport', () => {
     const assertion = {
       id: 'denied-resource',
@@ -570,8 +628,8 @@ function workflowSnapshot(options = {}) {
       conversationId: 'conversation-1',
       pendingCount: options.pendingCount ?? 0,
       sequence: 1,
-      pausedAfterCancel: false,
-      items: [],
+      paused: options.paused ?? false,
+      items: options.items ?? [],
     },
     queued: (options.pendingCount ?? 0) > 0,
     projectionEvents: [],

@@ -81,6 +81,7 @@ function normalizeSessionStreamingState(
     isThinking: streaming.isThinking,
     queuedMessageCount: streaming.queuedMessageCount ?? 0,
     queuedMessages: streaming.queuedMessages ? [...streaming.queuedMessages] : [],
+    queuePaused: streaming.queuePaused ?? false,
     ...(streaming.messageQueueSequence !== undefined
       ? { messageQueueSequence: streaming.messageQueueSequence }
       : {}),
@@ -93,5 +94,6 @@ function idleSessionStreamingState(): ConversationSessionStreamingState {
     isThinking: false,
     queuedMessageCount: 0,
     queuedMessages: [],
+    queuePaused: false,
   };
 }

@@ -197,6 +197,7 @@ const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
   'draft-submit',
   'submit',
   'queue',
+  'send-queued-now',
   'wait-for-idle',
   'cancel',
   'confirm',

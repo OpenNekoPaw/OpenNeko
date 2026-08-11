@@ -292,12 +292,12 @@ describe('webview protocol parser', () => {
 
     expect(
       parseAgentWebviewToHostMessage({
-        type: 'promoteQueuedMessage',
+        type: 'sendQueuedMessageNow',
         conversationId: 'conv-1',
         queueItemId: 'queue-1',
       }),
     ).toEqual({
-      type: 'promoteQueuedMessage',
+      type: 'sendQueuedMessageNow',
       conversationId: 'conv-1',
       queueItemId: 'queue-1',
     });
@@ -372,6 +372,7 @@ describe('webview protocol parser', () => {
         snapshot: {
           conversationId: 'conv-1',
           pendingCount: 0,
+          paused: false,
           sequence: 2,
           items: [],
         },
@@ -395,6 +396,7 @@ describe('webview protocol parser', () => {
         snapshot: {
           conversationId: 'conv-1',
           pendingCount: 0,
+          paused: false,
           sequence: 2,
           items: [],
         },
@@ -406,7 +408,7 @@ describe('webview protocol parser', () => {
     expect(parseAgentWebviewToHostMessage({ type: 'getMessageQueue' })).toBeNull();
     expect(
       parseAgentWebviewToHostMessage({
-        type: 'promoteQueuedMessage',
+        type: 'sendQueuedMessageNow',
         queueItemId: 'queue-1',
       }),
     ).toBeNull();

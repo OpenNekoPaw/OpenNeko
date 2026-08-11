@@ -434,6 +434,8 @@ export type {
   AgentReasoningPreset,
   AgentContinuationMetadata,
   AgentQueuedMessageDisplayKind,
+  AgentQueuedMessageConfigurationDraft,
+  AgentQueuedMessageDraft,
   AgentQueuedMessageItem,
   AgentQueuedMessageSource,
   AgentTurnSource,

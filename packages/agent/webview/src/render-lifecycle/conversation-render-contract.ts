@@ -12,6 +12,7 @@ export interface ConversationStreamingSnapshot {
   readonly isThinking: boolean;
   readonly queuedMessageCount: number;
   readonly queuedMessages: readonly AgentQueuedMessageItem[];
+  readonly queuePaused: boolean;
   readonly messageQueueSequence?: number;
 }
 
@@ -36,6 +37,7 @@ export type ConversationRenderMutation =
       readonly kind: 'queue-status';
       readonly queuedMessageCount: number;
       readonly queuedMessages: readonly AgentQueuedMessageItem[];
+      readonly queuePaused?: boolean;
       readonly messageQueueSequence?: number;
       readonly isThinking?: boolean;
     })
@@ -73,5 +75,6 @@ export function createIdleConversationStreamingSnapshot(): ConversationStreaming
     isThinking: false,
     queuedMessageCount: 0,
     queuedMessages: [],
+    queuePaused: false,
   };
 }

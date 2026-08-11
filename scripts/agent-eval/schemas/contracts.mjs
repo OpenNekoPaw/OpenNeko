@@ -312,6 +312,7 @@ const STEP_SCHEMA = s.union([
     { id: ID, kind: s.literal('queue'), prompt: TEXT, afterStepId: ID },
     { modelProfileId: ID },
   ),
+  s.object({ id: ID, kind: s.literal('send-queued-now'), queueStepId: ID }),
   s.object({ id: ID, kind: s.literal('wait-for-idle'), timeoutMs: s.integer({ min: 1 }) }),
   s.object({ id: ID, kind: s.literal('cancel'), afterStepId: ID }),
   s.object({
@@ -372,6 +373,7 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
         'draft.input.submit',
         'message.submit',
         'message.cancel',
+        'message.queue.send-now',
         'tool.confirm',
         'session.waitForIdle',
         'session.resume',
@@ -383,7 +385,7 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
   ),
   s.object(
     { kind: s.literal('turn'), role: s.enum(['user', 'assistant', 'system', 'tool']) },
-    { source: ID },
+    { source: ID, contentContains: SHORT_TEXT },
   ),
   s.object(
     { kind: s.literal('timeline'), eventKind: ID },
@@ -542,15 +544,24 @@ const ASSERTION_SCHEMA = s.union([
     kind: s.literal('process-order'),
     events: s.array(PROCESS_EVENT_SELECTOR_SCHEMA, { minLength: 2, maxLength: 100 }),
   }),
-  s.object(
-    {
+  s.union([
+    s.object(
+      {
+        ...ASSERTION_COMMON,
+        kind: s.literal('queue-state'),
+        stepId: ID,
+        status: s.enum(['queued', 'drained', 'paused-after-cancel']),
+      },
+      { minPending: s.integer({ min: 0 }) },
+    ),
+    s.object({
       ...ASSERTION_COMMON,
       kind: s.literal('queue-state'),
       stepId: ID,
-      status: s.enum(['queued', 'drained', 'paused-after-cancel']),
-    },
-    { minPending: s.integer({ min: 0 }) },
-  ),
+      status: s.literal('resumed-by-send-now'),
+      queueStepId: ID,
+    }),
+  ]),
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('cancellation'),
@@ -1068,6 +1079,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'draft-submit',
     'submit',
     'queue',
+    'send-queued-now',
     'wait-for-idle',
     'cancel',
     'confirm',
@@ -1298,6 +1310,14 @@ function validateWorkflowSteps(steps) {
         throw new Error(`${step.kind} ${step.id} afterStepId must reference the previous step`);
       }
     }
+    if (step.kind === 'send-queued-now') {
+      const queued = prior.get(step.queueStepId);
+      if (queued?.kind !== 'queue') {
+        throw new Error(
+          `send-queued-now ${step.id} queueStepId must reference an earlier queue step`,
+        );
+      }
+    }
     if (step.kind === 'feedback' && !step.prompt.includes('${lastAssistant}')) {
       throw new Error(`feedback ${step.id} prompt must include \${lastAssistant}`);
     }
@@ -1326,6 +1346,11 @@ function validateWorkflowSteps(steps) {
     } else if (step.kind === 'cancel') {
       if (state !== 'active') throw new Error(`cancel ${step.id} requires an active turn`);
       state = 'cancelling';
+    } else if (step.kind === 'send-queued-now') {
+      if (state !== 'idle') {
+        throw new Error(`send-queued-now ${step.id} requires a cancelled idle state`);
+      }
+      state = 'active';
     } else if (step.kind === 'wait-for-idle') {
       state = 'idle';
     } else if (step.kind === 'feedback') {

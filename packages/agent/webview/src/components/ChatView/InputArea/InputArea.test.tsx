@@ -29,7 +29,7 @@ const translations: Record<string, string> = {
   'chat.input.control.params': '工具参数',
   'chat.input.placeholder': '输入任何问题...',
   'chat.input.entryPlaceholder': '描述你想要完成的内容...',
-  'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
+  'chat.input.thinkingPlaceholder': '输入下一条消息',
   'chat.input.attach': '添加附件',
   'chat.input.attachUnavailableWhileRunning': '当前回复结束后可添加附件',
   'chat.input.attachFile': '添加附件',
@@ -40,17 +40,17 @@ const translations: Record<string, string> = {
   'chat.input.send': '发送',
   'chat.input.queue': '加入队列',
   'chat.input.skills': '技能',
-  'chat.input.queuePlaceholder': '正在回答... {count} 条排队消息待处理',
+  'chat.input.queuePlaceholder': '输入下一条消息 · {count} 条待处理',
   'chat.input.queuedMessages': '消息队列（{count} 条待处理）',
   'chat.input.queueItemLabel': '排队消息 {index}',
-  'chat.input.queueSendNext': '设为下一条发送',
+  'chat.input.queueSendNow': '立即发送',
   'chat.input.queueCancel': '取消排队消息',
   'chat.input.queueEdit': '重新编辑排队消息',
   'chat.input.queueExpand': '展开',
   'chat.input.queueCollapse': '收起',
   'chat.input.queueMore': '还有 {count} 条',
   'chat.input.queueAwaitingSnapshot': '正在同步队列...',
-  'chat.input.cancel': '取消 (Esc)',
+  'chat.input.cancel': '停止回答 (Esc)',
   'chat.input.commands': '命令',
   'chat.input.canvasContext.kicker': '画布选中上下文',
   'chat.input.canvasContext.multiTitle': '已选 {count} 个画布节点',
@@ -1857,7 +1857,7 @@ describe('InputArea composer controls', () => {
   it('queues plain text while a response is running and keeps stop available', () => {
     const onSend = vi.fn();
     const onCancel = vi.fn();
-    const onPromoteQueuedMessage = vi.fn();
+    const onSendQueuedMessageNow = vi.fn();
     const onCancelQueuedMessage = vi.fn();
     const onEditQueuedMessage = vi.fn();
 
@@ -1877,7 +1877,7 @@ describe('InputArea composer controls', () => {
             },
           ]}
           onInputChange={vi.fn()}
-          onPromoteQueuedMessage={onPromoteQueuedMessage}
+          onSendQueuedMessageNow={onSendQueuedMessageNow}
           onCancelQueuedMessage={onCancelQueuedMessage}
           onEditQueuedMessage={onEditQueuedMessage}
           onSend={onSend}
@@ -1886,15 +1886,13 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const textarea = screen.getByPlaceholderText('正在回答... 2 条排队消息待处理');
+    const textarea = screen.getByPlaceholderText('输入下一条消息 · 2 条待处理');
     expect(textarea).toBeTruthy();
     expect((textarea as HTMLTextAreaElement).disabled).toBe(false);
     (textarea as HTMLTextAreaElement).focus();
     expect(document.activeElement).toBe(textarea);
-    expect((screen.getByTitle('当前回复结束后可添加附件') as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    expect(screen.getByTitle('取消 (Esc)').className).toContain('agent-composer-stop');
+    expect((screen.getByTitle('添加附件') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTitle('停止回答 (Esc)').className).toContain('agent-composer-stop');
     expect(document.querySelector('.agent-composer-queue-count')).toBeNull();
     const queuePanel = document.querySelector('.agent-composer-queue-panel');
     expect(queuePanel?.className).toContain('agent-composer-pending-panel');
@@ -1905,8 +1903,8 @@ describe('InputArea composer controls', () => {
     );
     expect(screen.getByTitle('加入队列').className).toContain('agent-composer-queue');
 
-    fireEvent.click(screen.getByTitle('设为下一条发送'));
-    expect(onPromoteQueuedMessage).toHaveBeenCalledWith('queued-1');
+    fireEvent.click(screen.getByTitle('立即发送'));
+    expect(onSendQueuedMessageNow).toHaveBeenCalledWith('queued-1');
     fireEvent.click(screen.getByTitle('重新编辑排队消息'));
     expect(onEditQueuedMessage).toHaveBeenCalledWith('queued-1');
     fireEvent.click(screen.getByTitle('取消排队消息'));
@@ -1919,7 +1917,7 @@ describe('InputArea composer controls', () => {
       }),
     );
 
-    fireEvent.click(screen.getByTitle('取消 (Esc)'));
+    fireEvent.click(screen.getByTitle('停止回答 (Esc)'));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -1941,7 +1939,7 @@ describe('InputArea composer controls', () => {
     );
 
     expect(screen.getByTitle('加入队列').className).toContain('agent-composer-queue');
-    expect(screen.getByTitle('取消 (Esc)').className).toContain('agent-composer-stop');
+    expect(screen.getByTitle('停止回答 (Esc)').className).toContain('agent-composer-stop');
 
     fireEvent.click(screen.getByTitle('加入队列'));
     expect(onSend).toHaveBeenCalledWith(
@@ -1950,7 +1948,7 @@ describe('InputArea composer controls', () => {
       }),
     );
 
-    fireEvent.click(screen.getByTitle('取消 (Esc)'));
+    fireEvent.click(screen.getByTitle('停止回答 (Esc)'));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -2105,7 +2103,7 @@ describe('InputArea composer controls', () => {
             },
           ]}
           onInputChange={vi.fn()}
-          onPromoteQueuedMessage={vi.fn()}
+          onSendQueuedMessageNow={vi.fn()}
           onCancelQueuedMessage={vi.fn()}
           onEditQueuedMessage={vi.fn()}
           onSend={vi.fn()}
@@ -2114,9 +2112,9 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const promoteButton = screen.getByRole('button', { name: '设为下一条发送' });
-    promoteButton.focus();
-    expect(document.activeElement).toBe(promoteButton);
+    const sendNowButton = screen.getByRole('button', { name: '立即发送' });
+    sendNowButton.focus();
+    expect(document.activeElement).toBe(sendNowButton);
   });
 
   it('hides the queue panel when there are no queued items or pending count', () => {
@@ -2138,7 +2136,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('shows optimistic queued text but waits for runtime ids before enabling item actions', () => {
-    const onPromoteQueuedMessage = vi.fn();
+    const onSendQueuedMessageNow = vi.fn();
 
     render(
       <Harness>
@@ -2155,7 +2153,7 @@ describe('InputArea composer controls', () => {
             },
           ]}
           onInputChange={vi.fn()}
-          onPromoteQueuedMessage={onPromoteQueuedMessage}
+          onSendQueuedMessageNow={onSendQueuedMessageNow}
           onSend={vi.fn()}
           onCancel={vi.fn()}
         />
@@ -2163,13 +2161,13 @@ describe('InputArea composer controls', () => {
     );
 
     expect(screen.getByText('等待运行时确认')).toBeTruthy();
-    const promoteButton = screen.getByTitle('设为下一条发送');
-    expect(promoteButton.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(promoteButton);
-    expect(onPromoteQueuedMessage).not.toHaveBeenCalled();
+    const sendNowButton = screen.getByTitle('立即发送');
+    expect(sendNowButton.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(sendNowButton);
+    expect(onSendQueuedMessageNow).not.toHaveBeenCalled();
   });
 
-  it('does not queue rich context while a response is running', () => {
+  it('queues rich context while a response is running', () => {
     const onSend = vi.fn();
 
     render(
@@ -2192,9 +2190,19 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    expect(screen.queryByTitle('加入队列')).toBeNull();
-    expect(screen.getByTitle('取消 (Esc)')).toBeTruthy();
-    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTitle('加入队列'));
+    expect(screen.getByTitle('停止回答 (Esc)')).toBeTruthy();
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageText: '参考',
+        fileReferences: [
+          expect.objectContaining({
+            id: 'file-ref:assets/ref.png',
+            contentLocator: { kind: 'workspace-file', path: 'assets/ref.png' },
+          }),
+        ],
+      }),
+    );
   });
 
   it('locks model configuration while background work is active without blocking send', () => {

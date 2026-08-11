@@ -2,6 +2,7 @@ import type {
   AgentContinuationMetadata,
   AgentMessageQueueSnapshot,
   AgentQueuedMessageDisplayKind,
+  AgentQueuedMessageDraft,
   AgentQueuedMessageItem,
   AgentQueuedMessageSource,
 } from '@neko/agent-contracts';
@@ -25,6 +26,7 @@ export interface EnqueueAgentMessageInput {
   readonly source?: AgentQueuedMessageSource;
   readonly displayKind?: AgentQueuedMessageDisplayKind;
   readonly metadata?: AgentContinuationMetadata;
+  readonly draft?: AgentQueuedMessageDraft;
   readonly now?: number;
 }
 
@@ -107,6 +109,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
   private eventSequence = 0;
   private idSequence = 0;
   private pausedAfterActiveTurnCancel = false;
+  private sendNowItemId: string | null = null;
   private draining = false;
 
   constructor(private readonly options: CreateAgentConversationMessageQueueOptions) {
@@ -131,6 +134,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       source,
       displayKind: input.displayKind ?? defaultDisplayKindForSource(source),
       ...(input.metadata ? { metadata: { ...input.metadata } } : {}),
+      ...(input.draft ? { draft: cloneDraft(input.draft) } : {}),
     };
     this.items.push(item);
     this.advanceEventSequence();
@@ -142,13 +146,15 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       conversationId: this.conversationId,
       items: this.items.map(cloneItem),
       pendingCount: this.items.length,
+      paused: this.pausedAfterActiveTurnCancel,
       sequence: this.eventSequence,
     };
   }
 
   promote(queueItemId: string): AgentQueuedMessageItem {
-    const item = this.take(queueItemId);
+    const item = this.takeUserItem(queueItemId, 'sent immediately');
     this.items.unshift(item);
+    this.sendNowItemId = item.id;
     this.advanceEventSequence();
     return cloneItem(item);
   }
@@ -174,7 +180,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
   }
 
   remove(queueItemId: string): AgentQueuedMessageItem {
-    const item = this.take(queueItemId);
+    const item = this.takeUserItem(queueItemId, 'removed');
     this.advanceEventSequence();
     if (this.items.length === 0) {
       this.pausedAfterActiveTurnCancel = false;
@@ -209,11 +215,21 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
     if (this.pausedAfterActiveTurnCancel) {
       return null;
     }
+    const sendNowIndex =
+      this.sendNowItemId === null
+        ? -1
+        : this.items.findIndex((item) => item.id === this.sendNowItemId);
+    if (this.sendNowItemId !== null && sendNowIndex < 0) {
+      throw new Error(`Send-now queue item invariant violated: ${this.sendNowItemId}`);
+    }
     const continuationIndex = this.items.findIndex((item) => !isUserQueueSource(item.source));
-    const index = continuationIndex >= 0 ? continuationIndex : 0;
+    const index = sendNowIndex >= 0 ? sendNowIndex : continuationIndex >= 0 ? continuationIndex : 0;
     const item = this.items.splice(index, 1)[0];
     if (!item) {
       return null;
+    }
+    if (item.id === this.sendNowItemId) {
+      this.sendNowItemId = null;
     }
     this.advanceEventSequence();
     return cloneItem(item);
@@ -263,13 +279,25 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
     }
     this.items.length = 0;
     this.pausedAfterActiveTurnCancel = false;
+    this.sendNowItemId = null;
     this.advanceEventSequence();
   }
 
-  private take(queueItemId: string): AgentQueuedMessageItem {
+  private takeUserItem(queueItemId: string, operation: string): AgentQueuedMessageItem {
     const index = this.findIndex(queueItemId);
-    const item = this.items.splice(index, 1)[0];
-    return this.requireItemValue(item, queueItemId);
+    const item = this.requireItem(index, queueItemId);
+    if (!isUserQueueSource(item.source)) {
+      throw new AgentMessageQueueOperationError(
+        'invalid-queue-operation',
+        `Queued continuation cannot be ${operation} as a user message: ${queueItemId}`,
+        queueItemId,
+      );
+    }
+    this.items.splice(index, 1);
+    if (item.id === this.sendNowItemId) {
+      this.sendNowItemId = null;
+    }
+    return item;
   }
 
   private findIndex(queueItemId: string): number {
@@ -349,5 +377,10 @@ function cloneItem(item: AgentQueuedMessageItem): AgentQueuedMessageItem {
   return {
     ...item,
     ...(item.metadata ? { metadata: { ...item.metadata } } : {}),
+    ...(item.draft ? { draft: cloneDraft(item.draft) } : {}),
   };
+}
+
+function cloneDraft(draft: AgentQueuedMessageDraft): AgentQueuedMessageDraft {
+  return structuredClone(draft);
 }
