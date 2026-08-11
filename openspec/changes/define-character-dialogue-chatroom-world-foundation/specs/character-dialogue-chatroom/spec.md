@@ -1,14 +1,14 @@
 ## ADDED Requirements
 
-### Requirement: Interaction topology and runtime kind are orthogonal
+### Requirement: Dialogue and Chatroom are distinct interaction topologies
 
-The system SHALL model single-character Dialogue and multi-participant Chatroom as interaction topology, and SHALL separately bind each active run to exactly one `companion | narrative` runtime kind. It SHALL NOT model Play as a current Chara interaction type or switch runtime kind through an active tab, prompt or mutable session setting.
+The system SHALL model one selected Character as Dialogue and multiple selected participants as Chatroom. Both topologies SHALL reuse the same CharacterRun and primary AgentSession ownership contracts. Conversation mode selection and mode-specific context SHALL be provided only by the successor `character-conversation-modes` capability and MUST NOT be inferred from topology, prompt text or an active tab.
 
-#### Scenario: Four current interaction combinations are created
+#### Scenario: One and multiple Character selections are created
 
-- **WHEN** the user creates companion Dialogue, narrative Dialogue, companion Chatroom or narrative Chatroom
-- **THEN** the run records the selected topology and runtime kind as independent facts
-- **AND** all combinations reuse the same CharacterRun and primary AgentSession contract rather than selecting parallel responders
+- **WHEN** the user confirms one exact Character selection or multiple exact participant selections
+- **THEN** Chara creates the matching Dialogue or Chatroom topology
+- **AND** topology alone does not select, change or reinterpret the Conversation mode
 
 ### Requirement: Every agent-controlled CharacterRun has one primary AgentSession
 
@@ -33,7 +33,7 @@ Every RoomRun participant SHALL have a stable participant identity, explicit con
 #### Scenario: Two Characters respond in one Room
 
 - **WHEN** two agent-controlled participants are eligible to respond
-- **THEN** each participant receives its own visibility-filtered RoomView, Character/relationship memory view and optional immutable external-composition view
+- **THEN** each participant receives its own visibility-filtered RoomView and only the Character context authorized by the exact Conversation mode selection
 - **AND** each response is produced by that participant's exact primary AgentSession
 
 ### Requirement: Chat and TTS configuration is participant- and turn-scoped
@@ -71,36 +71,6 @@ The Room owner SHALL filter public, private and participant-scoped events before
 - **WHEN** a RoomEvent is visible only to a selected participant
 - **THEN** another participant's RoomView and Agent context omit that message and its derived secret
 - **AND** the omitted content cannot enter the other participant's relationship memory candidate
-
-### Requirement: Companion runs own relationship memory explicitly
-
-A companion DialogueRun or RoomRun SHALL bind exact UserCharacterRelationship identities for durable cross-session memory. Searchable transcript and Room events MAY be evidence, but SHALL NOT become accepted relationship memory without an owning accept operation.
-
-#### Scenario: Companion conversation produces a memory candidate
-
-- **WHEN** a user message or accepted Room event suggests a durable preference or shared experience
-- **THEN** Chara creates a sourced relationship memory candidate under the exact relationship identity
-- **AND** acceptance, correction or deletion is controlled by UserCharacterRelationship rather than AgentSession or Room projection
-
-### Requirement: Narrative runs require exact external Composition authority
-
-A narrative DialogueRun or RoomRun SHALL bind the exact typed narrative Composition ref supplied by its owning external domain before creating participant CharacterRuns, CharacterStorylineRuns, CharacterMemoryScopes or AgentSessions. Chara SHALL NOT define, expand or infer the external storyline/runtime/save shape. Missing or invalid Composition authority SHALL keep only that narrative launch unavailable.
-
-#### Scenario: Narrative Chatroom starts without a valid Composition binding
-
-- **WHEN** the requested owning Composition ref cannot be resolved or validated
-- **THEN** creation returns a visible external-composition-unavailable diagnostic
-- **AND** it does not downgrade to companion mode, select active/recent external state or use the Room transcript as narrative authority
-
-### Requirement: Runtime kind and authority do not change in place
-
-An active DialogueRun or RoomRun SHALL keep its runtime kind, CharacterVersion, CharacterStorylineRun, memory owner and narrative Composition binding fixed. Changing any of these facts SHALL create a new run or use an explicit owning-domain transaction defined for that fact.
-
-#### Scenario: User changes a companion Room to narrative
-
-- **WHEN** the user requests narrative interaction from an active companion RoomRun
-- **THEN** the system requires creation of a new narrative RoomRun, CharacterStorylineRun and CharacterMemoryScope with an exact external Composition binding
-- **AND** it does not copy relationship memory into CharacterMemory or reinterpret old Room events as accepted storyline progress
 
 ### Requirement: UI lifetime does not own Character activity
 

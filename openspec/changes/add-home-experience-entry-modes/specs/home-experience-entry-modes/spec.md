@@ -110,18 +110,19 @@ The same bar SHALL expose the exact selection entry for Authoring and Character 
 SHALL expose its World entry in a disabled, owner-qualified unavailable state until the World launch owner is
 composed; it MUST NOT fabricate a World selection or successful binding.
 
-Character Dialogue SHALL expose an explicit `Daily | Narrative` runtime-kind switch for both
-single-Character Dialogue and multi-participant Room selection. Daily SHALL map to the available companion
-runtime. Narrative SHALL remain disabled with the exact external Composition owner diagnostic until that
-owner is composed; the UI MUST NOT map a Character-owned storyline selection to narrative runtime or
-downgrade a failed narrative request to Daily.
+Character Dialogue SHALL expose an explicit `Daily | Narrative` mode switch for both single-Character
+Dialogue and multi-participant Room selection. The switch SHALL configure the strict Chara-owned mode
+selection supplied by `character-conversation-modes`; it MUST NOT infer mode from Storyline, prompt,
+active/recent state or external Composition availability. Until the Character product promotion gate is
+removed by a later qualified change, both modes MAY remain visibly unavailable for production submit, but
+their owner-qualified diagnostics MUST preserve the selected intent and MUST NOT downgrade Narrative to Daily.
 
-#### Scenario: Narrative Character runtime is not composed
+#### Scenario: User selects Narrative in the entry draft
 
-- **WHEN** the user opens the Character or Room selector before an external Composition owner is available
-- **THEN** the mode switch shows Daily as the active available mode and Narrative as disabled
-- **AND** the selector explains that Narrative requires the external Composition owner
-- **AND** selecting a Character-owned storyline does not change the runtime kind to Narrative
+- **WHEN** the user selects Narrative for an exact Character or Room draft
+- **THEN** the Draft keeps Narrative intent and exposes exact optional Storyline/Node configuration supplied by Chara
+- **AND** no external Composition is required or inferred
+- **AND** a closed product promotion gate blocks submit visibly without changing the selection to Daily
 
 #### Scenario: Selected bindings share one composer bar
 

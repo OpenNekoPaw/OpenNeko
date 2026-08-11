@@ -136,11 +136,12 @@ Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draf
 提供的 Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell；低信息量的
 Project selection 保留在 catalog，并以独立行操作显式打开 Workspace，不创建空洞的 Detail shell。
 Character Management 使用 package-owned catalog Main 与 exact detail Secondary Main；Character/Room
-Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、Avatar/Scene Main、
-Character/World Manager 与 Room 按需 Timeline。Avatar/Scene Main 只解析作者显式选择的 VRM，并通过
-Desktop Main 授权的短生命周期 opaque resource lease 建立唯一动态 runtime；未支持的表现格式、缺失资源、
-完整 World Experience 和未接入的 Room 提交能力必须在 owning Surface 返回 owner-qualified unavailable，Desktop
-不得选择 first-compatible 表现、暴露 raw path、回退静态肖像或伪造业务事实与成功状态。
+Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、一个 exact owner-qualified
+Character Presentation Main、Companion/Narrative Context 或 Room Participant Manager，以及可选且彼此独立的
+Storyline Timeline/RoomEvent Timeline。Presentation provider 可以提供 VRM、Live2D、Web、动态 Scene 或 Gameplay
+Surface，但 Desktop 只授权和挂载所选 exact surface；未支持格式、缺失资源或 owner mismatch 必须在对应 slot
+返回 owner-qualified unavailable。Desktop 不得选择 first-compatible 表现、暴露 raw path、回退静态肖像、
+把 Timeline 当进度或复制 Character/Agent/外部领域事实。
 
 World Foundation 使用独立 `world-management` 单例 scene，在同一个 package-owned Root 中组合 Library、
 Studio 和确定性 Preview。Main/preload 只转发 strict command/snapshot contract；Project、Version、Run、Save、

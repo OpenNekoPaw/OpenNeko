@@ -6,6 +6,18 @@
 
 当前变更只交付 Chara bounded context。角色背景故事和角色原生背景设定是 CharacterVersion 的角色事实，不是可创作、可运行或可存档的 World；CharacterStoryline、CharacterMemory、CharacterRun 与外部 WorldStory、WorldRun、WorldSave 保持独立。内容创作时的 Character/CharacterStoryline + World/WorldStory 组合由 `define-ai-native-interactive-world` 的 WorldExperienceProject/Version 通过精确引用完成，运行时参与由 WorldExperienceRun 绑定独立 CharacterStorylineRun 与 WorldStoryRun；本变更不定义或实现 World 领域。
 
+## Successor Boundary
+
+`separate-companion-and-narrative-character-conversations` 是本 foundation 的破坏性后续变更，并从本变更接管以下尚未晋级的实验语义：
+
+- Companion/Narrative mode contract、模式冻结和 Narrative 独立启动；
+- CharacterStoryline identity/draft/publication/node 与运行时只读上下文；
+- Companion continuity、Character 主观记忆和 UserCharacterRelationship 的跨会话投影；
+- Character Interaction Workbench 的 Presentation Main、Context/Participant Manager 和 Storyline/RoomEvent Timeline；
+- 对应 Agent Evaluation、可见 Electron 验收和产品晋级前证据。
+
+因此，本变更不再声明 `CharacterStorylineRun`、运行时 observation/transition/revision、run-scoped `CharacterMemoryScope`、Narrative external Composition requirement、固定 Avatar Main 或 Runtime Manager 统计为未来 canonical contract。下面的相关描述仅记录本 foundation 已实现且待 successor 原子删除的历史原型，不能作为新实现或验收的成功语义。
+
 ## What Changes
 
 - 建立 `CharacterProject -> immutable CharacterVersion`，在角色 canon 之外明确拥有 `CharacterBackgroundStory`、`CharacterOriginSetting`、知识边界、策略、证据、表现与声音引用、创作测试、审阅和发布。
@@ -28,9 +40,9 @@
 ### New Capabilities
 
 - `character-authoring-publication`: CharacterProject、不可变 CharacterVersion、角色背景故事、角色原生背景设定、证据、创作测试、审阅、发布和失效诊断。
-- `character-lore-storyline-memory`: CharacterStorylineVersion/Run、CharacterMemoryScope/Candidate/Entry、关系记忆隔离、外部证据候选和独立生命周期。
-- `character-dialogue-chatroom`: companion/narrative 单角色对话、多参与者聊天室、CharacterRun、participant/controller、AgentSession mapping、Room timeline、调度、可见性和生命周期。
-- `character-experience-workbench`: Character Studio、Agent Entry `@角色` 启动、Character/Room Workbench、Avatar、Voice、Chat/TTS 和角色运行管理投影。
+- `character-lore-storyline-memory`: 本变更只保留 Character background/origin lore foundation；Storyline authoring/context 和 Companion continuity 由 successor capabilities 接管。
+- `character-dialogue-chatroom`: 本变更保留单角色/多参与者 topology、participant/controller、AgentSession mapping、Room timeline、调度、可见性和生命周期；Conversation mode policy 由 successor capability 接管。
+- `character-experience-workbench`: 本变更保留 Character Studio、Agent Entry 精确角色选择、Avatar/Voice/Chat/TTS foundation 和 promotion gate；Character Interaction Workbench composition 由 successor capability 接管。
 
 ### Modified Capabilities
 
@@ -38,10 +50,10 @@
 
 ## Impact
 
-- Chara responsibility：`@neko/chara` 拥有 CharacterProject/Version、BackgroundStory、OriginSetting、CharacterStorylineVersion/Run、CharacterMemory、UserCharacterRelationship、CharacterRun、CharacterRoom/RoomRun、participant policy 和 RoomEvent。
-- External composition：Character 只导出精确 CharacterVersion、CharacterStorylineVersion/Run、CharacterMemoryScope 和 CharacterRun ref。Character + WorldStory 的创作/运行关联由 World Experience composition/binding owner 持有；Chara 不声明外部 World aggregate shape，也不与 WorldStory 共用进度记录。
+- Chara responsibility：`@neko/chara` 拥有 CharacterProject/Version、BackgroundStory、OriginSetting、Character authoring facts、Companion continuity、CharacterRun、CharacterRoom/RoomRun、participant policy 和 RoomEvent；Storyline runtime facts 不再属于 canonical owner。
+- External composition：Character Dialogue 的 Narrative mode 不依赖 World Experience、Save、branch 或其他外部 Composition；外部 World/Game 仍通过各自 owner 的精确引用独立组合，不进入 Chara mode 或 Storyline authority。
 - Agent responsibility：`@neko/agent-runtime` 继续拥有唯一 Pi AgentSession、conversation/turn、Tool Call、Approval、模型 binding、streaming、取消、transcript 和 compaction。
 - Asset/Voice responsibility：图片、模型和音频 bytes 继续由 Assets/Content/Media/Voice owner 管理；Chara 只保存稳定引用、角色语义和默认偏好。
-- Desktop responsibility：`@neko/host` 拥有 Character Studio 与 Character Runtime scene/slot contract；`apps/neko-desktop` 只组合 Chara、Agent、Avatar、Voice public ports和外部 Composition link adapter，不保留 Character-owned World CRUD。
+- Desktop responsibility：`@neko/host` 拥有 Character Studio 与 Character Interaction scene/slot contract；`apps/neko-desktop` 只组合 Chara、Agent、Presentation、Voice public ports 和真实 Electron trust-boundary adapter，不保留 Character mode、Storyline、memory 或外部领域事实。
 - Product qualification responsibility：路线图晋级前，`@neko/host` 产品组合边界返回 owner-qualified unavailable，Agent Webview 将 Roleplay 操作明确拒绝；scene contract 与 Chara public services 仅供隔离原型和测试使用，不代表生产可达。
 - Data：新增用户管理的 CharacterStorylineVersion 和 canonical Character memory/storyline records；不增加内部 contract/schema/format version，不复制外部存档或故事线数据。

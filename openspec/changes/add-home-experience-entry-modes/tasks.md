@@ -69,5 +69,5 @@
 - [x] 10.5 Move the Authoring directory chooser into the compact context bar and align its inset neutral treatment with the Entry composer.
 - [x] 10.6 Refine Authoring target choices into compact responsive cards with neutral hover, focus, and selected feedback.
 - [x] 10.7 Reuse the context bar for Character selection and expose World as a fail-visible disabled owner entry until its launcher is composed.
-- [x] 10.8 Add the Daily/Narrative runtime-kind switch to Character and Room selection, keeping Narrative fail-visible unavailable until its external Composition owner is composed.
+- [x] 10.8 Historical implementation superseded by `separate-companion-and-narrative-character-conversations`: retain the Daily/Narrative presentation control, but replace external-Composition unavailability with the strict Chara mode selection and independent product promotion gate.
 - [x] 10.9 Consolidate Project, Character, Room, and World target choices onto one compact horizontal card with shared selected, focus, disabled, and responsive states.
