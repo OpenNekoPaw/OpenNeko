@@ -239,6 +239,27 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/project",
+      "owner": "packages/project",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/project-node",
+      "owner": "packages/project-node",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/project-webview",
+      "owner": "packages/project-webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/search/domain",
       "owner": "packages/search/domain",
       "mode": "self",

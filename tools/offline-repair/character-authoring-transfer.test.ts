@@ -8,15 +8,15 @@ import {
 import { CharacterAuthoringService } from '@neko/chara/application';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCharacterAuthoringFileRepository } from './character-authoring-file-repository';
 import {
+  createCharacterAuthoringFileRepository,
   createPersistentCharacterRepository,
   initializeCharacterPersistenceTables,
-} from './character-persistent-repository';
+} from '@neko/chara-node';
 import {
-  exportLegacyCharacterAuthoring,
-  importLegacyCharacterAuthoring,
-} from './character-legacy-authoring-transfer';
+  exportCharacterAuthoringTransfer,
+  importCharacterAuthoringTransfer,
+} from './character-authoring-transfer';
 
 const roots: string[] = [];
 const NOW = '2026-08-11T00:00:00.000Z';
@@ -25,14 +25,17 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-describe('legacy Character authoring transfer', () => {
+describe('offline Character authoring transfer', () => {
   it('exports qualified SQLite facts and imports them without changing the source', async () => {
     const root = await temporaryRoot();
     const store = createNodeSqliteLocalMetadataStore({ homedir: root });
     await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
     await initializeCharacterPersistenceTables(store);
-    const legacy = createPersistentCharacterRepository({ metadataStore: store });
-    const authoring = new CharacterAuthoringService({ repository: legacy, now: () => NOW });
+    const sourceRepository = createPersistentCharacterRepository({ metadataStore: store });
+    const authoring = new CharacterAuthoringService({
+      repository: sourceRepository,
+      now: () => NOW,
+    });
     await authoring.createProject({
       characterProjectId: 'character-project-transfer',
       displayName: 'Lin',
@@ -50,7 +53,7 @@ describe('legacy Character authoring transfer', () => {
     const transferFile = join(root, 'transfer', 'characters.json');
 
     await expect(
-      exportLegacyCharacterAuthoring({ metadataStore: store, destinationFile: transferFile }),
+      exportCharacterAuthoringTransfer({ metadataStore: store, destinationFile: transferFile }),
     ).resolves.toEqual({ exportedRecords: 2, diagnostics: [] });
     expect(JSON.parse(await readFile(transferFile, 'utf8'))).not.toHaveProperty('version');
 
@@ -61,7 +64,7 @@ describe('legacy Character authoring transfer', () => {
       scope: { kind: 'standalone-library' },
     });
     await expect(
-      importLegacyCharacterAuthoring({ sourceFile: transferFile, repository: destination }),
+      importCharacterAuthoringTransfer({ sourceFile: transferFile, repository: destination }),
     ).resolves.toEqual({ importedRecords: 2, unchangedRecords: 0, diagnostics: [] });
     await expect(destination.readProject('character-project-transfer')).resolves.toMatchObject({
       displayName: 'Lin',
@@ -69,8 +72,8 @@ describe('legacy Character authoring transfer', () => {
     await expect(destination.readPublication('character-version-transfer')).resolves.toEqual(
       publication,
     );
-    await expect(legacy.readProject('character-project-transfer')).resolves.toBeDefined();
-    await expect(legacy.readPublication('character-version-transfer')).resolves.toEqual(
+    await expect(sourceRepository.readProject('character-project-transfer')).resolves.toBeDefined();
+    await expect(sourceRepository.readPublication('character-version-transfer')).resolves.toEqual(
       publication,
     );
     await store.dispose();
@@ -81,8 +84,11 @@ describe('legacy Character authoring transfer', () => {
     const store = createNodeSqliteLocalMetadataStore({ homedir: root });
     await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
     await initializeCharacterPersistenceTables(store);
-    const legacy = createPersistentCharacterRepository({ metadataStore: store });
-    await new CharacterAuthoringService({ repository: legacy, now: () => NOW }).createProject({
+    const sourceRepository = createPersistentCharacterRepository({ metadataStore: store });
+    await new CharacterAuthoringService({
+      repository: sourceRepository,
+      now: () => NOW,
+    }).createProject({
       characterProjectId: 'character-project-valid',
       displayName: 'Valid',
       draft: definition(),
@@ -96,7 +102,7 @@ describe('legacy Character authoring transfer', () => {
         ]),
     );
 
-    const report = await exportLegacyCharacterAuthoring({
+    const report = await exportCharacterAuthoringTransfer({
       metadataStore: store,
       destinationFile: join(root, 'characters.json'),
     });

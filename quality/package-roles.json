@@ -294,7 +294,7 @@
       "family": "project",
       "roles": ["contracts", "domain", "application", "testing"],
       "runtimes": ["host-neutral", "test"],
-      "productStatus": "inactive-prototype",
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {
@@ -303,7 +303,7 @@
       "family": "project",
       "roles": ["node"],
       "runtimes": ["node"],
-      "productStatus": "inactive-prototype",
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {

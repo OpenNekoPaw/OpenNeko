@@ -18,3 +18,7 @@ result that still violates the current Project Entity contract. Before the atomi
 an exclusive adjacent `*.backup-*` file containing the original bytes. The backup is never deleted
 or restored automatically. The replacement and backup preserve the original file's permission mode;
 the tool does not impose a fixed `0600` mode.
+
+The Character authoring transfer implementation and its focused test also live in this isolated
+directory. They are intentionally not exported from `@neko/chara-node` or reachable from Desktop;
+an explicit maintenance invocation must provide the exact source store and destination repository.

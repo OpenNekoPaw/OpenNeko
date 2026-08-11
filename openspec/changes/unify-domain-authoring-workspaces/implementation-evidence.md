@@ -26,7 +26,7 @@ The Character rows require an explicit Chara-owned offline export/import workflo
 
 ## Explicit Character Offline Transfer
 
-`@neko/chara-node` owns explicit `exportLegacyCharacterAuthoring` and `importLegacyCharacterAuthoring` operations. Export reads the three legacy Character authoring tables only when explicitly invoked, validates every record with the Chara codecs, retains valid siblings when one row is invalid, and atomically writes a transfer file without an internal format-version field. Import refuses conflicting existing facts, writes through the canonical file authoring repository, and never mutates or deletes the source SQLite rows.
+The isolated `tools/offline-repair/character-authoring-transfer.ts` module owns explicit `exportCharacterAuthoringTransfer` and `importCharacterAuthoringTransfer` operations while Chara contracts remain authoritative for record validation. The module is not exported from `@neko/chara-node` or reachable from Desktop. Export reads the three preserved Character authoring tables only when explicitly invoked, retains valid siblings when one row is invalid, and atomically writes a transfer file without an internal format-version field. Import refuses conflicting existing facts, writes through the canonical file authoring repository, and never mutates or deletes the source SQLite rows.
 
 Verification on 2026-08-11:
 

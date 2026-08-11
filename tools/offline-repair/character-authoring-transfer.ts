@@ -2,14 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import {
-  parseCharacterAuthoringTestSnapshot,
-  parseCharacterProject,
-  parseCharacterVersion,
-  type CharacterAuthoringTestSnapshot,
-  type CharacterProject,
-  type CharacterVersion,
-} from '@neko/chara/contracts';
+import * as characterContracts from '@neko/chara/contracts';
 import type { CharacterAuthoringRepository } from '@neko/chara/application';
 import type {
   LocalMetadataSqlExecutor,
@@ -17,71 +10,71 @@ import type {
   LocalMetadataStore,
 } from '@neko/local-metadata';
 
-export interface CharacterLegacyAuthoringBundle {
-  readonly projects: readonly CharacterProject[];
-  readonly versions: readonly CharacterVersion[];
-  readonly authoringTestSnapshots: readonly CharacterAuthoringTestSnapshot[];
+export interface CharacterAuthoringTransferBundle {
+  readonly projects: readonly characterContracts.CharacterProject[];
+  readonly versions: readonly characterContracts.CharacterVersion[];
+  readonly authoringTestSnapshots: readonly characterContracts.CharacterAuthoringTestSnapshot[];
 }
 
-export interface CharacterLegacyTransferDiagnostic {
+export interface CharacterAuthoringTransferDiagnostic {
   readonly recordKind: 'character-project' | 'character-version' | 'authoring-test-snapshot';
   readonly recordId: string;
   readonly message: string;
 }
 
-export interface CharacterLegacyExportReport {
+export interface CharacterAuthoringTransferExportReport {
   readonly exportedRecords: number;
-  readonly diagnostics: readonly CharacterLegacyTransferDiagnostic[];
+  readonly diagnostics: readonly CharacterAuthoringTransferDiagnostic[];
 }
 
-export interface CharacterLegacyImportReport {
+export interface CharacterAuthoringTransferImportReport {
   readonly importedRecords: number;
   readonly unchangedRecords: number;
-  readonly diagnostics: readonly CharacterLegacyTransferDiagnostic[];
+  readonly diagnostics: readonly CharacterAuthoringTransferDiagnostic[];
 }
 
-type CharacterLegacyImportRepository = CharacterAuthoringRepository & {
+type CharacterAuthoringTransferRepository = CharacterAuthoringRepository & {
   readPublication(
     characterVersionId: string,
     signal?: AbortSignal,
-  ): Promise<CharacterVersion | undefined>;
+  ): Promise<characterContracts.CharacterVersion | undefined>;
 };
 
-export async function exportLegacyCharacterAuthoring(options: {
+export async function exportCharacterAuthoringTransfer(options: {
   readonly metadataStore: LocalMetadataStore;
   readonly destinationFile: string;
   readonly signal?: AbortSignal;
-}): Promise<CharacterLegacyExportReport> {
+}): Promise<CharacterAuthoringTransferExportReport> {
   requireAbsoluteFile(options.destinationFile);
   options.signal?.throwIfAborted();
-  const diagnostics: CharacterLegacyTransferDiagnostic[] = [];
+  const diagnostics: CharacterAuthoringTransferDiagnostic[] = [];
   const bundle = await options.metadataStore.transaction(
-    { mode: 'read', ownership: 'state', operation: 'export-legacy-character-authoring' },
+    { mode: 'read', ownership: 'state', operation: 'export-character-authoring-transfer' },
     async ({ sql }) => ({
-      projects: await readLegacyRecords(
+      projects: await readSourceRecords(
         sql,
         'chara_projects',
         'character_project_id',
         'character-project',
-        parseCharacterProject,
+        characterContracts.parseCharacterProject,
         (record) => record.characterProjectId,
         diagnostics,
       ),
-      versions: await readLegacyRecords(
+      versions: await readSourceRecords(
         sql,
         'chara_versions',
         'character_version_id',
         'character-version',
-        parseCharacterVersion,
+        characterContracts.parseCharacterVersion,
         (record) => record.characterVersionId,
         diagnostics,
       ),
-      authoringTestSnapshots: await readLegacyRecords(
+      authoringTestSnapshots: await readSourceRecords(
         sql,
         'chara_authoring_test_snapshots',
         'authoring_test_snapshot_id',
         'authoring-test-snapshot',
-        parseCharacterAuthoringTestSnapshot,
+        characterContracts.parseCharacterAuthoringTestSnapshot,
         (record) => record.authoringTestSnapshotId,
         diagnostics,
       ),
@@ -95,15 +88,15 @@ export async function exportLegacyCharacterAuthoring(options: {
   };
 }
 
-export async function importLegacyCharacterAuthoring(options: {
+export async function importCharacterAuthoringTransfer(options: {
   readonly sourceFile: string;
-  readonly repository: CharacterLegacyImportRepository;
+  readonly repository: CharacterAuthoringTransferRepository;
   readonly signal?: AbortSignal;
-}): Promise<CharacterLegacyImportReport> {
+}): Promise<CharacterAuthoringTransferImportReport> {
   requireAbsoluteFile(options.sourceFile);
   options.signal?.throwIfAborted();
   const bundle = parseBundle(JSON.parse(await readFile(options.sourceFile, 'utf8')));
-  const diagnostics: CharacterLegacyTransferDiagnostic[] = [];
+  const diagnostics: CharacterAuthoringTransferDiagnostic[] = [];
   let importedRecords = 0;
   let unchangedRecords = 0;
 
@@ -165,14 +158,14 @@ export async function importLegacyCharacterAuthoring(options: {
   return { importedRecords, unchangedRecords, diagnostics };
 }
 
-async function readLegacyRecords<T>(
+async function readSourceRecords<T>(
   sql: LocalMetadataSqlExecutor,
   tableName: string,
   idColumn: string,
-  recordKind: CharacterLegacyTransferDiagnostic['recordKind'],
+  recordKind: CharacterAuthoringTransferDiagnostic['recordKind'],
   parse: (value: unknown) => T,
   readIdentity: (record: T) => string,
-  diagnostics: CharacterLegacyTransferDiagnostic[],
+  diagnostics: CharacterAuthoringTransferDiagnostic[],
 ): Promise<T[]> {
   const rows = await sql.all(
     `SELECT ${idColumn}, payload_json FROM ${tableName} ORDER BY ${idColumn}`,
@@ -193,21 +186,23 @@ async function readLegacyRecords<T>(
   return records;
 }
 
-function parseBundle(value: unknown): CharacterLegacyAuthoringBundle {
-  if (!isRecord(value)) throw new Error('Character legacy transfer file must be an object.');
+function parseBundle(value: unknown): CharacterAuthoringTransferBundle {
+  if (!isRecord(value))
+    throw new Error('Character authoring transfer transfer file must be an object.');
   return {
-    projects: parseArray(value['projects'], parseCharacterProject, 'projects'),
-    versions: parseArray(value['versions'], parseCharacterVersion, 'versions'),
+    projects: parseArray(value['projects'], characterContracts.parseCharacterProject, 'projects'),
+    versions: parseArray(value['versions'], characterContracts.parseCharacterVersion, 'versions'),
     authoringTestSnapshots: parseArray(
       value['authoringTestSnapshots'],
-      parseCharacterAuthoringTestSnapshot,
+      characterContracts.parseCharacterAuthoringTestSnapshot,
       'authoringTestSnapshots',
     ),
   };
 }
 
 function parseArray<T>(value: unknown, parse: (item: unknown) => T, label: string): T[] {
-  if (!Array.isArray(value)) throw new Error(`Character legacy '${label}' must be an array.`);
+  if (!Array.isArray(value))
+    throw new Error(`Character authoring transfer '${label}' must be an array.`);
   return value.map((item) => parse(item));
 }
 
@@ -235,10 +230,10 @@ async function writeAtomicJson(
 }
 
 function diagnostic(
-  recordKind: CharacterLegacyTransferDiagnostic['recordKind'],
+  recordKind: CharacterAuthoringTransferDiagnostic['recordKind'],
   recordId: string,
   error: unknown,
-): CharacterLegacyTransferDiagnostic {
+): CharacterAuthoringTransferDiagnostic {
   return {
     recordKind,
     recordId,
@@ -258,7 +253,8 @@ function readPayload(row: LocalMetadataSqlRow): string {
 }
 
 function requireAbsoluteFile(filePath: string): void {
-  if (!isAbsolute(filePath)) throw new Error('Character legacy transfer file must be absolute.');
+  if (!isAbsolute(filePath))
+    throw new Error('Character authoring transfer transfer file must be absolute.');
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

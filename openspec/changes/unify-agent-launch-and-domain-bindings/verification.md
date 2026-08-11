@@ -780,7 +780,7 @@ Verification performed:
   `DesktopShell` fixtures lack the new `projectAuthoring.getNavigation` port in seven tests. The
   Agent Webview build is independently blocked by a concurrent discriminated-union error in
   `packages/chara/src/contracts/character-authoring-host.ts`. `check:legacy-debt` is independently
-  blocked by the concurrent `character-legacy-authoring-transfer.ts`; none is in this queue scope.
+  blocked by the concurrent offline Character authoring transfer; none is in this queue scope.
 
 Visible Electron validation is advisory `blocked`, with useful partial evidence. The
 `desktop-agent-message-queue` development scenario proved an enabled running Composer and attachment

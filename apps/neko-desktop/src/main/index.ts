@@ -592,8 +592,85 @@ async function startDesktop(): Promise<void> {
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
     userDataRoot: globalStorage.root,
   });
-  let agentAuthoringMutationAuthority:
-    ReturnType<typeof createAgentAuthoringMutationAuthority> | undefined;
+  const agentAuthoringMutationAuthority = createAgentAuthoringMutationAuthority({
+    content: {
+      validate: async (binding, signal) => {
+        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        await new ProjectCompositionService(
+          createProjectCompositionFileRepository({
+            workspaceRoot: resolution.workspace.workspacePath,
+          }),
+        ).require(binding.target.contentProjectId, signal);
+      },
+    },
+    character: {
+      validate: async (binding, signal) => {
+        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        const workspaceRoot = resolution.workspace.workspacePath;
+        if ((await realpath(workspaceRoot)) === (await realpath(characterLibraryRoot))) {
+          await new CharacterAuthoringService({
+            repository: characterAuthoringRepository,
+          }).requireProject(binding.target.characterProjectId, signal);
+          return;
+        }
+        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
+        const compositions = new ProjectCompositionService(compositionRepository);
+        const composition = await compositionRepository.read(signal);
+        if (!composition) {
+          throw new Error('Agent Character authoring target has no exact Project composition.');
+        }
+        await compositions.requireLocalTarget(composition.contentProjectId, binding.target, signal);
+        const repository = createCharacterAuthoringFileRepository({
+          workspaceRoot,
+          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+        });
+        await new CharacterAuthoringService({ repository }).requireProject(
+          binding.target.characterProjectId,
+          signal,
+        );
+      },
+    },
+    world: {
+      validate: async (binding, signal) => {
+        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        const workspaceRoot = resolution.workspace.workspacePath;
+        if ((await realpath(workspaceRoot)) === (await realpath(worldLibraryRoot))) {
+          await new WorldAuthoringService({ repository: worldAuthoringRepository }).requireProject(
+            binding.target.worldProjectId,
+            signal,
+          );
+          return;
+        }
+        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
+        const composition = await compositionRepository.read(signal);
+        if (!composition) {
+          throw new Error('Agent World authoring target has no exact Project composition.');
+        }
+        await new ProjectCompositionService(compositionRepository).requireLocalTarget(
+          composition.contentProjectId,
+          binding.target,
+          signal,
+        );
+        const repository = createWorldAuthoringFileRepository({
+          workspaceRoot,
+          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+        });
+        await new WorldAuthoringService({ repository }).requireProject(
+          binding.target.worldProjectId,
+          signal,
+        );
+      },
+    },
+  });
   const agentComposition = createAgentAppHost({
     userDataRoot: globalStorage.root,
     userHome: homedir,
@@ -603,14 +680,7 @@ async function startDesktop(): Promise<void> {
     resolveGenerationJobs: (binding) => generationRuntime.getJobs(binding),
     assistantSpaceIds: [assistantSpaceId],
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
-    authoringMutationAuthority: {
-      authorize: (input) => {
-        if (!agentAuthoringMutationAuthority) {
-          throw new Error('Desktop Agent authoring mutation authority is not initialized.');
-        }
-        return agentAuthoringMutationAuthority.authorize(input);
-      },
-    },
+    authoringMutationAuthority: agentAuthoringMutationAuthority,
     createWorkspaceLogger: (workspace) => {
       if (workspace.workspaceId === assistantSpaceId) return agentLogger;
       const existing = workspaceLoggers.get(workspace.workspaceId);
@@ -1603,85 +1673,6 @@ async function startDesktop(): Promise<void> {
       runtime: worldRuntime,
       runtimeRepository: worldRuntimeRepositories.runtime,
     }),
-  });
-  agentAuthoringMutationAuthority = createAgentAuthoringMutationAuthority({
-    content: {
-      validate: async (binding, signal) => {
-        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
-          binding.workspaceGrantId,
-          binding.workspaceId,
-        );
-        await new ProjectCompositionService(
-          createProjectCompositionFileRepository({
-            workspaceRoot: resolution.workspace.workspacePath,
-          }),
-        ).require(binding.target.contentProjectId, signal);
-      },
-    },
-    character: {
-      validate: async (binding, signal) => {
-        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
-          binding.workspaceGrantId,
-          binding.workspaceId,
-        );
-        const workspaceRoot = resolution.workspace.workspacePath;
-        if ((await realpath(workspaceRoot)) === (await realpath(characterLibraryRoot))) {
-          await new CharacterAuthoringService({
-            repository: characterAuthoringRepository,
-          }).requireProject(binding.target.characterProjectId, signal);
-          return;
-        }
-        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
-        const compositions = new ProjectCompositionService(compositionRepository);
-        const composition = await compositionRepository.read(signal);
-        if (!composition) {
-          throw new Error('Agent Character authoring target has no exact Project composition.');
-        }
-        await compositions.requireLocalTarget(composition.contentProjectId, binding.target, signal);
-        const repository = createCharacterAuthoringFileRepository({
-          workspaceRoot,
-          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
-        });
-        await new CharacterAuthoringService({ repository }).requireProject(
-          binding.target.characterProjectId,
-          signal,
-        );
-      },
-    },
-    world: {
-      validate: async (binding, signal) => {
-        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
-          binding.workspaceGrantId,
-          binding.workspaceId,
-        );
-        const workspaceRoot = resolution.workspace.workspacePath;
-        if ((await realpath(workspaceRoot)) === (await realpath(worldLibraryRoot))) {
-          await new WorldAuthoringService({ repository: worldAuthoringRepository }).requireProject(
-            binding.target.worldProjectId,
-            signal,
-          );
-          return;
-        }
-        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
-        const composition = await compositionRepository.read(signal);
-        if (!composition) {
-          throw new Error('Agent World authoring target has no exact Project composition.');
-        }
-        await new ProjectCompositionService(compositionRepository).requireLocalTarget(
-          composition.contentProjectId,
-          binding.target,
-          signal,
-        );
-        const repository = createWorldAuthoringFileRepository({
-          workspaceRoot,
-          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
-        });
-        await new WorldAuthoringService({ repository }).requireProject(
-          binding.target.worldProjectId,
-          signal,
-        );
-      },
-    },
   });
   const agentEntryTargets = createDesktopAgentEntryTargetService({
     resolveWorkspace: async (windowId, workspaceGrantId) => {

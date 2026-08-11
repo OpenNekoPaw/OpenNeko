@@ -2794,6 +2794,58 @@
       "removalCondition": "Remove when candidate planning and WorldRuntime commit cannot be separated by asynchronous work or another event.",
       "token": "expectedWorldStateRevision",
       "versionFreeAnalysis": "This is the real CAS consumer bridge into WorldRuntimeService.commitAction; it cannot dispatch a contract shape, provider, or implementation."
+    },
+    {
+      "category": "internal-version-field",
+      "consumer": "Package contract tests and the repository internal-versioning audit",
+      "correctnessInvariant": "The canonical decoder must reject an injected internal schema-generation field instead of accepting or routing a second contract shape.",
+      "fieldScope": "Malformed-input poison assertion at packages/agent/contracts/src/__tests__/agent-entry-intent.test.ts:116",
+      "id": "a2b9ec42c1e046e0af98",
+      "isolationRule": "The literal exists only in rejected test input; decoding fails for that one value and cannot activate a schema branch, migration, fallback, or sibling failure.",
+      "owner": "@neko/agent-contracts canonical decoder",
+      "path": "packages/agent/contracts/src/__tests__/agent-entry-intent.test.ts",
+      "removalCondition": "Remove when the same decoder invariant is enforced by a replacement poison-test mechanism that does not require spelling the forbidden field.",
+      "token": "schemaVersion",
+      "versionFreeAnalysis": "Production contracts remain version-free. This occurrence is deliberately unknown input used to prove fail-visible rejection of internal contract versioning, not an accepted field or dispatch key."
+    },
+    {
+      "category": "internal-version-field",
+      "consumer": "Package contract tests and the repository internal-versioning audit",
+      "correctnessInvariant": "The canonical decoder must reject an injected internal schema-generation field instead of accepting or routing a second contract shape.",
+      "fieldScope": "Malformed-input poison assertion at packages/chara/src/contracts/__tests__/character-authoring-host.test.ts:93",
+      "id": "e5b3f747c37ded7b1773",
+      "isolationRule": "The literal exists only in rejected test input; decoding fails for that one value and cannot activate a schema branch, migration, fallback, or sibling failure.",
+      "owner": "@neko/chara canonical Host decoder",
+      "path": "packages/chara/src/contracts/__tests__/character-authoring-host.test.ts",
+      "removalCondition": "Remove when the same decoder invariant is enforced by a replacement poison-test mechanism that does not require spelling the forbidden field.",
+      "token": "schemaVersion",
+      "versionFreeAnalysis": "Production contracts remain version-free. This occurrence is deliberately unknown input used to prove fail-visible rejection of internal contract versioning, not an accepted field or dispatch key."
+    },
+    {
+      "category": "internal-version-field",
+      "consumer": "Package contract tests and the repository internal-versioning audit",
+      "correctnessInvariant": "The canonical decoder must reject an injected internal schema-generation field instead of accepting or routing a second contract shape.",
+      "fieldScope": "Malformed-input poison assertion at packages/project/src/project-composition.test.ts:24",
+      "id": "9acbcd58a3ff55074a56",
+      "isolationRule": "The literal exists only in rejected test input; decoding fails for that one value and cannot activate a schema branch, migration, fallback, or sibling failure.",
+      "owner": "@neko/project canonical composition decoder",
+      "path": "packages/project/src/project-composition.test.ts",
+      "removalCondition": "Remove when the same decoder invariant is enforced by a replacement poison-test mechanism that does not require spelling the forbidden field.",
+      "token": "schemaVersion",
+      "versionFreeAnalysis": "Production contracts remain version-free. This occurrence is deliberately unknown input used to prove fail-visible rejection of internal contract versioning, not an accepted field or dispatch key."
+    },
+    {
+      "category": "internal-version-field",
+      "consumer": "Package contract tests and the repository internal-versioning audit",
+      "correctnessInvariant": "The canonical decoder must reject an injected internal schema-generation field instead of accepting or routing a second contract shape.",
+      "fieldScope": "Malformed-input poison assertion at packages/world/src/contracts/__tests__/world-authoring-host.test.ts:93",
+      "id": "9a4d98d8ab284849ec49",
+      "isolationRule": "The literal exists only in rejected test input; decoding fails for that one value and cannot activate a schema branch, migration, fallback, or sibling failure.",
+      "owner": "@neko/world canonical Host decoder",
+      "path": "packages/world/src/contracts/__tests__/world-authoring-host.test.ts",
+      "removalCondition": "Remove when the same decoder invariant is enforced by a replacement poison-test mechanism that does not require spelling the forbidden field.",
+      "token": "schemaVersion",
+      "versionFreeAnalysis": "Production contracts remain version-free. This occurrence is deliberately unknown input used to prove fail-visible rejection of internal contract versioning, not an accepted field or dispatch key."
     }
   ]
 }
