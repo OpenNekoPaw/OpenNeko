@@ -84,6 +84,69 @@ describe('Canvas material action catalog', () => {
     expect(resolveCanvasMaterialActionTargets([node], [node.id])).toEqual([]);
   });
 
+  it('resolves the exact selected Prompt output as an immutable document target', () => {
+    const locator = {
+      kind: 'generated-output' as const,
+      outputId: 'prompt-output-1',
+      digest: 'sha256:prompt-output-1',
+      path: 'neko/generated/prompt-output-1.txt',
+    };
+    const data = createCanvasGenerationNodeData('prompt');
+    const node: CanvasNode = {
+      id: 'prompt-generation',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 240, height: 160 },
+      zIndex: 0,
+      data: {
+        ...data,
+        outputs: [
+          {
+            outputId: 'prompt-output-1',
+            jobRef: { kind: 'generation', jobId: 'generation-job-1' },
+            locator,
+            kind: 'prompt',
+            recipeInputFingerprint: 'recipe-fingerprint-1',
+          },
+        ],
+        selectedOutputId: 'prompt-output-1',
+      },
+    };
+
+    expect(resolveCanvasMaterialActionTargets([node], [node.id])).toEqual([
+      {
+        nodeId: node.id,
+        mediaKind: 'document',
+        origin: 'generated',
+        locator,
+      },
+    ]);
+  });
+
+  it('uses canonical document semantics for a generic File without extension inference', () => {
+    const node: CanvasNode = {
+      id: 'generic-file',
+      type: 'file',
+      position: { x: 0, y: 0 },
+      size: { width: 220, height: 150 },
+      zIndex: 0,
+      data: {
+        path: 'references/looks-like-video.mp4',
+        title: 'looks-like-video.mp4',
+        contentLocator: { kind: 'workspace-file', path: 'references/looks-like-video.mp4' },
+      },
+    };
+
+    expect(resolveCanvasMaterialActionTargets([node], [node.id])).toEqual([
+      {
+        nodeId: node.id,
+        mediaKind: 'document',
+        origin: 'referenced',
+        locator: node.data.contentLocator,
+      },
+    ]);
+  });
+
   it('projects owner actions from canonical kind and origin', () => {
     const referenced = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),

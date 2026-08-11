@@ -47,7 +47,7 @@ export function resolveCanvasMaterialActionTargets(
     }
     if (node.type === 'generation') {
       const output = selectedCanvasGenerationOutput(node.data);
-      if (!output || output.kind === 'prompt') return [];
+      if (!output) return [];
       const locatorResult = validateContentLocator(output.locator);
       if (!locatorResult.ok) {
         throw new Error(
@@ -56,7 +56,7 @@ export function resolveCanvasMaterialActionTargets(
       }
       targets.push({
         nodeId,
-        mediaKind: output.kind,
+        mediaKind: output.kind === 'prompt' ? 'document' : output.kind,
         origin: 'generated',
         locator: locatorResult.locator,
       });
@@ -75,10 +75,11 @@ export function resolveCanvasMaterialActionTargets(
         `Canvas material node "${nodeId}" requires a valid canonical ContentLocator.`,
       );
     }
-    const mediaKind = node.type === 'media' ? node.data.mediaType : node.data.mediaKind;
+    const mediaKind =
+      node.type === 'media' ? node.data.mediaType : (node.data.mediaKind ?? 'document');
     if (!mediaKind) {
       throw new Error(
-        `Canvas material node "${nodeId}" requires an explicit mediaKind; file extensions are not capability identity.`,
+        `Canvas Media node "${nodeId}" requires an explicit media type; file extensions are not capability identity.`,
       );
     }
     targets.push({

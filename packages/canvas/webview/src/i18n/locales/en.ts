@@ -32,6 +32,8 @@ export const en = {
   'errorBoundary.title': 'Something went wrong',
   'errorBoundary.retry': 'Try again',
   'selection.toolbar': 'Actions for {count} selected nodes',
+  'selection.actionsLoading': 'Loading available actions',
+  'selection.actionsUnavailable': 'Actions unavailable',
   'selection.multiple': 'Multiple',
   'selection.moreActions': 'More actions',
   'selection.group.file': 'File',

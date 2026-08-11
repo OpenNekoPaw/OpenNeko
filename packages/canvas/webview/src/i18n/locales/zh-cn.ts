@@ -32,6 +32,8 @@ export const zhCN = {
   'errorBoundary.title': '出现错误',
   'errorBoundary.retry': '重试',
   'selection.toolbar': '{count} 个已选节点的操作',
+  'selection.actionsLoading': '正在加载可用操作',
+  'selection.actionsUnavailable': '操作不可用',
   'selection.multiple': '多个节点',
   'selection.moreActions': '更多操作',
   'selection.group.file': '文件',

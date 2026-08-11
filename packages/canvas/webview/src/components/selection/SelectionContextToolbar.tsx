@@ -11,6 +11,7 @@ import {
   CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
   CANVAS_EDIT_AND_GENERATE_ACTION_ID,
+  CANVAS_EDIT_TEXT_ACTION_ID,
   CANVAS_IMAGE_COLOR_GRADE_ACTION_ID,
   CANVAS_IMAGE_CROP_ACTION_ID,
   CANVAS_IMAGE_ERASE_ACTION_ID,
@@ -39,9 +40,11 @@ import {
   CameraIcon,
   EyeIcon,
   EyeOffIcon,
+  EditIcon,
   FullscreenIcon,
   GridIcon,
   LayersIcon,
+  LoadingIcon,
   MoreHorizontalIcon,
   OpenIcon,
   PackageIcon,
@@ -52,6 +55,7 @@ import {
   ScissorsIcon,
   SettingsIcon,
   VolumeOffIcon,
+  WarningIcon,
   ZoomInIcon,
 } from '@neko/ui/icons';
 import {
@@ -88,6 +92,14 @@ interface ToolbarAction {
   readonly overflowGroup?: 'file' | 'media-edit' | 'media-library' | 'other';
 }
 
+type MaterialActionState =
+  | { readonly status: 'idle' | 'loading'; readonly descriptors: readonly [] }
+  | {
+      readonly status: 'ready';
+      readonly descriptors: readonly CanvasMaterialActionDescriptor[];
+    }
+  | { readonly status: 'error'; readonly descriptors: readonly []; readonly message: string };
+
 export function SelectionContextToolbar({
   nodes,
   selectedNodeIds,
@@ -100,49 +112,66 @@ export function SelectionContextToolbar({
   const clipboardStore = useClipboardStoreApi();
   const historyStore = useHistoryStoreApi();
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const [ownerDescriptors, setOwnerDescriptors] = useState<
-    readonly CanvasMaterialActionDescriptor[]
-  >([]);
+  const [materialActionState, setMaterialActionState] = useState<MaterialActionState>({
+    status: 'idle',
+    descriptors: [],
+  });
+  const [executionDiagnostic, setExecutionDiagnostic] = useState<string>();
   const selectedNodes = useMemo(
     () => selectedNodeIds.flatMap((id) => nodes.find((node) => node.id === id) ?? []),
     [nodes, selectedNodeIds],
   );
-  const selectionKey = selectedNodeIds.join('\u0000');
   const materialIdentityKey = useMemo(
     () => selectedNodes.map(materialActionIdentityKey).join('\u0000'),
     [selectedNodes],
   );
   useEffect(() => {
     let current = true;
-    setOwnerDescriptors([]);
+    setExecutionDiagnostic(undefined);
     if (!host || selectedNodeIds.length === 0) {
+      setMaterialActionState({ status: 'idle', descriptors: [] });
       return () => {
         current = false;
       };
     }
+    setMaterialActionState({ status: 'loading', descriptors: [] });
     void host
       .resolveMaterialActions(selectedNodeIds)
       .then((descriptors) => {
-        if (current) setOwnerDescriptors(descriptors);
+        if (current) setMaterialActionState({ status: 'ready', descriptors });
       })
-      .catch(() => {
-        if (current) setOwnerDescriptors([]);
+      .catch((error: unknown) => {
+        if (current) {
+          setMaterialActionState({
+            status: 'error',
+            descriptors: [],
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
       });
     return () => {
       current = false;
     };
-  }, [host, materialIdentityKey, selectionKey]);
+  }, [host, materialIdentityKey, selectedNodeIds]);
   const actions = useMemo(
     () =>
       resolveActions(
         selectedNodes,
         host,
-        ownerDescriptors,
+        materialActionState.descriptors,
         canvasStore,
         clipboardStore,
         historyStore,
+        setExecutionDiagnostic,
       ),
-    [canvasStore, clipboardStore, historyStore, host, ownerDescriptors, selectedNodes],
+    [
+      canvasStore,
+      clipboardStore,
+      historyStore,
+      host,
+      materialActionState.descriptors,
+      selectedNodes,
+    ],
   );
   if (hidden || selectedNodes.length === 0 || actions.length === 0) return null;
 
@@ -165,6 +194,15 @@ export function SelectionContextToolbar({
         {selectionLabel}
       </span>
       <span className="selection-context-toolbar__divider" aria-hidden="true" />
+      {materialActionState.status === 'loading' ? (
+        <span
+          className="selection-context-toolbar__status"
+          data-material-actions-status="loading"
+          title={t('selection.actionsLoading')}
+        >
+          <LoadingIcon size={14} />
+        </span>
+      ) : null}
       {primary.map((action, index) => (
         <Fragment key={action.key}>
           {index > 0 && primary[index - 1]?.section !== action.section ? (
@@ -249,6 +287,21 @@ export function SelectionContextToolbar({
           </div>
         </Popover>
       )}
+      {materialActionState.status === 'error' || executionDiagnostic ? (
+        <span
+          className="selection-context-toolbar__diagnostic"
+          data-material-actions-status="error"
+          role="alert"
+          title={
+            materialActionState.status === 'error'
+              ? materialActionState.message
+              : executionDiagnostic
+          }
+        >
+          <WarningIcon size={14} />
+          <span>{t('selection.actionsUnavailable')}</span>
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -276,11 +329,12 @@ function resolveActions(
   canvasStore: ReturnType<typeof useCanvasStoreApi>,
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
+  reportExecutionDiagnostic: (message: string | undefined) => void,
 ): ToolbarAction[] {
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
     return [
-      ...resolveOwnerActions(ownerDescriptors, selectedIds, host),
+      ...resolveOwnerActions(ownerDescriptors, selectedIds, host, reportExecutionDiagnostic),
       {
         key: 'group-selection',
         label: t('menu.group'),
@@ -296,7 +350,12 @@ function resolveActions(
 
   const node = selectedNodes[0];
   if (!node) return [];
-  const actions: ToolbarAction[] = resolveOwnerActions(ownerDescriptors, selectedIds, host);
+  const actions: ToolbarAction[] = resolveOwnerActions(
+    ownerDescriptors,
+    selectedIds,
+    host,
+    reportExecutionDiagnostic,
+  );
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
     const path = node.data.canvasPath;
     actions.push({
@@ -347,6 +406,7 @@ function resolveOwnerActions(
   descriptors: readonly CanvasMaterialActionDescriptor[],
   selectedNodeIds: readonly string[],
   host: ReturnType<typeof useOptionalCanvasHost>,
+  reportExecutionDiagnostic: (message: string | undefined) => void,
 ): ToolbarAction[] {
   if (!host) return [];
   return descriptors.map((descriptor) => {
@@ -356,12 +416,14 @@ function resolveOwnerActions(
       label: descriptor.label,
       icon: materialActionIcon(descriptor),
       ...presentation,
-      run: () =>
-        void host.executeMaterialAction(
-          descriptor.id,
-          selectedNodeIds,
-          descriptor.executionPayload ?? {},
-        ),
+      run: () => {
+        reportExecutionDiagnostic(undefined);
+        void host
+          .executeMaterialAction(descriptor.id, selectedNodeIds, descriptor.executionPayload ?? {})
+          .catch((error: unknown) => {
+            reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
+          });
+      },
     };
   });
 }
@@ -376,6 +438,8 @@ function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNo
   switch (descriptor.id) {
     case CANVAS_PREVIEW_ACTION_ID:
       return <FullscreenIcon size={14} />;
+    case CANVAS_EDIT_TEXT_ACTION_ID:
+      return <EditIcon size={14} />;
     case CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID:
     case CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID:
       return <PackageIcon size={14} />;
@@ -427,6 +491,7 @@ function materialActionPresentation(
   switch (actionId) {
     case CANVAS_ADD_TO_CUT_ACTION_ID:
     case CANVAS_OPEN_IN_CUT_ACTION_ID:
+    case CANVAS_EDIT_TEXT_ACTION_ID:
       return {
         placement: 'visible',
         priority: 10,
@@ -565,6 +630,21 @@ function resolveSelectionLabel(selectedNodes: readonly CanvasNode[]): string {
         return t('node.video');
       case undefined:
         return t('node.media');
+    }
+  }
+  if (node.type === 'file') {
+    switch (node.data.mediaKind) {
+      case 'image':
+        return t('node.image');
+      case 'audio':
+        return t('node.audio');
+      case 'video':
+        return t('node.video');
+      case 'document':
+      case 'model':
+      case 'other':
+      case undefined:
+        break;
     }
   }
   if (node.type !== 'generation') {
