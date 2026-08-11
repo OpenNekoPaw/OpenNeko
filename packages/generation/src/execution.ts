@@ -48,6 +48,14 @@ export interface PromptGenerationResult {
 
 export type GenerationExecutionResult = MediaGenerationResult | PromptGenerationResult;
 
+/**
+ * The provider accepted a submission but the transport closed before a result
+ * or recoverable provider task identity was returned.
+ */
+export class GenerationExecutionOutcomeUnknownError extends Error {
+  override readonly name = 'GenerationExecutionOutcomeUnknownError';
+}
+
 export interface MediaGenerationExecutionPort {
   generateImage(
     request: ImageGenerationRequest,

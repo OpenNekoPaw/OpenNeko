@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MediaGenerationResult } from '../../execution';
+import {
+  GenerationExecutionOutcomeUnknownError,
+  type MediaGenerationResult,
+} from '../../execution';
 import { GenerationJobCoordinator } from '../coordinator';
 import { createInMemoryGenerationJobStore } from '../store';
 
@@ -236,6 +239,31 @@ describe('GenerationJobCoordinator', () => {
       progress: { stage: 'waiting-provider', percent: 61 },
     });
     expect(execution.generateImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks an explicit synchronous execution ambiguity outcome-unknown without a provider task', async () => {
+    const execution = createExecution();
+    execution.generateImage.mockRejectedValue(
+      new GenerationExecutionOutcomeUnknownError('connection closed after submission'),
+    );
+    const coordinator = createCoordinator(execution, {
+      commit: vi.fn(async () => [createResultLocator('unused')]),
+    });
+
+    const initial = await coordinator.submitGeneration(createInput());
+    const terminal = await waitForPhase(coordinator, initial.ref, 'outcome-unknown');
+
+    expect(terminal).toMatchObject({
+      phase: 'outcome-unknown',
+      failure: {
+        code: 'generation-outcome-unknown',
+        retryable: false,
+        message: 'connection closed after submission',
+      },
+    });
+    expect(terminal.providerTask).toBeUndefined();
+    expect(execution.generateImage).toHaveBeenCalledTimes(1);
+    expect(execution.describeExternalTask).not.toHaveBeenCalled();
   });
 
   it('retries with a new identity and immutable retryOf provenance', async () => {

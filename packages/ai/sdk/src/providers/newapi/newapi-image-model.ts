@@ -411,6 +411,7 @@ async function fetchNewAPIImageResponse(
         cause: error,
         code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
         isRetryable: false,
+        outcomeUnknown: true,
       },
     );
   }

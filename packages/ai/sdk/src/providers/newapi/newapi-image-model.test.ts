@@ -134,4 +134,38 @@ describe('NewAPIImageModel', () => {
     expect(result.images).toEqual([png]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it('marks a post-submission transport timeout as outcome unknown and non-retryable', async () => {
+    const transportError = Object.assign(new Error('headers timed out'), {
+      code: 'UND_ERR_HEADERS_TIMEOUT',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw Object.assign(new Error('fetch failed'), { cause: transportError });
+      }),
+    );
+
+    const model = new NewAPIImageModel('gpt-image-2', {
+      apiUrl: 'https://www.nekoapi.com',
+      apiKey: 'test-key',
+    });
+
+    await expect(
+      model.doGenerate({
+        prompt: 'A playful cat',
+        n: 2,
+        size: '1024x1024',
+        aspectRatio: undefined,
+        seed: undefined,
+        files: undefined,
+        mask: undefined,
+        providerOptions: {},
+      }),
+    ).rejects.toMatchObject({
+      code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
+      isRetryable: false,
+      outcomeUnknown: true,
+    });
+  });
 });
