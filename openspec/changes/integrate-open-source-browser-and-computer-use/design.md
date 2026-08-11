@@ -149,6 +149,13 @@ catalog records from the network. Publishing new catalog entries or package rele
 application release; a remotely mutable signed catalog requires a separate OpenSpec with publisher-key ownership,
 rotation, revocation and rollback rules.
 
+Display metadata keeps one canonical default description and may declare locale-keyed description localization inside
+the plugin interface metadata. The extension service validates and projects that metadata through the existing catalog
+contract; it does not resolve a Window locale or create a translated catalog authority. The Agent Webview selects the
+exact current locale and otherwise displays the canonical default description. Invalid locale keys or localization
+records invalidate only that plugin manifest. Search, grid/list rows and configuration details consume the same
+resolved description.
+
 ```text
 bundled reviewed catalog
   -> UI shows publisher/release/platform/size/licenses/declared permissions

@@ -1,20 +1,27 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentExtensionManagementProjection,
   AgentExtensionManagementRuntime,
 } from '@neko/agent-contracts/extension-management';
 import {
   AgentExtensionManagementRoot,
+  resolveAgentExtensionDescription,
   searchAndOrderAgentExtensions,
   searchAndOrderAgentSkills,
 } from './root';
 
+const i18n = vi.hoisted(() => ({ locale: 'en' }));
+
 vi.mock('@neko/ui/i18n/react', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ locale: i18n.locale, t: (key: string) => key }),
 }));
+
+afterEach(() => {
+  i18n.locale = 'en';
+});
 
 describe('AgentExtensionManagementRoot', () => {
   it('keeps filtering and ordering package-owned and deterministic', () => {
@@ -32,6 +39,57 @@ describe('AgentExtensionManagementRoot', () => {
         '',
       ).map((item) => item.id),
     ).toEqual(['computer-use@openneko', 'github@openneko']);
+  });
+
+  it('renders and searches the current localized extension introduction', async () => {
+    i18n.locale = 'zh-cn';
+    const identity = { windowId: 'window-1' };
+    const browserUse = {
+      ...extension('browser-use@openneko', 'Browser Use', false),
+      description: 'Reviewed browser observation for approved domains',
+      localization: {
+        'zh-cn': { description: '在已授权域名中提供经过审核的浏览器观察能力' },
+      },
+    };
+    const runtime: AgentExtensionManagementRuntime = {
+      identity,
+      getSnapshot: async () => ({
+        identity,
+        operations: [],
+        skills: [],
+        skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+        extensions: [browserUse],
+        extensionDiscovery: { diagnostics: [] },
+      }),
+      installPlugin: vi.fn(),
+      updatePlugin: vi.fn(),
+      cancelPluginOperation: vi.fn(),
+      enablePlugin: vi.fn(),
+      disablePlugin: vi.fn(),
+      removePlugin: vi.fn(),
+      refreshMarketplaces: vi.fn(),
+      installPersonalSkill: vi.fn(),
+      removePersonalSkill: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    expect(resolveAgentExtensionDescription(browserUse, 'en')).toBe(
+      'Reviewed browser observation for approved domains',
+    );
+    expect(resolveAgentExtensionDescription(browserUse, 'zh-cn')).toBe(
+      '在已授权域名中提供经过审核的浏览器观察能力',
+    );
+    render(
+      <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'home.capabilities.extensions' }));
+    expect(await screen.findByText('在已授权域名中提供经过审核的浏览器观察能力')).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'home.capabilities.search' }), {
+      target: { value: '已授权域名' },
+    });
+    const option = await screen.findByRole('option', { name: /Browser Use/u });
+    fireEvent.click(option);
+    expect(screen.getAllByText('在已授权域名中提供经过审核的浏览器观察能力')).toHaveLength(2);
   });
 
   it('renders an explicit empty state for the active catalog', async () => {
@@ -450,6 +508,7 @@ function extension(id: string, displayName: string, installed: boolean) {
     name: displayName,
     displayName,
     description: displayName,
+    localization: {},
     version: '1.0.0',
     developer: 'OpenNeko',
     marketplace: 'openneko',

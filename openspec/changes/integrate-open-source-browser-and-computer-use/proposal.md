@@ -16,7 +16,8 @@ Play-use 都没有真实运行路径；现有 MCP client 还会丢失部分多�
   protocol negotiation、取消和连接 diagnostics。
 - 扩展 OpenNeko marketplace/install contract：首版以随签名应用发布的静态 catalog 作为真实性根，只按
   用户明确操作下载其中固定的第一方 platform artifact；支持 checksum/signature/SBOM、显式安装、启用、
-  停用和更新，安装时不执行远程 shell/pip/npm/curl 脚本。
+  停用和更新，并让目录简介随当前 Desktop locale 显示 manifest 声明的本地化内容；安装时不执行远程
+  shell/pip/npm/curl 脚本。
 - 提供第一方 `browser-use` 扩展，固定使用 MIT 许可的
   [`browser-use/browser-use`](https://github.com/browser-use/browser-use) 上游 MCP server
   `browser-use --mcp`。OpenNeko 不实现 DOM、Playwright/CDP 控制或第二套 Browser Agent。
