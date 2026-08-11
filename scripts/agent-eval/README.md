@@ -13,8 +13,8 @@ The Desktop application is the only product host. The previous TUI debug-automat
 removed. Desktop now exposes an isolated complete-session driver through the public Agent bridge and
 fixture-only automation contract. The focused runner has no case-id whitelist: it resolves an
 indexed Scenario into an immutable execution case and interprets supported Draft binding/rejection,
-submit, queue, Conversation configuration update, typed input invocation, confirm, cancel, resume,
-feedback and idle steps through one driver.
+submit, queue, exact queued-item send-now, Conversation configuration update, typed input invocation,
+confirm, cancel, resume, feedback and idle steps through one driver.
 
 Therefore:
 

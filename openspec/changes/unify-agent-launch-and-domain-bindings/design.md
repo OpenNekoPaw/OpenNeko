@@ -374,6 +374,49 @@ Agent Evaluation disposition 为 `create`：现有文档附件和搜索案例没
 route；新增一个 focused complete-session case，硬断言 `ListDirectory -> Read` 文本路径和
 `ListDirectory -> ReadDocument` 结构化路径，并 poison shell、raw locator、absolute path 与 binary-as-text。
 
+### 16. 图片感知 Tool 与 Prompt 消费同一 Turn 路由快照
+
+`image.understand` 配置只表达 purpose model binding，不自动构成可调用能力。Agent Workspace runtime
+注册一个 host-neutral `perception.image.understand` Tool；Pi bridge 仅在冻结的 Turn model policy 包含
+有效 `image.understand` purpose use 时将其投影到模型 Tool snapshot。Tool 的 model-visible 参数只包含
+Conversation-scoped `input_ref`/`image_ref` 短引用与有界 focus，`PiContentToolModelProtocol` 在 exact
+Conversation 内解析为 canonical content 或 representation locator。Tool 通过既有
+`AgentContentAccessRuntime` 有界读取并校验图片，使用 `ToolExecuteOptions.purposeModel` 调用冻结的精确
+Pi purpose model，再向 `agent.main` 返回 `PerceptionEvidence`、usage 与 provider/model identity；结果不含
+图片 payload、raw path、locator 或另一个 provider 选择参数。
+
+每个 Turn 在 provider execution 前形成唯一图片路由：
+
+```text
+agent.main accepts image
+  -> register ReadImage, omit perception.image.understand, use native Pi ImageContent
+
+agent.main rejects image + exact Pi image.understand use + registered Tool
+  -> omit ReadImage, register perception.image.understand, return structured text evidence
+
+otherwise
+  -> register neither image success path and fail the exact reference/Turn visibly
+```
+
+Tool snapshot、内容引用计划和 system Prompt 必须消费同一不可变路由结论。只有 external route 的最终
+model-visible Tool snapshot 确实包含图片感知 Tool 时才添加外部感知指令；不得通过比较 chat/perception
+配置 model id 推断 Tool 存在。`ReadImage` 不得为文本模型返回成功图片 attachment 后依赖 provider SDK
+丢弃像素，也不得内部切换到 purpose model。purpose binding、内容读取或模型调用失败只失败当前 Tool
+Call/Turn，不尝试另一 provider、模型、reader、source 或原生视觉路径。
+
+| 层   | 结论                                                                                                                                         |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Agent application 拥有 Turn 路由与 Prompt；感知 Tool 拥有图片理解请求和证据；Content runtime 拥有授权 bytes；Pi bridge 拥有 purpose model。 |
+| 依赖 | Tool 依赖 host-neutral content port 与执行期 purpose model，不依赖 Electron、Renderer、配置文件或 Desktop path adapter。                    |
+| 接口 | 模型只见短引用和 focus；内部准备参数携带 canonical locator；结果是结构化 `PerceptionEvidence`，不新增内部 contract 版本。                    |
+| 扩展 | 后续媒体 purpose Tool 可复用“实际 Tool snapshot 驱动 Prompt”的原则，但本任务不建立通用媒体路由框架。                                      |
+| 测试 | 覆盖 external/native/unavailable 三路、精确 purpose identity、短引用隔离、图片预算、无 `ReadImage` 文本路径和无 provider fallback。         |
+
+Agent Evaluation disposition 为 `update`：扩充既有 `agent-runtime.perception-routing`。正例必须证明
+DeepSeek-compatible `agent.main -> perception.image.understand -> exact image.understand purpose`；原生视觉
+边界必须证明外部 Tool 缺席；缺失 purpose binding 边界必须证明 Tool 与相关 Prompt 均缺席并 fail-visible。
+真实 visible Desktop 与 hidden complete-session provider 运行继续受任务 11.7 的显式成本授权约束。
+
 ### 17. Conversation 队列保存完整输入并串行处理中断
 
 Agent Workspace application 是每个 Conversation 待执行 Turn 的唯一队列 owner。Webview 在当前 Turn

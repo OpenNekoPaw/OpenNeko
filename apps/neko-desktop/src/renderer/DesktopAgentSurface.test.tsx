@@ -27,7 +27,6 @@ vi.mock('@neko/agent-webview/root', async () => {
       composerWorkspace,
       conversationFeed,
       locale,
-      onSubmitCharacterLaunch,
       presentation,
       toolCallAccessoryRenderer,
     }: {
@@ -36,13 +35,6 @@ vi.mock('@neko/agent-webview/root', async () => {
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly locale: string;
-      readonly onSubmitCharacterLaunch?: (input: {
-        readonly message: string;
-        readonly characters: readonly {
-          readonly characterVersionId: string;
-          readonly label: string;
-        }[];
-      }) => Promise<void>;
       readonly presentation: string;
       readonly conversationFeed?: { readonly conversationId: string; readonly content: ReactNode };
       readonly toolCallAccessoryRenderer?: AgentToolCallAccessoryRenderer;
@@ -85,23 +77,6 @@ vi.mock('@neko/agent-webview/root', async () => {
               toolCall: automationToolCall(),
             })}
           </div>
-          {onSubmitCharacterLaunch ? (
-            <button
-              data-testid="submit-character-launch"
-              type="button"
-              onClick={() =>
-                void onSubmitCharacterLaunch({
-                  message: 'Meet at the archive.',
-                  characters: [
-                    { characterVersionId: 'character-version-a', label: 'Lin' },
-                    { characterVersionId: 'character-version-b', label: 'Mira' },
-                  ],
-                })
-              }
-            >
-              launch characters
-            </button>
-          ) : null}
         </div>
       );
     },
@@ -556,31 +531,6 @@ describe('DesktopAgentSurface', () => {
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
   });
 
-  it('does not expose the experimental Character launch producer', async () => {
-    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-character'));
-    const launchCharacters = vi.fn(async () => ({
-      topology: 'chatroom' as const,
-      runtimeKind: 'companion' as const,
-      characterRoomId: 'character-room-a',
-      roomRunId: 'room-run-a',
-      interactionAgentSessionId: 'conversation:room:room-run-a',
-      participants: [],
-    }));
-    installBridge(vi.fn(), { attach, detach: vi.fn() });
-    window.openNekoDesktop.characterConversations.launch = launchCharacters;
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:1" />);
-    });
-    await act(async () => undefined);
-    expect(container.querySelector('[data-testid="submit-character-launch"]')).toBeNull();
-    expect(launchCharacters).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
-  });
-
   it('keeps the Root DOM identity while replacing the adapter by exact launch identity', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi
@@ -838,12 +788,18 @@ function installBridge(
         attach: launch?.attach ?? vi.fn(),
         authorizeResource: vi.fn(),
         bindTarget: vi.fn(),
+        configureEntryTarget: vi.fn(),
         updateConfiguration: vi.fn(),
         searchWorkspaceMentions: vi.fn(),
         submitDraft: vi.fn(),
         detach: launch?.detach ?? vi.fn(),
       },
-      workspaceGrants: { chooseDirectory: vi.fn(), selectProject: vi.fn() },
+      workspaceGrants: {
+        chooseDirectory: vi.fn(),
+        createContentProject: vi.fn(),
+        selectProject: vi.fn(),
+        selectAuthoringLibrary: vi.fn(),
+      },
       agent: {
         getBootstrap,
         getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),
@@ -915,6 +871,14 @@ function installBridge(
           diagnostics: [],
         })),
       },
+      characterAuthoring: {
+        getSnapshot: vi.fn(async () => {
+          throw new Error('Character authoring is not expected by this test.');
+        }),
+        execute: vi.fn(async () => {
+          throw new Error('Character authoring is not expected by this test.');
+        }),
+      },
       worldFoundation: {
         getSnapshot: vi.fn(async () => ({
           world: { projects: [], versions: [], runtimes: [] },
@@ -925,8 +889,13 @@ function installBridge(
           diagnostics: [],
         })),
       },
-      characterConversations: {
-        launch: vi.fn(),
+      worldAuthoring: {
+        getSnapshot: vi.fn(async () => {
+          throw new Error('World authoring is not expected by this test.');
+        }),
+        execute: vi.fn(async () => {
+          throw new Error('World authoring is not expected by this test.');
+        }),
       },
       characterAvatar: {
         openSurface: vi.fn(),
@@ -937,6 +906,12 @@ function installBridge(
         subscribe: vi.fn(() => () => undefined),
       },
       resources: createResourceBridgeMock(),
+      projectAuthoring: {
+        getNavigation: vi.fn(),
+      },
+      projectLocalAuthoring: {
+        createTarget: vi.fn(),
+      },
       projectPortability: {
         inspect: vi.fn(),
         plan: vi.fn(),

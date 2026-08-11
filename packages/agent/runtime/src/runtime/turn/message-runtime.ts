@@ -1641,55 +1641,6 @@ export function appendAmbientCanvasSystemPrompt(
   );
 }
 
-function appendPerceptionToolRoutingPrompt(
-  systemPrompt: string,
-  input: {
-    readonly chatModel?: ModelRef<'llm'>;
-    readonly understandingModels?: MediaUnderstandingModelSelections;
-  },
-): string {
-  const modalities = getDifferentUnderstandingModelModalities(input);
-  if (modalities.length === 0) {
-    return systemPrompt;
-  }
-
-  const imageRoute = modalities.includes('image')
-    ? 'For image evidence, call the registered `perception.image.understand` Tool with the short input_ref or image_ref shown in the current Conversation and a concise focus. Never construct a ContentLocator.'
-    : '';
-  const retainedDomainRoutes = modalities.filter((modality) => modality !== 'image');
-  const domainRoute =
-    retainedDomainRoutes.length === 0
-      ? ''
-      : `For ${retainedDomainRoutes.join(
-          ' and ',
-        )} evidence, use only a matching runtime-listed OpenNeko domain perception Tool; Pi does not provide a generic payload fallback for those modalities.`;
-  return `${systemPrompt}\n\n## Runtime Media Perception Routing\n\nThe selected chat model is different from the configured ${modalities.join(
-    ', ',
-  )} perception model. When the user asks to inspect, describe, compare, OCR, judge quality, analyze style, or reason from media pixels/samples, do not stop because the chat model lacks native media input, and do not guess. ${imageRoute} ${domainRoute} Base the answer on returned structured evidence. If no stable resource reference or matching Tool is available, report the missing perception path instead of guessing from a prompt, file name, task id, or thumbnail label.`;
-}
-
-function getDifferentUnderstandingModelModalities(input: {
-  readonly chatModel?: ModelRef<'llm'>;
-  readonly understandingModels?: MediaUnderstandingModelSelections;
-}): string[] {
-  const models = input.understandingModels;
-  if (!input.chatModel || !models) return [];
-
-  const modalities: string[] = [];
-  for (const modality of ['image', 'audio', 'video'] as const) {
-    const model = models[modality];
-    if (!model) continue;
-    if (
-      model.providerId !== input.chatModel.providerId ||
-      model.modelId !== input.chatModel.modelId
-    ) {
-      modalities.push(modality);
-    }
-  }
-
-  return modalities;
-}
-
 function appendCustomSystemPromptOverlay(
   systemPrompt: string,
   customSystemPrompt?: string | null,
@@ -1814,15 +1765,9 @@ export function buildAgentTurnConfigurationPlan(
   });
 
   return {
-    systemPrompt: appendPerceptionToolRoutingPrompt(
-      appendAmbientCanvasSystemPrompt(
-        appendCustomSystemPromptOverlay(input.baseSystemPrompt, input.customSystemPrompt),
-        input.ambientCanvas ?? [],
-      ),
-      {
-        chatModel: input.chatModel,
-        understandingModels: input.understandingModels,
-      },
+    systemPrompt: appendAmbientCanvasSystemPrompt(
+      appendCustomSystemPromptOverlay(input.baseSystemPrompt, input.customSystemPrompt),
+      input.ambientCanvas ?? [],
     ),
     maxIterations: input.maxIterations ?? 200,
     autoExecuteTools: input.autoExecuteTools,

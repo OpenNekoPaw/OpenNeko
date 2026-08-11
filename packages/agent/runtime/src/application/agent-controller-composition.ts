@@ -50,6 +50,7 @@ import {
   type AgentContextPayload,
   type AgentFileReference,
   type AgentFlatPurposeModelRefs,
+  type AgentEntryTargetReceipt,
   type AgentInputInvocationIntent,
   type AgentMessageQueueSnapshot,
   type OpenTab,
@@ -184,6 +185,9 @@ export interface AgentControllerComposition {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationEntryTargetReceipt?: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>;
     readonly readConversationConfiguration?: (
       conversationId: string,
     ) => Promise<AgentConversationConfiguration>;
@@ -205,6 +209,7 @@ export interface AgentControllerComposition {
     readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
+    readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
@@ -296,6 +301,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationEntryTargetReceipt?: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>;
     readonly readConversationConfiguration?: (
       conversationId: string,
     ) => Promise<AgentConversationConfiguration>;
@@ -445,6 +453,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             },
         input.readConversationConfiguration ?? missingConversationConfigurationDependency,
         input.readConversationContext ?? missingConversationContextDependency,
+        input.readConversationEntryTargetReceipt ?? readNoConversationEntryTargetReceipt,
       ),
       config: this.createConfigEffects(
         input.workspace,
@@ -460,6 +469,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         bind,
         facts,
         input.readConversationContext ?? missingConversationContextDependency,
+        input.readConversationEntryTargetReceipt ?? readNoConversationEntryTargetReceipt,
         input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,
         input.personalSkillOwnerId ?? '',
         input.readConversationConfiguration ?? missingConversationConfigurationDependency,
@@ -528,6 +538,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
+    readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
@@ -574,6 +585,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           facts,
           configuration: input.configuration,
           conversationContext: input.context,
+          entryTargetReceipt: input.entryTargetReceipt ?? null,
           ...(input.presentationText === undefined
             ? {}
             : { presentationText: input.presentationText }),
@@ -704,6 +716,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readConversationContext: (
       conversationId: string,
     ) => Promise<AgentBoundDomainBinding> = missingConversationContextDependency,
+    readConversationEntryTargetReceipt: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null> = readNoConversationEntryTargetReceipt,
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -766,7 +781,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       const operation = Promise.all([
         readConversationConfiguration(request.conversationId),
         readConversationContext(request.conversationId),
-      ]).then(([configuration, conversationContext]) =>
+        readConversationEntryTargetReceipt(request.conversationId),
+      ]).then(([configuration, conversationContext, entryTargetReceipt]) =>
         this.executeTurn({
           workspace,
           config,
@@ -775,6 +791,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           facts,
           configuration,
           conversationContext,
+          entryTargetReceipt,
           ...(skillName ? { skillName } : {}),
           ...(additionalInstructions ? { additionalInstructions } : {}),
         }),
@@ -1074,6 +1091,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     bind: (context: AgentHostRouteEffectContext) => void,
     facts: DesktopAgentFactsProjector,
     readConversationContext: (conversationId: string) => Promise<AgentBoundDomainBinding>,
+    readConversationEntryTargetReceipt: (
+      conversationId: string,
+    ) => Promise<AgentEntryTargetReceipt | null>,
     readGlobalSkillCatalog: () => Promise<import('./agent-app-host').AgentSkillCatalog>,
     personalSkillOwnerId: string,
     readConversationConfiguration: (
@@ -1129,13 +1149,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       const operation = Promise.all([
         readConversationConfiguration(conversationId),
         readConversationContext(conversationId),
-      ]).then(([configuration, conversationContext]) =>
+        readConversationEntryTargetReceipt(conversationId),
+      ]).then(([configuration, conversationContext, entryTargetReceipt]) =>
         this.executeTurn({
           workspace,
           config,
           request,
           context,
           facts,
+          entryTargetReceipt,
           configuration,
           conversationContext,
           presentationText: `${prefix}${skillName}${input.args ? ` ${input.args}` : ''}`,
@@ -1294,6 +1316,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly facts: DesktopAgentFactsProjector;
     readonly configuration:
       AgentConversationConfiguration | AgentConversationTurnConfigurationSnapshot;
+    readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
     readonly conversationContext: AgentBoundDomainBinding;
     readonly presentationText?: string;
     readonly queueInput?: AgentInputInvocationIntent;
@@ -1408,6 +1431,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           : { fileReferences: input.request.fileReferences }),
       },
       ...(contextPayloads.length ? { contextPayloads } : {}),
+      entryTargetReceipt: input.entryTargetReceipt,
       ...(input.skillName ? { skillName: input.skillName } : {}),
       ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
       ...(input.additionalInstructions
@@ -2294,6 +2318,10 @@ function parseCommandArtifactActivationId(handlerId: string): string {
 
 async function missingConversationContextDependency(): Promise<AgentBoundDomainBinding> {
   throw new Error('Agent Session input catalog has no Conversation context dependency.');
+}
+
+async function readNoConversationEntryTargetReceipt(): Promise<null> {
+  return null;
 }
 
 const missingConversationReferenceDependency: AgentConversationReferenceResolutionPort = {

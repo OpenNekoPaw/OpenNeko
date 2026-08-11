@@ -25,14 +25,6 @@ export interface AppShellProps {
     readonly conversationId: string;
     readonly content: ReactNode;
   };
-  readonly onSubmitCharacterLaunch?: (input: {
-    readonly message: string;
-    readonly characters: readonly {
-      readonly characterProjectId: string;
-      readonly characterVersionId: string;
-      readonly characterStorylineVersionId?: string;
-    }[];
-  }) => Promise<void>;
 }
 
 export function AppShell({
@@ -40,7 +32,6 @@ export function AppShell({
   conversationFeed,
   initialConversation,
   initialInput,
-  onSubmitCharacterLaunch,
   presentation = 'default',
 }: AppShellProps) {
   const config = useConfigState();
@@ -100,7 +91,6 @@ export function AppShell({
         initialConversation={initialConversation}
         initialInput={initialInput}
         conversationFeed={conversationFeed}
-        onSubmitCharacterLaunch={onSubmitCharacterLaunch}
         settings={settings}
         hasConfigSnapshot={hasConfigSnapshot}
         setSettings={setSettings}

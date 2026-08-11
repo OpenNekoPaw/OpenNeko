@@ -1455,7 +1455,7 @@ describe('message runtime helpers', () => {
     });
   });
 
-  it('injects perception tool routing when chat and perception models differ', () => {
+  it('does not claim a perception Tool from configuration identity alone', () => {
     const plan = buildAgentTurnConfigurationPlan({
       conversationId: 'conv-1',
       baseSystemPrompt: 'base',
@@ -1466,13 +1466,7 @@ describe('message runtime helpers', () => {
       },
     });
 
-    expect(plan.systemPrompt).toContain('Runtime Media Perception Routing');
-    expect(plan.systemPrompt).toContain('perception.image.understand');
-    expect(plan.systemPrompt).toContain('input_ref or image_ref');
-    expect(plan.systemPrompt).toContain('Never construct a ContentLocator');
-    expect(plan.systemPrompt).toContain(
-      'do not stop because the chat model lacks native media input',
-    );
+    expect(plan.systemPrompt).toBe('base');
     expect(plan.executionMetadata).toEqual({
       understandingModels: {
         image: { providerId: 'google', modelId: 'gemini-2.5-flash', category: 'llm' },

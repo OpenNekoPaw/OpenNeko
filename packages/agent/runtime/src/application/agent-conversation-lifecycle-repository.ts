@@ -3,6 +3,7 @@ import {
   parseAgentConversationConfiguration,
   parseAgentConversationTurnConfigurationSnapshot,
   parseAgentDraftInputIntent,
+  parseAgentEntryTargetReceipt,
   parseAgentFlatPurposeModelRefs,
   parseAgentInputReferenceReceipt,
   parseMessageContextReference,
@@ -397,6 +398,7 @@ export function parseAgentConversationLifecycleRecord(
     initialInputRecord,
     [
       'messageId',
+      'entryTargetReceipt',
       'intent',
       'references',
       'contextReferences',
@@ -463,6 +465,10 @@ export function parseAgentConversationLifecycleRecord(
     createdAt: identity(record['createdAt'], 'createdAt'),
     initialInput: {
       messageId: identity(initialInput['messageId'], 'initial message'),
+      entryTargetReceipt:
+        initialInput['entryTargetReceipt'] === null
+          ? null
+          : parseAgentEntryTargetReceipt(initialInput['entryTargetReceipt']),
       intent: parseAgentDraftInputIntent(initialInput['intent']),
       references: referencesValue.map(parseAgentInputReferenceReceipt),
       contextReferences: contextReferencesValue.map(parseMessageContextReference),

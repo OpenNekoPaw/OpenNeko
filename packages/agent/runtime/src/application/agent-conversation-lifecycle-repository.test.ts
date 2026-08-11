@@ -54,7 +54,18 @@ describe('persistent Agent conversation lifecycle repository', () => {
 
   it('recovers the exact canonical first-submit record, context and provider claim', async () => {
     const fixture = await createFixture();
-    const record = createRecord('conversation:1', 'request:1', 'turn:1');
+    const record = createRecord('conversation:1', 'request:1', 'turn:1', 'openai', 'gpt-5', {
+      targetReceiptId: 'target-receipt:1',
+      draftId: 'draft:1',
+      connectionId: 'connection:1',
+      mode: 'authoring',
+      binding: {
+        kind: 'authoring',
+        workspaceId: 'workspace:1',
+        workspaceGrantId: 'workspace-grant:1',
+        target: { kind: 'world-project', worldProjectId: 'world:1' },
+      },
+    });
 
     await expect(fixture.repository.commitFirstSubmit(record)).resolves.toEqual({
       record,
@@ -262,6 +273,7 @@ function createRecord(
   turnId: string,
   providerId = 'openai',
   modelId = 'gpt-5',
+  entryTargetReceipt: AgentConversationLifecycleRecord['initialInput']['entryTargetReceipt'] = null,
 ): AgentConversationLifecycleRecord {
   const request = {
     modelCatalogEntryId: `${providerId}:${modelId}`,
@@ -305,6 +317,7 @@ function createRecord(
     createdAt: '2026-08-03T00:00:00.000Z',
     initialInput: {
       messageId: `message:${conversationId}`,
+      entryTargetReceipt,
       intent: { kind: 'message', text: 'Hello' },
       references: [],
       contextReferences: [],

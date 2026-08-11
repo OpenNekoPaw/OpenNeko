@@ -68,20 +68,20 @@ export const chat = {
   'chat.emptyState.scope.activeDescription': 'Enter a message to start a new conversation.',
   'chat.entryExperience.label': 'Choose a conversation mode',
   'chat.entryExperience.mode.assistant': 'Assistant',
-  'chat.entryExperience.mode.workspace': 'Workspace',
-  'chat.entryExperience.mode.character': 'Character',
-  'chat.entryExperience.mode.world': 'World',
+  'chat.entryExperience.mode.authoring': 'Authoring',
+  'chat.entryExperience.mode.characterDialogue': 'Character Dialogue',
+  'chat.entryExperience.mode.worldExperience': 'World Experience',
   'chat.entryExperience.assistant.title': 'What would you like to explore?',
   'chat.entryExperience.assistant.description':
     'Start a conversation without selecting a project or directory.',
-  'chat.entryExperience.workspace.title': 'What should we work on?',
-  'chat.entryExperience.workspace.description':
-    'Choose an authorized project or directory, then describe the work.',
-  'chat.entryExperience.character.title': 'Enter a character conversation',
-  'chat.entryExperience.character.description':
+  'chat.entryExperience.authoring.title': 'What should we create?',
+  'chat.entryExperience.authoring.description':
+    'Choose an authorized workspace and exact content, character, or world target.',
+  'chat.entryExperience.characterDialogue.title': 'Enter a character dialogue',
+  'chat.entryExperience.characterDialogue.description':
     'Character requires a published CharacterVersion and a Chara-owned dialogue or room launcher.',
-  'chat.entryExperience.world.title': 'Enter an interactive world',
-  'chat.entryExperience.world.description':
+  'chat.entryExperience.worldExperience.title': 'Enter a world experience',
+  'chat.entryExperience.worldExperience.description':
     'World requires a WorldExperienceVersion and a World-owned run launcher.',
   'chat.entryExperience.validation.bindingPending': 'Updating the conversation target…',
   'chat.entryExperience.validation.configurationRequired':
@@ -276,6 +276,10 @@ export const chat = {
   'chat.input.workspace.openProject': 'Choose project',
   'chat.input.workspace.chooseDirectory': 'Choose from system directories',
   'chat.input.workspace.clear': 'Clear project selection',
+  'chat.input.workspace.loadingTargets': 'Loading authoring targets...',
+  'chat.input.workspace.createScope': 'New target location',
+  'chat.input.workspace.createTarget': 'Create authoring target',
+  'chat.input.workspace.targetName': 'Target name',
   'chat.input.commands': 'Commands',
   'chat.input.skills': 'Skills',
   'chat.input.mediaModelCalls': 'Media model calls: {count}',

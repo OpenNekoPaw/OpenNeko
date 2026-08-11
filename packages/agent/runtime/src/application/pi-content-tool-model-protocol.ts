@@ -1,6 +1,7 @@
 import type { SessionTreeEntry } from '@earendil-works/pi-agent-core';
 import {
   isAgentAuthorizedContentReferenceContextData,
+  TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_SEARCH,
   TOOL_NAMES_SYSTEM,
   type AgentContextPayload,
@@ -33,6 +34,7 @@ const MAX_MODEL_DOCUMENT_UNITS = 100;
 const MAX_MODEL_SEARCH_ITEMS = 20;
 const MAX_MODEL_TOOL_RESULT_CHARS = 24_000;
 const MAX_MODEL_IMAGE_REFS = 5;
+const MAX_MODEL_IMAGE_FOCUS_CHARS = 4_000;
 const LIST_DIRECTORY_TOOL_NAME = 'ListDirectory';
 
 const LIST_DIRECTORY_PARAMETERS: ToolParameters = {
@@ -113,6 +115,26 @@ const READ_IMAGE_PARAMETERS: ToolParameters = {
   additionalProperties: false,
 };
 
+const UNDERSTAND_IMAGE_PARAMETERS: ToolParameters = {
+  type: 'object',
+  properties: {
+    image_refs: {
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 1,
+      maxItems: MAX_MODEL_IMAGE_REFS,
+      description: `Authorized image or input references shown in this Conversation; maximum ${MAX_MODEL_IMAGE_REFS}.`,
+    },
+    focus: {
+      type: 'string',
+      maxLength: MAX_MODEL_IMAGE_FOCUS_CHARS,
+      description: 'Optional concise description of what visual evidence to inspect.',
+    },
+  },
+  required: ['image_refs'],
+  additionalProperties: false,
+};
+
 type Binding =
   | {
       readonly kind: 'input';
@@ -177,6 +199,13 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
         description:
           'Expose up to five authorized images to a native vision continuation using image_ref values shown with inputs or returned by prior Tools. Never pass locators, paths, MIME metadata, or document positions.',
         parameters: READ_IMAGE_PARAMETERS,
+      };
+    }
+    if (tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND) {
+      return {
+        description:
+          'Analyze up to five authorized images with the configured external image understanding model. Use only image_ref or image input_ref values shown in this Conversation; never pass paths, locators, providers, or model ids.',
+        parameters: UNDERSTAND_IMAGE_PARAMETERS,
       };
     }
     if (tool.name === LIST_DIRECTORY_TOOL_NAME) {
@@ -252,6 +281,9 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
     }
     if (input.tool.name === TOOL_NAMES_SYSTEM.READ_IMAGE) {
       return this.prepareReadImage(input.context.identity.conversationId, input.args);
+    }
+    if (input.tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND) {
+      return this.prepareUnderstandImage(input.context.identity.conversationId, input.args);
     }
     if (input.tool.name === LIST_DIRECTORY_TOOL_NAME) {
       return this.prepareListDirectory(input.context.identity.conversationId, input.args);
@@ -372,19 +404,55 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
     args: Record<string, unknown>,
   ): Record<string, unknown> {
     requireAllowedKeys(args, ['image_refs', 'analysis', 'prompt'], 'ReadImage');
-    if (!Array.isArray(args['image_refs']) || args['image_refs'].length === 0) {
-      throw new Error('ReadImage image_refs must contain at least one image reference.');
+    const images = this.resolveImageReferences(conversationId, args['image_refs'], 'ReadImage');
+    return {
+      images,
+      mode: 'metadata',
+      max_images: images.length,
+      ...(args['analysis'] === undefined ? {} : { analysis: args['analysis'] }),
+      ...(args['prompt'] === undefined ? {} : { prompt: args['prompt'] }),
+    };
+  }
+
+  private prepareUnderstandImage(
+    conversationId: string,
+    args: Record<string, unknown>,
+  ): Record<string, unknown> {
+    requireAllowedKeys(args, ['image_refs', 'focus'], 'Image understanding');
+    const images = this.resolveImageReferences(
+      conversationId,
+      args['image_refs'],
+      'Image understanding',
+    );
+    const focus = optionalBoundedText(
+      args['focus'],
+      'Image understanding focus',
+      MAX_MODEL_IMAGE_FOCUS_CHARS,
+    );
+    return {
+      images,
+      ...(focus === undefined ? {} : { focus }),
+    };
+  }
+
+  private resolveImageReferences(
+    conversationId: string,
+    value: unknown,
+    label: string,
+  ): BoundImage[] {
+    if (!Array.isArray(value) || value.length === 0) {
+      throw new Error(`${label} image_refs must contain at least one image reference.`);
     }
-    if (args['image_refs'].length > MAX_MODEL_IMAGE_REFS) {
+    if (value.length > MAX_MODEL_IMAGE_REFS) {
       throw new Error(
-        `ReadImage accepts at most ${MAX_MODEL_IMAGE_REFS} image references per call.`,
+        `${label} accepts at most ${MAX_MODEL_IMAGE_REFS} image references per call.`,
       );
     }
-    const imageRefs = args['image_refs'].map((value) => requireRef(value, 'ReadImage image_ref'));
+    const imageRefs = value.map((entry) => requireRef(entry, `${label} image_ref`));
     if (new Set(imageRefs).size !== imageRefs.length) {
-      throw new Error('ReadImage image_refs must not contain duplicates.');
+      throw new Error(`${label} image_refs must not contain duplicates.`);
     }
-    const images = imageRefs.map((ref) => {
+    return imageRefs.map((ref) => {
       const binding = this.conversations.get(conversationId)?.refs.get(ref);
       if (binding?.kind === 'image') return binding.image;
       if (
@@ -398,13 +466,6 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
       }
       throw new Error(`Agent content reference '${ref}' is not an image reference.`);
     });
-    return {
-      images,
-      mode: 'metadata',
-      max_images: images.length,
-      ...(args['analysis'] === undefined ? {} : { analysis: args['analysis'] }),
-      ...(args['prompt'] === undefined ? {} : { prompt: args['prompt'] }),
-    };
   }
 
   private prepareListDirectory(
@@ -1168,6 +1229,16 @@ function requireRef(value: unknown, label: string): string {
 
 function optionalRef(value: unknown, label: string): string | undefined {
   return value === undefined ? undefined : requireRef(value, label);
+}
+
+function optionalBoundedText(value: unknown, label: string, maxChars: number): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.trim().length === 0 || value.includes('\u0000')) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+  const text = value.trim();
+  if (text.length > maxChars) throw new Error(`${label} must not exceed ${maxChars} characters.`);
+  return text;
 }
 
 function requireWorkspaceDirectoryPath(value: unknown): string {

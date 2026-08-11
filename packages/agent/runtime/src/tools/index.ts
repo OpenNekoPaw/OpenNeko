@@ -79,12 +79,15 @@ export {
   PERCEPTION_IMAGE_CLASSIFY_METADATA,
   PERCEPTION_DESCRIBE_INPUT_METADATA,
   PERCEPTION_VIDEO_DETECT_SHOTS_METADATA,
+  PERCEPTION_IMAGE_UNDERSTAND_METADATA,
   PerceptionAudioTranscribeTool,
   PerceptionImageSimilarityTool,
   PerceptionImageClassifyTool,
   PerceptionDescribeInputTool,
   PerceptionVideoDetectShotsTool,
+  PerceptionImageUnderstandTool,
   createPerceptionTools,
+  createImageUnderstandingCapabilityProvider,
   perceptionToolGroup,
   type PerceptionAudioTranscribeToolConfig,
   type PerceptionVideoDetectShotsToolConfig,
@@ -94,6 +97,7 @@ export {
   type PerceptionDetectShotsClient,
   type PerceptionSimilarityClient,
   type PerceptionTranscribeClient,
+  type ImageUnderstandingToolDeps,
 } from './perception';
 
 // Re-export Agent-owned tool contracts for convenience.

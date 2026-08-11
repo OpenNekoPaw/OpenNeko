@@ -21,6 +21,11 @@ export interface AgentHostRuntimeAdapter {
 
 export interface AgentDraftHostRuntimeAdapter extends AgentHostRuntimeAdapter {
   readLaunchCatalog(): import('./agent-launch').AgentLaunchCatalogProjection;
+  readEntryIntent(): import('./agent-entry-intent').AgentEntryIntentProjection;
+  configureEntryTarget(
+    mode: import('./agent-entry-intent').AgentEntryMode,
+    binding?: import('./agent-entry-intent').AgentEntryTargetBinding,
+  ): Promise<import('./agent-entry-intent').AgentEntryIntentProjection>;
   bindTarget(
     binding: import('./agent-interaction-binding').AgentDomainBinding,
   ): Promise<import('./agent-launch').AgentLaunchCatalogProjection>;
@@ -43,6 +48,8 @@ export function requireAgentDraftHostRuntimeAdapter(
     typeof candidate.submitDraft !== 'function' ||
     typeof candidate.authorizeResource !== 'function' ||
     typeof candidate.bindTarget !== 'function' ||
+    typeof candidate.configureEntryTarget !== 'function' ||
+    typeof candidate.readEntryIntent !== 'function' ||
     typeof candidate.updateDraftConfiguration !== 'function' ||
     typeof candidate.readLaunchCatalog !== 'function'
   ) {

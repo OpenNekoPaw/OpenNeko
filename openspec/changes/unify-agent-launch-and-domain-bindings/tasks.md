@@ -212,6 +212,15 @@
 - [x] 24.4 Add Core Tool and Pi protocol tests for relative directory-to-text/document/image routing, strict text budgets, binary/protected denial, stable bounds, no absolute path/locator projection, symlink escape and sibling isolation; add the indexed Agent Evaluation case and no-fallback evidence.
 - [x] 24.5 Run focused tests/typechecks, strict OpenSpec and key-free Evaluation validation, then perform `neko-quality-review`; classify visible UI validation as not applicable unless implementation changes Renderer presentation, and keep real-provider execution under task 11.7 without explicit cost authorization.
 
+## 25. External Image Perception Tool Routing
+
+- [x] 25.1 Register one package-owned `perception.image.understand` Tool that consumes prepared canonical image bindings, uses bounded `AgentContentAccessRuntime`, calls only the frozen Pi `image.understand` purpose model and returns structured evidence with usage and exact model identity.
+- [x] 25.2 Extend the Conversation-scoped Pi content Tool protocol so the Tool exposes only short image/input refs and bounded focus while rejecting locator, path, provider, model, duplicate, oversized, stale and cross-Conversation arguments.
+- [x] 25.3 Derive native, external or unavailable image routing once from the immutable Turn model policy and actual registered Tool snapshot; make Tool visibility, content planning and Prompt consume that same route, and remove config-id-based Prompt claims plus the text-model `ReadImage` success path.
+- [x] 25.4 Add Tool, protocol, AppHost and Prompt regression tests proving exact purpose identity, evidence/usage, native/external/unavailable routes, local failure isolation and forbidden provider/model/source/`ReadImage` fallback.
+- [x] 25.5 Update `agent-runtime.perception-routing` with external/native/missing-binding path evidence and run key-free suite validation; retain real visible/hidden provider execution under task 11.7 without explicit cost authorization.
+- [x] 25.6 Run focused typechecks/tests, strict OpenSpec validation and `neko-quality-review`; record commands, findings and remaining real-provider risk in verification evidence.
+
 ## 26. Full-capability Conversation Queue And Interruption
 
 - [x] 26.1 Replace the text-only running-send policy with one full canonical input queue contract whose safe Draft presentation preserves supported attachments, context, references, typed input and configuration for exact edit restoration.

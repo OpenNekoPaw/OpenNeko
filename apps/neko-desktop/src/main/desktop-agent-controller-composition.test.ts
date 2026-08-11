@@ -5,6 +5,7 @@ import { createOpenNekoPiModels } from '@neko/agent-runtime/pi';
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
 import type {
   AgentHostToWebviewMessage,
+  AgentEntryTargetReceipt,
   AgentTurnTimelineToolCallItem,
   ConversationProjectionSnapshot,
 } from '@neko/agent-contracts';
@@ -358,6 +359,7 @@ describe('Agent controller composition', () => {
         workspaceId: workspace.workspaceId,
         workspaceGrantId: 'workspace-grant-1',
       },
+      entryTargetReceipt: authoringReceipt(),
       locale: 'en',
       purposeModels: {
         'image.generate': {
@@ -370,6 +372,7 @@ describe('Agent controller composition', () => {
 
     expect(workspace.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
+        entryTargetReceipt: authoringReceipt(),
         modelPolicy: expect.objectContaining({
           'agent.main': expect.objectContaining({ execution: 'pi' }),
           'image.generate': {
@@ -721,6 +724,7 @@ describe('Agent controller composition', () => {
         workspaceId: workspace.workspaceId,
         workspaceGrantId: 'workspace-grant-1',
       }),
+      readConversationEntryTargetReceipt: async () => authoringReceipt(),
     });
     const posted: AgentHostToWebviewMessage[] = [];
     effects.conversation.submitTurn(
@@ -756,6 +760,9 @@ describe('Agent controller composition', () => {
         action: 'workspace-board-delivery',
         conversationId: turnIdentity.conversationId,
       }),
+    );
+    expect(workspace.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ entryTargetReceipt: authoringReceipt() }),
     );
     const facts = effects.automation?.readFacts(turnIdentity);
     expect(facts).toMatchObject({
@@ -1242,6 +1249,21 @@ describe('Agent controller composition', () => {
     await composition.dispose?.();
   });
 });
+
+function authoringReceipt(): AgentEntryTargetReceipt {
+  return {
+    targetReceiptId: 'target-receipt-1',
+    draftId: 'draft-1',
+    connectionId: 'connection-1',
+    mode: 'authoring',
+    binding: {
+      kind: 'authoring',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+      target: { kind: 'content-project', contentProjectId: 'content-1' },
+    },
+  };
+}
 
 function createWorkspace(
   workspacePath = '/workspace/demo',

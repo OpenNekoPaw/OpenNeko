@@ -224,6 +224,8 @@ export interface ToolRuntimeRequirements {
   readonly engineBridge?: boolean;
   readonly contentAccess?: boolean;
   readonly writableProject?: boolean;
+  /** Exact Agent Entry authoring target kind required for a durable target mutation. */
+  readonly authoringTargetKind?: 'content-project' | 'character-project' | 'world-project';
 }
 
 /**

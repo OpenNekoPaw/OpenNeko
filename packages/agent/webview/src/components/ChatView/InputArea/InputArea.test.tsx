@@ -784,6 +784,7 @@ describe('InputArea composer controls', () => {
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
       },
+      target: { kind: 'content-project' as const, contentProjectId: 'project-1' },
     };
     const onSelectProject = vi.fn(async () => target);
     const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
@@ -813,6 +814,80 @@ describe('InputArea composer controls', () => {
 
     await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
     expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(target);
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
+  });
+
+  it('loads, selects, and creates owner-qualified authoring targets in the Entry menu', async () => {
+    const selected = {
+      label: 'Characters / Aster',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'character-library',
+        workspaceGrantId: 'grant-character',
+      },
+      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+    };
+    const option = {
+      optionId: 'standalone-character:character-1',
+      label: 'Aster',
+      workspaceLabel: 'Characters',
+      target: selected.target,
+      placement: { kind: 'standalone-library' as const, library: 'character' as const },
+    };
+    const creation = {
+      creationId: 'project-1:world',
+      label: 'Novel / Worlds',
+      targetKind: 'world-project' as const,
+      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
+    };
+    const onSelectAuthoringTarget = vi.fn(async () => selected);
+    const onCreateAuthoringTarget = vi.fn(async () => ({
+      ...selected,
+      target: { kind: 'world-project' as const, worldProjectId: 'world-1' },
+    }));
+    const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
+    render(
+      <Harness
+        composerWorkspace={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [option],
+            creationContexts: [creation],
+            diagnostics: [],
+          })),
+          onSelectAuthoringTarget,
+          onCreateAuthoringTarget,
+        }}
+      >
+        <InputArea
+          presentation="entry"
+          inputValue="preserved"
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          showDraftWorkspaceControl
+          onDraftWorkspaceTargetChange={onDraftWorkspaceTargetChange}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Aster/u }));
+    await waitFor(() => expect(onSelectAuthoringTarget).toHaveBeenCalledWith(option));
+    expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(selected);
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.change(await screen.findByLabelText('chat.input.workspace.createScope'), {
+      target: { value: creation.creationId },
+    });
+    fireEvent.change(screen.getByLabelText('chat.input.workspace.targetName'), {
+      target: { value: 'Arcadia' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'chat.input.workspace.createTarget' }));
+    await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledWith(creation, 'Arcadia'));
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
   });
 

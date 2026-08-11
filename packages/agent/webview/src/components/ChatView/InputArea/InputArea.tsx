@@ -62,6 +62,8 @@ import { projectContentLocatorPath } from '../../../presenters/content-locator-p
 import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';
 import {
   useComposerWorkspacePresentation,
+  type AgentComposerAuthoringCatalog,
+  type AgentComposerAuthoringTargetOption,
   type AgentComposerWorkspaceTarget,
 } from '../../ComposerWorkspaceContext';
 
@@ -237,6 +239,75 @@ export function InputArea({
 }: InputAreaProps) {
   const composerWorkspace = useComposerWorkspacePresentation();
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [authoringCatalog, setAuthoringCatalog] = useState<AgentComposerAuthoringCatalog>();
+  const [authoringCatalogLoading, setAuthoringCatalogLoading] = useState(false);
+  const [authoringCatalogDiagnostic, setAuthoringCatalogDiagnostic] = useState<string>();
+  const [authoringCreationId, setAuthoringCreationId] = useState('');
+  const [authoringCreationName, setAuthoringCreationName] = useState('');
+  const authoringCreationContext = authoringCatalog?.creationContexts.find(
+    (candidate) => candidate.creationId === authoringCreationId,
+  );
+  const openWorkspaceMenu = useCallback(() => {
+    const open = !workspaceMenuOpen;
+    setWorkspaceMenuOpen(open);
+    if (
+      !open ||
+      composerWorkspace?.kind !== 'entry' ||
+      !composerWorkspace.loadAuthoringCatalog ||
+      authoringCatalogLoading
+    ) {
+      return;
+    }
+    setAuthoringCatalogLoading(true);
+    setAuthoringCatalogDiagnostic(undefined);
+    void composerWorkspace
+      .loadAuthoringCatalog()
+      .then(setAuthoringCatalog)
+      .catch((error: unknown) =>
+        setAuthoringCatalogDiagnostic(error instanceof Error ? error.message : String(error)),
+      )
+      .finally(() => setAuthoringCatalogLoading(false));
+  }, [authoringCatalogLoading, composerWorkspace, workspaceMenuOpen]);
+  const selectAuthoringTarget = useCallback(
+    (option: AgentComposerAuthoringTargetOption) => {
+      if (composerWorkspace?.kind !== 'entry' || !composerWorkspace.onSelectAuthoringTarget) {
+        throw new Error('Agent Entry authoring target selector is unavailable.');
+      }
+      void composerWorkspace.onSelectAuthoringTarget(option).then((target) => {
+        if (target) void onDraftWorkspaceTargetChange?.(target);
+        setWorkspaceMenuOpen(false);
+      });
+    },
+    [composerWorkspace, onDraftWorkspaceTargetChange],
+  );
+  const createAuthoringTarget = useCallback(() => {
+    if (composerWorkspace?.kind !== 'entry' || !composerWorkspace.onCreateAuthoringTarget) {
+      throw new Error('Agent Entry authoring target creation is unavailable.');
+    }
+    const context = authoringCreationContext;
+    if (!context || (context.targetKind !== 'content-project' && !authoringCreationName.trim())) {
+      return;
+    }
+    setAuthoringCatalogLoading(true);
+    setAuthoringCatalogDiagnostic(undefined);
+    void composerWorkspace
+      .onCreateAuthoringTarget(context, authoringCreationName.trim())
+      .then((target) => {
+        if (target) void onDraftWorkspaceTargetChange?.(target);
+        setAuthoringCreationName('');
+        setWorkspaceMenuOpen(false);
+      })
+      .catch((error: unknown) =>
+        setAuthoringCatalogDiagnostic(error instanceof Error ? error.message : String(error)),
+      )
+      .finally(() => setAuthoringCatalogLoading(false));
+  }, [
+    authoringCreationContext,
+    authoringCreationId,
+    authoringCreationName,
+    composerWorkspace,
+    onDraftWorkspaceTargetChange,
+  ]);
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -1133,7 +1204,7 @@ export function InputArea({
                       type="button"
                       className="agent-composer-workspace-button"
                       disabled={composerWorkspace.disabled || draftTargetSelectionPending}
-                      onClick={() => setWorkspaceMenuOpen((open) => !open)}
+                      onClick={openWorkspaceMenu}
                       aria-expanded={workspaceMenuOpen}
                     >
                       {draftWorkspaceTarget?.label ?? t('chat.input.workspace.openProject')}
@@ -1151,6 +1222,85 @@ export function InputArea({
                     ) : null}
                     {workspaceMenuOpen ? (
                       <div className="agent-composer-workspace-menu" role="menu">
+                        {authoringCatalogLoading ? (
+                          <span className="agent-composer-workspace-menu-status" role="status">
+                            {t('chat.input.workspace.loadingTargets')}
+                          </span>
+                        ) : null}
+                        {authoringCatalogDiagnostic ? (
+                          <span
+                            className="agent-composer-workspace-menu-status is-error"
+                            role="alert"
+                          >
+                            {authoringCatalogDiagnostic}
+                          </span>
+                        ) : null}
+                        {authoringCatalog?.targets.map((option) => (
+                          <button
+                            key={option.optionId}
+                            type="button"
+                            role="menuitem"
+                            disabled={option.disabled || draftTargetSelectionPending}
+                            onClick={() => selectAuthoringTarget(option)}
+                          >
+                            <span>{option.label}</span>
+                            <small>{option.workspaceLabel}</small>
+                          </button>
+                        ))}
+                        {authoringCatalog?.diagnostics.map((diagnostic) => (
+                          <span
+                            className="agent-composer-workspace-menu-status is-error"
+                            key={diagnostic}
+                            role="status"
+                          >
+                            {diagnostic}
+                          </span>
+                        ))}
+                        {authoringCatalog?.creationContexts.length &&
+                        composerWorkspace.onCreateAuthoringTarget ? (
+                          <div className="agent-composer-workspace-create">
+                            <select
+                              aria-label={t('chat.input.workspace.createScope')}
+                              value={authoringCreationId}
+                              onChange={(event) =>
+                                setAuthoringCreationId(event.currentTarget.value)
+                              }
+                            >
+                              <option value="">{t('chat.input.workspace.createTarget')}</option>
+                              {authoringCatalog.creationContexts.map((context) => (
+                                <option key={context.creationId} value={context.creationId}>
+                                  {context.label}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              aria-label={t('chat.input.workspace.targetName')}
+                              placeholder={t('chat.input.workspace.targetName')}
+                              value={authoringCreationName}
+                              disabled={authoringCreationContext?.targetKind === 'content-project'}
+                              onChange={(event) =>
+                                setAuthoringCreationName(event.currentTarget.value)
+                              }
+                            />
+                            <button
+                              aria-label={t('chat.input.workspace.createTarget')}
+                              disabled={
+                                authoringCatalogLoading ||
+                                !authoringCreationId ||
+                                (authoringCreationContext?.targetKind !== 'content-project' &&
+                                  !authoringCreationName.trim())
+                              }
+                              title={t('chat.input.workspace.createTarget')}
+                              type="button"
+                              onClick={createAuthoringTarget}
+                            >
+                              <PlusIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : null}
+                        {authoringCatalog?.targets.length ? (
+                          <span className="agent-composer-workspace-menu-separator" />
+                        ) : null}
                         {composerWorkspace.projects.map((project) => (
                           <button
                             key={project.projectId}

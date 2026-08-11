@@ -247,6 +247,46 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(adapter.readLaunchCatalog()).toEqual(workspaceCatalog);
   });
 
+  it('stores the Host-issued Entry receipt and matching capability catalog together', async () => {
+    const bridge = createBridge();
+    const binding = {
+      kind: 'authoring' as const,
+      workspaceId: 'workspace:1',
+      workspaceGrantId: 'workspace-grant:1',
+      target: { kind: 'content-project' as const, contentProjectId: 'content:1' },
+    };
+    const workspaceCatalog = createCatalog({
+      binding: {
+        kind: 'workspace',
+        workspaceId: binding.workspaceId,
+        workspaceGrantId: binding.workspaceGrantId,
+      },
+    });
+    const intent = {
+      mode: 'authoring' as const,
+      targetReceipt: {
+        targetReceiptId: 'entry-target:1',
+        draftId: 'draft:entry',
+        connectionId: workspaceCatalog.connection.connectionId,
+        mode: 'authoring' as const,
+        binding,
+      },
+    };
+    bridge.agentLaunch.configureEntryTarget.mockResolvedValueOnce({
+      intent,
+      catalog: workspaceCatalog,
+    });
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
+
+    await expect(adapter.configureEntryTarget('authoring', binding)).resolves.toEqual(intent);
+    expect(adapter.readEntryIntent()).toEqual(intent);
+    expect(adapter.readLaunchCatalog()).toEqual(workspaceCatalog);
+  });
+
   it('restores the one Window entry draft across scope and connection replacement', () => {
     const storage = createStorage();
     const first = createElectronAgentLaunchHostRuntimeAdapter({
@@ -341,6 +381,7 @@ function createBridge() {
       attach: vi.fn(),
       authorizeResource: vi.fn(),
       bindTarget: vi.fn(),
+      configureEntryTarget: vi.fn(),
       updateConfiguration: vi.fn(),
       searchWorkspaceMentions: vi.fn(),
       submitDraft: vi.fn(),

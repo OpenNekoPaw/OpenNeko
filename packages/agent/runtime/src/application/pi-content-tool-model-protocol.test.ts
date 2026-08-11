@@ -1,6 +1,7 @@
 import type { SessionTreeEntry } from '@earendil-works/pi-agent-core';
 import {
   TOOL_NAMES_MEDIA,
+  TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_SEARCH,
   TOOL_NAMES_SYSTEM,
   type AgentContextPayload,
@@ -132,6 +133,63 @@ describe('Pi content Tool model protocol', () => {
         context: context('conversation-1'),
       }),
     ).toThrow("unsupported field 'locator'");
+  });
+
+  it('projects external image understanding with only bounded Conversation refs and focus', () => {
+    const protocol = new PiContentToolModelProtocol();
+    const inputRef = protocol.bindInputs('conversation-1', [imagePayload()]).get('file:page.png');
+    const definition = protocol.projectDefinition(tool(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND));
+
+    expect(definition?.parameters).toMatchObject({
+      required: ['image_refs'],
+      additionalProperties: false,
+      properties: {
+        image_refs: { maxItems: 5 },
+        focus: { maxLength: 4_000 },
+      },
+    });
+    expect(JSON.stringify(definition?.parameters)).not.toMatch(
+      /ContentLocator|providerId|modelId|path/u,
+    );
+    expect(
+      protocol.prepareArguments({
+        tool: tool(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND),
+        args: { image_refs: [inputRef], focus: 'Read the title.' },
+        context: context('conversation-1'),
+      }),
+    ).toEqual({
+      images: [
+        {
+          contentLocator: { kind: 'workspace-file', path: 'page.png' },
+          alias: 'page.png',
+        },
+      ],
+      focus: 'Read the title.',
+    });
+
+    for (const forbidden of ['provider', 'model', 'path', 'locator']) {
+      expect(() =>
+        protocol.prepareArguments({
+          tool: tool(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND),
+          args: { image_refs: [inputRef], [forbidden]: 'forbidden' },
+          context: context('conversation-1'),
+        }),
+      ).toThrow(`unsupported field '${forbidden}'`);
+    }
+    expect(() =>
+      protocol.prepareArguments({
+        tool: tool(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND),
+        args: { image_refs: [inputRef, inputRef] },
+        context: context('conversation-1'),
+      }),
+    ).toThrow('must not contain duplicates');
+    expect(() =>
+      protocol.prepareArguments({
+        tool: tool(TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND),
+        args: { image_refs: [inputRef] },
+        context: context('conversation-2'),
+      }),
+    ).toThrow('unknown in this Conversation');
   });
 
   it('rebuilds input and Tool-result bindings from persisted Pi entries', () => {

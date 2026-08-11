@@ -104,6 +104,18 @@ Provider, model and parameter resolution SHALL use the exact user request and do
 - **WHEN** the current Turn contains an authorized image reference, the exact selected `agent.main` model does not declare image input and no image perception capability is registered in that Turn's predetermined plan
 - **THEN** that Turn is rejected before provider execution with a modality diagnostic and no other model, provider, purpose or unregistered Tool path is attempted
 
+#### Scenario: Non-native vision uses the exact purpose model
+
+- **WHEN** the exact selected `agent.main` model does not declare image input and the immutable Turn policy contains a valid Pi-executed `image.understand` purpose binding
+- **THEN** the registered image perception Tool invokes only that exact provider/model snapshot and returns its identity and usage with structured evidence
+- **AND** the Tool cannot accept or select another provider/model through model-authored arguments
+
+#### Scenario: Configured purpose model has no executable Tool
+
+- **WHEN** configuration names an image understanding model but the exact Turn Tool snapshot does not contain an executable image perception Tool
+- **THEN** the system does not add a Prompt claiming that Tool is registered and does not treat model-id difference as capability availability
+- **AND** the exact image reference or Turn fails visibly without native-image, provider, model or Tool fallback
+
 #### Scenario: Stale model selection is submitted
 
 - **WHEN** a Draft or Conversation submits a model catalog identity that is no longer current

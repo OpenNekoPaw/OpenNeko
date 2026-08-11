@@ -41,6 +41,7 @@ import {
   createCanvasProjectCapabilityProvider,
   createCoreTools,
   createCutProjectCapabilityProvider,
+  createImageUnderstandingCapabilityProvider,
   registerMediaAgentTools,
 } from '@neko/agent-runtime/tools';
 import type { GenerationBinding, GenerationJobPort, GenerationOwner } from '@neko/generation/job';
@@ -63,12 +64,15 @@ import {
   isAgentAuthorizedContentReferenceContextData,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
+  TOOL_NAMES_SYSTEM,
   TOOL_NAMES_TRANSCRIBE,
   type AgentContextPayload,
+  type AgentEntryTargetReceipt,
   type IToolRegistry,
   type PromptFragment,
   type Tool,
 } from '@neko/agent-contracts';
+import type { AgentAuthoringMutationAuthority } from './agent-authoring-mutation-authority';
 import {
   createNodeHostContentReadService,
   NodeAuthorizedWorkspaceWriter,
@@ -134,6 +138,7 @@ export interface AgentTurnInput {
   readonly workspaceTrusted: boolean;
   readonly locale: 'en' | 'zh';
   readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
   readonly systemPrompt?: string;
   readonly skillName?: string;
   readonly skillActivationId?: string;
@@ -348,6 +353,7 @@ export interface CreateAgentAppHostOptions {
   readonly createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger;
   readonly resolveGenerationJobs: (binding: GenerationBinding) => Promise<GenerationJobPort>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
+  readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
 }
 
 export function createAgentAppHost(options: CreateAgentAppHostOptions): AgentAppHost {
@@ -695,6 +701,9 @@ class DefaultAgentAppHost implements AgentAppHost {
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
       structuredProjectAuthoring: !isAssistantSpace,
+      ...(this.options.authoringMutationAuthority === undefined
+        ? {}
+        : { authoringMutationAuthority: this.options.authoringMutationAuthority }),
       ...(owner.kind === 'workspace' && this.options.creatorVisibleArtifactDelivery
         ? { creatorVisibleArtifactDelivery: this.options.creatorVisibleArtifactDelivery }
         : {}),
@@ -774,6 +783,7 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly providerTurnAdmission: AgentProviderTurnScheduler;
   readonly structuredProjectAuthoring: boolean;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
+  readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
 }
 
 interface PendingAgentTurnOperation {
@@ -838,6 +848,12 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     const context = { hostContext: null };
     this.capabilities.registerProvider(
       createContentReadCapabilityProvider({ contentAccessRuntime: this.contentAccessRuntime }),
+      context,
+    );
+    this.capabilities.registerProvider(
+      createImageUnderstandingCapabilityProvider({
+        contentAccessRuntime: this.contentAccessRuntime,
+      }),
       context,
     );
     if (options.structuredProjectAuthoring) {
@@ -1336,16 +1352,22 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       input.workspaceTrusted,
       runtimeSnapshot.pluginSkillRoots,
     );
+    const imageRoute = resolveAgentTurnImageRoute(input.modelPolicy, runtimeSnapshot.tools);
+    const turnTools = bindAgentAuthoringMutationAuthority(
+      filterAgentTurnImageTools(runtimeSnapshot.tools, imageRoute),
+      input.entryTargetReceipt ?? null,
+      this.options.authoringMutationAuthority,
+    );
     const contextPayloads = await materializeAgentTurnContextPayloads({
       contextPayloads: input.contextPayloads,
       contentAccessRuntime: this.contentAccessRuntime,
-      toolNames: new Set(runtimeSnapshot.tools.map((tool) => tool.name)),
+      toolNames: new Set(turnTools.map((tool) => tool.name)),
     });
     const contentReferenceIds = this.contentToolModelProtocol.bindInputs(
       input.conversationId,
       input.contextPayloads,
     );
-    const capabilityTools = projectOpenNekoTools(runtimeSnapshot.tools, {
+    const capabilityTools = projectOpenNekoTools(turnTools, {
       locale: input.locale,
       purposesForTool: resolveOpenNekoToolModelPurposes,
       purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
@@ -1374,9 +1396,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       contextPayloads,
       modelPolicy: input.modelPolicy,
       contentAccessRuntime: this.contentAccessRuntime,
-      hasImagePerceptionTool: runtimeSnapshot.tools.some(
-        (tool) => tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND,
-      ),
+      hasImagePerceptionTool: imageRoute === 'external',
     });
     const prompt = buildEnhancedAgentMessage({
       message: input.prompt,
@@ -1426,7 +1446,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       workspaceTrusted: input.workspaceTrusted,
       events,
       ...(images.length === 0 ? {} : { images }),
-      ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
+      systemPrompt: appendAgentTurnImageRoutingPrompt(
+        input.systemPrompt ?? owner.baseSystemPrompt,
+        imageRoute,
+      ),
       ...(input.skillName === undefined ? {} : { skillName: input.skillName }),
       ...(input.skillActivationId === undefined
         ? {}
@@ -1857,6 +1880,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         input.models,
         branchId,
         lease.leaseId,
+        input.baseSystemPrompt,
       );
       this.conversations.set(input.conversationId, owner);
       this.options.onHomeProjectionChanged();
@@ -2060,6 +2084,83 @@ function createAgentContentAccessRuntime(
     documentAccess: createNodeDocumentAccessService(),
     resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
   });
+}
+
+type AgentTurnImageRoute = 'native' | 'external' | 'unavailable';
+
+function resolveAgentTurnImageRoute(
+  modelPolicy: AgentModelPolicy,
+  tools: readonly Tool[],
+): AgentTurnImageRoute {
+  if (modelPolicy['agent.main'].model.input.includes('image')) return 'native';
+  const understandingModel = modelPolicy['image.understand'];
+  return understandingModel?.execution === 'pi' &&
+    tools.some((tool) => tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND)
+    ? 'external'
+    : 'unavailable';
+}
+
+function filterAgentTurnImageTools(
+  tools: readonly Tool[],
+  route: AgentTurnImageRoute,
+): readonly Tool[] {
+  return tools.filter((tool) => {
+    if (tool.name === TOOL_NAMES_SYSTEM.READ_IMAGE) return route === 'native';
+    if (tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND) return route === 'external';
+    return true;
+  });
+}
+
+function bindAgentAuthoringMutationAuthority(
+  tools: readonly Tool[],
+  receipt: AgentEntryTargetReceipt | null,
+  authority: AgentAuthoringMutationAuthority | undefined,
+): readonly Tool[] {
+  return tools.flatMap((tool) => {
+    const expectedTargetKind = tool.requirements?.authoringTargetKind;
+    if (expectedTargetKind === undefined) return [tool];
+    if (
+      authority === undefined ||
+      receipt?.mode !== 'authoring' ||
+      receipt.binding.kind !== 'authoring' ||
+      receipt.binding.target.kind !== expectedTargetKind
+    ) {
+      return [];
+    }
+    return [
+      new Proxy(tool, {
+        get(target, property, receiver) {
+          if (property !== 'execute') return Reflect.get(target, property, receiver);
+          return async (
+            args: Record<string, unknown>,
+            options?: Parameters<Tool['execute']>[1],
+          ) => {
+            try {
+              await authority.authorize({
+                receipt,
+                expectedTargetKind,
+                ...(options?.signal ? { signal: options.signal } : {}),
+              });
+            } catch (error) {
+              return {
+                success: false,
+                error: `Agent authoring authority rejected ${tool.name}: ${error instanceof Error ? error.message : String(error)}`,
+              };
+            }
+            return target.execute(args, options);
+          };
+        },
+      }),
+    ];
+  });
+}
+
+function appendAgentTurnImageRoutingPrompt(
+  systemPrompt: string,
+  route: AgentTurnImageRoute,
+): string {
+  if (route !== 'external') return systemPrompt;
+  return `${systemPrompt}\n\n## External Image Understanding\n\nThe main model cannot inspect image pixels directly. For image inspection, OCR, comparison, style, layout, or quality questions, call the registered external image understanding Tool with the short image references from this Conversation and a concise focus. Base the answer on its structured evidence. Never construct paths or locators, select a provider or model, call ReadImage, or guess from filenames and labels.`;
 }
 
 async function materializeAgentTurnContextPayloads(input: {
@@ -2322,6 +2423,7 @@ class AgentConversationOwner {
     private readonly models: OpenPiConversationRuntimeOptions['models'],
     readonly branchId: string,
     readonly writerLeaseId: string,
+    readonly baseSystemPrompt: string,
   ) {}
 
   assertModels(models: OpenPiConversationRuntimeOptions['models']): void {

@@ -25,6 +25,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
 }): ElectronAgentLaunchHostRuntimeAdapter {
   const { connection } = input.catalog;
   let catalog = input.catalog;
+  let entryIntent = projectInitialEntryIntent(catalog.interaction.binding.kind);
   const storage = input.storage ?? window.sessionStorage;
   const listeners = new Set<(message: AgentHostToWebviewMessage) => void>();
   const stateKey = createDesktopAgentPresentationStateKey(
@@ -45,6 +46,23 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     readLaunchCatalog() {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       return catalog;
+    },
+    readEntryIntent() {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      return entryIntent;
+    },
+    async configureEntryTarget(mode, binding) {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      catalog = { ...catalog, inputs: [] };
+      emit({ type: 'projectFiles', filter: '', purpose: 'entry', files: [], mentionExtras: [] });
+      const configured = await input.bridge.agentLaunch.configureEntryTarget(
+        connection,
+        mode,
+        binding,
+      );
+      entryIntent = configured.intent;
+      catalog = configured.catalog;
+      return entryIntent;
     },
     async bindTarget(binding) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
@@ -242,5 +260,21 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
       listeners.clear();
       await input.bridge.agentLaunch.detach(connection);
     },
+  };
+}
+
+function projectInitialEntryIntent(
+  bindingKind: AgentLaunchCatalogProjection['interaction']['binding']['kind'],
+): import('@neko/agent-contracts').AgentEntryIntentProjection {
+  return {
+    mode:
+      bindingKind === 'workspace'
+        ? 'authoring'
+        : bindingKind === 'character'
+          ? 'character-dialogue'
+          : bindingKind === 'world'
+            ? 'world-experience'
+            : 'assistant',
+    targetReceipt: null,
   };
 }

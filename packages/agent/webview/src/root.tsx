@@ -41,14 +41,6 @@ export interface AgentWebviewRootProps {
     readonly content: ReactNode;
   };
   readonly toolCallAccessoryRenderer?: AgentToolCallAccessoryRenderer;
-  readonly onSubmitCharacterLaunch?: (input: {
-    readonly message: string;
-    readonly characters: readonly {
-      readonly characterProjectId: string;
-      readonly characterVersionId: string;
-      readonly characterStorylineVersionId?: string;
-    }[];
-  }) => Promise<void>;
 }
 
 export function AgentWebviewRoot({
@@ -60,7 +52,6 @@ export function AgentWebviewRoot({
   initialConversation,
   initialInput,
   locale,
-  onSubmitCharacterLaunch,
   presentation = 'default',
   toolCallAccessoryRenderer,
 }: AgentWebviewRootProps): ReactElement {
@@ -87,7 +78,6 @@ export function AgentWebviewRoot({
                   initialInput={initialInput}
                   presentation={presentation}
                   conversationFeed={conversationFeed}
-                  onSubmitCharacterLaunch={onSubmitCharacterLaunch}
                 />
               </ToolCallAccessoryProvider>
             </ComposerWorkspaceProvider>
@@ -99,6 +89,9 @@ export function AgentWebviewRoot({
 }
 
 export type {
+  AgentComposerAuthoringCatalog,
+  AgentComposerAuthoringCreationContext,
+  AgentComposerAuthoringTargetOption,
   AgentComposerWorkspacePresentation,
   AgentComposerWorkspaceTarget,
 } from './components/ComposerWorkspaceContext';

@@ -689,6 +689,56 @@ under task 11.7 because no provider/model cost authorization was supplied. Repos
 `check:quality` remains externally blocked at `check:no-internal-versioning` by concurrent changes in
 `packages/ai/sdk` and `packages/generation`; none of those findings is in this implementation scope.
 
+## External image perception Tool routing
+
+The DeepSeek-compatible non-native image route was implemented and requalified on 2026-08-11:
+
+- `image.understand` remains a model purpose binding rather than an implicit capability. The Agent
+  runtime now registers one package-owned `perception.image.understand` Tool. It accepts only
+  prepared canonical image bindings, reads through the bounded `AgentContentAccessRuntime`, calls
+  only the frozen Pi `image.understand` purpose model and returns `PerceptionEvidence` containing
+  exact provider/model identity and usage without image payloads, raw paths or locators.
+- `PiContentToolModelProtocol` exposes only Conversation-scoped `image_ref`/image `input_ref` values
+  plus a 4,000-character focus. It rejects unknown fields, provider/model/path/locator arguments,
+  duplicates, more than five images, stale refs and cross-Conversation refs before Tool execution.
+- AppHost derives one immutable `native | external | unavailable` image route from the Turn model
+  policy and actual registered Tool snapshot. Native vision exposes `ReadImage` only; text main plus
+  exact Pi purpose binding exposes the external Tool only; all other states expose neither and fail
+  the affected image reference before provider execution. Tool visibility, context planning,
+  provider image materialization and routing Prompt consume that same result.
+- The old configuration-id comparison Prompt was deleted. External routing instructions are added
+  only when the external Tool is present in the final Turn snapshot; removing the registered Tool
+  while retaining the purpose configuration now fails visibly and does not execute the provider.
+
+Evaluation disposition is `update`: `agent-runtime.perception-routing` now owns external, native and
+missing-binding cases. The external case asserts the exact Luna purpose identity, structured
+evidence/usage and absence of `ReadImage`; native asserts the external Tool is absent; missing
+binding asserts both image paths are absent and requires an explicit unavailable response.
+
+Verification performed:
+
+- `pnpm --dir packages/agent/runtime test` passed 119 files / 1139 tests; focused Tool, content,
+  protocol, Prompt and AppHost tests also passed.
+- `pnpm --dir packages/agent/runtime typecheck` passed.
+- `pnpm test:agent:eval` passed 45 files / 304 tests and strict discovery of 25 suites / 74 cases;
+  focused `agent-runtime.perception-routing` discovery passed one suite / three cases. These are
+  key-free harness and declarative contract results, not real provider behavior acceptance.
+- `openspec validate unify-agent-launch-and-domain-bindings --strict` and `pnpm check:openspec`
+  passed, including all 82 indexed changes/specs.
+- `pnpm check:content-access-boundaries`, `pnpm check:application-boundaries` and
+  `pnpm check:agent-boundaries` passed with no findings. `pnpm check:legacy-debt`,
+  `pnpm check:unused` and `git diff --check` passed; unused reported configuration hints only.
+- The L3 `neko-quality-review` found no blocking ownership, dependency direction, canonical-path,
+  user-data, fail-local or test-evidence issue in this scope. Full `pnpm check:quality` remains
+  externally blocked at its first no-internal-versioning gate by four concurrent new `version`
+  occurrences in `packages/agent/runtime/src/extensions/extension-manager.test.ts`; this change did
+  not edit, suppress or rely on those fields. The image-routing change itself adds no audit finding.
+
+Visible UI validation is not applicable because no Renderer/Webview layout, interaction or
+presentation changed. Real visible DeepSeek/Luna Desktop execution and the matching hidden
+complete-session case remain `infrastructure-blocked` under task 11.7 because no explicit provider
+cost authorization was supplied; deterministic path evidence cannot replace that acceptance lane.
+
 ## Full-capability Conversation queue and interruption
 
 The Conversation-owned queue was implemented and requalified on 2026-08-11:

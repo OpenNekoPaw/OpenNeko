@@ -12,8 +12,10 @@ import { projectAgentConfigurationPolicy } from './agent-launch-service';
 describe('Agent Conversation lifecycle service', () => {
   it('commits Workspace context and the initial turn once before provider execution', async () => {
     const fixture = createFixture();
+    const entryTargetReceipt = authoringReceipt();
     const input = {
       requestId: 'request-1',
+      entryTargetReceipt,
       context: {
         kind: 'workspace' as const,
         workspaceId: 'workspace-1',
@@ -35,6 +37,19 @@ describe('Agent Conversation lifecycle service', () => {
     };
     const committed = await fixture.service.firstSubmit(input);
     const replay = await fixture.service.firstSubmit(input);
+    await expect(
+      fixture.service.firstSubmit({
+        ...input,
+        entryTargetReceipt: {
+          ...entryTargetReceipt,
+          targetReceiptId: 'target-receipt-stale',
+        },
+      }),
+    ).rejects.toThrow('conflicts with its committed input');
+    const replacement = createFixture({ repository: fixture.repository });
+    await expect(
+      replacement.service.readConversationEntryTargetReceipt(committed.conversationId),
+    ).resolves.toEqual(entryTargetReceipt);
     expect(fixture.provider.start).not.toHaveBeenCalled();
     const first = await fixture.service.startProviderExecution(committed.conversationId);
 
@@ -66,6 +81,7 @@ describe('Agent Conversation lifecycle service', () => {
         turnId: first.pendingTurn.turnId,
         conversationId: first.conversationId,
         context: input.context,
+        entryTargetReceipt,
         contextPayloads: [],
       }),
     );
@@ -78,6 +94,7 @@ describe('Agent Conversation lifecycle service', () => {
     const fixture = createFixture();
     const committed = await fixture.service.firstSubmit({
       requestId: 'request-resource',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
@@ -238,6 +255,7 @@ describe('Agent Conversation lifecycle service', () => {
     const fixture = createFixture({ repository, providerError: new Error('provider unavailable') });
     const committed = await fixture.service.firstSubmit({
       requestId: 'request-assistant',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
@@ -324,6 +342,7 @@ describe('Agent Conversation lifecycle service', () => {
     const fixture = createFixture();
     const conversation = await fixture.service.firstSubmit({
       requestId: 'request-1',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
@@ -372,6 +391,7 @@ describe('Agent Conversation lifecycle service', () => {
     const fixture = createFixture({ repository });
     const conversation = await fixture.service.firstSubmit({
       requestId: 'request-1',
+      entryTargetReceipt: null,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
@@ -509,6 +529,7 @@ describe('Agent Conversation lifecycle service', () => {
 function assistantInput(requestId: string) {
   return {
     requestId,
+    entryTargetReceipt: null,
     context: {
       kind: 'assistant' as const,
       assistantSpaceId: 'assistant-space:default',
@@ -519,6 +540,21 @@ function assistantInput(requestId: string) {
     contextReferences: [],
     resourceGrantIds: [],
     configuration: configuration(),
+  };
+}
+
+function authoringReceipt() {
+  return {
+    targetReceiptId: 'target-receipt-1',
+    draftId: 'draft-1',
+    connectionId: 'connection-1',
+    mode: 'authoring' as const,
+    binding: {
+      kind: 'authoring' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant:1',
+      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+    },
   };
 }
 

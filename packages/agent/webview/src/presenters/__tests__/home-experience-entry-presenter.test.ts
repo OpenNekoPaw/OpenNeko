@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentDraftInteractionProjection } from '@neko/agent-contracts';
+import type {
+  AgentAuthoringBinding,
+  AgentDraftInteractionProjection,
+  AgentEntryIntentProjection,
+  AgentEntryMode,
+} from '@neko/agent-contracts';
 import { projectHomeExperienceEntry } from '../home-experience-entry-presenter';
 
 describe('home experience entry presenter', () => {
   it('allows Assistant without a Workspace target', () => {
     const projection = projectHomeExperienceEntry({
       mode: 'assistant',
+      intent: entryIntent('assistant'),
       draft: draft({ kind: 'unbound' }),
       workspaceChooserAvailable: true,
       bindingPending: false,
@@ -20,18 +26,31 @@ describe('home experience entry presenter', () => {
     expect(projection).not.toHaveProperty('submissionBlockedReasonKey');
   });
 
-  it('requires the selected Workspace and exact binding receipt', () => {
+  it('requires Authoring to select a Workspace and exact binding receipt', () => {
     const target = {
       context: {
         kind: 'workspace' as const,
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
       },
+      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
     };
 
     expect(
       projectHomeExperienceEntry({
-        mode: 'workspace',
+        mode: 'authoring',
+        intent: entryIntent('authoring'),
+        draft: draft(target.context),
+        workspaceTarget: { context: target.context },
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBe('chat.entryExperience.validation.workspaceRequired');
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'authoring',
+        intent: entryIntent('authoring'),
         draft: draft({ kind: 'unbound' }),
         workspaceChooserAvailable: true,
         bindingPending: false,
@@ -40,7 +59,8 @@ describe('home experience entry presenter', () => {
     ).toBe('chat.entryExperience.validation.workspaceRequired');
     expect(
       projectHomeExperienceEntry({
-        mode: 'workspace',
+        mode: 'authoring',
+        intent: entryIntent('authoring'),
         draft: draft(target.context, false),
         workspaceTarget: target,
         workspaceChooserAvailable: true,
@@ -50,7 +70,13 @@ describe('home experience entry presenter', () => {
     ).toBe('chat.entryExperience.validation.workspaceBindingMismatch');
     expect(
       projectHomeExperienceEntry({
-        mode: 'workspace',
+        mode: 'authoring',
+        intent: entryIntent('authoring', {
+          kind: 'authoring',
+          workspaceId: target.context.workspaceId,
+          workspaceGrantId: target.context.workspaceGrantId,
+          target: target.target,
+        }),
         draft: draft(target.context),
         workspaceTarget: target,
         workspaceChooserAvailable: true,
@@ -64,6 +90,7 @@ describe('home experience entry presenter', () => {
     expect(
       projectHomeExperienceEntry({
         mode: 'assistant',
+        intent: entryIntent('assistant'),
         draft: draft({
           kind: 'workspace',
           workspaceId: 'workspace-1',
@@ -76,10 +103,11 @@ describe('home experience entry presenter', () => {
     ).toBe('chat.entryExperience.validation.assistantBindingMismatch');
   });
 
-  it('keeps Character and World owner-qualified unavailable', () => {
-    for (const mode of ['character', 'world'] as const) {
+  it('keeps Character Dialogue and World Experience owner-qualified unavailable', () => {
+    for (const mode of ['character-dialogue', 'world-experience'] as const) {
       const projection = projectHomeExperienceEntry({
         mode,
+        intent: entryIntent(mode),
         draft: draft({ kind: 'unbound' }),
         workspaceChooserAvailable: true,
         bindingPending: false,
@@ -87,21 +115,42 @@ describe('home experience entry presenter', () => {
       });
 
       expect(projection.submissionBlockedReasonKey).toBe(
-        `chat.entryExperience.validation.${mode}Unavailable`,
+        mode === 'character-dialogue'
+          ? 'chat.entryExperience.validation.characterUnavailable'
+          : 'chat.entryExperience.validation.worldUnavailable',
       );
       expect(projection.showSkillSuggestions).toBe(false);
     }
     expect(
       projectHomeExperienceEntry({
         mode: 'assistant',
+        intent: entryIntent('assistant'),
         draft: draft({ kind: 'unbound' }),
         workspaceChooserAvailable: true,
         bindingPending: false,
         configurationReady: true,
-      }).options.find((option) => option.mode === 'world'),
-    ).toMatchObject({ disabled: true });
+      }).options.find((option) => option.mode === 'world-experience'),
+    ).toMatchObject({ disabled: false });
   });
 });
+
+function entryIntent(
+  mode: AgentEntryMode,
+  binding?: AgentAuthoringBinding,
+): AgentEntryIntentProjection {
+  return {
+    mode,
+    targetReceipt: binding
+      ? {
+          targetReceiptId: 'target-receipt-1',
+          draftId: 'draft-1',
+          connectionId: 'connection-1',
+          mode: 'authoring',
+          binding,
+        }
+      : null,
+  };
+}
 
 function draft(
   binding: AgentDraftInteractionProjection['binding'],

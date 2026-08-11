@@ -131,7 +131,15 @@ Mention discovery and selected references SHALL be resolved through the current 
 
 - **WHEN** the exact `agent.main` model cannot accept Pi `ImageContent`
 - **THEN** image analysis is available only when the immutable Turn capability snapshot includes an exact image perception Tool and purpose model
+- **AND** that Tool accepts only Conversation-scoped image/input references and a bounded focus, resolves canonical locators inside Agent application, and returns structured textual evidence instead of image payloads to the main model
+- **AND** `ReadImage` is not exposed as a successful visual-analysis path for that text-only model
 - **AND** otherwise only the reference or Turn is unavailable without switching the main model or silently attempting native image input
+
+#### Scenario: Native vision model receives an image reference
+
+- **WHEN** the exact `agent.main` model accepts Pi `ImageContent`
+- **THEN** the Turn exposes the native `ReadImage` path and omits the external image perception Tool even when an `image.understand` purpose default is configured
+- **AND** Prompt composition does not instruct the model to call an absent external perception Tool
 
 #### Scenario: Unsupported binary class is selected
 
