@@ -13,7 +13,7 @@ import {
   CharacterRoomInteractionService,
   type CharacterPreparedRoomRunPort,
 } from '../application/character-room-interaction-service';
-import type { CharacterPrimaryAgentSessionPort } from '../application/character-interaction-service';
+import type { CharacterAgentConversationPort } from '../application/character-interaction-service';
 
 const now = '2026-08-09T10:00:00.000Z';
 
@@ -28,17 +28,35 @@ describe('CharacterRoomInteractionService', () => {
     const run = await service.createRun({
       roomRunId: 'room-run-a',
       characterRoomId: 'room-a',
-      runtimeKind: 'companion',
-      relationshipBindings: [
-        { participantId: 'participant-a', relationshipId: 'relationship-a' },
-        { participantId: 'participant-b', relationshipId: 'relationship-b' },
+      mode: 'companion',
+      companionBindings: [
+        {
+          participantId: 'participant-a',
+          companionContinuityId: 'continuity-a',
+          relationshipId: 'relationship-a',
+        },
+        {
+          participantId: 'participant-b',
+          companionContinuityId: 'continuity-b',
+          relationshipId: 'relationship-b',
+        },
       ],
     });
 
     expect(fixture.createPrimarySession).toHaveBeenCalledTimes(2);
     expect(fixture.createPrimarySession.mock.calls.map(([input]) => input.owner)).toEqual([
-      { kind: 'room', roomId: 'room-a', roomRunId: 'room-run-a' },
-      { kind: 'room', roomId: 'room-a', roomRunId: 'room-run-a' },
+      {
+        kind: 'room',
+        roomId: 'room-a',
+        roomRunId: 'room-run-a',
+        participantId: 'participant-a',
+      },
+      {
+        kind: 'room',
+        roomId: 'room-a',
+        roomRunId: 'room-run-a',
+        participantId: 'participant-b',
+      },
     ]);
     expect(run.participants).toEqual([
       expect.objectContaining({
@@ -82,10 +100,18 @@ describe('CharacterRoomInteractionService', () => {
       service.createRun({
         roomRunId: 'room-run-a',
         characterRoomId: 'room-a',
-        runtimeKind: 'companion',
-        relationshipBindings: [
-          { participantId: 'participant-a', relationshipId: 'relationship-a' },
-          { participantId: 'participant-b', relationshipId: 'relationship-b' },
+        mode: 'companion',
+        companionBindings: [
+          {
+            participantId: 'participant-a',
+            companionContinuityId: 'continuity-a',
+            relationshipId: 'relationship-a',
+          },
+          {
+            participantId: 'participant-b',
+            companionContinuityId: 'continuity-b',
+            relationshipId: 'relationship-b',
+          },
         ],
       }),
     ).rejects.toThrow('aggregate write failed');
@@ -106,12 +132,27 @@ function createFixture() {
     ['relationship-a', relationship('a')],
     ['relationship-b', relationship('b')],
   ]);
-  const createPrimarySession = vi.fn<CharacterPrimaryAgentSessionPort['createPrimarySession']>(
+  const continuities = new Map(
+    ['a', 'b'].map((suffix) => [
+      `continuity-${suffix}`,
+      {
+        companionContinuityId: `continuity-${suffix}`,
+        userId: 'user-a',
+        characterProjectId: `character-project-${suffix}`,
+        continuityRevision: 0,
+        candidates: [],
+        entries: [],
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  );
+  const createPrimarySession = vi.fn<CharacterAgentConversationPort['createPrimarySession']>(
     async (input: { readonly characterRunId: string }) => ({
       primaryAgentSessionId: `session:${input.characterRunId}`,
     }),
   );
-  const releaseUnboundSession = vi.fn<CharacterPrimaryAgentSessionPort['releaseUnboundSession']>(
+  const releaseUnboundSession = vi.fn<CharacterAgentConversationPort['releaseUnboundSession']>(
     async () => undefined,
   );
   const createPreparedRun = vi.fn<CharacterPreparedRoomRunPort['createPreparedRun']>(
@@ -128,9 +169,11 @@ function createFixture() {
         readPublication: async (versionId: string) => structuredClone(versions.get(versionId)),
         readRelationship: async (relationshipId: string) =>
           structuredClone(relationships.get(relationshipId)),
+        readCompanionContinuity: async (continuityId: string) =>
+          structuredClone(continuities.get(continuityId)),
       },
       roomRuns: { createPreparedRun },
-      agentSessions: {
+      agentConversations: {
         createPrimarySession,
         releaseUnboundSession,
         submitTurn: vi.fn(async () => ({ turnId: 'unused', content: 'unused' })),
@@ -187,7 +230,8 @@ function relationship(suffix: string): UserCharacterRelationship {
   return parseUserCharacterRelationship({
     relationshipId: `relationship-${suffix}`,
     userId: 'user-a',
-    characterVersionId: `character-version-${suffix}`,
+    characterProjectId: `character-project-${suffix}`,
+    relationshipRevision: 0,
     memories: [],
     candidates: [],
     createdAt: now,

@@ -29,19 +29,35 @@ export interface CharacterConversationLaunchCatalog {
   readonly diagnostics: readonly CharacterConversationLaunchCatalogDiagnostic[];
 }
 
-export interface CharacterLaunchParticipantSelection {
+export interface CompanionCharacterLaunchParticipantSelection {
   readonly characterVersionId: string;
-  readonly characterStorylineVersionId?: string;
   readonly roleProfileId?: string;
 }
 
-interface CharacterConversationLaunchSelectionBase {
-  readonly characters: readonly CharacterLaunchParticipantSelection[];
+export interface NarrativeStorylineNodeSelection {
+  readonly characterStorylineId: string;
+  readonly characterStorylineVersionId: string;
+  readonly storylineNodeId: string;
 }
 
-export type CharacterConversationLaunchSelection = CharacterConversationLaunchSelectionBase & {
-  readonly runtimeKind: 'companion' | 'narrative';
-};
+export interface NarrativeCharacterLaunchParticipantSelection {
+  readonly characterVersionId: string;
+  readonly storyline?: NarrativeStorylineNodeSelection;
+  readonly roleProfileId?: string;
+}
+
+export type CharacterLaunchParticipantSelection =
+  CompanionCharacterLaunchParticipantSelection | NarrativeCharacterLaunchParticipantSelection;
+
+export type CharacterConversationLaunchSelection =
+  | {
+      readonly mode: 'companion';
+      readonly characters: readonly CompanionCharacterLaunchParticipantSelection[];
+    }
+  | {
+      readonly mode: 'narrative';
+      readonly characters: readonly NarrativeCharacterLaunchParticipantSelection[];
+    };
 
 export interface CharacterConversationLaunchInput {
   readonly requestId: string;
@@ -149,7 +165,7 @@ function parseCharacterConversationLaunchTarget(value: unknown): CharacterConver
 export type CharacterConversationLaunchResult =
   | {
       readonly topology: 'dialogue';
-      readonly runtimeKind: 'companion';
+      readonly mode: 'companion' | 'narrative';
       readonly characterProjectId: string;
       readonly characterVersionId: string;
       readonly characterRunId: string;
@@ -158,7 +174,7 @@ export type CharacterConversationLaunchResult =
     }
   | {
       readonly topology: 'chatroom';
-      readonly runtimeKind: 'companion';
+      readonly mode: 'companion' | 'narrative';
       readonly characterRoomId: string;
       readonly roomRunId: string;
       readonly interactionAgentSessionId: string;
@@ -175,20 +191,34 @@ export function parseCharacterConversationLaunchSelection(
 ): CharacterConversationLaunchSelection {
   const record = requireExactRecord(
     value,
-    ['runtimeKind', 'characters'],
+    ['mode', 'characters'],
     'Character conversation launch selection',
   );
-  const runtimeKind = requireOneOf(
-    record['runtimeKind'],
+  const mode = requireOneOf(
+    record['mode'],
     ['companion', 'narrative'] as const,
-    'Character conversation launch runtimeKind',
+    'Character conversation launch mode',
   );
-  const characters = requireUniqueIdentities(
-    requireArray(
+  if (mode === 'companion') {
+    const characters = parseLaunchCharacters(
       record['characters'],
-      parseCharacterLaunchParticipantSelection,
-      'Character conversation launch characters',
-    ),
+      parseCompanionCharacterLaunchParticipantSelection,
+    );
+    return { mode, characters };
+  }
+  const characters = parseLaunchCharacters(
+    record['characters'],
+    parseNarrativeCharacterLaunchParticipantSelection,
+  );
+  return { mode, characters };
+}
+
+function parseLaunchCharacters<T extends CharacterLaunchParticipantSelection>(
+  value: unknown,
+  parser: (item: unknown) => T,
+): readonly T[] {
+  const characters = requireUniqueIdentities(
+    requireArray(value, parser, 'Character conversation launch characters'),
     (character) => character.characterVersionId,
     'Character conversation launch characters',
   );
@@ -200,7 +230,7 @@ export function parseCharacterConversationLaunchSelection(
       'Character Room launch does not support participant role profiles without exact Room authority.',
     );
   }
-  return { runtimeKind, characters };
+  return characters;
 }
 
 export function parseCharacterConversationLaunchInput(
@@ -228,12 +258,14 @@ export function parseCharacterConversationLaunchResult(
     'Character conversation launch result',
   );
   if (record['topology'] === 'dialogue') {
-    if (record['runtimeKind'] !== 'companion') {
-      throw new Error('Character Dialogue launch runtimeKind must be companion.');
-    }
+    const mode = requireOneOf(
+      record['mode'],
+      ['companion', 'narrative'] as const,
+      'Character Dialogue launch mode',
+    );
     return {
       topology: 'dialogue',
-      runtimeKind: 'companion',
+      mode,
       characterProjectId: requireIdentity(
         record['characterProjectId'],
         'Character launch CharacterProject',
@@ -250,9 +282,14 @@ export function parseCharacterConversationLaunchResult(
       ),
     };
   }
-  if (record['topology'] !== 'chatroom' || record['runtimeKind'] !== 'companion') {
+  if (record['topology'] !== 'chatroom') {
     throw new Error('Character conversation launch result has an unsupported topology.');
   }
+  const mode = requireOneOf(
+    record['mode'],
+    ['companion', 'narrative'] as const,
+    'Character Room launch mode',
+  );
   const participants = requireUniqueIdentities(
     requireArray(
       record['participants'],
@@ -291,7 +328,7 @@ export function parseCharacterConversationLaunchResult(
   }
   return {
     topology: 'chatroom',
-    runtimeKind: 'companion',
+    mode,
     characterRoomId: requireIdentity(record['characterRoomId'], 'Character launch Room'),
     roomRunId: requireIdentity(record['roomRunId'], 'Character launch RoomRun'),
     interactionAgentSessionId: requireIdentity(
@@ -309,7 +346,7 @@ function recordKeysForLaunchResult(value: unknown): readonly string[] {
   return (value as Record<string, unknown>)['topology'] === 'dialogue'
     ? [
         'topology',
-        'runtimeKind',
+        'mode',
         'characterProjectId',
         'characterVersionId',
         'characterRunId',
@@ -318,7 +355,7 @@ function recordKeysForLaunchResult(value: unknown): readonly string[] {
       ]
     : [
         'topology',
-        'runtimeKind',
+        'mode',
         'characterRoomId',
         'roomRunId',
         'interactionAgentSessionId',
@@ -326,29 +363,64 @@ function recordKeysForLaunchResult(value: unknown): readonly string[] {
       ];
 }
 
-function parseCharacterLaunchParticipantSelection(
+function parseCompanionCharacterLaunchParticipantSelection(
   value: unknown,
-): CharacterLaunchParticipantSelection {
+): CompanionCharacterLaunchParticipantSelection {
   const record = requireExactRecord(
     value,
-    ['characterVersionId', 'characterStorylineVersionId', 'roleProfileId'],
-    'Character launch participant selection',
+    ['characterVersionId', 'roleProfileId'],
+    'Companion Character launch participant selection',
   );
-  const characterStorylineVersionId =
-    record['characterStorylineVersionId'] === undefined
-      ? undefined
-      : requireIdentity(
-          record['characterStorylineVersionId'],
-          'Character launch participant characterStorylineVersionId',
-        );
   return {
     characterVersionId: requireIdentity(
       record['characterVersionId'],
       'Character launch participant characterVersionId',
     ),
-    ...(characterStorylineVersionId === undefined ? {} : { characterStorylineVersionId }),
     ...(record['roleProfileId'] === undefined
       ? {}
       : { roleProfileId: requireIdentity(record['roleProfileId'], 'Character role profile') }),
+  };
+}
+
+function parseNarrativeCharacterLaunchParticipantSelection(
+  value: unknown,
+): NarrativeCharacterLaunchParticipantSelection {
+  const record = requireExactRecord(
+    value,
+    ['characterVersionId', 'storyline', 'roleProfileId'],
+    'Narrative Character launch participant selection',
+  );
+  return {
+    characterVersionId: requireIdentity(
+      record['characterVersionId'],
+      'Narrative Character launch participant characterVersionId',
+    ),
+    ...(record['storyline'] === undefined
+      ? {}
+      : { storyline: parseNarrativeStorylineNodeSelection(record['storyline']) }),
+    ...(record['roleProfileId'] === undefined
+      ? {}
+      : { roleProfileId: requireIdentity(record['roleProfileId'], 'Character role profile') }),
+  };
+}
+
+export function parseNarrativeStorylineNodeSelection(
+  value: unknown,
+): NarrativeStorylineNodeSelection {
+  const record = requireExactRecord(
+    value,
+    ['characterStorylineId', 'characterStorylineVersionId', 'storylineNodeId'],
+    'Narrative Storyline node selection',
+  );
+  return {
+    characterStorylineId: requireIdentity(
+      record['characterStorylineId'],
+      'Narrative Storyline identity',
+    ),
+    characterStorylineVersionId: requireIdentity(
+      record['characterStorylineVersionId'],
+      'Narrative StorylineVersion identity',
+    ),
+    storylineNodeId: requireIdentity(record['storylineNodeId'], 'Narrative StorylineNode identity'),
   };
 }

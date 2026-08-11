@@ -3,9 +3,9 @@ import type {
   CharacterProject,
   CharacterRoom,
   CharacterRun,
-  CharacterMemoryScope,
-  CharacterStorylineObservationCandidate,
-  CharacterStorylineRun,
+  CharacterCompanionContinuity,
+  CharacterStoryline,
+  CharacterStorylineDraft,
   CharacterStorylineVersion,
   CharacterRunPresentationConfiguration,
   CharacterVersion,
@@ -40,10 +40,13 @@ export interface CharacterDurableRecordDiagnostic {
     | 'dialogue-run'
     | 'character-room'
     | 'room-run'
+    | 'character-storyline'
+    | 'character-storyline-draft'
     | 'character-storyline-version'
     | 'character-storyline-run'
     | 'character-storyline-observation-candidate'
     | 'character-memory-scope'
+    | 'character-companion-continuity'
     | 'character-presentation-configuration';
   readonly recordId: string;
   readonly message: string;
@@ -57,10 +60,10 @@ export interface CharacterDurableCatalog {
   readonly dialogueRuns: readonly DialogueRun[];
   readonly rooms: readonly CharacterRoom[];
   readonly roomRuns: readonly RoomRun[];
+  readonly storylines: readonly CharacterStoryline[];
+  readonly storylineDrafts: readonly CharacterStorylineDraft[];
   readonly storylineVersions: readonly CharacterStorylineVersion[];
-  readonly storylineRuns: readonly CharacterStorylineRun[];
-  readonly storylineObservationCandidates: readonly CharacterStorylineObservationCandidate[];
-  readonly memoryScopes: readonly CharacterMemoryScope[];
+  readonly companionContinuities: readonly CharacterCompanionContinuity[];
   readonly presentationConfigurations: readonly CharacterRunPresentationConfiguration[];
   readonly diagnostics: readonly CharacterDurableRecordDiagnostic[];
 }
@@ -75,10 +78,10 @@ export interface CharacterRuntimeCatalog {
   readonly dialogueRuns: readonly DialogueRun[];
   readonly rooms: readonly CharacterRoom[];
   readonly roomRuns: readonly RoomRun[];
+  readonly storylines: readonly CharacterStoryline[];
+  readonly storylineDrafts: readonly CharacterStorylineDraft[];
   readonly storylineVersions: readonly CharacterStorylineVersion[];
-  readonly storylineRuns: readonly CharacterStorylineRun[];
-  readonly storylineObservationCandidates: readonly CharacterStorylineObservationCandidate[];
-  readonly memoryScopes: readonly CharacterMemoryScope[];
+  readonly companionContinuities: readonly CharacterCompanionContinuity[];
   readonly presentationConfigurations: readonly CharacterRunPresentationConfiguration[];
   readonly diagnostics: readonly CharacterDurableRecordDiagnostic[];
 }
@@ -106,10 +109,10 @@ export function createCharacterDurableCatalogPort(options: {
         dialogueRuns: runtime.dialogueRuns,
         rooms: runtime.rooms,
         roomRuns: runtime.roomRuns,
+        storylines: runtime.storylines,
+        storylineDrafts: runtime.storylineDrafts,
         storylineVersions: runtime.storylineVersions,
-        storylineRuns: runtime.storylineRuns,
-        storylineObservationCandidates: runtime.storylineObservationCandidates,
-        memoryScopes: runtime.memoryScopes,
+        companionContinuities: runtime.companionContinuities,
         presentationConfigurations: runtime.presentationConfigurations,
         diagnostics: [...authoring.diagnostics, ...runtime.diagnostics],
       };

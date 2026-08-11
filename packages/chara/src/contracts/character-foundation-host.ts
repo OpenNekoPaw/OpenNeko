@@ -15,16 +15,21 @@ import {
   type UserCharacterRelationship,
 } from './character';
 import {
-  parseCharacterMemoryCandidate,
-  parseCharacterMemoryScope,
-  parseCharacterStorylineObservationCandidate,
-  parseCharacterStorylineRun,
+  parseCharacterCompanionContinuity,
+  parseCompanionMemoryCandidate,
+  parseCompanionMemoryProvenance,
+  type CharacterCompanionContinuity,
+  type CompanionMemoryCompatibility,
+  type CompanionMemoryProvenance,
+} from './character-companion-continuity';
+import {
+  parseCharacterStoryline,
+  parseCharacterStorylineDraft,
   parseCharacterStorylineVersion,
-  type CharacterMemoryScope,
-  type CharacterStorylineObservationCandidate,
-  type CharacterStorylineRun,
+  type CharacterStoryline,
+  type CharacterStorylineDraft,
   type CharacterStorylineVersion,
-} from './character-lore-storyline-memory';
+} from './character-storyline';
 import {
   parseCharacterRunPresentationConfiguration,
   type CharacterRunPresentationConfiguration,
@@ -58,7 +63,7 @@ type CharacterFoundationDialogueCreateBase = {
 };
 
 export type CharacterFoundationDialogueCreateInput = CharacterFoundationDialogueCreateBase & {
-  readonly runtimeKind: 'companion';
+  readonly mode: 'companion';
   readonly relationshipId: string;
 };
 
@@ -95,7 +100,7 @@ export type CharacterFoundationCommand =
       readonly input: {
         readonly relationshipId: string;
         readonly userId: string;
-        readonly characterVersionId: string;
+        readonly characterProjectId: string;
       };
     }
   | {
@@ -103,8 +108,10 @@ export type CharacterFoundationCommand =
       readonly input: {
         readonly relationshipId: string;
         readonly candidateId: string;
+        readonly sourceCharacterVersionId: string;
+        readonly provenance: CompanionMemoryProvenance;
         readonly content: string;
-        readonly sourceRef: string;
+        readonly expectedRelationshipRevision: number;
       };
     }
   | {
@@ -113,23 +120,34 @@ export type CharacterFoundationCommand =
         readonly relationshipId: string;
         readonly candidateId: string;
         readonly memoryId: string;
+        readonly expectedRelationshipRevision: number;
       };
     }
   | {
       readonly operation: 'relationship-memory-candidate-reject';
-      readonly input: { readonly relationshipId: string; readonly candidateId: string };
+      readonly input: {
+        readonly relationshipId: string;
+        readonly candidateId: string;
+        readonly expectedRelationshipRevision: number;
+      };
     }
   | {
       readonly operation: 'relationship-memory-correct';
       readonly input: {
         readonly relationshipId: string;
-        readonly memoryId: string;
-        readonly content: string;
+        readonly candidateId: string;
+        readonly correctedMemoryId: string;
+        readonly replacementMemoryId: string;
+        readonly expectedRelationshipRevision: number;
       };
     }
   | {
       readonly operation: 'relationship-memory-delete';
-      readonly input: { readonly relationshipId: string; readonly memoryId: string };
+      readonly input: {
+        readonly relationshipId: string;
+        readonly memoryId: string;
+        readonly expectedRelationshipRevision: number;
+      };
     }
   | {
       readonly operation: 'dialogue-create';
@@ -142,97 +160,88 @@ export type CharacterFoundationCommand =
       readonly input: CharacterRunPresentationConfiguration;
     }
   | {
-      readonly operation: 'character-storyline-publish';
-      readonly input: Omit<CharacterStorylineVersion, 'publishedAt'>;
+      readonly operation: 'character-storyline-create';
+      readonly input: {
+        readonly characterStorylineId: string;
+        readonly characterProjectId: string;
+        readonly displayName: string;
+        readonly draft: Omit<CharacterStorylineDraft, 'characterStorylineId' | 'updatedAt'>;
+      };
     }
   | {
-      readonly operation: 'character-storyline-run-create';
+      readonly operation: 'character-storyline-update-draft';
       readonly input: {
-        readonly characterStorylineRunId: string;
+        readonly characterStorylineId: string;
+        readonly displayName?: string;
+        readonly draft: Omit<CharacterStorylineDraft, 'characterStorylineId' | 'updatedAt'>;
+      };
+    }
+  | {
+      readonly operation: 'character-storyline-restore-as-draft';
+      readonly input: {
+        readonly characterStorylineId: string;
         readonly characterStorylineVersionId: string;
-        readonly characterRunId: string;
-        readonly initialStageId: string;
       };
     }
   | {
-      readonly operation: 'character-storyline-observation-propose';
-      readonly input: Omit<
-        CharacterStorylineObservationCandidate,
-        'status' | 'reviewedAt' | 'acceptedTransitionId'
-      >;
+      readonly operation: 'character-storyline-delete';
+      readonly input: { readonly characterStorylineId: string };
     }
   | {
-      readonly operation: 'character-storyline-observation-accept';
+      readonly operation: 'character-storyline-publish';
       readonly input: {
-        readonly observationCandidateId: string;
-        readonly characterStorylineRunId: string;
-        readonly transitionId: string;
-        readonly expectedStorylineRevision: number;
+        readonly characterStorylineId: string;
+        readonly characterStorylineVersionId: string;
+        readonly label: string;
       };
     }
   | {
-      readonly operation: 'character-storyline-observation-reject';
+      readonly operation: 'companion-memory-candidate-propose';
       readonly input: {
-        readonly observationCandidateId: string;
-        readonly characterStorylineRunId: string;
-        readonly expectedStorylineRevision: number;
-      };
-    }
-  | {
-      readonly operation: 'character-memory-scope-create';
-      readonly input: {
-        readonly characterMemoryScopeId: string;
-        readonly characterRunId: string;
-        readonly characterStorylineRunId?: string;
-      };
-    }
-  | {
-      readonly operation: 'character-memory-candidate-propose';
-      readonly input: {
-        readonly characterMemoryScopeId: string;
-        readonly characterMemoryCandidateId: string;
+        readonly companionContinuityId: string;
+        readonly companionMemoryCandidateId: string;
+        readonly sourceCharacterVersionId: string;
+        readonly provenance: CompanionMemoryProvenance;
         readonly content: string;
-        readonly sourceRef: string;
-        readonly observerParticipantId?: string;
-        readonly observedAt: string;
+        readonly compatibility: CompanionMemoryCompatibility;
         readonly sensitivityTraits: readonly string[];
         readonly retentionTraits: readonly string[];
-        readonly expectedMemoryRevision: number;
+        readonly expectedContinuityRevision: number;
       };
     }
   | {
-      readonly operation: 'character-memory-candidate-accept';
+      readonly operation: 'companion-memory-candidate-accept';
       readonly input: {
-        readonly characterMemoryScopeId: string;
-        readonly characterMemoryCandidateId: string;
-        readonly characterMemoryEntryId: string;
-        readonly expectedMemoryRevision: number;
+        readonly companionContinuityId: string;
+        readonly companionMemoryCandidateId: string;
+        readonly companionMemoryEntryId: string;
+        readonly expectedContinuityRevision: number;
       };
     }
   | {
-      readonly operation: 'character-memory-candidate-reject';
+      readonly operation: 'companion-memory-candidate-reject';
       readonly input: {
-        readonly characterMemoryScopeId: string;
-        readonly characterMemoryCandidateId: string;
-        readonly expectedMemoryRevision: number;
+        readonly companionContinuityId: string;
+        readonly companionMemoryCandidateId: string;
+        readonly expectedContinuityRevision: number;
       };
     }
   | {
-      readonly operation: 'character-memory-candidate-correct';
+      readonly operation: 'companion-memory-candidate-correct';
       readonly input: {
-        readonly characterMemoryScopeId: string;
-        readonly characterMemoryCandidateId: string;
+        readonly companionContinuityId: string;
+        readonly companionMemoryCandidateId: string;
         readonly correctedMemoryEntryId: string;
         readonly replacementMemoryEntryId: string;
-        readonly expectedMemoryRevision: number;
+        readonly expectedContinuityRevision: number;
       };
     }
   | {
-      readonly operation: 'character-memory-entry-delete';
+      readonly operation: 'companion-memory-entry-delete';
       readonly input: {
-        readonly characterMemoryScopeId: string;
-        readonly characterMemoryEntryId: string;
-        readonly expectedMemoryRevision: number;
+        readonly companionContinuityId: string;
+        readonly companionMemoryEntryId: string;
+        readonly expectedContinuityRevision: number;
       };
     };
 
@@ -259,10 +268,10 @@ export interface CharacterFoundationSnapshot {
     readonly dialogueRuns: readonly DialogueRun[];
     readonly rooms: readonly CharacterRoom[];
     readonly roomRuns: readonly RoomRun[];
+    readonly storylines: readonly CharacterStoryline[];
+    readonly storylineDrafts: readonly CharacterStorylineDraft[];
     readonly storylineVersions: readonly CharacterStorylineVersion[];
-    readonly storylineRuns: readonly CharacterStorylineRun[];
-    readonly storylineObservationCandidates: readonly CharacterStorylineObservationCandidate[];
-    readonly memoryScopes: readonly CharacterMemoryScope[];
+    readonly companionContinuities: readonly CharacterCompanionContinuity[];
     readonly presentationConfigurations: readonly CharacterRunPresentationConfiguration[];
   };
   readonly diagnostics: readonly CharacterFoundationDiagnostic[];
@@ -400,7 +409,7 @@ export function parseCharacterFoundationCommandHostRequest(
     case 'relationship-create': {
       const input = exactRecord(
         record['input'],
-        ['relationshipId', 'userId', 'characterVersionId'],
+        ['relationshipId', 'userId', 'characterProjectId'],
         'Relationship create input',
       );
       return {
@@ -409,7 +418,7 @@ export function parseCharacterFoundationCommandHostRequest(
         input: {
           relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
           userId: requireIdentity(input['userId'], 'user'),
-          characterVersionId: requireIdentity(input['characterVersionId'], 'CharacterVersion'),
+          characterProjectId: requireIdentity(input['characterProjectId'], 'CharacterProject'),
         },
       };
     }
@@ -435,31 +444,25 @@ export function parseCharacterFoundationCommandHostRequest(
         operation,
         input: parseCharacterRunPresentationConfiguration(record['input']),
       };
+    case 'character-storyline-create':
+      return { requestId, operation, input: parseStorylineCreateInput(record['input']) };
+    case 'character-storyline-update-draft':
+      return { requestId, operation, input: parseStorylineUpdateDraftInput(record['input']) };
+    case 'character-storyline-restore-as-draft':
+      return { requestId, operation, input: parseStorylineRestoreInput(record['input']) };
+    case 'character-storyline-delete':
+      return { requestId, operation, input: parseStorylineDeleteInput(record['input']) };
     case 'character-storyline-publish':
       return { requestId, operation, input: parseStorylinePublishInput(record['input']) };
-    case 'character-storyline-run-create':
-      return { requestId, operation, input: parseStorylineRunCreateInput(record['input']) };
-    case 'character-storyline-observation-propose':
-      return {
-        requestId,
-        operation,
-        input: parseStorylineObservationProposeInput(record['input']),
-      };
-    case 'character-storyline-observation-accept':
-      return { requestId, operation, input: parseStorylineObservationAcceptInput(record['input']) };
-    case 'character-storyline-observation-reject':
-      return { requestId, operation, input: parseStorylineObservationRejectInput(record['input']) };
-    case 'character-memory-scope-create':
-      return { requestId, operation, input: parseMemoryScopeCreateInput(record['input']) };
-    case 'character-memory-candidate-propose':
+    case 'companion-memory-candidate-propose':
       return { requestId, operation, input: parseMemoryCandidateProposeInput(record['input']) };
-    case 'character-memory-candidate-accept':
+    case 'companion-memory-candidate-accept':
       return { requestId, operation, input: parseMemoryCandidateAcceptInput(record['input']) };
-    case 'character-memory-candidate-reject':
+    case 'companion-memory-candidate-reject':
       return { requestId, operation, input: parseMemoryCandidateRejectInput(record['input']) };
-    case 'character-memory-candidate-correct':
+    case 'companion-memory-candidate-correct':
       return { requestId, operation, input: parseMemoryCandidateCorrectInput(record['input']) };
-    case 'character-memory-entry-delete':
+    case 'companion-memory-entry-delete':
       return { requestId, operation, input: parseMemoryEntryDeleteInput(record['input']) };
     default:
       throw new Error(`Unknown Character Foundation operation '${String(operation)}'.`);
@@ -509,10 +512,10 @@ export function parseCharacterFoundationSnapshot(value: unknown): CharacterFound
       'dialogueRuns',
       'rooms',
       'roomRuns',
+      'storylines',
+      'storylineDrafts',
       'storylineVersions',
-      'storylineRuns',
-      'storylineObservationCandidates',
-      'memoryScopes',
+      'companionContinuities',
       'presentationConfigurations',
     ],
     'Character catalog',
@@ -530,25 +533,25 @@ export function parseCharacterFoundationSnapshot(value: unknown): CharacterFound
       dialogueRuns: parseArray(character['dialogueRuns'], parseDialogueRun, 'Dialogue runs'),
       rooms: parseArray(character['rooms'], parseCharacterRoom, 'Character rooms'),
       roomRuns: parseArray(character['roomRuns'], parseRoomRun, 'Room runs'),
+      storylines: parseArray(
+        character['storylines'],
+        parseCharacterStoryline,
+        'Character storylines',
+      ),
+      storylineDrafts: parseArray(
+        character['storylineDrafts'],
+        parseCharacterStorylineDraft,
+        'Character storyline drafts',
+      ),
       storylineVersions: parseArray(
         character['storylineVersions'],
         parseCharacterStorylineVersion,
         'Character storyline versions',
       ),
-      storylineRuns: parseArray(
-        character['storylineRuns'],
-        parseCharacterStorylineRun,
-        'Character storyline runs',
-      ),
-      storylineObservationCandidates: parseArray(
-        character['storylineObservationCandidates'],
-        parseCharacterStorylineObservationCandidate,
-        'Character storyline observation candidates',
-      ),
-      memoryScopes: parseArray(
-        character['memoryScopes'],
-        parseCharacterMemoryScope,
-        'Character memory scopes',
+      companionContinuities: parseArray(
+        character['companionContinuities'],
+        parseCharacterCompanionContinuity,
+        'Character Companion continuities',
       ),
       presentationConfigurations: parseArray(
         character['presentationConfigurations'],
@@ -640,7 +643,7 @@ function parseDialogueCreateInput(value: unknown): CharacterFoundationDialogueCr
       'userParticipantId',
       'characterParticipantId',
       'controller',
-      'runtimeKind',
+      'mode',
     ],
     ['relationshipId'],
     'Dialogue create input',
@@ -664,13 +667,16 @@ function parseDialogueCreateInput(value: unknown): CharacterFoundationDialogueCr
     userParticipantId: base.userParticipantId,
     characterParticipantId: base.characterParticipantId,
     characterRunId: base.characterRunId,
-    runtimeKind: input['runtimeKind'],
+    mode: input['mode'],
     relationshipIds: [requireIdentity(input['relationshipId'], 'relationship')],
     createdAt: '2000-01-01T00:00:00.000Z',
   });
+  if (parsedBinding.mode !== 'companion') {
+    throw new Error('Dialogue create command supports Companion mode only.');
+  }
   return {
     ...base,
-    runtimeKind: 'companion',
+    mode: 'companion',
     relationshipId: parsedBinding.relationshipIds[0]!,
   };
 }
@@ -683,14 +689,29 @@ function parseRelationshipMemoryProposeInput(
 >['input'] {
   const input = exactRecord(
     value,
-    ['relationshipId', 'candidateId', 'content', 'sourceRef'],
+    [
+      'relationshipId',
+      'candidateId',
+      'sourceCharacterVersionId',
+      'provenance',
+      'content',
+      'expectedRelationshipRevision',
+    ],
     'Relationship memory candidate propose input',
   );
   return {
     relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
     candidateId: requireIdentity(input['candidateId'], 'relationship memory candidate'),
+    sourceCharacterVersionId: requireIdentity(
+      input['sourceCharacterVersionId'],
+      'relationship memory source CharacterVersion',
+    ),
+    provenance: parseCompanionMemoryProvenance(input['provenance']),
     content: requireIdentity(input['content'], 'relationship memory content'),
-    sourceRef: requireOpaqueCommandRef(input['sourceRef'], 'relationship memory source'),
+    expectedRelationshipRevision: requireExpectedPosition(
+      input['expectedRelationshipRevision'],
+      'relationship',
+    ),
   };
 }
 
@@ -702,13 +723,17 @@ function parseRelationshipMemoryAcceptInput(
 >['input'] {
   const input = exactRecord(
     value,
-    ['relationshipId', 'candidateId', 'memoryId'],
+    ['relationshipId', 'candidateId', 'memoryId', 'expectedRelationshipRevision'],
     'Relationship memory candidate accept input',
   );
   return {
     relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
     candidateId: requireIdentity(input['candidateId'], 'relationship memory candidate'),
     memoryId: requireIdentity(input['memoryId'], 'relationship memory'),
+    expectedRelationshipRevision: requireExpectedPosition(
+      input['expectedRelationshipRevision'],
+      'relationship',
+    ),
   };
 }
 
@@ -720,12 +745,16 @@ function parseRelationshipMemoryRejectInput(
 >['input'] {
   const input = exactRecord(
     value,
-    ['relationshipId', 'candidateId'],
+    ['relationshipId', 'candidateId', 'expectedRelationshipRevision'],
     'Relationship memory candidate reject input',
   );
   return {
     relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
     candidateId: requireIdentity(input['candidateId'], 'relationship memory candidate'),
+    expectedRelationshipRevision: requireExpectedPosition(
+      input['expectedRelationshipRevision'],
+      'relationship',
+    ),
   };
 }
 
@@ -734,13 +763,27 @@ function parseRelationshipMemoryCorrectInput(
 ): Extract<CharacterFoundationCommand, { operation: 'relationship-memory-correct' }>['input'] {
   const input = exactRecord(
     value,
-    ['relationshipId', 'memoryId', 'content'],
+    [
+      'relationshipId',
+      'candidateId',
+      'correctedMemoryId',
+      'replacementMemoryId',
+      'expectedRelationshipRevision',
+    ],
     'Relationship memory correction input',
   );
   return {
     relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
-    memoryId: requireIdentity(input['memoryId'], 'relationship memory'),
-    content: requireIdentity(input['content'], 'relationship memory content'),
+    candidateId: requireIdentity(input['candidateId'], 'relationship memory candidate'),
+    correctedMemoryId: requireIdentity(input['correctedMemoryId'], 'corrected relationship memory'),
+    replacementMemoryId: requireIdentity(
+      input['replacementMemoryId'],
+      'replacement relationship memory',
+    ),
+    expectedRelationshipRevision: requireExpectedPosition(
+      input['expectedRelationshipRevision'],
+      'relationship',
+    ),
   };
 }
 
@@ -749,189 +792,174 @@ function parseRelationshipMemoryDeleteInput(
 ): Extract<CharacterFoundationCommand, { operation: 'relationship-memory-delete' }>['input'] {
   const input = exactRecord(
     value,
-    ['relationshipId', 'memoryId'],
+    ['relationshipId', 'memoryId', 'expectedRelationshipRevision'],
     'Relationship memory delete input',
   );
   return {
     relationshipId: requireIdentity(input['relationshipId'], 'relationship'),
     memoryId: requireIdentity(input['memoryId'], 'relationship memory'),
+    expectedRelationshipRevision: requireExpectedPosition(
+      input['expectedRelationshipRevision'],
+      'relationship',
+    ),
   };
 }
 
 function parseStorylinePublishInput(
   value: unknown,
 ): Extract<CharacterFoundationCommand, { operation: 'character-storyline-publish' }>['input'] {
-  const publication = parseCharacterStorylineVersion({
-    ...recordValue(value, 'Character storyline publication input'),
-    publishedAt: '2000-01-01T00:00:00.000Z',
-  });
-  const { publishedAt: _publishedAt, ...input } = publication;
-  return input;
-}
-
-function parseStorylineRunCreateInput(
-  value: unknown,
-): Extract<CharacterFoundationCommand, { operation: 'character-storyline-run-create' }>['input'] {
   const input = exactRecord(
     value,
-    ['characterStorylineRunId', 'characterStorylineVersionId', 'characterRunId', 'initialStageId'],
-    'Character storyline run create input',
+    ['characterStorylineId', 'characterStorylineVersionId', 'label'],
+    'Character storyline publication input',
   );
   return {
-    characterStorylineRunId: requireIdentity(
-      input['characterStorylineRunId'],
-      'CharacterStorylineRun',
-    ),
+    characterStorylineId: requireIdentity(input['characterStorylineId'], 'CharacterStoryline'),
     characterStorylineVersionId: requireIdentity(
       input['characterStorylineVersionId'],
       'CharacterStorylineVersion',
     ),
-    characterRunId: requireIdentity(input['characterRunId'], 'CharacterRun'),
-    initialStageId: requireIdentity(input['initialStageId'], 'storyline initial stage'),
+    label: requireIdentity(input['label'], 'CharacterStorylineVersion label'),
   };
 }
 
-function parseStorylineObservationProposeInput(
+function parseStorylineCreateInput(
   value: unknown,
-): Extract<
-  CharacterFoundationCommand,
-  { operation: 'character-storyline-observation-propose' }
->['input'] {
-  const candidate = parseCharacterStorylineObservationCandidate({
-    ...recordValue(value, 'Character storyline observation propose input'),
-    status: 'pending',
-  });
-  const { status: _status, ...input } = candidate;
-  return input;
-}
-
-function parseStorylineObservationAcceptInput(
-  value: unknown,
-): Extract<
-  CharacterFoundationCommand,
-  { operation: 'character-storyline-observation-accept' }
->['input'] {
+): Extract<CharacterFoundationCommand, { operation: 'character-storyline-create' }>['input'] {
   const input = exactRecord(
     value,
-    [
-      'observationCandidateId',
-      'characterStorylineRunId',
-      'transitionId',
-      'expectedStorylineRevision',
-    ],
-    'Character storyline observation accept input',
+    ['characterStorylineId', 'characterProjectId', 'displayName', 'draft'],
+    'Character storyline create input',
   );
+  const characterStorylineId = requireIdentity(input['characterStorylineId'], 'CharacterStoryline');
   return {
-    observationCandidateId: requireIdentity(
-      input['observationCandidateId'],
-      'storyline observation candidate',
-    ),
-    characterStorylineRunId: requireIdentity(
-      input['characterStorylineRunId'],
-      'CharacterStorylineRun',
-    ),
-    transitionId: requireIdentity(input['transitionId'], 'storyline transition'),
-    expectedStorylineRevision: requireExpectedPosition(
-      input['expectedStorylineRevision'],
-      'storyline',
-    ),
+    characterStorylineId,
+    characterProjectId: requireIdentity(input['characterProjectId'], 'CharacterProject'),
+    displayName: requireIdentity(input['displayName'], 'CharacterStoryline displayName'),
+    draft: parseStorylineDraftCommand(input['draft'], characterStorylineId),
   };
 }
 
-function parseStorylineObservationRejectInput(
+function parseStorylineUpdateDraftInput(
   value: unknown,
-): Extract<
-  CharacterFoundationCommand,
-  { operation: 'character-storyline-observation-reject' }
->['input'] {
-  const input = exactRecord(
-    value,
-    ['observationCandidateId', 'characterStorylineRunId', 'expectedStorylineRevision'],
-    'Character storyline observation reject input',
-  );
-  return {
-    observationCandidateId: requireIdentity(
-      input['observationCandidateId'],
-      'storyline observation candidate',
-    ),
-    characterStorylineRunId: requireIdentity(
-      input['characterStorylineRunId'],
-      'CharacterStorylineRun',
-    ),
-    expectedStorylineRevision: requireExpectedPosition(
-      input['expectedStorylineRevision'],
-      'storyline',
-    ),
-  };
-}
-
-function parseMemoryScopeCreateInput(
-  value: unknown,
-): Extract<CharacterFoundationCommand, { operation: 'character-memory-scope-create' }>['input'] {
+): Extract<CharacterFoundationCommand, { operation: 'character-storyline-update-draft' }>['input'] {
   const input = exactRecordWithOptional(
     value,
-    ['characterMemoryScopeId', 'characterRunId'],
-    ['characterStorylineRunId'],
-    'Character memory scope create input',
+    ['characterStorylineId', 'draft'],
+    ['displayName'],
+    'Character storyline draft update input',
   );
-  const characterStorylineRunId = optionalCommandIdentity(
-    input['characterStorylineRunId'],
-    'CharacterStorylineRun',
+  const characterStorylineId = requireIdentity(input['characterStorylineId'], 'CharacterStoryline');
+  const displayName = optionalCommandIdentity(
+    input['displayName'],
+    'CharacterStoryline displayName',
   );
   return {
-    characterMemoryScopeId: requireIdentity(
-      input['characterMemoryScopeId'],
-      'CharacterMemoryScope',
-    ),
-    characterRunId: requireIdentity(input['characterRunId'], 'CharacterRun'),
-    ...(characterStorylineRunId === undefined ? {} : { characterStorylineRunId }),
+    characterStorylineId,
+    ...(displayName === undefined ? {} : { displayName }),
+    draft: parseStorylineDraftCommand(input['draft'], characterStorylineId),
   };
+}
+
+function parseStorylineRestoreInput(
+  value: unknown,
+): Extract<
+  CharacterFoundationCommand,
+  { operation: 'character-storyline-restore-as-draft' }
+>['input'] {
+  const input = exactRecord(
+    value,
+    ['characterStorylineId', 'characterStorylineVersionId'],
+    'Character storyline restore input',
+  );
+  return {
+    characterStorylineId: requireIdentity(input['characterStorylineId'], 'CharacterStoryline'),
+    characterStorylineVersionId: requireIdentity(
+      input['characterStorylineVersionId'],
+      'CharacterStorylineVersion',
+    ),
+  };
+}
+
+function parseStorylineDeleteInput(
+  value: unknown,
+): Extract<CharacterFoundationCommand, { operation: 'character-storyline-delete' }>['input'] {
+  const input = exactRecord(value, ['characterStorylineId'], 'Character storyline delete input');
+  return {
+    characterStorylineId: requireIdentity(input['characterStorylineId'], 'CharacterStoryline'),
+  };
+}
+
+function parseStorylineDraftCommand(
+  value: unknown,
+  characterStorylineId: string,
+): Omit<CharacterStorylineDraft, 'characterStorylineId' | 'updatedAt'> {
+  const draft = parseCharacterStorylineDraft({
+    ...recordValue(value, 'Character storyline draft'),
+    characterStorylineId,
+    updatedAt: '2000-01-01T00:00:00.000Z',
+  });
+  const {
+    characterStorylineId: _characterStorylineId,
+    updatedAt: _updatedAt,
+    ...commandDraft
+  } = draft;
+  return commandDraft;
 }
 
 function parseMemoryCandidateProposeInput(
   value: unknown,
 ): Extract<
   CharacterFoundationCommand,
-  { operation: 'character-memory-candidate-propose' }
+  { operation: 'companion-memory-candidate-propose' }
 >['input'] {
-  const candidate = parseCharacterMemoryCandidate({
+  const candidate = parseCompanionMemoryCandidate({
     ...recordValue(value, 'Character memory candidate propose input'),
     status: 'pending',
+    createdAt: '2000-01-01T00:00:00.000Z',
   });
-  const { characterMemoryCandidateId, status: _status, ...input } = candidate;
-  return { characterMemoryCandidateId, ...input };
+  const {
+    companionMemoryCandidateId,
+    status: _status,
+    createdAt: _createdAt,
+    ...input
+  } = candidate;
+  return { companionMemoryCandidateId, ...input };
 }
 
 function parseMemoryCandidateAcceptInput(
   value: unknown,
 ): Extract<
   CharacterFoundationCommand,
-  { operation: 'character-memory-candidate-accept' }
+  { operation: 'companion-memory-candidate-accept' }
 >['input'] {
   const input = exactRecord(
     value,
     [
-      'characterMemoryScopeId',
-      'characterMemoryCandidateId',
-      'characterMemoryEntryId',
-      'expectedMemoryRevision',
+      'companionContinuityId',
+      'companionMemoryCandidateId',
+      'companionMemoryEntryId',
+      'expectedContinuityRevision',
     ],
     'Character memory candidate accept input',
   );
   return {
-    characterMemoryScopeId: requireIdentity(
-      input['characterMemoryScopeId'],
-      'CharacterMemoryScope',
+    companionContinuityId: requireIdentity(
+      input['companionContinuityId'],
+      'CharacterCompanionContinuity',
     ),
-    characterMemoryCandidateId: requireIdentity(
-      input['characterMemoryCandidateId'],
-      'CharacterMemoryCandidate',
+    companionMemoryCandidateId: requireIdentity(
+      input['companionMemoryCandidateId'],
+      'CompanionMemoryCandidate',
     ),
-    characterMemoryEntryId: requireIdentity(
-      input['characterMemoryEntryId'],
-      'CharacterMemoryEntry',
+    companionMemoryEntryId: requireIdentity(
+      input['companionMemoryEntryId'],
+      'CompanionMemoryEntry',
     ),
-    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+    expectedContinuityRevision: requireExpectedPosition(
+      input['expectedContinuityRevision'],
+      'continuity',
+    ),
   };
 }
 
@@ -939,23 +967,26 @@ function parseMemoryCandidateRejectInput(
   value: unknown,
 ): Extract<
   CharacterFoundationCommand,
-  { operation: 'character-memory-candidate-reject' }
+  { operation: 'companion-memory-candidate-reject' }
 >['input'] {
   const input = exactRecord(
     value,
-    ['characterMemoryScopeId', 'characterMemoryCandidateId', 'expectedMemoryRevision'],
+    ['companionContinuityId', 'companionMemoryCandidateId', 'expectedContinuityRevision'],
     'Character memory candidate reject input',
   );
   return {
-    characterMemoryScopeId: requireIdentity(
-      input['characterMemoryScopeId'],
-      'CharacterMemoryScope',
+    companionContinuityId: requireIdentity(
+      input['companionContinuityId'],
+      'CharacterCompanionContinuity',
     ),
-    characterMemoryCandidateId: requireIdentity(
-      input['characterMemoryCandidateId'],
-      'CharacterMemoryCandidate',
+    companionMemoryCandidateId: requireIdentity(
+      input['companionMemoryCandidateId'],
+      'CompanionMemoryCandidate',
     ),
-    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+    expectedContinuityRevision: requireExpectedPosition(
+      input['expectedContinuityRevision'],
+      'continuity',
+    ),
   };
 }
 
@@ -963,27 +994,27 @@ function parseMemoryCandidateCorrectInput(
   value: unknown,
 ): Extract<
   CharacterFoundationCommand,
-  { operation: 'character-memory-candidate-correct' }
+  { operation: 'companion-memory-candidate-correct' }
 >['input'] {
   const input = exactRecord(
     value,
     [
-      'characterMemoryScopeId',
-      'characterMemoryCandidateId',
+      'companionContinuityId',
+      'companionMemoryCandidateId',
       'correctedMemoryEntryId',
       'replacementMemoryEntryId',
-      'expectedMemoryRevision',
+      'expectedContinuityRevision',
     ],
     'Character memory candidate correct input',
   );
   return {
-    characterMemoryScopeId: requireIdentity(
-      input['characterMemoryScopeId'],
-      'CharacterMemoryScope',
+    companionContinuityId: requireIdentity(
+      input['companionContinuityId'],
+      'CharacterCompanionContinuity',
     ),
-    characterMemoryCandidateId: requireIdentity(
-      input['characterMemoryCandidateId'],
-      'CharacterMemoryCandidate',
+    companionMemoryCandidateId: requireIdentity(
+      input['companionMemoryCandidateId'],
+      'CompanionMemoryCandidate',
     ),
     correctedMemoryEntryId: requireIdentity(
       input['correctedMemoryEntryId'],
@@ -993,28 +1024,34 @@ function parseMemoryCandidateCorrectInput(
       input['replacementMemoryEntryId'],
       'replacement CharacterMemoryEntry',
     ),
-    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+    expectedContinuityRevision: requireExpectedPosition(
+      input['expectedContinuityRevision'],
+      'continuity',
+    ),
   };
 }
 
 function parseMemoryEntryDeleteInput(
   value: unknown,
-): Extract<CharacterFoundationCommand, { operation: 'character-memory-entry-delete' }>['input'] {
+): Extract<CharacterFoundationCommand, { operation: 'companion-memory-entry-delete' }>['input'] {
   const input = exactRecord(
     value,
-    ['characterMemoryScopeId', 'characterMemoryEntryId', 'expectedMemoryRevision'],
+    ['companionContinuityId', 'companionMemoryEntryId', 'expectedContinuityRevision'],
     'Character memory entry delete input',
   );
   return {
-    characterMemoryScopeId: requireIdentity(
-      input['characterMemoryScopeId'],
-      'CharacterMemoryScope',
+    companionContinuityId: requireIdentity(
+      input['companionContinuityId'],
+      'CharacterCompanionContinuity',
     ),
-    characterMemoryEntryId: requireIdentity(
-      input['characterMemoryEntryId'],
-      'CharacterMemoryEntry',
+    companionMemoryEntryId: requireIdentity(
+      input['companionMemoryEntryId'],
+      'CompanionMemoryEntry',
     ),
-    expectedMemoryRevision: requireExpectedPosition(input['expectedMemoryRevision'], 'memory'),
+    expectedContinuityRevision: requireExpectedPosition(
+      input['expectedContinuityRevision'],
+      'continuity',
+    ),
   };
 }
 
@@ -1027,14 +1064,6 @@ function requireExpectedPosition(value: unknown, label: string): number {
     throw new Error(`Character Foundation ${label} revision must be a non-negative integer.`);
   }
   return value;
-}
-
-function requireOpaqueCommandRef(value: unknown, label: string): string {
-  const ref = requireIdentity(value, label);
-  if (!/^[a-z][a-z0-9+.-]*:[^\s]+$/u.test(ref) || /^file:/u.test(ref)) {
-    throw new Error(`Character Foundation ${label} must be an opaque non-file reference.`);
-  }
-  return ref;
 }
 
 function parseDialogueController(

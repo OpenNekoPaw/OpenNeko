@@ -56,9 +56,27 @@ describe('neko-chara architecture boundaries', () => {
     );
   });
 
-  it('keeps lore, storyline, memory, and composition refs inside Chara ownership', () => {
+  it('keeps the Character launch contract on one strict mode shape', () => {
+    const source = readFileSync(
+      resolve(packageRoot, 'src/contracts/character-conversation-launch.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain("readonly mode: 'companion'");
+    expect(source).toContain("readonly mode: 'narrative'");
+    expect(source).toContain('NarrativeStorylineNodeSelection');
+    expect(source).not.toMatch(
+      /runtimeKind|externalCompositionRef|characterStorylineRunId|characterMemoryScopeId/u,
+    );
+  });
+
+  it('keeps lore refs and Companion continuity inside Chara ownership', () => {
     const source = readFileSync(
       resolve(packageRoot, 'src/contracts/character-lore-storyline-memory.ts'),
+      'utf8',
+    );
+    const continuitySource = readFileSync(
+      resolve(packageRoot, 'src/contracts/character-companion-continuity.ts'),
       'utf8',
     );
 
@@ -67,8 +85,11 @@ describe('neko-chara architecture boundaries', () => {
       /worldProjectId|worldVersionId|worldRunId|worldSaveId|branchId|activeCharacter|latestCharacter/u,
     );
     expect(source).toContain('CharacterVersionRef');
-    expect(source).toContain('CharacterStorylineRunRef');
-    expect(source).toContain('CharacterMemoryScopeRef');
+    expect(source).not.toContain('CharacterStorylineRunRef');
+    expect(source).not.toMatch(/CharacterMemoryScope|characterMemoryScope/u);
+    expect(continuitySource).toContain('CharacterCompanionContinuity');
+    expect(continuitySource).toContain('sourceCharacterVersionId');
+    expect(continuitySource).toContain('provenance');
   });
 
   it('keeps product interaction composition on the primary AgentSession port', () => {
@@ -77,7 +98,8 @@ describe('neko-chara architecture boundaries', () => {
       'utf8',
     );
 
-    expect(source).toContain('CharacterPrimaryAgentSessionPort');
+    expect(source).toContain('CharacterAgentConversationPort');
+    expect(source).not.toContain('CharacterPrimaryAgentSessionPort');
     expect(source).toContain("purpose: 'character.primary'");
     expect(source).not.toMatch(/CharacterDialogueSession|EmbodyCharacterSession/u);
     expect(source).not.toMatch(
@@ -91,10 +113,93 @@ describe('neko-chara architecture boundaries', () => {
     expect(testingEntry).toMatch(/character-dialogue-runtime/u);
     expect(testingEntry).toMatch(/character-dialogue-session|embody-character-session/u);
   });
+
+  it('keeps the removed Companion Assistant and attachment owners unreachable', () => {
+    const contractsEntry = readFileSync(resolve(packageRoot, 'src/contracts/index.ts'), 'utf8');
+    const applicationEntry = readFileSync(resolve(packageRoot, 'src/application/index.ts'), 'utf8');
+    const productionSources = [
+      ...listTypeScriptFiles(resolve(packageRoot, 'src/contracts')),
+      ...listTypeScriptFiles(resolve(packageRoot, 'src/application')),
+    ]
+      .filter((file) => !file.endsWith('.test.ts'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(existsSync(resolve(packageRoot, 'src/contracts/character-companion-assistant.ts'))).toBe(
+      false,
+    );
+    expect(
+      existsSync(resolve(packageRoot, 'src/application/character-companion-assistant-service.ts')),
+    ).toBe(false);
+    expect(`${contractsEntry}\n${applicationEntry}\n${productionSources}`).not.toMatch(
+      /CharacterCompanionAssistant|companionAssistantLane|CharacterExternalMaterial|externalMaterialRefs/u,
+    );
+  });
+
+  it('keeps Storyline mutation exclusively in the Chara authoring service', () => {
+    const runtimeSources = [
+      'character-conversation-launch-service.ts',
+      'character-dialogue-runtime.ts',
+      'character-interaction-service.ts',
+      'character-room-conversation-service.ts',
+      'character-room-service.ts',
+    ]
+      .map((file) => readFileSync(resolve(packageRoot, 'src/application', file), 'utf8'))
+      .join('\n');
+    expect(runtimeSources).not.toMatch(
+      /CharacterStorylineRun|StorylineObservation|acceptedTransition|progressRevision|updateStoryline|storeStorylineVersion|restoreAsDraft|deleteStoryline/u,
+    );
+
+    const packagesRoot = resolve(packageRoot, '..');
+    const externalSources = ['agent', 'world', 'project', 'content', 'host']
+      .flatMap((name) => listTypeScriptFiles(resolve(packagesRoot, name)))
+      .filter((file) => !file.endsWith('.test.ts') && !file.includes('/node_modules/'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(externalSources).not.toMatch(
+      /CharacterStorylineRun|characterStorylineRun|StorylineObservation|storylineTransition|storylineProgress|character-storyline-(?:create|update|publish|restore|delete)/u,
+    );
+
+    const contractsEntry = readFileSync(resolve(packageRoot, 'src/contracts/index.ts'), 'utf8');
+    const applicationEntry = readFileSync(resolve(packageRoot, 'src/application/index.ts'), 'utf8');
+    expect(`${contractsEntry}\n${applicationEntry}`).not.toMatch(
+      /CharacterStorylineRun|StorylineObservation|StorylineTransition|StorylineProgress/u,
+    );
+    expect(applicationEntry).toContain("export * from './character-storyline-service';");
+  });
+
+  it('keeps Desktop Character composition on delegated projections and exact providers', () => {
+    const repositoryRoot = resolve(packageRoot, '../..');
+    const desktopShell = readFileSync(
+      resolve(repositoryRoot, 'apps/neko-desktop/src/renderer/DesktopShell.tsx'),
+      'utf8',
+    );
+    const desktopComposition = readFileSync(
+      resolve(repositoryRoot, 'apps/neko-desktop/src/main/index.ts'),
+      'utf8',
+    );
+    const agentConversationAdapter = readFileSync(
+      resolve(repositoryRoot, 'apps/neko-desktop/src/main/character-agent-conversation-adapter.ts'),
+      'utf8',
+    );
+
+    expect(desktopShell).toContain('DesktopCharacterPresentationSurfaceRegistry');
+    expect(desktopShell).not.toMatch(/providerId\s*===\s*['"]chara\.representation/u);
+    expect(agentConversationAdapter).not.toMatch(
+      /AgentWorkspaceRuntime|startTurn|modelPolicy|companionMemory|candidate|canon/u,
+    );
+    expect(desktopComposition).not.toMatch(
+      /CharacterPrimaryAgentSessionAdapter|executeRoomInitialInput|resolveExternalOwnerTurnRuntime/u,
+    );
+    expect(`${desktopShell}\n${agentConversationAdapter}`).not.toMatch(
+      /forbiddenStoryFacts|authorOnlyNotes|projectCompanionContinuity|compatibilityDiagnostics/u,
+    );
+  });
 });
 
 function listTypeScriptFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
+    if (entry === 'node_modules' || entry === 'dist') return [];
     const fullPath = join(directory, entry);
     const stat = statSync(fullPath);
     if (stat.isDirectory()) return listTypeScriptFiles(fullPath);

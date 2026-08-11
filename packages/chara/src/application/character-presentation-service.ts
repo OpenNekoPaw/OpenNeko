@@ -1,6 +1,5 @@
 import {
   parseCharacterAvatarSurfaceProjection,
-  parseCharacterChatConfiguration,
   parseCharacterRun,
   parseRoomRun,
   parseCharacterRunPresentationConfiguration,
@@ -9,7 +8,6 @@ import {
   parseCharacterVersion,
   parseCharacterVoiceTimingProjection,
   type CharacterAvatarSurfaceProjection,
-  type CharacterChatConfiguration,
   type CharacterRepresentationKind,
   type CharacterRepresentationRef,
   type CharacterRun,
@@ -128,7 +126,6 @@ export class CharacterPresentationService {
     input: {
       readonly characterRunId: string;
       readonly participantId: string;
-      readonly chat: CharacterChatConfiguration;
       readonly tts?: CharacterTtsConfiguration;
     },
     signal?: AbortSignal,
@@ -142,7 +139,6 @@ export class CharacterPresentationService {
     const configuration = parseCharacterRunPresentationConfiguration({
       characterRunId: run.characterRunId,
       participantId: run.participantId,
-      chat: parseCharacterChatConfiguration(input.chat),
       tts: parseCharacterTtsConfiguration(tts),
       updatedAt: this.now(),
     });

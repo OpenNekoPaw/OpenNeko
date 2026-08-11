@@ -25,23 +25,14 @@ describe('CharacterFoundationCommandService', () => {
     };
     await service.execute({ operation: 'character-project-create', input: characterInput });
     const storylineInput = {
+      characterStorylineId: 'character-storyline-a',
       characterStorylineVersionId: 'character-storyline-version-a',
-      characterVersionId: 'character-version-a',
       label: 'First arc',
-      premise: 'A sealed archive opens.',
-      desire: 'Protect the record.',
-      conflict: 'The record must also be shared.',
-      growthArc: 'Learn to trust a witness.',
-      stages: [{ stageId: 'stage-a', title: 'Guarded', description: 'Keeps distance.' }],
-      turningPoints: [],
-      constraints: [],
-      acceptedEvidenceIds: [],
     } as const;
     await service.execute({ operation: 'character-storyline-publish', input: storylineInput });
     const presentationInput = {
       characterRunId: 'character-run-a',
       participantId: 'participant-a',
-      chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
       tts: {
         providerRef: 'provider:tts-a',
         voiceRepresentationId: 'voice-a',
@@ -90,14 +81,13 @@ function createServices() {
     roomInteractions: { createRun: vi.fn(async () => undefined) },
     presentation: { updateConfigurations: vi.fn(async () => undefined) },
     storylines: {
+      create: vi.fn(async () => undefined),
+      updateDraft: vi.fn(async () => undefined),
       publish: vi.fn(async () => undefined),
-      createRun: vi.fn(async () => undefined),
-      proposeObservation: vi.fn(async () => undefined),
-      acceptObservation: vi.fn(async () => undefined),
-      rejectObservation: vi.fn(async () => undefined),
+      restoreAsDraft: vi.fn(async () => undefined),
+      delete: vi.fn(async () => undefined),
     },
-    memories: {
-      createScope: vi.fn(async () => undefined),
+    companionContinuity: {
       propose: vi.fn(async () => undefined),
       accept: vi.fn(async () => undefined),
       reject: vi.fn(async () => undefined),

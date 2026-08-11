@@ -25,10 +25,10 @@ export class CharacterFoundationService {
         dialogueRuns: character.dialogueRuns,
         rooms: character.rooms,
         roomRuns: character.roomRuns,
+        storylines: character.storylines,
+        storylineDrafts: character.storylineDrafts,
         storylineVersions: character.storylineVersions,
-        storylineRuns: character.storylineRuns,
-        storylineObservationCandidates: character.storylineObservationCandidates,
-        memoryScopes: character.memoryScopes,
+        companionContinuities: character.companionContinuities,
         presentationConfigurations: character.presentationConfigurations,
       },
       diagnostics: character.diagnostics.map((diagnostic) => ({

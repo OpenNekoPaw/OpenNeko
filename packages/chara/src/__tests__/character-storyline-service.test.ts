@@ -1,11 +1,9 @@
 import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
-  parseCharacterRun,
   parseCharacterVersion,
-  type CharacterRun,
-  type CharacterStorylineObservationCandidate,
-  type CharacterStorylineRun,
+  type CharacterStoryline,
+  type CharacterStorylineDraft,
   type CharacterStorylineVersion,
   type CharacterVersion,
 } from '@neko/chara/contracts';
@@ -19,208 +17,211 @@ import { describe, expect, it } from 'vitest';
 const now = '2026-08-10T00:00:00.000Z';
 
 describe('CharacterStorylineService', () => {
-  it('publishes multiple explicitly selectable personal arcs for one CharacterVersion', async () => {
-    const repository = new InMemoryStorylineRepository();
-    repository.characterVersions.set('character-version-a', characterVersion());
-    const service = new CharacterStorylineService(repository, { now: () => now });
-
-    const first = await service.publish(storylineInput('storyline-version-a', 'Trust arc'));
-    const second = await service.publish(storylineInput('storyline-version-b', 'Duty arc'));
-
-    expect([...repository.storylineVersions]).toHaveLength(2);
-    expect(first.characterVersionId).toBe(second.characterVersionId);
-    expect(Object.isFrozen(first)).toBe(true);
-  });
-
-  it('creates an exact Run and atomically accepts one sourced transition at its CAS revision', async () => {
+  it('manages independent stable Storylines and immutable publications', async () => {
     const repository = preparedRepository();
     const service = new CharacterStorylineService(repository, { now: () => now });
-    const run = await service.createRun({
-      characterStorylineRunId: 'storyline-run-a',
-      characterStorylineVersionId: 'storyline-version-a',
-      characterRunId: 'character-run-a',
-      initialStageId: 'guarded',
+    await service.create(createInput('storyline-old-city', 'Old City Reunion'));
+    await service.create(createInput('storyline-archive', 'Archive Lockdown'));
+
+    const first = await service.publish({
+      characterStorylineId: 'storyline-old-city',
+      characterStorylineVersionId: 'storyline-version-1',
+      label: 'First publication',
     });
-    const candidate = await service.proposeObservation({
-      observationCandidateId: 'observation-a',
-      characterStorylineRunId: run.characterStorylineRunId,
-      sourceRef: 'external-event:event-a',
-      observedAt: now,
-      fromStageId: 'guarded',
-      toStageId: 'trusting',
-      turningPointId: 'delegate-key',
-      expectedStorylineRevision: 0,
+    await service.updateDraft({
+      characterStorylineId: 'storyline-old-city',
+      draft: { ...draftInput(), nodes: [node('arrival', 'A changed situation')] },
+    });
+    const second = await service.publish({
+      characterStorylineId: 'storyline-old-city',
+      characterStorylineVersionId: 'storyline-version-2',
+      label: 'Second publication',
     });
 
-    const accepted = await service.acceptObservation({
-      observationCandidateId: candidate.observationCandidateId,
-      characterStorylineRunId: run.characterStorylineRunId,
-      transitionId: 'transition-a',
-      expectedStorylineRevision: 0,
-    });
-
-    expect(accepted.run).toMatchObject({ currentStageId: 'trusting', storylineRevision: 1 });
-    expect(accepted.candidate).toMatchObject({
-      status: 'accepted',
-      acceptedTransitionId: 'transition-a',
-    });
-    expect(accepted.run.acceptedTransitions[0]?.sourceRef).toBe('external-event:event-a');
+    expect(first.characterStorylineId).toBe(second.characterStorylineId);
+    expect(first.nodes[0]?.context.situation).toBe('The old gate opens at dusk.');
+    expect(second.nodes[0]?.context.situation).toBe('A changed situation');
+    expect(repository.storylines).toHaveLength(2);
+    expect(repository.versions).toHaveLength(2);
   });
 
-  it('rejects stale and wrong-run observations without changing either Run', async () => {
+  it('compares versions and restores an exact old publication as the mutable draft', async () => {
     const repository = preparedRepository();
-    repository.characterRuns.set('character-run-b', characterRun('character-run-b'));
     const service = new CharacterStorylineService(repository, { now: () => now });
-    await service.createRun({
-      characterStorylineRunId: 'storyline-run-a',
-      characterStorylineVersionId: 'storyline-version-a',
-      characterRunId: 'character-run-a',
-      initialStageId: 'guarded',
+    await service.create(createInput('storyline-old-city', 'Old City Reunion'));
+    await service.publish({
+      characterStorylineId: 'storyline-old-city',
+      characterStorylineVersionId: 'storyline-version-1',
+      label: 'First',
     });
-    await service.createRun({
-      characterStorylineRunId: 'storyline-run-b',
-      characterStorylineVersionId: 'storyline-version-a',
-      characterRunId: 'character-run-b',
-      initialStageId: 'guarded',
+    await service.updateDraft({
+      characterStorylineId: 'storyline-old-city',
+      draft: {
+        ...draftInput(),
+        nodeOrder: ['arrival', 'meeting'],
+        nodes: [node('arrival', 'Changed'), node('meeting', 'They finally meet.')],
+        edges: [{ fromStorylineNodeId: 'arrival', toStorylineNodeId: 'meeting' }],
+      },
     });
-    await service.proposeObservation({
-      observationCandidateId: 'observation-a',
-      characterStorylineRunId: 'storyline-run-a',
-      sourceRef: 'external-event:event-a',
-      observedAt: now,
-      fromStageId: 'guarded',
-      toStageId: 'trusting',
-      expectedStorylineRevision: 0,
+    await service.publish({
+      characterStorylineId: 'storyline-old-city',
+      characterStorylineVersionId: 'storyline-version-2',
+      label: 'Second',
     });
 
     await expect(
-      service.acceptObservation({
-        observationCandidateId: 'observation-a',
-        characterStorylineRunId: 'storyline-run-b',
-        transitionId: 'transition-illegal',
-        expectedStorylineRevision: 0,
+      service.compare({
+        characterStorylineId: 'storyline-old-city',
+        leftCharacterStorylineVersionId: 'storyline-version-1',
+        rightCharacterStorylineVersionId: 'storyline-version-2',
+      }),
+    ).resolves.toMatchObject({
+      addedStorylineNodeIds: ['meeting'],
+      changedStorylineNodeIds: ['arrival'],
+    });
+    const restored = await service.restoreAsDraft({
+      characterStorylineId: 'storyline-old-city',
+      characterStorylineVersionId: 'storyline-version-1',
+    });
+    expect(restored.nodeOrder).toEqual(['arrival']);
+  });
+
+  it('rejects cross-project CharacterVersion binding without changing the Storyline', async () => {
+    const repository = preparedRepository();
+    repository.characterVersions.set(
+      'character-version-foreign',
+      characterVersion('character-version-foreign', 'character-project-foreign'),
+    );
+    const service = new CharacterStorylineService(repository, { now: () => now });
+    await service.create(createInput('storyline-old-city', 'Old City Reunion'));
+
+    await expect(
+      service.updateDraft({
+        characterStorylineId: 'storyline-old-city',
+        draft: { ...draftInput(), characterVersionId: 'character-version-foreign' },
       }),
     ).rejects.toMatchObject({
       code: 'character-storyline-binding-mismatch',
     } satisfies Partial<CharacterStorylineError>);
-    await expect(
-      service.proposeObservation({
-        observationCandidateId: 'observation-stale',
-        characterStorylineRunId: 'storyline-run-a',
-        sourceRef: 'external-event:event-b',
-        observedAt: now,
-        fromStageId: 'guarded',
-        toStageId: 'trusting',
-        expectedStorylineRevision: 1,
-      }),
-    ).rejects.toMatchObject({
-      code: 'character-storyline-revision-stale',
-    } satisfies Partial<CharacterStorylineError>);
-    expect(repository.storylineRuns.get('storyline-run-a')?.storylineRevision).toBe(0);
-    expect(repository.storylineRuns.get('storyline-run-b')?.storylineRevision).toBe(0);
+    expect(repository.drafts[0]?.characterVersionId).toBe('character-version-a');
   });
 });
 
 class InMemoryStorylineRepository implements CharacterStorylineRepository {
+  readonly projects = new Set(['character-project-a']);
   readonly characterVersions = new Map<string, CharacterVersion>();
-  readonly characterRuns = new Map<string, CharacterRun>();
-  readonly storylineVersions = new Map<string, CharacterStorylineVersion>();
-  readonly storylineRuns = new Map<string, CharacterStorylineRun>();
-  readonly candidates = new Map<string, CharacterStorylineObservationCandidate>();
+  readonly storylines: CharacterStoryline[] = [];
+  readonly drafts: CharacterStorylineDraft[] = [];
+  readonly versions: CharacterStorylineVersion[] = [];
 
+  async readCharacterProject(id: string) {
+    return this.projects.has(id) ? { characterProjectId: id } : undefined;
+  }
   async readCharacterVersion(id: string) {
     return cloneOptional(this.characterVersions.get(id));
   }
-  async readCharacterRun(id: string) {
-    return cloneOptional(this.characterRuns.get(id));
+  async createStoryline(storyline: CharacterStoryline, draft: CharacterStorylineDraft) {
+    this.storylines.push(structuredClone(storyline));
+    this.drafts.push(structuredClone(draft));
+  }
+  async updateStoryline(storyline: CharacterStoryline, draft: CharacterStorylineDraft) {
+    this.storylines.splice(
+      this.storylines.findIndex(
+        (item) => item.characterStorylineId === storyline.characterStorylineId,
+      ),
+      1,
+      structuredClone(storyline),
+    );
+    this.drafts.splice(
+      this.drafts.findIndex((item) => item.characterStorylineId === draft.characterStorylineId),
+      1,
+      structuredClone(draft),
+    );
+  }
+  async readStoryline(id: string) {
+    return cloneOptional(this.storylines.find((item) => item.characterStorylineId === id));
+  }
+  async readStorylineDraft(id: string) {
+    return cloneOptional(this.drafts.find((item) => item.characterStorylineId === id));
   }
   async storeStorylineVersion(version: CharacterStorylineVersion) {
-    if (this.storylineVersions.has(version.characterStorylineVersionId)) throw new Error('exists');
-    this.storylineVersions.set(version.characterStorylineVersionId, copy(version));
+    this.versions.push(structuredClone(version));
   }
   async readStorylineVersion(id: string) {
-    return cloneOptional(this.storylineVersions.get(id));
+    return cloneOptional(this.versions.find((item) => item.characterStorylineVersionId === id));
   }
-  async createStorylineRun(run: CharacterStorylineRun) {
-    if (this.storylineRuns.has(run.characterStorylineRunId)) throw new Error('exists');
-    this.storylineRuns.set(run.characterStorylineRunId, copy(run));
+  async listStorylines(projectId: string) {
+    return structuredClone(this.storylines.filter((item) => item.characterProjectId === projectId));
   }
-  async readStorylineRun(id: string) {
-    return cloneOptional(this.storylineRuns.get(id));
+  async listStorylineVersions(storylineId: string) {
+    return structuredClone(
+      this.versions.filter((item) => item.characterStorylineId === storylineId),
+    );
   }
-  async createStorylineObservationCandidate(candidate: CharacterStorylineObservationCandidate) {
-    if (this.candidates.has(candidate.observationCandidateId)) throw new Error('exists');
-    this.candidates.set(candidate.observationCandidateId, copy(candidate));
-  }
-  async readStorylineObservationCandidate(id: string) {
-    return cloneOptional(this.candidates.get(id));
-  }
-  async commitStorylineObservationReview(input: {
-    readonly characterStorylineRunId: string;
-    readonly observationCandidateId: string;
-    readonly expectedStorylineRevision: number;
-    readonly nextRun?: CharacterStorylineRun;
-    readonly nextCandidate: CharacterStorylineObservationCandidate;
-  }) {
-    const run = this.storylineRuns.get(input.characterStorylineRunId);
-    const candidate = this.candidates.get(input.observationCandidateId);
-    if (
-      !run ||
-      !candidate ||
-      candidate.status !== 'pending' ||
-      run.storylineRevision !== input.expectedStorylineRevision
-    ) {
-      throw new Error('concurrent storyline review');
-    }
-    if (input.nextRun) this.storylineRuns.set(input.characterStorylineRunId, copy(input.nextRun));
-    this.candidates.set(input.observationCandidateId, copy(input.nextCandidate));
+  async deleteStoryline(id: string) {
+    this.storylines.splice(
+      this.storylines.findIndex((item) => item.characterStorylineId === id),
+      1,
+    );
   }
 }
 
-function preparedRepository(): InMemoryStorylineRepository {
+function preparedRepository() {
   const repository = new InMemoryStorylineRepository();
-  repository.characterVersions.set('character-version-a', characterVersion());
-  repository.characterRuns.set('character-run-a', characterRun('character-run-a'));
-  repository.storylineVersions.set('storyline-version-a', storylineVersion());
+  repository.characterVersions.set(
+    'character-version-a',
+    characterVersion('character-version-a', 'character-project-a'),
+  );
   return repository;
 }
 
-function storylineInput(characterStorylineVersionId: string, label: string) {
+function createInput(characterStorylineId: string, displayName: string) {
   return {
-    characterStorylineVersionId,
-    characterVersionId: 'character-version-a',
-    label,
-    premise: 'Lin must learn to share responsibility.',
-    desire: 'Protect the archive alone.',
-    conflict: 'One keeper cannot preserve everything.',
-    growthArc: 'From control to reviewed trust.',
-    stages: [
-      { stageId: 'guarded', title: 'Guarded', description: 'Refuses assistance.' },
-      { stageId: 'trusting', title: 'Trusting', description: 'Delegates a protected task.' },
-    ],
-    turningPoints: [
-      {
-        turningPointId: 'delegate-key',
-        fromStageId: 'guarded',
-        toStageId: 'trusting',
-        description: 'Entrusts the key to a reviewed ally.',
-        evidenceIds: ['evidence-a'],
-      },
-    ],
-    constraints: ['Do not claim external state changed.'],
-    acceptedEvidenceIds: ['evidence-a'],
+    characterStorylineId,
+    characterProjectId: 'character-project-a',
+    displayName,
+    draft: draftInput(),
   } as const;
 }
 
-function storylineVersion(): CharacterStorylineVersion {
-  return { ...storylineInput('storyline-version-a', 'Trust arc'), publishedAt: now };
+function draftInput() {
+  return {
+    characterVersionId: 'character-version-a',
+    premise: 'An old promise returns.',
+    constraints: ['Do not reveal the sealed letter.'],
+    nodeOrder: ['arrival'],
+    nodes: [node('arrival', 'The old gate opens at dusk.')],
+    edges: [],
+  } as const;
 }
 
-function characterVersion(): CharacterVersion {
+function node(storylineNodeId: string, situation: string) {
+  return {
+    storylineNodeId,
+    title: storylineNodeId,
+    spoilerVisibility: 'visible',
+    context: {
+      situation,
+      time: 'Dusk',
+      location: 'Old city gate',
+      characterState: 'Cautious',
+      relationshipState: 'Estranged allies',
+      allowedStoryFacts: ['The gate is open.'],
+      forbiddenStoryFacts: ['The letter names the traitor.'],
+      narrativeMemories: ['They made a promise here.'],
+      knowledgeBoundary: ['Does not know who sent the letter.'],
+      behaviorConstraints: ['Avoid immediate trust.'],
+      expressionConstraints: ['Speak tersely.'],
+      authorOnlyNotes: ['The messenger is watching.'],
+    },
+  } as const;
+}
+
+function characterVersion(id: string, projectId: string): CharacterVersion {
   return parseCharacterVersion({
-    characterVersionId: 'character-version-a',
-    characterProjectId: 'character-project-a',
-    label: 'Published Lin',
+    characterVersionId: id,
+    characterProjectId: projectId,
+    label: 'Lin',
     definition: {
       summary: 'Archive keeper',
       backgroundStory: createEmptyCharacterBackgroundStory(),
@@ -231,26 +232,11 @@ function characterVersion(): CharacterVersion {
       expressionPolicy: [],
       representationRefs: [],
     },
-    acceptedEvidenceIds: ['evidence-a'],
+    acceptedEvidenceIds: [],
     publishedAt: now,
-  });
-}
-
-function characterRun(characterRunId: string): CharacterRun {
-  return parseCharacterRun({
-    characterRunId,
-    characterVersionId: 'character-version-a',
-    participantId: `participant:${characterRunId}`,
-    controller: { kind: 'agent', primaryAgentSessionId: `agent:${characterRunId}` },
-    runtimeBinding: { kind: 'companion', relationshipId: `relationship:${characterRunId}` },
-    createdAt: now,
   });
 }
 
 function cloneOptional<T>(value: T | undefined): T | undefined {
   return value === undefined ? undefined : structuredClone(value);
-}
-
-function copy<T>(value: T): T {
-  return structuredClone(value);
 }

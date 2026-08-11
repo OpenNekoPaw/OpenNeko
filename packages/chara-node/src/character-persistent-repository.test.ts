@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CharacterAuthoringService,
   CharacterConversationLaunchService,
-  CharacterMemoryService,
+  CharacterCompanionContinuityService,
   CharacterPresentationService,
   CharacterRoomService,
   CharacterStorylineService,
@@ -31,7 +31,7 @@ afterEach(async () => {
 });
 
 describe('persistent Character repository', () => {
-  it('atomically persists launch StorylineRun and MemoryScope with their exact CharacterRun', async () => {
+  it('atomically persists an exact Narrative Storyline selection without runtime progress or memory', async () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
@@ -52,23 +52,21 @@ describe('persistent Character repository', () => {
       label: 'Published Lin',
     });
     const storylines = new CharacterStorylineService(fixture.repository, { now: () => NOW });
+    await storylines.create({
+      characterStorylineId: 'character-storyline-launch',
+      characterProjectId: 'character-project-launch',
+      displayName: 'Trust arc',
+      draft: storylineDraft('character-version-launch'),
+    });
     await storylines.publish({
+      characterStorylineId: 'character-storyline-launch',
       characterStorylineVersionId: 'character-storyline-version-launch',
-      characterVersionId: 'character-version-launch',
       label: 'Trust arc',
-      premise: 'A sealed archive opens.',
-      desire: 'Protect the record.',
-      conflict: 'The record must be shared.',
-      growthArc: 'Learn to trust a witness.',
-      stages: [{ stageId: 'stage-guarded', title: 'Guarded', description: 'Keeps distance.' }],
-      turningPoints: [],
-      constraints: [],
-      acceptedEvidenceIds: [],
     });
     const launch = new CharacterConversationLaunchService({
       repository: fixture.repository,
       publications: fixture.repository,
-      agentSessions: {
+      agentConversations: {
         createPrimarySession: vi.fn(async ({ characterRunId }) => ({
           primaryAgentSessionId: `conversation:character:${characterRunId}`,
         })),
@@ -82,34 +80,69 @@ describe('persistent Character repository', () => {
       userId: 'user:local',
       userDisplayName: 'User',
       selection: {
-        runtimeKind: 'companion',
+        mode: 'narrative',
         characters: [
           {
             characterVersionId: 'character-version-launch',
-            characterStorylineVersionId: 'character-storyline-version-launch',
+            storyline: {
+              characterStorylineId: 'character-storyline-launch',
+              characterStorylineVersionId: 'character-storyline-version-launch',
+              storylineNodeId: 'storyline-node-arrival',
+            },
           },
         ],
       },
+    });
+    await fixture.repository.freezeNarrativeTurnReceipt({
+      turnId: 'turn-narrative-a',
+      primaryAgentSessionId: 'conversation:character:character-run:launch:persistent-launch:1',
+      characterRunId: 'character-run:launch:persistent-launch:1',
+      characterVersionId: 'character-version-launch',
+      conversation: {
+        topology: 'dialogue',
+        dialogueRunId: 'dialogue-run:launch:persistent-launch',
+      },
+      storyline: {
+        characterStorylineId: 'character-storyline-launch',
+        characterStorylineVersionId: 'character-storyline-version-launch',
+        storylineNodeId: 'storyline-node-arrival',
+      },
+      startedAt: NOW,
     });
 
     const reopened = createPersistentCharacterRepository({ metadataStore: fixture.store });
     await expect(
       reopened.readCharacterRun('character-run:launch:persistent-launch:1'),
     ).resolves.toMatchObject({
-      characterStorylineRunId: 'character-storyline-run:launch:persistent-launch:1',
-      characterMemoryScopeId: 'character-memory-scope:launch:persistent-launch:1',
+      runtimeBinding: {
+        kind: 'narrative',
+        storyline: {
+          characterStorylineId: 'character-storyline-launch',
+          characterStorylineVersionId: 'character-storyline-version-launch',
+          storylineNodeId: 'storyline-node-arrival',
+        },
+      },
     });
     await expect(
-      reopened.readStorylineRun('character-storyline-run:launch:persistent-launch:1'),
-    ).resolves.toMatchObject({
-      characterStorylineVersionId: 'character-storyline-version-launch',
-      currentStageId: 'stage-guarded',
-    });
-    await expect(
-      reopened.readMemoryScope('character-memory-scope:launch:persistent-launch:1'),
-    ).resolves.toMatchObject({
+      reopened.readCompanionContinuity(
+        'companion-continuity:user%3Alocal:character-project-launch',
+      ),
+    ).resolves.toBeUndefined();
+    await expect(reopened.readNarrativeTurnReceipt('turn-narrative-a')).resolves.toEqual({
+      turnId: 'turn-narrative-a',
+      primaryAgentSessionId: 'conversation:character:character-run:launch:persistent-launch:1',
       characterRunId: 'character-run:launch:persistent-launch:1',
-      characterStorylineRunId: 'character-storyline-run:launch:persistent-launch:1',
+      characterVersionId: 'character-version-launch',
+      conversation: {
+        topology: 'dialogue',
+        dialogueRunId: 'dialogue-run:launch:persistent-launch',
+      },
+      storyline: {
+        characterStorylineId: 'character-storyline-launch',
+        characterStorylineVersionId: 'character-storyline-version-launch',
+        storylineNodeId: 'storyline-node-arrival',
+      },
+      startedAt: NOW,
     });
     await fixture.store.dispose();
   });
@@ -252,7 +285,136 @@ describe('persistent Character repository', () => {
     await fixture.store.dispose();
   });
 
-  it('persists Storyline and Memory CAS authorities across repository reopen', async () => {
+  it('isolates corrupt Storyline, continuity, receipt and Presentation siblings without repair or latest substitution', async () => {
+    const fixture = await createFixture();
+    const authoring = new CharacterAuthoringService({
+      repository: fixture.repository,
+      now: () => NOW,
+    });
+    await authoring.createProject({
+      characterProjectId: 'character-project-isolation',
+      displayName: 'Isolation character',
+      draft: definition(),
+    });
+    await authoring.setReviewStatus({
+      characterProjectId: 'character-project-isolation',
+      reviewStatus: 'ready',
+    });
+    await authoring.publish({
+      characterProjectId: 'character-project-isolation',
+      characterVersionId: 'character-version-isolation',
+      label: 'Isolation publication',
+    });
+    const storylines = new CharacterStorylineService(fixture.repository, { now: () => NOW });
+    await storylines.create({
+      characterStorylineId: 'storyline-isolation',
+      characterProjectId: 'character-project-isolation',
+      displayName: 'Isolation arc',
+      draft: storylineDraft('character-version-isolation'),
+    });
+    await storylines.publish({
+      characterStorylineId: 'storyline-isolation',
+      characterStorylineVersionId: 'storyline-version-valid',
+      label: 'Valid publication',
+    });
+    const continuity = new CharacterCompanionContinuityService(fixture.repository, {
+      now: () => NOW,
+    });
+    await continuity.create({
+      companionContinuityId: 'continuity-valid',
+      userId: 'user-isolation',
+      characterProjectId: 'character-project-isolation',
+    });
+    await fixture.repository.storePresentationConfigurations([
+      {
+        characterRunId: 'character-run-presentation-valid',
+        participantId: 'participant-valid',
+        tts: {
+          providerRef: 'provider:tts-valid',
+          voiceRepresentationId: 'voice-valid',
+          speed: 1,
+          autoRead: false,
+        },
+        updatedAt: NOW,
+      },
+    ]);
+    await fixture.repository.freezeNarrativeTurnReceipt({
+      turnId: 'turn-receipt-valid',
+      primaryAgentSessionId: 'agent-session-valid',
+      characterRunId: 'character-run-valid',
+      characterVersionId: 'character-version-isolation',
+      conversation: { topology: 'dialogue', dialogueRunId: 'dialogue-valid' },
+      startedAt: NOW,
+    });
+    await fixture.store.transaction(
+      { mode: 'state-write', ownership: 'state', operation: 'insert-corrupt-character-siblings' },
+      async ({ sql }) => {
+        await sql.run(
+          `INSERT INTO chara_storyline_versions(character_storyline_version_id, payload_json) VALUES (?, ?)`,
+          [
+            'storyline-version-invalid',
+            '{"characterStorylineVersionId":"storyline-version-invalid"}',
+          ],
+        );
+        await sql.run(
+          `INSERT INTO chara_companion_continuities(companion_continuity_id, continuity_revision, payload_json) VALUES (?, 0, ?)`,
+          ['continuity-invalid', '{"companionContinuityId":"continuity-invalid"}'],
+        );
+        await sql.run(
+          `INSERT INTO chara_narrative_turn_receipts(turn_id, payload_json) VALUES (?, ?)`,
+          ['turn-receipt-invalid', '{"turnId":"turn-receipt-invalid"}'],
+        );
+        await sql.run(
+          `INSERT INTO chara_presentation_configurations(character_run_id, payload_json) VALUES (?, ?)`,
+          [
+            'character-run-presentation-invalid',
+            '{"characterRunId":"character-run-presentation-invalid"}',
+          ],
+        );
+      },
+    );
+
+    const catalog = await fixture.repository.readCatalog();
+    expect(catalog.storylineVersions).toEqual([
+      expect.objectContaining({ characterStorylineVersionId: 'storyline-version-valid' }),
+    ]);
+    expect(catalog.companionContinuities).toEqual([
+      expect.objectContaining({ companionContinuityId: 'continuity-valid' }),
+    ]);
+    expect(catalog.presentationConfigurations).toEqual([
+      expect.objectContaining({ characterRunId: 'character-run-presentation-valid' }),
+    ]);
+    expect(catalog.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recordKind: 'character-storyline-version',
+          recordId: 'storyline-version-invalid',
+        }),
+        expect.objectContaining({
+          recordKind: 'character-companion-continuity',
+          recordId: 'continuity-invalid',
+        }),
+        expect.objectContaining({
+          recordKind: 'character-presentation-configuration',
+          recordId: 'character-run-presentation-invalid',
+        }),
+      ]),
+    );
+    await expect(
+      fixture.repository.readNarrativeTurnReceipt('turn-receipt-valid'),
+    ).resolves.toMatchObject({ turnId: 'turn-receipt-valid' });
+    await expect(
+      fixture.repository.readNarrativeTurnReceipt('turn-receipt-invalid'),
+    ).rejects.toThrow();
+    await expect(
+      fixture.repository.readStorylineVersion('storyline-version-missing'),
+    ).resolves.toBeUndefined();
+    const reread = await fixture.repository.readCatalog();
+    expect(reread.diagnostics).toEqual(catalog.diagnostics);
+    await fixture.store.dispose();
+  });
+
+  it('persists immutable Storyline publications and Memory CAS independently across reopen', async () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
@@ -285,79 +447,74 @@ describe('persistent Character repository', () => {
     await rooms.createPreparedRun({ run: roomRun(), characterRuns: [characterRun()] });
 
     const storylines = new CharacterStorylineService(fixture.repository, { now: () => NOW });
+    await storylines.create({
+      characterStorylineId: 'storyline-a',
+      characterProjectId: 'character-project-a',
+      displayName: 'Trust arc',
+      draft: storylineDraft('character-version-a'),
+    });
     await storylines.publish({
+      characterStorylineId: 'storyline-a',
       characterStorylineVersionId: 'storyline-version-a',
-      characterVersionId: 'character-version-a',
       label: 'Trust arc',
-      premise: 'Lin must share responsibility.',
-      desire: 'Protect the archive alone.',
-      conflict: 'One keeper cannot preserve everything.',
-      growthArc: 'From control to reviewed trust.',
-      stages: [
-        { stageId: 'guarded', title: 'Guarded', description: 'Refuses assistance.' },
-        { stageId: 'trusting', title: 'Trusting', description: 'Delegates safely.' },
-      ],
-      turningPoints: [],
-      constraints: [],
-      acceptedEvidenceIds: [],
     });
-    await storylines.createRun({
-      characterStorylineRunId: 'storyline-run-a',
-      characterStorylineVersionId: 'storyline-version-a',
-      characterRunId: 'character-run-a',
-      initialStageId: 'guarded',
+    await storylines.updateDraft({
+      characterStorylineId: 'storyline-a',
+      draft: {
+        ...storylineDraft('character-version-a'),
+        nodes: [storylineNode('Revised situation.')],
+      },
     });
-    await storylines.proposeObservation({
-      observationCandidateId: 'observation-a',
-      characterStorylineRunId: 'storyline-run-a',
-      sourceRef: 'room-event:event-a',
-      observedAt: NOW,
-      fromStageId: 'guarded',
-      toStageId: 'trusting',
-      expectedStorylineRevision: 0,
-    });
-    await storylines.acceptObservation({
-      observationCandidateId: 'observation-a',
-      characterStorylineRunId: 'storyline-run-a',
-      transitionId: 'transition-a',
-      expectedStorylineRevision: 0,
+    await storylines.publish({
+      characterStorylineId: 'storyline-a',
+      characterStorylineVersionId: 'storyline-version-b',
+      label: 'Trust arc revised',
     });
 
-    const memories = new CharacterMemoryService(fixture.repository, { now: () => NOW });
-    await memories.createScope({
-      characterMemoryScopeId: 'memory-scope-a',
-      characterRunId: 'character-run-a',
-      characterStorylineRunId: 'storyline-run-a',
+    const memories = new CharacterCompanionContinuityService(fixture.repository, {
+      now: () => NOW,
+    });
+    await memories.create({
+      companionContinuityId: 'continuity-a',
+      userId: 'user-a',
+      characterProjectId: 'character-project-a',
     });
     const proposed = await memories.propose({
-      characterMemoryScopeId: 'memory-scope-a',
-      characterMemoryCandidateId: 'memory-candidate-a',
+      companionContinuityId: 'continuity-a',
+      companionMemoryCandidateId: 'memory-candidate-a',
+      sourceCharacterVersionId: 'character-version-a',
+      provenance: { kind: 'room-event', roomRunId: 'room-run-a', roomEventId: 'event-a' },
       content: 'Lin remembers trusting the user.',
-      sourceRef: 'room-event:event-a',
-      observedAt: NOW,
+      compatibility: {
+        requiredCanonFacts: [],
+        prohibitedKnowledgeBoundaries: [],
+        requiredBehaviorPolicies: [],
+      },
       sensitivityTraits: [],
       retentionTraits: ['milestone'],
-      expectedMemoryRevision: 0,
+      expectedContinuityRevision: 0,
     });
     await memories.accept({
-      characterMemoryScopeId: 'memory-scope-a',
-      characterMemoryCandidateId: 'memory-candidate-a',
-      characterMemoryEntryId: 'memory-entry-a',
-      expectedMemoryRevision: proposed.memoryRevision,
+      companionContinuityId: 'continuity-a',
+      companionMemoryCandidateId: 'memory-candidate-a',
+      companionMemoryEntryId: 'memory-entry-a',
+      expectedContinuityRevision: proposed.continuityRevision,
     });
-
     const reopened = createPersistentCharacterRepository({ metadataStore: fixture.store });
-    await expect(reopened.readStorylineRun('storyline-run-a')).resolves.toMatchObject({
-      currentStageId: 'trusting',
-      storylineRevision: 1,
+    await expect(reopened.readStorylineVersion('storyline-version-a')).resolves.toMatchObject({
+      characterStorylineId: 'storyline-a',
+      nodes: [{ context: { situation: 'The old gate opens.' } }],
     });
-    await expect(reopened.readMemoryScope('memory-scope-a')).resolves.toMatchObject({
-      memoryRevision: 2,
-      entries: [{ characterMemoryEntryId: 'memory-entry-a', status: 'active' }],
+    await expect(reopened.readStorylineVersion('storyline-version-b')).resolves.toMatchObject({
+      nodes: [{ context: { situation: 'Revised situation.' } }],
     });
-    await expect(reopened.mutateMemoryScope('memory-scope-a', 0, (scope) => scope)).rejects.toThrow(
-      'changed concurrently',
-    );
+    await expect(reopened.readCompanionContinuity('continuity-a')).resolves.toMatchObject({
+      continuityRevision: 2,
+      entries: [{ companionMemoryEntryId: 'memory-entry-a', status: 'active' }],
+    });
+    await expect(
+      reopened.mutateCompanionContinuity('continuity-a', 0, (continuity) => continuity),
+    ).rejects.toThrow('changed concurrently');
     await fixture.store.dispose();
   });
 
@@ -401,20 +558,16 @@ describe('persistent Character repository', () => {
     const initial = await presentation.initializeConfiguration({
       characterRunId: 'character-run-a',
       participantId: 'participant-lin',
-      chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
     });
     await presentation.startTurn({ turnId: 'turn-a', characterRunId: 'character-run-a' });
-    await presentation.updateConfigurations([
-      { ...initial, chat: { providerRef: 'provider:chat-b', modelRef: 'model:chat-b' } },
-    ]);
+    await presentation.updateConfigurations([{ ...initial, tts: { ...initial.tts, speed: 1.25 } }]);
 
     const reopened = createPersistentCharacterRepository({ metadataStore: fixture.store });
     await expect(reopened.readPresentationConfiguration('character-run-a')).resolves.toMatchObject({
-      chat: { modelRef: 'model:chat-b' },
+      tts: { speed: 1.25 },
     });
     await expect(reopened.readPresentationTurnReceipt('turn-a')).resolves.toMatchObject({
-      chat: { modelRef: 'model:chat-a' },
-      tts: { voiceRepresentationId: 'voice-a' },
+      tts: { voiceRepresentationId: 'voice-a', speed: 1 },
     });
     await fixture.store.dispose();
   });
@@ -491,7 +644,7 @@ function roomRun(): RoomRun {
     ],
     schedulingPolicy: { kind: 'mentioned' },
     events: [],
-    runtimeKind: 'companion',
+    mode: 'companion',
     relationshipIds: ['relationship-a'],
     createdAt: NOW,
   };
@@ -506,7 +659,40 @@ function characterRun(): CharacterRun {
       kind: 'agent',
       primaryAgentSessionId: 'conversation:character:character-run-a',
     },
-    runtimeBinding: { kind: 'companion', relationshipId: 'relationship-a' },
+    runtimeBinding: {
+      kind: 'companion',
+      companionContinuityId: 'continuity-a',
+      relationshipId: 'relationship-a',
+    },
     createdAt: NOW,
   };
+}
+
+function storylineDraft(characterVersionId: string) {
+  return {
+    characterVersionId,
+    premise: 'An old promise returns.',
+    constraints: ['Keep future facts hidden.'],
+    nodeOrder: ['storyline-node-arrival'],
+    nodes: [storylineNode('The old gate opens.')],
+    edges: [],
+  } as const;
+}
+
+function storylineNode(situation: string) {
+  return {
+    storylineNodeId: 'storyline-node-arrival',
+    title: 'Arrival',
+    spoilerVisibility: 'visible',
+    context: {
+      situation,
+      allowedStoryFacts: [],
+      forbiddenStoryFacts: ['A future revelation.'],
+      narrativeMemories: [],
+      knowledgeBoundary: [],
+      behaviorConstraints: [],
+      expressionConstraints: [],
+      authorOnlyNotes: [],
+    },
+  } as const;
 }

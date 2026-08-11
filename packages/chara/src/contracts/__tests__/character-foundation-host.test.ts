@@ -22,10 +22,10 @@ function emptySnapshot() {
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylines: [],
+      storylineDrafts: [],
       storylineVersions: [],
-      storylineRuns: [],
-      storylineObservationCandidates: [],
-      memoryScopes: [],
+      companionContinuities: [],
       presentationConfigurations: [],
     },
     diagnostics: [],
@@ -55,6 +55,12 @@ describe('Character Foundation host contract', () => {
     expect(() =>
       parseCharacterFoundationSnapshot({ ...emptySnapshot(), activeWorldId: 'world-a' }),
     ).toThrow(/unsupported fields/u);
+    expect(() =>
+      parseCharacterFoundationSnapshot({
+        ...emptySnapshot(),
+        character: { ...emptySnapshot().character, storylineRuns: [] },
+      }),
+    ).toThrow(/Character catalog contains unsupported fields/u);
   });
 
   it('strictly parses registered commands and rejects unavailable interaction routes', () => {
@@ -112,9 +118,13 @@ describe('Character Foundation host contract', () => {
       input: {
         roomRunId: 'room-run-a',
         characterRoomId: 'room-a',
-        runtimeKind: 'companion',
-        relationshipBindings: [
-          { participantId: 'participant-template-a', relationshipId: 'relationship-a' },
+        mode: 'companion',
+        companionBindings: [
+          {
+            participantId: 'participant-template-a',
+            companionContinuityId: 'continuity-a',
+            relationshipId: 'relationship-a',
+          },
         ],
       },
     });
@@ -134,7 +144,6 @@ describe('Character Foundation host contract', () => {
       input: {
         characterRunId: 'character-run-a',
         participantId: 'participant-a',
-        chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
         tts: {
           providerRef: 'provider:tts-a',
           voiceRepresentationId: 'voice-a',
@@ -158,26 +167,18 @@ describe('Character Foundation host contract', () => {
     const storyline = createCharacterFoundationCommandHostRequest('foundation-storyline-1', {
       operation: 'character-storyline-publish',
       input: {
+        characterStorylineId: 'character-storyline-a',
         characterStorylineVersionId: 'character-storyline-version-a',
-        characterVersionId: 'character-version-a',
         label: 'Trust arc',
-        premise: 'The sealed archive opens.',
-        desire: 'Protect its record.',
-        conflict: 'The record must be shared.',
-        growthArc: 'Learn to trust a witness.',
-        stages: [{ stageId: 'guarded', title: 'Guarded', description: 'Keeps distance.' }],
-        turningPoints: [],
-        constraints: [],
-        acceptedEvidenceIds: [],
       },
     });
     const memory = createCharacterFoundationCommandHostRequest('foundation-memory-1', {
-      operation: 'character-memory-candidate-accept',
+      operation: 'companion-memory-candidate-accept',
       input: {
-        characterMemoryScopeId: 'character-memory-scope-a',
-        characterMemoryCandidateId: 'character-memory-candidate-a',
-        characterMemoryEntryId: 'character-memory-entry-a',
-        expectedMemoryRevision: 2,
+        companionContinuityId: 'companion-continuity-a',
+        companionMemoryCandidateId: 'companion-memory-candidate-a',
+        companionMemoryEntryId: 'companion-memory-entry-a',
+        expectedContinuityRevision: 2,
       },
     });
 
@@ -186,7 +187,7 @@ describe('Character Foundation host contract', () => {
     expect(() =>
       parseCharacterFoundationAnyHostRequest({
         ...memory,
-        input: { ...memory.input, expectedMemoryRevision: -1 },
+        input: { ...memory.input, expectedContinuityRevision: -1 },
       }),
     ).toThrow(/non-negative integer/u);
 
@@ -197,8 +198,14 @@ describe('Character Foundation host contract', () => {
         input: {
           relationshipId: 'relationship-a',
           candidateId: 'relationship-memory-candidate-a',
+          sourceCharacterVersionId: 'character-version-a',
+          provenance: {
+            kind: 'room-event',
+            roomRunId: 'room-run-a',
+            roomEventId: 'room-event-rain',
+          },
           content: 'The user waited in the rain.',
-          sourceRef: 'room-event:rain',
+          expectedRelationshipRevision: 1,
         },
       },
     );
@@ -206,8 +213,11 @@ describe('Character Foundation host contract', () => {
     expect(() =>
       parseCharacterFoundationAnyHostRequest({
         ...relationship,
-        input: { ...relationship.input, sourceRef: 'file:/private/transcript.json' },
+        input: {
+          ...relationship.input,
+          provenance: { kind: 'room-event', roomRunId: 'room-run-a' },
+        },
       }),
-    ).toThrow(/opaque non-file reference/u);
+    ).toThrow(/RoomEvent identity/u);
   });
 });

@@ -75,50 +75,43 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
         ): Promise<unknown>;
       };
       readonly storylines: {
+        create(
+          input: CommandInput<'character-storyline-create'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
+        updateDraft(
+          input: CommandInput<'character-storyline-update-draft'>,
+          signal?: AbortSignal,
+        ): Promise<unknown>;
         publish(
           input: CommandInput<'character-storyline-publish'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
-        createRun(
-          input: CommandInput<'character-storyline-run-create'>,
+        restoreAsDraft(
+          input: CommandInput<'character-storyline-restore-as-draft'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
-        proposeObservation(
-          input: CommandInput<'character-storyline-observation-propose'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        acceptObservation(
-          input: CommandInput<'character-storyline-observation-accept'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        rejectObservation(
-          input: CommandInput<'character-storyline-observation-reject'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
+        delete(characterStorylineId: string, signal?: AbortSignal): Promise<unknown>;
       };
-      readonly memories: {
-        createScope(
-          input: CommandInput<'character-memory-scope-create'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
+      readonly companionContinuity: {
         propose(
-          input: CommandInput<'character-memory-candidate-propose'>,
+          input: CommandInput<'companion-memory-candidate-propose'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
         accept(
-          input: CommandInput<'character-memory-candidate-accept'>,
+          input: CommandInput<'companion-memory-candidate-accept'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
         reject(
-          input: CommandInput<'character-memory-candidate-reject'>,
+          input: CommandInput<'companion-memory-candidate-reject'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
         correct(
-          input: CommandInput<'character-memory-candidate-correct'>,
+          input: CommandInput<'companion-memory-candidate-correct'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
         delete(
-          input: CommandInput<'character-memory-entry-delete'>,
+          input: CommandInput<'companion-memory-entry-delete'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
       };
@@ -173,35 +166,32 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
       case 'character-storyline-publish':
         await this.services.storylines.publish(command.input, signal);
         return;
-      case 'character-storyline-run-create':
-        await this.services.storylines.createRun(command.input, signal);
+      case 'character-storyline-create':
+        await this.services.storylines.create(command.input, signal);
         return;
-      case 'character-storyline-observation-propose':
-        await this.services.storylines.proposeObservation(command.input, signal);
+      case 'character-storyline-update-draft':
+        await this.services.storylines.updateDraft(command.input, signal);
         return;
-      case 'character-storyline-observation-accept':
-        await this.services.storylines.acceptObservation(command.input, signal);
+      case 'character-storyline-restore-as-draft':
+        await this.services.storylines.restoreAsDraft(command.input, signal);
         return;
-      case 'character-storyline-observation-reject':
-        await this.services.storylines.rejectObservation(command.input, signal);
+      case 'character-storyline-delete':
+        await this.services.storylines.delete(command.input.characterStorylineId, signal);
         return;
-      case 'character-memory-scope-create':
-        await this.services.memories.createScope(command.input, signal);
+      case 'companion-memory-candidate-propose':
+        await this.services.companionContinuity.propose(command.input, signal);
         return;
-      case 'character-memory-candidate-propose':
-        await this.services.memories.propose(command.input, signal);
+      case 'companion-memory-candidate-accept':
+        await this.services.companionContinuity.accept(command.input, signal);
         return;
-      case 'character-memory-candidate-accept':
-        await this.services.memories.accept(command.input, signal);
+      case 'companion-memory-candidate-reject':
+        await this.services.companionContinuity.reject(command.input, signal);
         return;
-      case 'character-memory-candidate-reject':
-        await this.services.memories.reject(command.input, signal);
+      case 'companion-memory-candidate-correct':
+        await this.services.companionContinuity.correct(command.input, signal);
         return;
-      case 'character-memory-candidate-correct':
-        await this.services.memories.correct(command.input, signal);
-        return;
-      case 'character-memory-entry-delete':
-        await this.services.memories.delete(command.input, signal);
+      case 'companion-memory-entry-delete':
+        await this.services.companionContinuity.delete(command.input, signal);
         return;
     }
   }

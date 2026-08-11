@@ -4,9 +4,8 @@ import {
   parseCharacterVersion,
   parseCharacterStorylineVersion,
   type CharacterRoom,
-  type CharacterMemoryScope,
+  type CharacterCompanionContinuity,
   type CharacterRun,
-  type CharacterStorylineRun,
   type CharacterStorylineVersion,
   type CharacterVersion,
   type DialogueRun,
@@ -19,7 +18,7 @@ import {
   type CharacterConversationLaunchAggregate,
   type CharacterConversationLaunchRepository,
 } from '../application/character-conversation-launch-service';
-import type { CharacterPrimaryAgentSessionPort } from '../application/character-interaction-service';
+import type { CharacterAgentConversationPort } from '../application/character-interaction-service';
 
 const NOW = '2026-08-09T12:00:00.000Z';
 
@@ -29,7 +28,7 @@ describe('CharacterConversationLaunchService', () => {
 
     await expect(
       fixture.service.validateSelection({
-        runtimeKind: 'companion',
+        mode: 'companion',
         characters: [{ characterVersionId: 'version-a' }],
       }),
     ).resolves.toBeUndefined();
@@ -46,7 +45,7 @@ describe('CharacterConversationLaunchService', () => {
 
     expect(result).toEqual({
       topology: 'dialogue',
-      runtimeKind: 'companion',
+      mode: 'companion',
       characterProjectId: 'project-a',
       characterVersionId: 'version-a',
       characterRunId: 'character-run:launch:request-a:1',
@@ -55,13 +54,36 @@ describe('CharacterConversationLaunchService', () => {
     });
     expect(fixture.repository.dialogues).toHaveLength(1);
     expect(fixture.repository.rooms).toHaveLength(0);
-    expect(fixture.repository.memoryScopes).toEqual([
+    expect(fixture.repository.companionContinuities).toEqual([
       expect.objectContaining({
-        characterMemoryScopeId: 'character-memory-scope:launch:request-a:1',
-        characterRunId: 'character-run:launch:request-a:1',
+        companionContinuityId: 'companion-continuity:user%3Alocal:project-a',
+        characterProjectId: 'project-a',
       }),
     ]);
     expect(fixture.createPrimarySession).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses one stable Companion continuity and relationship across Conversations', async () => {
+    const fixture = createFixture([publication('a')]);
+
+    await fixture.service.launch(companionInput('request-first', ['version-a']));
+    await fixture.service.launch(companionInput('request-second', ['version-a']));
+
+    expect(fixture.repository.dialogues).toHaveLength(2);
+    expect(fixture.repository.companionContinuities).toHaveLength(1);
+    expect(fixture.repository.relationships).toHaveLength(1);
+    expect(fixture.repository.characterRuns.map((run) => run.runtimeBinding)).toEqual([
+      expect.objectContaining({
+        kind: 'companion',
+        companionContinuityId: 'companion-continuity:user%3Alocal:project-a',
+        relationshipId: 'relationship:user%3Alocal:project-a',
+      }),
+      expect.objectContaining({
+        kind: 'companion',
+        companionContinuityId: 'companion-continuity:user%3Alocal:project-a',
+        relationshipId: 'relationship:user%3Alocal:project-a',
+      }),
+    ]);
   });
 
   it('binds the selected role profile to the exact Dialogue AgentSession authority', async () => {
@@ -70,7 +92,7 @@ describe('CharacterConversationLaunchService', () => {
     await fixture.service.launch({
       ...companionInput('request-role', ['version-a']),
       selection: {
-        runtimeKind: 'companion',
+        mode: 'companion',
         characters: [{ characterVersionId: 'version-a', roleProfileId: 'role-profile-a' }],
       },
     });
@@ -115,7 +137,7 @@ describe('CharacterConversationLaunchService', () => {
     expect(fixture.repository.rooms).toHaveLength(1);
     expect(fixture.repository.roomRuns).toHaveLength(1);
     expect(fixture.repository.characterRuns).toHaveLength(2);
-    expect(fixture.repository.memoryScopes).toHaveLength(2);
+    expect(fixture.repository.companionContinuities).toHaveLength(2);
     expect(fixture.repository.roomRuns[0]?.schedulingPolicy).toEqual({
       kind: 'bounded-autonomous',
       maxResponsesPerCycle: 2,
@@ -123,36 +145,62 @@ describe('CharacterConversationLaunchService', () => {
     });
   });
 
-  it('atomically binds an explicitly selected storyline and fresh memory scope to the CharacterRun', async () => {
+  it('rejects the removed Companion storyline field before creating runtime records', async () => {
     const fixture = createFixture([publication('a')]);
     fixture.repository.storylineVersions.push(storyline('a', 'version-a'));
 
-    await fixture.service.launch({
-      ...companionInput('request-storyline', ['version-a']),
+    await expect(
+      fixture.service.launch({
+        ...companionInput('request-storyline', ['version-a']),
+        selection: {
+          mode: 'companion',
+          characters: [
+            {
+              characterVersionId: 'version-a',
+              characterStorylineVersionId: 'storyline-version-a',
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(/unsupported fields/u);
+
+    expect(fixture.repository.characterRuns).toHaveLength(0);
+    expect(fixture.repository.companionContinuities).toHaveLength(0);
+  });
+
+  it('creates node-bound Narrative without Companion memory or relationship authority', async () => {
+    const fixture = createFixture([publication('a')]);
+    fixture.repository.storylineVersions.push(storyline('a', 'version-a'));
+
+    const result = await fixture.service.launch({
+      requestId: 'request-narrative',
+      userId: 'user:local',
+      userDisplayName: 'You',
       selection: {
-        runtimeKind: 'companion',
+        mode: 'narrative',
         characters: [
           {
             characterVersionId: 'version-a',
-            characterStorylineVersionId: 'storyline-version-a',
+            storyline: {
+              characterStorylineId: 'storyline-a',
+              characterStorylineVersionId: 'storyline-version-a',
+              storylineNodeId: 'node-a',
+            },
           },
         ],
       },
     });
 
-    expect(fixture.repository.characterRuns[0]).toMatchObject({
-      characterStorylineRunId: 'character-storyline-run:launch:request-storyline:1',
-      characterMemoryScopeId: 'character-memory-scope:launch:request-storyline:1',
-    });
-    expect(fixture.repository.storylineRuns[0]).toMatchObject({
-      characterStorylineVersionId: 'storyline-version-a',
-      characterRunId: 'character-run:launch:request-storyline:1',
-      currentStageId: 'stage-a',
-      storylineRevision: 0,
-    });
-    expect(fixture.repository.memoryScopes[0]).toMatchObject({
-      characterStorylineRunId: 'character-storyline-run:launch:request-storyline:1',
-      memoryRevision: 0,
+    expect(result).toMatchObject({ topology: 'dialogue', mode: 'narrative' });
+    expect(fixture.repository.relationships).toHaveLength(0);
+    expect(fixture.repository.companionContinuities).toHaveLength(0);
+    expect(fixture.repository.characterRuns[0]?.runtimeBinding).toEqual({
+      kind: 'narrative',
+      storyline: {
+        characterStorylineId: 'storyline-a',
+        characterStorylineVersionId: 'storyline-version-a',
+        storylineNodeId: 'node-a',
+      },
     });
   });
 
@@ -187,11 +235,28 @@ describe('CharacterConversationLaunchService', () => {
     expect(fixture.createPrimarySession).not.toHaveBeenCalled();
   });
 
-  it('rejects replay when the exact Character memory authority is missing', async () => {
+  it('keeps the committed Conversation mode immutable for a reused request identity', async () => {
+    const fixture = createFixture([publication('a')]);
+    await fixture.service.launch(companionInput('request-mode', ['version-a']));
+
+    await expect(
+      fixture.service.launch({
+        ...companionInput('request-mode', ['version-a']),
+        selection: {
+          mode: 'narrative',
+          characters: [{ characterVersionId: 'version-a' }],
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'character-launch-conflict' });
+    expect(fixture.repository.dialogues).toHaveLength(1);
+    expect(fixture.repository.dialogues[0]?.mode).toBe('companion');
+  });
+
+  it('rejects replay when the exact Companion continuity authority is missing', async () => {
     const fixture = createFixture([publication('a')]);
     const input = companionInput('request-corrupt-memory', ['version-a']);
     await fixture.service.launch(input);
-    fixture.repository.memoryScopes.length = 0;
+    fixture.repository.companionContinuities.length = 0;
 
     await expect(fixture.service.launch(input)).rejects.toMatchObject({
       code: 'character-launch-conflict',
@@ -202,18 +267,18 @@ describe('CharacterConversationLaunchService', () => {
 
 function createFixture(publications: readonly CharacterVersion[]) {
   const repository = new MemoryLaunchRepository(publications);
-  const createPrimarySession = vi.fn<CharacterPrimaryAgentSessionPort['createPrimarySession']>(
+  const createPrimarySession = vi.fn<CharacterAgentConversationPort['createPrimarySession']>(
     async ({ characterRunId }) => ({
       primaryAgentSessionId: `conversation:character:${characterRunId}`,
     }),
   );
-  const releaseUnboundSession = vi.fn<CharacterPrimaryAgentSessionPort['releaseUnboundSession']>(
+  const releaseUnboundSession = vi.fn<CharacterAgentConversationPort['releaseUnboundSession']>(
     async () => undefined,
   );
   const service = new CharacterConversationLaunchService({
     repository,
     publications: repository,
-    agentSessions: {
+    agentConversations: {
       createPrimarySession,
       releaseUnboundSession,
       submitTurn: vi.fn(async () => ({ turnId: 'unused', content: 'unused' })),
@@ -228,8 +293,7 @@ class MemoryLaunchRepository implements CharacterConversationLaunchRepository {
   readonly relationships: UserCharacterRelationship[] = [];
   readonly characterRuns: CharacterRun[] = [];
   readonly storylineVersions: CharacterStorylineVersion[] = [];
-  readonly storylineRuns: CharacterStorylineRun[] = [];
-  readonly memoryScopes: CharacterMemoryScope[] = [];
+  readonly companionContinuities: CharacterCompanionContinuity[] = [];
   readonly dialogues: DialogueRun[] = [];
   readonly rooms: CharacterRoom[] = [];
   readonly roomRuns: RoomRun[] = [];
@@ -255,15 +319,11 @@ class MemoryLaunchRepository implements CharacterConversationLaunchRepository {
     );
   }
 
-  async readStorylineRun(characterStorylineRunId: string) {
+  async readCompanionContinuity(companionContinuityId: string) {
     return clone(
-      this.storylineRuns.find((item) => item.characterStorylineRunId === characterStorylineRunId),
-    );
-  }
-
-  async readMemoryScope(characterMemoryScopeId: string) {
-    return clone(
-      this.memoryScopes.find((item) => item.characterMemoryScopeId === characterMemoryScopeId),
+      this.companionContinuities.find(
+        (item) => item.companionContinuityId === companionContinuityId,
+      ),
     );
   }
 
@@ -286,8 +346,7 @@ class MemoryLaunchRepository implements CharacterConversationLaunchRepository {
   async commitLaunch(aggregate: CharacterConversationLaunchAggregate): Promise<void> {
     if (this.failCommit) throw new Error('aggregate failed');
     this.relationships.push(...structuredClone(aggregate.relationships));
-    this.storylineRuns.push(...structuredClone(aggregate.storylineRuns));
-    this.memoryScopes.push(...structuredClone(aggregate.memoryScopes));
+    this.companionContinuities.push(...structuredClone(aggregate.companionContinuities));
     if (aggregate.topology === 'dialogue') {
       this.characterRuns.push(structuredClone(aggregate.characterRun));
       this.dialogues.push(structuredClone(aggregate.dialogueRun));
@@ -322,16 +381,30 @@ function publication(suffix: string): CharacterVersion {
 function storyline(suffix: string, characterVersionId: string): CharacterStorylineVersion {
   return parseCharacterStorylineVersion({
     characterStorylineVersionId: `storyline-version-${suffix}`,
+    characterStorylineId: `storyline-${suffix}`,
     characterVersionId,
     label: `Storyline ${suffix.toUpperCase()}`,
     premise: 'A sealed archive opens.',
-    desire: 'Protect the record.',
-    conflict: 'The record must be shared.',
-    growthArc: 'Learn to trust a witness.',
-    stages: [{ stageId: `stage-${suffix}`, title: 'Guarded', description: 'Keeps distance.' }],
-    turningPoints: [],
     constraints: [],
-    acceptedEvidenceIds: [],
+    nodeOrder: [`node-${suffix}`],
+    nodes: [
+      {
+        storylineNodeId: `node-${suffix}`,
+        title: 'Arrival',
+        spoilerVisibility: 'visible',
+        context: {
+          situation: 'The archive opens.',
+          allowedStoryFacts: [],
+          forbiddenStoryFacts: [],
+          narrativeMemories: [],
+          knowledgeBoundary: [],
+          behaviorConstraints: [],
+          expressionConstraints: [],
+          authorOnlyNotes: [],
+        },
+      },
+    ],
+    edges: [],
     publishedAt: NOW,
   });
 }
@@ -342,7 +415,7 @@ function companionInput(requestId: string, characterVersionIds: readonly string[
     userId: 'user:local',
     userDisplayName: 'You',
     selection: {
-      runtimeKind: 'companion' as const,
+      mode: 'companion' as const,
       characters: characterVersionIds.map((characterVersionId) => ({ characterVersionId })),
     },
   };

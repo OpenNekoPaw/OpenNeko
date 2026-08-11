@@ -245,7 +245,13 @@ async function readCatalog(
       );
     }
   }
-  return { scope: options.scope, projects, versions, authoringTestSnapshots, diagnostics };
+  return {
+    scope: options.scope,
+    projects,
+    versions,
+    authoringTestSnapshots,
+    diagnostics,
+  };
 }
 
 async function collect<T>(

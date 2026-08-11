@@ -28,24 +28,29 @@ export type RoomControllerKind = (typeof ROOM_CONTROLLER_KINDS)[number];
 export type RoomSchedulingKind = (typeof ROOM_SCHEDULING_KINDS)[number];
 export type RoomEventKind = (typeof ROOM_EVENT_KINDS)[number];
 
-export interface CharacterRoomRelationshipBinding {
+export interface CharacterRoomCompanionBinding {
   readonly participantId: string;
+  readonly companionContinuityId: string;
   readonly relationshipId: string;
 }
 
 export interface CreateCharacterRoomRunInput {
   readonly roomRunId: string;
   readonly characterRoomId: string;
-  readonly runtimeKind: 'companion';
-  readonly relationshipBindings: readonly CharacterRoomRelationshipBinding[];
+  readonly mode: 'companion';
+  readonly companionBindings: readonly CharacterRoomCompanionBinding[];
 }
 
 export interface CompanionRunBinding {
-  readonly runtimeKind: 'companion';
+  readonly mode: 'companion';
   readonly relationshipIds: readonly string[];
 }
 
-export type InteractionRunBinding = CompanionRunBinding;
+export interface NarrativeRunBinding {
+  readonly mode: 'narrative';
+}
+
+export type InteractionRunBinding = CompanionRunBinding | NarrativeRunBinding;
 
 export interface DialogueRunBase {
   readonly topology: 'dialogue';
@@ -208,7 +213,7 @@ export function parseDialogueRun(value: unknown): DialogueRun {
       'userParticipantId',
       'characterParticipantId',
       'characterRunId',
-      'runtimeKind',
+      'mode',
       'relationshipIds',
       'createdAt',
     ],
@@ -293,7 +298,7 @@ export function parseRoomRun(value: unknown): RoomRun {
       'participants',
       'schedulingPolicy',
       'events',
-      'runtimeKind',
+      'mode',
       'relationshipIds',
       'createdAt',
     ],
@@ -383,34 +388,30 @@ export function parseRoomView(value: unknown): RoomView {
 export function parseCreateCharacterRoomRunInput(value: unknown): CreateCharacterRoomRunInput {
   const record = requireExactRecord(
     value,
-    ['roomRunId', 'characterRoomId', 'runtimeKind', 'relationshipBindings'],
+    ['roomRunId', 'characterRoomId', 'mode', 'companionBindings'],
     'Create CharacterRoom run input',
   );
   const base = {
     roomRunId: requireIdentity(record['roomRunId'], 'Create RoomRun identity'),
     characterRoomId: requireIdentity(record['characterRoomId'], 'Create CharacterRoom identity'),
   };
-  const runtimeKind = requireOneOf(
-    record['runtimeKind'],
-    ['companion'] as const,
-    'Create RoomRun runtimeKind',
-  );
-  const relationshipBindings = requireUniqueIdentities(
+  const mode = requireOneOf(record['mode'], ['companion'] as const, 'Create RoomRun runtimeKind');
+  const companionBindings = requireUniqueIdentities(
     requireArray(
-      record['relationshipBindings'],
-      parseCharacterRoomRelationshipBinding,
-      'RoomRun relationship bindings',
+      record['companionBindings'],
+      parseCharacterRoomCompanionBinding,
+      'RoomRun Companion bindings',
     ),
     (binding) => binding.participantId,
-    'RoomRun relationship bindings',
+    'RoomRun Companion bindings',
   );
-  if (relationshipBindings.length === 0) {
-    throw new Error('Companion RoomRun requires relationship bindings.');
+  if (companionBindings.length === 0) {
+    throw new Error('Companion RoomRun requires continuity and relationship bindings.');
   }
   return {
     ...base,
-    runtimeKind,
-    relationshipBindings,
+    mode,
+    companionBindings,
   };
 }
 
@@ -441,11 +442,17 @@ export function decodeRoomRecords<T>(
 function parseInteractionRunBinding(
   record: Readonly<Record<string, unknown>>,
 ): InteractionRunBinding {
-  const runtimeKind = requireOneOf(
-    record['runtimeKind'],
-    ['companion'] as const,
-    'Interaction runtimeKind',
+  const mode = requireOneOf(
+    record['mode'],
+    ['companion', 'narrative'] as const,
+    'Interaction mode',
   );
+  if (mode === 'narrative') {
+    if (record['relationshipIds'] !== undefined) {
+      throw new Error('Narrative run cannot bind Companion relationships.');
+    }
+    return { mode };
+  }
   const relationshipIds = requireUniqueStringArray(
     record['relationshipIds'],
     'Companion relationshipIds',
@@ -453,17 +460,21 @@ function parseInteractionRunBinding(
   if (relationshipIds.length === 0) {
     throw new Error('Companion run requires at least one relationship identity.');
   }
-  return { runtimeKind, relationshipIds };
+  return { mode, relationshipIds };
 }
 
-function parseCharacterRoomRelationshipBinding(value: unknown): CharacterRoomRelationshipBinding {
+function parseCharacterRoomCompanionBinding(value: unknown): CharacterRoomCompanionBinding {
   const record = requireExactRecord(
     value,
-    ['participantId', 'relationshipId'],
-    'CharacterRoom relationship binding',
+    ['participantId', 'companionContinuityId', 'relationshipId'],
+    'CharacterRoom Companion binding',
   );
   return {
     participantId: requireIdentity(record['participantId'], 'Relationship participant'),
+    companionContinuityId: requireIdentity(
+      record['companionContinuityId'],
+      'Companion continuity identity',
+    ),
     relationshipId: requireIdentity(record['relationshipId'], 'Relationship identity'),
   };
 }

@@ -167,6 +167,7 @@ function preparedTurn(participant: RoomParticipant, run: RoomRun): PreparedChara
   return {
     primaryAgentSessionId: participant.controller.primaryAgentSessionId,
     characterRunId: participant.controller.characterRunId,
+    mode: run.mode,
     context: {
       characterVersion: {
         characterVersionId: participant.characterVersionId,
@@ -293,7 +294,7 @@ function roomRun(): RoomRun {
       participantOrder: ['participant-agent-a', 'participant-agent-b'],
     },
     events: [],
-    runtimeKind: 'companion',
+    mode: 'companion',
     relationshipIds: ['relationship-a', 'relationship-b'],
     createdAt: NOW,
   };
