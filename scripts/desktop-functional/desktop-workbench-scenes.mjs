@@ -3605,7 +3605,7 @@ async function inspectActivatedWorkspaceAgent(evaluate) {
         return activeSurface instanceof HTMLElement &&
           activeSurfaces.length === 1 &&
           ownerActions === 0 &&
-          (title === '工作区已就绪' || title === 'Workspace is ready');
+          (title === '开始创作' || title === 'Start creating');
       })()`,
       'Workspace-bound Agent did not finish attaching its activated draft state.',
     );

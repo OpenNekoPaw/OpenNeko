@@ -10,7 +10,7 @@ const translations: Record<string, string> = {
   'chat.emptyState.desktopDockDescription': 'Describe an idea or mention a resource.',
   'chat.emptyState.desktopDockSkills': 'Try a Skill',
   'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
-  'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+  'chat.emptyState.scope.workspaceActiveTitle': 'Start creating',
   'chat.emptyState.scope.activeDescription': 'Start a conversation.',
 };
 
@@ -44,7 +44,7 @@ describe('EmptyState', () => {
     expect(document.querySelector('.agent-empty-skill-button')).toBeNull();
 
     view.rerender(<EmptyState draftScope="workspace" presentation="desktop-dock" />);
-    expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Start creating' })).toBeTruthy();
   });
 
   it('renders only the centered mode title for a projected Entry', () => {

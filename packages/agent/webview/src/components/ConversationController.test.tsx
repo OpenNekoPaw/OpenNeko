@@ -146,7 +146,7 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.emptyState.scope.characterRoom': 'Character / Room',
         'chat.emptyState.scope.characterRoomHelper': 'Character helper',
         'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
-        'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+        'chat.emptyState.scope.workspaceActiveTitle': 'Start creating',
         'chat.emptyState.scope.activeDescription': 'Start a conversation.',
         'chat.entryExperience.label': 'Choose an experience',
         'chat.entryExperience.mode.assistant': 'Assistant',
@@ -675,7 +675,7 @@ describe('ConversationController entry state', () => {
     );
 
     expect(screen.queryByTestId('header')).toBeNull();
-    expect(screen.getByText('Workspace is ready')).toBeTruthy();
+    expect(screen.getByText('Start creating')).toBeTruthy();
     expect(screen.getByRole('textbox')).toBeTruthy();
     expect(screen.getByTestId('entry-config-state').textContent).toBe('ready:false');
     expect(hostMocks.getConversations).not.toHaveBeenCalled();
@@ -1405,7 +1405,7 @@ describe('ConversationController entry state', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Start creating' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Assistant' })).toBeNull();
     expect(screen.queryByRole('tab', { name: 'Authoring' })).toBeNull();
   });

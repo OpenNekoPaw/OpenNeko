@@ -64,7 +64,7 @@ export const chat = {
     'Describe an idea, reference a project resource, or mention a character.',
   'chat.emptyState.desktopDockSkills': 'Try a Skill',
   'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
-  'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+  'chat.emptyState.scope.workspaceActiveTitle': 'Start creating',
   'chat.emptyState.scope.activeDescription': 'Enter a message to start a new conversation.',
   'chat.entryExperience.label': 'Choose a conversation mode',
   'chat.entryQuickActions.label': 'Quick start',

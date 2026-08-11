@@ -63,7 +63,7 @@ export const chat = {
   'chat.emptyState.desktopDockDescription': '描述灵感、引用项目素材，或提及一个角色。',
   'chat.emptyState.desktopDockSkills': '试试这些 Skill',
   'chat.emptyState.scope.assistantActiveTitle': '助手已就绪',
-  'chat.emptyState.scope.workspaceActiveTitle': '工作区已就绪',
+  'chat.emptyState.scope.workspaceActiveTitle': '开始创作',
   'chat.emptyState.scope.activeDescription': '输入内容以开始新的会话。',
   'chat.entryExperience.label': '选择对话模式',
   'chat.entryQuickActions.label': '快速开始',
