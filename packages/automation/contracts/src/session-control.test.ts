@@ -13,7 +13,6 @@ const projection = {
     extensionId: 'computer-use@openneko',
     providerId: 'cua-driver',
     kind: 'computer',
-    upstreamRelease: '0.19.2',
   },
   target: {
     kind: 'computer',

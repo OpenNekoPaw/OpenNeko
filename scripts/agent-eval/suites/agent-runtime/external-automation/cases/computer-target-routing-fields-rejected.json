@@ -24,11 +24,11 @@
       {
         "ref": "computer-target-rejection-facts",
         "kind": "runtime-fact",
-        "description": "Exact attempted arguments, terminal qualified Tool error, absent raw verify_state Tool, and terminal idle state.",
+        "description": "Exact attempted arguments, terminal compatible Tool error, absent raw verify_state Tool, and terminal idle state.",
         "required": true
       }
     ],
-    "expectedResult": "The qualified adapter rejects model-supplied pid and window_id fields instead of redirecting the Host-selected target.",
+    "expectedResult": "The compatible adapter rejects model-supplied pid and window_id fields instead of redirecting the Host-selected target.",
     "expectedFailure": "Executing against the injected target, stripping fields silently, raw provider access, provider fallback, or a busy turn fails."
   },
   "fixtureRefs": ["empty-workspace"],

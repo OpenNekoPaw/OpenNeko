@@ -12,7 +12,6 @@ import type {
 } from '@neko/agent-contracts';
 import {
   buildAgentPluginRuntime,
-  createAgentExtensionCandidateQualification,
   createAgentExtensionSupport,
   disposeAgentPluginRuntimeChanges,
   listChangedAgentPluginRuntimeIds,
@@ -209,74 +208,8 @@ describe('Desktop plugin runtime', () => {
       expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
-        dependencyStatus: 'ready',
-        hostPermissionStatus: 'not-applicable',
-        qualificationStatus: 'qualified',
       });
       await pluginRuntime.dispose();
-    });
-  });
-
-  it('qualifies a candidate in an isolated runtime and requires its exact handle to close once', async () => {
-    await withPlugin(async (pluginRoot) => {
-      const skillRoot = join(pluginRoot, 'skills');
-      await mkdir(join(skillRoot, 'fixture'), { recursive: true });
-      await writeFile(
-        join(skillRoot, 'fixture', 'SKILL.md'),
-        '---\nname: fixture\ndescription: Candidate fixture\n---\nUse the fixture method.\n',
-        'utf8',
-      );
-      const qualifier = createAgentExtensionCandidateQualification({ processEnv: {} });
-      const qualification = await qualifier.qualify({
-        operationId: 'candidate-operation-1',
-        descriptor: {
-          pluginId: 'fixture@market',
-          pluginRoot,
-          skillRoot,
-          mcpServerIds: [],
-          appIds: [],
-        },
-        signal: new AbortController().signal,
-      });
-
-      await expect(qualification.close()).resolves.toBeUndefined();
-      await expect(qualification.close()).rejects.toThrow('already closed');
-    });
-  });
-
-  it('rejects adapter-only candidates without starting their MCP process', async () => {
-    await withPlugin(async (pluginRoot) => {
-      const markerPath = join(pluginRoot, 'adapter-started');
-      const launcher = join(pluginRoot, 'adapter-mcp.mjs');
-      await writeFile(
-        launcher,
-        [
-          '#!/usr/bin/env node',
-          "import { writeFileSync } from 'node:fs';",
-          `writeFileSync(${JSON.stringify(markerPath)}, 'started', 'utf8');`,
-          'process.exit(1);',
-          '',
-        ].join('\n'),
-        { mode: 0o755 },
-      );
-      await writeFile(
-        join(pluginRoot, '.mcp.json'),
-        JSON.stringify({ mcpServers: { automation: { command: './adapter-mcp.mjs' } } }),
-        'utf8',
-      );
-      const qualifier = createAgentExtensionCandidateQualification({ processEnv: {} });
-
-      await expect(
-        qualifier.qualify({
-          operationId: 'candidate-operation-2',
-          descriptor: {
-            ...mcpDescriptor(pluginRoot, ['automation'], 'automation@market'),
-            mcpToolExposure: 'adapter-only',
-          },
-          signal: new AbortController().signal,
-        }),
-      ).rejects.toThrow('automation-adapter-unavailable');
-      await expect(readFile(markerPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     });
   });
 
@@ -330,9 +263,6 @@ describe('Desktop plugin runtime', () => {
       expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
-        dependencyStatus: 'ready',
-        hostPermissionStatus: 'not-applicable',
-        qualificationStatus: 'qualified',
       });
       await pluginRuntime.dispose();
 
@@ -356,9 +286,6 @@ describe('Desktop plugin runtime', () => {
       expect(adapterRuntime.readiness.get('fixture@market')).toEqual({
         status: 'unsupported',
         diagnosticCode: 'automation-adapter-unavailable',
-        dependencyStatus: 'unchecked',
-        hostPermissionStatus: 'unknown',
-        qualificationStatus: 'unqualified',
       });
       await adapterRuntime.dispose();
     });
@@ -444,19 +371,75 @@ describe('Desktop plugin runtime', () => {
         expect(runtime.readiness.get('automation@market')).toEqual({
           status: 'unsupported',
           diagnosticCode: 'automation-adapter-unavailable',
-          dependencyStatus: 'unchecked',
-          hostPermissionStatus: 'unknown',
-          qualificationStatus: 'unqualified',
         });
         expect(runtime.readiness.get('generic@market')).toEqual({
           status: 'ready',
           diagnosticCode: '',
-          dependencyStatus: 'ready',
-          hostPermissionStatus: 'not-applicable',
-          qualificationStatus: 'qualified',
         });
         await runtime.dispose();
       });
+    });
+  });
+
+  it('registers a product adapter Tool without exposing its raw MCP and replaces it by source identity', async () => {
+    await withPlugin(async (pluginRoot) => {
+      const descriptor = {
+        ...mcpDescriptor(pluginRoot, ['automation'], 'automation@market'),
+        mcpToolExposure: 'adapter-only' as const,
+      };
+      const snapshot: AgentExtensionCatalogSnapshot = {
+        records: [],
+        runtimeDescriptors: [descriptor],
+        diagnostics: [],
+      };
+      let runtimeId = 'runtime-one';
+      let disposed = 0;
+      const toolAdapters = {
+        async build(input: AgentExtensionRuntimeDescriptor) {
+          expect(input).toEqual(descriptor);
+          const capturedRuntimeId = runtimeId;
+          return {
+            sourceFingerprint: capturedRuntimeId,
+            tools: [
+              {
+                name: 'computer_use__verify_state',
+                description: 'Observe the selected window.',
+                parameters: { type: 'object' as const, properties: {} },
+                execute: async () => ({ success: true, data: capturedRuntimeId }),
+              },
+            ],
+            readiness: { status: 'ready' as const, diagnosticCode: '' },
+            async dispose() {
+              disposed += 1;
+            },
+          };
+        },
+      };
+
+      const initial = await buildAgentPluginRuntime(snapshot, { toolAdapters });
+      expect(initial.tools.map((tool) => tool.name)).toEqual(['computer_use__verify_state']);
+      expect(initial.readiness.get('automation@market')).toEqual({
+        status: 'ready',
+        diagnosticCode: '',
+      });
+
+      const retained = await reconcileAgentPluginRuntime(initial, snapshot, { toolAdapters });
+      expect(retained.contributions.get('automation@market')).toBe(
+        initial.contributions.get('automation@market'),
+      );
+      expect(disposed).toBe(1);
+
+      runtimeId = 'runtime-two';
+      const replaced = await reconcileAgentPluginRuntime(retained, snapshot, { toolAdapters });
+      expect(listChangedAgentPluginRuntimeIds(retained, replaced)).toEqual(['automation@market']);
+      await disposeAgentPluginRuntimeChanges(retained, replaced);
+      await expect(replaced.tools[0]?.execute({})).resolves.toMatchObject({
+        success: true,
+        data: 'runtime-two',
+      });
+      expect(disposed).toBe(2);
+      await replaced.dispose();
+      expect(disposed).toBe(3);
     });
   });
 

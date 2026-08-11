@@ -15,6 +15,11 @@ import type {
 
 export function createPiToolResultAssetLoader(
   contentAccessRuntime: AgentContentAccessRuntime,
+  loadTransientImage?: (input: {
+    readonly receiptId: string;
+    readonly sessionId: string;
+    readonly actionId: string;
+  }) => Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }>,
 ): PiToolResultAssetLoader {
   const loadSource = (ref: PerceptualAssetRef): Promise<ProviderImageBatchSource> =>
     loadProviderImageSource(contentAccessRuntime, ref);
@@ -29,6 +34,19 @@ export function createPiToolResultAssetLoader(
         mimeType: normalized.mimeType,
       };
     },
+    ...(loadTransientImage === undefined
+      ? {}
+      : {
+          async loadTransientImage(ref) {
+            const source = await loadTransientImage(ref);
+            const normalized = await normalizeProviderImage(source.bytes, source.mimeType);
+            return {
+              kind: 'image' as const,
+              url: toImageDataUrl(normalized.bytes, normalized.mimeType),
+              mimeType: normalized.mimeType,
+            };
+          },
+        }),
     async loadBatch(refs, options) {
       const sources = await Promise.all(refs.map(loadSource));
       return (await composeProviderImageBatches(sources, options.layout)).map((batch) => ({

@@ -1,129 +1,103 @@
 ## MODIFIED Requirements
 
-### Requirement: Extensions manages Skills and extension packages
+### Requirement: Extensions provides open Plugin, Skill and MCP integration
 
-The Extensions Surface MUST manage global personal/plugin Skills and OpenNeko extension packages through the canonical
-Agent extension application service. Extension package enablement and Automation runtime source MUST be separate facts.
-For a user-managed local runtime, Extensions MUST provide official installation guidance, exact local authorization,
-recheck and disconnect; it MUST NOT present OpenNeko-owned install, update or uninstall actions. Future reviewed managed
-artifacts MAY support platform artifact install, update and removal as distinct operations. Runtime readiness MUST
-separately report source, enablement, local authorization or package integrity, dependency/MCP connection, platform
-qualification and required Host permissions. Opening Agent, Extensions, a Skill or a conversation MUST NOT install or
-update a runtime.
+The Extensions Surface MUST discover and manage personal/plugin Skills and extension packages through the canonical
+Agent extension application service. A catalog record itself MUST mean that a configured local source exists; the
+projection MUST expose enablement, contribution summary and a local diagnostic without a redundant install-presence
+state. It MUST NOT expose qualification, verification, dependency, declared-permission or accepted-permission
+status matrices.
+Without a composed remote Marketplace/artifact Host, it MUST NOT expose Plugin download, update candidate, transfer,
+verification, commit, rollback or cancel-operation state.
 
-#### Scenario: User configures an already-installed automation runtime
+#### Scenario: User enables a Plugin
 
-- **WHEN** the user chooses Browser Use or Computer Use with the user-managed local runtime source
-- **THEN** Extensions SHALL show `Open installation guide`, `Select/authorize runtime`, `Check again` and `Disconnect`
-  actions as applicable
-- **AND** SHALL show `missing`, `invalid`, `unqualified`, `qualified` or `changed` for the exact authorized runtime
-- **AND** SHALL NOT show OpenNeko-owned install, update or uninstall actions for that source
-- **AND** Browser Use SHALL request its runtime and browser executable as separate exact authorizations
+- **WHEN** the user enables a discovered Plugin
+- **THEN** enablement SHALL be the complete consent to load that Plugin's declared Skill, ordinary MCP and App
+  contributions
+- **AND** Tool invocation, Host/OS permission and Automation target/action authorization SHALL continue at their owning
+  runtime boundaries
+- **AND** Extensions SHALL NOT ask the user to accept a manifest permission string set
+
+#### Scenario: Third-party contribution fails
+
+- **WHEN** one Plugin, Skill, MCP server or Tool cannot be parsed or connected
+- **THEN** Extensions SHALL retain the owning record and display a local diagnostic
+- **AND** unrelated contributions, extensions, conversations and Workspaces SHALL remain available
+- **AND** the failure SHALL NOT be presented as a global qualification or verification result
+
+#### Scenario: Extensions is rescanned
+
+- **WHEN** the user refreshes the Extensions catalog
+- **THEN** OpenNeko SHALL rescan only configured local Plugin and Skill sources
+- **AND** SHALL NOT contact a Marketplace, download an artifact or construct an update candidate
+
+#### Scenario: User installs a personal or third-party Skill
+
+- **WHEN** a valid Skill is added to an OpenNeko-supported personal, workspace or Plugin Skill root
+- **THEN** the canonical Skill discovery path SHALL make it available according to source trust
+- **AND** no OpenNeko-specific package, publisher registration or qualification badge SHALL be required
+- **AND** `allowed-tools` and external processor authorization SHALL only restrict existing runtime authority
+
+### Requirement: External Automation dependencies remain user-managed
+
+Extensions MUST provide official installation guidance, a copyable installation command, exact resource selection,
+recheck and disconnect for Browser Use and Cua Driver. OpenNeko MUST NOT execute, update or uninstall the external
+runtime.
+
+#### Scenario: User needs Browser Use
+
+- **WHEN** Browser Use is not configured
+- **THEN** Extensions SHALL show a copyable upstream installation command and installation-guide action
+- **AND** SHALL allow the user to select the provider runtime and browser executable independently
+- **AND** SHALL NOT execute `uvx`, `pip`, shell or any installer
+
+#### Scenario: User needs Cua Driver
+
+- **WHEN** Cua Driver is not configured
+- **THEN** Extensions SHALL show a copyable upstream installation command and installation-guide action
+- **AND** SHALL allow the user to select the exact installed application/runtime
+- **AND** SHALL NOT execute `curl`, shell, PowerShell or the upstream installer
+
+#### Scenario: User opens a non-Automation Extension
+
+- **WHEN** the selected Plugin does not own a Browser or Computer adapter
+- **THEN** its detail SHALL NOT append Browser/Cua runtime or OS-permission controls
+- **AND** the Plugin's own contributions, enablement and local diagnostics SHALL remain available
 
 #### Scenario: User disconnects a local runtime
 
 - **WHEN** the user confirms Disconnect and no exact Automation session owns the source
-- **THEN** OpenNeko SHALL remove only its Host-owned authorization and qualification facts
-- **AND** SHALL NOT delete, update, terminate or otherwise manage the user-installed runtime files
-- **AND** the extension metadata and sibling extensions SHALL remain available
+- **THEN** OpenNeko SHALL remove only its Host-owned authorization
+- **AND** SHALL NOT delete, update or terminate user-owned runtime files
+- **AND** extension metadata and sibling extensions SHALL remain available
 
-#### Scenario: User installs a future managed automation artifact
+### Requirement: Local runtime UI is action-oriented
 
-- **WHEN** the user confirms installation after reviewing publisher, package release, platform, download size, licenses
-  and declared capabilities
-- **THEN** Main SHALL download the exact artifact to staging, verify checksum, package containment, provenance and
-  license inventory, and atomically install it under the OpenNeko extension root
-- **AND** installation SHALL NOT execute a remote shell, curl, pip, uv, npm or upstream install script
-- **AND** the extension SHALL remain disabled until the user explicitly enables its declared permissions
+The local runtime projection MUST use only `not-configured`, `ready` and `error` as its top-level state. The UI MUST
+show concrete resource state and diagnostics when action is needed. It MUST NOT show `qualified`, `unqualified`,
+`verified`, `unverified` or equivalent badges.
 
-#### Scenario: User enables a configured automation extension
+#### Scenario: Compatible runtime connects
 
-- **WHEN** the user enables a Browser Use or Computer Use extension with an explicitly selected runtime source
-- **THEN** the extension service SHALL validate the current authorized runtime or platform artifact and permission declaration, connect the
-  exact MCP server, discover and filter the reviewed Tool set, and project runtime readiness
-- **AND** only Tools whose effective policy is valid SHALL enter Pi
-- **AND** install success or manifest declarations SHALL NOT produce ready status
+- **WHEN** the exact selected assets remain valid, MCP handshake succeeds and required operations are structurally
+  compatible
+- **THEN** the source SHALL be reported `ready`
+- **AND** the UI SHALL show available actions without a qualification badge
 
-#### Scenario: Installation is interrupted
+#### Scenario: Runtime is incompatible
 
-- **WHEN** download cancellation, network failure, disk exhaustion, verification failure or application restart
-  interrupts installation
-- **THEN** only the exact operation-owned staging data SHALL be discarded or resumed for the same artifact identity and
-  digest
-- **AND** the installed authoritative package and sibling extensions SHALL remain unchanged
+- **WHEN** MCP connection, required operation or required input shape is incompatible
+- **THEN** only that source SHALL be reported `error` with a concrete diagnostic
+- **AND** the user MAY reselect, recheck or disconnect it
+- **AND** OpenNeko SHALL NOT select another runtime or present a generalized third-party trust verdict
 
-#### Scenario: User leaves Extensions during download
+### Requirement: Opening management surfaces never installs dependencies
 
-- **WHEN** an install or update download is active and the Extensions scene unmounts
-- **THEN** the extension application service SHALL continue or explicitly cancel the exact background operation according
-  to the user action
-- **AND** reopening Extensions SHALL project its current progress without retaining the previous React Root
+Opening Agent, Extensions, a Skill or a conversation MUST NOT download or execute third-party dependencies.
 
-#### Scenario: User updates an extension
+#### Scenario: Extensions is refreshed
 
-- **WHEN** a newer reviewed plugin release is available and the user confirms update
-- **THEN** the extension service SHALL stage and qualify the exact new platform artifact before committing the package
-  replacement
-- **AND** update SHALL be rejected while an Agent turn or automation session owns the extension
-- **AND** a failed candidate SHALL leave the previously installed package authoritative without registering a parallel
-  runtime path
-
-#### Scenario: Update expands permissions
-
-- **WHEN** an update adds a Tool, action class, environment secret, network scope, OS capability or data access
-- **THEN** the candidate SHALL remain unregistered and disabled until the user separately accepts the expanded declared
-  capability set
-- **AND** previous enablement or OS permission SHALL NOT authorize the expansion
-
-#### Scenario: User disables or removes an active automation extension
-
-- **WHEN** the exact extension owns an active automation session
-- **THEN** disable and remove SHALL fail visibly until the user stops or takes over that session
-- **AND** unrelated extensions and conversations SHALL remain available
-
-#### Scenario: Marketplace is refreshed
-
-- **WHEN** the user refreshes the bundled reviewed catalog
-- **THEN** no runtime artifact SHALL download or execute
-- **AND** unknown, unsigned, checksum-invalid or unsupported-platform records SHALL not become installable
-
-#### Scenario: Extension introduction follows the Desktop locale
-
-- **WHEN** an extension manifest declares a localized introduction for the current Desktop locale
-- **THEN** Extensions SHALL display that introduction consistently in grid/list results and the selected configuration detail
-- **AND** search SHALL use the same locale-resolved introduction
-- **AND** a locale without a declared introduction SHALL display the manifest's canonical default introduction
-- **AND** invalid locale keys or localization metadata SHALL invalidate only the affected plugin manifest
-
-### Requirement: First-delivery catalog trust is application-anchored
-
-The first Browser Use and Computer Use delivery MUST use only the reviewed catalog shipped inside the signed OpenNeko
-application as the catalog authenticity root. Network access MAY download only the exact artifact named by that catalog.
-A remotely mutable catalog MUST NOT be introduced without a separate trust, key-rotation and revocation design.
-
-#### Scenario: Network content attempts to change the catalog
-
-- **WHEN** refresh or artifact download returns a new package record, release, URL, digest or permission declaration not
-  present in the application-owned catalog
-- **THEN** the record SHALL be rejected
-- **AND** installed packages and the reviewed catalog SHALL remain unchanged
-
-### Requirement: Installed package facts remain visible and independently owned
-
-The extension application service MUST separately own installed artifact identity and digest, enablement, accepted
-declared permissions and operation ownership. Current integrity, MCP connection, OS permission and platform
-qualification MUST be queried facts used to compute readiness. An invalid installed package MUST remain visible and
-MUST NOT execute.
-
-#### Scenario: Installed package becomes invalid
-
-- **WHEN** an installed package fails manifest, digest, signature or executable validation
-- **THEN** Extensions SHALL retain its package identity and display an invalid diagnostic with explicit reinstall and
-  remove actions
-- **AND** it SHALL not hide, auto-repair, enable or register the package
-
-#### Scenario: User removes an extension runtime
-
-- **WHEN** the user confirms runtime removal while the extension owns no active turn, process or automation session
-- **THEN** the installed runtime SHALL move to trash
-- **AND** browser profiles, downloads and extension data SHALL remain until a separate data-removal action is confirmed
+- **WHEN** the user refreshes Extensions
+- **THEN** OpenNeko SHALL only reread configured Plugin/Skill/MCP/local-runtime facts
+- **AND** no package manager, installer, remote shell or hidden dependency setup SHALL execute

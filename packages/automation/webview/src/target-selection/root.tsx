@@ -90,7 +90,7 @@ export function AutomationTargetSelectionRoot({
               <h3>{t('automation.targetSelection.title')}</h3>
             </div>
             <span className="automation-target-selection__provider">
-              {projection.provider.providerId} · {projection.provider.upstreamRelease}
+              {projection.provider.providerId}
             </span>
           </header>
           <p className="automation-target-selection__description">

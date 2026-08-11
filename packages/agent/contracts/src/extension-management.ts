@@ -18,26 +18,8 @@ export interface AgentManagedSkillItem {
   readonly canRemove: boolean;
 }
 
-export type AgentExtensionArtifactOperationKind = 'install' | 'update';
-export type AgentExtensionArtifactOperationPhase =
-  'queued' | 'downloading' | 'verifying' | 'committing' | 'cancelling';
-export type AgentExtensionArtifactOperationStatus = 'active' | 'completed' | 'cancelled' | 'failed';
-
-export interface AgentExtensionArtifactOperationSnapshot {
-  readonly operationId: string;
-  readonly pluginId: string;
-  readonly kind: AgentExtensionArtifactOperationKind;
-  readonly phase: AgentExtensionArtifactOperationPhase;
-  readonly status: AgentExtensionArtifactOperationStatus;
-  readonly transferredBytes: number;
-  readonly totalBytes: number;
-  readonly canCancel: boolean;
-  readonly diagnosticCode: '' | 'cancelled' | 'operation-failed';
-}
-
 export interface AgentExtensionManagementProjection {
   readonly identity: AgentExtensionManagementSessionIdentity;
-  readonly operations: readonly AgentExtensionArtifactOperationSnapshot[];
   readonly skills: readonly AgentManagedSkillItem[];
   readonly skillDiscovery: {
     readonly diagnostics: readonly {
@@ -60,13 +42,10 @@ export interface AgentExtensionManagementProjection {
 export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
-  installPlugin(pluginId: string): Promise<void>;
-  updatePlugin(pluginId: string): Promise<void>;
-  cancelPluginOperation(operationId: string): Promise<void>;
   enablePlugin(pluginId: string): Promise<void>;
   disablePlugin(pluginId: string): Promise<void>;
   removePlugin(pluginId: string): Promise<void>;
-  refreshMarketplaces(): Promise<void>;
+  rescanSources(): Promise<void>;
   installPersonalSkill(): Promise<void>;
   removePersonalSkill(managementId: string): Promise<void>;
   dispose(): void;
@@ -77,98 +56,18 @@ export function parseAgentExtensionManagementProjection(
 ): AgentExtensionManagementProjection {
   const record = requireExactRecord(
     value,
-    ['identity', 'operations', 'skills', 'skillDiscovery', 'extensions', 'extensionDiscovery'],
+    ['identity', 'skills', 'skillDiscovery', 'extensions', 'extensionDiscovery'],
     'Agent Extension Management projection is invalid.',
   );
-  if (
-    !Array.isArray(record['operations']) ||
-    !Array.isArray(record['skills']) ||
-    !Array.isArray(record['extensions'])
-  ) {
+  if (!Array.isArray(record['skills']) || !Array.isArray(record['extensions'])) {
     throw new Error('Agent Extension Management catalog is invalid.');
   }
   return {
     identity: parseAgentExtensionManagementSessionIdentity(record['identity']),
-    operations: record['operations'].map(parseArtifactOperation),
     skills: record['skills'].map(parseManagedSkill),
     skillDiscovery: parseSkillDiscovery(record['skillDiscovery']),
     extensions: record['extensions'].map(parseExtension),
     extensionDiscovery: parseExtensionDiscovery(record['extensionDiscovery']),
-  };
-}
-
-function parseArtifactOperation(value: unknown): AgentExtensionArtifactOperationSnapshot {
-  const record = requireExactRecord(
-    value,
-    [
-      'operationId',
-      'pluginId',
-      'kind',
-      'phase',
-      'status',
-      'transferredBytes',
-      'totalBytes',
-      'canCancel',
-      'diagnosticCode',
-    ],
-    'Agent Extension Management artifact operation is invalid.',
-  );
-  const phase = requireOneOf(
-    record['phase'],
-    ['queued', 'downloading', 'verifying', 'committing', 'cancelling'] as const,
-    'Agent Extension Management artifact operation phase is invalid.',
-  );
-  const status = requireOneOf(
-    record['status'],
-    ['active', 'completed', 'cancelled', 'failed'] as const,
-    'Agent Extension Management artifact operation status is invalid.',
-  );
-  const transferredBytes = requireNonNegativeInteger(
-    record['transferredBytes'],
-    'Agent Extension Management artifact operation progress is invalid.',
-  );
-  const totalBytes = requireNonNegativeInteger(
-    record['totalBytes'],
-    'Agent Extension Management artifact operation total size is invalid.',
-  );
-  const canCancel = requireBoolean(
-    record['canCancel'],
-    'Agent Extension Management artifact operation cancellation is invalid.',
-  );
-  const diagnosticCode = requireOneOf(
-    record['diagnosticCode'],
-    ['', 'cancelled', 'operation-failed'] as const,
-    'Agent Extension Management artifact operation diagnostic is invalid.',
-  );
-  if (
-    transferredBytes > totalBytes ||
-    canCancel !== (status === 'active' && phase !== 'committing' && phase !== 'cancelling') ||
-    (['downloading', 'verifying', 'committing'].includes(phase) && totalBytes === 0) ||
-    (status === 'active' && diagnosticCode !== '') ||
-    (status === 'completed' &&
-      (phase !== 'committing' || diagnosticCode !== '' || transferredBytes !== totalBytes)) ||
-    (status === 'cancelled' && (phase !== 'cancelling' || diagnosticCode !== 'cancelled')) ||
-    (status === 'failed' && diagnosticCode !== 'operation-failed')
-  ) {
-    throw new Error('Agent Extension Management artifact operation state is inconsistent.');
-  }
-  return {
-    operationId: requireNonEmptyString(
-      record['operationId'],
-      'Agent Extension Management artifact operation identity is required.',
-    ),
-    pluginId: requirePluginId(record['pluginId']),
-    kind: requireOneOf(
-      record['kind'],
-      ['install', 'update'] as const,
-      'Agent Extension Management artifact operation kind is invalid.',
-    ),
-    phase,
-    status,
-    transferredBytes,
-    totalBytes,
-    canCancel,
-    diagnosticCode,
   };
 }
 
@@ -285,24 +184,11 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'developer',
       'marketplace',
       'category',
-      'installed',
       'enabled',
-      'canInstall',
-      'canUpdate',
       'canEnable',
       'canDisable',
       'canRemove',
-      'updatePackageRelease',
       'deliverySource',
-      'artifactPlatform',
-      'downloadSizeBytes',
-      'artifactStatus',
-      'dependencyStatus',
-      'enableGrantStatus',
-      'hostPermissionStatus',
-      'qualificationStatus',
-      'declaredPermissions',
-      'acceptedPermissions',
       'agentStatus',
       'runtimeDiagnosticCode',
       'iconDataUrl',
@@ -327,21 +213,9 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
   if (id !== `${name}@${marketplace}`) {
     throw new Error('Agent Extension Management extension identity is inconsistent.');
   }
-  const installed = requireBoolean(
-    record['installed'],
-    'Agent Extension Management installed flag is invalid.',
-  );
   const enabled = requireBoolean(
     record['enabled'],
     'Agent Extension Management enabled flag is invalid.',
-  );
-  const canInstall = requireBoolean(
-    record['canInstall'],
-    'Agent Extension Management install flag is invalid.',
-  );
-  const canUpdate = requireBoolean(
-    record['canUpdate'],
-    'Agent Extension Management update flag is invalid.',
   );
   const canRemove = requireBoolean(
     record['canRemove'],
@@ -355,88 +229,20 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     record['canDisable'],
     'Agent Extension Management disable flag is invalid.',
   );
-  const declaredPermissions = requireUniqueIdentifiers(
-    record['declaredPermissions'],
-    'Agent Extension Management declared permissions are invalid.',
-  );
-  const acceptedPermissions = requireUniqueIdentifiers(
-    record['acceptedPermissions'],
-    'Agent Extension Management accepted permissions are invalid.',
-  );
-  const updatePackageRelease = requireString(
-    record['updatePackageRelease'],
-    'Agent Extension Management update package release must be a string.',
-  );
   const deliverySource = requireOneOf(
     record['deliverySource'],
-    ['', 'github-release', 'official-download'] as const,
+    ['bundled', 'personal'] as const,
     'Agent Extension Management delivery source is invalid.',
   );
-  const artifactPlatform = requireString(
-    record['artifactPlatform'],
-    'Agent Extension Management artifact platform must be a string.',
-  );
-  const downloadSizeBytes = requireNonNegativeInteger(
-    record['downloadSizeBytes'],
-    'Agent Extension Management artifact size is invalid.',
-  );
-  const artifactStatus = requireOneOf(
-    record['artifactStatus'],
-    ['unavailable', 'available', 'installed', 'invalid'] as const,
-    'Agent Extension Management artifact status is invalid.',
-  );
-  const dependencyStatus = requireOneOf(
-    record['dependencyStatus'],
-    ['unchecked', 'ready', 'error'] as const,
-    'Agent Extension Management dependency status is invalid.',
-  );
-  const enableGrantStatus = requireOneOf(
-    record['enableGrantStatus'],
-    ['not-required', 'required', 'accepted'] as const,
-    'Agent Extension Management enable grant status is invalid.',
-  );
-  const hostPermissionStatus = requireOneOf(
-    record['hostPermissionStatus'],
-    ['not-applicable', 'unknown', 'granted', 'needs-permission', 'unsupported'] as const,
-    'Agent Extension Management Host permission status is invalid.',
-  );
-  const qualificationStatus = requireOneOf(
-    record['qualificationStatus'],
-    ['unqualified', 'qualified', 'partial', 'failed'] as const,
-    'Agent Extension Management qualification status is invalid.',
-  );
   if (
-    (canInstall && installed) ||
-    canUpdate !== (installed && !enabled && updatePackageRelease.length > 0) ||
-    (canUpdate && updatePackageRelease === record['version']) ||
-    (canEnable && (!installed || enabled)) ||
-    canDisable !== (installed && enabled) ||
-    canRemove !== (installed && !enabled) ||
-    (!installed && (enabled || acceptedPermissions.length > 0)) ||
-    (acceptedPermissions.length > 0 && !sameStringSet(declaredPermissions, acceptedPermissions)) ||
-    (enabled && !sameStringSet(declaredPermissions, acceptedPermissions)) ||
-    (artifactStatus === 'available') !== canInstall ||
-    (!installed && artifactStatus === 'installed') ||
-    (installed && artifactStatus === 'available') ||
-    (artifactStatus === 'unavailable' && downloadSizeBytes !== 0) ||
-    (artifactStatus === 'unavailable' && deliverySource !== '') ||
-    ((artifactStatus === 'available' || artifactStatus === 'installed') && deliverySource === '') ||
-    (artifactStatus === 'invalid' && deliverySource !== '') ||
-    (artifactStatus === 'invalid' && dependencyStatus !== 'error') ||
-    (declaredPermissions.length === 0 && enableGrantStatus !== 'not-required') ||
-    (declaredPermissions.length > 0 &&
-      enableGrantStatus !==
-        (sameStringSet(declaredPermissions, acceptedPermissions) ? 'accepted' : 'required'))
+    canEnable !== !enabled ||
+    canDisable !== enabled ||
+    canRemove !== (!enabled && deliverySource === 'personal')
   ) {
     throw new Error('Agent Extension Management extension flags are inconsistent.');
   }
   const agentStatus = requireExtensionStatus(record['agentStatus']);
-  if (
-    (!installed &&
-      agentStatus !== 'not-installed' &&
-      !(agentStatus === 'unsupported' && !canInstall)) ||
-    (installed && !enabled && agentStatus !== 'disabled' && agentStatus !== 'error')
-  ) {
+  if (!enabled && agentStatus !== 'disabled' && agentStatus !== 'error') {
     throw new Error('Agent Extension Management extension status is inconsistent.');
   }
   return {
@@ -464,24 +270,11 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       record['category'],
       'Agent Extension Management category must be a string.',
     ),
-    installed,
     enabled,
-    canInstall,
-    canUpdate,
     canEnable,
     canDisable,
     canRemove,
-    updatePackageRelease,
     deliverySource,
-    artifactPlatform,
-    downloadSizeBytes,
-    artifactStatus,
-    dependencyStatus,
-    enableGrantStatus,
-    hostPermissionStatus,
-    qualificationStatus,
-    declaredPermissions,
-    acceptedPermissions,
     agentStatus,
     runtimeDiagnosticCode: requireDiagnosticValue(record['runtimeDiagnosticCode']),
     iconDataUrl: requireIconDataUrl(record['iconDataUrl']),
@@ -681,7 +474,6 @@ function requireExtensionDiagnosticCode(value: unknown): AgentExtensionDiagnosti
 
 function requireExtensionStatus(value: unknown): AgentExtensionStatus {
   if (
-    value !== 'not-installed' &&
     value !== 'disabled' &&
     value !== 'ready' &&
     value !== 'partial' &&
@@ -691,10 +483,6 @@ function requireExtensionStatus(value: unknown): AgentExtensionStatus {
     throw new Error('Agent Extension Management extension status is invalid.');
   }
   return value;
-}
-
-function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value) => right.includes(value));
 }
 
 function requireNonEmptyString(value: unknown, message: string): string {

@@ -87,7 +87,11 @@ export function createAgentAutomationCapabilityTools(options: {
               mode,
               timeoutMs: input.timeoutMs,
               stepBudget: input.stepBudget,
-              owner,
+              owner: {
+                conversationId: owner.conversationId,
+                runId: owner.runId,
+                toolCallId: owner.toolCallId,
+              },
               grant,
             },
             executionOptions?.signal,
@@ -142,6 +146,9 @@ export function createAgentAutomationCapabilityTools(options: {
           if (operationError !== undefined) throw operationError;
           if (closeError !== undefined) throw closeError;
           if (!result) throw new Error(`Automation Tool '${operation.name}' returned no result.`);
+          const transientImages = result.evidence.filter(
+            (evidence) => evidence.kind === 'transient-image',
+          );
           return {
             success: true,
             data: {
@@ -157,6 +164,19 @@ export function createAgentAutomationCapabilityTools(options: {
               },
               evidence: result.evidence,
             },
+            ...(transientImages.length === 0
+              ? {}
+              : {
+                  attachments: transientImages.map((evidence) => ({
+                    type: 'image' as const,
+                    mimeType: evidence.mimeType,
+                    transientImage: {
+                      receiptId: evidence.receiptId,
+                      sessionId,
+                      actionId,
+                    },
+                  })),
+                }),
           };
         },
       };

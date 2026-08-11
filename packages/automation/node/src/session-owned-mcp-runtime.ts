@@ -23,7 +23,7 @@ export interface AutomationMcpClientPort {
 }
 
 export interface AutomationMcpClientFactoryPort {
-  createQualificationClient(): AutomationMcpClientPort;
+  createInspectionClient(): AutomationMcpClientPort;
   createSessionClient(input: {
     readonly sessionId: string;
     readonly target: AutomationTarget;
@@ -57,7 +57,7 @@ export function createSessionOwnedAutomationMcpRuntime(options: {
 
   return {
     async inspectTools(input) {
-      const client = options.clients.createQualificationClient();
+      const client = options.clients.createInspectionClient();
       claimExclusiveClient(claimedClients, client);
       let tools: readonly AutomationMcpToolDefinition[];
       try {
@@ -69,7 +69,7 @@ export function createSessionOwnedAutomationMcpRuntime(options: {
         } catch (disconnectError) {
           throw new AggregateError(
             [operationError, disconnectError],
-            'Automation MCP qualification and cleanup both failed.',
+            'Automation MCP inspection and cleanup both failed.',
           );
         }
         throw operationError;
@@ -145,7 +145,7 @@ function claimExclusiveClient(
   client: AutomationMcpClientPort,
 ): void {
   if (claimedClients.has(client)) {
-    throw new Error('Automation MCP client is already owned by another qualification or session.');
+    throw new Error('Automation MCP client is already owned by another inspection or session.');
   }
   claimedClients.add(client);
 }

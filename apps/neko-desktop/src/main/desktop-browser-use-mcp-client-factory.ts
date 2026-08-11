@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
+  MCPConnectionInfo,
   MCPRequestOptions,
   MCPServerConfig,
   MCPToolDefinition,
@@ -16,21 +17,30 @@ import type {
 } from '@neko/automation-node';
 
 export interface DesktopBrowserUseRuntimeLayout {
-  readonly runtimeRoot: string;
   readonly executablePath: string;
   readonly browserExecutablePath: string;
-  readonly binaryPath: string;
 }
 
 export interface DesktopBrowserUseMcpClientFactoryOptions {
   readonly runtime: DesktopBrowserUseRuntimeLayout;
   readonly storageRoot: string;
   readonly createClient?: (config: MCPServerConfig) => DesktopBrowserUseMcpClient;
+  readonly validateRuntime?: (runtime: DesktopBrowserUseRuntimeLayout) => Promise<void>;
+}
+
+interface DesktopAutomationMcpInspection {
+  readonly server: MCPConnectionInfo['server'];
+  readonly tools: readonly AutomationMcpToolDefinition[];
+}
+
+export interface DesktopBrowserUseMcpClientFactory extends AutomationMcpClientFactoryPort {
+  inspectProvider(signal?: AbortSignal): Promise<DesktopAutomationMcpInspection>;
 }
 
 interface DesktopBrowserUseMcpClient {
   connect(options?: MCPRequestOptions): Promise<void>;
   disconnect(): Promise<void>;
+  getConnectionInfo(): MCPConnectionInfo | undefined;
   listTools(options?: MCPRequestOptions): Promise<MCPToolDefinition[]>;
   callTool(
     name: string,
@@ -53,30 +63,34 @@ interface PreparedBrowserUseConfiguration {
 }
 
 const BROWSER_USE_MCP_ARGUMENTS = Object.freeze(['--mcp'] as const);
-const QUALIFICATION_DOMAIN = 'qualification.invalid';
+const INSPECTION_DOMAIN = 'inspection.invalid';
+const BROWSER_USE_MCP_SERVER_NAME = 'browser-use';
 
 export function createDesktopBrowserUseMcpClientFactory(
   options: DesktopBrowserUseMcpClientFactoryOptions,
-): AutomationMcpClientFactoryPort {
+): DesktopBrowserUseMcpClientFactory {
   const runtime = Object.freeze({ ...options.runtime });
   const storageRoot = options.storageRoot;
   validateLayout(runtime, storageRoot);
   const createClient = options.createClient ?? ((config) => createMCPClient(config));
+  const validateRuntime = options.validateRuntime ?? validateDesktopBrowserUseRuntime;
 
+  const createInspectionClient = () =>
+    createPreparedClient({
+      launch: {
+        id: `inspection-${randomUUID()}`,
+        allowedDomains: [INSPECTION_DOMAIN],
+        directory: 'inspection',
+        requestTimeout: 30_000,
+        removeDataOnDisconnect: true,
+      },
+      runtime,
+      storageRoot,
+      createClient,
+      validateRuntime,
+    });
   return Object.freeze({
-    createQualificationClient: () =>
-      createPreparedClient({
-        launch: {
-          id: `qualification-${randomUUID()}`,
-          allowedDomains: [QUALIFICATION_DOMAIN],
-          directory: 'qualification',
-          requestTimeout: 30_000,
-          removeDataOnDisconnect: true,
-        },
-        runtime,
-        storageRoot,
-        createClient,
-      }),
+    createInspectionClient: () => createInspectionClient(),
     createSessionClient: (
       input: Parameters<AutomationMcpClientFactoryPort['createSessionClient']>[0],
     ) => {
@@ -94,17 +108,38 @@ export function createDesktopBrowserUseMcpClientFactory(
         runtime,
         storageRoot,
         createClient,
+        validateRuntime,
       });
+    },
+    async inspectProvider(signal?: AbortSignal) {
+      const client = createInspectionClient();
+      try {
+        await client.connect({ ...(signal === undefined ? {} : { signal }) });
+        const connection = client.getConnectionInfo();
+        if (!connection) throw new Error('Browser Use returned no negotiated MCP identity.');
+        const tools = await client.listTools({ ...(signal === undefined ? {} : { signal }) });
+        return Object.freeze({
+          server: Object.freeze({ ...connection.server }),
+          tools: Object.freeze(tools),
+        });
+      } finally {
+        await client.disconnect();
+      }
     },
   });
 }
+
+type PreparedBrowserUseClient = AutomationMcpClientPort & {
+  getConnectionInfo(): MCPConnectionInfo | undefined;
+};
 
 function createPreparedClient(input: {
   readonly launch: PreparedBrowserUseLaunch;
   readonly runtime: DesktopBrowserUseRuntimeLayout;
   readonly storageRoot: string;
   readonly createClient: (config: MCPServerConfig) => DesktopBrowserUseMcpClient;
-}): AutomationMcpClientPort {
+  readonly validateRuntime: (runtime: DesktopBrowserUseRuntimeLayout) => Promise<void>;
+}): PreparedBrowserUseClient {
   let client: DesktopBrowserUseMcpClient | undefined;
   let preparedDirectory: string | undefined;
 
@@ -114,6 +149,7 @@ function createPreparedClient(input: {
         throw new Error(`Browser Use MCP client '${input.launch.id}' is already connected.`);
       if (signal?.aborted) throw abortReason(signal);
       await validateInstalledRuntime(input.runtime);
+      await input.validateRuntime(input.runtime);
       const prepared = await prepareLaunchConfiguration(input);
       preparedDirectory = prepared.sessionRoot;
       if (signal?.aborted) throw abortReason(signal);
@@ -121,11 +157,15 @@ function createPreparedClient(input: {
       client = created;
       try {
         await created.connect({ ...(signal === undefined ? {} : { signal }) });
+        requireReviewedConnection(created);
       } catch (error) {
         client = undefined;
         await closeAfterFailedConnection(created);
         throw error;
       }
+    },
+    getConnectionInfo() {
+      return client?.getConnectionInfo();
     },
     async disconnect() {
       const connected = client;
@@ -164,6 +204,44 @@ function createPreparedClient(input: {
       return projectToolResult(result);
     },
   };
+}
+
+export async function validateDesktopBrowserUseRuntime(
+  runtime: DesktopBrowserUseRuntimeLayout,
+): Promise<void> {
+  const firstLine = await readEntrypointFirstLine(runtime.executablePath);
+  const interpreterPath = firstLine.startsWith('#!') ? firstLine.slice(2).trim() : '';
+  if (!path.isAbsolute(interpreterPath) || /\s/u.test(interpreterPath)) {
+    throw new Error('Browser Use runtime must be a Python entrypoint with an exact interpreter.');
+  }
+  const interpreter = await realpath(interpreterPath);
+  if (interpreter !== interpreterPath) {
+    throw new Error('Browser Use Python interpreter authorization changed before launch.');
+  }
+}
+
+async function readEntrypointFirstLine(executablePath: string): Promise<string> {
+  const handle = await open(executablePath, 'r');
+  try {
+    const buffer = Buffer.alloc(4_096);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const contents = buffer.subarray(0, bytesRead).toString('utf8');
+    const newline = contents.indexOf('\n');
+    if (newline < 0 && bytesRead === buffer.length) {
+      throw new Error('Browser Use runtime entrypoint header is too large.');
+    }
+    return contents.slice(0, newline < 0 ? contents.length : newline);
+  } finally {
+    await handle.close();
+  }
+}
+
+function requireReviewedConnection(client: DesktopBrowserUseMcpClient): MCPConnectionInfo {
+  const connection = client.getConnectionInfo();
+  if (!connection || connection.server.name !== BROWSER_USE_MCP_SERVER_NAME) {
+    throw new Error('Browser Use MCP server identity is incompatible.');
+  }
+  return connection;
 }
 
 async function prepareLaunchConfiguration(input: {
@@ -212,7 +290,7 @@ async function prepareLaunchConfiguration(input: {
     config: {
       id: `browser-use:${input.launch.id}`,
       name: 'Browser Use',
-      description: 'Contained reviewed Browser Use MCP runtime',
+      description: 'Reviewed user-managed Browser Use MCP runtime',
       category: 'productivity',
       transport: 'stdio',
       command: input.runtime.executablePath,
@@ -224,7 +302,7 @@ async function prepareLaunchConfiguration(input: {
         TMPDIR: temporary,
         TMP: temporary,
         TEMP: temporary,
-        PATH: input.runtime.binaryPath,
+        PATH: path.dirname(input.runtime.executablePath),
         XDG_CONFIG_HOME: configDirectory,
         XDG_CACHE_HOME: cacheDirectory,
         BROWSER_USE_CONFIG_DIR: configDirectory,
@@ -316,24 +394,20 @@ function projectToolResult(result: MCPToolResult): AutomationMcpCallResult {
 }
 
 async function validateInstalledRuntime(runtime: DesktopBrowserUseRuntimeLayout): Promise<void> {
-  const installedRoot = await realpath(runtime.runtimeRoot);
-  const [executablePath, browserExecutablePath, binaryPath] = await Promise.all([
+  const [executablePath, browserExecutablePath] = await Promise.all([
     realpath(runtime.executablePath),
     realpath(runtime.browserExecutablePath),
-    realpath(runtime.binaryPath),
   ]);
-  for (const candidate of [executablePath, browserExecutablePath, binaryPath]) {
-    requireContainedPath(installedRoot, candidate, 'Browser Use runtime path');
+  if (
+    executablePath !== runtime.executablePath ||
+    browserExecutablePath !== runtime.browserExecutablePath
+  ) {
+    throw new Error('Browser Use local runtime authorization changed before launch.');
   }
-  const [rootStats, executableStats, browserStats, binaryStats] = await Promise.all([
-    stat(installedRoot),
+  const [executableStats, browserStats] = await Promise.all([
     stat(executablePath),
     stat(browserExecutablePath),
-    stat(binaryPath),
   ]);
-  if (!rootStats.isDirectory() || !binaryStats.isDirectory()) {
-    throw new Error('Browser Use runtime and binary paths must be directories.');
-  }
   if (!executableStats.isFile() || !browserStats.isFile()) {
     throw new Error('Browser Use launcher and browser paths must be files.');
   }
@@ -343,24 +417,25 @@ function validateLayout(runtime: DesktopBrowserUseRuntimeLayout, storageRoot: st
   for (const [label, value] of Object.entries({ ...runtime, storageRoot })) {
     if (!path.isAbsolute(value)) throw new Error(`Browser Use ${label} must be an absolute path.`);
   }
-  for (const candidate of [
-    runtime.executablePath,
-    runtime.browserExecutablePath,
-    runtime.binaryPath,
-  ]) {
-    requireContainedPath(runtime.runtimeRoot, candidate, 'Browser Use runtime path');
+  if (runtime.executablePath === runtime.browserExecutablePath) {
+    throw new Error('Browser Use runtime and browser executable must be independent authorities.');
+  }
+  if (
+    pathsOverlap(storageRoot, runtime.executablePath) ||
+    pathsOverlap(storageRoot, runtime.browserExecutablePath)
+  ) {
+    throw new Error('Browser Use local runtime and session storage must be separate.');
   }
 }
 
-function requireContainedPath(root: string, candidate: string, label: string): void {
-  const relative = path.relative(root, candidate);
-  if (
-    relative === '' ||
-    (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
-  ) {
-    return;
-  }
-  throw new Error(`${label} escapes the installed extension runtime.`);
+function pathsOverlap(left: string, right: string): boolean {
+  const relative = path.relative(path.resolve(left), path.resolve(right));
+  const rightInsideLeft =
+    relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  const reverse = path.relative(path.resolve(right), path.resolve(left));
+  const leftInsideRight =
+    reverse === '' || (!reverse.startsWith('..') && !path.isAbsolute(reverse));
+  return rightInsideLeft || leftInsideRight;
 }
 
 function sessionDirectoryName(identity: string): string {

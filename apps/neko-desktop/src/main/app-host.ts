@@ -143,16 +143,16 @@ import type {
 } from '@neko/agent-contracts/extension-management';
 import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import {
-  parseAutomationEndpointManagementHostRequest,
-  type AutomationEndpointManagementHostResult,
-} from '@neko/automation-contracts/endpoint-management';
+  parseAutomationLocalRuntimeManagementHostRequest,
+  type AutomationLocalRuntimeManagementHostResult,
+} from '@neko/automation-contracts/local-runtime-management';
 import {
   parseAutomationPermissionManagementHostRequest,
   type AutomationPermissionManagementHostResult,
 } from '@neko/automation-contracts/permission-management';
 import type {
   AutomationApplicationService,
-  AutomationEndpointManagementService,
+  AutomationLocalRuntimeManagementService,
   AutomationPermissionManagementService,
   AutomationTargetSelectionCoordinator,
 } from '@neko/automation-node';
@@ -346,7 +346,7 @@ export interface DesktopAppHostOptions {
   readonly settings: DesktopApplicationSettingsService;
   readonly extensionManager: AgentExtensionManager;
   readonly personalSkillManager: PersonalSkillManager;
-  readonly automationEndpoints: AutomationEndpointManagementService;
+  readonly automationLocalRuntimes: AutomationLocalRuntimeManagementService;
   readonly automationPermissions: AutomationPermissionManagementService;
   readonly automationTargetSelections: AutomationTargetSelectionCoordinator;
   readonly automationSessions: Pick<
@@ -1776,20 +1776,6 @@ export class DesktopAppHost {
     switch (request.route) {
       case 'snapshot.get':
         break;
-      case 'plugin.install': {
-        const snapshot = await this.options.extensionManager.installPlugin(request.pluginId);
-        await this.activatePluginSnapshot(snapshot);
-        break;
-      }
-      case 'plugin.update': {
-        const snapshot = await this.options.extensionManager.updatePlugin(request.pluginId);
-        await this.activatePluginSnapshot(snapshot);
-        break;
-      }
-      case 'plugin.operation.cancel': {
-        this.options.extensionManager.cancelArtifactOperation(request.operationId);
-        break;
-      }
       case 'plugin.enable': {
         const snapshot = await this.options.extensionManager.enablePlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
@@ -1805,8 +1791,8 @@ export class DesktopAppHost {
         await this.activatePluginSnapshot(snapshot);
         break;
       }
-      case 'marketplaces.refresh': {
-        const snapshot = await this.options.extensionManager.refreshMarketplaces();
+      case 'sources.rescan': {
+        const snapshot = await this.options.extensionManager.rescanSources();
         await this.activatePluginSnapshot(snapshot);
         break;
       }
@@ -1827,42 +1813,71 @@ export class DesktopAppHost {
     };
   }
 
-  async executeAutomationEndpointManagement(
+  async executeAutomationLocalRuntimeManagement(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<AutomationEndpointManagementHostResult> {
+  ): Promise<AutomationLocalRuntimeManagementHostResult> {
     this.requireActive();
-    const request = parseAutomationEndpointManagementHostRequest(payload);
+    const request = parseAutomationLocalRuntimeManagementHostRequest(payload);
     const window = this.windows.resolveSender(sender);
     if (request.identity.windowId !== window.windowId) {
-      throw new Error('Automation endpoint management request belongs to another Window.');
+      throw new Error('Automation local runtime management request belongs to another Window.');
     }
     const shell = await this.shell.getProjection(window.windowId);
     const activeScene = resolveActiveDesktopWindowWorkbench(shell.window).scene;
     if (activeScene.context.kind !== 'extensions') {
-      throw new Error('Automation endpoint management request does not match the active Scene.');
+      throw new Error(
+        'Automation local runtime management request does not match the active Scene.',
+      );
     }
-    let endpoints;
+    let runtimes;
     switch (request.route) {
       case 'snapshot.get':
-        endpoints = await this.options.automationEndpoints.list();
+        runtimes = await this.options.automationLocalRuntimes.list();
         break;
-      case 'endpoint.configure':
-        endpoints = await this.options.automationEndpoints.configure(request.configuration);
-        break;
-      case 'endpoint.remove':
-        endpoints = await this.options.automationEndpoints.remove(
-          request.connectorId,
-          request.endpointId,
+      case 'guide.open':
+        runtimes = await this.options.automationLocalRuntimes.openInstallationGuide(
+          request.sourceId,
         );
         break;
+      case 'command.copy':
+        runtimes = await this.options.automationLocalRuntimes.copyInstallationCommand(
+          request.sourceId,
+        );
+        break;
+      case 'asset.authorize':
+        runtimes = await this.options.automationLocalRuntimes.authorizeAsset(
+          request.sourceId,
+          request.assetKey,
+          window.windowId,
+        );
+        break;
+      case 'runtime.recheck':
+        runtimes = await this.options.automationLocalRuntimes.recheck(
+          request.sourceId,
+          request.runtimeId,
+        );
+        break;
+      case 'runtime.disconnect':
+        runtimes = await this.options.automationLocalRuntimes.disconnect(
+          request.sourceId,
+          request.runtimeId,
+        );
+        break;
+    }
+    if (
+      request.route === 'asset.authorize' ||
+      request.route === 'runtime.recheck' ||
+      request.route === 'runtime.disconnect'
+    ) {
+      await this.activatePluginSnapshot(await this.options.extensionManager.readCatalog());
     }
     return {
       requestId: request.requestId,
       route: request.route,
       projection: {
         identity: request.identity,
-        endpoints,
+        runtimes,
       },
     };
   }
@@ -2008,7 +2023,6 @@ export class DesktopAppHost {
     );
     return {
       identity,
-      operations: this.options.extensionManager.readArtifactOperations(),
       skills,
       skillDiscovery: projectSkillDiscovery(skillCatalog),
       extensions: extensionCatalog.records,

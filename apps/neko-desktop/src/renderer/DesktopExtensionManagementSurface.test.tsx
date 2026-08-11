@@ -4,11 +4,12 @@ import { act, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentExtensionManagementRuntime } from '@neko/agent-contracts/extension-management';
-import type { AutomationEndpointManagementRuntime } from '@neko/automation-contracts/endpoint-management';
+import type { AutomationLocalRuntimeManagementRuntime } from '@neko/automation-contracts/local-runtime-management';
 import type { AutomationPermissionManagementRuntime } from '@neko/automation-contracts/permission-management';
 import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementSurface';
 
-let capturedEndpointRuntime: AutomationEndpointManagementRuntime | undefined;
+let capturedLocalRuntime: AutomationLocalRuntimeManagementRuntime | undefined;
+let capturedSourceId: string | undefined;
 let capturedPermissionRuntime: AutomationPermissionManagementRuntime | undefined;
 
 vi.mock('@neko/agent-webview/extension-management/root', async () => {
@@ -26,18 +27,18 @@ vi.mock('@neko/agent-webview/extension-management/root', async () => {
       }) => ReactNode;
     }) => {
       const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
-      const [selected, setSelected] = useState(false);
+      const [selectedItemId, setSelectedItemId] = useState<string>();
       useEffect(() => {
-        onDetailVisibilityChange(selected);
+        onDetailVisibilityChange(selectedItemId !== undefined);
         return () => onDetailVisibilityChange(false);
-      }, [onDetailVisibilityChange, selected]);
+      }, [onDetailVisibilityChange, selectedItemId]);
       return (
         <>
           <button
             type="button"
             onClick={() => {
               setTab('skills');
-              setSelected(true);
+              setSelectedItemId('skill:test');
             }}
           >
             Show skill
@@ -46,15 +47,33 @@ vi.mock('@neko/agent-webview/extension-management/root', async () => {
             type="button"
             onClick={() => {
               setTab('extensions');
-              setSelected(true);
+              setSelectedItemId('computer-use@openneko');
             }}
           >
-            Show extensions
+            Show computer
           </button>
-          {selected
+          <button
+            type="button"
+            onClick={() => {
+              setTab('extensions');
+              setSelectedItemId('browser-use@openneko');
+            }}
+          >
+            Show browser
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTab('extensions');
+              setSelectedItemId('other@third-party');
+            }}
+          >
+            Show ordinary
+          </button>
+          {selectedItemId
             ? renderDetail({
                 content: null,
-                selectedItemId: tab === 'skills' ? 'skill:test' : 'computer-use@openneko',
+                selectedItemId,
                 tab,
               })
             : null}
@@ -64,13 +83,16 @@ vi.mock('@neko/agent-webview/extension-management/root', async () => {
   };
 });
 
-vi.mock('@neko/automation-webview/endpoint-management/root', () => ({
-  AutomationEndpointManagementRoot: ({
+vi.mock('@neko/automation-webview/local-runtime-management/root', () => ({
+  AutomationLocalRuntimeManagementRoot: ({
     runtime,
+    sourceId,
   }: {
-    readonly runtime: AutomationEndpointManagementRuntime;
+    readonly runtime: AutomationLocalRuntimeManagementRuntime;
+    readonly sourceId: string;
   }) => {
-    capturedEndpointRuntime = runtime;
+    capturedLocalRuntime = runtime;
+    capturedSourceId = sourceId;
     return null;
   },
 }));
@@ -87,15 +109,15 @@ vi.mock('@neko/automation-webview/permission-management/root', () => ({
 }));
 
 describe('DesktopExtensionManagementSurface', () => {
-  it('keeps the endpoint runtime usable through React StrictMode lifecycle replay', async () => {
+  it('shows only the selected bundled adapter local-runtime controls', async () => {
     Object.defineProperty(window, 'openNekoDesktop', {
       configurable: true,
       value: {
-        automationEndpoints: {
+        automationLocalRuntimes: {
           execute: vi.fn(async (request) => ({
             requestId: request.requestId,
             route: request.route,
-            projection: { identity: request.identity, endpoints: [] },
+            projection: { identity: request.identity, runtimes: [] },
           })),
         },
         automationPermissions: {
@@ -128,7 +150,6 @@ describe('DesktopExtensionManagementSurface', () => {
       );
     });
 
-    expect(capturedEndpointRuntime).toBeUndefined();
     expect(capturedPermissionRuntime).toBeUndefined();
     expect(detailTarget.querySelector('[data-workbench-main-panel="extension-detail"]')).toBeNull();
     expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(false);
@@ -137,24 +158,37 @@ describe('DesktopExtensionManagementSurface', () => {
     );
     await act(async () => skillButton?.click());
     expect(detailTarget.querySelector('[data-workbench-main-panel="extension-detail"]')).not.toBeNull();
-    expect(capturedEndpointRuntime).toBeUndefined();
     expect(capturedPermissionRuntime).toBeUndefined();
     expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(true);
-    const extensionButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Show extensions',
+    const browserButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Show browser',
     );
-    await act(async () => extensionButton?.click());
+    await act(async () => browserButton?.click());
 
-    expect(capturedEndpointRuntime).toBeDefined();
-    await expect(capturedEndpointRuntime?.getSnapshot()).resolves.toMatchObject({
-      identity: { windowId: 'window-1' },
-      endpoints: [],
-    });
+    expect(capturedLocalRuntime).toBeDefined();
+    expect(capturedSourceId).toBe('browser-use.observe.local');
+    expect(capturedPermissionRuntime).toBeUndefined();
+
+    const computerButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Show computer',
+    );
+    await act(async () => computerButton?.click());
+    expect(capturedSourceId).toBe('computer-use.observe.local');
     expect(capturedPermissionRuntime).toBeDefined();
     await expect(capturedPermissionRuntime?.getSnapshot()).resolves.toMatchObject({
       identity: { windowId: 'window-1' },
       permissions: [],
     });
+
+    capturedLocalRuntime = undefined;
+    capturedSourceId = undefined;
+    capturedPermissionRuntime = undefined;
+    const ordinaryButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Show ordinary',
+    );
+    await act(async () => ordinaryButton?.click());
+    expect(capturedLocalRuntime).toBeUndefined();
+    expect(capturedPermissionRuntime).toBeUndefined();
     act(() => root.unmount());
   });
 });

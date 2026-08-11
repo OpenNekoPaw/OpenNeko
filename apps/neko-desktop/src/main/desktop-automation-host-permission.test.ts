@@ -6,8 +6,7 @@ const provider: AutomationProviderIdentity = {
   extensionId: 'computer-use@openneko',
   providerId: 'cua-driver',
   kind: 'computer',
-  upstreamRelease: '0.19.2',
-  deliverySource: { kind: 'github-release' },
+  deliverySource: { kind: 'bundled-adapter' },
 };
 
 const target: AutomationTarget = {
@@ -64,7 +63,7 @@ describe('Desktop Automation Host permission', () => {
     ).resolves.toBe('unsupported');
   });
 
-  it('keeps unqualified platforms unavailable and rejects target substitution locally', async () => {
+  it('keeps unsupported platforms unavailable and rejects target substitution locally', async () => {
     const getScreenRecordingStatus = vi.fn(() => 'granted' as const);
     const host = createDesktopAutomationHostPermission({
       platform: 'win32',

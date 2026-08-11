@@ -1653,7 +1653,7 @@ code {
   opacity: 0.5;
 }
 
-.desktop-extension-configuration-composition > .automation-endpoint-management,
+.desktop-extension-configuration-composition > .automation-local-runtime-management,
 .desktop-extension-configuration-composition > .automation-permission-management {
   box-sizing: border-box;
   width: auto;
@@ -1662,7 +1662,7 @@ code {
   border-top: 1px solid var(--neko-desktop-border);
 }
 
-.automation-endpoint-management,
+.automation-local-runtime-management,
 .automation-permission-management {
   box-sizing: border-box;
   width: min(1020px, calc(100% - 64px));
@@ -1670,43 +1670,43 @@ code {
   padding: 0 0 52px;
 }
 
-.automation-endpoint-management .management-surface-header h3,
+.automation-local-runtime-management .management-surface-header h3,
 .automation-permission-management .management-surface-header h3 {
   margin: 3px 0 0;
   color: var(--neko-fg);
   font-size: 21px;
 }
 
-.automation-endpoint-row,
+.automation-local-runtime-row,
 .automation-permission-row {
   align-items: flex-start;
 }
 
-.automation-endpoint-form {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: 8px;
-  background: var(--neko-desktop-surface-raised);
+.automation-local-runtime-row {
+  flex-direction: column;
 }
 
-.automation-endpoint-form label {
-  display: grid;
-  gap: 5px;
-  color: var(--neko-fg-secondary);
-  font-size: 11px;
+.automation-local-runtime-row .management-surface-copy {
+  width: 100%;
+  overflow: visible;
 }
 
-.automation-endpoint-form input,
-.automation-endpoint-form select {
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: 7px;
-  color: var(--neko-fg);
-  background: var(--neko-desktop-surface);
+.automation-local-runtime-row .management-surface-copy code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.automation-local-runtime-row .management-surface-row-actions {
+  width: 100%;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.automation-local-runtime-row .management-surface-row-actions button {
+  width: auto;
+  min-height: 28px;
+  height: auto;
+  padding: 5px 8px;
 }
 
 .project-management-catalog {

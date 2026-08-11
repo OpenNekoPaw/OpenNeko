@@ -59,6 +59,17 @@ describe('Agent Automation Capability adapter', () => {
     expect(result).toMatchObject({
       success: true,
       data: { actionId: 'action-1' },
+      attachments: [
+        {
+          type: 'image',
+          mimeType: 'image/png',
+          transientImage: {
+            receiptId: 'receipt-1',
+            sessionId: 'session-1',
+            actionId: 'action-1',
+          },
+        },
+      ],
     });
     expect(JSON.stringify(result)).not.toMatch(
       /browserProfileId|browserSessionId|tabId|processId|windowId/u,
@@ -74,7 +85,16 @@ describe('Agent Automation Capability adapter', () => {
         },
       }),
     );
-    expect(service.openSession).toHaveBeenCalledOnce();
+    expect(service.openSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: {
+          conversationId: 'conversation-1',
+          runId: 'run-1',
+          toolCallId: 'tool-call-1',
+        },
+      }),
+      undefined,
+    );
     expect(service.executeAction).toHaveBeenCalledWith(
       {
         actionId: 'action-1',
@@ -225,7 +245,7 @@ describe('Agent Automation Capability adapter', () => {
 
 function createService() {
   return {
-    listQualificationDiagnostics: vi.fn(() => []),
+    listCompatibilityDiagnostics: vi.fn(() => []),
     listAvailableOperations: vi.fn(() => BROWSER_USE_OBSERVE_PROFILE.operations),
     listOwnedSessions: vi.fn(() => []),
     listSessionControls: vi.fn(() => []),
@@ -255,7 +275,15 @@ function createService() {
         status: 'active' as const,
         remainingSteps: 0,
       },
-      evidence: [],
+      evidence: [
+        {
+          kind: 'transient-image' as const,
+          receiptId: 'receipt-1',
+          mimeType: 'image/png',
+          width: 1,
+          height: 1,
+        },
+      ],
     })),
     pauseSession: vi.fn(),
     resumeSession: vi.fn(),

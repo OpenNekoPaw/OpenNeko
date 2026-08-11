@@ -5,7 +5,7 @@ import type {
   AutomationReviewedOperation,
 } from '@neko/automation-contracts';
 
-export interface AutomationQualificationDiagnostic {
+export interface AutomationCompatibilityDiagnostic {
   readonly profileId: string;
   readonly operation: string;
   readonly code:
@@ -16,18 +16,18 @@ export interface AutomationQualificationDiagnostic {
     | 'operation-annotations-contradictory';
 }
 
-export interface AutomationProfileQualification {
-  readonly availableOperations: readonly AutomationReviewedOperation[];
-  readonly diagnostics: readonly AutomationQualificationDiagnostic[];
+export interface AutomationProfileCompatibility {
+  readonly compatibleOperations: readonly AutomationReviewedOperation[];
+  readonly diagnostics: readonly AutomationCompatibilityDiagnostic[];
 }
 
-export function qualifyAutomationProviderProfile(
+export function inspectAutomationProviderCompatibility(
   profile: AutomationProfile,
   inspection: AutomationProviderInspection,
-): AutomationProfileQualification {
+): AutomationProfileCompatibility {
   if (!sameProviderIdentity(profile.provider, inspection.provider)) {
     return {
-      availableOperations: Object.freeze([]),
+      compatibleOperations: Object.freeze([]),
       diagnostics: Object.freeze(
         profile.operations.map((operation) => ({
           profileId: profile.id,
@@ -38,8 +38,8 @@ export function qualifyAutomationProviderProfile(
     };
   }
   const discovered = new Map(inspection.operations.map((operation) => [operation.name, operation]));
-  const availableOperations: AutomationReviewedOperation[] = [];
-  const diagnostics: AutomationQualificationDiagnostic[] = [];
+  const compatibleOperations: AutomationReviewedOperation[] = [];
+  const diagnostics: AutomationCompatibilityDiagnostic[] = [];
   for (const reviewed of profile.operations) {
     const actual = discovered.get(reviewed.name);
     if (!actual) {
@@ -48,7 +48,7 @@ export function qualifyAutomationProviderProfile(
         operation: reviewed.name,
         code: 'operation-unreviewed',
       });
-    } else if (actual.inputSchemaDigest !== reviewed.inputSchemaDigest) {
+    } else if (!hasCompatibleInputSchema(actual.inputSchema, reviewed.requiredInputProperties)) {
       diagnostics.push({
         profileId: profile.id,
         operation: reviewed.name,
@@ -61,11 +61,11 @@ export function qualifyAutomationProviderProfile(
         code: 'operation-annotations-contradictory',
       });
     } else {
-      availableOperations.push(reviewed);
+      compatibleOperations.push(reviewed);
     }
   }
   return {
-    availableOperations: Object.freeze(availableOperations),
+    compatibleOperations: Object.freeze(compatibleOperations),
     diagnostics: Object.freeze(diagnostics),
   };
 }
@@ -78,18 +78,29 @@ function sameProviderIdentity(
     left.extensionId !== right.extensionId ||
     left.providerId !== right.providerId ||
     left.kind !== right.kind ||
-    left.upstreamRelease !== right.upstreamRelease ||
     left.deliverySource.kind !== right.deliverySource.kind
   ) {
     return false;
   }
   if (
-    left.deliverySource.kind === 'user-managed-endpoint' &&
-    right.deliverySource.kind === 'user-managed-endpoint'
+    left.deliverySource.kind === 'user-managed-local-runtime' &&
+    right.deliverySource.kind === 'user-managed-local-runtime'
   ) {
-    return left.deliverySource.endpointId === right.deliverySource.endpointId;
+    return left.deliverySource.runtimeId === right.deliverySource.runtimeId;
   }
   return true;
+}
+
+function hasCompatibleInputSchema(
+  schema: Readonly<Record<string, unknown>>,
+  requiredProperties: readonly string[],
+): boolean {
+  if (schema['type'] !== 'object') return false;
+  const properties = schema['properties'];
+  if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
+    return requiredProperties.length === 0;
+  }
+  return requiredProperties.every((property) => Object.hasOwn(properties, property));
 }
 
 function annotationsContradict(

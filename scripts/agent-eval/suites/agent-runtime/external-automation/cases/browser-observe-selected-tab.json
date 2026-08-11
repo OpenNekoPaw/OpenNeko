@@ -15,9 +15,10 @@
     "canonicalPath": [
       "visible Desktop Agent composer",
       "Pi agent.main Tool call",
+      "explicitly authorized user-managed Browser Use runtime",
       "explicit Browser target selector",
       "browser-use.observe profile",
-      "qualified Browser Use 0.13.7 MCP operation",
+      "compatible Browser Use MCP operation",
       "transient screenshot receipt",
       "terminal Tool result projection"
     ],
@@ -30,7 +31,7 @@
       }
     ],
     "expectedResult": "The selected OpenNeko Evaluation Browser tab is observed once through browser-use.observe and the Agent receives transient screenshot evidence without raw bytes.",
-    "expectedFailure": "Implicit active-tab routing, a different provider/profile, raw browser_exec access, missing screenshot receipt, or fabricated observation fails visibly."
+    "expectedFailure": "Implicit active-tab routing, inherited model credentials, Computer provider fallback, raw or nested Browser access, missing screenshot receipt, or fabricated observation fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -95,6 +96,13 @@
       "id": "no-browser-agent-fallback",
       "kind": "tool-call",
       "name": "retry_with_browser_use_agent",
+      "status": "absent",
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "no-computer-fallback",
+      "kind": "tool-call",
+      "name": "automation_cua-driver_verify_state",
       "status": "absent",
       "evidenceRef": "browser-observe-facts"
     },

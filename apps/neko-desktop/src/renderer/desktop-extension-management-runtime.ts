@@ -26,21 +26,6 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     return this.execute({ route: 'snapshot.get' });
   }
 
-  async installPlugin(pluginId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.install', pluginId });
-  }
-
-  async updatePlugin(pluginId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.update', pluginId });
-  }
-
-  async cancelPluginOperation(operationId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.operation.cancel', operationId });
-  }
-
   async enablePlugin(pluginId: string): Promise<void> {
     this.requireActive();
     await this.execute({ route: 'plugin.enable', pluginId });
@@ -56,9 +41,9 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     await this.execute({ route: 'plugin.remove', pluginId });
   }
 
-  async refreshMarketplaces(): Promise<void> {
+  async rescanSources(): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'marketplaces.refresh' });
+    await this.execute({ route: 'sources.rescan' });
   }
 
   async installPersonalSkill(): Promise<void> {

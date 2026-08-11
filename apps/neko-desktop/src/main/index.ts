@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   nativeImage,
   nativeTheme,
@@ -36,8 +37,13 @@ import {
 } from './desktop-workspace-registry';
 import { DesktopWorkspaceBoardDelivery } from './desktop-workspace-board-delivery';
 import { createElectronNekoHostPorts } from './electron-host-ports';
-import { createDesktopAutomationEndpointHost } from './desktop-automation-endpoint-host';
+import { createDesktopAutomationLocalRuntimeHost } from './desktop-automation-local-runtime-host';
+import { createDesktopAutomationLocalRuntimeProviderInspector } from './desktop-automation-local-runtime-provider-inspector';
 import { createDesktopAutomationHostPermission } from './desktop-automation-host-permission';
+import {
+  createDesktopAutomationPluginToolAdapter,
+  type DesktopAutomationPluginToolAdapter,
+} from './desktop-automation-plugin-tool-adapter';
 import { registerDesktopIpc } from './ipc';
 import { DesktopRendererRecovery } from './renderer-recovery';
 import { projectDesktopCanvasGenerationModels } from './desktop-canvas-generation-model-catalog';
@@ -89,10 +95,7 @@ import {
 import { DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT } from '../shared/agent-automation-contract';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
-import {
-  createAutomationApplicationService,
-  createAutomationTargetSelectionCoordinator,
-} from '@neko/automation-node';
+import { createAutomationTargetSelectionCoordinator } from '@neko/automation-node';
 import { DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS } from '../shared/automation-target-selection-contract';
 import { DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS } from '../shared/automation-session-control-contract';
 import {
@@ -220,12 +223,10 @@ import {
   resolveGlobalMediaLibraryTarget,
 } from '@neko/assets-node';
 import {
-  createAgentExtensionCandidateQualification,
   createAgentExtensionManager,
   createAgentExtensionMutationOwnership,
   createAgentExtensionSupport,
   createOpenNekoExtensionRepository,
-  type AgentExtensionArtifactHostPort,
 } from '@neko/agent-runtime/extensions';
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
@@ -420,8 +421,6 @@ async function startDesktop(): Promise<void> {
       decrypt: (value) => safeStorage.decryptString(Buffer.from(value)),
     },
   });
-  const automationEndpointHost = createDesktopAutomationEndpointHost({ secrets });
-  const automationEndpoints = automationEndpointHost.management;
   const automationHostPermission = createDesktopAutomationHostPermission({
     platform: process.platform,
     getScreenRecordingStatus: () => systemPreferences.getMediaAccessStatus('screen'),
@@ -671,6 +670,14 @@ async function startDesktop(): Promise<void> {
       },
     },
   });
+  const automationTargetSelections = createAutomationTargetSelectionCoordinator();
+  let automationPluginToolAdapter: DesktopAutomationPluginToolAdapter | undefined;
+  const requireAutomationPluginToolAdapter = (): DesktopAutomationPluginToolAdapter => {
+    if (!automationPluginToolAdapter) {
+      throw new Error('Desktop Automation plugin adapter is not composed.');
+    }
+    return automationPluginToolAdapter;
+  };
   const agentComposition = createAgentAppHost({
     userDataRoot: globalStorage.root,
     userHome: homedir,
@@ -681,6 +688,11 @@ async function startDesktop(): Promise<void> {
     assistantSpaceIds: [assistantSpaceId],
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     authoringMutationAuthority: agentAuthoringMutationAuthority,
+    pluginToolAdapters: {
+      build: (descriptor) => requireAutomationPluginToolAdapter().build(descriptor),
+    },
+    loadTransientToolResultImage: async (input) =>
+      requireAutomationPluginToolAdapter().consumeTransientImage(input),
     createWorkspaceLogger: (workspace) => {
       if (workspace.workspaceId === assistantSpaceId) return agentLogger;
       const existing = workspaceLoggers.get(workspace.workspaceId);
@@ -713,40 +725,6 @@ async function startDesktop(): Promise<void> {
     locator: { kind: 'relative' as const, value: 'assistant-spaces/local-user' },
   };
   const assistantAgentWorkspace = await agentComposition.attachWorkspace(assistantWorkspace);
-  const automationService = await createAutomationApplicationService({
-    profiles: [],
-    providers: [],
-    extensionRuntime: {
-      isEnabled: async () => {
-        throw new Error('Desktop Automation runtime is not composed.');
-      },
-    },
-    sessionGrants: {
-      consume: async () => {
-        throw new Error('Desktop Automation session grants are not composed.');
-      },
-    },
-    hostPermissions: automationHostPermission.runtime,
-    transientObservations: {
-      publish: async () => {
-        throw new Error('Desktop Automation observation projection is not composed.');
-      },
-    },
-  });
-  const automationTargetSelections = createAutomationTargetSelectionCoordinator();
-  const extensionArtifactHost: AgentExtensionArtifactHostPort = {
-    available: false,
-    platform: { os: process.platform, arch: process.arch },
-    stage: async () => {
-      throw new Error('Desktop remote extension artifact staging is not composed.');
-    },
-    commit: async () => {
-      throw new Error('Desktop remote extension artifact commit is not composed.');
-    },
-    discard: async () => {
-      throw new Error('Desktop remote extension artifact cleanup is not composed.');
-    },
-  };
   const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
       marketplaceRoot: path.join(
@@ -756,35 +734,20 @@ async function startDesktop(): Promise<void> {
       ),
       installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
       stateRoot: path.join(globalStorage.root, 'extensions', 'state'),
-      artifactHost: extensionArtifactHost,
-      candidateQualification: createAgentExtensionCandidateQualification(),
       trashItem: (absolutePath) => shell.trashItem(absolutePath),
     }),
     agentSupport: createAgentExtensionSupport(),
     mutationOwnership: createAgentExtensionMutationOwnership({
       listOwnedAgentTurns: (pluginId) => agentComposition.listActivePluginTurns(pluginId),
-      listOwnedAutomationSessions: (pluginId) => automationService.listOwnedSessions(pluginId),
+      listOwnedAutomationSessions: (pluginId) =>
+        automationPluginToolAdapter?.listOwnedSessions(pluginId) ?? [],
     }),
   });
-  const initialExtensionSnapshot = await extensionManager.readCatalog();
-  extensionManager.setRuntimeReadiness(
-    initialExtensionSnapshot,
-    await agentComposition.reconcilePluginRuntime(initialExtensionSnapshot),
-  );
   const windowsById = new Map<string, BrowserWindow>();
   const disposeAutomationTargetSelectionEvents = automationTargetSelections.subscribe(() => {
     for (const window of windowsById.values()) {
       if (!window.isDestroyed()) {
         window.webContents.send(DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.changed, {
-          kind: 'changed',
-        });
-      }
-    }
-  });
-  const disposeAutomationSessionControlEvents = automationService.subscribeSessionControls(() => {
-    for (const window of windowsById.values()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send(DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.changed, {
           kind: 'changed',
         });
       }
@@ -804,6 +767,57 @@ async function startDesktop(): Promise<void> {
     }
     return owner;
   };
+  const automationLocalRuntimeHost = createDesktopAutomationLocalRuntimeHost({
+    selectAsset: async ({ ownerId, sourceId, assetKey }) => {
+      const result = await dialog.showOpenDialog(requireOwnerWindow(ownerId), {
+        title:
+          sourceId === 'computer-use.observe.local'
+            ? 'Authorize Cua Driver Application'
+            : assetKey === 'browser-executable'
+            ? 'Authorize Browser Executable'
+            : 'Authorize Browser Use Runtime',
+        buttonLabel: 'Authorize',
+        properties: ['openFile'],
+      });
+      return result.canceled ? undefined : result.filePaths[0];
+    },
+    openExternal: async (url) => shell.openExternal(url),
+    writeClipboardText: (text) => clipboard.writeText(text),
+    assertDisconnectAllowed: async (pluginId) => {
+      const sessions = requireAutomationPluginToolAdapter().listOwnedSessions(pluginId);
+      if (sessions.length > 0) {
+        throw new Error(
+          `Automation runtime cannot disconnect while '${pluginId}' owns ${sessions.length} session(s).`,
+        );
+      }
+    },
+    inspectProvider: createDesktopAutomationLocalRuntimeProviderInspector({
+      storageRoot: path.join(userData, 'automation', 'local-runtimes'),
+      platform: process.platform,
+    }),
+  });
+  automationPluginToolAdapter = createDesktopAutomationPluginToolAdapter({
+    localRuntimes: automationLocalRuntimeHost,
+    targetSelections: automationTargetSelections,
+    hostPermissions: automationHostPermission.runtime,
+    storageRoot: path.join(userData, 'automation', 'adapter-sessions'),
+    platform: process.platform,
+  });
+  const initialExtensionSnapshot = await extensionManager.readCatalog();
+  extensionManager.setRuntimeReadiness(
+    initialExtensionSnapshot,
+    await agentComposition.reconcilePluginRuntime(initialExtensionSnapshot),
+  );
+  const disposeAutomationSessionControlEvents =
+    automationPluginToolAdapter.subscribeSessionControls(() => {
+      for (const window of windowsById.values()) {
+        if (!window.isDestroyed()) {
+          window.webContents.send(DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.changed, {
+            kind: 'changed',
+          });
+        }
+      }
+    });
   const personalSkillManager = createPersonalSkillManager({
     personalSkillRoot: path.join(homedir, '.agents', 'skills'),
     selectDirectory: async (windowId) => {
@@ -2293,10 +2307,10 @@ async function startDesktop(): Promise<void> {
     settings: applicationSettings,
     extensionManager,
     personalSkillManager,
-    automationEndpoints,
+    automationLocalRuntimes: automationLocalRuntimeHost.management,
     automationPermissions: automationHostPermission.management,
     automationTargetSelections,
-    automationSessions: automationService,
+    automationSessions: requireAutomationPluginToolAdapter(),
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
     ...(agentAutomationLaunch
@@ -2630,6 +2644,8 @@ async function startDesktop(): Promise<void> {
     disposeAutomationSessionControlEvents();
     automationTargetSelections.dispose();
     await appHost.dispose();
+    await requireAutomationPluginToolAdapter().dispose();
+    automationLocalRuntimeHost.dispose();
     await entityProjectionRuntime.dispose();
     await localMetadataStore.dispose();
     resourceRegistry.dispose();

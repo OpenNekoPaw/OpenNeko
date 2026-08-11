@@ -16,7 +16,7 @@
       {
         "ref": "disabled-tool-facts",
         "kind": "runtime-fact",
-        "description": "Absence of qualified Browser/Computer and raw upstream Tools, non-empty answer, and terminal idle state.",
+        "description": "Absence of available Browser/Computer and raw upstream Tools, non-empty answer, and terminal idle state.",
         "required": true
       }
     ],

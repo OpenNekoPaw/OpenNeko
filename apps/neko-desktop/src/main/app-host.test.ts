@@ -15,7 +15,7 @@ import {
   createDesktopApplicationSettingsUpdateRequest,
 } from '@neko/host/application-settings';
 import { createAgentExtensionManagementHostRequest } from '@neko/agent-contracts/extension-management-host';
-import { parseAutomationEndpointManagementHostRequest } from '@neko/automation-contracts/endpoint-management';
+import { parseAutomationLocalRuntimeManagementHostRequest } from '@neko/automation-contracts/local-runtime-management';
 import { parseAutomationPermissionManagementHostRequest } from '@neko/automation-contracts/permission-management';
 import { createAutomationTargetSelectionCoordinator } from '@neko/automation-node';
 import { type AgentHomeNavigationIdentity } from '@neko/agent-contracts';
@@ -239,7 +239,7 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
-      automationEndpoints: createAutomationEndpoints(),
+      automationLocalRuntimes: createAutomationLocalRuntimes(),
       automationPermissions: createAutomationPermissions(),
       automationTargetSelections: createAutomationTargetSelectionCoordinator(),
       automationSessions: createAutomationSessions(),
@@ -331,7 +331,7 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
-      automationEndpoints: createAutomationEndpoints(),
+      automationLocalRuntimes: createAutomationLocalRuntimes(),
       automationPermissions: createAutomationPermissions(),
       automationTargetSelections: createAutomationTargetSelectionCoordinator(),
       automationSessions: createAutomationSessions(),
@@ -406,7 +406,7 @@ describe('DesktopAppHost', () => {
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
-      automationEndpoints: createAutomationEndpoints(),
+      automationLocalRuntimes: createAutomationLocalRuntimes(),
       automationPermissions: createAutomationPermissions(),
       automationTargetSelections: createAutomationTargetSelectionCoordinator(),
       automationSessions: createAutomationSessions(),
@@ -3205,24 +3205,11 @@ describe('DesktopAppHost', () => {
           developer: 'OpenAI',
           marketplace: 'openneko',
           category: 'Productivity',
-          installed: true,
           enabled: true,
-          canInstall: false,
-          canUpdate: false,
           canEnable: false,
           canDisable: true,
           canRemove: false,
-          updatePackageRelease: '',
-          deliverySource: 'official-download',
-          artifactPlatform: 'darwin-arm64',
-          downloadSizeBytes: 64_208_172,
-          artifactStatus: 'installed',
-          dependencyStatus: 'ready',
-          enableGrantStatus: 'accepted',
-          hostPermissionStatus: 'granted',
-          qualificationStatus: 'qualified',
-          declaredPermissions: ['accessibility', 'screen-recording'],
-          acceptedPermissions: ['accessibility', 'screen-recording'],
+          deliverySource: 'bundled',
           agentStatus: 'ready',
           runtimeDiagnosticCode: '',
           iconDataUrl: '',
@@ -3335,48 +3322,42 @@ describe('DesktopAppHost', () => {
     ).rejects.toThrow('does not match the active Scene');
   });
 
-  it('keeps user-managed endpoint authorization sender-bound and delegates no service lifecycle', async () => {
-    const automationEndpoints: DesktopAppHostOptions['automationEndpoints'] = {
+  it('keeps local runtime authorization sender-bound and passes no Host path contract', async () => {
+    const automationLocalRuntimes: DesktopAppHostOptions['automationLocalRuntimes'] = {
       list: vi.fn(async () => []),
-      configure: vi.fn(async (configuration) => [
-        {
-          connectorId: configuration.connectorId,
-          displayName: 'Browser Use 0.13.7',
-          providerKind: 'browser' as const,
-          upstreamRelease: '0.13.7',
-          configured: true,
-          endpointId: configuration.endpointId,
-          endpointUrl: configuration.url,
-          authorizationState: 'configured' as const,
-          healthStatus: 'reachable' as const,
-          providerStatus: 'matched' as const,
-          qualificationStatus: 'qualified' as const,
-          diagnostics: [],
-        },
-      ]),
-      remove: vi.fn(async () => []),
+      openInstallationGuide: vi.fn(async () => []),
+      copyInstallationCommand: vi.fn(async () => []),
+      authorizeAsset: vi.fn(async () => []),
+      recheck: vi.fn(async () => []),
+      disconnect: vi.fn(async () => []),
     };
-    const fixture = await createShellAppHost({ automationEndpoints });
+    const fixture = await createShellAppHost({ automationLocalRuntimes });
     const extensions = await openExtensionsScene(fixture);
-    const configuration = {
-      connectorId: 'browser-use.observe.endpoint',
-      endpointId: 'endpoint-1',
-      url: 'https://browser.example/mcp',
-      authorization: { kind: 'bearer', secret: 'host-only' } as const,
-    };
-    const request = parseAutomationEndpointManagementHostRequest({
-      requestId: 'endpoint-configure-1',
+    const request = parseAutomationLocalRuntimeManagementHostRequest({
+      requestId: 'local-runtime-authorize-1',
       identity: extensions.identity,
-      route: 'endpoint.configure',
-      configuration,
+      route: 'asset.authorize',
+      sourceId: 'browser-use.observe.local',
+      assetKey: 'provider-runtime',
     });
 
-    await fixture.appHost.executeAutomationEndpointManagement(fixture.sender, request);
-    expect(automationEndpoints.configure).toHaveBeenCalledWith(configuration);
-    expect(automationEndpoints.list).not.toHaveBeenCalled();
-    expect(Object.keys(automationEndpoints).sort()).toEqual(['configure', 'list', 'remove']);
+    await fixture.appHost.executeAutomationLocalRuntimeManagement(fixture.sender, request);
+    expect(automationLocalRuntimes.authorizeAsset).toHaveBeenCalledWith(
+      'browser-use.observe.local',
+      'provider-runtime',
+      fixture.windowId,
+    );
+    expect(JSON.stringify(request)).not.toContain('/Users');
+    expect(Object.keys(automationLocalRuntimes).sort()).toEqual([
+      'authorizeAsset',
+      'copyInstallationCommand',
+      'disconnect',
+      'list',
+      'openInstallationGuide',
+      'recheck',
+    ]);
     await expect(
-      fixture.appHost.executeAutomationEndpointManagement(fixture.sender, {
+      fixture.appHost.executeAutomationLocalRuntimeManagement(fixture.sender, {
         ...request,
         identity: { windowId: 'window-2' },
       }),
@@ -3576,54 +3557,15 @@ describe('DesktopAppHost', () => {
     expect(fixture.extensionManager.removePlugin).toHaveBeenCalledWith('computer-use@openneko');
     expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
 
-    vi.mocked(fixture.extensionManager.updatePlugin).mockRejectedValue(
-      new Error("OpenNeko extension 'computer-use@openneko' update is owned."),
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'sources.rescan',
+        requestId: 'sources-rescan-1',
+        identity: extensions.identity,
+      }),
     );
-    await expect(
-      fixture.appHost.executeExtensionManagement(
-        fixture.sender,
-        createAgentExtensionManagementHostRequest({
-          route: 'plugin.update',
-          requestId: 'plugin-update-1',
-          identity: extensions.identity,
-          pluginId: 'computer-use@openneko',
-        }),
-      ),
-    ).rejects.toThrow('update is owned');
-    expect(fixture.extensionManager.updatePlugin).toHaveBeenCalledWith('computer-use@openneko');
-    expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
-
-    vi.mocked(fixture.extensionManager.readArtifactOperations).mockReturnValue([
-      {
-        operationId: 'artifact-operation-1',
-        pluginId: 'computer-use@openneko',
-        kind: 'update',
-        phase: 'downloading',
-        status: 'active',
-        transferredBytes: 32,
-        totalBytes: 64,
-        canCancel: true,
-        diagnosticCode: '',
-      },
-    ]);
-    await expect(
-      fixture.appHost.executeExtensionManagement(
-        fixture.sender,
-        createAgentExtensionManagementHostRequest({
-          route: 'plugin.operation.cancel',
-          requestId: 'plugin-operation-cancel-1',
-          identity: extensions.identity,
-          operationId: 'artifact-operation-1',
-        }),
-      ),
-    ).resolves.toMatchObject({
-      projection: {
-        operations: [expect.objectContaining({ operationId: 'artifact-operation-1' })],
-      },
-    });
-    expect(fixture.extensionManager.cancelArtifactOperation).toHaveBeenCalledWith(
-      'artifact-operation-1',
-    );
+    expect(fixture.extensionManager.rescanSources).toHaveBeenCalledOnce();
   });
 
   it('cleans up an Asset Center Preview after leaving its Scene without projecting into the new Scene', async () => {
@@ -4130,8 +4072,7 @@ function targetSelectionProjection() {
       extensionId: 'computer-use@openneko',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
-      deliverySource: { kind: 'github-release' as const },
+      deliverySource: { kind: 'bundled-adapter' as const },
     },
     mode: 'observe' as const,
     timeoutMs: 30_000,
@@ -4161,7 +4102,6 @@ function sessionControlProjection() {
       extensionId: 'computer-use@openneko',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
     },
     target: { kind: 'computer' as const, targetKey: 'target-1', label: 'Editor' },
     mode: 'observe' as const,
@@ -4192,7 +4132,7 @@ async function createShellAppHost(options?: {
   readonly characterInteractions?: DesktopAppHostOptions['characterInteractions'];
   readonly characterRoomConversations?: DesktopAppHostOptions['characterRoomConversations'];
   readonly characterRoomWorkbench?: DesktopAppHostOptions['characterRoomWorkbench'];
-  readonly automationEndpoints?: DesktopAppHostOptions['automationEndpoints'];
+  readonly automationLocalRuntimes?: DesktopAppHostOptions['automationLocalRuntimes'];
   readonly automationPermissions?: DesktopAppHostOptions['automationPermissions'];
   readonly automationTargetSelections?: DesktopAppHostOptions['automationTargetSelections'];
   readonly automationSessions?: DesktopAppHostOptions['automationSessions'];
@@ -4309,7 +4249,7 @@ async function createShellAppHost(options?: {
     textEditor: options?.textEditor,
     extensionManager,
     personalSkillManager: createPersonalSkillManager(),
-    automationEndpoints: options?.automationEndpoints ?? createAutomationEndpoints(),
+    automationLocalRuntimes: options?.automationLocalRuntimes ?? createAutomationLocalRuntimes(),
     automationPermissions: options?.automationPermissions ?? {
       list: async () => [],
       request: async () => [],
@@ -4609,14 +4549,10 @@ function createExtensionManager(): AgentExtensionManager & {
       runtimeDescriptors: [],
       diagnostics: [],
     })),
-    readArtifactOperations: vi.fn(() => []),
-    cancelArtifactOperation: vi.fn(),
-    installPlugin: vi.fn(),
-    updatePlugin: vi.fn(),
     enablePlugin: vi.fn(),
     disablePlugin: vi.fn(),
     removePlugin: vi.fn(),
-    refreshMarketplaces: vi.fn(),
+    rescanSources: vi.fn(),
     setRuntimeReadiness: vi.fn(),
   };
 }
@@ -4863,13 +4799,14 @@ function createTestPiModels() {
   });
 }
 
-function createAutomationEndpoints() {
+function createAutomationLocalRuntimes(): DesktopAppHostOptions['automationLocalRuntimes'] {
   return {
     list: async () => [],
-    configure: async () => {
-      throw new Error('Automation endpoint configuration is not expected by this AppHost test.');
-    },
-    remove: async () => [],
+    openInstallationGuide: async () => [],
+    copyInstallationCommand: async () => [],
+    authorizeAsset: async () => [],
+    recheck: async () => [],
+    disconnect: async () => [],
   };
 }
 

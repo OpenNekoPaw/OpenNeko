@@ -6,7 +6,6 @@ import {
   browserUseMcpResultProjector,
 } from './browser-use';
 import { createReviewedMcpAutomationProvider, type AutomationMcpRuntimePort } from './mcp-provider';
-import { digestAutomationInputSchema } from './schema-digest';
 
 const target: AutomationTarget = {
   kind: 'browser',
@@ -20,11 +19,10 @@ const target: AutomationTarget = {
 };
 
 describe('reviewed MCP Automation provider', () => {
-  it('pins the Browser Use 0.13.7 observe allowlist and canonical schema digests', () => {
+  it('defines the Browser Use observe allowlist without a complete schema digest gate', () => {
     expect(BROWSER_USE_OBSERVE_PROFILE.provider).toMatchObject({
-      upstreamRelease: '0.13.7',
       kind: 'browser',
-      deliverySource: { kind: 'github-release' },
+      deliverySource: { kind: 'bundled-adapter' },
     });
     expect(BROWSER_USE_OBSERVE_TOOL_NAMES).toEqual([
       'browser_get_state',
@@ -35,7 +33,10 @@ describe('reviewed MCP Automation provider', () => {
     ]);
     expect(
       BROWSER_USE_OBSERVE_PROFILE.operations.every(
-        (operation) => operation.modes.length === 1 && operation.modes[0] === 'observe',
+        (operation) =>
+          operation.modes.length === 1 &&
+          operation.modes[0] === 'observe' &&
+          operation.requiredInputProperties.length === 0,
       ),
     ).toBe(true);
     expect(BROWSER_USE_OBSERVE_TOOL_NAMES).not.toEqual(
@@ -48,18 +49,6 @@ describe('reviewed MCP Automation provider', () => {
         'browser_type',
       ]),
     );
-    expect(
-      digestAutomationInputSchema({
-        type: 'object',
-        properties: {
-          full_page: {
-            type: 'boolean',
-            description: 'Whether to capture the full scrollable page or just the visible viewport',
-            default: false,
-          },
-        },
-      }),
-    ).toBe('sha256:3b661d759f56b59d15377c68ec7316d16084eb3ef35182cf2e29ec7f6fb23693');
   });
 
   it('discovers all upstream tools but executes only the exact reviewed allowlist', async () => {

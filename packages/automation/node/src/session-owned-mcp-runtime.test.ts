@@ -17,21 +17,21 @@ const target: AutomationTarget = {
 };
 
 describe('session-owned Automation MCP runtime', () => {
-  it('uses a disposable qualification client that never becomes a session', async () => {
+  it('uses a disposable inspection client that never becomes a session', async () => {
     const fixture = createFixture();
 
     await expect(fixture.runtime.inspectTools({})).resolves.toEqual([
       { name: 'browser_get_state', inputSchema: { type: 'object' } },
     ]);
-    expect(fixture.qualification.connect).toHaveBeenCalledOnce();
-    expect(fixture.qualification.disconnect).toHaveBeenCalledOnce();
+    expect(fixture.inspection.connect).toHaveBeenCalledOnce();
+    expect(fixture.inspection.disconnect).toHaveBeenCalledOnce();
     await expect(
       fixture.runtime.callTool({
-        providerSessionId: 'qualification',
+        providerSessionId: 'inspection',
         name: 'browser_get_state',
         arguments: {},
       }),
-    ).rejects.toThrow("Automation MCP session 'qualification' is unavailable.");
+    ).rejects.toThrow("Automation MCP session 'inspection' is unavailable.");
   });
 
   it('routes each session to its exclusive MCP client and closes only the exact owner', async () => {
@@ -92,7 +92,7 @@ describe('session-owned Automation MCP runtime', () => {
     const shared = createClient();
     const runtime = createSessionOwnedAutomationMcpRuntime({
       clients: {
-        createQualificationClient: () => createClient(),
+        createInspectionClient: () => createClient(),
         createSessionClient: () => shared,
       },
       targets: { revalidate: vi.fn(async () => target) },
@@ -100,18 +100,18 @@ describe('session-owned Automation MCP runtime', () => {
 
     await runtime.openSession(openInput('session-a'));
     await expect(runtime.openSession(openInput('session-b'))).rejects.toThrow(
-      'Automation MCP client is already owned by another qualification or session.',
+      'Automation MCP client is already owned by another inspection or session.',
     );
     expect(shared.connect).toHaveBeenCalledOnce();
   });
 
-  it('preserves qualification failure when cleanup also fails', async () => {
-    const qualification = createClient();
-    qualification.listTools.mockRejectedValueOnce(new Error('inspection failed'));
-    qualification.disconnect.mockRejectedValueOnce(new Error('cleanup failed'));
+  it('preserves inspection failure when cleanup also fails', async () => {
+    const inspection = createClient();
+    inspection.listTools.mockRejectedValueOnce(new Error('inspection failed'));
+    inspection.disconnect.mockRejectedValueOnce(new Error('cleanup failed'));
     const runtime = createSessionOwnedAutomationMcpRuntime({
       clients: {
-        createQualificationClient: () => qualification,
+        createInspectionClient: () => inspection,
         createSessionClient: () => createClient(),
       },
       targets: { revalidate: vi.fn(async () => target) },
@@ -130,7 +130,7 @@ describe('session-owned Automation MCP runtime', () => {
     client.disconnect.mockRejectedValueOnce(new Error('disconnect failed'));
     const runtime = createSessionOwnedAutomationMcpRuntime({
       clients: {
-        createQualificationClient: () => createClient(),
+        createInspectionClient: () => createClient(),
         createSessionClient: () => client,
       },
       targets: { revalidate: vi.fn(async () => target) },
@@ -151,12 +151,12 @@ describe('session-owned Automation MCP runtime', () => {
 });
 
 function createFixture() {
-  const qualification = createClient();
+  const inspection = createClient();
   const sessionClients = new Map<string, ReturnType<typeof createClient>>();
   const revalidate = vi.fn(async () => target);
   const runtime = createSessionOwnedAutomationMcpRuntime({
     clients: {
-      createQualificationClient: () => qualification,
+      createInspectionClient: () => inspection,
       createSessionClient: ({ sessionId }) => {
         const client = createClient();
         sessionClients.set(sessionId, client);
@@ -165,7 +165,7 @@ function createFixture() {
     },
     targets: { revalidate },
   });
-  return { runtime, qualification, sessionClients, revalidate };
+  return { runtime, inspection, sessionClients, revalidate };
 }
 
 function createClient(): AutomationMcpClientPort & {

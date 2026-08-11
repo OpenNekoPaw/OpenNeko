@@ -15,9 +15,10 @@
     "canonicalPath": [
       "visible Desktop Agent composer",
       "Pi agent.main Tool call",
+      "explicitly authorized Cua Driver app with expected publisher, notarization, and TCC responsibility chain",
       "explicit native-window target selector",
       "computer-use.observe.macos profile",
-      "qualified Cua Driver 0.19.2 verify_state",
+      "compatible Cua Driver verify_state operation",
       "transient screenshot receipt",
       "terminal Tool result projection"
     ],
@@ -25,12 +26,12 @@
       {
         "ref": "computer-observe-facts",
         "kind": "runtime-fact",
-        "description": "Exact qualified Tool and arguments, selected native window label, observe profile, terminal session result, Timeline result, and absence of raw Cua Driver access.",
+        "description": "Authorized Cua Driver identity, exact compatible Tool and arguments, selected native window label, observe profile, terminal session result, Timeline result, and absence of raw Cua Driver access.",
         "required": true
       }
     ],
-    "expectedResult": "The explicitly selected OpenNeko Evaluation Computer Window is observed once through the qualified Computer profile.",
-    "expectedFailure": "Active-window fallback, model-owned pid/window routing, raw verify_state access, missing evidence, or fabricated observation fails."
+    "expectedResult": "The explicitly selected OpenNeko Evaluation Computer Window is observed once through the compatible Computer profile.",
+    "expectedFailure": "Wrong Cua publisher or TCC owner, active-window fallback, model-owned pid/window routing, raw verify_state access, missing evidence, or fabricated observation fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",

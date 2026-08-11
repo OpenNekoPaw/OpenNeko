@@ -29,6 +29,27 @@ const REPRESENTATION_LOCATOR: ContentRepresentationLocator = {
 };
 
 describe('Pi Tool result asset loader', () => {
+  it('consumes and normalizes one exact transient observation receipt', async () => {
+    const runtime = createRuntime();
+    const consume = vi.fn(async () => ({ bytes: PNG_BYTES, mimeType: 'image/png' }));
+    const loader = createPiToolResultAssetLoader(runtime, consume);
+
+    const result = await loader.loadTransientImage?.({
+      receiptId: 'receipt-1',
+      sessionId: 'session-1',
+      actionId: 'action-1',
+    });
+
+    expect(result).toMatchObject({ kind: 'image', mimeType: 'image/png' });
+    expect(result?.url).toMatch(/^data:image\/png;base64,/u);
+    expect(consume).toHaveBeenCalledWith({
+      receiptId: 'receipt-1',
+      sessionId: 'session-1',
+      actionId: 'action-1',
+    });
+    expect(runtime.loadContentAsset).not.toHaveBeenCalled();
+  });
+
   it('loads and normalizes the exact content locator without consulting ref.uri', async () => {
     const runtime = createRuntime();
     runtime.loadContentAsset.mockResolvedValueOnce(readyPng());

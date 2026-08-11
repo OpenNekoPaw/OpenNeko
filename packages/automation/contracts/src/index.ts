@@ -4,16 +4,13 @@ export type AutomationPermission = 'screen-recording' | 'accessibility' | 'input
 export type AutomationSessionStatus = 'active' | 'paused' | 'stopped' | 'taken-over';
 
 export type AutomationProviderDeliverySource =
-  | { readonly kind: 'github-release' }
-  | { readonly kind: 'official-download' }
-  | { readonly kind: 'user-managed-endpoint'; readonly endpointId: string };
+  | { readonly kind: 'bundled-adapter' }
+  | { readonly kind: 'user-managed-local-runtime'; readonly runtimeId: string };
 
 export interface AutomationProviderIdentity {
   readonly extensionId: string;
   readonly providerId: string;
   readonly kind: AutomationProviderKind;
-  /** Third-party release identity qualified with the extension artifact. */
-  readonly upstreamRelease: string;
   readonly deliverySource: AutomationProviderDeliverySource;
 }
 
@@ -27,8 +24,8 @@ export interface AutomationActionTrait {
 
 export interface AutomationReviewedOperation {
   readonly name: string;
-  /** Digest of the exact third-party MCP input schema reviewed for this release. */
-  readonly inputSchemaDigest: string;
+  /** Input fields the product-owned adapter reads or injects. */
+  readonly requiredInputProperties: readonly string[];
   readonly modes: readonly AutomationMode[];
   readonly trait: AutomationActionTrait;
 }
@@ -44,7 +41,7 @@ export interface AutomationProfile {
 
 export interface AutomationProviderOperation {
   readonly name: string;
-  readonly inputSchemaDigest: string;
+  readonly inputSchema: Readonly<Record<string, unknown>>;
   readonly annotations: {
     readonly readOnlyHint?: boolean;
     readonly destructiveHint?: boolean;
@@ -216,7 +213,7 @@ export function parseAutomationProviderInspection(value: unknown): AutomationPro
   const operations = record['operations'].map((value) => {
     const operation = exactRecord(
       value,
-      ['name', 'inputSchemaDigest', 'annotations'],
+      ['name', 'inputSchema', 'annotations'],
       'Automation provider operation',
     );
     const annotations = recordWithAllowedKeys(
@@ -226,7 +223,7 @@ export function parseAutomationProviderInspection(value: unknown): AutomationPro
     );
     return {
       name: identity(operation['name'], 'Automation provider operation'),
-      inputSchemaDigest: digest(operation['inputSchemaDigest']),
+      inputSchema: recordValue(operation['inputSchema'], 'Automation provider input schema'),
       annotations: {
         ...(annotations['readOnlyHint'] === undefined
           ? {}
@@ -337,7 +334,7 @@ function sameOrderedStrings(left: readonly string[], right: readonly string[]): 
 export function parseAutomationProviderIdentity(value: unknown): AutomationProviderIdentity {
   const record = exactRecord(
     value,
-    ['extensionId', 'providerId', 'kind', 'upstreamRelease', 'deliverySource'],
+    ['extensionId', 'providerId', 'kind', 'deliverySource'],
     'Automation provider identity',
   );
   const kind = record['kind'];
@@ -347,7 +344,6 @@ export function parseAutomationProviderIdentity(value: unknown): AutomationProvi
     extensionId: identity(record['extensionId'], 'Automation extension'),
     providerId: identity(record['providerId'], 'Automation provider'),
     kind,
-    upstreamRelease: nonEmptyString(record['upstreamRelease'], 'Automation upstream release'),
     deliverySource: parseProviderDeliverySource(record['deliverySource']),
   };
 }
@@ -355,21 +351,18 @@ export function parseAutomationProviderIdentity(value: unknown): AutomationProvi
 function parseProviderDeliverySource(value: unknown): AutomationProviderDeliverySource {
   const source = recordValue(value, 'Automation provider delivery source');
   switch (source['kind']) {
-    case 'github-release':
+    case 'bundled-adapter':
       exactRecord(source, ['kind'], 'Automation provider delivery source');
-      return { kind: 'github-release' };
-    case 'official-download':
-      exactRecord(source, ['kind'], 'Automation provider delivery source');
-      return { kind: 'official-download' };
-    case 'user-managed-endpoint': {
-      const endpoint = exactRecord(
+      return { kind: 'bundled-adapter' };
+    case 'user-managed-local-runtime': {
+      const runtime = exactRecord(
         source,
-        ['kind', 'endpointId'],
+        ['kind', 'runtimeId'],
         'Automation provider delivery source',
       );
       return {
-        kind: 'user-managed-endpoint',
-        endpointId: identity(endpoint['endpointId'], 'Automation endpoint'),
+        kind: 'user-managed-local-runtime',
+        runtimeId: identity(runtime['runtimeId'], 'Automation local runtime authorization'),
       };
     }
     default:
@@ -380,12 +373,19 @@ function parseProviderDeliverySource(value: unknown): AutomationProviderDelivery
 function parseReviewedOperation(value: unknown): AutomationReviewedOperation {
   const record = exactRecord(
     value,
-    ['name', 'inputSchemaDigest', 'modes', 'trait'],
+    ['name', 'requiredInputProperties', 'modes', 'trait'],
     'Automation reviewed operation',
   );
   if (!Array.isArray(record['modes']) || record['modes'].length === 0) {
     throw new Error('Automation reviewed operation modes are invalid.');
   }
+  if (!Array.isArray(record['requiredInputProperties'])) {
+    throw new Error('Automation reviewed operation input properties are invalid.');
+  }
+  const requiredInputProperties = record['requiredInputProperties'].map((value) =>
+    identity(value, 'Automation reviewed operation input property'),
+  );
+  requireUnique(requiredInputProperties, 'Automation reviewed operation input properties');
   const modes = record['modes'].map(mode);
   requireUnique(modes, 'Automation reviewed operation modes');
   const trait = exactRecord(
@@ -412,7 +412,7 @@ function parseReviewedOperation(value: unknown): AutomationReviewedOperation {
   }
   return {
     name: identity(record['name'], 'Automation reviewed operation'),
-    inputSchemaDigest: digest(record['inputSchemaDigest']),
+    requiredInputProperties,
     modes,
     trait: parsedTrait,
   };
@@ -571,13 +571,6 @@ function permission(value: unknown): AutomationPermission {
     throw new Error('Automation permission is invalid.');
   }
   return value;
-}
-
-function digest(value: unknown): string {
-  const result = nonEmptyString(value, 'Automation schema digest');
-  if (!/^sha256:[0-9a-f]{64}$/u.test(result))
-    throw new Error('Automation schema digest is invalid.');
-  return result;
 }
 
 function identity(value: unknown, label: string): string {

@@ -4,9 +4,9 @@ import {
   createAgentExtensionManagementHostRequest,
 } from '@neko/agent-contracts/extension-management-host';
 import {
-  AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
-  parseAutomationEndpointManagementHostRequest,
-} from '@neko/automation-contracts/endpoint-management';
+  AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
+  parseAutomationLocalRuntimeManagementHostRequest,
+} from '@neko/automation-contracts/local-runtime-management';
 import {
   AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
   parseAutomationPermissionManagementHostRequest,
@@ -86,7 +86,6 @@ describe('Desktop Extension Management preload bridge', () => {
         route: request.route,
         projection: {
           identity,
-          operations: [],
           skills: [],
           skillDiscovery: { diagnostics: [], duplicateCount: 0 },
           extensions: [],
@@ -106,8 +105,8 @@ describe('Desktop Extension Management preload bridge', () => {
 
   it('rejects stale result identity and unknown projection fields', async () => {
     const request = createAgentExtensionManagementHostRequest({
-      route: 'plugin.install',
-      requestId: 'extensions-install-1',
+      route: 'plugin.enable',
+      requestId: 'extensions-enable-1',
       identity,
       pluginId: 'computer-use@openneko',
     });
@@ -116,7 +115,6 @@ describe('Desktop Extension Management preload bridge', () => {
       route: request.route,
       projection: {
         identity,
-        operations: [],
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [],
@@ -129,34 +127,31 @@ describe('Desktop Extension Management preload bridge', () => {
     await expect(bridge.extensionManagement.execute(request)).rejects.toThrow('identity is stale');
   });
 
-  it('routes user-managed endpoint authorization through its dedicated typed channel', async () => {
-    const request = parseAutomationEndpointManagementHostRequest({
-      route: 'endpoint.configure',
-      requestId: 'endpoint-configure-1',
+  it('routes only opaque local runtime authorization through its dedicated typed channel', async () => {
+    const request = parseAutomationLocalRuntimeManagementHostRequest({
+      route: 'asset.authorize',
+      requestId: 'local-runtime-authorize-1',
       identity,
-      configuration: {
-        connectorId: 'browser-use.observe.endpoint',
-        endpointId: 'endpoint-1',
-        url: 'https://browser.example/mcp',
-        authorization: { kind: 'bearer', secret: 'host-only' },
-      },
+      sourceId: 'browser-use.observe.local',
+      assetKey: 'provider-runtime',
     });
-    electron.invoke.mockImplementation(async (channel: string) => {
-      expect(channel).toBe(AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL);
+    electron.invoke.mockImplementation(async (channel: string, payload: unknown) => {
+      expect(channel).toBe(AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL);
+      expect(JSON.stringify(payload)).not.toContain('/Users');
       return {
         requestId: request.requestId,
         route: request.route,
-        projection: { identity, endpoints: [] },
+        projection: { identity, runtimes: [] },
       };
     });
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
 
-    await expect(bridge.automationEndpoints.execute(request)).resolves.toMatchObject({
-      projection: { identity, endpoints: [] },
+    await expect(bridge.automationLocalRuntimes.execute(request)).resolves.toMatchObject({
+      projection: { identity, runtimes: [] },
     });
     expect(electron.invoke).toHaveBeenCalledWith(
-      AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+      AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
       request,
     );
   });

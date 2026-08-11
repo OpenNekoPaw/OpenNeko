@@ -54,7 +54,7 @@ describe('Cua Driver Computer target discovery', () => {
     });
   });
 
-  it('rejects changed discovery schemas before reading private Desktop metadata', async () => {
+  it('rejects incompatible discovery structures before reading private Desktop metadata', async () => {
     const client = createClient();
     client.listTools = vi.fn(async () => [
       tool('list_apps', { type: 'object', properties: {}, additionalProperties: false }),
@@ -65,7 +65,7 @@ describe('Cua Driver Computer target discovery', () => {
     });
 
     await expect(discovery.listCandidates()).rejects.toThrow(
-      "Cua Driver target Tool 'list_windows' schema changed.",
+      "Cua Driver target Tool 'list_windows' structure is incompatible.",
     );
     expect(client.callTool).not.toHaveBeenCalled();
     expect(client.disconnect).toHaveBeenCalledOnce();

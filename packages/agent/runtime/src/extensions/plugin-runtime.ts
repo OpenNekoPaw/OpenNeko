@@ -8,7 +8,6 @@ import type { MCPServerConfig } from '@neko/agent-contracts';
 import type { Tool } from '@neko/agent-contracts';
 
 import type {
-  AgentExtensionCandidateQualificationPort,
   AgentExtensionSupportPort,
   AgentExtensionCatalogSnapshot,
   AgentExtensionRuntimeDescriptor,
@@ -41,57 +40,6 @@ export function createAgentExtensionSupport(
   };
 }
 
-export function createAgentExtensionCandidateQualification(
-  options: {
-    readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
-  } = {},
-): AgentExtensionCandidateQualificationPort {
-  return {
-    async qualify({ operationId, descriptor, signal }) {
-      signal.throwIfAborted();
-      const runtime = await buildAgentPluginRuntime(
-        {
-          records: [],
-          runtimeDescriptors: [descriptor],
-          diagnostics: [],
-        },
-        options,
-      );
-      try {
-        signal.throwIfAborted();
-        const readiness = runtime.readiness.get(descriptor.pluginId);
-        if (!readiness || readiness.status !== 'ready') {
-          throw new Error(
-            `OpenNeko extension '${descriptor.pluginId}' update candidate is not qualified: ${readiness?.diagnosticCode ?? 'runtime-unavailable'}.`,
-          );
-        }
-      } catch (error) {
-        try {
-          await runtime.dispose();
-        } catch (disposeError) {
-          throw new AggregateError(
-            [error, disposeError],
-            `OpenNeko extension '${descriptor.pluginId}' candidate qualification and cleanup failed.`,
-          );
-        }
-        throw error;
-      }
-      let open = true;
-      return Object.freeze({
-        async close() {
-          if (!open) {
-            throw new Error(
-              `Extension update candidate qualification '${operationId}' is already closed.`,
-            );
-          }
-          open = false;
-          await runtime.dispose();
-        },
-      });
-    },
-  };
-}
-
 export interface AgentPluginRuntime {
   readonly sourceFingerprint: string;
   readonly contributions: ReadonlyMap<string, AgentPluginRuntimeContribution>;
@@ -112,10 +60,24 @@ export interface AgentPluginRuntimeContribution {
   dispose(): Promise<void>;
 }
 
+export interface AgentPluginToolAdapterRuntime {
+  readonly sourceFingerprint: string;
+  readonly tools: readonly Tool[];
+  readonly readiness: AgentExtensionRuntimeReadiness;
+  dispose(): Promise<void>;
+}
+
+export interface AgentPluginToolAdapterPort {
+  build(
+    descriptor: AgentExtensionRuntimeDescriptor,
+  ): Promise<AgentPluginToolAdapterRuntime | undefined>;
+}
+
 export async function buildAgentPluginRuntime(
   snapshot: AgentExtensionCatalogSnapshot,
   options: {
     readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
+    readonly toolAdapters?: AgentPluginToolAdapterPort;
   } = {},
 ): Promise<AgentPluginRuntime> {
   return reconcileAgentPluginRuntime(undefined, snapshot, options);
@@ -126,6 +88,7 @@ export async function reconcileAgentPluginRuntime(
   snapshot: AgentExtensionCatalogSnapshot,
   options: {
     readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
+    readonly toolAdapters?: AgentPluginToolAdapterPort;
   } = {},
 ): Promise<AgentPluginRuntime> {
   const processEnv = options.processEnv ?? process.env;
@@ -146,13 +109,26 @@ export async function reconcileAgentPluginRuntime(
       if (contributions.has(descriptor.pluginId)) {
         throw new Error(`Plugin runtime contribution '${descriptor.pluginId}' is duplicated.`);
       }
-      const sourceFingerprint = createPluginRuntimeContributionFingerprint(snapshot, descriptor);
+      let adapter: AgentPluginToolAdapterRuntime | undefined;
+      let adapterFailed = false;
+      if (descriptor.mcpToolExposure === 'adapter-only' && options.toolAdapters) {
+        try {
+          adapter = await options.toolAdapters.build(descriptor);
+        } catch {
+          adapterFailed = true;
+        }
+      }
+      const sourceFingerprint = combineContributionSourceFingerprint(
+        createPluginRuntimeContributionFingerprint(snapshot, descriptor),
+        adapterFailed ? 'failed' : adapter?.sourceFingerprint,
+      );
       const existing = previous?.contributions.get(descriptor.pluginId);
       const mcpServerConflict = conflictedPluginIds.has(descriptor.pluginId);
       if (
         existing?.sourceFingerprint === sourceFingerprint &&
         existing.mcpServerConflict === mcpServerConflict
       ) {
+        await adapter?.dispose();
         contributions.set(descriptor.pluginId, existing);
         continue;
       }
@@ -161,6 +137,8 @@ export async function reconcileAgentPluginRuntime(
         sourceFingerprint,
         processEnv,
         mcpServerConflict,
+        adapter,
+        adapterFailed,
       );
       contributions.set(descriptor.pluginId, contribution);
       created.push(contribution);
@@ -242,6 +220,8 @@ async function buildAgentPluginRuntimeContribution(
   sourceFingerprint: string,
   processEnv: Readonly<NodeJS.ProcessEnv>,
   mcpServerConflict: boolean,
+  adapter: AgentPluginToolAdapterRuntime | undefined,
+  adapterFailed: boolean,
 ): Promise<AgentPluginRuntimeContribution> {
   const mcpManager = new MCPManager();
   try {
@@ -264,16 +244,15 @@ async function buildAgentPluginRuntimeContribution(
       }
     }
     if (descriptor.appIds.length > 0) state.unsupported.push('app-unsupported');
+    if (adapterFailed) state.failures.push('automation-adapter-failed');
     if (mcpServerConflict) {
       state.failures.push('mcp-server-conflict');
-    } else if (descriptor.mcpDocumentPath) {
+    } else if (descriptor.mcpDocumentPath && descriptor.mcpToolExposure !== 'adapter-only') {
       const parsed = await parsePluginMcpDocument(descriptor, processEnv);
       state.unsupported.push(...parsed.unsupported);
       state.failures.push(...parsed.failures);
       state.mcpServerIds.push(...parsed.servers.map((server) => server.id));
-      if (descriptor.mcpToolExposure !== 'adapter-only') {
-        for (const server of parsed.servers) mcpManager.register(server);
-      }
+      for (const server of parsed.servers) mcpManager.register(server);
     }
     for (const server of mcpManager.listServers()) {
       try {
@@ -283,7 +262,7 @@ async function buildAgentPluginRuntimeContribution(
         state.failures.push('mcp-connect-failed');
       }
     }
-    const tools = await createAllMCPTools(mcpManager);
+    const tools = [...(await createAllMCPTools(mcpManager)), ...(adapter?.tools ?? [])];
     assertUniqueToolNames(tools);
     let disposal: Promise<void> | undefined;
     return Object.freeze({
@@ -295,9 +274,9 @@ async function buildAgentPluginRuntimeContribution(
       ),
       skillRoots: Object.freeze(skillRoots),
       tools: Object.freeze(tools),
-      readiness: projectReadiness(state),
+      readiness: projectReadiness(state, adapter?.readiness),
       async dispose() {
-        disposal ??= mcpManager.dispose().catch((error: unknown) => {
+        disposal ??= disposeContributionRuntime(mcpManager, adapter).catch((error: unknown) => {
           disposal = undefined;
           throw error;
         });
@@ -306,7 +285,7 @@ async function buildAgentPluginRuntimeContribution(
     });
   } catch (error) {
     try {
-      await mcpManager.dispose();
+      await disposeContributionRuntime(mcpManager, adapter);
     } catch (disposeError) {
       throw new AggregateError(
         [error, disposeError],
@@ -630,7 +609,10 @@ function parseEnvironment(
   return env;
 }
 
-function projectReadiness(state: PluginContributionState): AgentExtensionRuntimeReadiness {
+function projectReadiness(
+  state: PluginContributionState,
+  adapterReadiness?: AgentExtensionRuntimeReadiness,
+): AgentExtensionRuntimeReadiness {
   const mcpReady =
     state.mcpServerIds.length > 0 && state.mcpServerIds.length === state.connectedServerIds.length;
   const anyReady = state.skillReady || state.connectedServerIds.length > 0;
@@ -639,45 +621,62 @@ function projectReadiness(state: PluginContributionState): AgentExtensionRuntime
     return {
       status: anyReady ? 'partial' : 'error',
       diagnosticCode: state.failures[0] ?? 'runtime-failed',
-      dependencyStatus: 'error',
-      hostPermissionStatus: adapterOnly ? 'unknown' : 'not-applicable',
-      qualificationStatus: anyReady ? 'partial' : 'failed',
     };
   }
   if (state.unsupported.length > 0) {
     return {
       status: anyReady ? 'partial' : 'unsupported',
       diagnosticCode: state.unsupported[0] ?? 'runtime-unsupported',
-      dependencyStatus: anyReady ? 'ready' : 'error',
-      hostPermissionStatus: adapterOnly ? 'unknown' : 'not-applicable',
-      qualificationStatus: anyReady ? 'partial' : 'failed',
     };
+  }
+  if (adapterReadiness) {
+    if (adapterReadiness.status === 'ready') {
+      return { status: 'ready', diagnosticCode: '' };
+    }
+    if (state.skillReady) {
+      return {
+        status: 'partial',
+        diagnosticCode: adapterReadiness.diagnosticCode,
+      };
+    }
+    return adapterReadiness;
   }
   if (adapterOnly) {
     return {
       status: state.skillReady ? 'partial' : 'unsupported',
       diagnosticCode: 'automation-adapter-unavailable',
-      dependencyStatus: 'unchecked',
-      hostPermissionStatus: 'unknown',
-      qualificationStatus: state.skillReady ? 'partial' : 'unqualified',
     };
   }
   if (state.skillReady || mcpReady) {
     return {
       status: 'ready',
       diagnosticCode: '',
-      dependencyStatus: 'ready',
-      hostPermissionStatus: 'not-applicable',
-      qualificationStatus: 'qualified',
     };
   }
   return {
     status: 'unsupported',
     diagnosticCode: 'no-agent-contribution',
-    dependencyStatus: 'error',
-    hostPermissionStatus: 'not-applicable',
-    qualificationStatus: 'failed',
   };
+}
+
+function combineContributionSourceFingerprint(
+  descriptorFingerprint: string,
+  adapterFingerprint: string | undefined,
+): string {
+  return adapterFingerprint === undefined
+    ? descriptorFingerprint
+    : `${descriptorFingerprint}\nadapter:${adapterFingerprint}`;
+}
+
+async function disposeContributionRuntime(
+  mcpManager: MCPManager,
+  adapter: AgentPluginToolAdapterRuntime | undefined,
+): Promise<void> {
+  const results = await Promise.allSettled([mcpManager.dispose(), adapter?.dispose()]);
+  const errors = results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []));
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Failed to dispose a plugin contribution runtime.');
+  }
 }
 
 function assertUniqueToolNames(tools: readonly Tool[]): void {

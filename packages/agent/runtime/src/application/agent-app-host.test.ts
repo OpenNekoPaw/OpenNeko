@@ -3173,9 +3173,6 @@ describe('AgentAppHost', () => {
           {
             status: 'ready',
             diagnosticCode: '',
-            dependencyStatus: 'ready',
-            hostPermissionStatus: 'not-applicable',
-            qualificationStatus: 'qualified',
           },
         ],
       ]),

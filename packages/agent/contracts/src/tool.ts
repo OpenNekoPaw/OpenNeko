@@ -102,6 +102,12 @@ export interface ToolResultAttachment {
   mimeType?: string;
   /** Stable asset reference for generated or perceptual assets. */
   assetRef?: import('@neko/media').PerceptualAssetRef;
+  /** One-shot Host receipt for sensitive image bytes that must not enter persisted Tool data. */
+  transientImage?: {
+    readonly receiptId: string;
+    readonly sessionId: string;
+    readonly actionId: string;
+  };
 }
 
 export interface ToolResultArtifactSnapshot {

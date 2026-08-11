@@ -10,7 +10,7 @@ const EXTENSION_ROOT = '.agent-extension-management-root';
 const EXTENSION_OPTION = `${EXTENSION_ROOT} [role="option"]`;
 const SEARCH_INPUT = `${EXTENSION_ROOT} .management-search-field input`;
 
-const ENGLISH_DESCRIPTION = 'Reviewed browser observation for approved domains';
+const ENGLISH_DESCRIPTION = 'Browser observation for approved domains';
 const CHINESE_DESCRIPTION = '在已授权域名中提供经过审核的浏览器观察能力';
 
 export const desktopExtensionLocalizationScenario = Object.freeze({
@@ -44,7 +44,21 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
       waitForSelector,
     });
     checkpoint('extension-introduction-en', english);
+    const browserControls = await inspectAutomationControls({
+      evaluate,
+      expectedSourceId: 'browser-use.observe.local',
+      expectPermissions: false,
+      waitForSelector,
+    });
+    checkpoint('browser-local-runtime-controls', browserControls);
     const englishScreenshot = await screenshot('extension-introduction-en');
+    await scrollAutomationControlsIntoView(evaluate);
+    const browserControlsScreenshot = await screenshot('browser-local-runtime-controls');
+
+    const computerControls = await inspectComputerControls({ evaluate, waitForSelector });
+    checkpoint('computer-local-runtime-controls', computerControls);
+    await scrollAutomationControlsIntoView(evaluate);
+    const computerScreenshot = await screenshot('computer-local-runtime-controls');
 
     await openAppearanceSettings({ click, waitForSelector });
     await selectDesktopLocale(evaluate, 'zh-cn');
@@ -83,12 +97,21 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
       initialViewport,
       english,
       chinese,
-      screenshots: [englishScreenshot, chineseScreenshot],
+      browserControls,
+      computerControls,
+      screenshots: [
+        englishScreenshot,
+        browserControlsScreenshot,
+        computerScreenshot,
+        chineseScreenshot,
+      ],
     };
   },
   assertObservation(_observation, evidence) {
     assertIntroduction(evidence.english, 'en', ENGLISH_DESCRIPTION);
     assertIntroduction(evidence.chinese, 'zh-cn', CHINESE_DESCRIPTION);
+    assertAutomationControls(evidence.browserControls, 'browser-use.observe.local', false);
+    assertAutomationControls(evidence.computerControls, 'computer-use.observe.local', true);
   },
 });
 
@@ -99,6 +122,98 @@ async function openAppearanceSettings({ click, waitForSelector }) {
   await waitForSelector(
     '[data-settings-surface="main"] .desktop-settings__card .desktop-settings__row:nth-child(2) select',
   );
+}
+
+async function inspectComputerControls({ evaluate, waitForSelector }) {
+  await replaceSearch(evaluate, 'Computer Use');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll(${JSON.stringify(EXTENSION_OPTION)}).length === 1 &&
+      document.querySelector(${JSON.stringify(`${EXTENSION_OPTION} strong`)})?.textContent === 'Computer Use'`,
+    'Computer Use search did not resolve one extension.',
+  );
+  await evaluate(`(() => {
+    const option = document.querySelector(${JSON.stringify(EXTENSION_OPTION)});
+    if (!(option instanceof HTMLButtonElement)) throw new Error('Computer Use option is unavailable.');
+    option.click();
+  })()`);
+  await waitForSelector('[data-workbench-main-panel="extension-detail"]');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll('.automation-local-runtime-management').length === 1 &&
+      document.querySelector('.automation-local-runtime-row strong')?.textContent === 'Cua Driver' &&
+      document.querySelectorAll('.automation-permission-management').length === 1`,
+    'Computer Use automation controls did not finish updating.',
+  );
+  return readAutomationControls(evaluate);
+}
+
+async function replaceSearch(evaluate, value) {
+  await evaluate(`(() => {
+    const input = document.querySelector(${JSON.stringify(SEARCH_INPUT)});
+    if (!(input instanceof HTMLInputElement)) throw new Error('Extension search is unavailable.');
+    const previous = input.value;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (!setter) throw new Error('Extension search setter is unavailable.');
+    setter.call(input, ${JSON.stringify(value)});
+    input._valueTracker?.setValue(previous);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+}
+
+async function inspectAutomationControls({
+  evaluate,
+  expectedSourceId,
+  expectPermissions,
+  waitForSelector,
+}) {
+  await waitForSelector('.automation-local-runtime-management [data-local-runtime-state]');
+  const result = await readAutomationControls(evaluate);
+  assertAutomationControls(result, expectedSourceId, expectPermissions);
+  return result;
+}
+
+async function readAutomationControls(evaluate) {
+  return evaluate(`(() => ({
+    localRuntimeCount: document.querySelectorAll('.automation-local-runtime-management').length,
+    sourceNames: Array.from(document.querySelectorAll('.automation-local-runtime-row strong')).map(
+      (item) => item.textContent ?? '',
+    ),
+    sourceCommands: Array.from(document.querySelectorAll('.automation-local-runtime-row code')).map(
+      (item) => item.textContent ?? '',
+    ),
+    permissionCount: document.querySelectorAll('.automation-permission-management').length,
+  }))()`);
+}
+
+async function scrollAutomationControlsIntoView(evaluate) {
+  await evaluate(`(() => {
+    const surface = document.querySelector('.desktop-extension-configuration-composition');
+    if (!(surface instanceof HTMLElement)) throw new Error('Extension detail scroll surface is unavailable.');
+    surface.scrollTo({ top: surface.scrollHeight, behavior: 'instant' });
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('.desktop-extension-configuration-composition')?.scrollTop > 0`,
+    'Extension automation controls did not scroll into view.',
+  );
+}
+
+function assertAutomationControls(result, expectedSourceId, expectPermissions) {
+  const expectedName =
+    expectedSourceId === 'browser-use.observe.local' ? 'Browser Use' : 'Cua Driver';
+  if (
+    result.localRuntimeCount !== 1 ||
+    result.sourceNames.length !== 1 ||
+    result.sourceNames[0] !== expectedName ||
+    result.sourceCommands.length !== 1 ||
+    result.sourceCommands[0].length === 0 ||
+    result.permissionCount !== (expectPermissions ? 1 : 0)
+  ) {
+    throw new Error(
+      `Extension automation controls are not scoped to ${expectedSourceId}: ${JSON.stringify(result)}`,
+    );
+  }
 }
 
 async function selectDesktopLocale(evaluate, locale) {

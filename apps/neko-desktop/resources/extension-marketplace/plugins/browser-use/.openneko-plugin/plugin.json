@@ -1,14 +1,13 @@
 {
   "name": "browser-use",
   "version": "0.13.7",
-  "description": "Observe explicitly authorized browser sessions through the reviewed Browser Use MCP runtime.",
+  "description": "Observe explicitly authorized browser sessions through a compatible Browser Use MCP runtime.",
   "author": { "name": "OpenNeko" },
-  "permissions": ["browser-observe", "network-approved-domains", "screen-content"],
   "mcpServers": "./.mcp.json",
   "mcpToolExposure": "adapter-only",
   "interface": {
     "displayName": "Browser Use",
-    "shortDescription": "Reviewed browser observation for approved domains",
+    "shortDescription": "Browser observation for approved domains",
     "localization": {
       "zh-cn": {
         "shortDescription": "在已授权域名中提供经过审核的浏览器观察能力"

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { MCPServerConfig, MCPToolResult } from '@neko/agent-contracts';
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDesktopBrowserUseMcpClientFactory,
   type DesktopBrowserUseRuntimeLayout,
+  validateDesktopBrowserUseRuntime,
 } from './desktop-browser-use-mcp-client-factory';
 
 const roots: string[] = [];
@@ -37,13 +38,13 @@ describe('Desktop Browser Use MCP client factory', () => {
         requestTimeout: 12_345,
       });
       expect(launch.cwd).toBe(path.dirname(requireEnvironment(launch, 'HOME')));
-      expect(launch.cwd).not.toBe(fixture.runtime.runtimeRoot);
+      expect(launch.cwd).not.toBe(path.dirname(fixture.runtime.executablePath));
       expect(launch.env).toMatchObject({
         BROWSER_USE_ALLOWED_DOMAINS: 'example.test,assets.example.test',
         BROWSER_USE_DISABLE_EXTENSIONS: 'true',
         BROWSER_USE_CLOUD_SYNC: 'false',
         ANONYMIZED_TELEMETRY: 'false',
-        PATH: fixture.runtime.binaryPath,
+        PATH: path.dirname(fixture.runtime.executablePath),
       });
       expect(launch.env).not.toHaveProperty('OPENNEKO_BROWSER_USE_SECRET_FIXTURE');
       expect(launch.env?.['HOME']).not.toBe(process.env['HOME']);
@@ -69,9 +70,9 @@ describe('Desktop Browser Use MCP client factory', () => {
     }
   });
 
-  it('uses distinct directory owners and clients for qualification and concurrent sessions', async () => {
+  it('uses distinct directory owners and clients for inspection and concurrent sessions', async () => {
     const fixture = await createFixture();
-    const qualification = fixture.factory.createQualificationClient();
+    const inspection = fixture.factory.createInspectionClient();
     const first = fixture.factory.createSessionClient({
       sessionId: 'session-a',
       target,
@@ -84,17 +85,17 @@ describe('Desktop Browser Use MCP client factory', () => {
       mode: 'observe',
       timeoutMs: 30_000,
     });
-    await qualification.connect({});
-    const qualificationHome = requireEnvironment(fixture.configs[0]!, 'HOME');
+    await inspection.connect({});
+    const inspectionHome = requireEnvironment(fixture.configs[0]!, 'HOME');
     await first.connect({});
     await second.connect({});
 
     const homes = fixture.configs.map((config) => requireEnvironment(config, 'HOME'));
     expect(new Set(homes).size).toBe(3);
-    expect(fixture.configs[0]?.env?.['BROWSER_USE_ALLOWED_DOMAINS']).toBe('qualification.invalid');
+    expect(fixture.configs[0]?.env?.['BROWSER_USE_ALLOWED_DOMAINS']).toBe('inspection.invalid');
     expect(fixture.clients).toHaveLength(3);
-    await qualification.disconnect();
-    await expect(readFile(qualificationHome, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    await inspection.disconnect();
+    await expect(readFile(inspectionHome, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('forwards Tool discovery, calls and cancellation through the canonical MCP client', async () => {
@@ -135,7 +136,7 @@ describe('Desktop Browser Use MCP client factory', () => {
     );
   });
 
-  it('rejects a symlinked executable that resolves outside the installed runtime', async () => {
+  it('rejects a non-canonical symlink instead of resolving another local runtime path', async () => {
     const root = await createRoot();
     const runtimeRoot = path.join(root, 'runtime');
     const outside = path.join(root, 'outside');
@@ -144,18 +145,15 @@ describe('Desktop Browser Use MCP client factory', () => {
     await writeFile(outsideExecutable, 'fixture');
     const linkedExecutable = path.join(runtimeRoot, 'browser-use');
     await symlink(outsideExecutable, linkedExecutable);
-    const browserExecutablePath = path.join(runtimeRoot, 'chromium');
+    const browserExecutablePath = path.join(outside, 'chromium');
     await writeFile(browserExecutablePath, 'fixture');
-    const binaryPath = path.join(runtimeRoot, 'bin');
-    await mkdir(binaryPath);
     const factory = createDesktopBrowserUseMcpClientFactory({
       runtime: {
-        runtimeRoot,
         executablePath: linkedExecutable,
         browserExecutablePath,
-        binaryPath,
       },
       storageRoot: path.join(root, 'storage'),
+      validateRuntime: async () => undefined,
       createClient: () => createFakeClient(),
     });
 
@@ -168,20 +166,33 @@ describe('Desktop Browser Use MCP client factory', () => {
           timeoutMs: 30_000,
         })
         .connect({}),
-    ).rejects.toThrow('escapes the installed extension runtime');
+    ).rejects.toThrow('authorization changed before launch');
+  });
+
+  it('validates the exact Browser Use interpreter without a distribution release gate', async () => {
+    const root = await createRoot();
+    const interpreter = path.join(root, 'python');
+    const executablePath = path.join(root, 'browser-use');
+    const browserExecutablePath = path.join(root, 'chromium');
+    await Promise.all([
+      writeFile(interpreter, 'python fixture'),
+      writeFile(executablePath, `#!${interpreter}\n`),
+      writeFile(browserExecutablePath, 'browser fixture'),
+    ]);
+    const runtime = { executablePath, browserExecutablePath };
+
+    await expect(validateDesktopBrowserUseRuntime(runtime)).resolves.toBeUndefined();
   });
 });
 
 async function createFixture() {
   const root = await createRoot();
   const runtimeRoot = path.join(root, 'runtime');
-  const binaryPath = path.join(runtimeRoot, 'bin');
-  await mkdir(binaryPath, { recursive: true });
+  const browserRoot = path.join(root, 'browser');
+  await Promise.all([mkdir(runtimeRoot), mkdir(browserRoot)]);
   const runtime: DesktopBrowserUseRuntimeLayout = {
-    runtimeRoot,
-    executablePath: path.join(binaryPath, 'browser-use'),
-    browserExecutablePath: path.join(runtimeRoot, 'chromium'),
-    binaryPath,
+    executablePath: path.join(runtimeRoot, 'browser-use'),
+    browserExecutablePath: path.join(browserRoot, 'chromium'),
   };
   await Promise.all([
     writeFile(runtime.executablePath, 'fixture'),
@@ -193,6 +204,7 @@ async function createFixture() {
   const factory = createDesktopBrowserUseMcpClientFactory({
     runtime,
     storageRoot: path.join(root, 'storage'),
+    validateRuntime: async () => undefined,
     createClient: (config) => {
       configs.push(config);
       const created = clients.length === 0 ? client : createFakeClient();
@@ -214,6 +226,11 @@ function createFakeClient() {
   return {
     connect: vi.fn(async () => undefined),
     disconnect: vi.fn(async () => undefined),
+    getConnectionInfo: vi.fn(() => ({
+      protocolVersion: '2025-06-18',
+      server: { name: 'browser-use', version: '0.1.0' },
+      capabilities: {},
+    })),
     listTools: vi.fn(async () => [
       {
         name: 'browser_screenshot',
@@ -233,7 +250,7 @@ function requireEnvironment(config: MCPServerConfig, name: string): string {
 }
 
 async function createRoot(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'openneko-browser-use-'));
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'openneko-browser-use-')));
   roots.push(root);
   return root;
 }

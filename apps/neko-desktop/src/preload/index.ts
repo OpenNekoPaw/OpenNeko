@@ -222,11 +222,11 @@ import {
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
 import {
-  AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
-  parseAutomationEndpointManagementHostRequest,
-  parseAutomationEndpointManagementHostResult,
-  type OpenNekoAutomationEndpointManagementBridge,
-} from '@neko/automation-contracts/endpoint-management';
+  AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
+  parseAutomationLocalRuntimeManagementHostRequest,
+  parseAutomationLocalRuntimeManagementHostResult,
+  type OpenNekoAutomationLocalRuntimeManagementBridge,
+} from '@neko/automation-contracts/local-runtime-management';
 import {
   AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
   parseAutomationPermissionManagementHostRequest,
@@ -350,7 +350,7 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoAssistantResourceBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
-  OpenNekoAutomationEndpointManagementBridge &
+  OpenNekoAutomationLocalRuntimeManagementBridge &
   OpenNekoAutomationPermissionManagementBridge &
   OpenNekoDesktopAutomationTargetSelectionBridge &
   OpenNekoDesktopAutomationSessionControlBridge &
@@ -936,14 +936,14 @@ const bridge: OpenNekoDesktopBridge &
       return parseAgentExtensionManagementHostResult(response, request);
     },
   },
-  automationEndpoints: {
+  automationLocalRuntimes: {
     async execute(input) {
-      const request = parseAutomationEndpointManagementHostRequest(input);
+      const request = parseAutomationLocalRuntimeManagementHostRequest(input);
       const response: unknown = await ipcRenderer.invoke(
-        AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+        AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
         request,
       );
-      return parseAutomationEndpointManagementHostResult(response, request);
+      return parseAutomationLocalRuntimeManagementHostResult(response, request);
     },
   },
   automationPermissions: {

@@ -766,7 +766,7 @@ function installBridge(
       assetCenter: { execute: vi.fn() },
       assistantResources: { execute: vi.fn() },
       extensionManagement: { execute: vi.fn() },
-      automationEndpoints: { execute: vi.fn() },
+      automationLocalRuntimes: { execute: vi.fn() },
       automationPermissions: { execute: vi.fn() },
       automationTargetSelection: {
         execute: vi.fn(async (request) => ({
@@ -973,8 +973,7 @@ function targetSelectionProjection() {
       extensionId: 'computer-use@openneko',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
-      deliverySource: { kind: 'github-release' as const },
+      deliverySource: { kind: 'bundled-adapter' as const },
     },
     mode: 'observe' as const,
     timeoutMs: 30_000,
@@ -1012,7 +1011,6 @@ function sessionControlProjection() {
       extensionId: 'computer-use@openneko',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
     },
     target: {
       kind: 'computer' as const,

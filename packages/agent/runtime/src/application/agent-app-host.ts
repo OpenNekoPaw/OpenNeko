@@ -100,11 +100,11 @@ import type {
   AgentExtensionRuntimeReadiness,
 } from '@neko/agent-contracts';
 import {
-  createPluginRuntimeSourceFingerprint,
   disposeAgentPluginRuntimeChanges,
   listChangedAgentPluginRuntimeIds,
   listChangedPluginRuntimeSourceIds,
   reconcileAgentPluginRuntime,
+  type AgentPluginToolAdapterPort,
   type AgentPluginRuntime,
 } from '@neko/agent-runtime/extensions';
 import {
@@ -354,6 +354,12 @@ export interface CreateAgentAppHostOptions {
   readonly resolveGenerationJobs: (binding: GenerationBinding) => Promise<GenerationJobPort>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
+  readonly pluginToolAdapters?: AgentPluginToolAdapterPort;
+  readonly loadTransientToolResultImage?: (input: {
+    readonly receiptId: string;
+    readonly sessionId: string;
+    readonly actionId: string;
+  }) => Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }>;
 }
 
 export function createAgentAppHost(options: CreateAgentAppHostOptions): AgentAppHost {
@@ -481,10 +487,6 @@ class DefaultAgentAppHost implements AgentAppHost {
     snapshot: AgentExtensionCatalogSnapshot,
   ): Promise<ReadonlyMap<string, AgentExtensionRuntimeReadiness>> {
     this.requireActive();
-    const sourceFingerprint = createPluginRuntimeSourceFingerprint(snapshot);
-    if (this.pluginRuntime?.sourceFingerprint === sourceFingerprint) {
-      return this.pluginRuntime.readiness;
-    }
     if (this.pluginRuntimeChanging) {
       throw new Error('Agent plugin runtime is already changing.');
     }
@@ -495,7 +497,11 @@ class DefaultAgentAppHost implements AgentAppHost {
         snapshot,
       );
       this.assertPluginRuntimeChangesIdle(expectedChangedPluginIds);
-      const next = await reconcileAgentPluginRuntime(this.pluginRuntime, snapshot);
+      const next = await reconcileAgentPluginRuntime(this.pluginRuntime, snapshot, {
+        ...(this.options.pluginToolAdapters === undefined
+          ? {}
+          : { toolAdapters: this.options.pluginToolAdapters }),
+      });
       const changedPluginIds = listChangedAgentPluginRuntimeIds(this.pluginRuntime, next);
       try {
         this.assertPluginRuntimeChangesIdle(changedPluginIds);
@@ -701,6 +707,9 @@ class DefaultAgentAppHost implements AgentAppHost {
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
       structuredProjectAuthoring: !isAssistantSpace,
+      ...(this.options.loadTransientToolResultImage === undefined
+        ? {}
+        : { loadTransientToolResultImage: this.options.loadTransientToolResultImage }),
       ...(this.options.authoringMutationAuthority === undefined
         ? {}
         : { authoringMutationAuthority: this.options.authoringMutationAuthority }),
@@ -784,6 +793,11 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly structuredProjectAuthoring: boolean;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
+  readonly loadTransientToolResultImage?: (input: {
+    readonly receiptId: string;
+    readonly sessionId: string;
+    readonly actionId: string;
+  }) => Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }>;
 }
 
 interface PendingAgentTurnOperation {
@@ -837,7 +851,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   constructor(private readonly options: DefaultAgentWorkspaceRuntimeOptions) {
     this.models = createOpenNekoPiModels(options.credentialRuntime.credentials);
     this.contentAccessRuntime = createAgentContentAccessRuntime(options.workspace);
-    this.toolResultAssetLoader = createPiToolResultAssetLoader(this.contentAccessRuntime);
+    this.toolResultAssetLoader = createPiToolResultAssetLoader(
+      this.contentAccessRuntime,
+      options.loadTransientToolResultImage,
+    );
     this.capabilities = new CapabilityRegistryRuntime(
       { toolRegistry: this.tools },
       options.logger ? { logger: options.logger } : {},

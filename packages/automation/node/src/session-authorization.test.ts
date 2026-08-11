@@ -184,7 +184,28 @@ describe('Automation session authorization', () => {
     expect(selection).not.toHaveBeenCalled();
   });
 
-  it('rejects a changed profile before reading Host target metadata', async () => {
+  it('treats third-party release metadata as informational', async () => {
+    const targets = createTargets();
+    const service = createService({
+      targets,
+      grants: createAutomationSessionGrantAuthority(),
+      selection: vi.fn(async (input) => ({
+        authorizationId: input.authorizationId,
+        targetKey: target.targetKey,
+      })),
+    });
+
+    await expect(
+      service.authorizeSession({
+        ...request(),
+        profile: {
+          ...CUA_DRIVER_OBSERVE_PROFILE,
+        },
+      }),
+    ).resolves.toMatchObject({ target });
+  });
+
+  it('rejects a changed provider identity before reading Host target metadata', async () => {
     const targets = createTargets();
     const service = createService({
       targets,
@@ -197,7 +218,7 @@ describe('Automation session authorization', () => {
         ...request(),
         profile: {
           ...CUA_DRIVER_OBSERVE_PROFILE,
-          provider: { ...CUA_DRIVER_OBSERVE_PROFILE.provider, upstreamRelease: 'changed' },
+          provider: { ...CUA_DRIVER_OBSERVE_PROFILE.provider, providerId: 'changed' },
         },
       }),
     ).rejects.toThrow('authorization profile is unavailable or changed');

@@ -8,32 +8,9 @@ import type {
   AutomationMcpClientPort,
   AutomationTargetRevalidationPort,
 } from './session-owned-mcp-runtime';
-import { digestAutomationInputSchema } from './schema-digest';
-
-const LIST_APPS_SCHEMA = Object.freeze({
-  type: 'object',
-  properties: Object.freeze({}),
-  additionalProperties: false,
-});
-
-const LIST_WINDOWS_SCHEMA = Object.freeze({
-  type: 'object',
-  properties: Object.freeze({
-    pid: Object.freeze({
-      type: 'integer',
-      description: "Optional pid filter. When set, only this pid's windows are returned.",
-    }),
-    on_screen_only: Object.freeze({
-      type: 'boolean',
-      description: 'When true, drop windows not on the current Space. Default false.',
-    }),
-  }),
-  additionalProperties: false,
-});
-
-const REVIEWED_TARGET_TOOL_SCHEMAS = new Map([
-  ['list_apps', digestAutomationInputSchema(LIST_APPS_SCHEMA)],
-  ['list_windows', digestAutomationInputSchema(LIST_WINDOWS_SCHEMA)],
+const REQUIRED_TARGET_TOOL_PROPERTIES = new Map<string, readonly string[]>([
+  ['list_apps', Object.freeze([])],
+  ['list_windows', Object.freeze(['pid', 'on_screen_only'])],
 ]);
 
 export interface CuaDriverTargetClientFactoryPort {
@@ -166,16 +143,28 @@ async function requireReviewedTargetTools(
 ): Promise<void> {
   const tools = await client.listTools({ ...(signal === undefined ? {} : { signal }) });
   const discovered = new Map(tools.map((tool) => [tool.name, tool]));
-  for (const [name, expectedDigest] of REVIEWED_TARGET_TOOL_SCHEMAS) {
+  for (const [name, requiredProperties] of REQUIRED_TARGET_TOOL_PROPERTIES) {
     const tool = discovered.get(name);
     if (!tool) throw new Error(`Cua Driver target Tool '${name}' is unavailable.`);
-    if (digestAutomationInputSchema(tool.inputSchema) !== expectedDigest) {
-      throw new Error(`Cua Driver target Tool '${name}' schema changed.`);
+    if (!hasCompatibleInputSchema(tool.inputSchema, requiredProperties)) {
+      throw new Error(`Cua Driver target Tool '${name}' structure is incompatible.`);
     }
     if (tool.annotations?.readOnlyHint === false || tool.annotations?.destructiveHint === true) {
       throw new Error(`Cua Driver target Tool '${name}' annotations are contradictory.`);
     }
   }
+}
+
+function hasCompatibleInputSchema(
+  schema: Readonly<Record<string, unknown>>,
+  requiredProperties: readonly string[],
+): boolean {
+  if (schema['type'] !== 'object') return false;
+  const properties = schema['properties'];
+  if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
+    return requiredProperties.length === 0;
+  }
+  return requiredProperties.every((property) => Object.hasOwn(properties, property));
 }
 
 function parseRunningApplications(

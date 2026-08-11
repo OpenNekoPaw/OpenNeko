@@ -1,222 +1,91 @@
-## 1. Upstream lock and supply chain
+## 1. Canonical MCP and result boundary
 
-- [ ] 1.1 Record the selected stable Browser Use, Cua Driver and official MCP SDK releases, source commits, licenses,
-      transitive license inventory, build recipes, artifact sizes and supported OS/arch without using `latest`.
-      Exact upstream releases, commits, root licenses, MCP npm integrity and Cua platform URL/size/digest inventory are
-      locked. Cua workflow/main Cargo lock/payload owners and the cache-miss release log's 31 Node runtime crate releases
-      are also recorded. OpenNeko now owns an exact 36-package Node runtime Cargo lock reconstructed against that release
-      evidence, pinned runtime source tree and Rust toolchain. Cua now has a deterministic 367-package SPDX candidate and
-      contained darwin-arm64 candidate size/digest; human license review, Browser first-party recipe and releasable signed
-      artifact facts remain open. These remaining first-party artifact facts apply to the optional future managed source
-      and do not block first-delivery user-managed local runtime qualification.
-- [ ] 1.2 Build reproducible first-party platform artifacts from pinned upstream sources/dependencies; include all required
-      runtime/browser/native payloads and a contained launcher, with no user-machine post-install package manager.
-      Browser Use remains blocked on a reviewed Python/native/Chromium closure. A deterministic Cua `darwin-arm64`
-      recipe now rebuilds the Node runtime with the exact first-party Cargo lock, pinned Rust toolchain, `--locked`, both
-      macOS targets and fixed patch boundaries; the release command requires two independent byte-identical builds,
-      candidate assembly requires that matching receipt and replaces the unpinned upstream `.node`. An isolated official
-      Rust `1.97.1` toolchain produced two identical 1,569,136-byte universal binaries with
-      `sha256:c4e5b70fddbf6ffdd6477a90ea4da5fa3881d99796d9ded9f5faaf3e1039725a`; external Cargo-home paths are remapped to a
-      canonical build identity. Two identical 63,911,219-byte contained candidates were produced with
-      `sha256:9e3bae3b3358fe0d9ea44007916610e3c5b997360a2146a32349135df2ab63f6`. The darwin-arm64
-      production-only main/Node Cargo closure is locked to 367 unique package identities and candidate SPDX validation requires that exact
-      set; license-expression review, OpenNeko signature and packaged qualification remain open. This task is a future
-      managed-source release gate, not a prerequisite or fallback for the local-runtime source.
-- [x] 1.3 Add checksum/signature/SBOM validation and poison tests for modified archives, path escape, symlink, duplicate
-      identity, unknown platform and unreviewed upstream Tool sets.
-- [x] 1.4 Keep the first-delivery catalog inside the signed application as the only catalog authenticity root; constrain
-      artifact HTTPS hosts/redirects and defer a remotely mutable catalog to a separate trust/key-management change.
+- [x] 1.1 Replace the handwritten MCP client with the official SDK while retaining the single
+      `MCPManager -> ToolRegistry -> Pi` path.
+- [x] 1.2 Preserve Tool annotations, ordered text/image/resource results, cancellation and fail-local diagnostics.
+- [x] 1.3 Add transient sensitive-observation projection so raw screenshot bytes and Host identities do not persist in
+      transcript or cross preload.
+- [x] 1.4 Keep `adapter-only` Automation MCP out of generic raw Tool registration while ordinary sibling MCP remains
+      available.
 
-## 2. Canonical MCP boundary
+## 2. Open Plugin, Skill and MCP model
 
-- [x] 2.1 Replace the handwritten MCP stdio/HTTP client with the official SDK adapter while retaining the existing
-      `MCPManager -> ToolRegistry -> Pi` product path; delete the old transport implementation and direct test paths.
-- [x] 2.2 Update the package-owned MCP contract to preserve standard Tool annotations and ordered text/image/supported
-      resource result blocks without adding internal contract or schema versions.
-- [x] 2.3 Add producer/consumer tests for protocol negotiation, cancellation, mixed text/image delivery, `isError`,
-      malformed single-Tool isolation and sibling Tool/server availability.
-- [x] 2.4 Add transient sensitive-observation projection and transcript-safe receipt tests proving raw screenshot bytes,
-      Host paths and secret/window handles are not persisted or exposed to Renderer.
-- [x] 2.5 Prevent automation providers from using generic raw MCP exposure or lifecycle; assert adapter-only servers are
-      never registered, connected or started globally, ordinary sibling MCP remains available, and unknown,
-      contradictory and changed-schema Tools remain absent in plan, ask and auto modes even when upstream annotations
-      claim read-only.
+- [x] 2.1 Audit current public Plugin, Skill and MCP paths and identify actual enforcement consumers versus status-only
+      permission/qualification bookkeeping.
+- [x] 2.2 Revise proposal, design and capability specs so Extension is an open loader rather than a qualification and
+      release-management platform.
+- [x] 2.3 Simplify the Extension canonical projection to enable/action/runtime-diagnostic facts; make record presence
+      mean the configured local source exists, and remove redundant install-presence state plus public dependency,
+      enable-grant, Host-permission, qualification and declared/accepted-permission matrices.
+- [x] 2.4 Simplify durable Plugin enablement to `{ pluginId, enabled }`; remove permission-set acceptance and expansion
+      logic without adding a legacy/dual-read path.
+- [x] 2.5 Update Extension producer/consumer tests, typed Main/preload/Renderer contracts and localized UI; show only
+      contribution, enabled state, actions and local diagnostic.
+- [x] 2.6 Prove personal/workspace/plugin Skill discovery and ordinary MCP connection use the same public path for
+      OpenNeko and third-party sources, with Workspace Trust and runtime Tool permissions as the only applicable gates.
+- [x] 2.7 Remove remote artifact install/update/cancel operations, transfer progress, staged qualification, reviewed
+      artifact provenance/license state and the unavailable Desktop artifact Host from the canonical Extension path.
+- [x] 2.8 Reduce Extension catalog actions to local source rescan, enable/disable and removal only where OpenNeko owns
+      the copied local Plugin; retain personal Skill install/remove and fail-local discovery diagnostics.
+- [x] 2.9 Remove Browser/Cua special endpoint management from the current Desktop composition and prove the one selected
+      local-runtime path cannot fall back to an endpoint or generic raw MCP Tool.
+- [x] 2.10 Scope local-runtime and OS-permission controls to the selected Browser/Cua Extension instead of appending
+      global Automation controls to every Extension detail.
 
-## 3. Extension artifact lifecycle
+## 3. User-managed external runtime setup
 
-- [x] 3.1 Extend `@neko/agent-runtime/extensions` public entry with reviewed remote platform artifact download, staging,
-      integrity/provenance/license validation and atomic install through injected Host ports.
-- [x] 3.2 Add explicit enable, disable and update state owned by the extension application service; migrate current
-      installed-equals-enabled behavior atomically and remove the old implicit activation path.
-- [x] 3.3 Add idle/session ownership gates for enable/disable/update/remove, exact operation identity, safe diagnostics and
-      fail-local sibling behavior.
-- [x] 3.4 Update typed Main/preload/Renderer management contracts and Extensions UI for size, install, enable, disable,
-      update, dependency, permission and qualification status in English and Simplified Chinese.
-- [ ] 3.5 Add a real Electron management path proving catalog refresh does not download, install is user-triggered, enable
-      performs qualification, and failed install/update does not alter the authoritative package/runtime.
-- [x] 3.6 Persist the exact installed artifact/release/digest/provenance, enable grant and accepted declared permission set
-      separately; query integrity/MCP/OS/qualification facts and keep invalid installed records visible but non-runnable.
-- [ ] 3.7 Add streaming download size/digest, disk-space, archive expansion/file-count, path/case-collision/link, redirect,
-      cancellation, crash-staging cleanup and same-artifact bounded-resume tests on macOS and Windows.
-      Current macOS/host-neutral evidence covers the production disk budget, expansion/file-count bounds, cross-platform
-      path/case/link rejection, exact reviewed-host redirects, redirect count, download and extraction cancellation, and
-      staging cleanup. Same-operation resume is now bounded to one request using the exact final URL, catalog artifact/
-      digest closure, strong ETag or standard Last-Modified validator, Range/If-Range and exact Content-Range; missing or
-      changed validators and a second interruption fail closed without another source or full-download path. A real
-      Windows run remains open, so this task stays unchecked.
-- [ ] 3.8 Stage and qualify updates without Agent registration, block commit until exact turns/processes/sessions are idle,
-      terminate candidate processes before replacement and require a new enable grant for permission expansion.
-      The extension application service now invokes one injected candidate qualifier against the operation-owned staged
-      descriptor, requires its exact close handle to terminate before the second idle check and commit, and discards the
-      candidate while preserving the authoritative runtime on qualification, close or cancellation failure. The generic
-      qualifier builds an isolated unregistered plugin runtime and explicitly rejects `adapter-only` candidates without
-      starting their MCP server. Enablement and accepted permissions are now independent strict state facts: disable
-      preserves the exact accepted set without contributing runtime, equal/reduced updates retain only the candidate
-      set, expanded updates clear acceptance and remain disabled, and the old existence-implies-enabled shape fails
-      closed. Ordinary plugin runtime resources are now partitioned into extension-owned MCP Manager children; reconcile
-      reuses unchanged children, projects changed Tools through the existing single Workspace Tool Registry/Pi path and
-      closes only replaced children. Agent turns freeze exact Tool/Skill snapshots and expose pluginId-bound run owners,
-      so the mutation gate no longer blocks unrelated turns. Initial server-id conflicts fail locally, while a changed
-      conflicting candidate is discarded without closing its authoritative sibling. Provider-owned Browser/Cua
-      qualification, the authoritative MCP-process pre-commit quiesce/close handoff, and pre-qualification user
-      acceptance ordering for expanded permissions remain open. This task stays unchecked.
-- [ ] 3.9 Separate runtime removal from profile/download/extension-data removal and add independent confirmations, trash,
-      active-owner checks and recovery tests.
-- [x] 3.10 Own install/update progress outside the Extensions React Root with exact operation identity, explicit cancel and
-      restart cleanup/resume; verify scene changes do not cancel work or retain hidden UI.
-- [x] 3.11 Model fixed GitHub Release, fixed official-vendor artifact and user-managed endpoint as explicit non-fallback
-      delivery sources; add Host-owned endpoint authorization/credential storage, health/schema qualification and UI
-      while ensuring OpenNeko never installs, starts, updates or terminates a user-owned service.
-- [x] 3.12 Add locale-keyed extension introduction metadata to the canonical manifest/catalog projection; render and
-      search the current Desktop locale in grid/list and configuration details, retain the canonical default for
-      undeclared locales, and add manifest, IPC and Agent Webview regressions for English and Simplified Chinese.
-- [ ] 3.13 Add `user-managed-local-runtime` as an explicit non-fallback source with an opaque `runtimeId` and Host-owned
-      exact resolved path/release/signature/schema authorization, changed-runtime invalidation and source-specific UI.
-      Do not persist raw absolute paths in package/domain contracts. OpenNeko may open official instructions
-      but must never execute install/update/uninstall commands, scan `PATH` or delete user-owned runtime files.
+- [x] 3.1 Add `user-managed-local-runtime` with opaque Host-owned runtime/resource authorization; never persist package
+      raw paths or scan `PATH`.
+- [x] 3.2 Add a copyable installation command to the local-runtime source contract and Browser Use/Cua descriptors;
+      commands are user-visible text and are never executed by OpenNeko.
+- [x] 3.3 Replace local-runtime qualification states with `not-configured | ready | error`; keep exact asset state and
+      concrete diagnostics, and remove qualification/unverified labels from UI and locale catalogs.
+- [x] 3.4 Keep guide, select/reselect, recheck and disconnect actions; disconnect removes only OpenNeko authority and
+      never modifies user-installed files.
+- [x] 3.5 Add contract, Desktop IPC and Webview tests proving command copy and no install/update/uninstall execution path.
 
-## 4. Automation package ownership
+## 4. Minimal Browser/Cua compatibility
 
-- [x] 4.1 Create `@neko/automation-contracts` L0 contracts for provider/profile/session/target/action trait/evidence/
-      diagnostic with one canonical shape and strict invalid-input isolation.
-- [x] 4.2 Create `@neko/automation-node` L1 application service and narrow Browser/Computer provider, Host permission,
-      transient observation and extension runtime ports; add package boundary tests forbidding Electron/React imports.
-- [x] 4.3 Implement the Agent Capability adapter that freezes exact session/target/mode/budget, intersects reviewed policy
-      with MCP annotations, revalidates mutations and delegates to one explicitly selected provider without fallback.
-- [ ] 4.4 Add Desktop Main concrete download/process/window/OS-permission/resource adapters and typed IPC while keeping
-      automation policy, target selection and completion semantics out of `apps/neko-desktop`. The managed Cua Host
-      factory now supplies an isolated bounded target-discovery client; package-owned authorization now performs
-      bounded discovery, redacted explicit selection, exact post-selection revalidation and one-time grant issuance.
-      Package-owned pending-selection coordination plus exact Conversation/Window-bound Desktop Main/preload/Renderer
-      IPC and selection UI are connected. Production provider/profile registration and remaining Host adapters stay open.
-- [x] 4.5 Add Tool Call/Timeline projection for target, mode, budget, observation/action state, Pause, Stop, Take over and
-      evidence status without a second Task/session catalog or retained hidden Root.
-      Package-owned redacted live projection, exact owner command, data-free subscription, takeover-safe provider abort,
-      sender/Window/Connection/visible-Conversation IPC and package-owned control provider are implemented. Agent Webview
-      exposes one domain-neutral Tool Call accessory slot; Desktop composes the Automation projection into the exact
-      Conversation + Tool Call item and no longer mounts a floating control success path. Production still has no qualified
-      provider with which to produce populated real Desktop visual evidence; that release qualification remains tracked by
-      5.1-5.7 and 7.3 rather than leaving the deterministic Timeline implementation open.
-- [x] 4.6 Implement layered authorization tests for install confirmation, enable grant, queried OS permission, exact
-      session scope and single-action mutation approval; prove none substitutes for another and hard blocks are not
-      approval-overridable.
-- [x] 4.7 Revalidate the exact target before showing mutation approval and immediately before input; include target,
-      effect/data exposure, mode and remaining budget in the approval projection.
-- [x] 4.8 Keep first-delivery mutation approval single-action and reject persistent, cross-target or cross-session allow;
-      add approval replay and stale-target poison tests.
+- [x] 4.1 Replace complete Automation input-schema digests with operation-owned structural requirements for fields used
+      by each adapter; update provider inspection and compatibility tests atomically.
+- [x] 4.2 Remove exact Browser Use package/server version equality as a readiness gate while retaining exact entrypoint
+      interpreter/path and server-name checks.
+- [x] 4.3 Remove exact Cua bundle/server version equality as a readiness gate while retaining bundle identifier,
+      Developer ID/Team ID, notarization and stable TCC responsibility-chain checks.
+- [x] 4.4 Prove a compatible release-string change succeeds, while missing operation, incompatible required field,
+      changed path identity, wrong Cua publisher and contradictory annotation fail locally.
+- [x] 4.5 Keep unknown Automation operations out of the product wrapper, preserve exact Browser runtime/browser asset
+      authorities and reject raw/alternate provider fallback.
+- [x] 4.6 Remove upstream release from Automation provider/session/authorization identity and make any displayed release
+      an optional owning-runtime diagnostic fact.
+- [x] 4.7 Rename qualification APIs, diagnostics and temporary runtime ownership to compatibility/inspection terminology
+      without weakening exact provider, operation, field, annotation, signature or TCC checks.
 
-## 5. Browser Use extension
+## 5. Automation ownership and real permissions
 
-- [ ] 5.1 Add a first-party Browser Use marketplace profile that starts only an exact authorized user-managed
-      `browser-use --mcp` runtime and declares an exact reviewed Tool allowlist. Pin and qualify the selected upstream
-      release; PyPI package presence alone is insufficient.
-- [x] 5.2 Allow exactly `browser_get_state`, `browser_get_html`, `browser_screenshot`, `browser_list_tabs` and
-      `browser_list_sessions` in initial `observe`; reject `--cli-mcp`, `browser_exec`, `browser_extract_content`,
-      `retry_with_browser_use_agent`, arbitrary file operations, implicit cloud provider and all unknown Tools at
-      composition time.
-- [ ] 5.3 Implement isolated profile ownership, explicit allowed domains and `observe`, `browse-read`, `interact` policy;
-      start Browser Use without model-provider/API credentials and add deterministic allowlist, process-environment,
-      mode, domain, redirect and approval tests.
-- [ ] 5.4 Qualify Browser Use on `darwin-arm64` with an exact user-authorized Python/MCP runtime and independently
-      authorized browser executable, using real local fixture sites for state, HTML, screenshot,
-      Pi-owned page understanding, navigation and denied mutation; prove no nested model call and record other platform
-      blockers.
-- [x] 5.5 Establish extension/session-scoped home/temp/browser-data directories and an explicit environment allowlist in
-      the contained client factory; prove real user `HOME`, general `PATH`, existing profiles and unrelated secrets are
-      absent. Reuse this isolation policy for the local-runtime adapter without treating the contained-root assumption as
-      first-delivery authority; independent local path authorization remains in 5.7.
-- [ ] 5.6 Enforce domains for navigation, redirects and new tabs at the qualified upstream browser boundary; block `file:`
-      and external application protocols, require explicit localhost/private-network scope and keep download/upload
-      unavailable in the first delivery.
-- [ ] 5.7 Refactor the Host client factory so the authorized Browser Use entrypoint and browser executable are independent
-      exact authorities; invalidate qualification on path/release/digest/schema change, keep existing user profiles out
-      of first delivery and prove no contained-root, `PATH`, recent-install or managed-artifact fallback.
+- [x] 5.1 Keep host-neutral Automation contracts/application service and thin Desktop process/window/OS adapters.
+- [x] 5.2 Freeze exact session/target/mode/budget/owner, revalidate target before approval and input, and retain
+      single-action mutation approval.
+- [x] 5.3 Keep Pause, Stop and Take over on the exact Tool Call/session projection without a second Task catalog or
+      retained hidden Root.
+- [x] 5.4a Register the production Cua provider/profile through the existing Automation session owner and canonical
+      Agent Tool Registry; reconcile local-runtime authorization through the existing plugin contribution lifecycle.
+- [ ] 5.4b Register the production Browser Use provider/profile only after the upstream MCP can bind a direct observe
+      operation atomically to the exact user-selected tab/session; consume the official PyPI/`uvx` distribution without
+      maintaining a fork, active-tab switching or a parallel CDP controller.
+- [x] 5.5 For the current observe-only profile, query macOS Screen Recording and Accessibility at use time, keep Input
+      Control explicitly unavailable, and interrupt the exact running session through Stop/Take over. Do not add a
+      global input monitor before an interact profile has a real correctness consumer.
 
-## 6. Computer Use extension
+## 6. Evaluation and quality gates
 
-- [ ] 6.1 Add a first-party Computer Use marketplace profile for exact `/Applications/CuaDriver.app` authorization and
-      bounded MCP policy; verify bundle identifier, Developer ID/Team ID, notarization, reviewed release and Tool schema,
-      and reject unrestricted/bypass modes, raw helpers and unknown operations.
-- [ ] 6.2 Implement exact app/process/window/region binding, OS permission projection, pre-input revalidation, timeout,
-      step budget, Pause/Stop/Take over and user-input interruption through Automation ports. Package-owned Cua target
-      discovery now locks `list_apps/list_windows`, issues opaque target keys and revalidates exact bundle/PID/window/
-      bounds without active/recent/title fallback. Package-owned authorization also rejects model-authored routing,
-      projects redacted candidates for explicit selection, immediately revalidates the chosen target and only then
-      issues a one-time grant. Desktop selection UI is now exact Conversation/Window-bound; interruption and live
-      Pause/Resume/Stop/Take over now revoke exact package authority, abort the in-flight provider signal, preserve
-      takeover through Agent cleanup and leave sibling sessions usable. Real user-input interruption, exact rebind after
-      changed target, Timeline embedding and provider-backed Desktop evidence remain open.
-- [ ] 6.3 Qualify signed/notarized user-installed `/Applications/CuaDriver.app` observe mode on `darwin-arm64` with a real fixture app, target-only screenshot,
-      permission denial/loss, process restart, target mismatch and cleanup.
-- [ ] 6.4 Qualify mutating actions individually on macOS with approval and independent result evidence; keep unsupported
-      actions unavailable rather than reporting generic interact readiness.
-- [ ] 6.5 Add Windows artifacts only after packaged OpenNeko Windows exists; run a real Windows x64 app/window/permission/
-      input matrix before changing support status. Linux remains outside this change.
-- [ ] 6.6 Request no OS automation permission during install; add explicit macOS Screen Recording and qualified
-      Accessibility/Input grant actions, current TCC queries, revocation tests and stable app daemon/proxy responsibility-
-      chain evidence. Keep `mcp --direct`, raw `serve` and unsigned helper paths unavailable unless independently qualified.
-- [ ] 6.7 Prove Windows standard-user execution without service/driver installation or elevation; reject elevated apps,
-      UAC secure desktop, lock screen and higher-integrity targets, and verify executable shutdown before update/removal.
-- [ ] 6.8 Keep the existing deterministic Cua artifact candidate as a future managed-source input; do not publish, install
-      or select it until license review, OpenNeko signature and packaged qualification pass, and never use it as fallback
-      from the user-managed local runtime.
-
-## 7. Agent Evaluation
-
-- [x] 7.1 Create `agent-runtime.external-automation` and update the coverage index for capability Tool routing, Tool Call
-      lifecycle, Tool result delivery and Desktop event projection; do not map unrelated capabilities to it.
-- [ ] 7.2 Add declarative Browser observe positive and mutation-denied cases proving exact extension/server/Tool/session,
-      local runtime/browser executable authorization, changed-runtime rejection, domain policy, structured result,
-      Pi-owned page understanding and no model credential, extraction Tool, nested
-      Agent, exec or Computer Use fallback.
-      The standalone suite now contains selected-tab observe and observe-profile mutation denial cases with exact
-      qualified Tool/profile/result and raw/nested fallback poison assertions. Domain pre-content enforcement and real
-      Pi page-understanding evidence remain blocked on the production Browser binding, so this task stays open.
-- [ ] 7.3 Add Computer observe, wrong-target and cancel/takeover cases proving exact pid/window, OS permission, transient
-      signed CuaDriver.app/TCC responsibility chain, screenshot receipt, sibling isolation and no direct/raw helper,
-      active-window or mock fallback.
-      The suite now contains selected-window observe, model-authored pid/window rejection and pending-request cancellation
-      cases. Deterministic service/Desktop tests now prove exact-owner takeover, late-result rejection, transient receipt
-      suppression and sibling isolation. Real TCC, target-only receipt and provider-backed takeover Evaluation remain
-      open because the current Evaluation workflow cannot produce an authoritative live Automation control fact.
-- [ ] 7.4 Run key-free suite/schema/dry-run validation, then hidden complete Desktop + real provider Browser cases and a
-      visible Desktop + real provider + real OS permission Computer case; preserve `infrastructure-blocked` where an
-      exact authorized local runtime/browser executable, provider composition, credential, model or OS grant is unavailable.
-      Key-free validation passes at 45 files / 304 tests and 25 suites / 70 cases. Provider-backed lanes remain open.
-- [ ] 7.5 Re-run affected foundational cells for Tool result delivery, cancellation, projection, conversation switching
-      and isolation; record other matrix cells as unaffected with rationale.
-- [ ] 7.6 Add disabled-extension and poisoned-unknown-Tool cases proving no Tool registration or execution in ask/auto,
-      plus session-scope expiry and target-change-after-approval cases proving no grant transfer.
-      A disabled/unknown Tool absence case is present. Ask/auto matrix, session expiry and post-approval target change
-      remain open.
-
-## 8. Completion and quality gates
-
-- [ ] 8.1 Run focused package tests, strict typecheck, MCP conformance, packaged Desktop builds, architecture/security/
-      internal-version checks, `pnpm check:openspec`, `git diff --check` and applicable local gates.
-- [x] 8.2 Run Neko quality review across responsibility, dependency, interface, extension and testing layers; verify no
-      handwritten automation engine, second Agent/MCP/Task path, implicit install or provider fallback remains.
-- [ ] 8.3 Record exact upstream/plugin releases, user-managed runtime authorization/qualification evidence, Evaluation
-      reports, unexecuted cases, screenshot/privacy limitations and remaining Windows/Computer-write risks before
-      changing capability status. Existing managed-artifact candidate evidence remains historical and does not satisfy
-      the new local-runtime qualification gate.
+- [x] 6.1 Create `agent-runtime.external-automation` Evaluation ownership and deterministic Browser/Computer cases.
+- [x] 6.2 Update Browser cases for open local-runtime setup, structural compatibility, no model credential and no raw/
+      nested/Computer fallback.
+- [x] 6.3 Update Computer Evaluation coverage and deterministic companion tests for Cua signing/TCC identity, exact
+      target, permission loss, cancellation/Take over and no release-string gate.
+- [x] 6.4 Run focused contracts/runtime/webview/Desktop tests, strict typecheck, OpenSpec check and `git diff --check`.
+- [x] 6.5 Run Neko quality review and record provider-backed Desktop Evaluation evidence, unexecuted platform cases and
+      residual Browser/Cua privacy or write risks.
+- [x] 6.6 Re-run focused contract/runtime/Webview/Desktop tests, key-free external-Automation Evaluation selection,
+      strict typecheck, OpenSpec validation, UI validation and quality review after the lifecycle cleanup.

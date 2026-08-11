@@ -15,7 +15,7 @@ import type {
 } from '@neko/project/contracts';
 import type { OpenNekoAssetCenterBridge } from '@neko/assets-domain/asset-center/host-contract';
 import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contracts/extension-management-host';
-import type { OpenNekoAutomationEndpointManagementBridge } from '@neko/automation-contracts/endpoint-management';
+import type { OpenNekoAutomationLocalRuntimeManagementBridge } from '@neko/automation-contracts/local-runtime-management';
 import type { OpenNekoAutomationPermissionManagementBridge } from '@neko/automation-contracts/permission-management';
 import type { OpenNekoDesktopAutomationTargetSelectionBridge } from './automation-target-selection-contract';
 import type { OpenNekoDesktopAutomationSessionControlBridge } from './automation-session-control-contract';
@@ -49,7 +49,7 @@ declare global {
       OpenNekoAssistantResourceBridge &
       OpenNekoDesktopWorkspaceGrantBridge &
       OpenNekoAgentExtensionManagementBridge &
-      OpenNekoAutomationEndpointManagementBridge &
+      OpenNekoAutomationLocalRuntimeManagementBridge &
       OpenNekoAutomationPermissionManagementBridge &
       OpenNekoDesktopAutomationTargetSelectionBridge &
       OpenNekoDesktopAutomationSessionControlBridge &
