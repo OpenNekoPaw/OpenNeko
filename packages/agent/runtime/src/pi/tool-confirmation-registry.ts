@@ -1,5 +1,3 @@
-export const PI_TOOL_CONFIRMATION_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-
 interface PendingConfirmation {
   readonly resolve: (approved: boolean) => void;
   readonly cancel: () => void;
@@ -7,12 +5,6 @@ interface PendingConfirmation {
 
 export class PiToolConfirmationRegistry {
   private readonly pending = new Map<string, PendingConfirmation>();
-
-  constructor(private readonly timeoutMs: number = PI_TOOL_CONFIRMATION_DEFAULT_TIMEOUT_MS) {
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-      throw new Error('Pi tool confirmation timeout must be a positive finite number.');
-    }
-  }
 
   async request(
     toolCallId: string,
@@ -34,28 +26,16 @@ export class PiToolConfirmationRegistry {
     if (this.pending.has(toolCallId)) {
       throw new Error(`Pi tool confirmation ${toolCallId} is already pending.`);
     }
-    return new Promise<boolean>((resolve, reject) => {
+    return new Promise<boolean>((resolve) => {
       let settled = false;
       const settle = (approved: boolean): void => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeout);
         signal?.removeEventListener('abort', abort);
         this.pending.delete(toolCallId);
         resolve(approved);
       };
       const abort = (): void => settle(false);
-      const timeout = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        signal?.removeEventListener('abort', abort);
-        this.pending.delete(toolCallId);
-        reject(
-          new Error(
-            `Pi tool confirmation ${toolCallId} timed out after ${this.timeoutMs}ms without a user decision.`,
-          ),
-        );
-      }, this.timeoutMs);
       this.pending.set(toolCallId, {
         resolve: settle,
         cancel: () => settle(false),
