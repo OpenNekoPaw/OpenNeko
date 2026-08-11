@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createDesktopContentProjectTargetRequest,
+  createDesktopWorkspaceAuthoringLibraryTargetRequest,
   createDesktopWorkspaceDirectoryTargetRequest,
   createDesktopWorkspaceProjectTargetRequest,
   parseDesktopWorkspaceGrantTargetResult,
@@ -65,5 +67,36 @@ describe('Desktop Workspace grant contract', () => {
         projectId: 'project-1',
       }),
     ).toMatchObject({ operation: 'select-project', projectId: 'project-1' });
+  });
+
+  it('keeps Content creation and configured authoring libraries as closed Host operations', () => {
+    expect(
+      createDesktopContentProjectTargetRequest({
+        requestId: 'request-content',
+        rendererSessionId: 'epoch-1',
+        windowId: 'window-1',
+      }),
+    ).toMatchObject({ operation: 'create-content-project' });
+    expect(
+      createDesktopWorkspaceAuthoringLibraryTargetRequest({
+        requestId: 'request-library',
+        rendererSessionId: 'epoch-1',
+        windowId: 'window-1',
+        library: 'character',
+      }),
+    ).toMatchObject({ operation: 'select-authoring-library', library: 'character' });
+    expect(
+      parseDesktopWorkspaceGrantTargetResult({
+        requestId: 'request-content',
+        status: 'authorized-project',
+        workspaceId: 'workspace-1',
+        projectId: 'content:workspace-1',
+        grant: {
+          workspaceGrantId: 'grant-1',
+          windowId: 'window-1',
+          label: 'Novel',
+        },
+      }),
+    ).toMatchObject({ status: 'authorized-project', projectId: 'content:workspace-1' });
   });
 });

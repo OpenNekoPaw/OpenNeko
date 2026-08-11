@@ -8,7 +8,7 @@ export interface DesktopConversationDeletionPort {
   deleteConversations(conversations: readonly DesktopAgentHomeNavigationIdentity[]): Promise<void>;
 }
 
-export interface DesktopProjectManagementShellPort {
+export interface DesktopProjectRegistrationShellPort {
   getProjection(windowId: string): Promise<DesktopShellProjection>;
   removeProjectsFromCatalog(
     windowId: string,
@@ -22,13 +22,13 @@ export interface DesktopProjectManagementShellPort {
   ): Promise<readonly DesktopAgentHomeNavigationIdentity[]>;
 }
 
-export interface DesktopProjectManagementServiceOptions {
+export interface DesktopProjectRegistrationServiceOptions {
   readonly conversations: DesktopConversationDeletionPort;
-  readonly shell: DesktopProjectManagementShellPort;
+  readonly shell: DesktopProjectRegistrationShellPort;
 }
 
-export class DesktopProjectManagementService {
-  constructor(private readonly options: DesktopProjectManagementServiceOptions) {}
+export class DesktopProjectRegistrationService {
+  constructor(private readonly options: DesktopProjectRegistrationServiceOptions) {}
 
   async removeProjects(
     windowId: string,

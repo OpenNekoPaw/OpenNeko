@@ -115,6 +115,7 @@ const emptyRelationshipMemoryFields: RelationshipMemoryDraftFields = {
 };
 
 export function CharacterPanel({
+  authoringOnly = false,
   creating,
   execute,
   locale,
@@ -123,6 +124,7 @@ export function CharacterPanel({
   selectedProjectId,
   snapshot,
 }: {
+  readonly authoringOnly?: boolean;
   readonly creating: boolean;
   readonly execute: ExecuteCommand;
   readonly locale: SupportedLocale;
@@ -642,509 +644,535 @@ export function CharacterPanel({
               ))}
             </div>
           </section>
-          <details
-            className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-            data-character-studio-section="storyline-authoring"
-          >
-            <summary>
-              <div className="character-foundation__studio-heading">
-                <div>
-                  <span>{foundationLabel(locale, '个人故事线', 'Character storylines')}</span>
-                  <h4>
-                    {foundationLabel(locale, '发布角色故事线', 'Publish a character storyline')}
-                  </h4>
-                </div>
-                <strong>{storylineVersions.length}</strong>
-              </div>
-            </summary>
-            {versions.length === 0 ? (
-              <p>
-                {foundationLabel(
-                  locale,
-                  '先发布一个角色版本，再为该版本创建故事线。',
-                  'Publish a character version before creating a storyline for it.',
-                )}
-              </p>
-            ) : (
-              <form
-                className="character-foundation__form-grid"
-                onSubmit={(event) => submitForm(event, publishStoryline)}
+          {!authoringOnly ? (
+            <>
+              <details
+                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
+                data-character-studio-section="storyline-authoring"
               >
-                <FoundationField label={foundationLabel(locale, '角色版本', 'Character version')}>
-                  <select
-                    required
-                    value={storylineFields.characterVersionId}
-                    onChange={(event) =>
-                      setStorylineFields({
-                        ...storylineFields,
-                        characterVersionId: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">
-                      {foundationLabel(locale, '选择版本', 'Select a version')}
-                    </option>
-                    {versions.map((publication) => (
-                      <option
-                        key={publication.characterVersionId}
-                        value={publication.characterVersionId}
-                      >
-                        {publication.label}
-                      </option>
-                    ))}
-                  </select>
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '故事线名称', 'Storyline label')}>
-                  <input
-                    required
-                    value={storylineFields.label}
-                    onChange={(event) =>
-                      setStorylineFields({ ...storylineFields, label: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '前提', 'Premise')}>
-                  <textarea
-                    required
-                    rows={3}
-                    value={storylineFields.premise}
-                    onChange={(event) =>
-                      setStorylineFields({ ...storylineFields, premise: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '欲望', 'Desire')}>
-                  <textarea
-                    required
-                    rows={3}
-                    value={storylineFields.desire}
-                    onChange={(event) =>
-                      setStorylineFields({ ...storylineFields, desire: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '冲突', 'Conflict')}>
-                  <textarea
-                    required
-                    rows={3}
-                    value={storylineFields.conflict}
-                    onChange={(event) =>
-                      setStorylineFields({ ...storylineFields, conflict: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '成长弧', 'Growth arc')}>
-                  <textarea
-                    required
-                    rows={3}
-                    value={storylineFields.growthArc}
-                    onChange={(event) =>
-                      setStorylineFields({ ...storylineFields, growthArc: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '初始阶段', 'Initial stage')}>
-                  <input
-                    required
-                    value={storylineFields.stageTitle}
-                    onChange={(event) =>
-                      setStorylineFields({ ...storylineFields, stageTitle: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '阶段说明', 'Stage description')}>
-                  <textarea
-                    rows={3}
-                    value={storylineFields.stageDescription}
-                    onChange={(event) =>
-                      setStorylineFields({
-                        ...storylineFields,
-                        stageDescription: event.target.value,
-                      })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField
-                  hint={foundationLabel(locale, '每行一条约束', 'One constraint per line')}
-                  label={foundationLabel(locale, '故事线约束', 'Storyline constraints')}
-                >
-                  <textarea
-                    rows={3}
-                    value={storylineFields.constraints}
-                    onChange={(event) =>
-                      setStorylineFields({ ...storylineFields, constraints: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationSubmit pending={pendingOperation !== undefined}>
-                  {foundationLabel(locale, '发布故事线', 'Publish storyline')}
-                </FoundationSubmit>
-              </form>
-            )}
-            <div className="character-foundation__review-list">
-              {storylineVersions.map((storyline) => (
-                <div
-                  className="character-foundation__storyline-record"
-                  key={storyline.characterStorylineVersionId}
-                >
-                  <strong>{storyline.label}</strong>
-                  <span>{storyline.premise}</span>
-                  <code>{storyline.characterStorylineVersionId}</code>
-                </div>
-              ))}
-            </div>
-          </details>
-          <details
-            className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-            data-character-studio-section="memory-review"
-          >
-            <summary>
-              <div className="character-foundation__studio-heading">
-                <div>
-                  <span>{foundationLabel(locale, '角色主观记忆', 'Character memory')}</span>
-                  <h4>
+                <summary>
+                  <div className="character-foundation__studio-heading">
+                    <div>
+                      <span>{foundationLabel(locale, '个人故事线', 'Character storylines')}</span>
+                      <h4>
+                        {foundationLabel(locale, '发布角色故事线', 'Publish a character storyline')}
+                      </h4>
+                    </div>
+                    <strong>{storylineVersions.length}</strong>
+                  </div>
+                </summary>
+                {versions.length === 0 ? (
+                  <p>
                     {foundationLabel(
                       locale,
-                      '候选与已接受记忆',
-                      'Candidates and accepted memories',
+                      '先发布一个角色版本，再为该版本创建故事线。',
+                      'Publish a character version before creating a storyline for it.',
                     )}
-                  </h4>
-                </div>
-                <strong>{memoryScopes.length}</strong>
-              </div>
-            </summary>
-            <div className="character-foundation__review-list">
-              {characterRuns.map((run) => {
-                const scope = memoryScopes.find(
-                  (item) => item.characterRunId === run.characterRunId,
-                );
-                return (
-                  <div key={run.characterRunId}>
-                    <code>{run.characterRunId}</code>
-                    {scope ? (
-                      <span>{`${scope.entries.filter((entry) => entry.status === 'active').length} active · ${scope.candidates.filter((candidate) => candidate.status === 'pending').length} pending`}</span>
-                    ) : (
-                      <button
-                        disabled={pendingOperation !== undefined}
-                        type="button"
-                        onClick={() =>
-                          void createMemoryScope(run.characterRunId).catch(() => undefined)
+                  </p>
+                ) : (
+                  <form
+                    className="character-foundation__form-grid"
+                    onSubmit={(event) => submitForm(event, publishStoryline)}
+                  >
+                    <FoundationField
+                      label={foundationLabel(locale, '角色版本', 'Character version')}
+                    >
+                      <select
+                        required
+                        value={storylineFields.characterVersionId}
+                        onChange={(event) =>
+                          setStorylineFields({
+                            ...storylineFields,
+                            characterVersionId: event.target.value,
+                          })
                         }
                       >
-                        {foundationLabel(locale, '创建记忆域', 'Create memory scope')}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {memoryScopes.length > 0 ? (
-              <form
-                className="character-foundation__form-grid"
-                onSubmit={(event) => submitForm(event, proposeMemory)}
+                        <option value="">
+                          {foundationLabel(locale, '选择版本', 'Select a version')}
+                        </option>
+                        {versions.map((publication) => (
+                          <option
+                            key={publication.characterVersionId}
+                            value={publication.characterVersionId}
+                          >
+                            {publication.label}
+                          </option>
+                        ))}
+                      </select>
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '故事线名称', 'Storyline label')}
+                    >
+                      <input
+                        required
+                        value={storylineFields.label}
+                        onChange={(event) =>
+                          setStorylineFields({ ...storylineFields, label: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField label={foundationLabel(locale, '前提', 'Premise')}>
+                      <textarea
+                        required
+                        rows={3}
+                        value={storylineFields.premise}
+                        onChange={(event) =>
+                          setStorylineFields({ ...storylineFields, premise: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField label={foundationLabel(locale, '欲望', 'Desire')}>
+                      <textarea
+                        required
+                        rows={3}
+                        value={storylineFields.desire}
+                        onChange={(event) =>
+                          setStorylineFields({ ...storylineFields, desire: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField label={foundationLabel(locale, '冲突', 'Conflict')}>
+                      <textarea
+                        required
+                        rows={3}
+                        value={storylineFields.conflict}
+                        onChange={(event) =>
+                          setStorylineFields({ ...storylineFields, conflict: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField label={foundationLabel(locale, '成长弧', 'Growth arc')}>
+                      <textarea
+                        required
+                        rows={3}
+                        value={storylineFields.growthArc}
+                        onChange={(event) =>
+                          setStorylineFields({ ...storylineFields, growthArc: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField label={foundationLabel(locale, '初始阶段', 'Initial stage')}>
+                      <input
+                        required
+                        value={storylineFields.stageTitle}
+                        onChange={(event) =>
+                          setStorylineFields({ ...storylineFields, stageTitle: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '阶段说明', 'Stage description')}
+                    >
+                      <textarea
+                        rows={3}
+                        value={storylineFields.stageDescription}
+                        onChange={(event) =>
+                          setStorylineFields({
+                            ...storylineFields,
+                            stageDescription: event.target.value,
+                          })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      hint={foundationLabel(locale, '每行一条约束', 'One constraint per line')}
+                      label={foundationLabel(locale, '故事线约束', 'Storyline constraints')}
+                    >
+                      <textarea
+                        rows={3}
+                        value={storylineFields.constraints}
+                        onChange={(event) =>
+                          setStorylineFields({
+                            ...storylineFields,
+                            constraints: event.target.value,
+                          })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationSubmit pending={pendingOperation !== undefined}>
+                      {foundationLabel(locale, '发布故事线', 'Publish storyline')}
+                    </FoundationSubmit>
+                  </form>
+                )}
+                <div className="character-foundation__review-list">
+                  {storylineVersions.map((storyline) => (
+                    <div
+                      className="character-foundation__storyline-record"
+                      key={storyline.characterStorylineVersionId}
+                    >
+                      <strong>{storyline.label}</strong>
+                      <span>{storyline.premise}</span>
+                      <code>{storyline.characterStorylineVersionId}</code>
+                    </div>
+                  ))}
+                </div>
+              </details>
+              <details
+                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
+                data-character-studio-section="memory-review"
               >
-                <FoundationField label={foundationLabel(locale, '记忆域', 'Memory scope')}>
-                  <select
-                    required
-                    value={memoryFields.characterMemoryScopeId}
-                    onChange={(event) =>
-                      setMemoryFields({
-                        ...memoryFields,
-                        characterMemoryScopeId: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">
-                      {foundationLabel(locale, '选择记忆域', 'Select a scope')}
-                    </option>
-                    {memoryScopes.map((scope) => (
-                      <option
-                        key={scope.characterMemoryScopeId}
-                        value={scope.characterMemoryScopeId}
-                      >
-                        {scope.characterMemoryScopeId}
-                      </option>
-                    ))}
-                  </select>
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '记忆内容', 'Memory content')}>
-                  <textarea
-                    required
-                    rows={3}
-                    value={memoryFields.content}
-                    onChange={(event) =>
-                      setMemoryFields({ ...memoryFields, content: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '来源引用', 'Source reference')}>
-                  <input
-                    required
-                    value={memoryFields.sourceRef}
-                    onChange={(event) =>
-                      setMemoryFields({ ...memoryFields, sourceRef: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '敏感标签', 'Sensitivity traits')}>
-                  <textarea
-                    rows={2}
-                    value={memoryFields.sensitivityTraits}
-                    onChange={(event) =>
-                      setMemoryFields({
-                        ...memoryFields,
-                        sensitivityTraits: event.target.value,
-                      })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '保留标签', 'Retention traits')}>
-                  <textarea
-                    rows={2}
-                    value={memoryFields.retentionTraits}
-                    onChange={(event) =>
-                      setMemoryFields({ ...memoryFields, retentionTraits: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationSubmit pending={pendingOperation !== undefined}>
-                  {foundationLabel(locale, '提出记忆候选', 'Propose memory candidate')}
-                </FoundationSubmit>
-              </form>
-            ) : null}
-            <div className="character-foundation__review-list">
-              {memoryScopes.flatMap((scope) =>
-                scope.candidates.map((candidate) => (
-                  <div key={candidate.characterMemoryCandidateId}>
-                    <strong>{candidate.content}</strong>
-                    <span>{candidate.status}</span>
-                    {candidate.status === 'pending' ? (
-                      <span className="character-foundation__review-actions">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void execute({
-                              operation: 'character-memory-candidate-accept',
-                              input: {
-                                characterMemoryScopeId: scope.characterMemoryScopeId,
-                                characterMemoryCandidateId: candidate.characterMemoryCandidateId,
-                                characterMemoryEntryId:
-                                  createDomainIdentity('character-memory-entry'),
-                                expectedMemoryRevision: scope.memoryRevision,
-                              },
-                            }).catch(() => undefined)
-                          }
-                        >
-                          {foundationLabel(locale, '接受', 'Accept')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void execute({
-                              operation: 'character-memory-candidate-reject',
-                              input: {
-                                characterMemoryScopeId: scope.characterMemoryScopeId,
-                                characterMemoryCandidateId: candidate.characterMemoryCandidateId,
-                                expectedMemoryRevision: scope.memoryRevision,
-                              },
-                            }).catch(() => undefined)
-                          }
-                        >
-                          {foundationLabel(locale, '拒绝', 'Reject')}
-                        </button>
-                      </span>
-                    ) : null}
+                <summary>
+                  <div className="character-foundation__studio-heading">
+                    <div>
+                      <span>{foundationLabel(locale, '角色主观记忆', 'Character memory')}</span>
+                      <h4>
+                        {foundationLabel(
+                          locale,
+                          '候选与已接受记忆',
+                          'Candidates and accepted memories',
+                        )}
+                      </h4>
+                    </div>
+                    <strong>{memoryScopes.length}</strong>
                   </div>
-                )),
-              )}
-            </div>
-          </details>
-          <details
-            className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-            data-character-studio-section="relationship-memory-review"
-          >
-            <summary>
-              <div className="character-foundation__studio-heading">
-                <div>
-                  <span>{foundationLabel(locale, '关系记忆', 'Relationship memory')}</span>
-                  <h4>
+                </summary>
+                <div className="character-foundation__review-list">
+                  {characterRuns.map((run) => {
+                    const scope = memoryScopes.find(
+                      (item) => item.characterRunId === run.characterRunId,
+                    );
+                    return (
+                      <div key={run.characterRunId}>
+                        <code>{run.characterRunId}</code>
+                        {scope ? (
+                          <span>{`${scope.entries.filter((entry) => entry.status === 'active').length} active · ${scope.candidates.filter((candidate) => candidate.status === 'pending').length} pending`}</span>
+                        ) : (
+                          <button
+                            disabled={pendingOperation !== undefined}
+                            type="button"
+                            onClick={() =>
+                              void createMemoryScope(run.characterRunId).catch(() => undefined)
+                            }
+                          >
+                            {foundationLabel(locale, '创建记忆域', 'Create memory scope')}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {memoryScopes.length > 0 ? (
+                  <form
+                    className="character-foundation__form-grid"
+                    onSubmit={(event) => submitForm(event, proposeMemory)}
+                  >
+                    <FoundationField label={foundationLabel(locale, '记忆域', 'Memory scope')}>
+                      <select
+                        required
+                        value={memoryFields.characterMemoryScopeId}
+                        onChange={(event) =>
+                          setMemoryFields({
+                            ...memoryFields,
+                            characterMemoryScopeId: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="">
+                          {foundationLabel(locale, '选择记忆域', 'Select a scope')}
+                        </option>
+                        {memoryScopes.map((scope) => (
+                          <option
+                            key={scope.characterMemoryScopeId}
+                            value={scope.characterMemoryScopeId}
+                          >
+                            {scope.characterMemoryScopeId}
+                          </option>
+                        ))}
+                      </select>
+                    </FoundationField>
+                    <FoundationField label={foundationLabel(locale, '记忆内容', 'Memory content')}>
+                      <textarea
+                        required
+                        rows={3}
+                        value={memoryFields.content}
+                        onChange={(event) =>
+                          setMemoryFields({ ...memoryFields, content: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '来源引用', 'Source reference')}
+                    >
+                      <input
+                        required
+                        value={memoryFields.sourceRef}
+                        onChange={(event) =>
+                          setMemoryFields({ ...memoryFields, sourceRef: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '敏感标签', 'Sensitivity traits')}
+                    >
+                      <textarea
+                        rows={2}
+                        value={memoryFields.sensitivityTraits}
+                        onChange={(event) =>
+                          setMemoryFields({
+                            ...memoryFields,
+                            sensitivityTraits: event.target.value,
+                          })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '保留标签', 'Retention traits')}
+                    >
+                      <textarea
+                        rows={2}
+                        value={memoryFields.retentionTraits}
+                        onChange={(event) =>
+                          setMemoryFields({ ...memoryFields, retentionTraits: event.target.value })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationSubmit pending={pendingOperation !== undefined}>
+                      {foundationLabel(locale, '提出记忆候选', 'Propose memory candidate')}
+                    </FoundationSubmit>
+                  </form>
+                ) : null}
+                <div className="character-foundation__review-list">
+                  {memoryScopes.flatMap((scope) =>
+                    scope.candidates.map((candidate) => (
+                      <div key={candidate.characterMemoryCandidateId}>
+                        <strong>{candidate.content}</strong>
+                        <span>{candidate.status}</span>
+                        {candidate.status === 'pending' ? (
+                          <span className="character-foundation__review-actions">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void execute({
+                                  operation: 'character-memory-candidate-accept',
+                                  input: {
+                                    characterMemoryScopeId: scope.characterMemoryScopeId,
+                                    characterMemoryCandidateId:
+                                      candidate.characterMemoryCandidateId,
+                                    characterMemoryEntryId:
+                                      createDomainIdentity('character-memory-entry'),
+                                    expectedMemoryRevision: scope.memoryRevision,
+                                  },
+                                }).catch(() => undefined)
+                              }
+                            >
+                              {foundationLabel(locale, '接受', 'Accept')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void execute({
+                                  operation: 'character-memory-candidate-reject',
+                                  input: {
+                                    characterMemoryScopeId: scope.characterMemoryScopeId,
+                                    characterMemoryCandidateId:
+                                      candidate.characterMemoryCandidateId,
+                                    expectedMemoryRevision: scope.memoryRevision,
+                                  },
+                                }).catch(() => undefined)
+                              }
+                            >
+                              {foundationLabel(locale, '拒绝', 'Reject')}
+                            </button>
+                          </span>
+                        ) : null}
+                      </div>
+                    )),
+                  )}
+                </div>
+              </details>
+              <details
+                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
+                data-character-studio-section="relationship-memory-review"
+              >
+                <summary>
+                  <div className="character-foundation__studio-heading">
+                    <div>
+                      <span>{foundationLabel(locale, '关系记忆', 'Relationship memory')}</span>
+                      <h4>
+                        {foundationLabel(
+                          locale,
+                          '独立审阅关系记忆',
+                          'Review relationship memory independently',
+                        )}
+                      </h4>
+                    </div>
+                    <strong>{relationships.length}</strong>
+                  </div>
+                </summary>
+                {relationships.length > 0 ? (
+                  <form
+                    className="character-foundation__form-grid"
+                    onSubmit={(event) => submitForm(event, proposeRelationshipMemory)}
+                  >
+                    <FoundationField label={foundationLabel(locale, '角色关系', 'Relationship')}>
+                      <select
+                        required
+                        value={relationshipMemoryFields.relationshipId}
+                        onChange={(event) =>
+                          setRelationshipMemoryFields({
+                            ...relationshipMemoryFields,
+                            relationshipId: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="">
+                          {foundationLabel(locale, '选择关系', 'Select a relationship')}
+                        </option>
+                        {relationships.map((relationship) => (
+                          <option
+                            key={relationship.relationshipId}
+                            value={relationship.relationshipId}
+                          >
+                            {relationship.relationshipId}
+                          </option>
+                        ))}
+                      </select>
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '关系记忆内容', 'Relationship memory content')}
+                    >
+                      <textarea
+                        required
+                        rows={3}
+                        value={relationshipMemoryFields.content}
+                        onChange={(event) =>
+                          setRelationshipMemoryFields({
+                            ...relationshipMemoryFields,
+                            content: event.target.value,
+                          })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationField
+                      label={foundationLabel(locale, '来源引用', 'Source reference')}
+                    >
+                      <input
+                        required
+                        value={relationshipMemoryFields.sourceRef}
+                        onChange={(event) =>
+                          setRelationshipMemoryFields({
+                            ...relationshipMemoryFields,
+                            sourceRef: event.target.value,
+                          })
+                        }
+                      />
+                    </FoundationField>
+                    <FoundationSubmit pending={pendingOperation !== undefined}>
+                      {foundationLabel(locale, '提出关系记忆', 'Propose relationship memory')}
+                    </FoundationSubmit>
+                  </form>
+                ) : (
+                  <p>
                     {foundationLabel(
                       locale,
-                      '独立审阅关系记忆',
-                      'Review relationship memory independently',
+                      '角色进入 Companion 对话后会创建可独立审阅的关系记录。',
+                      'Companion dialogue creates relationship records that can be reviewed independently.',
                     )}
-                  </h4>
-                </div>
-                <strong>{relationships.length}</strong>
-              </div>
-            </summary>
-            {relationships.length > 0 ? (
-              <form
-                className="character-foundation__form-grid"
-                onSubmit={(event) => submitForm(event, proposeRelationshipMemory)}
-              >
-                <FoundationField label={foundationLabel(locale, '角色关系', 'Relationship')}>
-                  <select
-                    required
-                    value={relationshipMemoryFields.relationshipId}
-                    onChange={(event) =>
-                      setRelationshipMemoryFields({
-                        ...relationshipMemoryFields,
-                        relationshipId: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">
-                      {foundationLabel(locale, '选择关系', 'Select a relationship')}
-                    </option>
-                    {relationships.map((relationship) => (
-                      <option key={relationship.relationshipId} value={relationship.relationshipId}>
-                        {relationship.relationshipId}
-                      </option>
-                    ))}
-                  </select>
-                </FoundationField>
-                <FoundationField
-                  label={foundationLabel(locale, '关系记忆内容', 'Relationship memory content')}
-                >
-                  <textarea
-                    required
-                    rows={3}
-                    value={relationshipMemoryFields.content}
-                    onChange={(event) =>
-                      setRelationshipMemoryFields({
-                        ...relationshipMemoryFields,
-                        content: event.target.value,
-                      })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField label={foundationLabel(locale, '来源引用', 'Source reference')}>
-                  <input
-                    required
-                    value={relationshipMemoryFields.sourceRef}
-                    onChange={(event) =>
-                      setRelationshipMemoryFields({
-                        ...relationshipMemoryFields,
-                        sourceRef: event.target.value,
-                      })
-                    }
-                  />
-                </FoundationField>
-                <FoundationSubmit pending={pendingOperation !== undefined}>
-                  {foundationLabel(locale, '提出关系记忆', 'Propose relationship memory')}
-                </FoundationSubmit>
-              </form>
-            ) : (
-              <p>
-                {foundationLabel(
-                  locale,
-                  '角色进入 Companion 对话后会创建可独立审阅的关系记录。',
-                  'Companion dialogue creates relationship records that can be reviewed independently.',
+                  </p>
                 )}
-              </p>
-            )}
-            <div className="character-foundation__review-list">
-              {relationships.flatMap((relationship) => [
-                ...relationship.candidates.map((candidate) => (
-                  <div key={`${relationship.relationshipId}:${candidate.candidateId}`}>
-                    <strong>{candidate.content}</strong>
-                    <span>{candidate.status}</span>
-                    {candidate.status === 'pending' ? (
-                      <span className="character-foundation__review-actions">
+                <div className="character-foundation__review-list">
+                  {relationships.flatMap((relationship) => [
+                    ...relationship.candidates.map((candidate) => (
+                      <div key={`${relationship.relationshipId}:${candidate.candidateId}`}>
+                        <strong>{candidate.content}</strong>
+                        <span>{candidate.status}</span>
+                        {candidate.status === 'pending' ? (
+                          <span className="character-foundation__review-actions">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void execute({
+                                  operation: 'relationship-memory-candidate-accept',
+                                  input: {
+                                    relationshipId: relationship.relationshipId,
+                                    candidateId: candidate.candidateId,
+                                    memoryId: createDomainIdentity('relationship-memory'),
+                                  },
+                                }).catch(() => undefined)
+                              }
+                            >
+                              {foundationLabel(locale, '接受', 'Accept')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void execute({
+                                  operation: 'relationship-memory-candidate-reject',
+                                  input: {
+                                    relationshipId: relationship.relationshipId,
+                                    candidateId: candidate.candidateId,
+                                  },
+                                }).catch(() => undefined)
+                              }
+                            >
+                              {foundationLabel(locale, '拒绝', 'Reject')}
+                            </button>
+                          </span>
+                        ) : null}
+                      </div>
+                    )),
+                    ...relationship.memories.map((memory) => (
+                      <div key={`${relationship.relationshipId}:${memory.memoryId}`}>
+                        <strong>{memory.content}</strong>
+                        <span>{memory.sourceRef}</span>
                         <button
                           type="button"
                           onClick={() =>
                             void execute({
-                              operation: 'relationship-memory-candidate-accept',
+                              operation: 'relationship-memory-delete',
                               input: {
                                 relationshipId: relationship.relationshipId,
-                                candidateId: candidate.candidateId,
-                                memoryId: createDomainIdentity('relationship-memory'),
+                                memoryId: memory.memoryId,
                               },
                             }).catch(() => undefined)
                           }
                         >
-                          {foundationLabel(locale, '接受', 'Accept')}
+                          {foundationLabel(locale, '删除', 'Delete')}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void execute({
-                              operation: 'relationship-memory-candidate-reject',
-                              input: {
-                                relationshipId: relationship.relationshipId,
-                                candidateId: candidate.candidateId,
-                              },
-                            }).catch(() => undefined)
-                          }
-                        >
-                          {foundationLabel(locale, '拒绝', 'Reject')}
-                        </button>
-                      </span>
-                    ) : null}
-                  </div>
-                )),
-                ...relationship.memories.map((memory) => (
-                  <div key={`${relationship.relationshipId}:${memory.memoryId}`}>
-                    <strong>{memory.content}</strong>
-                    <span>{memory.sourceRef}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void execute({
-                          operation: 'relationship-memory-delete',
-                          input: {
-                            relationshipId: relationship.relationshipId,
-                            memoryId: memory.memoryId,
-                          },
-                        }).catch(() => undefined)
-                      }
-                    >
-                      {foundationLabel(locale, '删除', 'Delete')}
-                    </button>
-                  </div>
-                )),
-              ])}
-            </div>
-          </details>
-          <section
-            className="character-foundation__studio-inventory"
-            data-character-studio-section="runtime-inventory"
-          >
-            <h4>
-              {foundationLabel(locale, '角色能力与历史', 'Character capabilities and history')}
-            </h4>
-            <div className="character-foundation__studio-grid">
-              <StudioSummary
-                label={foundationLabel(locale, '个人故事线', 'Character storylines')}
-                value={`${storylineVersions.length} / ${storylineRuns.length}`}
-              />
-              <StudioSummary
-                label={foundationLabel(locale, '角色主观记忆', 'Character memory')}
-                value={`${memoryScopes.length}`}
-              />
-              <StudioSummary
-                label={foundationLabel(locale, '关系记忆', 'Relationship memory')}
-                value={`${relationships.reduce((count, item) => count + item.memories.length, 0)}`}
-              />
-              <StudioSummary
-                label={foundationLabel(locale, '表现资源', 'Presentation resources')}
-                value={`${selectedProject.draft.representationRefs.length}`}
-              />
-              <StudioSummary
-                label={foundationLabel(locale, '语音默认值', 'Voice defaults')}
-                value={
-                  selectedProject.draft.voiceDefaults?.voiceRepresentationId ??
-                  foundationLabel(locale, '未配置', 'Not configured')
-                }
-              />
-              <StudioSummary
-                label={foundationLabel(locale, '运行历史', 'Runtime history')}
-                value={`${characterRuns.length}`}
-              />
-            </div>
-          </section>
+                      </div>
+                    )),
+                  ])}
+                </div>
+              </details>
+              <section
+                className="character-foundation__studio-inventory"
+                data-character-studio-section="runtime-inventory"
+              >
+                <h4>
+                  {foundationLabel(locale, '角色能力与历史', 'Character capabilities and history')}
+                </h4>
+                <div className="character-foundation__studio-grid">
+                  <StudioSummary
+                    label={foundationLabel(locale, '个人故事线', 'Character storylines')}
+                    value={`${storylineVersions.length} / ${storylineRuns.length}`}
+                  />
+                  <StudioSummary
+                    label={foundationLabel(locale, '角色主观记忆', 'Character memory')}
+                    value={`${memoryScopes.length}`}
+                  />
+                  <StudioSummary
+                    label={foundationLabel(locale, '关系记忆', 'Relationship memory')}
+                    value={`${relationships.reduce((count, item) => count + item.memories.length, 0)}`}
+                  />
+                  <StudioSummary
+                    label={foundationLabel(locale, '表现资源', 'Presentation resources')}
+                    value={`${selectedProject.draft.representationRefs.length}`}
+                  />
+                  <StudioSummary
+                    label={foundationLabel(locale, '语音默认值', 'Voice defaults')}
+                    value={
+                      selectedProject.draft.voiceDefaults?.voiceRepresentationId ??
+                      foundationLabel(locale, '未配置', 'Not configured')
+                    }
+                  />
+                  <StudioSummary
+                    label={foundationLabel(locale, '运行历史', 'Runtime history')}
+                    value={`${characterRuns.length}`}
+                  />
+                </div>
+              </section>
+            </>
+          ) : null}
         </>
       ) : null}
     </div>

@@ -9,46 +9,43 @@ import {
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { EmptyState } from '@neko/ui/primitives';
+import type { ProjectCatalogItem } from '@neko/project/contracts';
 import { useMemo, useState } from 'react';
-import type {
-  DesktopAgentHomeConversationSummary,
-  DesktopProjectCatalogItem,
-} from '@neko/host/desktop-shell-contract';
 
-export type DesktopProjectManagementSort =
+export * from './authoring-workbench';
+
+export type ProjectCatalogSort =
   'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
 
-export function DesktopProjectCatalogSurface({
-  conversations,
+export interface ProjectCatalogRootProps {
+  readonly associatedConversationCounts: Readonly<Record<string, number>>;
+  readonly interactive: boolean;
+  readonly projects: readonly ProjectCatalogItem[];
+  readonly onOpenDirectory: () => void;
+  readonly onOpen: (projectId: string) => void;
+  readonly onDeleteAssociatedConversations: (projects: readonly ProjectCatalogItem[]) => void;
+  readonly onRemove: (projects: readonly ProjectCatalogItem[]) => void;
+}
+
+export function ProjectCatalogRoot({
+  associatedConversationCounts,
   interactive,
-  onDeleteConversations,
+  onDeleteAssociatedConversations,
   onOpenDirectory,
   onOpen,
   onRemove,
   projects,
-}: {
-  readonly conversations: readonly DesktopAgentHomeConversationSummary[];
-  readonly interactive: boolean;
-  readonly onDeleteConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
-  readonly onOpenDirectory: () => void;
-  readonly onOpen: (projectId: string) => void;
-  readonly onRemove: (projects: readonly DesktopProjectCatalogItem[]) => void;
-  readonly projects: readonly DesktopProjectCatalogItem[];
-}): JSX.Element {
+}: ProjectCatalogRootProps): JSX.Element {
   const { locale, t } = useTranslation();
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<DesktopProjectManagementSort>('updated-descending');
+  const [sort, setSort] = useState<ProjectCatalogSort>('updated-descending');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const visible = useMemo(
     () => filterAndSortProjectCatalog(projects, query, sort),
     [projects, query, sort],
   );
-  const conversationCounts = useMemo(
-    () => countProjectWorkspaceConversations(projects, conversations),
-    [conversations, projects],
-  );
   return (
-    <section className="project-management-catalog">
+    <section className="project-management-catalog" data-project-catalog-root>
       <header className="management-surface-header">
         <div>
           <p className="section-label">{t('home.projects.eyebrow')}</p>
@@ -73,7 +70,7 @@ export function DesktopProjectCatalogSurface({
         <select
           aria-label={t('home.projects.sort')}
           value={sort}
-          onChange={(event) => setSort(parseProjectManagementSort(event.currentTarget.value))}
+          onChange={(event) => setSort(parseProjectCatalogSort(event.currentTarget.value))}
         >
           <option value="updated-descending">{t('home.sort.newest')}</option>
           <option value="updated-ascending">{t('home.sort.oldest')}</option>
@@ -104,13 +101,6 @@ export function DesktopProjectCatalogSurface({
         className={`management-surface-list is-${view}`}
         data-empty={visible.length === 0}
         data-view-mode={view}
-        onKeyDown={(event) => {
-          if (event.key === 'Home' || event.key === 'End') {
-            event.preventDefault();
-            event.currentTarget.scrollTop =
-              event.key === 'Home' ? 0 : event.currentTarget.scrollHeight;
-          }
-        }}
         role="region"
         tabIndex={0}
       >
@@ -137,15 +127,9 @@ export function DesktopProjectCatalogSurface({
                 <strong>{project.displayName}</strong>
                 <small>{formatProjectDate(project.updatedAt, locale)}</small>
                 {project.unavailable ? (
-                  <small
-                    className="management-surface-row__diagnostic"
-                    role="status"
-                    title={`${project.unavailable.fieldNames.join(', ')}: ${project.unavailable.message}`}
-                  >
+                  <small className="management-surface-row__diagnostic" role="status">
                     <WarningIcon size={13} />
-                    <span>
-                      {project.unavailable.fieldNames.join(', ')}: {project.unavailable.message}
-                    </span>
+                    <span>{project.unavailable.message}</span>
                   </small>
                 ) : null}
               </span>
@@ -156,9 +140,11 @@ export function DesktopProjectCatalogSurface({
                 aria-label={t('shell.deleteProjectConversations', {
                   project: project.displayName,
                 })}
-                disabled={!interactive || (conversationCounts.get(project.projectId) ?? 0) === 0}
+                disabled={
+                  !interactive || (associatedConversationCounts[project.projectId] ?? 0) === 0
+                }
                 title={t('shell.deleteProjectConversations', { project: project.displayName })}
-                onClick={() => onDeleteConversations([project])}
+                onClick={() => onDeleteAssociatedConversations([project])}
               >
                 <TrashIcon size={15} />
               </button>
@@ -179,28 +165,11 @@ export function DesktopProjectCatalogSurface({
   );
 }
 
-function countProjectWorkspaceConversations(
-  projects: readonly DesktopProjectCatalogItem[],
-  conversations: readonly DesktopAgentHomeConversationSummary[],
-): ReadonlyMap<string, number> {
-  const projectIdsByWorkspace = new Map(
-    projects.map((project) => [project.workspaceId, project.projectId] as const),
-  );
-  const counts = new Map<string, number>();
-  for (const conversation of conversations) {
-    if (conversation.navigation.owner.kind !== 'workspace') continue;
-    const projectId = projectIdsByWorkspace.get(conversation.navigation.owner.workspaceId);
-    if (!projectId) continue;
-    counts.set(projectId, (counts.get(projectId) ?? 0) + 1);
-  }
-  return counts;
-}
-
 export function filterAndSortProjectCatalog(
-  projects: readonly DesktopProjectCatalogItem[],
+  projects: readonly ProjectCatalogItem[],
   query: string,
-  sort: DesktopProjectManagementSort,
-): readonly DesktopProjectCatalogItem[] {
+  sort: ProjectCatalogSort,
+): readonly ProjectCatalogItem[] {
   const normalized = query.trim().toLocaleLowerCase();
   return [...projects]
     .filter((project) => project.displayName.toLocaleLowerCase().includes(normalized))
@@ -218,7 +187,7 @@ export function filterAndSortProjectCatalog(
     });
 }
 
-export function parseProjectManagementSort(value: string): DesktopProjectManagementSort {
+export function parseProjectCatalogSort(value: string): ProjectCatalogSort {
   if (
     value === 'updated-descending' ||
     value === 'updated-ascending' ||
@@ -227,7 +196,7 @@ export function parseProjectManagementSort(value: string): DesktopProjectManagem
   ) {
     return value;
   }
-  throw new Error(`Unknown Project Management sort option: ${value}`);
+  throw new Error(`Unknown Project catalog sort option: ${value}`);
 }
 
 function formatProjectDate(value: string, locale: string): string {

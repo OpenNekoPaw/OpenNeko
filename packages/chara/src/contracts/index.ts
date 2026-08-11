@@ -9,6 +9,7 @@ export * from './character';
 
 export * from './room';
 export * from './character-foundation-host';
+export * from './character-authoring-host';
 export * from './character-room-workbench-host';
 export * from './character-avatar-host';
 export * from './character-conversation-launch';

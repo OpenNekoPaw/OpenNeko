@@ -28,10 +28,13 @@ import type {
   CharacterConversationLaunchAggregate,
   CharacterConversationLaunchRepository,
   CharacterDurableCatalogPort,
+  CharacterRuntimeCatalogPort,
   CharacterInteractionRepository,
   CharacterMemoryRepository,
+  CharacterAvatarAuthorityRepository,
   CharacterPresentationRepository,
   CharacterRoomRepository,
+  CharacterRoomInteractionRepository,
   CharacterStorylineRepository,
   UserCharacterRelationshipRepository,
 } from '@neko/chara/application';
@@ -47,6 +50,58 @@ export interface CharacterPersistentRepository
     CharacterStorylineRepository,
     UserCharacterRelationshipRepository,
     CharacterDurableCatalogPort {}
+
+export interface CharacterRuntimeRepositories {
+  readonly conversationLaunch: CharacterConversationLaunchRepository;
+  readonly interaction: CharacterInteractionRepository;
+  readonly memory: CharacterMemoryRepository;
+  readonly avatarAuthority: CharacterAvatarAuthorityRepository;
+  readonly presentation: CharacterPresentationRepository;
+  readonly room: CharacterRoomRepository;
+  readonly roomInteraction: CharacterRoomInteractionRepository;
+  readonly storyline: CharacterStorylineRepository;
+  readonly relationship: UserCharacterRelationshipRepository;
+  readonly catalog: CharacterRuntimeCatalogPort;
+}
+
+export function initializeCharacterRuntimePersistenceTables(
+  store: LocalMetadataStore,
+): Promise<void> {
+  return initializeLocalMetadataTables(store, {
+    ownership: 'state',
+    operation: 'initialize-character-runtime-persistence-tables',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS chara_versions (
+        character_version_id TEXT PRIMARY KEY,
+        character_project_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+      ) STRICT`,
+      table('chara_relationships', 'relationship_id'),
+      table('chara_character_runs', 'character_run_id'),
+      table('chara_dialogue_runs', 'dialogue_run_id'),
+      table('chara_rooms', 'character_room_id'),
+      table('chara_storyline_versions', 'character_storyline_version_id'),
+      `CREATE TABLE IF NOT EXISTS chara_storyline_runs (
+        character_storyline_run_id TEXT PRIMARY KEY,
+        storyline_revision INTEGER NOT NULL CHECK (storyline_revision >= 0),
+        payload_json TEXT NOT NULL
+      ) STRICT`,
+      table('chara_storyline_observation_candidates', 'observation_candidate_id'),
+      `CREATE TABLE IF NOT EXISTS chara_memory_scopes (
+        character_memory_scope_id TEXT PRIMARY KEY,
+        memory_revision INTEGER NOT NULL CHECK (memory_revision >= 0),
+        payload_json TEXT NOT NULL
+      ) STRICT`,
+      table('chara_presentation_configurations', 'character_run_id'),
+      table('chara_presentation_turn_receipts', 'turn_id'),
+      `CREATE TABLE IF NOT EXISTS chara_room_runs (
+        room_run_id TEXT PRIMARY KEY,
+        room_revision INTEGER NOT NULL CHECK (room_revision >= 0),
+        payload_json TEXT NOT NULL
+      ) STRICT`,
+    ],
+  });
+}
 
 export function initializeCharacterPersistenceTables(store: LocalMetadataStore): Promise<void> {
   return initializeLocalMetadataTables(store, {
@@ -412,6 +467,18 @@ export function createPersistentCharacterRepository(options: {
       return options.metadataStore.transaction(
         { mode: 'state-write', ownership: 'state', operation: 'commit-character-launch' },
         async ({ sql }) => {
+          for (const publication of aggregate.publications) {
+            await insertImmutable(
+              sql,
+              'commit-character-launch',
+              'chara_versions',
+              'character_version_id',
+              publication.characterVersionId,
+              encode(publication, 'commit-character-launch'),
+              ['character_project_id'],
+              [publication.characterProjectId],
+            );
+          }
           for (const relationship of aggregate.relationships) {
             await insertImmutable(
               sql,
@@ -965,9 +1032,224 @@ export function createPersistentCharacterRepository(options: {
   return Object.freeze(repository);
 }
 
+export function createPersistentCharacterRuntimeRepositories(options: {
+  readonly metadataStore: LocalMetadataStore;
+}): CharacterRuntimeRepositories {
+  const repository = createPersistentCharacterRepository(options);
+  return Object.freeze({
+    conversationLaunch: pickRepository(repository, [
+      'readPublication',
+      'readRelationship',
+      'readStorylineVersion',
+      'readStorylineRun',
+      'readMemoryScope',
+      'readCharacterRun',
+      'readDialogueRun',
+      'readRoom',
+      'readRun',
+      'commitLaunch',
+    ] as const),
+    interaction: pickRepository(repository, [
+      'readPublication',
+      'readRelationship',
+      'createDialogue',
+      'readCharacterRun',
+      'readDialogueRun',
+      'readRoomRun',
+      'readStorylineRun',
+      'readStorylineVersion',
+      'readMemoryScope',
+    ] as const),
+    memory: pickRepository(repository, [
+      'readCharacterRun',
+      'readStorylineRun',
+      'createMemoryScope',
+      'readMemoryScope',
+      'mutateMemoryScope',
+    ] as const),
+    avatarAuthority: pickRepository(repository, [
+      'readCharacterRun',
+      'readPublication',
+      'readRoomRun',
+    ] as const),
+    presentation: pickRepository(repository, [
+      'readCharacterRun',
+      'readPublication',
+      'readPresentationConfiguration',
+      'storePresentationConfigurations',
+      'freezePresentationTurn',
+      'readPresentationTurnReceipt',
+    ] as const),
+    room: pickRepository(repository, [
+      'createRoom',
+      'readRoom',
+      'createRun',
+      'createRunAggregate',
+      'readRun',
+      'mutateRun',
+    ] as const),
+    roomInteraction: pickRepository(repository, [
+      'readRoom',
+      'readPublication',
+      'readRelationship',
+    ] as const),
+    storyline: pickRepository(repository, [
+      'readCharacterVersion',
+      'readCharacterRun',
+      'storeStorylineVersion',
+      'readStorylineVersion',
+      'createStorylineRun',
+      'readStorylineRun',
+      'createStorylineObservationCandidate',
+      'readStorylineObservationCandidate',
+      'commitStorylineObservationReview',
+    ] as const),
+    relationship: pickRepository(repository, ['create', 'read', 'mutate'] as const),
+    catalog: createCharacterRuntimeCatalogPort(options),
+  });
+}
+
+function createCharacterRuntimeCatalogPort(options: {
+  readonly metadataStore: LocalMetadataStore;
+}): CharacterRuntimeCatalogPort {
+  return Object.freeze({
+    readRuntimeCatalog(signal?: AbortSignal) {
+      signal?.throwIfAborted();
+      return options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'read-character-runtime-catalog' },
+        async ({ sql }) => {
+          const diagnostics: import('@neko/chara/application').CharacterDurableRecordDiagnostic[] =
+            [];
+          const relationships = await readCatalogRecords(
+            sql,
+            'chara_relationships',
+            'relationship_id',
+            'relationship',
+            parseUserCharacterRelationship,
+            (record) => record.relationshipId,
+            diagnostics,
+          );
+          const characterRuns = await readCatalogRecords(
+            sql,
+            'chara_character_runs',
+            'character_run_id',
+            'character-run',
+            parseCharacterRun,
+            (record) => record.characterRunId,
+            diagnostics,
+          );
+          const dialogueRuns = await readCatalogRecords(
+            sql,
+            'chara_dialogue_runs',
+            'dialogue_run_id',
+            'dialogue-run',
+            parseDialogueRun,
+            (record) => record.dialogueRunId,
+            diagnostics,
+          );
+          const rooms = await readCatalogRecords(
+            sql,
+            'chara_rooms',
+            'character_room_id',
+            'character-room',
+            parseCharacterRoom,
+            (record) => record.characterRoomId,
+            diagnostics,
+          );
+          const roomRuns = await readCatalogRecords(
+            sql,
+            'chara_room_runs',
+            'room_run_id',
+            'room-run',
+            parseRoomRun,
+            (record) => record.roomRunId,
+            diagnostics,
+          );
+          const storylineVersions = await readCatalogRecords(
+            sql,
+            'chara_storyline_versions',
+            'character_storyline_version_id',
+            'character-storyline-version',
+            parseCharacterStorylineVersion,
+            (record) => record.characterStorylineVersionId,
+            diagnostics,
+          );
+          const storylineRuns = await readCatalogRecords(
+            sql,
+            'chara_storyline_runs',
+            'character_storyline_run_id',
+            'character-storyline-run',
+            parseCharacterStorylineRun,
+            (record) => record.characterStorylineRunId,
+            diagnostics,
+          );
+          const storylineObservationCandidates = await readCatalogRecords(
+            sql,
+            'chara_storyline_observation_candidates',
+            'observation_candidate_id',
+            'character-storyline-observation-candidate',
+            parseCharacterStorylineObservationCandidate,
+            (record) => record.observationCandidateId,
+            diagnostics,
+          );
+          const memoryScopes = await readCatalogRecords(
+            sql,
+            'chara_memory_scopes',
+            'character_memory_scope_id',
+            'character-memory-scope',
+            parseCharacterMemoryScope,
+            (record) => record.characterMemoryScopeId,
+            diagnostics,
+          );
+          const presentationConfigurations = await readCatalogRecords(
+            sql,
+            'chara_presentation_configurations',
+            'character_run_id',
+            'character-presentation-configuration',
+            parseCharacterRunPresentationConfiguration,
+            (record) => record.characterRunId,
+            diagnostics,
+          );
+          return {
+            relationships,
+            characterRuns,
+            dialogueRuns,
+            rooms,
+            roomRuns,
+            storylineVersions,
+            storylineRuns,
+            storylineObservationCandidates,
+            memoryScopes,
+            presentationConfigurations,
+            diagnostics,
+          };
+        },
+      );
+    },
+  });
+}
+
+function pickRepository<TSource extends object, const TKeys extends readonly (keyof TSource)[]>(
+  source: TSource,
+  keys: TKeys,
+): Pick<TSource, TKeys[number]> {
+  return Object.freeze(Object.fromEntries(keys.map((key) => [key, source[key]]))) as Pick<
+    TSource,
+    TKeys[number]
+  >;
+}
+
 function parseLaunchAggregate(
   value: CharacterConversationLaunchAggregate,
 ): CharacterConversationLaunchAggregate {
+  const publications = value.publications.map((publication) => parseCharacterVersion(publication));
+  const publicationIds = new Set(publications.map((publication) => publication.characterVersionId));
+  if (publicationIds.size !== publications.length) {
+    throw metadataError(
+      'commit-character-launch',
+      'Character launch aggregate contains duplicate CharacterVersion identities.',
+    );
+  }
   const relationships = value.relationships.map((relationship) =>
     parseUserCharacterRelationship(relationship),
   );
@@ -983,8 +1265,10 @@ function parseLaunchAggregate(
       );
     }
     assertLaunchRuntimeOwnership([characterRun], storylineRuns, memoryScopes);
+    assertLaunchPublications([characterRun], publicationIds);
     return {
       topology: 'dialogue',
+      publications,
       relationships,
       characterRun,
       dialogueRun,
@@ -1016,8 +1300,10 @@ function parseLaunchAggregate(
     );
   }
   assertLaunchRuntimeOwnership(characterRuns, storylineRuns, memoryScopes);
+  assertLaunchPublications(characterRuns, publicationIds);
   return {
     topology: 'chatroom',
+    publications,
     relationships,
     room,
     characterRuns,
@@ -1025,6 +1311,21 @@ function parseLaunchAggregate(
     storylineRuns,
     memoryScopes,
   };
+}
+
+function assertLaunchPublications(
+  characterRuns: readonly import('@neko/chara/contracts').CharacterRun[],
+  publicationIds: ReadonlySet<string>,
+): void {
+  if (
+    publicationIds.size !== characterRuns.length ||
+    characterRuns.some((run) => !publicationIds.has(run.characterVersionId))
+  ) {
+    throw metadataError(
+      'commit-character-launch',
+      'Character launch publications do not exactly match CharacterRun authorities.',
+    );
+  }
 }
 
 function assertLaunchRuntimeOwnership(

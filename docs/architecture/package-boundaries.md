@@ -89,6 +89,15 @@ runtime 入口。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
 - 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 分别返回语义 `DocumentLocator` 与内容 `ContentLocator`，不拥有 SQLite projection。
 
+### `@neko/project`
+
+`@neko/project` 只拥有 Content Project composition：项目本地 Character/World target membership、精确外部 publication reference、组合校验与 target-tree projection。它不拥有 Content、Character 或 World payload，也不解释 Workspace raw path。
+
+- `@neko/project-node` 只在 Host 已授权的 Workspace root 内原子读写 `neko/project-composition.json`，不得扫描其他 Workspace、读取用户级 SQLite 或提供 fallback repository。
+- `@neko/project-webview` 拥有 Project catalog 和 composition browser presentation；Desktop 只组合其 public Root。
+- standalone Character/World library root 由 Host settings 授权，portable locator 分别为 `${NEKO_HOME}/libraries/characters` 与 `${NEKO_HOME}/libraries/worlds`；Renderer 和领域事实不得接收展开后的绝对路径。
+- Project-local Character/World facts 仍由 `@neko/chara` / `@neko/world` 及其 Node repositories 拥有，Project composition 只保存 exact identity。
+
 ### `@neko/generation`
 
 `@neko/generation` 根入口只暴露 renderer-safe 请求、结果、Job contract 与领域 contract。
@@ -234,8 +243,8 @@ Agent 能力按 owning package 职责分层：
 | `@neko/ai-sdk`               | provider/AI SDK adapter                                                                                                    |
 | `@neko/host`                 | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
 | `@neko/agent-webview`        | Chat/Agent UI、消息投影和用户输入                                                                                          |
-| `@neko/chara-webview`        | Character、Dialogue 与 Chatroom 的 browser-only 产品视图和可丢弃展示状态                                                  |
-| `@neko/world-webview`        | World Foundation Library、Studio、确定性预览与可丢弃展示状态；不实现完整 World Experience                                |
+| `@neko/chara-webview`        | Character、Dialogue 与 Chatroom 的 browser-only 产品视图和可丢弃展示状态                                                   |
+| `@neko/world-webview`        | World Foundation Library、Studio、确定性预览与可丢弃展示状态；不实现完整 World Experience                                  |
 
 Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime 与 Host 不导入 Electron、React
 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
@@ -304,7 +313,7 @@ Character IP 与 Interactive World 已确定为独立 bounded context，必须�
 | 包                                                         | 状态                                   | 聚合主线                                                       | 主要职责                                                                                                                       | 关键边界                                                                                                                                                                    |
 | ---------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion -> Storyline/Memory/Run` | 角色背景故事与原生背景设定、角色创作与发布、个人故事线、角色/关系记忆、Dialogue/Chatroom 运行、持久化和 package-owned 产品视图 | 完全复用 Agent/Pi；外部 Composition、World、Entity、Assets、Voice、Renderer、Media/Game Activity 只通过公共 ref/port/provider 组合，Chara 不拥有外部 authoring/runtime/save |
-| `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Foundation / Node adapter / browser UI | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` | 世界书、事实、规则/事件、运行、存档、分支、WorldView、Foundation 创作与确定性检查；Node/Webview 分别只拥有 adapter 与展示状态 | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；基础预览不得冒充需要 Story/Experience/实时 AI 的完整 World 成功路径                                            |
+| `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Foundation / Node adapter / browser UI | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` | 世界书、事实、规则/事件、运行、存档、分支、WorldView、Foundation 创作与确定性检查；Node/Webview 分别只拥有 adapter 与展示状态  | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；基础预览不得冒充需要 Story/Experience/实时 AI 的完整 World 成功路径                                 |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
 Agent、Renderer、Device、表现 runtime 和 host adapter。Agent package 不导入 Character/World；

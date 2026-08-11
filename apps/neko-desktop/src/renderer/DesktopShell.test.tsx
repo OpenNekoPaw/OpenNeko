@@ -12,6 +12,7 @@ import {
   DesktopShellView,
   MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO,
   MANAGEMENT_MAIN_SPLIT_MIN_RATIO,
+  matchesWorkspaceAuthoringMainSurface,
   projectDesktopShellInteractionLocks,
   resizeApplicationSidebar,
   resizeProjectDockWorkbench,
@@ -19,10 +20,7 @@ import {
   setResourceDockPresentationWorkbench,
   toggleWorkbenchRegion,
 } from './DesktopShell';
-import {
-  filterAndSortProjectCatalog,
-  parseProjectManagementSort,
-} from './DesktopProjectManagementSurface';
+import { filterAndSortProjectCatalog, parseProjectCatalogSort } from '@neko/project-webview/root';
 import { createDesktopI18n } from './i18n';
 import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
@@ -80,10 +78,8 @@ describe('Desktop scene Workbench', () => {
   });
 
   it('keeps catalog parsing and deterministic ordering fail-visible', () => {
-    expect(parseProjectManagementSort('updated-ascending')).toBe('updated-ascending');
-    expect(() => parseProjectManagementSort('recent')).toThrow(
-      'Unknown Project Management sort option',
-    );
+    expect(parseProjectCatalogSort('updated-ascending')).toBe('updated-ascending');
+    expect(() => parseProjectCatalogSort('recent')).toThrow('Unknown Project catalog sort option');
 
     expect(
       filterAndSortProjectCatalog(
@@ -668,11 +664,72 @@ describe('Desktop scene Workbench', () => {
     ).toThrow('Workspace Scene Main Surface has no exact Workbench View');
   });
 
+  it('maps Character and World authoring only from exact target-qualified Views', () => {
+    const characterView = {
+      viewId: 'view:character-1',
+      viewInstanceId: 'view-instance:character-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'character-authoring' as const,
+      ownerId: 'character',
+      displayLabel: 'Lead',
+      characterProjectId: 'character-project-1',
+    };
+    const characterSurface = {
+      kind: 'character-authoring' as const,
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      viewId: 'view:character-1',
+      viewInstanceId: 'view-instance:character-1',
+      characterProjectId: 'character-project-1',
+    };
+    expect(matchesWorkspaceAuthoringMainSurface(characterView, characterSurface, 'project-1')).toBe(
+      true,
+    );
+    expect(
+      matchesWorkspaceAuthoringMainSurface(
+        characterView,
+        { ...characterSurface, characterProjectId: 'character-project-other' },
+        'project-1',
+      ),
+    ).toBe(false);
+    expect(
+      matchesWorkspaceAuthoringMainSurface(
+        {
+          ...characterView,
+          kind: 'world-authoring',
+          characterProjectId: undefined,
+          worldProjectId: 'world-project-1',
+        },
+        {
+          kind: 'world-authoring',
+          workspaceId: 'workspace-1',
+          projectId: 'project-1',
+          viewId: 'view:character-1',
+          viewInstanceId: 'view-instance:character-1',
+          worldProjectId: 'world-project-1',
+        },
+        'project-other',
+      ),
+    ).toBe(false);
+  });
+
   it('uses one Workbench shell and the package-owned Asset Management surface', () => {
     expect(desktopShellSource.match(/<ControlledWorkbenchShell/gu) ?? []).toHaveLength(1);
     expect(desktopShellSource).toContain('onChooseWorkspaceTarget');
     expect(desktopShellSource).toContain('AgentComposerWorkspaceTarget');
     expect(assetManagementSurfaceSource).toContain('@neko/assets-webview/asset-management/root');
+  });
+
+  it('maps project-local authoring through public package Roots without domain file access', () => {
+    expect(desktopShellSource).toContain('CharacterAuthoringStudioRoot');
+    expect(desktopShellSource).toContain('WorldAuthoringStudioRoot');
+    expect(desktopShellSource).toContain('ProjectAuthoringTargetSwitchRoot');
+    expect(desktopShellSource).toContain('@neko/chara-webview/root');
+    expect(desktopShellSource).toContain('@neko/world-webview/root');
+    expect(desktopShellSource).not.toContain('@neko/chara-node');
+    expect(desktopShellSource).not.toContain('@neko/world-node');
+    expect(desktopShellSource).not.toMatch(/node:fs|readFile|writeFile|workspacePath/u);
   });
 });
 
@@ -944,7 +1001,7 @@ function extensionsScene(): DesktopWorkbenchSceneProjection {
 }
 
 function projectManagementScene(): DesktopWorkbenchSceneProjection {
-  return managementScene('project-management');
+  return managementScene('creative-management');
 }
 
 function settingsScene(section = 'general'): DesktopWorkbenchSceneProjection {
@@ -952,7 +1009,7 @@ function settingsScene(section = 'general'): DesktopWorkbenchSceneProjection {
 }
 
 function managementScene(
-  kind: 'asset-center' | 'extensions' | 'project-management' | 'settings',
+  kind: 'asset-center' | 'creative-management' | 'extensions' | 'settings',
   section = 'general',
 ): DesktopWorkbenchSceneProjection {
   const sceneId = `scene:window-1:${kind}`;
@@ -979,13 +1036,13 @@ function managementScene(
       },
     });
   }
-  if (kind === 'project-management') {
+  if (kind === 'creative-management') {
     return parseDesktopWorkbenchSceneProjection({
       sceneId,
       windowId: 'window-1',
-      context: { kind },
+      context: { kind, catalog: 'content-projects' },
       slots: {
-        main: { kind: 'project-management' },
+        main: { kind: 'creative-management', catalog: 'content-projects' },
         status: { kind: 'scene-status', sceneId },
       },
     });

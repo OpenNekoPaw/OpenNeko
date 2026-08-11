@@ -3,6 +3,7 @@ import {
   createEmptyCharacterOriginSetting,
   type CharacterFoundationCommand,
   type CharacterFoundationSnapshot,
+  type CharacterAuthoringSnapshot,
   type OpenNekoDesktopCharacterBridge,
   type OpenNekoDesktopCharacterRoomWorkbenchBridge,
   type RoomView,
@@ -12,6 +13,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CharacterCatalogSurface,
+  CharacterAuthoringStudioRoot,
   CharacterDetailSurface,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface,
@@ -62,6 +64,51 @@ describe('Character Management surfaces', () => {
     expect(screen.queryByRole('button', { name: 'Dialogues' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rooms' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'World Foundation' })).toBeNull();
+  });
+
+  it('mounts the project-local authoring-only Studio from validated authority', async () => {
+    const foundation = projectSnapshot();
+    const project = foundation.character.projects[0]!;
+    const snapshot: CharacterAuthoringSnapshot = {
+      project,
+      versions: foundation.character.versions,
+      diagnostics: [],
+    };
+    const getSnapshot = vi.fn(async () => snapshot);
+    const execute = vi.fn(async () => snapshot);
+    const { container, unmount } = render(
+      <CharacterAuthoringStudioRoot
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          contentProjectId: 'content-project-1',
+          characterProjectId: project.characterProjectId,
+        }}
+        host={{ getSnapshot, execute }}
+        initialSnapshot={snapshot}
+        locale="en"
+        windowId="window-1"
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Lin' })).toBeTruthy();
+    expect(getSnapshot).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('[data-character-studio-section="runtime-inventory"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-character-studio-section="storyline-authoring"]'),
+    ).toBeNull();
+    fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'Updated summary' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(execute).toHaveBeenCalledWith(
+      'window-1',
+      expect.objectContaining({ characterProjectId: project.characterProjectId }),
+      expect.objectContaining({ operation: 'character-project-update-draft' }),
+    );
+    unmount();
+    expect(container.querySelector('[data-character-authoring-studio="true"]')).toBeNull();
   });
 
   it('filters the catalog and opens the exact project detail', async () => {

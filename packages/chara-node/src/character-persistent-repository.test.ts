@@ -67,6 +67,7 @@ describe('persistent Character repository', () => {
     });
     const launch = new CharacterConversationLaunchService({
       repository: fixture.repository,
+      publications: fixture.repository,
       agentSessions: {
         createPrimarySession: vi.fn(async ({ characterRunId }) => ({
           primaryAgentSessionId: `conversation:character:${characterRunId}`,

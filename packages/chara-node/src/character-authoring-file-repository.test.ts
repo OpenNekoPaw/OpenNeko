@@ -1,0 +1,185 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
+} from '@neko/chara/contracts';
+import { CharacterAuthoringService } from '@neko/chara/application';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  characterAuthoringTestPath,
+  characterProjectPath,
+  characterVersionPath,
+  createCharacterAuthoringFileRepository,
+} from './character-authoring-file-repository';
+
+const NOW = '2026-08-11T00:00:00.000Z';
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('Character authoring file repository', () => {
+  it.each([
+    { kind: 'standalone-library' as const },
+    { kind: 'content-project' as const, contentProjectId: 'content-project-1' },
+  ])('uses the same service and file shape for $kind placement', async (scope) => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({ workspaceRoot: root, scope });
+    const service = new CharacterAuthoringService({ repository, now: () => NOW });
+    await service.createProject({
+      characterProjectId: 'character-project-1',
+      displayName: 'Lin',
+      draft: definition(),
+    });
+    await service.setReviewStatus({
+      characterProjectId: 'character-project-1',
+      reviewStatus: 'ready',
+    });
+    const publication = await service.publish({
+      characterProjectId: 'character-project-1',
+      characterVersionId: 'character-version-1',
+      label: 'Opening',
+    });
+    const snapshot = await service.captureAuthoringTest({
+      characterProjectId: 'character-project-1',
+      authoringTestSnapshotId: 'authoring-test-1',
+    });
+
+    await expect(repository.readProject('character-project-1')).resolves.toMatchObject({
+      displayName: 'Lin',
+    });
+    await expect(repository.readPublication('character-version-1')).resolves.toEqual(publication);
+    await expect(
+      readFile(join(root, characterProjectPath('character-project-1')), 'utf8'),
+    ).resolves.toContain('"characterProjectId": "character-project-1"');
+    await expect(
+      readFile(
+        join(root, characterVersionPath('character-project-1', 'character-version-1')),
+        'utf8',
+      ),
+    ).resolves.toContain('"characterVersionId": "character-version-1"');
+    await expect(
+      readFile(
+        join(root, characterAuthoringTestPath('character-project-1', 'authoring-test-1')),
+        'utf8',
+      ),
+    ).resolves.toContain(snapshot.authoringTestSnapshotId);
+    await expect(repository.readAuthoringCatalog()).resolves.toMatchObject({ scope });
+    expect('createDialogue' in repository).toBe(false);
+    expect('createRun' in repository).toBe(false);
+  });
+
+  it('isolates one malformed Project while preserving valid siblings', async () => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'content-project', contentProjectId: 'content-project-1' },
+    });
+    const service = new CharacterAuthoringService({ repository, now: () => NOW });
+    await service.createProject({
+      characterProjectId: 'character-valid',
+      displayName: 'Valid',
+      draft: definition(),
+    });
+    const invalid = join(root, characterProjectPath('character-invalid'));
+    await mkdir(join(root, 'neko/characters/character-invalid'), { recursive: true });
+    await writeFile(invalid, JSON.stringify({ characterProjectId: 'character-invalid' }), 'utf8');
+
+    const catalog = await repository.readAuthoringCatalog();
+    expect(catalog.projects.map((project) => project.characterProjectId)).toEqual([
+      'character-valid',
+    ]);
+    expect(catalog.diagnostics).toEqual([
+      expect.objectContaining({ recordKind: 'character-project', recordId: 'character-invalid' }),
+    ]);
+    await expect(readFile(invalid, 'utf8')).resolves.toContain('character-invalid');
+  });
+
+  it('does not project a Project-local Character into the standalone library root', async () => {
+    const projectRoot = await workspace();
+    const libraryRoot = await workspace();
+    const projectRepository = createCharacterAuthoringFileRepository({
+      workspaceRoot: projectRoot,
+      scope: { kind: 'content-project', contentProjectId: 'content-project-1' },
+    });
+    await new CharacterAuthoringService({
+      repository: projectRepository,
+      now: () => NOW,
+    }).createProject({
+      characterProjectId: 'project-local-character',
+      displayName: 'Local',
+      draft: definition(),
+    });
+    const libraryRepository = createCharacterAuthoringFileRepository({
+      workspaceRoot: libraryRoot,
+      scope: { kind: 'standalone-library' },
+    });
+    await expect(libraryRepository.readAuthoringCatalog()).resolves.toMatchObject({ projects: [] });
+    await expect(projectRepository.readAuthoringCatalog()).resolves.toMatchObject({
+      projects: [expect.objectContaining({ characterProjectId: 'project-local-character' })],
+    });
+  });
+
+  it('does not reinterpret invalid identity or root as another authority', async () => {
+    expect(() =>
+      createCharacterAuthoringFileRepository({
+        workspaceRoot: 'relative',
+        scope: { kind: 'standalone-library' },
+      }),
+    ).toThrow('absolute Host-authorized path');
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: await workspace(),
+      scope: { kind: 'standalone-library' },
+    });
+    expect(() => repository.readProject('../escape')).toThrow(
+      expect.objectContaining({ code: 'character-record-invalid' }),
+    );
+  });
+
+  it('keeps immutable publications unchanged on conflict', async () => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    const publication = {
+      characterVersionId: 'character-version-1',
+      characterProjectId: 'character-project-1',
+      label: 'First',
+      definition: definition(),
+      acceptedEvidenceIds: [],
+      publishedAt: NOW,
+    };
+    await repository.storePublication(publication);
+    await expect(
+      repository.storePublication({ ...publication, label: 'Changed' }),
+    ).rejects.toMatchObject({
+      code: 'character-publication-conflict',
+    });
+    await expect(repository.readPublication('character-version-1')).resolves.toMatchObject({
+      label: 'First',
+    });
+  });
+});
+
+async function workspace(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'openneko-character-authoring-'));
+  roots.push(root);
+  return root;
+}
+
+function definition() {
+  return {
+    summary: 'A careful archivist.',
+    backgroundStory: createEmptyCharacterBackgroundStory(),
+    originSetting: createEmptyCharacterOriginSetting(),
+    canon: ['Keeps promises.'],
+    knowledgeBoundary: ['Does not know the sealed archive.'],
+    behaviorPolicy: ['Ask before changing a record.'],
+    expressionPolicy: ['Uses concise language.'],
+    representationRefs: [],
+  };
+}

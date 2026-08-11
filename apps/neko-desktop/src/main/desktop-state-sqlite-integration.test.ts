@@ -85,9 +85,9 @@ describe('Desktop SQLite application state composition', () => {
       unexpectedField: 1,
       sceneId,
       windowId: 'window-old',
-      context: { kind: 'project-management' },
+      context: { kind: 'creative-management', catalog: 'content-projects' },
       slots: {
-        main: { kind: 'project-management' },
+        main: { kind: 'creative-management', catalog: 'content-projects' },
         status: { kind: 'scene-status', sceneId },
       },
     };

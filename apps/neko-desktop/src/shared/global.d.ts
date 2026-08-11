@@ -9,6 +9,10 @@ import type { OpenNekoDesktopCanvasBridge } from './canvas-bridge-contract';
 import type { OpenNekoDesktopCutBridge } from './cut-bridge-contract';
 import type { OpenNekoDesktopApplicationSettingsBridge } from '@neko/host/application-settings';
 import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domain/contracts';
+import type {
+  OpenNekoDesktopProjectAuthoringBridge,
+  OpenNekoDesktopProjectLocalAuthoringBridge,
+} from '@neko/project/contracts';
 import type { OpenNekoAssetCenterBridge } from '@neko/assets-domain/asset-center/host-contract';
 import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contracts/extension-management-host';
 import type { OpenNekoAutomationEndpointManagementBridge } from '@neko/automation-contracts/endpoint-management';
@@ -20,11 +24,14 @@ import type { OpenNekoAssistantResourceBridge } from '@neko/agent-contracts/assi
 import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-workspace-grant-contract';
 import type {
   OpenNekoDesktopCharacterBridge,
-  OpenNekoDesktopCharacterConversationBridge,
+  OpenNekoDesktopCharacterAuthoringBridge,
   OpenNekoDesktopCharacterAvatarBridge,
   OpenNekoDesktopCharacterRoomWorkbenchBridge,
 } from '@neko/chara/contracts';
-import type { OpenNekoDesktopWorldBridge } from '@neko/world/contracts';
+import type {
+  OpenNekoDesktopWorldAuthoringBridge,
+  OpenNekoDesktopWorldBridge,
+} from '@neko/world/contracts';
 
 declare global {
   interface Window {
@@ -48,9 +55,12 @@ declare global {
       OpenNekoDesktopAutomationSessionControlBridge &
       OpenNekoDesktopApplicationSettingsBridge &
       OpenNekoDesktopProjectPortabilityBridge &
+      OpenNekoDesktopProjectAuthoringBridge &
+      OpenNekoDesktopProjectLocalAuthoringBridge &
       OpenNekoDesktopCharacterBridge &
+      OpenNekoDesktopCharacterAuthoringBridge &
       OpenNekoDesktopWorldBridge &
-      OpenNekoDesktopCharacterConversationBridge &
+      OpenNekoDesktopWorldAuthoringBridge &
       OpenNekoDesktopCharacterAvatarBridge &
       OpenNekoDesktopCharacterRoomWorkbenchBridge;
   }

@@ -1,8 +1,9 @@
+import { access, readFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  DesktopProjectManagementService,
-  type DesktopProjectManagementShellPort,
-} from './desktop-project-management-service';
+  DesktopProjectRegistrationService,
+  type DesktopProjectRegistrationShellPort,
+} from './desktop-project-registration-service';
 import type {
   DesktopAgentHomeNavigationIdentity,
   DesktopShellProjection,
@@ -14,7 +15,18 @@ import {
 } from './desktop-scene-contract';
 import { createDesktopWindowComposition } from './desktop-window-composition-contract';
 
-describe('DesktopProjectManagementService', () => {
+describe('DesktopProjectRegistrationService', () => {
+  it('keeps the deleted Project business owner path unreachable', async () => {
+    await expect(
+      access(new URL('./desktop-project-management-service.ts', import.meta.url)),
+    ).rejects.toBeDefined();
+    const source = await readFile(
+      new URL('./desktop-project-registration-service.ts', import.meta.url),
+      'utf8',
+    );
+    expect(source).not.toMatch(/@neko\/project|ContentProjectComposition|project-composition/u);
+  });
+
   it('removes Project registration without invoking Agent conversation deletion', async () => {
     const retainedConversation = workspaceConversation('conversation:project-1');
     const removedProjection = projection([retainedConversation]);
@@ -23,7 +35,7 @@ describe('DesktopProjectManagementService', () => {
       projection: removedProjection,
     });
     const deleteConversations = vi.fn(async () => undefined);
-    const service = new DesktopProjectManagementService({
+    const service = new DesktopProjectRegistrationService({
       shell,
       conversations: { deleteConversations },
     });
@@ -48,7 +60,7 @@ describe('DesktopProjectManagementService', () => {
     const finalProjection = projection([]);
     const shell = createShell({ conversations, projection: finalProjection });
     const deleteConversations = vi.fn(async () => undefined);
-    const service = new DesktopProjectManagementService({
+    const service = new DesktopProjectRegistrationService({
       shell,
       conversations: { deleteConversations },
     });
@@ -70,7 +82,7 @@ describe('DesktopProjectManagementService', () => {
     const finalProjection = projection([]);
     const shell = createShell({ conversations: [], projection: finalProjection });
     const deleteConversations = vi.fn(async () => undefined);
-    const service = new DesktopProjectManagementService({
+    const service = new DesktopProjectRegistrationService({
       shell,
       conversations: { deleteConversations },
     });
@@ -86,7 +98,7 @@ describe('DesktopProjectManagementService', () => {
     const shell = createShell({ conversations: [], projection: projection([]) });
     shell.resolveProjectWorkspaceConversations.mockRejectedValue(validationError);
     const deleteConversations = vi.fn(async () => undefined);
-    const service = new DesktopProjectManagementService({
+    const service = new DesktopProjectRegistrationService({
       shell,
       conversations: { deleteConversations },
     });
@@ -105,7 +117,7 @@ function createShell({
 }: {
   readonly conversations: readonly DesktopAgentHomeNavigationIdentity[];
   readonly projection: DesktopShellProjection;
-}): DesktopProjectManagementShellPort & {
+}): DesktopProjectRegistrationShellPort & {
   readonly getProjection: ReturnType<typeof vi.fn>;
   readonly removeProjectsFromCatalog: ReturnType<typeof vi.fn>;
   readonly resolveProjectWorkspaceConversations: ReturnType<typeof vi.fn>;

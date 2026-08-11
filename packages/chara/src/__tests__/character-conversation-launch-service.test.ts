@@ -24,6 +24,21 @@ import type { CharacterPrimaryAgentSessionPort } from '../application/character-
 const NOW = '2026-08-09T12:00:00.000Z';
 
 describe('CharacterConversationLaunchService', () => {
+  it('validates an exact published selection without creating formal runtime facts', async () => {
+    const fixture = createFixture([publication('a')]);
+
+    await expect(
+      fixture.service.validateSelection({
+        runtimeKind: 'companion',
+        characters: [{ characterVersionId: 'version-a' }],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(fixture.repository.characterRuns).toHaveLength(0);
+    expect(fixture.repository.dialogues).toHaveLength(0);
+    expect(fixture.createPrimarySession).not.toHaveBeenCalled();
+  });
+
   it('creates one companion Dialogue with one exact primary AgentSession', async () => {
     const fixture = createFixture([publication('a')]);
 
@@ -47,6 +62,25 @@ describe('CharacterConversationLaunchService', () => {
       }),
     ]);
     expect(fixture.createPrimarySession).toHaveBeenCalledTimes(1);
+  });
+
+  it('binds the selected role profile to the exact Dialogue AgentSession authority', async () => {
+    const fixture = createFixture([publication('a')]);
+
+    await fixture.service.launch({
+      ...companionInput('request-role', ['version-a']),
+      selection: {
+        runtimeKind: 'companion',
+        characters: [{ characterVersionId: 'version-a', roleProfileId: 'role-profile-a' }],
+      },
+    });
+
+    expect(fixture.createPrimarySession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: expect.objectContaining({ roleProfileId: 'role-profile-a' }),
+      }),
+      undefined,
+    );
   });
 
   it('atomically creates a Room and isolated participant AgentSessions for multiple Characters', async () => {
@@ -178,6 +212,7 @@ function createFixture(publications: readonly CharacterVersion[]) {
   );
   const service = new CharacterConversationLaunchService({
     repository,
+    publications: repository,
     agentSessions: {
       createPrimarySession,
       releaseUnboundSession,

@@ -17,11 +17,38 @@ import type {
   WorldAuthoringRepository,
   WorldDurableCatalogPort,
   WorldRuntimeAggregate,
+  WorldRuntimeCatalogPort,
   WorldRuntimeRepository,
 } from '@neko/world/application';
 
 export interface WorldPersistentRepository
   extends WorldAuthoringRepository, WorldRuntimeRepository, WorldDurableCatalogPort {}
+
+export interface WorldRuntimeRepositories {
+  readonly runtime: WorldRuntimeRepository;
+  readonly catalog: WorldRuntimeCatalogPort;
+}
+
+export function initializeWorldRuntimePersistenceTables(store: LocalMetadataStore): Promise<void> {
+  return initializeLocalMetadataTables(store, {
+    ownership: 'state',
+    operation: 'initialize-world-runtime-persistence-tables',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS world_versions (
+        world_version_id TEXT PRIMARY KEY,
+        world_project_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+      ) STRICT`,
+      `CREATE TABLE IF NOT EXISTS world_runtime_aggregates (
+        world_run_id TEXT PRIMARY KEY,
+        world_version_id TEXT NOT NULL,
+        world_state_revision INTEGER NOT NULL CHECK (world_state_revision >= 0),
+        run_json TEXT NOT NULL,
+        save_json TEXT NOT NULL
+      ) STRICT`,
+    ],
+  });
+}
 
 export function initializeWorldPersistenceTables(store: LocalMetadataStore): Promise<void> {
   return initializeLocalMetadataTables(store, {
@@ -254,6 +281,57 @@ export function createPersistentWorldRepository(options: {
     },
   };
   return Object.freeze(repository);
+}
+
+export function createPersistentWorldRuntimeRepositories(options: {
+  readonly metadataStore: LocalMetadataStore;
+  readonly publications: Pick<WorldRuntimeRepository, 'readPublication'>;
+}): WorldRuntimeRepositories {
+  const repository = createPersistentWorldRepository(options);
+  const runtimeRepository: WorldRuntimeRepository = {
+    readPublication: (identity, signal) => options.publications.readPublication(identity, signal),
+    async createRuntime(aggregate, signal) {
+      signal?.throwIfAborted();
+      await repository.storePublication(aggregate.publication, signal);
+      await repository.createRuntime(aggregate, signal);
+    },
+    readRuntime: (identity, signal) => repository.readRuntime(identity, signal),
+    mutateRuntime: (identity, mutation, signal) =>
+      repository.mutateRuntime(identity, mutation, signal),
+  };
+  const runtime = Object.freeze(runtimeRepository);
+  const runtimeCatalog: WorldRuntimeCatalogPort = {
+    readRuntimeCatalog(signal) {
+      signal?.throwIfAborted();
+      return options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'read-world-runtime-catalog' },
+        async ({ sql }) => {
+          const diagnostics: import('@neko/world/application').WorldDurableRecordDiagnostic[] = [];
+          const runtimeRows = await sql.all(
+            `SELECT world_run_id FROM world_runtime_aggregates ORDER BY world_run_id`,
+          );
+          const runtimes = [];
+          for (const row of runtimeRows) {
+            const recordId = diagnosticText(row['world_run_id']);
+            try {
+              const aggregate = await readRuntime(sql, recordId, 'read-world-runtime-catalog');
+              if (!aggregate) throw new Error(`WorldRun '${recordId}' is missing.`);
+              runtimes.push({ run: aggregate.run, save: aggregate.save });
+            } catch (error) {
+              diagnostics.push({
+                recordKind: 'world-runtime',
+                recordId,
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+          return { runtimes, diagnostics };
+        },
+      );
+    },
+  };
+  const catalog = Object.freeze(runtimeCatalog);
+  return Object.freeze({ runtime, catalog });
 }
 
 async function readCatalogPayloads<T>(

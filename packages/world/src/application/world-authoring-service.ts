@@ -149,10 +149,7 @@ export class WorldAuthoringService {
     return publication;
   }
 
-  private async requireProject(
-    worldProjectId: string,
-    signal?: AbortSignal,
-  ): Promise<WorldProject> {
+  async requireProject(worldProjectId: string, signal?: AbortSignal): Promise<WorldProject> {
     const project = await this.options.repository.readProject(worldProjectId, signal);
     if (!project) {
       throw worldAuthoringError(

@@ -17,8 +17,15 @@ export type DesktopWorkspaceGrantTargetRequest =
       readonly operation: 'choose-directory';
     })
   | (DesktopWorkspaceGrantTargetRequestBase & {
+      readonly operation: 'create-content-project';
+    })
+  | (DesktopWorkspaceGrantTargetRequestBase & {
       readonly operation: 'select-project';
       readonly projectId: string;
+    })
+  | (DesktopWorkspaceGrantTargetRequestBase & {
+      readonly operation: 'select-authoring-library';
+      readonly library: 'character' | 'world';
     });
 
 export type DesktopWorkspaceGrantTargetResult =
@@ -31,12 +38,24 @@ export type DesktopWorkspaceGrantTargetResult =
   | {
       readonly requestId: string;
       readonly status: 'cancelled';
+    }
+  | {
+      readonly requestId: string;
+      readonly status: 'authorized-project';
+      readonly workspaceId: string;
+      readonly projectId: string;
+      readonly grant: DesktopWorkspaceGrantProjection;
     };
 
 export interface OpenNekoDesktopWorkspaceGrantBridge {
   readonly workspaceGrants: {
     chooseDirectory(windowId: string): Promise<DesktopWorkspaceGrantTargetResult>;
+    createContentProject(windowId: string): Promise<DesktopWorkspaceGrantTargetResult>;
     selectProject(windowId: string, projectId: string): Promise<DesktopWorkspaceGrantTargetResult>;
+    selectAuthoringLibrary(
+      windowId: string,
+      library: 'character' | 'world',
+    ): Promise<DesktopWorkspaceGrantTargetResult>;
   };
 }
 
@@ -58,6 +77,14 @@ export function createDesktopWorkspaceDirectoryTargetRequest(input: {
   return parseDesktopWorkspaceGrantTargetRequest({ ...input, operation: 'choose-directory' });
 }
 
+export function createDesktopContentProjectTargetRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+}): DesktopWorkspaceGrantTargetRequest {
+  return parseDesktopWorkspaceGrantTargetRequest({ ...input, operation: 'create-content-project' });
+}
+
 export function createDesktopWorkspaceProjectTargetRequest(input: {
   readonly requestId: string;
   readonly rendererSessionId: string;
@@ -65,6 +92,18 @@ export function createDesktopWorkspaceProjectTargetRequest(input: {
   readonly projectId: string;
 }): DesktopWorkspaceGrantTargetRequest {
   return parseDesktopWorkspaceGrantTargetRequest({ ...input, operation: 'select-project' });
+}
+
+export function createDesktopWorkspaceAuthoringLibraryTargetRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly library: 'character' | 'world';
+}): DesktopWorkspaceGrantTargetRequest {
+  return parseDesktopWorkspaceGrantTargetRequest({
+    ...input,
+    operation: 'select-authoring-library',
+  });
 }
 
 export function parseDesktopWorkspaceGrantTargetRequest(
@@ -80,7 +119,7 @@ export function parseDesktopWorkspaceGrantTargetRequest(
     ),
     windowId: requireIdentity(record['windowId'], 'Desktop Workspace target Window'),
   };
-  if (operation === 'choose-directory') {
+  if (operation === 'choose-directory' || operation === 'create-content-project') {
     requireExactKeys(
       record,
       ['requestId', 'rendererSessionId', 'windowId', 'operation'],
@@ -100,6 +139,17 @@ export function parseDesktopWorkspaceGrantTargetRequest(
       projectId: requireIdentity(record['projectId'], 'Desktop Workspace target Project'),
     };
   }
+  if (operation === 'select-authoring-library') {
+    requireExactKeys(
+      record,
+      ['requestId', 'rendererSessionId', 'windowId', 'operation', 'library'],
+      'Desktop Workspace authoring library target request',
+    );
+    if (record['library'] !== 'character' && record['library'] !== 'world') {
+      throw invalid(`Unknown Desktop authoring library '${String(record['library'])}'.`);
+    }
+    return { ...base, operation, library: record['library'] };
+  }
   throw invalid(`Unknown Desktop Workspace target operation '${String(operation)}'.`);
 }
 
@@ -116,6 +166,20 @@ export function parseDesktopWorkspaceGrantTargetResult(
   if (status === 'cancelled') {
     requireExactKeys(record, ['requestId', 'status'], 'Desktop Workspace target result');
     return { requestId, status };
+  }
+  if (status === 'authorized-project') {
+    requireExactKeys(
+      record,
+      ['requestId', 'status', 'workspaceId', 'projectId', 'grant'],
+      'Desktop Content Project target result',
+    );
+    return {
+      requestId,
+      status,
+      workspaceId: requireIdentity(record['workspaceId'], 'Desktop Workspace target Workspace'),
+      projectId: requireIdentity(record['projectId'], 'Desktop Content Project target'),
+      grant: parseDesktopWorkspaceGrantProjection(record['grant']),
+    };
   }
   if (status !== 'authorized') {
     throw invalid(`Unknown Desktop Workspace target result status '${String(status)}'.`);

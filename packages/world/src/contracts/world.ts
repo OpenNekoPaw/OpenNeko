@@ -92,6 +92,9 @@ export interface WorldVersion {
   readonly publishedAt: string;
 }
 
+/** Immutable publication identity for a complete, formally runnable World Experience. */
+export type WorldExperienceVersionId = string;
+
 export interface WorldRun {
   readonly worldRunId: string;
   readonly worldVersionId: string;

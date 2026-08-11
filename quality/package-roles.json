@@ -289,6 +289,33 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/project",
+      "name": "@neko/project",
+      "family": "project",
+      "roles": ["contracts", "domain", "application", "testing"],
+      "runtimes": ["host-neutral", "test"],
+      "productStatus": "inactive-prototype",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/project-node",
+      "name": "@neko/project-node",
+      "family": "project",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "inactive-prototype",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/project-webview",
+      "name": "@neko/project-webview",
+      "family": "project",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/quality",
       "name": "@neko/quality",
       "family": "quality",

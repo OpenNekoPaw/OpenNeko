@@ -4,6 +4,18 @@ import { describe, expect, it } from 'vitest';
 const styles = readFileSync(new URL('./renderer/styles.css', import.meta.url), 'utf8');
 
 describe('Desktop renderer styles', () => {
+  it('keeps Creative Management and target navigation constrained at narrow widths', () => {
+    expect(styles).toContain('@media (max-width: 720px)');
+    expect(styles).toMatch(
+      /\.creative-management__catalog-switcher\s*\{[\s\S]*?overflow-x:\s*auto/u,
+    );
+    expect(styles).toMatch(
+      /\.project-authoring-navigation__row\s*\{[\s\S]*?grid-template-columns:\s*18px minmax\(0, 1fr\) 24px/u,
+    );
+    expect(styles).toMatch(
+      /\.project-authoring-target-switch,[\s\S]*?min-width:\s*0;[\s\S]*?min-height:\s*0;/u,
+    );
+  });
   it('keeps the pre-React startup diagnostic independent from runtime theme tokens', () => {
     const bootstrapStyles = styles.slice(
       styles.indexOf('.desktop-bootstrap-error'),

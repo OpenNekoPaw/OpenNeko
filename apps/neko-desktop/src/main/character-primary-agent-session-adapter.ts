@@ -103,6 +103,9 @@ export function createCharacterPrimaryAgentSessionAdapter(
                   input.owner.characterRunId,
                 ),
                 dialogueRunId: input.owner.dialogueRunId,
+                ...(input.owner.roleProfileId === undefined
+                  ? {}
+                  : { roleProfileId: input.owner.roleProfileId }),
               }
             : {
                 kind: 'room',

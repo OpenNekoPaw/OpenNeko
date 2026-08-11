@@ -48,7 +48,7 @@ import {
   createDesktopWebPreferences,
 } from './security';
 import { DesktopShellService } from '@neko/host/desktop-shell-service';
-import { DesktopProjectManagementService } from '@neko/host/desktop-project-management-service';
+import { DesktopProjectRegistrationService } from '@neko/host/desktop-project-registration-service';
 import {
   createEmptyDesktopShellState,
   parseDesktopShellStoredState,
@@ -56,6 +56,7 @@ import {
 } from '@neko/host/desktop-shell-state';
 import {
   createAgentAppHost,
+  createAgentAuthoringMutationAuthority,
   createAgentConversationLifecycleService,
   createAgentDomainBindingApplicationService,
   createAgentLaunchDraftSubmissionApplicationService,
@@ -98,6 +99,11 @@ import {
   createAgentControllerComposition,
   isAgentLaunchConversationCreationCommand,
 } from '@neko/agent-runtime/application';
+import { createDesktopAgentEntryTargetService } from './desktop-agent-entry-target-service';
+import {
+  createDesktopAgentCharacterDialogueTargetValidator,
+  createDesktopAgentRuntimeEntryService,
+} from './desktop-agent-runtime-entry-service';
 import { searchAgentWorkspaceMentions } from '@neko/agent-runtime/runtime/host-controller';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
@@ -112,14 +118,18 @@ import {
 } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import {
-  createPersistentCharacterRepository,
-  initializeCharacterPersistenceTables,
+  createCharacterAuthoringFileRepository,
+  createPersistentCharacterRuntimeRepositories,
+  initializeCharacterRuntimePersistenceTables,
 } from '@neko/chara-node';
 import {
-  createPersistentWorldRepository,
-  initializeWorldPersistenceTables,
+  createPersistentWorldRuntimeRepositories,
+  createWorldAuthoringFileRepository,
+  initializeWorldRuntimePersistenceTables,
 } from '@neko/world-node';
 import {
+  createWorldDurableCatalogPort,
+  WorldAuthoringHostService,
   createWorldFoundationActionHandlers,
   WorldAuthoringService,
   WorldFoundationCommandService,
@@ -130,6 +140,7 @@ import {
 } from '@neko/world/application';
 import {
   CharacterAuthoringService,
+  CharacterAuthoringHostService,
   CharacterAvatarAuthorityService,
   CharacterConversationLaunchService,
   CharacterFoundationCommandService,
@@ -141,8 +152,16 @@ import {
   CharacterRoomInteractionService,
   CharacterRoomService,
   CharacterStorylineService,
+  createCharacterDurableCatalogPort,
   UserCharacterRelationshipService,
 } from '@neko/chara/application';
+import {
+  ProjectAuthoringNavigationService,
+  ProjectCompositionService,
+  ProjectLocalAuthoringService,
+} from '@neko/project/application';
+import { createProjectCompositionFileRepository } from '@neko/project-node';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
   AssetCenterNodeRuntime,
   ResourceBrowserNodeRuntime,
@@ -338,8 +357,8 @@ async function startDesktop(): Promise<void> {
     );
     await initializeAssetLibraryMembershipTables(localMetadataStore);
     await initializeAgentConversationLifecycleTables(localMetadataStore);
-    await initializeCharacterPersistenceTables(localMetadataStore);
-    await initializeWorldPersistenceTables(localMetadataStore);
+    await initializeCharacterRuntimePersistenceTables(localMetadataStore);
+    await initializeWorldRuntimePersistenceTables(localMetadataStore);
     agentRuntimeSettings = await createAgentRuntimeSettingsAuthority({
       scopeId: assistantSpaceId,
       repository: agentRuntimeSettingsRepository,
@@ -349,14 +368,39 @@ async function startDesktop(): Promise<void> {
     throw error;
   }
   const applicationSettings = new DesktopApplicationSettingsService(applicationSettingsRepository);
-  const characterRepository = createPersistentCharacterRepository({
+  const characterLibraryRoot = path.join(globalStorage.root, 'libraries', 'characters');
+  const worldLibraryRoot = path.join(globalStorage.root, 'libraries', 'worlds');
+  await Promise.all([
+    mkdir(characterLibraryRoot, { recursive: true }),
+    mkdir(worldLibraryRoot, { recursive: true }),
+  ]);
+  const characterAuthoringRepository = createCharacterAuthoringFileRepository({
+    workspaceRoot: characterLibraryRoot,
+    scope: { kind: 'standalone-library' },
+  });
+  const characterRuntimeRepositories = createPersistentCharacterRuntimeRepositories({
     metadataStore: localMetadataStore,
   });
   const characterFoundation = new CharacterFoundationService({
-    characterCatalog: characterRepository,
+    characterCatalog: createCharacterDurableCatalogPort({
+      authoring: characterAuthoringRepository,
+      runtime: characterRuntimeRepositories.catalog,
+    }),
   });
-  const worldRepository = createPersistentWorldRepository({ metadataStore: localMetadataStore });
-  const worldFoundation = new WorldFoundationService({ catalog: worldRepository });
+  const worldAuthoringRepository = createWorldAuthoringFileRepository({
+    workspaceRoot: worldLibraryRoot,
+    scope: { kind: 'standalone-library' },
+  });
+  const worldRuntimeRepositories = createPersistentWorldRuntimeRepositories({
+    metadataStore: localMetadataStore,
+    publications: worldAuthoringRepository,
+  });
+  const worldFoundation = new WorldFoundationService({
+    catalog: createWorldDurableCatalogPort({
+      authoring: worldAuthoringRepository,
+      runtime: worldRuntimeRepositories.catalog,
+    }),
+  });
   const initialApplicationSettings = await applicationSettings.initialize();
   const applicationSettingsStateDiagnostics = readDesktopApplicationSettingsStateDiagnostics(
     await applicationSettingsRepository.read(),
@@ -548,6 +592,8 @@ async function startDesktop(): Promise<void> {
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
     userDataRoot: globalStorage.root,
   });
+  let agentAuthoringMutationAuthority:
+    ReturnType<typeof createAgentAuthoringMutationAuthority> | undefined;
   const agentComposition = createAgentAppHost({
     userDataRoot: globalStorage.root,
     userHome: homedir,
@@ -557,6 +603,14 @@ async function startDesktop(): Promise<void> {
     resolveGenerationJobs: (binding) => generationRuntime.getJobs(binding),
     assistantSpaceIds: [assistantSpaceId],
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
+    authoringMutationAuthority: {
+      authorize: (input) => {
+        if (!agentAuthoringMutationAuthority) {
+          throw new Error('Desktop Agent authoring mutation authority is not initialized.');
+        }
+        return agentAuthoringMutationAuthority.authorize(input);
+      },
+    },
     createWorkspaceLogger: (workspace) => {
       if (workspace.workspaceId === assistantSpaceId) return agentLogger;
       const existing = workspaceLoggers.get(workspace.workspaceId);
@@ -1452,7 +1506,7 @@ async function startDesktop(): Promise<void> {
       });
     },
   });
-  const characterRooms = new CharacterRoomService(characterRepository);
+  const characterRooms = new CharacterRoomService(characterRuntimeRepositories.room);
   const characterAgentSessions = createCharacterPrimaryAgentSessionAdapter({
     workspace: assistantAgentWorkspace,
     conversationContexts: createPersistentAgentConversationContextAuthority({
@@ -1469,10 +1523,14 @@ async function startDesktop(): Promise<void> {
     baseSystemPrompt: (characterRunId) =>
       `You are the primary Character Agent for CharacterRun '${characterRunId}'.`,
   });
-  const characterPresentation = new CharacterPresentationService(characterRepository);
-  const characterStorylines = new CharacterStorylineService(characterRepository);
-  const characterMemories = new CharacterMemoryService(characterRepository);
-  const characterAvatarAuthority = new CharacterAvatarAuthorityService(characterRepository);
+  const characterPresentation = new CharacterPresentationService(
+    characterRuntimeRepositories.presentation,
+  );
+  const characterStorylines = new CharacterStorylineService(characterRuntimeRepositories.storyline);
+  const characterMemories = new CharacterMemoryService(characterRuntimeRepositories.memory);
+  const characterAvatarAuthority = new CharacterAvatarAuthorityService(
+    characterRuntimeRepositories.avatarAuthority,
+  );
   const characterAvatar = new DesktopCharacterAvatarRuntime({
     globalAssetRoot: globalStorage.assets,
     assetLibraryMemberships: metadataRepositories.assetLibraryMemberships,
@@ -1480,7 +1538,7 @@ async function startDesktop(): Promise<void> {
     authority: characterAvatarAuthority,
   });
   const characterInteractions = new CharacterInteractionService({
-    repository: characterRepository,
+    repository: characterRuntimeRepositories.interaction,
     agentSessions: characterAgentSessions,
     roomViews: {
       materializeRoomView: (roomRunId, participantId, signal) =>
@@ -1493,17 +1551,26 @@ async function startDesktop(): Promise<void> {
     interactions: characterInteractions,
   });
   const characterConversations = new CharacterConversationLaunchService({
-    repository: characterRepository,
+    repository: characterRuntimeRepositories.conversationLaunch,
+    publications: characterAuthoringRepository,
     agentSessions: characterAgentSessions,
   });
+  const agentRuntimeEntry = createDesktopAgentRuntimeEntryService({
+    characterConversations,
+    characterInteractions,
+    characterRooms,
+    characterRoomConversations,
+    userId: 'user:local',
+    userDisplayName: 'You',
+  });
   const characterRoomInteractions = new CharacterRoomInteractionService({
-    repository: characterRepository,
+    repository: characterRuntimeRepositories.roomInteraction,
     roomRuns: characterRooms,
     agentSessions: characterAgentSessions,
   });
   const characterFoundationCommands = new CharacterFoundationCommandService({
-    characterAuthoring: new CharacterAuthoringService({ repository: characterRepository }),
-    relationships: new UserCharacterRelationshipService(characterRepository),
+    characterAuthoring: new CharacterAuthoringService({ repository: characterAuthoringRepository }),
+    relationships: new UserCharacterRelationshipService(characterRuntimeRepositories.relationship),
     interactions: characterInteractions,
     rooms: characterRooms,
     roomInteractions: characterRoomInteractions,
@@ -1512,7 +1579,7 @@ async function startDesktop(): Promise<void> {
     memories: characterMemories,
   });
   const worldRuntime = new WorldRuntimeService({
-    repository: worldRepository,
+    repository: worldRuntimeRepositories.runtime,
     actionHandlers: createWorldFoundationActionHandlers(),
   });
   const worldTransformationPlanner = new WorldTransformationPlanningService({
@@ -1526,16 +1593,144 @@ async function startDesktop(): Promise<void> {
         capabilityId: 'world.foundation.fact.delete',
       },
     ],
-    runtimeRepository: worldRepository,
+    runtimeRepository: worldRuntimeRepositories.runtime,
   });
   const worldFoundationCommands = new WorldFoundationCommandService({
-    authoring: new WorldAuthoringService({ repository: worldRepository }),
+    authoring: new WorldAuthoringService({ repository: worldAuthoringRepository }),
     runtime: worldRuntime,
     transformations: new WorldTransformationStateCommitService({
       planner: worldTransformationPlanner,
       runtime: worldRuntime,
-      runtimeRepository: worldRepository,
+      runtimeRepository: worldRuntimeRepositories.runtime,
     }),
+  });
+  agentAuthoringMutationAuthority = createAgentAuthoringMutationAuthority({
+    content: {
+      validate: async (binding, signal) => {
+        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        await new ProjectCompositionService(
+          createProjectCompositionFileRepository({
+            workspaceRoot: resolution.workspace.workspacePath,
+          }),
+        ).require(binding.target.contentProjectId, signal);
+      },
+    },
+    character: {
+      validate: async (binding, signal) => {
+        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        const workspaceRoot = resolution.workspace.workspacePath;
+        if ((await realpath(workspaceRoot)) === (await realpath(characterLibraryRoot))) {
+          await new CharacterAuthoringService({
+            repository: characterAuthoringRepository,
+          }).requireProject(binding.target.characterProjectId, signal);
+          return;
+        }
+        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
+        const compositions = new ProjectCompositionService(compositionRepository);
+        const composition = await compositionRepository.read(signal);
+        if (!composition) {
+          throw new Error('Agent Character authoring target has no exact Project composition.');
+        }
+        await compositions.requireLocalTarget(composition.contentProjectId, binding.target, signal);
+        const repository = createCharacterAuthoringFileRepository({
+          workspaceRoot,
+          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+        });
+        await new CharacterAuthoringService({ repository }).requireProject(
+          binding.target.characterProjectId,
+          signal,
+        );
+      },
+    },
+    world: {
+      validate: async (binding, signal) => {
+        const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        const workspaceRoot = resolution.workspace.workspacePath;
+        if ((await realpath(workspaceRoot)) === (await realpath(worldLibraryRoot))) {
+          await new WorldAuthoringService({ repository: worldAuthoringRepository }).requireProject(
+            binding.target.worldProjectId,
+            signal,
+          );
+          return;
+        }
+        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
+        const composition = await compositionRepository.read(signal);
+        if (!composition) {
+          throw new Error('Agent World authoring target has no exact Project composition.');
+        }
+        await new ProjectCompositionService(compositionRepository).requireLocalTarget(
+          composition.contentProjectId,
+          binding.target,
+          signal,
+        );
+        const repository = createWorldAuthoringFileRepository({
+          workspaceRoot,
+          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+        });
+        await new WorldAuthoringService({ repository }).requireProject(
+          binding.target.worldProjectId,
+          signal,
+        );
+      },
+    },
+  });
+  const agentEntryTargets = createDesktopAgentEntryTargetService({
+    resolveWorkspace: async (windowId, workspaceGrantId) => {
+      const resolution = await workspaceGrantAuthority.resolve(windowId, workspaceGrantId);
+      return {
+        workspace: resolution.workspace,
+        workspaceId: resolution.workspace.workspaceId,
+      };
+    },
+    readContentProjects: async (windowId) =>
+      (await shellService.getProjection(windowId)).catalog.projects,
+    requireProjectLocalTarget: async ({ workspace, contentProjectId, target }) => {
+      await new ProjectCompositionService(
+        createProjectCompositionFileRepository({ workspaceRoot: workspace.workspacePath }),
+      ).requireLocalTarget(contentProjectId, target);
+    },
+    validateCharacterProject: async ({ workspace, contentProjectId, characterProjectId }) => {
+      if (!contentProjectId) {
+        if ((await realpath(workspace.workspacePath)) !== (await realpath(characterLibraryRoot))) {
+          return false;
+        }
+        return (await characterAuthoringRepository.readProject(characterProjectId)) !== undefined;
+      }
+      return (
+        (await createCharacterAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        }).readProject(characterProjectId)) !== undefined
+      );
+    },
+    validateWorldProject: async ({ workspace, contentProjectId, worldProjectId }) => {
+      if (!contentProjectId) {
+        if ((await realpath(workspace.workspacePath)) !== (await realpath(worldLibraryRoot))) {
+          return false;
+        }
+        return (await worldAuthoringRepository.readProject(worldProjectId)) !== undefined;
+      }
+      return (
+        (await createWorldAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        }).readProject(worldProjectId)) !== undefined
+      );
+    },
+    validateCharacterDialogue: createDesktopAgentCharacterDialogueTargetValidator({
+      conversations: characterConversations,
+      publications: characterAuthoringRepository,
+    }),
+    createIdentity: randomUUID,
   });
   const agentLaunch = createDesktopAgentLaunchRuntime({
     agent: agentComposition,
@@ -1656,6 +1851,7 @@ async function startDesktop(): Promise<void> {
       }
       return { label: path.basename(selectedPath), hostResource: selectedPath };
     },
+    entryTargets: agentEntryTargets,
   });
   const agentDomainBindings = createAgentDomainBindingApplicationService({
     assistant: {
@@ -1717,6 +1913,10 @@ async function startDesktop(): Promise<void> {
     },
     domainContext: {
       resolveForTurn: async ({ conversationId, context, references }) => {
+        if (context.kind === 'character' || context.kind === 'room') {
+          await agentRuntimeEntry.validateContext(context);
+          return [];
+        }
         const resolution = await agentDomainBindings.resolve(context);
         if (resolution.status === 'unavailable') {
           throw new Error(
@@ -1762,16 +1962,29 @@ async function startDesktop(): Promise<void> {
     },
     session: {
       materialize: async (request) => {
+        if (request.context.kind === 'character' || request.context.kind === 'room') {
+          await agentRuntimeEntry.validateContext(request.context);
+          await assistantAgentWorkspace.ensureConversation(request.conversationId, request.title);
+          return;
+        }
         const workspace = await resolveConversationWorkspace(request.context);
         await workspace.ensureConversation(request.conversationId, request.title);
       },
     },
     provider: {
       start: async (request) => {
-        const workspace = await resolveConversationWorkspace(request.context);
         if (isAgentLaunchConversationCreationCommand(request.input)) {
           return;
         }
+        if (request.context.kind === 'character' || request.context.kind === 'room') {
+          await agentRuntimeEntry.executeInitialInput({
+            requestId: request.requestId,
+            context: request.context,
+            intent: request.input,
+          });
+          return;
+        }
+        const workspace = await resolveConversationWorkspace(request.context);
         if (!agentControllerComposition.startInitialTurn) {
           throw new Error('Agent initial-turn provider adapter is unavailable.');
         }
@@ -1788,6 +2001,7 @@ async function startDesktop(): Promise<void> {
           presentationText: projectAgentDraftInputText(request.input),
           configuration: request.configuration,
           context: request.context,
+          entryTargetReceipt: request.entryTargetReceipt,
           locale: 'en',
           contextPayloads: request.contextPayloads,
           ...(request.purposeModels === undefined ? {} : { purposeModels: request.purposeModels }),
@@ -1838,6 +2052,7 @@ async function startDesktop(): Promise<void> {
         return resolution.binding;
       },
     },
+    runtimeEntry: agentRuntimeEntry,
     bindings: agentDomainBindings,
     lifecycle: conversationLifecycle,
     resources: {
@@ -1902,7 +2117,7 @@ async function startDesktop(): Promise<void> {
     grants: agentLaunch,
     preview: assistantPreview,
   });
-  const projectManagement = new DesktopProjectManagementService({
+  const projectManagement = new DesktopProjectRegistrationService({
     shell: shellService,
     conversations: {
       deleteConversations: async (conversations) => {
@@ -1912,11 +2127,148 @@ async function startDesktop(): Promise<void> {
       },
     },
   });
+  const resolveCharacterAuthoring = async (input: {
+    readonly workspace: AssetWorkspaceResolution;
+    readonly contentProjectId: string;
+    readonly characterProjectId: string;
+  }) => {
+    const compositions = new ProjectCompositionService(
+      createProjectCompositionFileRepository({ workspaceRoot: input.workspace.workspacePath }),
+    );
+    await compositions.requireLocalTarget(input.contentProjectId, {
+      kind: 'character-project',
+      characterProjectId: input.characterProjectId,
+    });
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: input.workspace.workspacePath,
+      scope: { kind: 'content-project', contentProjectId: input.contentProjectId },
+    });
+    return new CharacterAuthoringHostService({
+      contentProjectId: input.contentProjectId,
+      catalog: repository,
+      authoring: new CharacterAuthoringService({ repository }),
+    });
+  };
+  const resolveWorldAuthoring = async (input: {
+    readonly workspace: AssetWorkspaceResolution;
+    readonly contentProjectId: string;
+    readonly worldProjectId: string;
+  }) => {
+    const compositions = new ProjectCompositionService(
+      createProjectCompositionFileRepository({ workspaceRoot: input.workspace.workspacePath }),
+    );
+    await compositions.requireLocalTarget(input.contentProjectId, {
+      kind: 'world-project',
+      worldProjectId: input.worldProjectId,
+    });
+    const repository = createWorldAuthoringFileRepository({
+      workspaceRoot: input.workspace.workspacePath,
+      scope: { kind: 'content-project', contentProjectId: input.contentProjectId },
+    });
+    return new WorldAuthoringHostService({
+      contentProjectId: input.contentProjectId,
+      catalog: repository,
+      authoring: new WorldAuthoringService({ repository }),
+    });
+  };
   const appHost = new DesktopAppHost({
     host,
     logger,
     shell: shellService,
     projectManagement,
+    projectAuthoring: {
+      ensureComposition: async ({ workspace, contentProjectId }) => {
+        const compositions = new ProjectCompositionService(
+          createProjectCompositionFileRepository({ workspaceRoot: workspace.workspacePath }),
+        );
+        try {
+          await compositions.require(contentProjectId);
+        } catch (error) {
+          if (
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            error.code === 'project-composition-not-found'
+          ) {
+            await compositions.create(contentProjectId);
+            return;
+          }
+          throw error;
+        }
+      },
+      getNavigation: async ({ workspace, contentProjectId, contentLabel }) => {
+        const characters = createCharacterAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        });
+        const worlds = createWorldAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        });
+        return new ProjectAuthoringNavigationService({
+          composition: createProjectCompositionFileRepository({
+            workspaceRoot: workspace.workspacePath,
+          }),
+          characters,
+          worlds,
+        }).read({ contentProjectId, contentLabel });
+      },
+      createLocalTarget: async ({ workspace, workspaceId, contentProjectId, create }) => {
+        const characters = createCharacterAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        });
+        const worlds = createWorldAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        });
+        const service = new ProjectLocalAuthoringService({
+          compositions: new ProjectCompositionService(
+            createProjectCompositionFileRepository({ workspaceRoot: workspace.workspacePath }),
+          ),
+          characters: {
+            createProject: (input, signal) =>
+              new CharacterAuthoringService({ repository: characters }).createProject(
+                input,
+                signal,
+              ),
+            deleteUnlinkedProject: async () => {
+              throw new Error('Character deletion requires an explicit owner command.');
+            },
+          },
+          worlds: {
+            createProject: (input, signal) =>
+              new WorldAuthoringService({ repository: worlds }).createProject(input, signal),
+            deleteUnlinkedProject: async () => {
+              throw new Error('World deletion requires an explicit owner command.');
+            },
+          },
+        });
+        const authority = { workspaceId, contentProjectId };
+        return create.kind === 'character-project'
+          ? (
+              await service.createCharacter(authority, {
+                characterProjectId: create.characterProjectId,
+                displayName: create.displayName,
+                draft: create.draft,
+              })
+            ).target
+          : (
+              await service.createWorld(authority, {
+                worldProjectId: create.worldProjectId,
+                title: create.title,
+                draft: create.draft,
+              })
+            ).target;
+      },
+      getCharacterSnapshot: async (input) =>
+        (await resolveCharacterAuthoring(input)).getSnapshot(input.characterProjectId),
+      executeCharacter: async (input) =>
+        (await resolveCharacterAuthoring(input)).execute(input.command),
+      getWorldSnapshot: async (input) =>
+        (await resolveWorldAuthoring(input)).getSnapshot(input.worldProjectId),
+      executeWorld: async (input) => (await resolveWorldAuthoring(input)).execute(input.command),
+    },
     agent: agentComposition,
     assistantWorkspace,
     agentControllerComposition,
@@ -1925,6 +2277,10 @@ async function startDesktop(): Promise<void> {
     generationLifecycle: generationRuntime,
     workspaceConfigLifecycle: workspaceConfigAuthority,
     workspaceGrants: workspaceGrantAuthority,
+    authoringLibraryRoots: {
+      character: { label: 'Characters', hostResource: characterLibraryRoot },
+      world: { label: 'Worlds', hostResource: worldLibraryRoot },
+    },
     conversationLifecycle,
     assistantResources,
     characterFoundation,
@@ -1932,7 +2288,6 @@ async function startDesktop(): Promise<void> {
     worldFoundation,
     worldFoundationCommands,
     characterAvatar,
-    characterConversations,
     characterInteractions,
     characterRoomConversations,
     characterRoomWorkbench: characterRooms,

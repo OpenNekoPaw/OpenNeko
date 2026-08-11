@@ -1,4 +1,5 @@
 export * from './world-authoring-service';
+export * from './world-authoring-host-service';
 export * from './world-runtime-service';
 export * from './world-durable-catalog';
 export * from './world-foundation-command-service';

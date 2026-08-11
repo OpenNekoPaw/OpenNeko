@@ -62,6 +62,7 @@ export interface CharacterPrimaryAgentSessionPort {
             readonly characterId: string;
             readonly characterRunId: string;
             readonly dialogueRunId: string;
+            readonly roleProfileId?: string;
           }
         | {
             readonly kind: 'room';
@@ -193,6 +194,41 @@ export class CharacterInteractionService {
 
   constructor(private readonly options: CharacterInteractionServiceOptions) {
     this.now = options.now ?? (() => new Date().toISOString());
+  }
+
+  async validateDialogueBinding(
+    input: {
+      readonly characterProjectId: string;
+      readonly characterVersionId: string;
+      readonly characterRunId: string;
+      readonly dialogueRunId: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const [storedRun, storedPublication, storedDialogue] = await Promise.all([
+      this.options.repository.readCharacterRun(input.characterRunId, signal),
+      this.options.repository.readPublication(input.characterVersionId, signal),
+      this.options.repository.readDialogueRun(input.dialogueRunId, signal),
+    ]);
+    const run = storedRun ? parseCharacterRun(storedRun) : undefined;
+    const publication = storedPublication ? parseCharacterVersion(storedPublication) : undefined;
+    const dialogue = storedDialogue ? parseDialogueRun(storedDialogue) : undefined;
+    if (
+      !run ||
+      !publication ||
+      !dialogue ||
+      publication.characterProjectId !== input.characterProjectId ||
+      run.characterVersionId !== input.characterVersionId ||
+      run.controller.kind !== 'agent' ||
+      dialogue.characterRunId !== input.characterRunId ||
+      dialogue.dialogueRunId !== input.dialogueRunId
+    ) {
+      throw interactionError(
+        'character-run-authority-mismatch',
+        'Character Dialogue binding does not match the exact Character publication, Run and Dialogue authority.',
+        input.characterRunId,
+      );
+    }
   }
 
   async createDialogue(

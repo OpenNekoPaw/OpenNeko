@@ -1,6 +1,11 @@
+import { isCharacterAuthoringCommand } from '@neko/chara/contracts';
 import type {
   CharacterFoundationCommand,
   CharacterFoundationSnapshot,
+  CharacterAuthoringCommand,
+  CharacterAuthoringSnapshot,
+  CharacterAuthoringBinding,
+  OpenNekoDesktopCharacterAuthoringBridge,
   OpenNekoDesktopCharacterBridge,
 } from '@neko/chara/contracts';
 import {
@@ -14,7 +19,7 @@ import {
   WarningIcon,
 } from '@neko/ui';
 import type { SupportedLocale } from '@neko/ui/i18n';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CharacterPanel } from './character-panel';
 import { describeError, FoundationDiagnostic } from './foundation-ui';
 import { foundationLabel } from './labels';
@@ -327,6 +332,134 @@ export function CharacterDetailSurface({
       )}
     </section>
   );
+}
+
+type AuthoringLoadState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string }
+  | { readonly kind: 'ready'; readonly snapshot: CharacterAuthoringSnapshot };
+
+export function CharacterAuthoringStudioRoot({
+  binding,
+  host,
+  initialSnapshot,
+  locale,
+  windowId,
+}: {
+  readonly binding: CharacterAuthoringBinding;
+  readonly host?: OpenNekoDesktopCharacterAuthoringBridge['characterAuthoring'];
+  readonly initialSnapshot?: CharacterAuthoringSnapshot;
+  readonly locale: SupportedLocale;
+  readonly windowId: string;
+}): JSX.Element {
+  const [loadState, setLoadState] = useState<AuthoringLoadState>(() =>
+    initialSnapshot ? { kind: 'ready', snapshot: initialSnapshot } : { kind: 'loading' },
+  );
+  const initialSnapshotConsumed = useRef(initialSnapshot !== undefined);
+  const [pendingOperation, setPendingOperation] = useState<string>();
+  const [diagnostic, setDiagnostic] = useState<string>();
+
+  const reload = useCallback(async () => {
+    setLoadState({ kind: 'loading' });
+    setDiagnostic(undefined);
+    try {
+      if (!host) throw new Error('Character authoring Host port is unavailable.');
+      setLoadState({ kind: 'ready', snapshot: await host.getSnapshot(windowId, binding) });
+    } catch (error) {
+      setLoadState({ kind: 'failed', message: describeError(error) });
+    }
+  }, [binding, host, windowId]);
+
+  useEffect(() => {
+    if (initialSnapshotConsumed.current) {
+      initialSnapshotConsumed.current = false;
+      return;
+    }
+    void reload();
+  }, [reload]);
+
+  const execute = useCallback(
+    async (command: CharacterFoundationCommand): Promise<CharacterFoundationSnapshot> => {
+      if (!isCharacterAuthoringCommand(command)) {
+        throw new Error(`Character Studio command '${command.operation}' is not authoring-only.`);
+      }
+      setPendingOperation(command.operation);
+      setDiagnostic(undefined);
+      try {
+        if (!host) throw new Error('Character authoring Host port is unavailable.');
+        const snapshot = await host.execute(
+          windowId,
+          binding,
+          command as CharacterAuthoringCommand,
+        );
+        setLoadState({ kind: 'ready', snapshot });
+        return projectAuthoringFoundationSnapshot(snapshot);
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        throw error;
+      } finally {
+        setPendingOperation(undefined);
+      }
+    },
+    [binding, host, windowId],
+  );
+
+  if (loadState.kind === 'loading') {
+    return (
+      <div className="character-management__status" role="status">
+        {foundationLabel(locale, '正在读取角色创作目标...', 'Loading character target...')}
+      </div>
+    );
+  }
+  if (loadState.kind === 'failed') {
+    return (
+      <div className="character-management__status is-error">
+        <FoundationDiagnostic role="alert">{loadState.message}</FoundationDiagnostic>
+        <button type="button" onClick={() => void reload()}>
+          {foundationLabel(locale, '重试', 'Retry')}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <section className="character-authoring-studio" data-character-authoring-studio="true">
+      {diagnostic ? <FoundationDiagnostic role="alert">{diagnostic}</FoundationDiagnostic> : null}
+      <CharacterPanel
+        authoringOnly
+        creating={false}
+        execute={execute}
+        locale={locale}
+        pendingOperation={pendingOperation}
+        selectedProjectId={binding.characterProjectId}
+        snapshot={projectAuthoringFoundationSnapshot(loadState.snapshot)}
+        onCreated={() => {
+          throw new Error('Project-local Character creation must use the Project workflow.');
+        }}
+      />
+    </section>
+  );
+}
+
+function projectAuthoringFoundationSnapshot(
+  snapshot: CharacterAuthoringSnapshot,
+): CharacterFoundationSnapshot {
+  return {
+    character: {
+      projects: [snapshot.project],
+      versions: snapshot.versions,
+      relationships: [],
+      characterRuns: [],
+      dialogueRuns: [],
+      rooms: [],
+      roomRuns: [],
+      storylineVersions: [],
+      storylineRuns: [],
+      storylineObservationCandidates: [],
+      memoryScopes: [],
+      presentationConfigurations: [],
+    },
+    diagnostics: snapshot.diagnostics,
+  };
 }
 
 function reviewLabelZh(status: 'draft' | 'ready' | 'blocked'): string {

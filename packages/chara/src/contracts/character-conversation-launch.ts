@@ -6,12 +6,10 @@ import {
   requireUniqueIdentities,
 } from './codec';
 
-export const CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL =
-  'neko:character:conversation-launch' as const;
-
 export interface CharacterLaunchParticipantSelection {
   readonly characterVersionId: string;
   readonly characterStorylineVersionId?: string;
+  readonly roleProfileId?: string;
 }
 
 interface CharacterConversationLaunchSelectionBase {
@@ -53,35 +51,6 @@ export type CharacterConversationLaunchResult =
       }[];
     };
 
-export interface CharacterConversationLaunchHostRequest {
-  readonly requestId: string;
-  readonly rendererSessionId: string;
-  readonly workbenchInstanceId: string;
-  readonly agentSurfaceId: string;
-  readonly agentViewId: string;
-  readonly draftId: string;
-  readonly message: string;
-  readonly selection: CharacterConversationLaunchSelection;
-}
-
-export interface CharacterConversationLaunchHostResult {
-  readonly requestId: string;
-  readonly launch: CharacterConversationLaunchResult;
-}
-
-export interface OpenNekoDesktopCharacterConversationBridge {
-  readonly characterConversations: {
-    launch(input: {
-      readonly workbenchInstanceId: string;
-      readonly agentSurfaceId: string;
-      readonly agentViewId: string;
-      readonly draftId: string;
-      readonly message: string;
-      readonly selection: CharacterConversationLaunchSelection;
-    }): Promise<CharacterConversationLaunchResult>;
-  };
-}
-
 export function parseCharacterConversationLaunchSelection(
   value: unknown,
 ): CharacterConversationLaunchSelection {
@@ -107,6 +76,11 @@ export function parseCharacterConversationLaunchSelection(
   if (characters.length === 0) {
     throw new Error('Character conversation launch requires at least one CharacterVersion.');
   }
+  if (characters.length > 1 && characters.some((character) => character.roleProfileId)) {
+    throw new Error(
+      'Character Room launch does not support participant role profiles without exact Room authority.',
+    );
+  }
   return { runtimeKind, characters };
 }
 
@@ -123,66 +97,6 @@ export function parseCharacterConversationLaunchInput(
     userId: requireIdentity(record['userId'], 'Character launch userId'),
     userDisplayName: requireIdentity(record['userDisplayName'], 'Character launch userDisplayName'),
     selection: parseCharacterConversationLaunchSelection(record['selection']),
-  };
-}
-
-export function createCharacterConversationLaunchHostRequest(
-  input: CharacterConversationLaunchHostRequest,
-): CharacterConversationLaunchHostRequest {
-  return parseCharacterConversationLaunchHostRequest(input);
-}
-
-export function parseCharacterConversationLaunchHostRequest(
-  value: unknown,
-): CharacterConversationLaunchHostRequest {
-  const record = requireExactRecord(
-    value,
-    [
-      'requestId',
-      'rendererSessionId',
-      'workbenchInstanceId',
-      'agentSurfaceId',
-      'agentViewId',
-      'draftId',
-      'message',
-      'selection',
-    ],
-    'Character conversation launch Host request',
-  );
-  return {
-    requestId: requireIdentity(record['requestId'], 'Character launch Host request'),
-    rendererSessionId: requireIdentity(
-      record['rendererSessionId'],
-      'Character launch renderer session',
-    ),
-    workbenchInstanceId: requireIdentity(
-      record['workbenchInstanceId'],
-      'Character launch Workbench',
-    ),
-    agentSurfaceId: requireIdentity(record['agentSurfaceId'], 'Character launch Agent Surface'),
-    agentViewId: requireIdentity(record['agentViewId'], 'Character launch Agent View'),
-    draftId: requireIdentity(record['draftId'], 'Character launch Draft'),
-    message: requireIdentity(record['message'], 'Character launch message'),
-    selection: parseCharacterConversationLaunchSelection(record['selection']),
-  };
-}
-
-export function parseCharacterConversationLaunchHostResult(
-  value: unknown,
-  expectedRequestId: string,
-): CharacterConversationLaunchHostResult {
-  const record = requireExactRecord(
-    value,
-    ['requestId', 'launch'],
-    'Character conversation launch Host result',
-  );
-  const requestId = requireIdentity(record['requestId'], 'Character launch response request');
-  if (requestId !== expectedRequestId) {
-    throw new Error('Character conversation launch response request identity mismatch.');
-  }
-  return {
-    requestId,
-    launch: parseCharacterConversationLaunchResult(record['launch']),
   };
 }
 
@@ -298,7 +212,7 @@ function parseCharacterLaunchParticipantSelection(
 ): CharacterLaunchParticipantSelection {
   const record = requireExactRecord(
     value,
-    ['characterVersionId', 'characterStorylineVersionId'],
+    ['characterVersionId', 'characterStorylineVersionId', 'roleProfileId'],
     'Character launch participant selection',
   );
   const characterStorylineVersionId =
@@ -314,5 +228,8 @@ function parseCharacterLaunchParticipantSelection(
       'Character launch participant characterVersionId',
     ),
     ...(characterStorylineVersionId === undefined ? {} : { characterStorylineVersionId }),
+    ...(record['roleProfileId'] === undefined
+      ? {}
+      : { roleProfileId: requireIdentity(record['roleProfileId'], 'Character role profile') }),
   };
 }

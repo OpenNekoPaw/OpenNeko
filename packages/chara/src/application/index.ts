@@ -1,5 +1,6 @@
 export * from './character-purpose-operations';
 export * from './character-authoring-service';
+export * from './character-authoring-host-service';
 export * from './character-room-service';
 export * from './character-room-conversation-service';
 export * from './character-room-interaction-service';

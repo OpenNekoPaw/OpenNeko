@@ -10,10 +10,6 @@ import {
   parseCharacterVersion,
   parseUserCharacterRelationship,
 } from '../character';
-import {
-  createCharacterConversationLaunchHostRequest,
-  parseCharacterConversationLaunchHostResult,
-} from '../character-conversation-launch';
 import { describe, expect, it } from 'vitest';
 
 const now = '2026-08-09T10:00:00.000Z';
@@ -221,52 +217,5 @@ describe('Character canonical contracts', () => {
         recordId: 'character-version-invalid',
       }),
     ]);
-  });
-
-  it('strictly binds Character conversation launch to one exact Desktop Draft', () => {
-    const request = createCharacterConversationLaunchHostRequest({
-      requestId: 'character-launch-a',
-      rendererSessionId: 'renderer-session-a',
-      workbenchInstanceId: 'workbench-a',
-      agentSurfaceId: 'agent-surface-a',
-      agentViewId: 'agent-view-a',
-      draftId: 'draft-a',
-      message: 'Hello.',
-      selection: {
-        runtimeKind: 'companion',
-        characters: [{ characterVersionId: 'character-version-a' }],
-      },
-    });
-
-    expect(request.selection.characters).toEqual([{ characterVersionId: 'character-version-a' }]);
-    expect(() =>
-      createCharacterConversationLaunchHostRequest({
-        ...request,
-        selection: {
-          ...request.selection,
-          characters: [
-            { characterVersionId: 'character-version-a' },
-            { characterVersionId: 'character-version-a' },
-          ],
-        },
-      }),
-    ).toThrow(/duplicate identity/u);
-    expect(() =>
-      parseCharacterConversationLaunchHostResult(
-        {
-          requestId: 'foreign-request',
-          launch: {
-            topology: 'dialogue',
-            runtimeKind: 'companion',
-            characterProjectId: 'character-project-a',
-            characterVersionId: 'character-version-a',
-            characterRunId: 'character-run-a',
-            dialogueRunId: 'dialogue-run-a',
-            primaryAgentSessionId: 'conversation:character:a',
-          },
-        },
-        request.requestId,
-      ),
-    ).toThrow(/request identity mismatch/u);
   });
 });

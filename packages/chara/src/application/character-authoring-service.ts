@@ -26,6 +26,13 @@ export interface CharacterAuthoringRepository {
   ): Promise<void>;
 }
 
+export interface CharacterPublicationReader {
+  readPublication(
+    characterVersionId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterVersion | undefined>;
+}
+
 export interface CharacterAuthoringServiceOptions {
   readonly repository: CharacterAuthoringRepository;
   readonly now?: () => string;
@@ -364,7 +371,7 @@ export class CharacterAuthoringService {
     return published;
   }
 
-  private async requireProject(
+  async requireProject(
     characterProjectId: string,
     signal?: AbortSignal,
   ): Promise<CharacterProject> {

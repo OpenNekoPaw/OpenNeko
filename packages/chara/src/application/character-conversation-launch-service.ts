@@ -1,5 +1,6 @@
 import {
   parseCharacterConversationLaunchInput,
+  parseCharacterConversationLaunchSelection,
   parseCharacterMemoryScope,
   parseCharacterRoom,
   parseCharacterRun,
@@ -11,6 +12,7 @@ import {
   parseUserCharacterRelationship,
   type CharacterConversationLaunchInput,
   type CharacterConversationLaunchResult,
+  type CharacterConversationLaunchSelection,
   type CharacterRoom,
   type CharacterRun,
   type CharacterMemoryScope,
@@ -22,10 +24,12 @@ import {
   type UserCharacterRelationship,
 } from '@neko/chara/contracts';
 import type { CharacterPrimaryAgentSessionPort } from './character-interaction-service';
+import type { CharacterPublicationReader } from './character-authoring-service';
 
 export type CharacterConversationLaunchAggregate =
   | {
       readonly topology: 'dialogue';
+      readonly publications: readonly CharacterVersion[];
       readonly relationships: readonly UserCharacterRelationship[];
       readonly characterRun: CharacterRun;
       readonly dialogueRun: DialogueRun;
@@ -34,6 +38,7 @@ export type CharacterConversationLaunchAggregate =
     }
   | {
       readonly topology: 'chatroom';
+      readonly publications: readonly CharacterVersion[];
       readonly relationships: readonly UserCharacterRelationship[];
       readonly room: CharacterRoom;
       readonly characterRuns: readonly CharacterRun[];
@@ -105,6 +110,7 @@ interface CharacterConversationLaunchIdentities {
 interface PreparedLaunchCharacter {
   readonly publication: CharacterVersion;
   readonly storyline?: CharacterStorylineVersion;
+  readonly roleProfileId?: string;
 }
 
 export class CharacterConversationLaunchService {
@@ -113,6 +119,7 @@ export class CharacterConversationLaunchService {
   constructor(
     private readonly options: {
       readonly repository: CharacterConversationLaunchRepository;
+      readonly publications: CharacterPublicationReader;
       readonly agentSessions: CharacterPrimaryAgentSessionPort;
       readonly now?: () => string;
     },
@@ -136,30 +143,60 @@ export class CharacterConversationLaunchService {
     const existing = await this.readExisting(input, identities, signal);
     if (existing) return existing;
 
-    const characters = await Promise.all(
-      input.selection.characters.map(async (selection) => {
-        const stored = await this.options.repository.readPublication(
-          selection.characterVersionId,
+    const characters = await this.prepareCharacters(input.selection, input.requestId, signal);
+    const relationships = await this.resolveRelationships(input, identities, signal);
+    return characters.length === 1
+      ? this.launchDialogue(identities, characters[0]!, relationships, signal)
+      : this.launchRoom(input, identities, characters, relationships, signal);
+  }
+
+  async validateSelection(
+    selectionValue: CharacterConversationLaunchSelection,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.prepareCharacters(
+      parseCharacterConversationLaunchSelection(selectionValue),
+      undefined,
+      signal,
+    );
+  }
+
+  private async prepareCharacters(
+    selection: CharacterConversationLaunchSelection,
+    requestId: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<readonly PreparedLaunchCharacter[]> {
+    return Promise.all(
+      selection.characters.map(async (character) => {
+        const stored = await this.options.publications.readPublication(
+          character.characterVersionId,
           signal,
         );
         if (!stored) {
           throw launchError(
             'character-launch-version-unavailable',
-            `CharacterVersion '${selection.characterVersionId}' is not published or available.`,
-            input.requestId,
+            `CharacterVersion '${character.characterVersionId}' is not published or available.`,
+            requestId,
           );
         }
         const publication = parseCharacterVersion(stored);
-        if (selection.characterStorylineVersionId === undefined) return { publication };
+        if (character.characterStorylineVersionId === undefined) {
+          return {
+            publication,
+            ...(character.roleProfileId === undefined
+              ? {}
+              : { roleProfileId: character.roleProfileId }),
+          };
+        }
         const storyline = await this.options.repository.readStorylineVersion(
-          selection.characterStorylineVersionId,
+          character.characterStorylineVersionId,
           signal,
         );
         if (!storyline) {
           throw launchError(
             'character-launch-selection-invalid',
-            `CharacterStorylineVersion '${selection.characterStorylineVersionId}' is unavailable.`,
-            input.requestId,
+            `CharacterStorylineVersion '${character.characterStorylineVersionId}' is unavailable.`,
+            requestId,
           );
         }
         const canonicalStoryline = parseCharacterStorylineVersion(storyline);
@@ -167,16 +204,18 @@ export class CharacterConversationLaunchService {
           throw launchError(
             'character-launch-selection-invalid',
             `CharacterStorylineVersion '${canonicalStoryline.characterStorylineVersionId}' does not belong to CharacterVersion '${publication.characterVersionId}'.`,
-            input.requestId,
+            requestId,
           );
         }
-        return { publication, storyline: canonicalStoryline };
+        return {
+          publication,
+          storyline: canonicalStoryline,
+          ...(character.roleProfileId === undefined
+            ? {}
+            : { roleProfileId: character.roleProfileId }),
+        };
       }),
     );
-    const relationships = await this.resolveRelationships(input, identities, signal);
-    return characters.length === 1
-      ? this.launchDialogue(identities, characters[0]!, relationships, signal)
-      : this.launchRoom(input, identities, characters, relationships, signal);
   }
 
   private async launchDialogue(
@@ -197,6 +236,9 @@ export class CharacterConversationLaunchService {
           characterId: publication.characterProjectId,
           characterRunId,
           dialogueRunId: identities.dialogueRunId,
+          ...(character.roleProfileId === undefined
+            ? {}
+            : { roleProfileId: character.roleProfileId }),
         },
       },
       signal,
@@ -237,6 +279,7 @@ export class CharacterConversationLaunchService {
       await this.options.repository.commitLaunch(
         {
           topology: 'dialogue',
+          publications: [publication],
           relationships,
           characterRun,
           dialogueRun,
@@ -387,6 +430,7 @@ export class CharacterConversationLaunchService {
       await this.options.repository.commitLaunch(
         {
           topology: 'chatroom',
+          publications: characters.map((character) => character.publication),
           relationships,
           room,
           characterRuns,
