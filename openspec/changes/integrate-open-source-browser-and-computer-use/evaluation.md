@@ -1,6 +1,6 @@
 # Agent Evaluation Evidence
 
-更新日期：2026-08-10
+更新日期：2026-08-12
 
 ## Evaluation Scope
 
@@ -12,6 +12,11 @@
 - Artifact lifecycle decision：reviewed catalog/receipt validation 与 atomic commit 是 deterministic application
   service policy，由 unit/contract tests 验证；它本身不创建 Agent Evaluation case。只有 concrete Host artifact
   adapter 接入 production Capability 后，才进入下述真实 Agent 行为 Evaluation。
+- User-managed local runtime decision：`update agent-runtime.external-automation`。首期 Browser Use/Cua Driver
+  runtime source 从未来 managed artifact 收敛为用户明确授权的已安装 runtime。该 source contract、路径/release/
+  signature/schema 资格与 changed-runtime invalidation 可由 deterministic tests 证明；但它最终改变 production
+  provider registration、Tool routing 与真实进程边界，因此 Browser hidden complete Desktop lane 和 Computer
+  visible Desktop lane 仍必须运行。官方安装指南、选择/复查/断开 UI 本身不构成 Agent 行为证据。
 - Enable/update-state decision：`reuse agent-runtime.external-automation`。用户可见行为是 disabled extension 即使
   保留 exact accepted permissions 也不注册或执行 Tool，扩权 update 则投影为 disabled + grant required。
   Canonical path 仍是 extension service state -> enabled runtime descriptor filter -> product-owned Capability Tool；
@@ -45,10 +50,13 @@
   `agent-runtime.external-automation` 承担真实行为证据。
 - 需要真实 Evaluation 的原因：最终路径会改变 Capability/Tool 注册、permission、Tool Call lifecycle、
   cancellation 和 Desktop event projection。
-- canonical path：reviewed extension/provider -> Automation session -> product-owned Capability Tool ->
-  Tool Registry -> Pi Tool Call -> exact session MCP process。
-- forbidden path：raw MCP Tool、共享 current browser session、nested Browser Use Agent、Computer Use fallback、
-  direct turn runner、mock provider 或 fixture final text。
+- canonical path：reviewed extension/provider -> Host-authorized exact user-managed local runtime -> qualification ->
+  Automation session -> product-owned Capability Tool -> Tool Registry -> Pi Tool Call -> exact session-owned MCP
+  process。Browser Use 还必须绑定独立授权的 exact browser executable；Cua macOS 必须绑定已资格化的
+  `/Applications/CuaDriver.app` 与稳定 TCC responsibility chain。
+- forbidden path：安装命令执行、`PATH`/recent/default runtime discovery、managed artifact 或 endpoint fallback、
+  raw/direct MCP helper、共享 current browser/profile、nested Browser Use Agent、Computer Use fallback、direct turn
+  runner、mock provider 或 fixture final text。
 
 ## Current Deterministic Evidence
 
@@ -111,8 +119,10 @@
   Agent session Root，空状态不保留可见 surface，取消只解析当前 authorization。
 - transient observation store 使用 byte limit、TTL、exact session/action owner 与 single-consume；可持久化 receipt
   不含 raw screenshot bytes、Host path 或窗口 handle。
-- Desktop Cua Driver client factory 只允许 macOS observe，使用 `mcp --direct` 与 approved bounded policy，
-  不继承 Host environment；Windows 和 interact 在 factory boundary 直接 unavailable。
+- Desktop Cua Driver contained client factory 只允许 macOS observe，当前使用 `mcp --direct` 与 approved bounded
+  policy，不继承 Host environment；Windows 和 interact 在 factory boundary 直接 unavailable。新的
+  user-managed-local-runtime 决策要求 app daemon/proxy TCC 路径，因此该 factory 只是历史受控启动证据，不能
+  直接成为首期 Cua production source。
 - bundled catalog source 现在可显示 Browser Use / Computer Use 的审核范围，但 artifact 未就绪时
   `canInstall=false`、`artifact-unavailable`，catalog refresh 不触发下载。
 - `@neko/agent-runtime/extensions` 已删除 marketplace package-directory copy 安装路径；installable entry 必须为
@@ -168,6 +178,10 @@
   session-owned connection 现在复用 exact Host MCP client factory；每次连接都从加密 Host store 解析 exact
   connector/endpoint 配置，核对固定 server identity，过期 identity 或 mismatch 不尝试其他 endpoint、managed
   runtime 或 provider。该 adapter 尚未注册到 production Agent provider，因此不代表真实 Browser/Cua capability 已资格化。
+- `user-managed-local-runtime` 当前只有设计决策，尚未实现或产生资格证据。必须新增 Host-owned exact local
+  authorization，并分别验证 Browser Use entrypoint/browser executable 与 CuaDriver.app bundle/signature/TCC chain；
+  路径、release、digest、signature、server identity 或 Tool schema 变化必须撤销资格。现有 contained client factory、
+  endpoint connector、PyPI 包存在或 Cua candidate artifact 均不能冒充这条 source path 已接通。
 - production Desktop 已组合独立的 macOS permission management path：list/runtime query 读取当前 Screen Recording
   media access status 与 non-prompting Accessibility trust；只有 exact user request 才为 Screen Recording 打开固定
   System Settings URI，或用 prompting trust query 请求 Accessibility。Input Control 与非 macOS 平台仍为
@@ -205,18 +219,20 @@ transient receipt 与隐私边界证据。
 尚未运行 provider-backed case。以下前置条件仍未满足：
 
 - Desktop 用户首次 session 授权和 target/domain 选择 UI；
-- 发布公钥、真实 signed artifact、installed artifact resolution、contained client factory 的 production composition
-  与真实 process；
+- Host-owned user-managed local runtime authorization、changed-runtime invalidation、production client factory
+  composition 与真实 session-owned process；
+- Browser Use exact Python/MCP entrypoint 与独立 browser executable 的资格证据，以及 CuaDriver.app exact bundle/
+  Developer ID/notarization/TCC responsibility-chain 证据；
 - 不借助隐藏 `browser_navigate` 的 exact page/session binding，以及 redirect/new-tab 在内容进入页面前阻断的
   固定 upstream 证据；
 - production Agent Automation Capability registration 与 qualified provider-backed Tool/Timeline execution；
-- packaged Browser Use artifact 和真实 local fixture qualification；
+- user-managed Browser Use runtime/browser executable 和真实 local fixture qualification；
 - qualified Cua Driver macOS app/process/window observation path、真实 permission denial/loss request fixture。
 
 因此 5 个需要真实 provider 的 Browser/Computer cases 仍为 `infrastructure-blocked`；disabled/unknown Tool case 已有
 可执行 declarative contract，但还未运行 ask/auto provider-backed matrix。当前 Evaluation DSL 只能证明 pending request
 的 turn cancellation，不能投影 Automation session takeover 的 authoritative fact；takeover case 保持未完成，不能用
-普通 cancellation assertion 冒充。真实运行必须在启动 Desktop 前检查 artifact/provider/domain-binding/TCC 资格，缺失时
+普通 cancellation assertion 冒充。真实运行必须在启动 Desktop 前检查 local-runtime/provider/domain-binding/TCC 资格，缺失时
 记录 `infrastructure-blocked`，不得把 Tool 缺失或等待目标选择超时记为行为失败。
 
 Desktop control contract 与 runtime 已具备真实 case 所需的 exact Conversation owner 和 data-free refresh 边界，但
@@ -227,12 +243,14 @@ fact。因此本轮没有新增一个会在 key-free dry-run 中“通过”却�
 
 - 当前证据不证明 Browser Use 或 Computer Use 已在产品中可用。
 - Browser Use `--mcp` 的单 browser session 语义要求每个 Automation session 独占进程；contained client
-  factory 与 Capability adapter 已实现，但 exact origin/tab 尚未绑定，redirect/new-tab 又是事后处置。在
-  verified artifact 发布输入、Host authorization、上游 target/domain 资格与 production composition 全部接通前
+  factory 与 Capability adapter 已实现，但尚未适配独立授权的本地 Python/MCP entrypoint 与 browser executable，
+  exact origin/tab 也未绑定，redirect/new-tab 又是事后处置。在 Host local-runtime authorization、上游
+  target/domain 资格与 production composition 全部接通前
   不得注册 Agent Tool。
 - Cua Driver 已完成 exact observe schema/profile、target argument injection 和 contained bounded client factory；
   production composition 也已能 non-prompting 查询当前 macOS Screen Recording/Accessibility 状态，并仅在用户显式
-  action 后打开 Screen Recording 设置或请求 Accessibility。macOS target-only capture、TCC responsibility chain、
+  action 后打开 Screen Recording 设置或请求 Accessibility。用户安装 `/Applications/CuaDriver.app` 的 exact
+  authorization、app daemon/proxy MCP composition、macOS target-only capture、TCC responsibility chain、
   denial/loss fixture 和输入动作仍未资格化，Windows 保持 unavailable。
 - 完成 Capability/UI/Desktop wiring 后必须补一条 visible Desktop + real provider 路径和一条 hidden
   complete Desktop + real provider 路径；deterministic 或 mock 结果不能替代。

@@ -166,21 +166,23 @@ approval or model text MUST NOT substitute for another layer.
 
 ### Requirement: Automation capability is qualified per platform and release
 
-An extension MUST be reported ready only when its installed platform artifact, enablement, integrity, upstream release,
-MCP connection, Tool allowlist, required OS permission and runtime qualification all pass. A manifest, source repository
-or upstream platform claim MUST NOT alone establish OpenNeko support.
+An extension MUST be reported ready only when its explicitly selected runtime source, enablement, exact authorized
+runtime identity, upstream release, integrity/signature where applicable, MCP connection, Tool allowlist, required OS
+permission and runtime qualification all pass. A manifest, source repository, package-manager presence, path existence or
+upstream platform claim MUST NOT alone establish OpenNeko support.
 
-#### Scenario: Computer Use is installed without macOS permission
+#### Scenario: Computer Use local runtime is qualified without macOS permission
 
-- **WHEN** the Cua Driver artifact is valid but Screen Recording or Accessibility required by the selected mode is absent
+- **WHEN** the signed/notarized CuaDriver.app and MCP runtime are valid but Screen Recording or Accessibility required by
+  the selected mode is absent
 - **THEN** Extensions SHALL show `needs-permission` rather than ready
 - **AND** Agent SHALL not receive the affected operation
 
-#### Scenario: User installs Computer Use on macOS
+#### Scenario: User authorizes Computer Use on macOS
 
-- **WHEN** installation completes before the extension is enabled
+- **WHEN** the user authorizes or rechecks an installed CuaDriver.app before the extension is enabled
 - **THEN** OpenNeko SHALL NOT request Screen Recording, Accessibility or Input permission
-- **AND** the installed extension SHALL remain disabled
+- **AND** the extension SHALL remain disabled
 
 #### Scenario: macOS permission is revoked during use
 
@@ -204,8 +206,8 @@ or upstream platform claim MUST NOT alone establish OpenNeko support.
 ### Requirement: Automation runtime resources are isolated
 
 Browser Use and Computer Use processes MUST use extension/session-scoped home, temporary and data locations plus exact
-contained executable paths. They MUST NOT inherit the real user home, general Host environment, browser profile, model
-credential or undeclared secret.
+authorized executable paths. Browser Use's Python/MCP entrypoint and browser executable MUST be independently authorized.
+They MUST NOT inherit the real user home, general Host environment, browser profile, model credential or undeclared secret.
 
 #### Scenario: Browser Use process starts
 
@@ -216,10 +218,53 @@ credential or undeclared secret.
 
 ### Requirement: Automation runtime delivery source is explicit
 
-An Automation provider MUST use one explicitly selected delivery source: a reviewed fixed GitHub Release artifact, a
-reviewed fixed official-vendor artifact, or a user-managed endpoint. Managed artifacts MUST use the same verified install
-contract regardless of host. A user-managed endpoint MUST remain externally owned: OpenNeko MUST NOT download, install,
-update or start that service. Delivery sources MUST NOT be fallback candidates for each other.
+An Automation provider MUST use one explicitly selected delivery source: a user-managed local runtime, a reviewed fixed
+GitHub Release artifact, a reviewed fixed official-vendor artifact, or a user-managed endpoint. Managed artifacts MUST
+use the same verified install contract regardless of host. A user-managed endpoint service and user-managed local runtime
+files MUST remain externally owned. Delivery sources MUST NOT be fallback candidates for each other. The first Browser
+Use and Cua Driver delivery MUST use the user-managed local runtime source; managed artifacts remain optional future
+sources until separately released and qualified.
+
+#### Scenario: User authorizes an already-installed local runtime
+
+- **WHEN** the user selects a user-managed local runtime for a reviewed Automation provider
+- **THEN** OpenNeko SHALL store an opaque Host-owned runtime authorization identity and reviewed release identity, not a
+  raw absolute path in the package/domain contract
+- **AND** SHALL validate executable identity, integrity/signature where applicable, MCP server identity and reviewed Tool
+  schemas before qualification
+- **AND** SHALL start and terminate only the exact Automation session-owned child process
+- **AND** SHALL NOT install, update or uninstall the user-owned runtime files
+
+#### Scenario: Authorized local runtime changes or disappears
+
+- **WHEN** the authorized path, release, executable digest, platform signature, MCP identity or reviewed Tool schema is
+  missing or differs from its qualified facts
+- **THEN** only that provider source SHALL become `missing`, `invalid`, `changed` or `unqualified`
+- **AND** its Tools SHALL remain absent until the user reauthorizes and qualification passes
+- **AND** OpenNeko SHALL NOT search `PATH`, select another local installation, connect a recent endpoint or install a
+  managed artifact
+
+#### Scenario: Browser Use authorizes its browser independently
+
+- **WHEN** the user selects a Browser Use Python/MCP runtime
+- **THEN** OpenNeko SHALL require a separate exact browser executable authorization and qualification
+- **AND** neither authorization SHALL widen or substitute for the other
+- **AND** an existing user browser profile SHALL remain unavailable in the first delivery
+
+#### Scenario: Cua Driver qualifies on macOS
+
+- **WHEN** the user authorizes `/Applications/CuaDriver.app`
+- **THEN** OpenNeko SHALL verify its exact bundle identifier, Developer ID/Team ID, notarization, reviewed release and MCP
+  Tool schemas
+- **AND** SHALL use an upstream-supported app daemon/proxy path with a stable TCC responsibility chain
+- **AND** raw `serve`, unsigned helper and `mcp --direct` paths SHALL remain unavailable unless the packaged OpenNeko host
+  independently passes the same responsibility-chain qualification
+
+#### Scenario: User requests installation help
+
+- **WHEN** the selected user-managed local runtime is missing or invalid
+- **THEN** OpenNeko MAY open the reviewed official installation guide or copy user-visible instructions
+- **AND** SHALL NOT execute `pip`, `uv`, `npm`, `curl`, shell, PowerShell or an upstream installer
 
 #### Scenario: OpenNeko installs a GitHub or official artifact
 
