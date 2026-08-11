@@ -19,6 +19,10 @@ import {
   type CanvasGenerationRecipe,
 } from './types/canvas-generation-node';
 import type { CanvasGenerationRuntimeProjection } from './canvas-generation-application-port';
+import type {
+  CanvasTextFilePreviewRequest,
+  CanvasTextFilePreviewResult,
+} from './canvas-text-file-preview';
 
 export function createCanvasHostSessionId(viewId: string, viewInstanceId: string): string {
   requireNonEmptyString(viewId, 'Canvas Host View identity is required.');
@@ -29,6 +33,7 @@ export function createCanvasHostSessionId(viewId: string, viewInstanceId: string
 export const CANVAS_HOST_RUNTIME_ROUTES = {
   snapshotGet: 'snapshot.get',
   materialActionsResolve: 'material-actions.resolve',
+  textFilePreviewRead: 'text-file-preview.read',
   intentExecute: 'intent.execute',
   projectionEvent: 'projection.event',
 } as const;
@@ -202,6 +207,7 @@ export interface CanvasHostRuntime {
   resolveMaterialActions(
     request: CanvasMaterialActionResolutionRequest,
   ): Promise<CanvasMaterialActionResolution>;
+  readTextFilePreview(request: CanvasTextFilePreviewRequest): Promise<CanvasTextFilePreviewResult>;
   subscribe(listener: (event: CanvasHostProjectionEvent) => void): () => void;
   executeIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult>;
   /** Releases runtime-local listeners. Owner-managed remote sessions may omit this hook. */

@@ -34,6 +34,68 @@ afterEach(async () => {
 });
 
 describe('DesktopCanvasRuntime', () => {
+  it('reads a bounded text preview through the workspace content service', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-text-preview-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    await writeFixtureFile(workspacePath, 'data/project.json', '{"name":"OpenNeko"}');
+    await writeFixtureFile(
+      workspacePath,
+      identity.documentId,
+      JSON.stringify({
+        name: 'Text preview',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'file-json',
+            type: 'file',
+            position: { x: 0, y: 0 },
+            size: { width: 280, height: 180 },
+            zIndex: 1,
+            data: {
+              path: 'data/project.json',
+              title: 'project.json',
+              mediaType: 'application/json',
+              contentLocator: { kind: 'workspace-file', path: 'data/project.json' },
+            },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+    await runtime.getSnapshot('window-1', identity);
+
+    await expect(
+      runtime.readTextFilePreview('window-1', {
+        requestId: 'preview-ready',
+        identity,
+        nodeId: 'file-json',
+        locator: { kind: 'workspace-file', path: 'data/project.json' },
+      }),
+    ).resolves.toEqual({
+      requestId: 'preview-ready',
+      nodeId: 'file-json',
+      status: 'ready',
+      kind: 'json',
+      text: '{\n  "name": "OpenNeko"\n}',
+      truncated: false,
+      empty: false,
+    });
+    await expect(
+      runtime.readTextFilePreview('window-1', {
+        requestId: 'preview-stale',
+        identity,
+        nodeId: 'file-json',
+        locator: { kind: 'workspace-file', path: 'data/other.json' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'canvas-text-preview-stale-node' },
+    });
+    await runtime.dispose();
+  });
+
   it('opens path-only material nodes as unavailable without migrating or authorizing content', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-degraded-content-'));
     roots.push(workspacePath);

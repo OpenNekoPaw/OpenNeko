@@ -12,6 +12,7 @@ export function createElectronCanvasHostRuntime(
     getSnapshot: () => window.openNekoDesktop.canvas.getSnapshot(identity),
     resolveMaterialActions: (request) =>
       window.openNekoDesktop.canvas.resolveMaterialActions(request),
+    readTextFilePreview: (request) => window.openNekoDesktop.canvas.readTextFilePreview(request),
     subscribe: (listener) => window.openNekoDesktop.canvas.subscribe(identity, listener),
     executeIntent: (request: CanvasHostIntentRequest) =>
       window.openNekoDesktop.canvas.executeIntent(request),

@@ -950,6 +950,7 @@ function installBridge(
       canvas: {
         getSnapshot: vi.fn(),
         resolveMaterialActions: vi.fn(),
+        readTextFilePreview: vi.fn(),
         executeIntent: vi.fn(),
         resolvePreviewVariant: vi.fn(),
         executeMediaRequest: vi.fn(),

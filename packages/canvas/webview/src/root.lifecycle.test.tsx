@@ -69,6 +69,9 @@ describe('CanvasWebviewRoot lifetime', () => {
       async resolveMaterialActions() {
         throw new Error('Material actions are not used by the lifetime fixture.');
       },
+      async readTextFilePreview() {
+        throw new Error('Text previews are not used by the lifetime fixture.');
+      },
       subscribe() {
         return () => {};
       },
@@ -119,6 +122,9 @@ describe('CanvasWebviewRoot lifetime', () => {
       },
       async resolveMaterialActions() {
         throw new Error('Material actions are not used by the lifetime fixture.');
+      },
+      async readTextFilePreview() {
+        throw new Error('Text previews are not used by the lifetime fixture.');
       },
       subscribe,
       async executeIntent(request) {
@@ -205,6 +211,9 @@ function createRuntime(input: {
     },
     async resolveMaterialActions() {
       throw new Error('Material actions are not used by the lifetime fixture.');
+    },
+    async readTextFilePreview() {
+      throw new Error('Text previews are not used by the lifetime fixture.');
     },
     subscribe: input.subscribe,
     async executeIntent(request) {

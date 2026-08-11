@@ -1,4 +1,4 @@
-import type { ContentLocator } from '@neko/content';
+import { contentLocatorsEqual, type ContentLocator } from '@neko/content';
 import type { CanvasData } from './types/canvas';
 import type {
   CanvasMaterialActionDescriptor,
@@ -18,6 +18,11 @@ import {
   type CanvasMaterialActionResolution,
   type CanvasMaterialActionResolutionRequest,
 } from './canvas-host-runtime-contract';
+import {
+  createUnavailableCanvasTextFilePreview,
+  type CanvasTextFilePreviewRequest,
+  type CanvasTextFilePreviewResult,
+} from './canvas-text-file-preview';
 import { purposeForCanvasGenerationKind } from './types/canvas-generation-node';
 import {
   projectCanvasMaterialActionCatalog,
@@ -40,6 +45,14 @@ import type {
 import type { CanvasHostPresentationSnapshotStore } from './canvas-host-presentation-snapshot';
 
 export interface CanvasHostRuntimeSessionEffects {
+  readonly readTextFilePreview?: (input: {
+    readonly requestId: string;
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly nodeId: string;
+    readonly locator: ContentLocator;
+    readonly path: string;
+    readonly mediaType?: string;
+  }) => Promise<CanvasTextFilePreviewResult>;
   readonly resolveMaterialActions?: (input: {
     readonly canvas: CanvasData;
     readonly identity: CanvasHostRuntimeIdentity;
@@ -212,6 +225,55 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     request: CanvasMaterialActionResolutionRequest,
   ): Promise<CanvasMaterialActionResolution> {
     return this.enqueueOperation(() => this.resolveMaterialActionsSerial(request));
+  }
+
+  async readTextFilePreview(
+    request: CanvasTextFilePreviewRequest,
+  ): Promise<CanvasTextFilePreviewResult> {
+    return this.enqueueOperation(() => this.readTextFilePreviewSerial(request));
+  }
+
+  private async readTextFilePreviewSerial(
+    request: CanvasTextFilePreviewRequest,
+  ): Promise<CanvasTextFilePreviewResult> {
+    this.assertActive();
+    assertCanvasHostRuntimeIdentity(this.identity, request.identity);
+    const node = this.canvas.nodes.find((candidate) => candidate.id === request.nodeId);
+    if (
+      node?.type !== 'file' ||
+      !node.data.contentLocator ||
+      !contentLocatorsEqual(node.data.contentLocator, request.locator)
+    ) {
+      return createUnavailableCanvasTextFilePreview({
+        requestId: request.requestId,
+        nodeId: request.nodeId,
+        code: 'canvas-text-preview-stale-node',
+      });
+    }
+    const effect = this.options.effects.readTextFilePreview;
+    if (!effect) {
+      return createUnavailableCanvasTextFilePreview({
+        requestId: request.requestId,
+        nodeId: request.nodeId,
+        code: 'canvas-text-preview-unavailable',
+      });
+    }
+    try {
+      return await effect({
+        requestId: request.requestId,
+        identity: { ...this.identity },
+        nodeId: node.id,
+        locator: node.data.contentLocator,
+        path: node.data.path || node.data.title,
+        ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),
+      });
+    } catch {
+      return createUnavailableCanvasTextFilePreview({
+        requestId: request.requestId,
+        nodeId: request.nodeId,
+        code: 'canvas-text-preview-read-failed',
+      });
+    }
   }
 
   private async resolveMaterialActionsSerial(

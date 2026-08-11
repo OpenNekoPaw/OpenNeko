@@ -71,6 +71,58 @@ describe('Desktop Canvas preload bridge', () => {
       'Canvas Generation Recipe stale marker is invalid.',
     );
   });
+
+  it('requires an owner-bound snapshot and strictly parses text preview results', async () => {
+    const textPreviewIdentity = {
+      ...identity,
+      viewInstanceId: 'canvas-text-preview-instance',
+      sessionId: 'canvas-text-preview-session',
+    };
+    const request = {
+      requestId: 'text-preview-1',
+      identity: textPreviewIdentity,
+      nodeId: 'file-1',
+      locator: { kind: 'workspace-file' as const, path: 'data/project.json' },
+    };
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(bridge.canvas.readTextFilePreview(request)).rejects.toThrow(
+      'current owner-bound snapshot',
+    );
+    expect(electron.invoke).not.toHaveBeenCalled();
+
+    electron.invoke.mockImplementation(async (channel: string, value: unknown) => {
+      if (channel === DESKTOP_CANVAS_CHANNELS.snapshotGet) {
+        return { ...snapshot([]), identity: textPreviewIdentity };
+      }
+      expect(channel).toBe(DESKTOP_CANVAS_CHANNELS.textFilePreviewRead);
+      expect(value).toEqual(request);
+      return {
+        requestId: request.requestId,
+        nodeId: request.nodeId,
+        status: 'ready',
+        kind: 'json',
+        text: '{\n  "ready": true\n}',
+        truncated: false,
+        empty: false,
+      };
+    });
+    await bridge.canvas.getSnapshot(textPreviewIdentity);
+    await expect(bridge.canvas.readTextFilePreview(request)).resolves.toMatchObject({
+      status: 'ready',
+      kind: 'json',
+    });
+
+    electron.invoke.mockResolvedValue({
+      requestId: 'wrong-request',
+      nodeId: request.nodeId,
+      status: 'unsupported',
+    });
+    await expect(bridge.canvas.readTextFilePreview(request)).rejects.toThrow(
+      'request identity does not match',
+    );
+  });
 });
 
 function snapshot(generationNodes: readonly unknown[]) {

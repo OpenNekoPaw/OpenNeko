@@ -5,6 +5,7 @@ import {
   createCanvasHostPresentationSnapshotStore,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostIntentRequest,
+  parseCanvasTextFilePreviewRequest,
   type CanvasHostIntentRequest,
   type CanvasHostIntentResult,
   type CanvasHostProjectionEvent,
@@ -12,12 +13,14 @@ import {
   type CanvasHostSnapshot,
   type CanvasMaterialActionResolution,
   type CanvasMaterialActionTarget,
+  type CanvasTextFilePreviewResult,
   type CanvasGenerationApplicationPort,
   type CanvasGenerationModelOption,
   createCanvasMaterialActionOwner,
 } from '@neko/canvas-domain';
 import type { NekoHostPorts } from '@neko/host/ports';
 import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { createNodeHostContentReadService } from '@neko/content/node';
 import {
   loadNkc,
   saveNkc,
@@ -32,6 +35,7 @@ import type { DesktopWorkbenchLayoutProjection } from '@neko/host/desktop-workbe
 import {
   CanvasMaterialAuthoringService,
   CanvasMediaLibraryCopyService,
+  CanvasTextFilePreviewService,
   type CanvasExternalSource,
 } from '@neko/canvas-node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
@@ -227,6 +231,16 @@ export class DesktopCanvasRuntime {
     );
   }
 
+  async readTextFilePreview(
+    windowId: string,
+    payload: unknown,
+  ): Promise<CanvasTextFilePreviewResult> {
+    const request = parseCanvasTextFilePreviewRequest(payload);
+    return (await this.requireSession(windowId, request.identity)).session.readTextFilePreview(
+      request,
+    );
+  }
+
   async resolvePreviewVariant(
     windowId: string,
     value: DesktopCanvasPreviewVariantRequest | unknown,
@@ -413,6 +427,9 @@ export class DesktopCanvasRuntime {
             path: identity.documentId,
           });
     const initialCanvas = await this.loadDocument(documentPath, grant.workspace.displayName);
+    const textFilePreview = new CanvasTextFilePreviewService(
+      createNodeHostContentReadService({ workspaceRoot: grant.workspace.workspacePath }),
+    );
     const requestSource = this.options.requestSource;
     const previewResource = this.options.previewResource;
     const resolveCut = this.options.resolveCut;
@@ -606,6 +623,7 @@ export class DesktopCanvasRuntime {
       resolveGenerationModels: () =>
         this.options.resolveGenerationModels?.({ workspace: grant.workspace }) ?? [],
       effects: {
+        readTextFilePreview: (input) => textFilePreview.read(input),
         resolveMaterialActions: ({ identity: requestIdentity, targets }) =>
           materialActionOwner.resolve({
             identity: requestIdentity,

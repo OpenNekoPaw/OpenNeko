@@ -196,7 +196,13 @@ describe('Canvas Host runtime contract', () => {
 
   it('covers every fixed Canvas Host route', () => {
     expect(Object.values(CANVAS_HOST_RUNTIME_ROUTES).sort()).toEqual(
-      ['intent.execute', 'material-actions.resolve', 'projection.event', 'snapshot.get'].sort(),
+      [
+        'intent.execute',
+        'material-actions.resolve',
+        'projection.event',
+        'snapshot.get',
+        'text-file-preview.read',
+      ].sort(),
     );
   });
 });

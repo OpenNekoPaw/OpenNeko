@@ -233,6 +233,11 @@ export function registerDesktopIpc(
       appHost.resolveCanvasMaterialActions(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.readCanvasTextFilePreview(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.intentExecute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeCanvasIntent(requireSender(event), payload),
@@ -400,6 +405,7 @@ export function registerDesktopIpc(
       TEXT_EDITOR_HOST_CHANNELS.execute,
       DESKTOP_CANVAS_CHANNELS.snapshotGet,
       DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
+      DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
       DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
       DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,

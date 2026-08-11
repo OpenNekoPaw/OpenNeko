@@ -95,6 +95,84 @@ describe('CanvasHostRuntimeSession', () => {
     });
   });
 
+  it('authorizes text preview effects against the exact current File locator', async () => {
+    const readTextFilePreview = vi.fn(async (input) => ({
+      requestId: input.requestId,
+      nodeId: input.nodeId,
+      status: 'ready' as const,
+      kind: 'json' as const,
+      text: '{\n  "ready": true\n}',
+      truncated: false,
+      empty: false,
+    }));
+    const locator = { kind: 'workspace-file' as const, path: 'data/project.json' };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: {
+        ...createEmptyCanvasData('Initial'),
+        nodes: [
+          {
+            id: 'file-1',
+            type: 'file',
+            position: { x: 0, y: 0 },
+            size: { width: 280, height: 180 },
+            zIndex: 1,
+            data: {
+              path: locator.path,
+              title: 'project.json',
+              mediaType: 'application/json',
+              contentLocator: locator,
+            },
+          },
+        ],
+      },
+      effects: { readTextFilePreview },
+    });
+
+    await expect(
+      runtime.readTextFilePreview({
+        requestId: 'stale',
+        identity,
+        nodeId: 'file-1',
+        locator: {
+          kind: 'workspace-file',
+          path: 'data/other.json',
+        },
+      }),
+    ).resolves.toEqual({
+      requestId: 'stale',
+      nodeId: 'file-1',
+      status: 'unavailable',
+      diagnostic: { code: 'canvas-text-preview-stale-node' },
+    });
+    expect(readTextFilePreview).not.toHaveBeenCalled();
+
+    await expect(
+      runtime.readTextFilePreview({ requestId: 'ready', identity, nodeId: 'file-1', locator }),
+    ).resolves.toMatchObject({ status: 'ready', kind: 'json' });
+    expect(readTextFilePreview).toHaveBeenCalledOnce();
+    expect(readTextFilePreview).toHaveBeenCalledWith({
+      requestId: 'ready',
+      identity,
+      nodeId: 'file-1',
+      locator,
+      path: locator.path,
+      mediaType: 'application/json',
+    });
+    const snapshot = await runtime.getSnapshot();
+    expect(snapshot.canvas.nodes[0]).toMatchObject({
+      id: 'file-1',
+      data: {
+        path: locator.path,
+        title: 'project.json',
+        mediaType: 'application/json',
+        contentLocator: locator,
+      },
+    });
+    expect(snapshot.canvas.nodes[0]?.data).not.toHaveProperty('preview');
+    expect(snapshot.canvas.nodes[0]?.data).not.toHaveProperty('previewText');
+  });
+
   it('deduplicates command identity and does not repeat content effects', async () => {
     const authorMaterial = vi.fn(async ({ canvas }) => ({
       ...canvas,

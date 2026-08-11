@@ -101,6 +101,7 @@ import type {
   CanvasHostRuntimeIdentity,
   CanvasHostSnapshot,
   CanvasMaterialActionResolution,
+  CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
 import {
   parseDesktopCanvasHostIdentity,
@@ -2163,6 +2164,15 @@ export class DesktopAppHost {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
     return this.requireCanvas().resolveMaterialActions(window.windowId, payload);
+  }
+
+  async readCanvasTextFilePreview(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<CanvasTextFilePreviewResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    return this.requireCanvas().readTextFilePreview(window.windowId, payload);
   }
 
   async resolveCanvasPreviewVariant(

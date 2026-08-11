@@ -1,6 +1,8 @@
 import {
   createCanvasMaterialActionResolutionRequest,
   createCanvasHostIntentRequest,
+  createCanvasTextFilePreviewRequest,
+  parseCanvasTextFilePreviewResult,
   type CanvasHostAuthoringCapabilities,
   type CanvasHostIntent,
   type CanvasHostPresentationState,
@@ -9,6 +11,7 @@ import {
   type CanvasGenerationKind,
   type CanvasGenerationRecipe,
   type CanvasGenerationRuntimeProjection,
+  type CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
 import { isValidNkc, type CanvasData, type CanvasViewport } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
@@ -82,6 +85,10 @@ export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
   resolveMaterialActions(
     selectedNodeIds: readonly string[],
   ): Promise<readonly CanvasMaterialActionDescriptor[]>;
+  readTextFilePreview(
+    nodeId: string,
+    locator: ContentLocator,
+  ): Promise<CanvasTextFilePreviewResult>;
   getAuthoringCapabilities(): CanvasHostAuthoringCapabilities;
   executeMaterialAction(
     actionId: string,
@@ -102,6 +109,7 @@ export function createCanvasWebviewHost(
   let started = false;
   let commandSequence = 0;
   let materialActionRequestSequence = 0;
+  let textFilePreviewRequestSequence = 0;
   let currentMaterialActionRequestId: string | undefined;
   let snapshotRequestSequence = 0;
   let currentSnapshotRequestId: string | undefined;
@@ -221,6 +229,23 @@ export function createCanvasWebviewHost(
     }
     snapshot = result.snapshot;
     return result.snapshot;
+  };
+
+  const readTextFilePreview = (
+    nodeId: string,
+    locator: ContentLocator,
+  ): Promise<CanvasTextFilePreviewResult> => {
+    if (disposed) return Promise.reject(new Error('Canvas Webview Host is disposed.'));
+    textFilePreviewRequestSequence += 1;
+    const request = createCanvasTextFilePreviewRequest({
+      requestId: `canvas-webview-text-preview:${textFilePreviewRequestSequence}`,
+      identity: runtime.identity,
+      nodeId,
+      locator,
+    });
+    return runtime
+      .readTextFilePreview(request)
+      .then((result) => parseCanvasTextFilePreviewResult(result, request.requestId, nodeId));
   };
 
   const postMessage = (value: unknown): void => {
@@ -379,6 +404,7 @@ export function createCanvasWebviewHost(
       }
       return structuredClone(resolution.descriptors);
     },
+    readTextFilePreview,
     getAuthoringCapabilities: () =>
       structuredClone(
         snapshot?.authoringCapabilities ?? {

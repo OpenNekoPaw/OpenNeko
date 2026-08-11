@@ -1,10 +1,14 @@
-import type { ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content';
 import type {
+  CanvasTextFilePreviewDiagnosticCode,
+  CanvasTextFilePreviewKind,
+  CanvasTextFilePreviewResult,
   FileCanvasNode,
   JobCanvasNode,
   MarkdownCanvasNode,
   MediaCanvasNode,
 } from '@neko/canvas-domain';
+import { resolveCanvasTextFilePreviewKind } from '@neko/canvas-domain';
 import { FileIcon, toCodiconClassName, type CodiconName } from '@neko/ui/icons';
 import { MarkdownDocumentView } from '@neko/ui/markdown';
 import type { MilkdownRichSurfaceState } from '@neko/markdown/rich-surface';
@@ -26,6 +30,13 @@ type CanonicalNodeProps<TNode> = NodeRendererCommonProps & {
 };
 
 type CanvasMediaType = NonNullable<MediaCanvasNode['data']['mediaType']>;
+type CanvasFilePreviewPresentation =
+  | CanvasTextFilePreviewResult
+  | { readonly status: 'loading' }
+  | {
+      readonly status: 'local-error';
+      readonly code: CanvasTextFilePreviewDiagnosticCode;
+    };
 export type MediaPlaybackOwner = 'idle' | 'hover' | 'manual-playing' | 'manual-paused';
 export type MediaPlaybackInteraction =
   'pointer-enter' | 'pointer-leave' | PreviewPlaybackInteractionState;
@@ -374,6 +385,38 @@ export function FileNode({
 }: CanonicalNodeProps<FileCanvasNode>) {
   const fileName = resolveCanvasFileName(node.data);
   const contentLocator = node.data.contentLocator;
+  const contentLocatorIdentity = contentLocator ? contentLocatorKey(contentLocator) : undefined;
+  const contentLocatorRef = useRef(contentLocator);
+  contentLocatorRef.current = contentLocator;
+  const host = useOptionalCanvasHost();
+  const eligibleKind = resolveCanvasTextFilePreviewKind({
+    path: node.data.path || node.data.title,
+    ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),
+  });
+  const [preview, setPreview] = useState<CanvasFilePreviewPresentation>();
+
+  useEffect(() => {
+    const currentContentLocator = contentLocatorRef.current;
+    if (!host || !currentContentLocator || !eligibleKind) {
+      setPreview(undefined);
+      return;
+    }
+    let active = true;
+    setPreview({ status: 'loading' });
+    void host.readTextFilePreview(node.id, currentContentLocator).then(
+      (result) => {
+        if (active) setPreview(result);
+      },
+      () => {
+        if (!active) return;
+        setPreview({ status: 'local-error', code: 'canvas-text-preview-read-failed' });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [contentLocatorIdentity, eligibleKind, host, node.id]);
+
   return (
     <BaseNode
       node={node}
@@ -387,24 +430,129 @@ export function FileNode({
         text: fileName,
       }}
     >
-      <div className="canvas-file-node" data-canvas-content-kind="file">
-        <div className="canvas-file-node__content">
-          <span style={{ color: 'var(--node-fg-secondary)' }}>
-            <FileIcon size={36} strokeWidth={1.4} />
-          </span>
-          {!contentLocator ? (
-            <div
-              className="text-xs"
-              style={{ color: 'var(--hostPort-errorForeground)' }}
-              role="status"
-            >
-              {t('node.contentUnavailable')}
-            </div>
-          ) : null}
-        </div>
+      <div
+        className="canvas-file-node"
+        data-canvas-content-kind="file"
+        data-text-preview-status={preview?.status}
+        data-text-preview-kind={preview?.status === 'ready' ? preview.kind : undefined}
+      >
+        <CanvasFileNodeContent contentLocator={contentLocator} preview={preview} />
       </div>
     </BaseNode>
   );
+}
+
+function CanvasFileNodeContent({
+  contentLocator,
+  preview,
+}: {
+  readonly contentLocator: ContentLocator | undefined;
+  readonly preview: CanvasFilePreviewPresentation | undefined;
+}) {
+  if (!contentLocator) {
+    return <CanvasFileIconState diagnostic={t('node.contentUnavailable')} />;
+  }
+  if (!preview || preview.status === 'unsupported') return <CanvasFileIconState />;
+  if (preview.status === 'loading') {
+    return (
+      <div className="canvas-file-node__state" role="status">
+        <span className="canvas-file-node__activity" aria-hidden="true" />
+        <span>{t('node.textPreviewLoading')}</span>
+      </div>
+    );
+  }
+  if (preview.status === 'local-error') {
+    return (
+      <div className="canvas-file-node__state canvas-file-node__state--error" role="status">
+        <FileIcon size={24} strokeWidth={1.4} aria-hidden="true" />
+        <span>{resolveCanvasTextPreviewDiagnostic(preview.code)}</span>
+      </div>
+    );
+  }
+  if (preview.status === 'unavailable') {
+    return (
+      <div className="canvas-file-node__state canvas-file-node__state--error" role="status">
+        <FileIcon size={24} strokeWidth={1.4} aria-hidden="true" />
+        <span>{resolveCanvasTextPreviewDiagnostic(preview.diagnostic.code)}</span>
+      </div>
+    );
+  }
+  if (preview.empty) {
+    return (
+      <div className="canvas-file-node__state" role="status">
+        <FileIcon size={24} strokeWidth={1.4} aria-hidden="true" />
+        <span>{t('node.textPreviewEmpty')}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="canvas-file-node__preview">
+      <div className="canvas-file-node__format" aria-label={resolvePreviewKindLabel(preview.kind)}>
+        {resolvePreviewKindLabel(preview.kind)}
+      </div>
+      <div className="canvas-file-node__scroll">
+        {preview.kind === 'markdown' ? (
+          <MarkdownDocumentView
+            value={preview.text}
+            className="canvas-file-node__markdown canvas-markdown-node__document"
+          />
+        ) : (
+          <pre className="canvas-file-node__text">{preview.text}</pre>
+        )}
+      </div>
+      {preview.truncated ? (
+        <div className="canvas-file-node__truncated" role="status">
+          {t('node.textPreviewTruncated')}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CanvasFileIconState({ diagnostic }: { readonly diagnostic?: string }) {
+  return (
+    <div className="canvas-file-node__content">
+      <span style={{ color: 'var(--node-fg-secondary)' }}>
+        <FileIcon size={36} strokeWidth={1.4} aria-hidden="true" />
+      </span>
+      {diagnostic ? (
+        <div className="canvas-file-node__missing" role="status">
+          {diagnostic}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function resolvePreviewKindLabel(kind: CanvasTextFilePreviewKind): string {
+  switch (kind) {
+    case 'json':
+      return 'JSON';
+    case 'markdown':
+      return 'Markdown';
+    case 'plain':
+      return t('node.textPreviewPlain');
+  }
+}
+
+function resolveCanvasTextPreviewDiagnostic(code: CanvasTextFilePreviewDiagnosticCode): string {
+  switch (code) {
+    case 'canvas-text-preview-invalid-json':
+      return t('node.textPreviewInvalidJson');
+    case 'canvas-text-preview-invalid-utf8':
+      return t('node.textPreviewInvalidUtf8');
+    case 'canvas-text-preview-missing':
+      return t('node.textPreviewMissing');
+    case 'canvas-text-preview-too-large':
+      return t('node.textPreviewTooLarge');
+    case 'canvas-text-preview-unauthorized':
+      return t('node.textPreviewUnauthorized');
+    case 'canvas-text-preview-stale-node':
+      return t('node.textPreviewStale');
+    case 'canvas-text-preview-read-failed':
+    case 'canvas-text-preview-unavailable':
+      return t('node.textPreviewUnavailable');
+  }
 }
 
 export function resolveCanvasFileName(

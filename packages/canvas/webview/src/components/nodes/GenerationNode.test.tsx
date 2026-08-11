@@ -177,6 +177,11 @@ function createHost(
     projectContent: async () => snapshot(),
     previewResource: async () => undefined,
     revealResource: async () => undefined,
+    readTextFilePreview: async (nodeId) => ({
+      requestId: 'fixture-text-preview',
+      nodeId,
+      status: 'unsupported',
+    }),
     getAuthoringCapabilities: () => ({
       sourceModes: [],
       generationKinds: [],

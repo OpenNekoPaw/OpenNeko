@@ -116,6 +116,8 @@ import {
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
   parseCanvasHostSnapshot,
+  parseCanvasTextFilePreviewRequest,
+  parseCanvasTextFilePreviewResult,
   type CanvasHostProjectionEvent,
   type CanvasHostRuntimeIdentity,
 } from '@neko/canvas-domain';
@@ -1225,6 +1227,18 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseCanvasMaterialActionResolution(response, request.requestId);
+    },
+    async readTextFilePreview(value) {
+      const request = parseCanvasTextFilePreviewRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error('Desktop Canvas text preview requires a current owner-bound snapshot.');
+      }
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
+        request,
+      );
+      return parseCanvasTextFilePreviewResult(response, request.requestId, request.nodeId);
     },
     async executeIntent(value) {
       const request = parseCanvasHostIntentRequest(value);

@@ -6,6 +6,8 @@ import type {
   CanvasHostSnapshot,
   CanvasMaterialActionResolution,
   CanvasMaterialActionResolutionRequest,
+  CanvasTextFilePreviewRequest,
+  CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
 import type {
   HtmlAudioDescriptor,
@@ -18,6 +20,7 @@ import { validateContentLocator, type ContentLocator } from '@neko/content';
 export const DESKTOP_CANVAS_CHANNELS = {
   snapshotGet: 'open-neko:canvas:snapshot-get',
   materialActionsResolve: 'open-neko:canvas:material-actions-resolve',
+  textFilePreviewRead: 'open-neko:canvas:text-file-preview-read',
   intentExecute: 'open-neko:canvas:intent-execute',
   previewVariantResolve: 'open-neko:canvas:preview-variant-resolve',
   mediaRequestExecute: 'open-neko:canvas:media-request-execute',
@@ -49,6 +52,7 @@ export interface OpenNekoDesktopCanvasBridge {
       request: CanvasMaterialActionResolutionRequest,
     ): Promise<CanvasMaterialActionResolution>;
     executeIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult>;
+    readTextFilePreview(request: CanvasTextFilePreviewRequest): Promise<CanvasTextFilePreviewResult>;
     resolvePreviewVariant(
       request: DesktopCanvasPreviewVariantRequest,
     ): Promise<DesktopCanvasPreviewVariantResult>;
