@@ -437,26 +437,19 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const selectedNodeScreenshot = await screenshot('canvas-node-selected-without-property-dock');
     const videoActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
     if (
-      videoActions.visible.join('|') !== '添加到剪辑|预览|创建节点副本' &&
-      videoActions.visible.join('|') !== 'Add to Cut|Preview|Duplicate node'
+      videoActions.actionIds.join('|') !==
+        'cut:add-resource|video:separate-audio|node:duplicate|preview:open' ||
+      videoActions.overflowActionIds.join('|') !== 'desktop:reveal'
     ) {
       throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
     }
-    if (
-      !videoActions.overflowActionIds.includes('desktop:reveal') ||
-      !videoActions.overflowActionIds.includes('delete-selection')
-    ) {
-      throw new Error(
-        `Canvas video overflow actions are incomplete: ${JSON.stringify(videoActions)}`,
-      );
-    }
     await click('[data-owner-view-id="canvas:functional:video"] [data-selection-overflow="true"]');
-    await waitForSelector('[data-selection-overflow-group="node"]');
+    await waitForSelector('[data-selection-overflow-group="file"]');
     const videoOverflow = await inspectCanvasOverflow(evaluate);
     if (
-      !videoOverflow.groups.includes('file') ||
-      !videoOverflow.groups.includes('node') ||
-      !videoOverflow.nodeText.some((text) => ['删除', 'Delete'].includes(text))
+      videoOverflow.groups.join('|') !== 'file' ||
+      videoOverflow.actionIds.join('|') !== 'desktop:reveal' ||
+      videoOverflow.text.some((text) => ['删除', 'Delete'].includes(text))
     ) {
       throw new Error(
         `Canvas video overflow grouping is invalid: ${JSON.stringify(videoOverflow)}`,
@@ -464,6 +457,32 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     const videoOverflowScreenshot = await screenshot('canvas-video-actions-overflow');
     await pressKey('Escape');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
+    );
+    const imageActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
+    if (
+      imageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      imageActions.overflowActionIds.length !== 0 ||
+      imageActions.actionIds.some((actionId) =>
+        ['cut:add-resource', 'video:separate-audio', 'audio:voice-denoise'].includes(actionId),
+      )
+    ) {
+      throw new Error(`Canvas image actions are invalid: ${JSON.stringify(imageActions)}`);
+    }
+    checkpoint('canvas-image-owner-actions', imageActions);
+    const imageActionsScreenshot = await screenshot('canvas-image-owner-actions');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
+      0,
+      { xRatio: 0.5, yRatio: 0.95 },
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:add-resource"]',
+    );
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:add-resource"]',
     );
@@ -602,6 +621,24 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       videoPlayback.currentTime,
     );
     await waitForCanvasPackagePlaybackState(evaluate, 'canvas:functional:audio', 'audio');
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="audio-node"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="cut:add-resource"]',
+    );
+    const audioActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:audio');
+    if (
+      audioActions.actionIds.join('|') !== 'cut:add-resource|node:duplicate|preview:open' ||
+      audioActions.overflowActionIds.join('|') !== 'desktop:reveal' ||
+      audioActions.actionIds.some((actionId) =>
+        ['video:separate-audio', 'audio:voice-denoise'].includes(actionId),
+      )
+    ) {
+      throw new Error(`Canvas audio actions are invalid: ${JSON.stringify(audioActions)}`);
+    }
+    checkpoint('canvas-audio-owner-actions', audioActions);
+    const audioActionsScreenshot = await screenshot('canvas-audio-owner-actions');
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:audio"] [data-preview-surface="audio"] [data-testid="canvas-audio-toggle-playback"]',
     );
@@ -784,6 +821,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       videoActions,
       videoOverflow,
       videoOverflowScreenshot,
+      imageActions,
+      imageActionsScreenshot,
+      audioActions,
+      audioActionsScreenshot,
       newDraftHandoff,
       newDraftHandoffScreenshot,
       otioActions,
@@ -873,6 +914,13 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evidence.newDraftHandoff.clipCount !== 1 ||
       !evidence.otioActions.actionIds.includes('cut:open') ||
       evidence.otioActions.actionIds.includes('cut:add-resource') ||
+      evidence.videoActions.actionIds.join('|') !==
+        'cut:add-resource|video:separate-audio|node:duplicate|preview:open' ||
+      evidence.imageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      evidence.imageActions.overflowActionIds.length !== 0 ||
+      evidence.audioActions.actionIds.join('|') !==
+        'cut:add-resource|node:duplicate|preview:open' ||
+      evidence.audioActions.overflowActionIds.join('|') !== 'desktop:reveal' ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||
       evidence.audioAdvancedTo <= 0
@@ -2152,8 +2200,11 @@ function inspectCanvasOverflow(evaluate) {
   return evaluate(`(() => ({
     groups: [...document.querySelectorAll('[data-selection-overflow-group]')]
       .map((group) => group.getAttribute('data-selection-overflow-group')),
-    nodeText: [...document.querySelectorAll(
-      '[data-selection-overflow-group="node"] [data-selection-action]'
+    actionIds: [...document.querySelectorAll(
+      '[data-selection-overflow-group] [data-selection-action]'
+    )].map((action) => action.getAttribute('data-selection-action')),
+    text: [...document.querySelectorAll(
+      '[data-selection-overflow-group] [data-selection-action]'
     )].map((action) => action.textContent?.trim() ?? ''),
   }))()`);
 }

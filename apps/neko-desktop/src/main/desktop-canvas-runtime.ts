@@ -134,8 +134,17 @@ export class DesktopCanvasRuntime {
       }) => Promise<DesktopCanvasSourceSelection | undefined>;
       readonly previewResource?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
+        readonly workspace: DesktopCanvasViewGrant['workspace'];
         readonly locator: ContentLocator;
-        readonly absolutePath: string;
+        readonly absolutePath?: string;
+      }) => Promise<void>;
+      readonly resolveEditText?: (input: {
+        readonly identity: CanvasHostRuntimeIdentity;
+        readonly target: CanvasMaterialActionTarget;
+      }) => Promise<boolean>;
+      readonly editText?: (input: {
+        readonly identity: CanvasHostRuntimeIdentity;
+        readonly target: CanvasMaterialActionTarget;
       }) => Promise<void>;
       readonly registerPreviewResource?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
@@ -183,6 +192,7 @@ export class DesktopCanvasRuntime {
         readonly preview: string;
         readonly reveal: string;
         readonly openInCut?: string;
+        readonly editText?: string;
         readonly addToCut?: string;
         readonly separateAudio?: string;
         readonly copyToProjectMediaLibrary?: string;
@@ -432,6 +442,8 @@ export class DesktopCanvasRuntime {
     );
     const requestSource = this.options.requestSource;
     const previewResource = this.options.previewResource;
+    const resolveEditText = this.options.resolveEditText;
+    const editText = this.options.editText;
     const resolveCut = this.options.resolveCut;
     const openInCut = this.options.openInCut;
     const resolveAddToCut = this.options.resolveAddToCut;
@@ -442,11 +454,13 @@ export class DesktopCanvasRuntime {
     const generation = this.options.generation;
     const previewEffect = previewResource
       ? async (requestIdentity: CanvasHostRuntimeIdentity, locator: ContentLocator) => {
-          const absolutePath = await resolveWorkspaceContentLocator(grant.workspace, locator);
           await previewResource({
             identity: requestIdentity,
+            workspace: grant.workspace,
             locator,
-            absolutePath,
+            ...(locator.kind === 'workspace-file' || locator.kind === 'generated-output'
+              ? { absolutePath: await resolveWorkspaceContentLocator(grant.workspace, locator) }
+              : {}),
           });
         }
       : undefined;
@@ -471,8 +485,29 @@ export class DesktopCanvasRuntime {
         : {}),
       ...(this.options.host.external?.revealPath
         ? {
+            resolveReveal: async ({ target }: { readonly target: CanvasMaterialActionTarget }) =>
+              target.locator.kind === 'workspace-file' ||
+              target.locator.kind === 'generated-output',
             reveal: ({ identity: requestIdentity, target }) =>
               revealEffect(requestIdentity, target.locator),
+          }
+        : {}),
+      ...(resolveEditText && editText
+        ? {
+            resolveEditText: ({
+              identity: requestIdentity,
+              target,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+            }) => resolveEditText({ identity: requestIdentity, target }),
+            editText: ({
+              identity: requestIdentity,
+              target,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+            }) => editText({ identity: requestIdentity, target }),
           }
         : {}),
       ...(resolveCut && openInCut

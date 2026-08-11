@@ -18,6 +18,7 @@ import {
   createNodeTextEditorMarkdownReferenceCatalog,
   NodeTextEditorMarkdownMediaService,
 } from '@neko/text-editor-node';
+import { modeForTextDocument } from '@neko/text-editor-domain';
 import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import {
@@ -839,6 +840,7 @@ async function startDesktop(): Promise<void> {
       preview: canvasUsesChineseLabels ? '全屏预览' : 'Full-screen preview',
       reveal: canvasUsesChineseLabels ? '在访达中显示' : 'Reveal in Finder',
       openInCut: canvasUsesChineseLabels ? '打开剪辑' : 'Open Cut',
+      editText: canvasUsesChineseLabels ? '编辑文本' : 'Edit text',
       addToCut: canvasUsesChineseLabels ? '剪辑' : 'Edit',
       separateAudio: canvasUsesChineseLabels ? '音频分离' : 'Separate audio',
       copyToProjectMediaLibrary: canvasUsesChineseLabels ? '存为素材' : 'Save material',
@@ -948,16 +950,42 @@ async function startDesktop(): Promise<void> {
       });
       return destination ? { globalLibraryId: libraryId, ...destination } : undefined;
     },
-    previewResource: async ({ absolutePath, identity, locator }) => {
-      const label = path.basename(absolutePath);
+    previewResource: async ({ absolutePath, identity, locator, workspace }) => {
+      const label = canvasContentDisplayName(locator);
+      const shellProjection = await shellService.getProjection(identity.windowId);
+      const tab = shellProjection.window.tabs.find(
+        (candidate) => candidate.projectId === identity.projectId,
+      );
+      if (!tab || shellProjection.rendererSessionId !== identity.rendererSessionId) {
+        throw new Error('Canvas Preview owner is stale.');
+      }
+      let source:
+        | { readonly absolutePath: string; readonly bytes?: never }
+        | { readonly absolutePath?: never; readonly bytes: Uint8Array };
+      if (absolutePath) {
+        source = { absolutePath };
+      } else {
+        const contentRead = createNodeHostContentReadService({
+          workspaceRoot: workspace.workspacePath,
+          documentEntryReader: {
+            readEntry: (sourcePath, entryPath) =>
+              canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+          },
+        });
+        const loaded = await contentRead.read(locator, { maxBytes: 64 * 1024 * 1024 });
+        if (loaded.status !== 'ready') {
+          throw new Error(`Canvas Preview content is unavailable: ${loaded.diagnostic.code}.`);
+        }
+        source = { bytes: loaded.bytes };
+      }
       await previewRuntime.open({
         identity: {
           projectId: identity.projectId,
           workspaceId: identity.workspaceId,
           windowId: identity.windowId,
-          viewId: `resource-browser:${identity.viewId}`,
-          viewInstanceId: identity.viewInstanceId,
-          rendererSessionId: identity.rendererSessionId,
+          viewId: `resource-browser:${tab.viewId}`,
+          viewInstanceId: tab.viewInstanceId,
+          rendererSessionId: shellProjection.rendererSessionId,
         },
         item: {
           resourceId: `canvas-content:${identity.documentId}:${JSON.stringify(locator)}`,
@@ -969,7 +997,35 @@ async function startDesktop(): Promise<void> {
           locator,
           capabilities: ['preview'],
         },
-        absolutePath,
+        ...source,
+      });
+    },
+    resolveEditText: async ({ target }) =>
+      target.locator.kind === 'workspace-file' &&
+      modeForTextDocument(target.locator.path) !== undefined,
+    editText: async ({ identity, target }) => {
+      if (target.locator.kind !== 'workspace-file') {
+        throw new Error('Canvas Text Editor requires a Workspace File locator.');
+      }
+      await textEditorRuntime.open({
+        identity: {
+          projectId: identity.projectId,
+          workspaceId: identity.workspaceId,
+          windowId: identity.windowId,
+          viewId: `canvas-material:${identity.viewId}`,
+          viewInstanceId: identity.viewInstanceId,
+          rendererSessionId: identity.rendererSessionId,
+        },
+        item: {
+          resourceId: `canvas-content:${identity.documentId}:${target.nodeId}`,
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'document',
+          label: path.posix.basename(target.locator.path),
+          locator: target.locator,
+          capabilities: ['edit-text', 'preview', 'reveal'],
+        },
       });
     },
     resolveCut: async ({ absolutePath, identity, target }) =>
@@ -2492,6 +2548,18 @@ function requireCanvasPreviewContentType(
       return 'application/pdf';
     default:
       throw new Error('Canvas preview content type is unavailable.');
+  }
+}
+
+function canvasContentDisplayName(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return path.posix.basename(locator.path);
+    case 'document-entry':
+      return path.posix.basename(locator.entryPath);
+    case 'package-resource':
+      return path.posix.basename(locator.resourcePath);
   }
 }
 
