@@ -14,8 +14,7 @@ import type {
 } from '@neko/entity-domain';
 import type { EntityMention } from '@neko/chara';
 import { parseEntityUri } from '@neko/entity-domain';
-import { normalizeCharacterLookupKey } from '@neko/entity-domain';
-import { stableIdPart } from '@neko/entity-domain';
+import { normalizeCreativeEntityLookupKey } from '@neko/entity-domain';
 
 const ANALYZER_ID = 'neko.text-entity.deterministic';
 
@@ -120,7 +119,7 @@ function buildEntityNameIndex(snapshot: SemanticEntitySnapshot): EntityNameIndex
     byId.set(entity.entityId, entity);
     for (const label of [entity.names.canonical, entity.names.display, ...entity.names.aliases]) {
       if (!label?.trim()) continue;
-      const normalized = normalizeCharacterLookupKey(label);
+      const normalized = normalizeCreativeEntityLookupKey(label);
       const entities = byName.get(normalized) ?? [];
       if (!entities.some((candidate) => candidate.entityId === entity.entityId)) {
         entities.push(entity);
@@ -209,7 +208,7 @@ function collectExplicitCandidateObservation(
   const name = segment.explicitEntityName?.trim();
   const kind = segment.explicitEntityKind;
   if (!name || !kind) return;
-  const normalizedName = normalizeCharacterLookupKey(name);
+  const normalizedName = normalizeCreativeEntityLookupKey(name);
   const exact = index.byName.get(normalizedName) ?? [];
   const compatible = exact.filter((entity) => entity.kind === kind);
   if (compatible.length === 1) return;
@@ -254,6 +253,12 @@ function collectExplicitCandidateObservation(
     range,
     sourceFingerprint: input.source.fingerprint,
   });
+}
+
+function stableIdPart(value: string): string {
+  const normalized = value.trim().normalize('NFC').toLocaleLowerCase().replace(/\s+/g, '-');
+  const slug = normalized.replace(/[^\p{Letter}\p{Number}_-]+/gu, '-').replace(/-+/g, '-');
+  return (slug.replace(/^-|-$/g, '') || 'entity').slice(0, 96);
 }
 
 function candidateFromObservation(

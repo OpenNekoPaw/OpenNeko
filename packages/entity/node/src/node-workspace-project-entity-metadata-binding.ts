@@ -2,25 +2,25 @@ import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { LocalMetadataPartition } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
-import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
+import type { ProjectEntityProjectionRepository } from '@neko/entity-domain';
 import {
-  initializeEntityAssetProjectionTables,
+  initializeProjectEntityProjectionTables,
   initializeCoreLocalMetadataTables,
 } from '@neko/local-metadata/sqlite';
 
-export interface NodeWorkspaceEntityAssetMetadataBinding {
+export interface NodeWorkspaceProjectEntityMetadataBinding {
   readonly workspaceId: string;
   readonly partition: LocalMetadataPartition;
-  readonly repository: EntityAssetProjectionRepository;
+  readonly repository: ProjectEntityProjectionRepository;
   dispose(): Promise<void>;
 }
 
-export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
+export async function createNodeWorkspaceProjectEntityMetadataBinding(options: {
   readonly homedir: string;
   readonly workDir: string;
   readonly createWorkspaceId?: () => string;
   readonly now?: () => string;
-}): Promise<NodeWorkspaceEntityAssetMetadataBinding> {
+}): Promise<NodeWorkspaceProjectEntityMetadataBinding> {
   const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
   try {
     const databasePath = resolveGlobalStorageLayout(options.homedir).database;
@@ -29,7 +29,7 @@ export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
       busyTimeoutMs: 2_000,
     });
     await initializeCoreLocalMetadataTables(metadataStore);
-    await initializeEntityAssetProjectionTables(metadataStore);
+    await initializeProjectEntityProjectionTables(metadataStore);
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -41,12 +41,12 @@ export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
     const partition: LocalMetadataPartition = {
       scope: 'workspace',
       workspaceId: identity.workspaceId,
-      domain: 'entity-asset-projection',
+      domain: 'project-entity-projection',
     };
     return {
       workspaceId: identity.workspaceId,
       partition,
-      repository: metadataStore.repositories.entityAssetProjections,
+      repository: metadataStore.repositories.projectEntityProjections,
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {

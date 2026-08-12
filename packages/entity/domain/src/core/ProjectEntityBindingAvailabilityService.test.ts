@@ -170,7 +170,6 @@ const DOCUMENT: ProjectEntityDocument = {
       entityId: 'character-rin',
       kind: 'character',
       names: { canonical: 'Rin', aliases: [] },
-      facts: { role: 'lead' },
       representations: [WORKSPACE, DOCUMENT_ENTRY, GENERATED, PACKAGE],
       lifecycle: { state: 'active' },
       createdAt: '2026-08-05T00:00:00.000Z',

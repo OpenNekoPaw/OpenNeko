@@ -1,15 +1,15 @@
 import type {
-  EntityAssetProjectionRepository,
+  ProjectEntityProjectionRepository,
   ProjectEntityBindingAvailabilityService,
 } from '@neko/entity-domain';
-import type { EntityAssetProjectionPartition } from '@neko/entity-domain';
+import type { ProjectEntityProjectionPartition } from '@neko/entity-domain';
 import type { ProjectEntityAvailableDocumentReader } from './node-project-entity-repository';
 
 export interface RefreshProjectEntityBindingAvailabilityOptions {
   readonly documentRepository: ProjectEntityAvailableDocumentReader;
   readonly availability: Pick<ProjectEntityBindingAvailabilityService, 'project'>;
-  readonly projections: EntityAssetProjectionRepository;
-  readonly partition: EntityAssetProjectionPartition;
+  readonly projections: ProjectEntityProjectionRepository;
+  readonly partition: ProjectEntityProjectionPartition;
 }
 
 export async function refreshProjectEntityBindingAvailability(

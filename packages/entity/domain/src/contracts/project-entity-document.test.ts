@@ -11,7 +11,6 @@ import {
 } from './project-entity-document';
 
 const DIGEST_A = 'a'.repeat(64);
-const DIGEST_B = 'b'.repeat(64);
 
 describe('Project Entity document contract', () => {
   it('round-trips every supported Project Entity kind', () => {
@@ -61,67 +60,8 @@ describe('Project Entity document contract', () => {
     expect(decoded).toEqual({ ok: true, document, diagnostics: [] });
   });
 
-  it('records an immutable import base independently from current Project Entity facts', () => {
-    const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
-    const document = createDocument([
-      {
-        ...entity,
-        facts: { personality: 'locally edited' },
-        provenance: {
-          origin: { assetId: 'asset-rin', revision: 'revision-1', digest: DIGEST_A },
-          applied: { assetId: 'asset-rin', revision: 'revision-2', digest: DIGEST_B },
-          importBase: {
-            kind: 'character',
-            names: entity.names,
-            facts: { personality: 'published base' },
-            representations: [],
-          },
-          representationOrigins: [],
-        },
-      },
-    ]);
-
-    expect(assertProjectEntityDocument(document).entities[0]?.provenance?.importBase.facts).toEqual(
-      {
-        personality: 'published base',
-      },
-    );
-  });
-
-  it('rejects Asset binding lineage that does not resolve on both sides', () => {
-    const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
-    expect(
-      decodeProjectEntityDocument(
-        createDocument([
-          {
-            ...entity,
-            provenance: {
-              origin: { assetId: 'asset-rin', revision: 'revision-1', digest: DIGEST_A },
-              applied: { assetId: 'asset-rin', revision: 'revision-1', digest: DIGEST_A },
-              importBase: {
-                kind: entity.kind,
-                names: entity.names,
-                facts: {},
-                representations: [],
-              },
-              representationOrigins: [
-                {
-                  assetBindingId: 'asset-binding-missing',
-                  projectBindingId: 'project-binding-missing',
-                },
-              ],
-            },
-          },
-        ]),
-      ),
-    ).toMatchObject({
-      ok: true,
-      document: { entities: [] },
-      diagnostics: [{ code: 'invalid-project-entity-asset-provenance' }],
-    });
-  });
-
-  it('diagnoses unsupported document fields and rejects projection authority from facts', () => {
+  it('diagnoses unsupported document fields and rejects former facts and provenance authority', () => {
+    const valid = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
     expect(
       decodeProjectEntityDocument({ ...createDocument([]), unexpectedField: 1 }),
     ).toMatchObject({
@@ -135,22 +75,35 @@ describe('Project Entity document contract', () => {
       diagnostics: [{ code: 'invalid-project-entity-document' }],
     });
     expect(
-      decodeProjectEntityDocument(
-        createDocument([
+      decodeProjectEntityDocument({
+        projectId: 'project-neko',
+        entities: [
+          valid,
           {
             ...createEntity({
-              entityId: 'character-rin',
+              entityId: 'character-with-facts',
               kind: 'character',
-              canonical: 'Rin',
+              canonical: 'Facts',
             }),
             facts: { availability: 'active' },
           },
-        ]),
-      ),
+          {
+            ...createEntity({
+              entityId: 'character-with-provenance',
+              kind: 'character',
+              canonical: 'Provenance',
+            }),
+            provenance: { formerAssetLineage: true },
+          },
+        ],
+      }),
     ).toMatchObject({
       ok: true,
-      document: { entities: [] },
-      diagnostics: [{ code: 'invalid-project-entity-document' }],
+      document: { entities: [valid] },
+      diagnostics: [
+        { code: 'invalid-project-entity-document', entityId: 'character-with-facts' },
+        { code: 'invalid-project-entity-document', entityId: 'character-with-provenance' },
+      ],
     });
   });
 
@@ -365,7 +318,6 @@ function createEntity(input: {
     entityId: input.entityId,
     kind: input.kind,
     names: { canonical: input.canonical, aliases: [] },
-    facts: {},
     representations: [],
     lifecycle: { state: 'active' },
     createdAt: '2026-08-05T00:00:00.000Z',

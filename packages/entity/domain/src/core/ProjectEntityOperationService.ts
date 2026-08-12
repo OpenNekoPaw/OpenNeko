@@ -9,7 +9,6 @@ import {
   type ProjectEntityOperationCommitPort,
   type ProjectEntityOperationCommitRequest,
   type ProjectEntityRecord,
-  type ProjectEntityFactValue,
   type ProjectEntityNames,
   type ProjectEntityRepresentationBinding,
   type ProjectEntityReferenceOperationKind,
@@ -43,8 +42,7 @@ export interface DismissProjectEntityCandidateRequest {
 export interface EditProjectEntityRequest {
   readonly entityId: string;
   readonly changes: {
-    readonly names?: ProjectEntityNames;
-    readonly facts?: Readonly<Record<string, ProjectEntityFactValue>>;
+    readonly names: ProjectEntityNames;
   };
   readonly updatedAt: string;
 }
@@ -133,7 +131,7 @@ export class ProjectEntityOperationService {
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     return this.mutate(async (current) => {
-      const target = requireActiveEntity(current, request.targetEntityId);
+      const target = requireActiveProjectEntity(current, request.targetEntityId);
       const candidate = await this.requireCandidate(request.candidateId, signal);
       ensureSameKind(target.kind, request.targetSemantic.kind);
       const updated: ProjectEntityRecord = {
@@ -161,19 +159,11 @@ export class ProjectEntityOperationService {
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     return this.mutate((current) => {
-      const entity = requireActiveEntity(current, request.entityId);
-      if (!request.changes.names && !request.changes.facts) {
-        throw operationError(
-          'project-entity-operation-invalid',
-          'Project Entity edit requires at least one semantic change.',
-          { entityId: entity.entityId },
-        );
-      }
+      const entity = requireActiveProjectEntity(current, request.entityId);
       return {
         entities: replaceEntity(current.entities, {
           ...entity,
-          ...(request.changes.names ? { names: request.changes.names } : {}),
-          ...(request.changes.facts ? { facts: request.changes.facts } : {}),
+          names: request.changes.names,
           updatedAt: request.updatedAt,
         }),
       };
@@ -185,7 +175,7 @@ export class ProjectEntityOperationService {
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     return this.mutate((current) => {
-      const entity = requireActiveEntity(current, request.entityId);
+      const entity = requireActiveProjectEntity(current, request.entityId);
       if (
         current.entities.some((candidate) =>
           candidate.representations.some(
@@ -222,7 +212,7 @@ export class ProjectEntityOperationService {
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     return this.mutate((current) => {
-      const entity = requireActiveEntity(current, request.entityId);
+      const entity = requireActiveProjectEntity(current, request.entityId);
       if (!entity.representations.some((binding) => binding.bindingId === request.bindingId)) {
         throw operationError(
           'project-entity-operation-invalid',
@@ -247,8 +237,8 @@ export class ProjectEntityOperationService {
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     return this.commitWithReferences((current) => {
-      const source = requireActiveEntity(current, request.sourceEntityId);
-      const target = requireActiveEntity(current, request.targetEntityId);
+      const source = requireActiveProjectEntity(current, request.sourceEntityId);
+      const target = requireActiveProjectEntity(current, request.targetEntityId);
       ensureDistinctEntities(source, target);
       ensureSameKind(source.kind, target.kind);
       ensureSameKind(target.kind, request.targetSemantic.kind);
@@ -275,11 +265,11 @@ export class ProjectEntityOperationService {
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     return this.commitWithReferences((current) => {
-      const source = requireActiveEntity(current, request.entityId);
+      const source = requireActiveProjectEntity(current, request.entityId);
       const replacement =
         request.replacementEntityId === undefined
           ? undefined
-          : requireActiveEntity(current, request.replacementEntityId);
+          : requireActiveProjectEntity(current, request.replacementEntityId);
       if (replacement) {
         ensureDistinctEntities(source, replacement);
         ensureSameKind(source.kind, replacement.kind);
@@ -429,7 +419,7 @@ function requireEntity(document: ProjectEntityDocument, entityId: string): Proje
   return entity;
 }
 
-function requireActiveEntity(
+export function requireActiveProjectEntity(
   document: ProjectEntityDocument,
   entityId: string,
 ): ProjectEntityRecord {

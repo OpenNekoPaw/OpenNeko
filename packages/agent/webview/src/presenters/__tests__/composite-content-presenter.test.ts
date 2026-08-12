@@ -167,19 +167,17 @@ describe('composite content presenter', () => {
       reviewPolicy: 'requires-user-review',
       entityCandidates: [
         {
-          id: 'candidate-rin',
+          candidateId: 'candidate-rin',
           kind: 'character',
-          name: 'Rin',
-          status: 'open',
-          identityBasis: 'user-named',
-          provenance: [
+          proposedNames: { canonical: 'Rin', aliases: [] },
+          freshness: 'fresh',
+          evidence: [
             {
-              providerId: 'neko-agent',
-              sourceKind: 'agent',
-              sourceRef: 'read-doc#0',
+              evidenceId: 'evidence-rin',
+              owner: 'document',
+              sourceId: 'read-doc#0',
             },
           ],
-          sourceRefs: ['read-doc#0'],
         },
       ],
     };
@@ -271,7 +269,7 @@ describe('composite content presenter', () => {
     ]);
     expect(projection.data.entityMemoryContribution).toMatchObject({
       contributionId: 'contribution-page-1',
-      entityCandidates: [expect.objectContaining({ id: 'candidate-rin' })],
+      entityCandidates: [expect.objectContaining({ candidateId: 'candidate-rin' })],
     });
     expect(projection.data.sections[0]?.media).toEqual([
       expect.objectContaining({

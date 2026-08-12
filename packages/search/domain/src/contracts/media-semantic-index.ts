@@ -22,7 +22,7 @@ import {
   type CharacterObservationSource,
   type EntityMention,
 } from '@neko/chara';
-import type { CreativeEntityCandidate, EntityAssetRequirement } from '@neko/entity-domain';
+import type { ProjectEntityCandidateProjection } from '@neko/entity-domain';
 
 export const MEDIA_TEXT_SEGMENT_KINDS = [
   'ocr',
@@ -171,11 +171,10 @@ export interface EntityMemoryContribution {
   readonly sourcePackage: string;
   readonly sourceRef: MediaEvidenceSourceRef;
   readonly reviewPolicy: EntityMemoryContributionReviewPolicy;
-  readonly entityCandidates?: readonly CreativeEntityCandidate[];
+  readonly entityCandidates?: readonly ProjectEntityCandidateProjection[];
   readonly characterObservations?: readonly CharacterObservation[];
   readonly mediaTextSegments?: readonly MediaTextSegment[];
   readonly semanticTags?: readonly SemanticTag[];
-  readonly assetRequirements?: readonly EntityAssetRequirement[];
   readonly diagnostics?: readonly ContributionDiagnostic[];
   readonly createdAt?: string;
   readonly updatedAt?: string;
@@ -674,6 +673,22 @@ function validateContribution(
     );
   }
   validateArray(
+    value['entityCandidates'],
+    [...path, 'entityCandidates'],
+    diagnostics,
+    (item, itemPath) => validateProjectEntityCandidate(item, itemPath, diagnostics),
+  );
+  if (value['assetRequirements'] !== undefined) {
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'invalid-required-field',
+        [...path, 'assetRequirements'],
+        'Entity memory contributions cannot own Asset requirements.',
+      ),
+    );
+  }
+  validateArray(
     value['characterObservations'],
     [...path, 'characterObservations'],
     diagnostics,
@@ -706,12 +721,6 @@ function validateContribution(
   validateArray(value['semanticTags'], [...path, 'semanticTags'], diagnostics, (item, itemPath) =>
     validateSemanticTag(item, itemPath, diagnostics),
   );
-  validateArray(
-    value['assetRequirements'],
-    [...path, 'assetRequirements'],
-    diagnostics,
-    (item, itemPath) => validateAssetRequirement(item, itemPath, diagnostics),
-  );
   validateArray(value['diagnostics'], [...path, 'diagnostics'], diagnostics, (item, itemPath) =>
     validateContributionDiagnostic(item, itemPath, diagnostics),
   );
@@ -719,13 +728,13 @@ function validateContribution(
   validateSerializedSize(value, path, diagnostics, options);
 }
 
-function validateAssetRequirement(
+function validateProjectEntityCandidate(
   value: unknown,
   path: readonly CharacterMemoryPathSegment[],
   diagnostics: MediaSemanticDiagnostic[],
 ): void {
-  if (!isRecord(value)) {
-    diagnostics.push(invalidFieldDiagnostic(path, 'object', value));
+  if (!isRecord(value) || typeof value['candidateId'] !== 'string') {
+    diagnostics.push(invalidFieldDiagnostic(path, 'Project Entity candidate projection', value));
     return;
   }
   validateSerializableValue(value, path, diagnostics);

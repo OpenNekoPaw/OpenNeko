@@ -5,3 +5,7 @@ export type CreativeEntityKind = (typeof CREATIVE_ENTITY_KINDS)[number];
 export function isCreativeEntityKind(value: unknown): value is CreativeEntityKind {
   return CREATIVE_ENTITY_KINDS.some((kind) => kind === value);
 }
+
+export function normalizeCreativeEntityLookupKey(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}

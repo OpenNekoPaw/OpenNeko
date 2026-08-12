@@ -129,19 +129,17 @@ describe('composite content contract', () => {
             reviewPolicy: 'requires-user-review',
             entityCandidates: [
               {
-                id: 'candidate-rin',
+                candidateId: 'candidate-rin',
                 kind: 'character',
-                name: 'Rin',
-                status: 'open',
-                identityBasis: 'user-named',
-                provenance: [
+                proposedNames: { canonical: 'Rin', aliases: [] },
+                freshness: 'fresh',
+                evidence: [
                   {
-                    providerId: 'neko-agent',
-                    sourceKind: 'agent',
-                    sourceRef: 'read-doc#0',
+                    evidenceId: 'evidence-rin',
+                    owner: 'document',
+                    sourceId: 'read-doc#0',
                   },
                 ],
-                sourceRefs: ['read-doc#0'],
               },
             ],
           },
@@ -235,19 +233,17 @@ describe('composite content contract', () => {
       "reviewPolicy": "requires-user-review",
       "entityCandidates": [
         {
-          "id": "candidate-rin",
+          "candidateId": "candidate-rin",
           "kind": "character",
-          "name": "Rin",
-          "status": "open",
-          "identityBasis": "user-named",
-          "provenance": [
+          "proposedNames": { "canonical": "Rin", "aliases": [] },
+          "freshness": "fresh",
+          "evidence": [
             {
-              "providerId": "neko-agent",
-              "sourceKind": "agent",
-              "sourceRef": "read-doc#0"
+              "evidenceId": "evidence-rin",
+              "owner": "document",
+              "sourceId": "read-doc#0"
             }
-          ],
-          "sourceRefs": ["read-doc#0"]
+          ]
         }
       ]
     }

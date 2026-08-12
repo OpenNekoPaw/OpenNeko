@@ -138,7 +138,6 @@ function entity(
     entityId,
     kind: 'character',
     names: { canonical, aliases: [] },
-    facts: {},
     representations: [],
     lifecycle,
     createdAt: '2026-08-05T00:00:00.000Z',

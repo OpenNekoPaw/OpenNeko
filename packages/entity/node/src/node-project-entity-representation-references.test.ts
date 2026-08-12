@@ -52,7 +52,6 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
       entityId: 'character-invalid',
       kind: 'character',
       names: { canonical: '', aliases: [] },
-      facts: {},
       representations: [],
       lifecycle: { state: 'active' },
       createdAt: '2026-08-05T00:00:00.000Z',
@@ -109,7 +108,6 @@ async function writeCanonicalDocument(workspacePath: string): Promise<void> {
         entityId: 'character-rin',
         kind: 'character',
         names: { canonical: 'Rin', aliases: [] },
-        facts: {},
         representations: [
           {
             bindingId: 'workspace-binding',

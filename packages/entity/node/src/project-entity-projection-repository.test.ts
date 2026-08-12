@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
-  initializeEntityAssetProjectionTables,
+  initializeProjectEntityProjectionTables,
   initializeCoreLocalMetadataTables,
 } from '@neko/local-metadata/sqlite';
 
@@ -19,30 +19,37 @@ afterEach(async () => {
   );
 });
 
-describe('Entity/Asset projection repository', () => {
-  it('creates one typed projection table without graph, occurrence, or reverse-lookup tables', async () => {
-    const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-asset-schema-'));
+describe('Project Entity projection repository', () => {
+  it('creates one typed semantic projection table without legacy Entity Asset storage', async () => {
+    const homedir = await mkdtemp(join(tmpdir(), 'neko-project-entity-schema-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const store = createNodeSqliteLocalMetadataStore({ homedir });
     await store.open({ databasePath, busyTimeoutMs: 1_000 });
     await initializeCoreLocalMetadataTables(store);
-    await initializeEntityAssetProjectionTables(store);
+    await initializeProjectEntityProjectionTables(store);
     await store.dispose();
 
     const database = new DatabaseSync(databasePath, { readOnly: true });
-    const rows = database
+    const tables = database
       .prepare(
         `SELECT name FROM sqlite_schema
           WHERE type = 'table'
-            AND (name LIKE 'entity_%' OR name LIKE 'asset_%' OR name LIKE '%occurrence%')
+            AND (name LIKE '%entity%' OR name LIKE '%asset%')
           ORDER BY name`,
       )
       .all();
-    const names = rows.flatMap((row) => (typeof row['name'] === 'string' ? [row['name']] : []));
+    const columns = database.prepare('PRAGMA table_info(project_entity_projections)').all();
+    const schema = database
+      .prepare(`SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?`)
+      .get('project_entity_projections');
     database.close();
 
-    expect(names).toEqual(['entity_asset_projections']);
+    expect(tables.map((row) => row['name'])).toContain('project_entity_projections');
+    expect(tables.map((row) => row['name'])).not.toContain('entity_asset_projections');
+    expect(columns.map((row) => row['name'])).not.toContain('asset_ref');
+    expect(schema?.['sql']).not.toContain('asset-graph-node');
+    expect(schema?.['sql']).not.toContain('asset-graph-edge');
   });
 
   it('reinitializes stable tables and isolates an invalid projection row', async () => {
@@ -52,7 +59,7 @@ describe('Entity/Asset projection repository', () => {
     const store = createNodeSqliteLocalMetadataStore({ homedir });
     await store.open({ databasePath, busyTimeoutMs: 1_000 });
     await initializeCoreLocalMetadataTables(store);
-    await initializeEntityAssetProjectionTables(store);
+    await initializeProjectEntityProjectionTables(store);
     await store.repositories.workspaces.bind({
       identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
@@ -61,19 +68,26 @@ describe('Entity/Asset projection repository', () => {
     const partition = {
       scope: 'workspace' as const,
       workspaceId: WORKSPACE_ID,
-      domain: 'entity-asset-projection',
+      domain: 'project-entity-projection',
     };
     const updatedAt = '2026-07-13T07:00:00.000Z';
-    await store.repositories.entityAssetProjections.replaceSource({
+    await store.repositories.projectEntityProjections.replaceSource({
       partition,
-      sourceId: 'asset-runtime',
+      sourceId: 'entity-runtime',
       records: [
         {
-          projectionId: 'node:asset-rin',
-          kind: 'asset-graph-node',
-          sourceId: 'asset-runtime',
+          projectionId: 'occurrence:story:12',
+          kind: 'entity-occurrence',
+          sourceId: 'entity-runtime',
+          entityId: 'char_rin',
           freshness: 'fresh',
-          value: { id: 'node:asset-rin', kind: 'asset', refId: 'asset-rin' },
+          value: {
+            entityRef: { entityId: 'char_rin', entityKind: 'character' },
+            label: 'Rin',
+            source: { sourceId: 'story-main', sourceKind: 'story' },
+            role: 'reference',
+            location: 'story/main.fountain:12',
+          },
           updatedAt,
         },
       ],
@@ -84,25 +98,25 @@ describe('Entity/Asset projection repository', () => {
       async ({ sql }) => {
         const rows = await sql.all(
           `SELECT partition_key, partition_scope, workspace_id
-             FROM entity_asset_projections
+             FROM project_entity_projections
             WHERE projection_id = ?`,
-          ['node:asset-rin'],
+          ['occurrence:story:12'],
         );
         const row = rows[0]!;
         const invalidValue = {
           projectionId: 'projection:invalid',
-          kind: 'asset-graph-node',
+          kind: 'entity-occurrence',
           sourceId: 'invalid-source',
           freshness: 'fresh',
           value: { unexpectedField: true },
           updatedAt,
         };
         await sql.run(
-          `INSERT INTO entity_asset_projections (
+          `INSERT INTO project_entity_projections (
              partition_key, partition_scope, workspace_id, projection_kind, projection_id,
-             source_id, entity_id, related_entity_id, candidate_id, asset_ref, freshness,
+             source_id, entity_id, related_entity_id, candidate_id, freshness,
              projection_json, updated_at
-           ) VALUES (?, ?, ?, 'asset-graph-node', ?, ?, NULL, NULL, NULL, NULL, 'fresh', ?, ?)`,
+           ) VALUES (?, ?, ?, 'entity-occurrence', ?, ?, NULL, NULL, NULL, 'fresh', ?, ?)`,
           [
             String(row['partition_key']),
             String(row['partition_scope']),
@@ -116,15 +130,18 @@ describe('Entity/Asset projection repository', () => {
       },
     );
 
-    await initializeEntityAssetProjectionTables(store);
+    await initializeProjectEntityProjectionTables(store);
 
-    await expect(store.repositories.entityAssetProjections.list({ partition })).resolves.toEqual({
+    await expect(store.repositories.projectEntityProjections.list({ partition })).resolves.toEqual({
       records: [
-        expect.objectContaining({ projectionId: 'node:asset-rin', kind: 'asset-graph-node' }),
+        expect.objectContaining({
+          projectionId: 'occurrence:story:12',
+          kind: 'entity-occurrence',
+        }),
       ],
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
-          code: 'invalid-entity-asset-projection',
+          code: 'invalid-project-entity-projection',
           projectionId: 'projection:invalid',
         }),
       ]),
@@ -132,14 +149,14 @@ describe('Entity/Asset projection repository', () => {
     await store.dispose();
   });
 
-  it('round-trips typed projections and supports entity and asset reverse lookup', async () => {
-    const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-asset-projection-'));
+  it('round-trips the four typed semantic projections and supports Entity lookup', async () => {
+    const homedir = await mkdtemp(join(tmpdir(), 'neko-project-entity-projection-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const store = createNodeSqliteLocalMetadataStore({ homedir });
     await store.open({ databasePath, busyTimeoutMs: 1_000 });
     await initializeCoreLocalMetadataTables(store);
-    await initializeEntityAssetProjectionTables(store);
+    await initializeProjectEntityProjectionTables(store);
     await store.repositories.workspaces.bind({
       identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
@@ -148,38 +165,14 @@ describe('Entity/Asset projection repository', () => {
     const partition = {
       scope: 'workspace' as const,
       workspaceId: WORKSPACE_ID,
-      domain: 'entity-asset-projection',
+      domain: 'project-entity-projection',
     };
     const updatedAt = '2026-07-13T07:00:00.000Z';
 
-    await store.repositories.entityAssetProjections.replaceSource({
+    await store.repositories.projectEntityProjections.replaceSource({
       partition,
       sourceId: 'entity-runtime',
       records: [
-        {
-          projectionId: 'node:char-rin',
-          kind: 'asset-graph-node',
-          sourceId: 'entity-runtime',
-          entityId: 'char_rin',
-          freshness: 'fresh',
-          value: { id: 'node:char-rin', kind: 'entity', refId: 'char_rin', label: 'Rin' },
-          updatedAt,
-        },
-        {
-          projectionId: 'edge:rin-portrait',
-          kind: 'asset-graph-edge',
-          sourceId: 'entity-runtime',
-          entityId: 'char_rin',
-          assetRef: 'project://assets/rin.png',
-          freshness: 'fresh',
-          value: {
-            from: 'node:char-rin',
-            to: 'asset:rin-portrait',
-            type: 'bound-to-representation',
-            strength: 'confirmed',
-          },
-          updatedAt,
-        },
         {
           projectionId: 'occurrence:story:12',
           kind: 'entity-occurrence',
@@ -259,23 +252,14 @@ describe('Entity/Asset projection repository', () => {
       updatedAt,
     });
 
-    await expect(
-      store.repositories.entityAssetProjections.list({
-        partition,
-        assetRef: 'project://assets/rin.png',
-      }),
-    ).resolves.toEqual({
-      records: [expect.objectContaining({ kind: 'asset-graph-edge' })],
-      diagnostics: [],
-    });
-    const entityResult = await store.repositories.entityAssetProjections.list({
+    const entityResult = await store.repositories.projectEntityProjections.list({
       partition,
       entityId: 'char_rin',
     });
-    expect(entityResult.records).toHaveLength(5);
+    expect(entityResult.records).toHaveLength(3);
     expect(entityResult.diagnostics).toEqual([]);
     await expect(
-      store.repositories.entityAssetProjections.list({
+      store.repositories.projectEntityProjections.list({
         partition,
         kinds: ['entity-candidate'],
       }),
@@ -286,7 +270,7 @@ describe('Entity/Asset projection repository', () => {
       diagnostics: [],
     });
     await expect(
-      store.repositories.entityAssetProjections.replaceSource({
+      store.repositories.projectEntityProjections.replaceSource({
         partition,
         sourceId: 'invalid-provider',
         records: [
@@ -309,18 +293,18 @@ describe('Entity/Asset projection repository', () => {
         updatedAt,
       }),
     ).rejects.toMatchObject({ code: 'metadata-transaction-failed' });
-    const all = await store.repositories.entityAssetProjections.list({ partition });
-    expect(all.records).toHaveLength(6);
+    const all = await store.repositories.projectEntityProjections.list({ partition });
+    expect(all.records).toHaveLength(4);
     expect(all.diagnostics).toEqual([]);
     await expect(
       store.repositories.cacheMaintenance.clearPartition({
-        table: 'entity_asset_projections',
+        table: 'project_entity_projections',
         partition,
         reason: 'rebuild',
         updatedAt: '2026-07-13T07:30:00.000Z',
       }),
-    ).resolves.toEqual({ deletedRows: 6 });
-    await expect(store.repositories.entityAssetProjections.list({ partition })).resolves.toEqual({
+    ).resolves.toEqual({ deletedRows: 4 });
+    await expect(store.repositories.projectEntityProjections.list({ partition })).resolves.toEqual({
       records: [],
       diagnostics: [],
     });

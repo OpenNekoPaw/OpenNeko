@@ -1,8 +1,8 @@
 import {
   ProjectEntityContractError,
   projectEntityManagement,
-  type EntityAssetProjectionPartition,
-  type EntityAssetProjectionRepository,
+  type ProjectEntityProjectionPartition,
+  type ProjectEntityProjectionRepository,
   type EntityBindingAvailabilityProjectionValue,
   type ProjectEntityCandidateProjection,
   type ProjectEntityDiagnostic,
@@ -44,8 +44,8 @@ export async function readProjectEntityManagementResources(input: {
   readonly candidates?: readonly ProjectEntityCandidateProjection[];
   readonly bindingAvailability?: readonly EntityBindingAvailabilityProjectionValue[];
   readonly derivedProjection?: {
-    readonly repository: Pick<EntityAssetProjectionRepository, 'list'>;
-    readonly partition: EntityAssetProjectionPartition;
+    readonly repository: Pick<ProjectEntityProjectionRepository, 'list'>;
+    readonly partition: ProjectEntityProjectionPartition;
   };
   readonly signal?: AbortSignal;
 }): Promise<ProjectEntityManagementResources> {

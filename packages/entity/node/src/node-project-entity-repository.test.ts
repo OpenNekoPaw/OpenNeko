@@ -131,15 +131,19 @@ describe('NodeProjectEntityRepository', () => {
     await expect(readFile(entityPath, 'utf8')).resolves.toBe(source);
   });
 
-  it('reads valid sibling Entities but blocks mutation while preserving an invalid record', async () => {
+  it('keeps valid siblings visible and preserves former facts and provenance records byte-for-byte', async () => {
     const workspacePath = await createWorkspace();
     const entityPath = resolveProjectEntityDocumentPath(workspacePath);
     await mkdir(path.dirname(entityPath), { recursive: true });
     const valid = createRecord('Rin');
-    const invalid = { ...createRecord('Mio'), names: { canonical: '', aliases: [] } };
+    const invalidFacts = { ...createRecord('Mio'), facts: { role: 'lead' } };
+    const invalidProvenance = {
+      ...createRecord('Nova'),
+      provenance: { formerAssetLineage: true },
+    };
     const invalidBytes = `${JSON.stringify({
       projectId: 'project-neko',
-      entities: [valid, invalid],
+      entities: [valid, invalidFacts, invalidProvenance],
     })}\n`;
     await writeFile(entityPath, invalidBytes, 'utf8');
     const repository = createRepository(workspacePath);
@@ -149,7 +153,11 @@ describe('NodeProjectEntityRepository', () => {
       diagnostics: [
         expect.objectContaining({
           code: 'invalid-project-entity-document',
-          entityId: invalid.entityId,
+          entityId: invalidFacts.entityId,
+        }),
+        expect.objectContaining({
+          code: 'invalid-project-entity-document',
+          entityId: invalidProvenance.entityId,
         }),
       ],
     });
@@ -224,7 +232,6 @@ function createRecord(name: string): ProjectEntityDocument['entities'][number] {
     entityId: `character-${slug}`,
     kind: 'character',
     names: { canonical: name, aliases: [] },
-    facts: {},
     representations: [],
     lifecycle: { state: 'active' },
     createdAt: '2026-08-05T00:00:00.000Z',

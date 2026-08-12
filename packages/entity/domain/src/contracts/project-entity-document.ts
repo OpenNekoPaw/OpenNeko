@@ -3,7 +3,7 @@ import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity
 import {
   isEntityRepresentationRole,
   type EntityRepresentationRole,
-} from './entity-representation-binding';
+} from './project-entity-representation';
 
 export const PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH = 'neko/entities.json' as const;
 
@@ -30,14 +30,6 @@ export type ProjectEntityCandidateSourceOwner =
 export type ProjectEntityCandidateFreshness =
   (typeof PROJECT_ENTITY_CANDIDATE_FRESHNESS_STATES)[number];
 
-export type ProjectEntityFactValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly ProjectEntityFactValue[]
-  | { readonly [key: string]: ProjectEntityFactValue };
-
 export interface ProjectEntityNames {
   readonly canonical: string;
   readonly display?: string;
@@ -61,35 +53,15 @@ export interface ProjectEntityRepresentationBinding {
   readonly acceptedAt: string;
 }
 
-export interface ProjectEntityAssetRevisionRef {
-  readonly assetId: string;
-  readonly revision: string;
-  readonly digest: string;
-}
-
 export interface ProjectEntitySemanticSnapshot {
   readonly kind: CreativeEntityKind;
   readonly names: ProjectEntityNames;
-  readonly facts: Readonly<Record<string, ProjectEntityFactValue>>;
   readonly representations: readonly ProjectEntityRepresentationBinding[];
-}
-
-export interface ProjectEntityAssetProvenance {
-  readonly origin: ProjectEntityAssetRevisionRef;
-  readonly applied: ProjectEntityAssetRevisionRef;
-  readonly importBase: ProjectEntitySemanticSnapshot;
-  readonly representationOrigins: readonly ProjectEntityRepresentationOrigin[];
-}
-
-export interface ProjectEntityRepresentationOrigin {
-  readonly assetBindingId: string;
-  readonly projectBindingId: string;
 }
 
 export interface ProjectEntityRecord extends ProjectEntitySemanticSnapshot {
   readonly entityId: string;
   readonly lifecycle: ProjectEntityLifecycle;
-  readonly provenance?: ProjectEntityAssetProvenance;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -141,9 +113,6 @@ export type ProjectEntityDiagnosticCode =
   | 'project-entity-operation-invalid'
   | 'project-entity-reference-plan-incomplete'
   | 'project-entity-binding-unavailable'
-  | 'project-entity-asset-not-found'
-  | 'invalid-project-entity-asset-snapshot'
-  | 'invalid-project-entity-asset-provenance'
   | 'project-entity-path-unauthorized'
   | 'project-entity-operation-cancelled'
   | 'project-entity-io-failed';
@@ -238,14 +207,6 @@ export function decodeProjectEntityDocument(value: unknown): ProjectEntityDocume
       });
       continue;
     }
-    if (entity.provenance && !hasValidRepresentationOrigins(entity)) {
-      diagnostics.push({
-        code: 'invalid-project-entity-asset-provenance',
-        message: `Project Entity '${entity.entityId}' has invalid Asset representation lineage.`,
-        entityId: entity.entityId,
-      });
-      continue;
-    }
     entities.push(entity);
     entityIds.add(entity.entityId);
     for (const bindingId of localBindingIds) bindingIds.add(bindingId);
@@ -322,16 +283,18 @@ export function isProjectEntityCandidateProjection(
   );
 }
 
+export function isProjectEntityRecord(value: unknown): value is ProjectEntityRecord {
+  return parseEntity(value) !== undefined;
+}
+
 function parseEntity(value: unknown): ProjectEntityRecord | undefined {
   if (!isRecord(value) || !hasOnlyKeys(value, ENTITY_KEYS)) return undefined;
   const semantic = parseSemanticSnapshot(value);
   const lifecycle = parseLifecycle(value['lifecycle']);
-  const provenance = parseOptionalProvenance(value['provenance']);
   if (
     !semantic ||
     !isStableIdentity(value['entityId']) ||
     !lifecycle ||
-    provenance === false ||
     !isTimestamp(value['createdAt']) ||
     !isTimestamp(value['updatedAt']) ||
     Date.parse(value['updatedAt']) < Date.parse(value['createdAt'])
@@ -342,7 +305,6 @@ function parseEntity(value: unknown): ProjectEntityRecord | undefined {
     entityId: value['entityId'],
     ...semantic,
     lifecycle,
-    ...(provenance ? { provenance } : {}),
     createdAt: value['createdAt'],
     updatedAt: value['updatedAt'],
   };
@@ -356,13 +318,7 @@ function readCandidateEntityId(value: unknown): string | undefined {
 function parseSemanticSnapshot(value: unknown): ProjectEntitySemanticSnapshot | undefined {
   if (!isRecord(value)) return undefined;
   const names = parseNames(value['names']);
-  const facts = parseFacts(value['facts']);
-  if (
-    !isCreativeEntityKind(value['kind']) ||
-    !names ||
-    !facts ||
-    !Array.isArray(value['representations'])
-  ) {
+  if (!isCreativeEntityKind(value['kind']) || !names || !Array.isArray(value['representations'])) {
     return undefined;
   }
   const representations: ProjectEntityRepresentationBinding[] = [];
@@ -377,7 +333,7 @@ function parseSemanticSnapshot(value: unknown): ProjectEntitySemanticSnapshot | 
     if (defaultRoles.has(representation.role)) return undefined;
     defaultRoles.add(representation.role);
   }
-  return { kind: value['kind'], names, facts, representations };
+  return { kind: value['kind'], names, representations };
 }
 
 function parseNames(value: unknown): ProjectEntityNames | undefined {
@@ -448,88 +404,6 @@ function parseRepresentation(value: unknown): ProjectEntityRepresentationBinding
   };
 }
 
-function parseOptionalProvenance(value: unknown): ProjectEntityAssetProvenance | undefined | false {
-  if (value === undefined) return undefined;
-  if (!isRecord(value) || !hasOnlyKeys(value, PROVENANCE_KEYS)) return false;
-  const origin = parseAssetRevision(value['origin']);
-  const applied = parseAssetRevision(value['applied']);
-  const importBase = parseImportBase(value['importBase']);
-  const representationOrigins = parseRepresentationOrigins(value['representationOrigins']);
-  if (
-    !origin ||
-    !applied ||
-    !importBase ||
-    !representationOrigins ||
-    origin.assetId !== applied.assetId
-  ) {
-    return false;
-  }
-  return { origin, applied, importBase, representationOrigins };
-}
-
-function parseRepresentationOrigins(
-  value: unknown,
-): readonly ProjectEntityRepresentationOrigin[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const origins: ProjectEntityRepresentationOrigin[] = [];
-  for (const candidate of value) {
-    if (
-      !isRecord(candidate) ||
-      !hasOnlyKeys(candidate, REPRESENTATION_ORIGIN_KEYS) ||
-      !isStableIdentity(candidate['assetBindingId']) ||
-      !isStableIdentity(candidate['projectBindingId'])
-    ) {
-      return undefined;
-    }
-    origins.push({
-      assetBindingId: candidate['assetBindingId'],
-      projectBindingId: candidate['projectBindingId'],
-    });
-  }
-  return origins;
-}
-
-function hasValidRepresentationOrigins(entity: ProjectEntityRecord): boolean {
-  if (!entity.provenance) return true;
-  const origins = entity.provenance.representationOrigins;
-  const assetBindingIds = new Set(
-    entity.provenance.importBase.representations.map((binding) => binding.bindingId),
-  );
-  const projectBindingIds = new Set(entity.representations.map((binding) => binding.bindingId));
-  return (
-    new Set(origins.map((origin) => origin.assetBindingId)).size === origins.length &&
-    new Set(origins.map((origin) => origin.projectBindingId)).size === origins.length &&
-    origins.every(
-      (origin) =>
-        assetBindingIds.has(origin.assetBindingId) &&
-        projectBindingIds.has(origin.projectBindingId),
-    )
-  );
-}
-
-function parseImportBase(value: unknown): ProjectEntitySemanticSnapshot | undefined {
-  if (!isRecord(value) || !hasOnlyKeys(value, SNAPSHOT_KEYS)) return undefined;
-  return parseSemanticSnapshot(value);
-}
-
-function parseAssetRevision(value: unknown): ProjectEntityAssetRevisionRef | undefined {
-  if (!isRecord(value) || !hasOnlyKeys(value, ASSET_REVISION_KEYS)) return undefined;
-  if (
-    !isStableIdentity(value['assetId']) ||
-    !isStableIdentity(value['revision']) ||
-    !isDigest(value['digest'])
-  ) {
-    return undefined;
-  }
-  return { assetId: value['assetId'], revision: value['revision'], digest: value['digest'] };
-}
-
-function parseFacts(value: unknown): Readonly<Record<string, ProjectEntityFactValue>> | undefined {
-  if (!isRecord(value) || !isFactObject(value)) return undefined;
-  if (Object.keys(value).some((key) => FORBIDDEN_FACT_KEYS.has(key))) return undefined;
-  return value;
-}
-
 function isProjectEntityCandidateEvidence(value: unknown): value is ProjectEntityCandidateEvidence {
   if (!isRecord(value) || !hasOnlyKeys(value, CANDIDATE_EVIDENCE_KEYS)) return false;
   const locator =
@@ -551,25 +425,6 @@ function invalidDocument(
   identity: Pick<ProjectEntityDiagnostic, 'entityId' | 'bindingId' | 'candidateId'> = {},
 ): ProjectEntityDocumentDecodeResult {
   return { ok: false, diagnostics: [{ code, message, ...identity }] };
-}
-
-function isFactObject(
-  value: Record<string, unknown>,
-): value is Record<string, ProjectEntityFactValue> {
-  return Object.values(value).every(isFactValue);
-}
-
-function isFactValue(value: unknown): value is ProjectEntityFactValue {
-  if (
-    value === null ||
-    typeof value === 'boolean' ||
-    typeof value === 'string' ||
-    (typeof value === 'number' && Number.isFinite(value))
-  ) {
-    return true;
-  }
-  if (Array.isArray(value)) return value.every(isFactValue);
-  return isRecord(value) && Object.values(value).every(isFactValue);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -596,10 +451,6 @@ function isTimestamp(value: unknown): value is string {
   return isNonEmptyString(value) && !Number.isNaN(Date.parse(value));
 }
 
-function isDigest(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
-}
-
 function isOptionalConfidence(value: unknown): boolean {
   return value === undefined || (typeof value === 'number' && value >= 0 && value <= 1);
 }
@@ -613,14 +464,11 @@ const ENTITY_KEYS = [
   'entityId',
   'kind',
   'names',
-  'facts',
   'representations',
   'lifecycle',
-  'provenance',
   'createdAt',
   'updatedAt',
 ] as const;
-const SNAPSHOT_KEYS = ['kind', 'names', 'facts', 'representations'] as const;
 const NAME_KEYS = ['canonical', 'display', 'aliases'] as const;
 const LIFECYCLE_KEYS = ['state', 'deprecatedAt', 'replacementEntityId'] as const;
 const REPRESENTATION_KEYS = [
@@ -631,9 +479,6 @@ const REPRESENTATION_KEYS = [
   'isDefault',
   'acceptedAt',
 ] as const;
-const PROVENANCE_KEYS = ['origin', 'applied', 'importBase', 'representationOrigins'] as const;
-const REPRESENTATION_ORIGIN_KEYS = ['assetBindingId', 'projectBindingId'] as const;
-const ASSET_REVISION_KEYS = ['assetId', 'revision', 'digest'] as const;
 const CANDIDATE_KEYS = [
   'candidateId',
   'kind',
@@ -651,14 +496,3 @@ const CANDIDATE_EVIDENCE_KEYS = [
   'confidence',
   'observedAt',
 ] as const;
-const FORBIDDEN_FACT_KEYS = new Set([
-  'availability',
-  'candidateScore',
-  'confidence',
-  'occurrences',
-  'searchRows',
-  'thumbnail',
-  'cachePath',
-  'runtimePath',
-  'providerResponse',
-]);

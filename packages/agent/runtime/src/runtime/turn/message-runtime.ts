@@ -1310,20 +1310,17 @@ function formatResolvedEntityContext(
   const isZh = normalizeAgentRuntimePromptLocale(locale) === 'zh';
   const lines = [
     `[${isZh ? '实体' : 'Entity'}: ${payload.label}]`,
-    `${isZh ? '实体 ID' : 'Entity ID'}: ${entity.id}`,
+    `${isZh ? '实体 ID' : 'Entity ID'}: ${entity.entityId}`,
     `${isZh ? '类型' : 'Kind'}: ${entity.kind}`,
-    `${isZh ? '规范名称' : 'Canonical name'}: ${entity.canonicalName}`,
+    `${isZh ? '规范名称' : 'Canonical name'}: ${entity.names.canonical}`,
   ];
-  if (entity.displayName) {
-    lines.push(`${isZh ? '显示名称' : 'Display name'}: ${entity.displayName}`);
+  if (entity.names.display) {
+    lines.push(`${isZh ? '显示名称' : 'Display name'}: ${entity.names.display}`);
   }
   lines.push(
-    `${isZh ? '别名' : 'Aliases'}: ${entity.aliases.length > 0 ? entity.aliases.join(', ') : isZh ? '无' : 'none'}`,
-    `${isZh ? '状态' : 'Status'}: ${entity.status}`,
+    `${isZh ? '别名' : 'Aliases'}: ${entity.names.aliases.length > 0 ? entity.names.aliases.join(', ') : isZh ? '无' : 'none'}`,
+    `${isZh ? '状态' : 'Status'}: ${entity.lifecycle.state}`,
   );
-  if (entity.metadata) {
-    lines.push(`${isZh ? '元数据' : 'Metadata'}:\n${JSON.stringify(entity.metadata, null, 2)}`);
-  }
   return lines.join('\n');
 }
 

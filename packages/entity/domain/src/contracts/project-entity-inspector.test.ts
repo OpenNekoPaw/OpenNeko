@@ -10,7 +10,6 @@ describe('Project Entity Inspector intents', () => {
         accepted: {
           kind: 'character',
           names: { canonical: 'Nova', aliases: [] },
-          facts: { role: 'lead' },
         },
       }),
     ).toMatchObject({ type: 'confirm', candidateId: 'candidate-nova' });
@@ -26,33 +25,10 @@ describe('Project Entity Inspector intents', () => {
     ).toMatchObject({ type: 'bind', binding: { role: 'portrait' } });
   });
 
-  it('parses exact owner identities for interaction operations', () => {
-    expect(
-      assertProjectEntityInspectorIntent({
-        type: 'character-dialogue',
-        entityId: 'character-nova',
-        characterId: 'character-runtime-nova',
-        conversationId: 'conversation-nova',
-      }),
-    ).toEqual({
-      type: 'character-dialogue',
-      entityId: 'character-nova',
-      characterId: 'character-runtime-nova',
-      conversationId: 'conversation-nova',
-    });
-    expect(() =>
-      assertProjectEntityInspectorIntent({
-        type: 'room-open',
-        entityId: 'character-nova',
-      }),
-    ).toThrow('identity is invalid');
-  });
-
-  it('rejects unknown fields, renderer-owned paths, and malformed Asset revisions', () => {
+  it('rejects removed Asset and Character interaction operations plus renderer-owned fields', () => {
     for (const intent of [
       {
         type: 'publish',
-        unexpectedField: 1,
         entityId: 'character-nova',
       },
       {
@@ -63,7 +39,23 @@ describe('Project Entity Inspector intents', () => {
       },
       {
         type: 'instantiate',
-        asset: { assetId: 'asset-nova', revision: '2', digest: 'bad' },
+        asset: { assetId: 'asset-nova' },
+      },
+      {
+        type: 'character-dialogue',
+        entityId: 'character-nova',
+        characterId: 'character-runtime-nova',
+      },
+      {
+        type: 'room-open',
+        entityId: 'character-nova',
+        roomId: 'room-nova',
+      },
+      {
+        type: 'character-embody',
+        entityId: 'character-nova',
+        characterId: 'character-runtime-nova',
+        conversationId: 'conversation-nova',
       },
     ]) {
       expect(() => assertProjectEntityInspectorIntent(intent)).toThrow();

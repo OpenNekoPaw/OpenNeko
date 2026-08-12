@@ -80,16 +80,6 @@ export const TOOL_NAMES_EFFECTS = {
 } as const;
 
 // =============================================================================
-// Creative Entities — Entity Facts and Projections
-// =============================================================================
-
-export const TOOL_NAMES_ENTITY = {
-  LIST_CREATIVE_ENTITIES: 'ListCreativeEntities',
-  GET_CREATIVE_ENTITY: 'GetCreativeEntity',
-  BIND_ENTITY_REPRESENTATION: 'BindEntityRepresentation',
-} as const;
-
-// =============================================================================
 // Project Search — Sanitized Project-Wide Search
 // =============================================================================
 

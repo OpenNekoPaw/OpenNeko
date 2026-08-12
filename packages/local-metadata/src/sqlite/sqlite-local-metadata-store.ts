@@ -35,6 +35,10 @@ import type {
   MediaMetadataUpsertRequest,
   ResourceCacheMetadataRepository,
   ResourceCacheProjectionReplaceRequest,
+  ResourceUsageProjectionQuery,
+  ResourceUsageProjectionQueryResult,
+  ResourceUsageProjectionReplaceSourceRequest,
+  ResourceUsageProjectionRepository,
   SearchDocumentInsertMissingResult,
   SearchDocumentProjectionReplaceRequest,
   SearchDocumentPartitionReplaceRequest,
@@ -59,17 +63,17 @@ import type {
   WorkspaceRegistryRepository,
 } from '../repositories';
 import type {
-  EntityAssetProjectionDiagnostic,
-  EntityAssetProjectionInsertMissingResult,
-  EntityAssetProjectionKind,
-  EntityAssetProjectionQuery,
-  EntityAssetProjectionQueryResult,
-  EntityAssetProjectionRecord,
-  EntityAssetProjectionReplaceSourceRequest,
-  EntityAssetProjectionRepository,
+  ProjectEntityProjectionDiagnostic,
+  ProjectEntityProjectionInsertMissingResult,
+  ProjectEntityProjectionKind,
+  ProjectEntityProjectionQuery,
+  ProjectEntityProjectionQueryResult,
+  ProjectEntityProjectionRecord,
+  ProjectEntityProjectionReplaceSourceRequest,
+  ProjectEntityProjectionRepository,
 } from '@neko/entity-domain';
 import {
-  isCreativeEntityKind,
+  isCreativeEntityRef,
   isEntityBindingAvailabilityProjectionValue,
   isProjectEntityCandidateProjection,
 } from '@neko/entity-domain';
@@ -86,6 +90,11 @@ import {
   isProjectSemanticProviderMetadata,
   isProjectSearchItemKind,
   isProjectSearchPartitionKind,
+  isResourceUsageProjectionRecord,
+  isResourceUsageProjectionSource,
+  isResourceUsageTarget,
+  type ResourceUsageProjectionDiagnostic,
+  type ResourceUsageProjectionRecord,
 } from '@neko/search-domain';
 import { isCompactMediaSemanticIndex } from '@neko/search-domain';
 import {
@@ -1574,20 +1583,121 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
   }
 }
 
-class RawEntityAssetProjectionRepository implements EntityAssetProjectionRepository {
+class RawResourceUsageProjectionRepository implements ResourceUsageProjectionRepository {
   constructor(private readonly connection: () => SqliteConnection) {}
 
-  async list(query: EntityAssetProjectionQuery): Promise<EntityAssetProjectionQueryResult> {
-    assertEntityAssetProjectionPartition(query.partition);
+  async list(query: ResourceUsageProjectionQuery): Promise<ResourceUsageProjectionQueryResult> {
+    assertResourceUsageProjectionPartition(query.partition);
+    const clauses = ['partition_key = ?'];
+    const parameters: SqliteBindingValue[] = [partitionKey(query.partition)];
+    if (query.source) {
+      if (!isResourceUsageProjectionSource(query.source)) {
+        throw invalidResourceUsageProjectionRequest('Resource usage source filter is invalid.');
+      }
+      clauses.push('source_owner_id = ?', 'source_id = ?');
+      parameters.push(query.source.ownerId, query.source.sourceId);
+    }
+    if (query.target) {
+      if (!isResourceUsageTarget(query.target)) {
+        throw invalidResourceUsageProjectionRequest('Resource usage target filter is invalid.');
+      }
+      clauses.push('target_owner_id = ?', 'target_resource_id = ?');
+      parameters.push(query.target.ownerId, query.target.resourceId);
+    }
+    const rows = await this.connection().all(
+      `SELECT projection_id, source_owner_id, source_id, target_owner_id,
+              target_resource_id, availability, freshness, source_fingerprint,
+              projection_json, updated_at
+         FROM resource_usage_projections
+        WHERE ${clauses.join(' AND ')}
+        ORDER BY source_owner_id, source_id, projection_id`,
+      parameters,
+    );
+    const records: ResourceUsageProjectionRecord[] = [];
+    const diagnostics: ResourceUsageProjectionDiagnostic[] = [];
+    for (const row of rows) {
+      try {
+        records.push(decodeResourceUsageProjection(row));
+      } catch (error: unknown) {
+        diagnostics.push({
+          code: 'invalid-resource-usage-projection',
+          projectionId: readString(row, 'projection_id'),
+          sourceOwnerId: readString(row, 'source_owner_id'),
+          sourceId: readString(row, 'source_id'),
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return { records, diagnostics };
+  }
+
+  async replaceSource(request: ResourceUsageProjectionReplaceSourceRequest): Promise<void> {
+    assertResourceUsageProjectionPartition(request.partition);
+    if (!isResourceUsageProjectionSource(request.source)) {
+      throw invalidResourceUsageProjectionRequest('Resource usage source is invalid.');
+    }
+    parseMetadataTimestamp(request.updatedAt, 'replace-resource-usage-projection-source');
+    const identities = new Set<string>();
+    for (const record of request.records) {
+      if (
+        !isResourceUsageProjectionRecord(record) ||
+        record.source.ownerId !== request.source.ownerId ||
+        record.source.sourceId !== request.source.sourceId ||
+        identities.has(record.projectionId)
+      ) {
+        throw invalidResourceUsageProjectionRequest(
+          `Resource usage projection is invalid, duplicated, or foreign: ${record.projectionId}`,
+        );
+      }
+      identities.add(record.projectionId);
+    }
+    const key = partitionKey(request.partition);
+    await this.connection().run(
+      `DELETE FROM resource_usage_projections
+        WHERE partition_key = ? AND source_owner_id = ? AND source_id = ?`,
+      [key, request.source.ownerId, request.source.sourceId],
+    );
+    for (const record of request.records) {
+      await this.connection().run(
+        `INSERT INTO resource_usage_projections (
+          partition_key, partition_scope, workspace_id, projection_id,
+          source_owner_id, source_id, target_owner_id, target_resource_id,
+          availability, freshness, source_fingerprint, projection_json, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          key,
+          request.partition.scope,
+          request.partition.workspaceId,
+          record.projectionId,
+          record.source.ownerId,
+          record.source.sourceId,
+          record.target.ownerId,
+          record.target.resourceId,
+          record.availability,
+          record.freshness,
+          record.sourceFingerprint,
+          serializeLocalMetadataJson(record, 'replace-resource-usage-projection'),
+          record.updatedAt,
+        ],
+      );
+    }
+  }
+}
+
+class RawProjectEntityProjectionRepository implements ProjectEntityProjectionRepository {
+  constructor(private readonly connection: () => SqliteConnection) {}
+
+  async list(query: ProjectEntityProjectionQuery): Promise<ProjectEntityProjectionQueryResult> {
+    assertProjectEntityProjectionPartition(query.partition);
     const clauses = ['partition_key = ?'];
     const parameters: SqliteBindingValue[] = [partitionKey(query.partition)];
     if (query.kinds) {
       const kinds = [...new Set(query.kinds)];
-      if (kinds.length === 0 || !kinds.every(isEntityAssetProjectionKind)) {
+      if (kinds.length === 0 || !kinds.every(isProjectEntityProjectionKind)) {
         throw new LocalMetadataError({
           code: 'metadata-transaction-failed',
-          operation: 'query-entity-asset-projections',
-          message: 'Entity/Asset projection kind filter is empty or invalid',
+          operation: 'query-project-entity-projections',
+          message: 'Project Entity projection kind filter is empty or invalid',
         });
       }
       clauses.push(`projection_kind IN (${kinds.map(() => '?').join(', ')})`);
@@ -1596,7 +1706,6 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
     appendProjectionStringFilter(clauses, parameters, 'source_id', query.sourceId);
     appendProjectionStringFilter(clauses, parameters, 'projection_id', query.projectionId);
     appendProjectionStringFilter(clauses, parameters, 'candidate_id', query.candidateId);
-    appendProjectionStringFilter(clauses, parameters, 'asset_ref', query.assetRef);
     if (query.entityId !== undefined) {
       assertNonEmptyProjectionFilter(query.entityId, 'entityId');
       clauses.push('(entity_id = ? OR related_entity_id = ?)');
@@ -1604,21 +1713,21 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
     }
     const rows = await this.connection().all(
       `SELECT projection_kind, projection_id, source_id, entity_id,
-              related_entity_id, candidate_id, asset_ref, freshness,
+              related_entity_id, candidate_id, freshness,
               projection_json, updated_at
-         FROM entity_asset_projections
+         FROM project_entity_projections
         WHERE ${clauses.join(' AND ')}
         ORDER BY projection_kind, projection_id`,
       parameters,
     );
-    const records: EntityAssetProjectionRecord[] = [];
-    const diagnostics: EntityAssetProjectionDiagnostic[] = [];
+    const records: ProjectEntityProjectionRecord[] = [];
+    const diagnostics: ProjectEntityProjectionDiagnostic[] = [];
     for (const row of rows) {
       try {
-        records.push(decodeEntityAssetProjection(row));
+        records.push(decodeProjectEntityProjection(row));
       } catch (error) {
         diagnostics.push({
-          code: 'invalid-entity-asset-projection',
+          code: 'invalid-project-entity-projection',
           projectionId: readString(row, 'projection_id'),
           sourceId: readString(row, 'source_id'),
           message: error instanceof Error ? error.message : String(error),
@@ -1628,33 +1737,33 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
     return { records, diagnostics };
   }
 
-  async replaceSource(request: EntityAssetProjectionReplaceSourceRequest): Promise<void> {
-    assertEntityAssetProjectionPartition(request.partition);
+  async replaceSource(request: ProjectEntityProjectionReplaceSourceRequest): Promise<void> {
+    assertProjectEntityProjectionPartition(request.partition);
     assertNonEmptyProjectionFilter(request.sourceId, 'sourceId');
-    parseMetadataTimestamp(request.updatedAt, 'replace-entity-asset-projection-source');
+    parseMetadataTimestamp(request.updatedAt, 'replace-project-entity-projection-source');
     const identities = new Set<string>();
     for (const record of request.records) {
-      assertEntityAssetProjectionRecord(record, identities);
+      assertProjectEntityProjectionRecord(record, identities);
       if (record.sourceId !== request.sourceId) {
         throw new LocalMetadataError({
           code: 'metadata-transaction-failed',
-          operation: 'replace-entity-asset-projection-source',
+          operation: 'replace-project-entity-projection-source',
           message: `Projection ${record.projectionId} does not belong to source ${request.sourceId}`,
         });
       }
     }
     const key = partitionKey(request.partition);
     await this.connection().run(
-      'DELETE FROM entity_asset_projections WHERE partition_key = ? AND source_id = ?',
+      'DELETE FROM project_entity_projections WHERE partition_key = ? AND source_id = ?',
       [key, request.sourceId],
     );
     for (const record of request.records) {
       await this.connection().run(
-        `INSERT INTO entity_asset_projections (
+        `INSERT INTO project_entity_projections (
           partition_key, partition_scope, workspace_id, projection_kind,
           projection_id, source_id, entity_id, related_entity_id,
-          candidate_id, asset_ref, freshness, projection_json, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          candidate_id, freshness, projection_json, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           key,
           request.partition.scope,
@@ -1665,9 +1774,8 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
           record.entityId ?? null,
           record.relatedEntityId ?? null,
           record.candidateId ?? null,
-          record.assetRef ?? null,
           record.freshness,
-          serializeLocalMetadataJson(record, 'replace-entity-asset-projection'),
+          serializeLocalMetadataJson(record, 'replace-project-entity-projection'),
           record.updatedAt,
         ],
       );
@@ -1675,18 +1783,18 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
   }
 
   async insertMissing(
-    request: EntityAssetProjectionReplaceSourceRequest,
-  ): Promise<EntityAssetProjectionInsertMissingResult> {
-    assertEntityAssetProjectionPartition(request.partition);
+    request: ProjectEntityProjectionReplaceSourceRequest,
+  ): Promise<ProjectEntityProjectionInsertMissingResult> {
+    assertProjectEntityProjectionPartition(request.partition);
     assertNonEmptyProjectionFilter(request.sourceId, 'sourceId');
-    parseMetadataTimestamp(request.updatedAt, 'insert-missing-entity-asset-projections');
+    parseMetadataTimestamp(request.updatedAt, 'insert-missing-project-entity-projections');
     const identities = new Set<string>();
     for (const record of request.records) {
-      assertEntityAssetProjectionRecord(record, identities);
+      assertProjectEntityProjectionRecord(record, identities);
       if (record.sourceId !== request.sourceId) {
         throw new LocalMetadataError({
           code: 'metadata-transaction-failed',
-          operation: 'insert-missing-entity-asset-projections',
+          operation: 'insert-missing-project-entity-projections',
           message: `Projection ${record.projectionId} does not belong to source ${request.sourceId}`,
         });
       }
@@ -1696,11 +1804,11 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
     const preservedProjectionKeys: string[] = [];
     for (const record of request.records) {
       const result = await this.connection().run(
-        `INSERT INTO entity_asset_projections (
+        `INSERT INTO project_entity_projections (
           partition_key, partition_scope, workspace_id, projection_kind,
           projection_id, source_id, entity_id, related_entity_id,
-          candidate_id, asset_ref, freshness, projection_json, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          candidate_id, freshness, projection_json, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(partition_key, projection_kind, projection_id) DO NOTHING`,
         [
           key,
@@ -1712,9 +1820,8 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
           record.entityId ?? null,
           record.relatedEntityId ?? null,
           record.candidateId ?? null,
-          record.assetRef ?? null,
           record.freshness,
-          serializeLocalMetadataJson(record, 'insert-entity-asset-projection'),
+          serializeLocalMetadataJson(record, 'insert-project-entity-projection'),
           record.updatedAt,
         ],
       );
@@ -2153,12 +2260,63 @@ function assertSemanticProjectionRecord(
   sourceIds.add(record.sourceId);
 }
 
-function assertEntityAssetProjectionPartition(partition: LocalMetadataPartition): void {
-  if (partition.domain !== 'entity-asset-projection') {
+function assertResourceUsageProjectionPartition(partition: LocalMetadataPartition): void {
+  if (partition.domain !== 'resource-usage-projection') {
+    throw invalidResourceUsageProjectionRequest(
+      `Resource usage repository requires the resource-usage-projection domain: ${partition.domain}`,
+    );
+  }
+  partitionKey(partition);
+}
+
+function decodeResourceUsageProjection(row: SqliteRow): ResourceUsageProjectionRecord {
+  const parsed = parseJsonColumn(
+    readString(row, 'projection_json'),
+    'decode-resource-usage-projection',
+  );
+  if (!isResourceUsageProjectionRecord(parsed)) {
+    throw new LocalMetadataError({
+      code: 'metadata-integrity-failed',
+      operation: 'decode-resource-usage-projection',
+      message: 'Stored resource usage projection does not match its typed contract.',
+    });
+  }
+  const comparisons: ReadonlyArray<[unknown, unknown, string]> = [
+    [parsed.projectionId, readString(row, 'projection_id'), 'projectionId'],
+    [parsed.source.ownerId, readString(row, 'source_owner_id'), 'source.ownerId'],
+    [parsed.source.sourceId, readString(row, 'source_id'), 'source.sourceId'],
+    [parsed.target.ownerId, readString(row, 'target_owner_id'), 'target.ownerId'],
+    [parsed.target.resourceId, readString(row, 'target_resource_id'), 'target.resourceId'],
+    [parsed.availability, readString(row, 'availability'), 'availability'],
+    [parsed.freshness, readString(row, 'freshness'), 'freshness'],
+    [parsed.sourceFingerprint, readString(row, 'source_fingerprint'), 'sourceFingerprint'],
+    [parsed.updatedAt, readString(row, 'updated_at'), 'updatedAt'],
+  ];
+  const mismatch = comparisons.find(([left, right]) => left !== right);
+  if (mismatch) {
+    throw new LocalMetadataError({
+      code: 'metadata-integrity-failed',
+      operation: 'decode-resource-usage-projection',
+      message: `Stored resource usage projection column does not match payload: ${mismatch[2]}`,
+    });
+  }
+  return parsed;
+}
+
+function invalidResourceUsageProjectionRequest(message: string): LocalMetadataError {
+  return new LocalMetadataError({
+    code: 'metadata-transaction-failed',
+    operation: 'resource-usage-projection',
+    message,
+  });
+}
+
+function assertProjectEntityProjectionPartition(partition: LocalMetadataPartition): void {
+  if (partition.domain !== 'project-entity-projection') {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
-      operation: 'entity-asset-projection-partition',
-      message: `Entity/Asset repository requires the entity-asset-projection domain: ${partition.domain}`,
+      operation: 'project-entity-projection-partition',
+      message: `Project Entity repository requires the project-entity-projection domain: ${partition.domain}`,
     });
   }
   partitionKey(partition);
@@ -2180,22 +2338,22 @@ function assertNonEmptyProjectionFilter(value: string, field: string): void {
   if (!value.trim()) {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
-      operation: 'query-entity-asset-projections',
-      message: `Entity/Asset projection ${field} must not be empty`,
+      operation: 'query-project-entity-projections',
+      message: `Project Entity projection ${field} must not be empty`,
     });
   }
 }
 
-function decodeEntityAssetProjection(row: SqliteRow): EntityAssetProjectionRecord {
+function decodeProjectEntityProjection(row: SqliteRow): ProjectEntityProjectionRecord {
   const parsed = parseJsonColumn(
     readString(row, 'projection_json'),
-    'decode-entity-asset-projection',
+    'decode-project-entity-projection',
   );
-  if (!isEntityAssetProjectionRecord(parsed)) {
+  if (!isProjectEntityProjectionRecord(parsed)) {
     throw new LocalMetadataError({
       code: 'metadata-integrity-failed',
-      operation: 'decode-entity-asset-projection',
-      message: 'Stored Entity/Asset projection does not match its typed contract',
+      operation: 'decode-project-entity-projection',
+      message: 'Stored Project Entity projection does not match its typed contract',
     });
   }
   const comparisons: ReadonlyArray<[unknown, unknown, string]> = [
@@ -2209,7 +2367,6 @@ function decodeEntityAssetProjection(row: SqliteRow): EntityAssetProjectionRecor
       'relatedEntityId',
     ],
     [parsed.candidateId ?? null, readNullableString(row, 'candidate_id'), 'candidateId'],
-    [parsed.assetRef ?? null, readNullableString(row, 'asset_ref'), 'assetRef'],
     [parsed.freshness, readString(row, 'freshness'), 'freshness'],
     [parsed.updatedAt, readString(row, 'updated_at'), 'updatedAt'],
   ];
@@ -2217,32 +2374,32 @@ function decodeEntityAssetProjection(row: SqliteRow): EntityAssetProjectionRecor
   if (mismatch) {
     throw new LocalMetadataError({
       code: 'metadata-integrity-failed',
-      operation: 'decode-entity-asset-projection',
-      message: `Stored Entity/Asset projection column does not match payload: ${mismatch[2]}`,
+      operation: 'decode-project-entity-projection',
+      message: `Stored Project Entity projection column does not match payload: ${mismatch[2]}`,
     });
   }
   return parsed;
 }
 
-function assertEntityAssetProjectionRecord(
-  record: EntityAssetProjectionRecord,
+function assertProjectEntityProjectionRecord(
+  record: ProjectEntityProjectionRecord,
   identities: Set<string>,
 ): void {
   const identity = `${record.kind}:${record.projectionId}`;
-  if (!isEntityAssetProjectionRecord(record) || identities.has(identity)) {
+  if (!isProjectEntityProjectionRecord(record) || identities.has(identity)) {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
-      operation: 'replace-entity-asset-projection',
-      message: `Entity/Asset projection is invalid or duplicated: ${identity}`,
+      operation: 'replace-project-entity-projection',
+      message: `Project Entity projection is invalid or duplicated: ${identity}`,
     });
   }
   identities.add(identity);
 }
 
-function isEntityAssetProjectionRecord(value: unknown): value is EntityAssetProjectionRecord {
+function isProjectEntityProjectionRecord(value: unknown): value is ProjectEntityProjectionRecord {
   if (
     !isRecord(value) ||
-    !isEntityAssetProjectionKind(value['kind']) ||
+    !isProjectEntityProjectionKind(value['kind']) ||
     typeof value['projectionId'] !== 'string' ||
     !value['projectionId'].trim() ||
     typeof value['sourceId'] !== 'string' ||
@@ -2250,7 +2407,6 @@ function isEntityAssetProjectionRecord(value: unknown): value is EntityAssetProj
     !optionalNonEmptyString(value['entityId']) ||
     !optionalNonEmptyString(value['relatedEntityId']) ||
     !optionalNonEmptyString(value['candidateId']) ||
-    !optionalPortableAssetRef(value['assetRef']) ||
     !isProjectIndexFreshness(value['freshness']) ||
     typeof value['updatedAt'] !== 'string' ||
     !Number.isFinite(Date.parse(value['updatedAt']))
@@ -2258,10 +2414,6 @@ function isEntityAssetProjectionRecord(value: unknown): value is EntityAssetProj
     return false;
   }
   switch (value['kind']) {
-    case 'asset-graph-node':
-      return isCreativeGraphNode(value['value']);
-    case 'asset-graph-edge':
-      return isCreativeRelationEdge(value['value']);
     case 'entity-occurrence':
       return isCreativeEntityOccurrenceProjection(value['value']);
     case 'entity-relationship':
@@ -2274,16 +2426,13 @@ function isEntityAssetProjectionRecord(value: unknown): value is EntityAssetProj
     case 'binding-availability':
       return (
         isEntityBindingAvailabilityProjectionValue(value['value']) &&
-        value['entityId'] === value['value'].entityId &&
-        value['assetRef'] === undefined
+        value['entityId'] === value['value'].entityId
       );
   }
 }
 
-function isEntityAssetProjectionKind(value: unknown): value is EntityAssetProjectionKind {
+function isProjectEntityProjectionKind(value: unknown): value is ProjectEntityProjectionKind {
   return (
-    value === 'asset-graph-node' ||
-    value === 'asset-graph-edge' ||
     value === 'entity-occurrence' ||
     value === 'entity-relationship' ||
     value === 'entity-candidate' ||
@@ -2291,47 +2440,10 @@ function isEntityAssetProjectionKind(value: unknown): value is EntityAssetProjec
   );
 }
 
-function isCreativeGraphNode(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value['id'] === 'string' &&
-    value['id'].trim().length > 0 &&
-    (value['kind'] === 'entity' ||
-      value['kind'] === 'occurrence' ||
-      value['kind'] === 'asset' ||
-      value['kind'] === 'canvas-node' ||
-      value['kind'] === 'script-range' ||
-      value['kind'] === 'generated-asset') &&
-    optionalPortableProjectionRef(value['refId']) &&
-    optionalNonEmptyString(value['label'])
-  );
-}
-
-function isCreativeRelationEdge(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value['from'] === 'string' &&
-    value['from'].trim().length > 0 &&
-    typeof value['to'] === 'string' &&
-    value['to'].trim().length > 0 &&
-    typeof value['type'] === 'string' &&
-    value['type'].trim().length > 0 &&
-    (value['strength'] === 'confirmed' || value['strength'] === 'inferred') &&
-    (value['confidence'] === undefined ||
-      (typeof value['confidence'] === 'number' && Number.isFinite(value['confidence']))) &&
-    (value['provenance'] === undefined ||
-      value['provenance'] === 'user' ||
-      value['provenance'] === 'lineage' ||
-      value['provenance'] === 'rule' ||
-      value['provenance'] === 'ai' ||
-      value['provenance'] === 'import')
-  );
-}
-
 function isCreativeEntityOccurrenceProjection(value: unknown): boolean {
   return (
     isRecord(value) &&
-    (value['entityRef'] === undefined || isCreativeEntityRef(value['entityRef'])) &&
+    (value['entityRef'] === undefined || isPortableCreativeEntityRef(value['entityRef'])) &&
     optionalNonEmptyString(value['candidateId']) &&
     typeof value['label'] === 'string' &&
     value['label'].trim().length > 0 &&
@@ -2347,8 +2459,8 @@ function isCreativeEntityOccurrenceProjection(value: unknown): boolean {
 function isCreativeEntityRelationshipProjection(value: unknown): boolean {
   return (
     isRecord(value) &&
-    isCreativeEntityRef(value['from']) &&
-    isCreativeEntityRef(value['to']) &&
+    isPortableCreativeEntityRef(value['from']) &&
+    isPortableCreativeEntityRef(value['to']) &&
     typeof value['type'] === 'string' &&
     value['type'].trim().length > 0 &&
     optionalNonEmptyString(value['strength']) &&
@@ -2358,14 +2470,10 @@ function isCreativeEntityRelationshipProjection(value: unknown): boolean {
   );
 }
 
-function isCreativeEntityRef(value: unknown): boolean {
+function isPortableCreativeEntityRef(value: unknown): boolean {
   return (
-    isRecord(value) &&
-    typeof value['entityId'] === 'string' &&
-    value['entityId'].trim().length > 0 &&
-    isCreativeEntityKind(value['entityKind']) &&
-    optionalPortableProjectionRef(value['projectRoot']) &&
-    optionalNonEmptyString(value['source'])
+    isCreativeEntityRef(value) &&
+    (value.projectRoot === undefined || isPortableProjectionRef(value.projectRoot))
   );
 }
 
@@ -2398,13 +2506,6 @@ function isCreativeEntitySourceMetadata(value: unknown): boolean {
 
 function optionalNonEmptyString(value: unknown): boolean {
   return value === undefined || (typeof value === 'string' && value.trim().length > 0);
-}
-
-function optionalPortableAssetRef(value: unknown): boolean {
-  if (value === undefined) return true;
-  if (typeof value !== 'string' || !value.trim()) return false;
-  const normalized = value.replace(/\\/gu, '/');
-  return !/^([A-Za-z]:\/|\/)/u.test(normalized) && !hasHiddenPathSegment(normalized);
 }
 
 function optionalPortableProjectionRef(value: unknown): boolean {
@@ -2516,7 +2617,8 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
       request.table !== 'media_metadata' &&
       request.table !== 'search_documents' &&
       request.table !== 'semantic_sources' &&
-      request.table !== 'entity_asset_projections' &&
+      request.table !== 'resource_usage_projections' &&
+      request.table !== 'project_entity_projections' &&
       request.table !== 'catalog_items'
     ) {
       throw new LocalMetadataError({
@@ -2551,15 +2653,20 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
                     'DELETE FROM semantic_sources WHERE partition_key = ?',
                     [partitionKey(request.partition)],
                   )
-                : request.table === 'entity_asset_projections'
+                : request.table === 'resource_usage_projections'
                   ? await this.connection().run(
-                      'DELETE FROM entity_asset_projections WHERE partition_key = ?',
+                      'DELETE FROM resource_usage_projections WHERE partition_key = ?',
                       [partitionKey(request.partition)],
                     )
-                  : await this.connection().run(
-                      'DELETE FROM catalog_items WHERE partition_key = ?',
-                      [partitionKey(request.partition)],
-                    );
+                  : request.table === 'project_entity_projections'
+                    ? await this.connection().run(
+                        'DELETE FROM project_entity_projections WHERE partition_key = ?',
+                        [partitionKey(request.partition)],
+                      )
+                    : await this.connection().run(
+                        'DELETE FROM catalog_items WHERE partition_key = ?',
+                        [partitionKey(request.partition)],
+                      );
     return { deletedRows: result.changes };
   }
 
@@ -2607,11 +2714,13 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
                   ? 'project-search'
                   : request.table === 'semantic_sources'
                     ? 'semantic-projection'
-                    : request.table === 'entity_asset_projections'
-                      ? 'entity-asset-projection'
-                      : request.table === 'catalog_items'
-                        ? 'catalog'
-                        : 'conversations',
+                    : request.table === 'resource_usage_projections'
+                      ? 'resource-usage-projection'
+                      : request.table === 'project_entity_projections'
+                        ? 'project-entity-projection'
+                        : request.table === 'catalog_items'
+                          ? 'catalog'
+                          : 'conversations',
         },
         reason: 'orphan-gc',
         updatedAt: request.collectedAt,
@@ -2961,9 +3070,9 @@ class ExclusiveSemanticProjectionRepository implements SemanticProjectionReposit
   }
 }
 
-class ExclusiveEntityAssetProjectionRepository implements EntityAssetProjectionRepository {
+class ExclusiveResourceUsageProjectionRepository implements ResourceUsageProjectionRepository {
   constructor(
-    private readonly raw: EntityAssetProjectionRepository,
+    private readonly raw: ResourceUsageProjectionRepository,
     private readonly exclusive: ExclusiveCoordinator,
     private readonly transaction: <T>(
       mode: LocalMetadataTransactionMode,
@@ -2971,19 +3080,40 @@ class ExclusiveEntityAssetProjectionRepository implements EntityAssetProjectionR
     ) => Promise<T>,
   ) {}
 
-  list(query: EntityAssetProjectionQuery): Promise<EntityAssetProjectionQueryResult> {
+  list(query: ResourceUsageProjectionQuery): Promise<ResourceUsageProjectionQueryResult> {
     return this.exclusive.run(() => this.raw.list(query));
   }
 
-  replaceSource(request: EntityAssetProjectionReplaceSourceRequest): Promise<void> {
+  replaceSource(request: ResourceUsageProjectionReplaceSourceRequest): Promise<void> {
+    return this.exclusive.run(() =>
+      this.transaction('cache-write', () => this.raw.replaceSource(request)),
+    );
+  }
+}
+
+class ExclusiveProjectEntityProjectionRepository implements ProjectEntityProjectionRepository {
+  constructor(
+    private readonly raw: ProjectEntityProjectionRepository,
+    private readonly exclusive: ExclusiveCoordinator,
+    private readonly transaction: <T>(
+      mode: LocalMetadataTransactionMode,
+      operation: () => Promise<T>,
+    ) => Promise<T>,
+  ) {}
+
+  list(query: ProjectEntityProjectionQuery): Promise<ProjectEntityProjectionQueryResult> {
+    return this.exclusive.run(() => this.raw.list(query));
+  }
+
+  replaceSource(request: ProjectEntityProjectionReplaceSourceRequest): Promise<void> {
     return this.exclusive.run(() =>
       this.transaction('cache-write', () => this.raw.replaceSource(request)),
     );
   }
 
   insertMissing(
-    request: EntityAssetProjectionReplaceSourceRequest,
-  ): Promise<EntityAssetProjectionInsertMissingResult> {
+    request: ProjectEntityProjectionReplaceSourceRequest,
+  ): Promise<ProjectEntityProjectionInsertMissingResult> {
     return this.exclusive.run(() =>
       this.transaction('cache-write', () => this.raw.insertMissing(request)),
     );
@@ -3060,7 +3190,8 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
     const mediaMetadata = new RawMediaMetadataRepository(getConnection);
     const searchDocuments = new RawSearchDocumentRepository(getConnection);
     const semanticProjections = new RawSemanticProjectionRepository(getConnection);
-    const entityAssetProjections = new RawEntityAssetProjectionRepository(getConnection);
+    const resourceUsageProjections = new RawResourceUsageProjectionRepository(getConnection);
+    const projectEntityProjections = new RawProjectEntityProjectionRepository(getConnection);
     const catalogItems = new RawCatalogProjectionRepository(getConnection);
     const cacheMaintenance = new RawCacheMaintenanceRepository(getConnection, workspaces);
     this.rawRepositories = {
@@ -3073,7 +3204,8 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       mediaMetadata,
       searchDocuments,
       semanticProjections,
-      entityAssetProjections,
+      resourceUsageProjections,
+      projectEntityProjections,
       catalogItems,
       cacheMaintenance,
     };
@@ -3117,8 +3249,13 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
         this.exclusive,
         (mode, operation) => this.executeTransaction(mode, operation),
       ),
-      entityAssetProjections: new ExclusiveEntityAssetProjectionRepository(
-        entityAssetProjections,
+      resourceUsageProjections: new ExclusiveResourceUsageProjectionRepository(
+        resourceUsageProjections,
+        this.exclusive,
+        (mode, operation) => this.executeTransaction(mode, operation),
+      ),
+      projectEntityProjections: new ExclusiveProjectEntityProjectionRepository(
+        projectEntityProjections,
         this.exclusive,
         (mode, operation) => this.executeTransaction(mode, operation),
       ),

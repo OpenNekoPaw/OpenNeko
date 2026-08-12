@@ -6,15 +6,8 @@
 // facts, asset bindings, or runtime media payloads.
 // =============================================================================
 
-import type {
-  CreativeEntityCandidate,
-  CreativeEntityKind,
-  CreativeEntityRef,
-  RepresentationKind,
-  RepresentationResolveResult,
-  RepresentationTarget,
-} from '@neko/entity-domain';
-import { isCreativeEntityCandidate } from '@neko/entity-domain';
+import type { CreativeEntityKind, CreativeEntityRef } from '@neko/entity-domain';
+import type { CharacterRepresentationKind } from './character';
 import type { DocumentSourceRef } from '@neko/content';
 import { isHostProjectedRuntimeValue } from '@neko/content';
 
@@ -278,7 +271,7 @@ export interface CharacterObservation {
   readonly dimensions: readonly CharacterTraitObservation[];
   readonly entityRef?: CreativeEntityRef;
   readonly candidateId?: string;
-  readonly candidate?: Pick<CreativeEntityCandidate, 'id' | 'kind' | 'name' | 'confidence'>;
+  readonly candidate?: CharacterObservationCandidate;
   readonly mention?: EntityMention;
   readonly confidence?: number;
   readonly supersedesObservationIds?: readonly string[];
@@ -288,6 +281,13 @@ export interface CharacterObservation {
   readonly reviewer?: string;
   readonly notes?: string;
   readonly extensions?: CharacterMemoryExtensionMap;
+}
+
+export interface CharacterObservationCandidate {
+  readonly candidateId: string;
+  readonly kind: CreativeEntityKind;
+  readonly canonicalName: string;
+  readonly confidence?: number;
 }
 
 export interface CharacterEvidenceLedger {
@@ -372,8 +372,7 @@ export interface CharacterMemoryOperationResult {
 }
 
 export interface CharacterRepresentationContext {
-  readonly kind: RepresentationKind;
-  readonly result?: RepresentationResolveResult;
+  readonly kind: CharacterRepresentationKind;
   readonly missing?: boolean;
   readonly diagnostics?: readonly CharacterMemoryDiagnostic[];
 }
@@ -388,19 +387,21 @@ export interface CharacterGenerationContextParticipant {
   readonly stateSnapshot?: CharacterStateSnapshot;
   readonly visualRepresentations?: readonly CharacterRepresentationContext[];
   readonly voiceRepresentation?: CharacterRepresentationContext;
-  readonly missingRepresentationKinds?: readonly RepresentationKind[];
+  readonly missingRepresentationKinds?: readonly CharacterRepresentationKind[];
   readonly sourceRefs?: readonly CharacterMemorySourceRef[];
 }
 
 export interface CharacterGenerationContext {
   readonly contextId: string;
-  readonly target: RepresentationTarget | 'generation';
+  readonly target: CharacterGenerationTarget;
   readonly sourceRef?: CharacterMemorySourceRef;
   readonly participants: readonly CharacterGenerationContextParticipant[];
   readonly diagnostics?: readonly CharacterMemoryDiagnostic[];
   readonly createdAt?: string;
   readonly metadata?: CharacterMemoryJsonRecord;
 }
+
+export type CharacterGenerationTarget = 'canvas' | 'agent' | 'cut' | 'generation';
 
 export interface CharacterMemoryValidationOptions {
   readonly maxSerializedBytes?: number;
@@ -686,7 +687,7 @@ export function deriveCharacterStateSnapshot(input: {
 
 export function createCharacterGenerationContext(input: {
   readonly contextId: string;
-  readonly target: RepresentationTarget | 'generation';
+  readonly target: CharacterGenerationTarget;
   readonly sourceRef?: CharacterMemorySourceRef;
   readonly participants: readonly CharacterGenerationContextParticipant[];
   readonly createdAt?: string;
@@ -875,12 +876,13 @@ function validateObservationIdentityLink(
 function isCreativeEntityCandidateSummary(
   value: unknown,
 ): value is CharacterObservation['candidate'] {
-  if (isCreativeEntityCandidate(value)) return true;
   if (!isRecord(value)) return false;
   return (
-    typeof value['id'] === 'string' &&
+    typeof value['candidateId'] === 'string' &&
+    value['candidateId'].trim().length > 0 &&
     isCreativeEntityKind(value['kind']) &&
-    typeof value['name'] === 'string' &&
+    typeof value['canonicalName'] === 'string' &&
+    value['canonicalName'].trim().length > 0 &&
     (value['confidence'] === undefined ||
       (typeof value['confidence'] === 'number' &&
         Number.isFinite(value['confidence']) &&
@@ -1438,7 +1440,9 @@ function buildParticipantDiagnostics(
   participant: CharacterGenerationContextParticipant,
   path: readonly CharacterMemoryPathSegment[],
 ): readonly CharacterMemoryDiagnostic[] {
-  const missingKinds = new Set<RepresentationKind>(participant.missingRepresentationKinds ?? []);
+  const missingKinds = new Set<CharacterRepresentationKind>(
+    participant.missingRepresentationKinds ?? [],
+  );
   for (const context of participant.visualRepresentations ?? []) {
     if (context.missing) missingKinds.add(context.kind);
   }

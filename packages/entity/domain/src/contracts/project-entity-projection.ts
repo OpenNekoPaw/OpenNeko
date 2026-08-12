@@ -7,14 +7,13 @@ import {
 import type {
   CreativeEntityOccurrenceProjection,
   CreativeEntityRelationshipProjection,
-} from './creative-entity-asset-composition';
+} from './project-entity-semantics';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 import type { ProjectEntityCandidateProjection } from './project-entity-document';
-import type { CreativeGraphNode, CreativeRelationEdge } from './creative-entity-graph';
 import {
   isEntityRepresentationRole,
   type EntityRepresentationRole,
-} from './entity-representation-binding';
+} from './project-entity-representation';
 
 export const PROJECT_ENTITY_BINDING_RESOURCE_OWNERS = [
   'workspace-file',
@@ -42,19 +41,14 @@ export interface ProjectEntityBindingAttention {
   readonly action: ProjectEntityBindingAttentionAction;
 }
 
-export interface EntityAssetProjectionPartition {
+export interface ProjectEntityProjectionPartition {
   readonly scope: 'global' | 'workspace';
   readonly workspaceId: string | null;
   readonly domain: string;
 }
 
-export type EntityAssetProjectionKind =
-  | 'asset-graph-node'
-  | 'asset-graph-edge'
-  | 'entity-occurrence'
-  | 'entity-relationship'
-  | 'entity-candidate'
-  | 'binding-availability';
+export type ProjectEntityProjectionKind =
+  'entity-occurrence' | 'entity-relationship' | 'entity-candidate' | 'binding-availability';
 
 export interface EntityBindingAvailabilityProjectionValue {
   readonly bindingId: string;
@@ -133,81 +127,71 @@ const BINDING_AVAILABILITY_KEYS = [
 ] as const;
 const BINDING_ATTENTION_KEYS = ['diagnostic', 'action'] as const;
 
-interface EntityAssetProjectionRecordBase {
+interface ProjectEntityProjectionRecordBase {
   readonly projectionId: string;
   readonly sourceId: string;
   readonly entityId?: string;
   readonly relatedEntityId?: string;
   readonly candidateId?: string;
-  readonly assetRef?: string;
   readonly freshness: 'fresh' | 'stale' | 'rebuilding';
   readonly updatedAt: string;
 }
 
-export type EntityAssetProjectionRecord =
-  | (EntityAssetProjectionRecordBase & {
-      readonly kind: 'asset-graph-node';
-      readonly value: CreativeGraphNode;
-    })
-  | (EntityAssetProjectionRecordBase & {
-      readonly kind: 'asset-graph-edge';
-      readonly value: CreativeRelationEdge;
-    })
-  | (EntityAssetProjectionRecordBase & {
+export type ProjectEntityProjectionRecord =
+  | (ProjectEntityProjectionRecordBase & {
       readonly kind: 'entity-occurrence';
       readonly value: CreativeEntityOccurrenceProjection;
     })
-  | (EntityAssetProjectionRecordBase & {
+  | (ProjectEntityProjectionRecordBase & {
       readonly kind: 'entity-relationship';
       readonly value: CreativeEntityRelationshipProjection;
     })
-  | (EntityAssetProjectionRecordBase & {
+  | (ProjectEntityProjectionRecordBase & {
       readonly kind: 'entity-candidate';
       readonly value: ProjectEntityCandidateProjection;
     })
-  | (EntityAssetProjectionRecordBase & {
+  | (ProjectEntityProjectionRecordBase & {
       readonly kind: 'binding-availability';
       readonly value: EntityBindingAvailabilityProjectionValue;
     });
 
-export interface EntityAssetProjectionQuery {
-  readonly partition: EntityAssetProjectionPartition;
+export interface ProjectEntityProjectionQuery {
+  readonly partition: ProjectEntityProjectionPartition;
   readonly projectionId?: string;
-  readonly kinds?: readonly EntityAssetProjectionKind[];
+  readonly kinds?: readonly ProjectEntityProjectionKind[];
   readonly sourceId?: string;
   readonly entityId?: string;
   readonly candidateId?: string;
-  readonly assetRef?: string;
 }
 
-export interface EntityAssetProjectionReplaceSourceRequest {
-  readonly partition: EntityAssetProjectionPartition;
+export interface ProjectEntityProjectionReplaceSourceRequest {
+  readonly partition: ProjectEntityProjectionPartition;
   readonly sourceId: string;
-  readonly records: readonly EntityAssetProjectionRecord[];
+  readonly records: readonly ProjectEntityProjectionRecord[];
   readonly updatedAt: string;
 }
 
-export interface EntityAssetProjectionInsertMissingResult {
+export interface ProjectEntityProjectionInsertMissingResult {
   readonly insertedProjectionKeys: readonly string[];
   readonly preservedProjectionKeys: readonly string[];
 }
 
-export interface EntityAssetProjectionDiagnostic {
-  readonly code: 'invalid-entity-asset-projection';
+export interface ProjectEntityProjectionDiagnostic {
+  readonly code: 'invalid-project-entity-projection';
   readonly projectionId: string;
   readonly sourceId: string;
   readonly message: string;
 }
 
-export interface EntityAssetProjectionQueryResult {
-  readonly records: readonly EntityAssetProjectionRecord[];
-  readonly diagnostics: readonly EntityAssetProjectionDiagnostic[];
+export interface ProjectEntityProjectionQueryResult {
+  readonly records: readonly ProjectEntityProjectionRecord[];
+  readonly diagnostics: readonly ProjectEntityProjectionDiagnostic[];
 }
 
-export interface EntityAssetProjectionRepository {
-  list(query: EntityAssetProjectionQuery): Promise<EntityAssetProjectionQueryResult>;
-  replaceSource(request: EntityAssetProjectionReplaceSourceRequest): Promise<void>;
+export interface ProjectEntityProjectionRepository {
+  list(query: ProjectEntityProjectionQuery): Promise<ProjectEntityProjectionQueryResult>;
+  replaceSource(request: ProjectEntityProjectionReplaceSourceRequest): Promise<void>;
   insertMissing(
-    request: EntityAssetProjectionReplaceSourceRequest,
-  ): Promise<EntityAssetProjectionInsertMissingResult>;
+    request: ProjectEntityProjectionReplaceSourceRequest,
+  ): Promise<ProjectEntityProjectionInsertMissingResult>;
 }

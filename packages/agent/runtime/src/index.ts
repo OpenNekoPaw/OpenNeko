@@ -72,7 +72,6 @@ export {
   type VisionPreprocessPolicy,
 } from './provider/multimodal-message-projection';
 export * from './tools/search/project-search-capability-provider';
-export * from './tools/entity/creative-entity-capability-provider';
 
 export {
   AgentProfileRegistry,

@@ -29,9 +29,7 @@
       "source": "repository",
       "digest": "sha256:475e0a3d8d9a6f481f4b2148ef9681cd4175a4046e8fbd170c8166010e883c93",
       "mutable": true,
-      "links": [
-        { "path": "neko/assets/Reference", "target": "media-source" }
-      ]
+      "links": [{ "path": "neko/assets/Reference", "target": "media-source" }]
     }
   ],
   "cases": [
@@ -39,12 +37,6 @@
       "id": "linked-media-search-read",
       "file": "cases/linked-media-search-read.json",
       "group": "canonical",
-      "visibility": "public"
-    },
-    {
-      "id": "generated-output-entity-binding",
-      "file": "cases/generated-output-entity-binding.json",
-      "group": "artifact",
       "visibility": "public"
     }
   ],

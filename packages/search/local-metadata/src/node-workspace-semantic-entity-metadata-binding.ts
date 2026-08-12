@@ -9,7 +9,7 @@ import type {
   SemanticSourceProjectionListResult,
 } from '@neko/search-domain';
 import type {
-  EntityAssetProjectionRecord,
+  ProjectEntityProjectionRecord,
   ProjectEntityCandidateSourceOwner,
 } from '@neko/entity-domain';
 import type { DocumentLocator } from '@neko/content';
@@ -21,7 +21,7 @@ import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspac
 import type { SemanticProjectionRecord } from '@neko/local-metadata';
 import { assertProjectEntityDiscoveryProjectionBatch } from '@neko/search-domain';
 import {
-  initializeEntityAssetProjectionTables,
+  initializeProjectEntityProjectionTables,
   initializeCoreLocalMetadataTables,
   initializeSearchProjectionTables,
 } from '@neko/local-metadata/sqlite';
@@ -73,7 +73,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
     }
     await initializeCoreLocalMetadataTables(metadataStore);
     await initializeSearchProjectionTables(metadataStore);
-    await initializeEntityAssetProjectionTables(metadataStore);
+    await initializeProjectEntityProjectionTables(metadataStore);
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -90,7 +90,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
     const entityPartition: LocalMetadataPartition = {
       scope: 'workspace',
       workspaceId,
-      domain: 'entity-asset-projection',
+      domain: 'project-entity-projection',
     };
     return {
       workspaceId,
@@ -141,7 +141,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
               source: semanticRecord(request),
               updatedAt: request.updatedAt,
             });
-            await repositories.entityAssetProjections.replaceSource({
+            await repositories.projectEntityProjections.replaceSource({
               partition: entityPartition,
               sourceId: request.source.sourceId,
               records: discoveryProjectionRecords({
@@ -167,7 +167,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
           },
           ({ repositories }) => {
             const checked = assertProjectEntityDiscoveryProjectionBatch(request);
-            return repositories.entityAssetProjections.replaceSource({
+            return repositories.projectEntityProjections.replaceSource({
               partition: entityPartition,
               sourceId: checked.source.sourceId,
               records: discoveryProjectionRecords(checked),
@@ -183,7 +183,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
             operation: 'delete-project-entity-discovery-source',
           },
           ({ repositories }) =>
-            repositories.entityAssetProjections.replaceSource({
+            repositories.projectEntityProjections.replaceSource({
               partition: entityPartition,
               sourceId,
               records: [],
@@ -203,7 +203,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
               sourceId,
               updatedAt,
             );
-            await repositories.entityAssetProjections.replaceSource({
+            await repositories.projectEntityProjections.replaceSource({
               partition: entityPartition,
               sourceId,
               records: [],
@@ -239,11 +239,11 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
               },
               updatedAt,
             });
-            const entityRecords = await repositories.entityAssetProjections.list({
+            const entityRecords = await repositories.projectEntityProjections.list({
               partition: entityPartition,
               sourceId,
             });
-            await repositories.entityAssetProjections.replaceSource({
+            await repositories.projectEntityProjections.replaceSource({
               partition: entityPartition,
               sourceId,
               records: entityRecords.records.map((record) =>
@@ -254,7 +254,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
           },
         ),
       listCandidateProjections: async () => {
-        const result = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.projectEntityProjections.list({
           partition: entityPartition,
           kinds: ['entity-candidate'],
         });
@@ -263,7 +263,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
         );
       },
       listDiscoveryOccurrences: async (query = {}) => {
-        const result = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.projectEntityProjections.list({
           partition: entityPartition,
           kinds: ['entity-occurrence'],
           ...projectionQuery(query),
@@ -273,7 +273,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
         );
       },
       findOccurrencesByEntity: async (entityId) => {
-        const result = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.projectEntityProjections.list({
           partition: entityPartition,
           kinds: ['entity-occurrence'],
           entityId,
@@ -281,7 +281,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
         return loadSemanticOccurrenceRecords(result.records);
       },
       findEntityLinksByOccurrence: async (occurrenceId) => {
-        const result = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.projectEntityProjections.list({
           partition: entityPartition,
           projectionId: occurrenceId,
           kinds: ['entity-occurrence'],
@@ -291,7 +291,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
         return occurrence ? occurrenceLinks(occurrence) : null;
       },
       findEntityLinksByLocator: async (sourceId, locator) => {
-        const result = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.projectEntityProjections.list({
           partition: entityPartition,
           sourceId,
           kinds: ['entity-occurrence'],
@@ -310,7 +310,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
 }
 
 async function loadSemanticOccurrenceRecords(
-  records: readonly EntityAssetProjectionRecord[],
+  records: readonly ProjectEntityProjectionRecord[],
 ): Promise<readonly SemanticEntityOccurrenceRecord[]> {
   const results: SemanticEntityOccurrenceRecord[] = [];
   for (const record of records) {
@@ -386,9 +386,9 @@ function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticPro
 
 function discoveryProjectionRecords(
   request: ProjectEntityDiscoveryProjectionBatch,
-): readonly EntityAssetProjectionRecord[] {
+): readonly ProjectEntityProjectionRecord[] {
   const checked = assertProjectEntityDiscoveryProjectionBatch(request);
-  const occurrenceRecords: EntityAssetProjectionRecord[] = checked.occurrences.map(
+  const occurrenceRecords: ProjectEntityProjectionRecord[] = checked.occurrences.map(
     (occurrence) => ({
       projectionId: requireSemanticOccurrenceId(occurrence),
       kind: 'entity-occurrence',
@@ -400,7 +400,7 @@ function discoveryProjectionRecords(
       updatedAt: checked.updatedAt,
     }),
   );
-  const candidateRecords: EntityAssetProjectionRecord[] = checked.candidates.map((candidate) => ({
+  const candidateRecords: ProjectEntityProjectionRecord[] = checked.candidates.map((candidate) => ({
     projectionId: `${checked.source.sourceId}:candidate:${candidate.candidateId}`,
     kind: 'entity-candidate',
     sourceId: checked.source.sourceId,
@@ -413,9 +413,9 @@ function discoveryProjectionRecords(
 }
 
 function staleProjectionRecord(
-  record: EntityAssetProjectionRecord,
+  record: ProjectEntityProjectionRecord,
   updatedAt: string,
-): EntityAssetProjectionRecord {
+): ProjectEntityProjectionRecord {
   if (record.kind === 'entity-candidate') {
     return {
       ...record,
@@ -440,7 +440,7 @@ function staleProjectionRecord(
 
 function projectionRecordFreshness(
   freshness: 'fresh' | 'stale' | 'building' | 'partial' | 'failed' | undefined,
-): EntityAssetProjectionRecord['freshness'] {
+): ProjectEntityProjectionRecord['freshness'] {
   if (freshness === 'building') return 'rebuilding';
   if (freshness === 'stale' || freshness === 'partial' || freshness === 'failed') return 'stale';
   return 'fresh';

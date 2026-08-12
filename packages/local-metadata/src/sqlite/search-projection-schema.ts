@@ -66,6 +66,35 @@ const SEARCH_PROJECTION_TABLES = [
   ) STRICT`,
   `CREATE INDEX IF NOT EXISTS semantic_sources_partition_asset_idx
     ON semantic_sources(partition_key, asset_id, freshness, updated_at)`,
+  `CREATE TABLE IF NOT EXISTS resource_usage_projections (
+    partition_key TEXT NOT NULL,
+    partition_scope TEXT NOT NULL CHECK (partition_scope IN ('global', 'workspace')),
+    workspace_id TEXT,
+    projection_id TEXT NOT NULL,
+    source_owner_id TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    target_owner_id TEXT NOT NULL,
+    target_resource_id TEXT NOT NULL,
+    availability TEXT NOT NULL CHECK (availability IN (
+      'available',
+      'needs-attention',
+      'unavailable'
+    )),
+    freshness TEXT NOT NULL CHECK (freshness IN ('fresh', 'stale', 'rebuilding')),
+    source_fingerprint TEXT NOT NULL,
+    projection_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (partition_key, source_owner_id, source_id, projection_id),
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(workspace_id) ON DELETE CASCADE,
+    CHECK (
+      (partition_scope = 'global' AND workspace_id IS NULL) OR
+      (partition_scope = 'workspace' AND workspace_id IS NOT NULL)
+    )
+  ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS resource_usage_projections_source_idx
+    ON resource_usage_projections(partition_key, source_owner_id, source_id, updated_at)`,
+  `CREATE INDEX IF NOT EXISTS resource_usage_projections_target_idx
+    ON resource_usage_projections(partition_key, target_owner_id, target_resource_id, updated_at)`,
 ] as const;
 
 export function initializeSearchProjectionTables(store: LocalMetadataStore): Promise<void> {

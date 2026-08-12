@@ -70,7 +70,6 @@ const DOCUMENT: ProjectEntityDocument = {
       entityId: 'character-rin',
       kind: 'character',
       names: { canonical: 'Rin', aliases: [] },
-      facts: {},
       representations: [
         {
           bindingId: 'binding-rin',
@@ -88,7 +87,6 @@ const DOCUMENT: ProjectEntityDocument = {
       entityId: 'location-school',
       kind: 'location',
       names: { canonical: 'School', aliases: [] },
-      facts: {},
       representations: [],
       lifecycle: { state: 'deprecated', deprecatedAt: '2026-08-05T01:00:00.000Z' },
       createdAt: '2026-08-05T00:00:00.000Z',

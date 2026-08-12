@@ -6,8 +6,8 @@ import type {
 } from '../contracts';
 import type {
   EntityBindingAvailabilityProjectionValue,
-  EntityAssetProjectionPartition,
-  EntityAssetProjectionRepository,
+  ProjectEntityProjectionPartition,
+  ProjectEntityProjectionRepository,
   ProjectEntityCandidateProjection,
   ProjectEntityDocumentRepository,
   ProjectEntityManagementProjection,
@@ -25,8 +25,8 @@ export interface EntitySearchAdapterOptions {
   readonly projectRoot: string;
   readonly entities: Pick<ProjectEntityDocumentRepository, 'load'>;
   readonly derivedProjection?: {
-    readonly repository: Pick<EntityAssetProjectionRepository, 'list'>;
-    readonly partition: EntityAssetProjectionPartition;
+    readonly repository: Pick<ProjectEntityProjectionRepository, 'list'>;
+    readonly partition: ProjectEntityProjectionPartition;
   };
   readonly providerId?: string;
 }

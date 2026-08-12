@@ -34,6 +34,7 @@ export {
 } from './projections';
 export { SimpleEventEmitter } from './simpleEventEmitter';
 export * from './SemanticSourceCoordinator';
+export * from './ResourceUsageProjectionReconciliationService';
 export type {
   ProjectSearchContextResolver,
   ProjectSearchDisposable,

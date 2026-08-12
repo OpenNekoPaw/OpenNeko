@@ -818,7 +818,7 @@ export function projectCharacterObservationToSearchItem(
   const observation = input.observation;
   const label =
     observation.entityRef?.entityId ??
-    observation.candidate?.name ??
+    observation.candidate?.canonicalName ??
     observation.mention?.text ??
     observation.candidateId ??
     observation.observationId;

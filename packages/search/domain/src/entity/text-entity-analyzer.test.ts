@@ -141,7 +141,6 @@ function entity(
     entityId,
     kind,
     names: { canonical, aliases },
-    facts: {},
     representations: [],
     lifecycle: { state: 'active' },
     createdAt: '2026-07-18T00:00:00.000Z',

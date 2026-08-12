@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type {
-  EntityAssetProjectionRecord,
-  EntityAssetProjectionReplaceSourceRequest,
-  EntityAssetProjectionRepository,
+  ProjectEntityProjectionRecord,
+  ProjectEntityProjectionReplaceSourceRequest,
+  ProjectEntityProjectionRepository,
 } from '@neko/entity-domain';
 import { NodeProjectEntityInspectorRuntime } from './node-project-entity-inspector-runtime';
 import { NodeProjectEntityRepository } from './node-project-entity-repository';
@@ -33,7 +33,6 @@ describe('NodeProjectEntityInspectorRuntime', () => {
         {
           entityId: 'entity-rin',
           names: { canonical: 'Rin' },
-          facts: { role: 'lead' },
         },
       ],
     });
@@ -66,11 +65,11 @@ describe('NodeProjectEntityInspectorRuntime', () => {
     await runtime.execute({
       type: 'edit',
       entityId: 'entity-rin',
-      changes: { facts: { role: 'protagonist' } },
+      changes: { names: { canonical: 'Rin Aoki', aliases: [] } },
     });
 
     await expect(repository(root).load()).resolves.toMatchObject({
-      entities: [{ facts: { role: 'protagonist' } }],
+      entities: [{ names: { canonical: 'Rin Aoki' } }],
     });
     await expect(
       projections.list({
@@ -101,7 +100,7 @@ describe('NodeProjectEntityInspectorRuntime', () => {
       runtime.execute({
         type: 'edit',
         entityId: 'entity-rin',
-        changes: { facts: { role: 'lead' } },
+        changes: { names: { canonical: 'Rin', aliases: [] } },
       }),
     ).rejects.toMatchObject({
       diagnostics: [{ code: 'project-entity-io-failed' }],
@@ -111,17 +110,17 @@ describe('NodeProjectEntityInspectorRuntime', () => {
 });
 
 class MemoryProjectionRepository implements Pick<
-  EntityAssetProjectionRepository,
+  ProjectEntityProjectionRepository,
   'list' | 'replaceSource'
 > {
   failNextReplace = false;
-  private records: EntityAssetProjectionRecord[];
+  private records: ProjectEntityProjectionRecord[];
 
-  constructor(records: readonly EntityAssetProjectionRecord[]) {
+  constructor(records: readonly ProjectEntityProjectionRecord[]) {
     this.records = [...records];
   }
 
-  async list(query: Parameters<EntityAssetProjectionRepository['list']>[0]) {
+  async list(query: Parameters<ProjectEntityProjectionRepository['list']>[0]) {
     return {
       records: this.records.filter(
         (record) =>
@@ -133,7 +132,7 @@ class MemoryProjectionRepository implements Pick<
     };
   }
 
-  async replaceSource(request: EntityAssetProjectionReplaceSourceRequest): Promise<void> {
+  async replaceSource(request: ProjectEntityProjectionReplaceSourceRequest): Promise<void> {
     if (this.failNextReplace) {
       this.failNextReplace = false;
       throw new Error('projection interruption');
@@ -166,12 +165,11 @@ function confirmIntent() {
     accepted: {
       kind: 'character' as const,
       names: { canonical: 'Rin', aliases: [] },
-      facts: { role: 'lead' },
     },
   };
 }
 
-function candidateRecord(sourceId: string): EntityAssetProjectionRecord {
+function candidateRecord(sourceId: string): ProjectEntityProjectionRecord {
   return {
     projectionId: `${sourceId}:candidate-rin`,
     kind: 'entity-candidate',
@@ -193,7 +191,7 @@ function partition() {
   return {
     scope: 'workspace' as const,
     workspaceId: 'project-neko',
-    domain: 'entity-asset-projection',
+    domain: 'project-entity-projection',
   };
 }
 

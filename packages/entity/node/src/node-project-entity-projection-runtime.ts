@@ -2,7 +2,7 @@ import path from 'node:path';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import {
   ProjectEntityBindingAvailabilityService,
-  type EntityAssetProjectionRepository,
+  type ProjectEntityProjectionRepository,
 } from '@neko/entity-domain';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import {
@@ -28,7 +28,7 @@ export class NodeProjectEntityProjectionRuntime {
     private readonly options: {
       readonly homedir: string;
       readonly metadataStore: LocalMetadataStore;
-      readonly projections: EntityAssetProjectionRepository;
+      readonly projections: ProjectEntityProjectionRepository;
       readonly now?: () => string;
       readonly createMetadataBinding?: typeof createNodeWorkspaceSemanticEntityMetadataBinding;
       readonly createSemanticRuntime?: typeof createNodeWorkspaceSemanticEntityRuntime;
@@ -76,7 +76,7 @@ export class NodeProjectEntityProjectionRuntime {
         partition: {
           scope: 'workspace',
           workspaceId: workspace.workspaceId,
-          domain: 'entity-asset-projection',
+          domain: 'project-entity-projection',
         },
       },
       (this.options.now ?? (() => new Date().toISOString()))(),
