@@ -91,6 +91,7 @@ export function AgentWebviewRoot({
 export type {
   AgentComposerAuthoringCatalog,
   AgentComposerAuthoringCreationContext,
+  AgentComposerAuthoringCreationResult,
   AgentComposerAuthoringTargetOption,
   AgentComposerWorkspacePresentation,
   AgentComposerWorkspaceTarget,

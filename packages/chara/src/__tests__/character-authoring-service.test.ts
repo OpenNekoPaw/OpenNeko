@@ -100,6 +100,77 @@ class MemoryCharacterAuthoringRepository
 }
 
 describe('CharacterAuthoringService', () => {
+  it('commits manual, evidence, Asset and Entity-context seeds through one fresh CharacterProject path', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const project = await service.createProject({
+      characterProjectId: 'character-project-seeded',
+      displayName: 'Seeded',
+      draft: emptyDefinition(),
+      seed: {
+        evidence: [
+          {
+            evidenceId: 'evidence-file',
+            sourceRef: 'content:workspace/story.md',
+            excerpt: 'Seeded is the archive keeper.',
+            observedAt: firstTime,
+          },
+          {
+            evidenceId: 'evidence-entity',
+            sourceRef: 'entity:character-seeded',
+            observedAt: firstTime,
+          },
+        ],
+        representationRefs: [
+          {
+            representationId: 'live2d-main',
+            kind: 'live2d',
+            resourceRef: 'asset:live2d-seeded/exact-member',
+          },
+        ],
+      },
+    });
+
+    expect(project).toMatchObject({
+      characterProjectId: 'character-project-seeded',
+      evidence: [{ evidenceId: 'evidence-file' }, { evidenceId: 'evidence-entity' }],
+      draft: {
+        representationRefs: [
+          {
+            representationId: 'live2d-main',
+            resourceRef: 'asset:live2d-seeded/exact-member',
+          },
+        ],
+      },
+      reviewStatus: 'draft',
+    });
+    expect(repository.projects.size).toBe(1);
+    expect(repository.versions.size).toBe(0);
+  });
+
+  it('rejects duplicate seed identities without partially storing a CharacterProject', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    await expect(
+      service.createProject({
+        characterProjectId: 'character-project-invalid-seed',
+        displayName: 'Invalid',
+        draft: definition(),
+        seed: {
+          evidence: [],
+          representationRefs: [
+            {
+              representationId: 'portrait-main',
+              kind: 'portrait',
+              resourceRef: 'asset:other-portrait',
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow("duplicate identity 'portrait-main'");
+    expect(repository.projects.size).toBe(0);
+  });
+
   it('continues the one working draft from an exact owned CharacterVersion', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
     const service = new CharacterAuthoringService({

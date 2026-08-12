@@ -15,6 +15,7 @@ import {
   type CharacterVersion,
   type CharacterVersionLineage,
   type CharacterVersionRelation,
+  type CharacterCreationSeed,
 } from '@neko/chara/contracts';
 import type { CharacterVersionLineageRepository } from './character-version-lineage-repository';
 
@@ -52,6 +53,7 @@ export interface CreateCharacterProjectInput {
   readonly characterProjectId: string;
   readonly displayName: string;
   readonly draft: CharacterDefinition;
+  readonly seed?: CharacterCreationSeed;
 }
 
 export interface UpdateCharacterDraftInput {
@@ -177,11 +179,15 @@ export class CharacterAuthoringService {
       );
     }
     const timestamp = this.now();
+    const seed = input.seed ?? { evidence: [], representationRefs: [] };
     const project = parseCharacterProject({
       characterProjectId: input.characterProjectId,
       displayName: input.displayName,
-      draft: input.draft,
-      evidence: [],
+      draft: {
+        ...input.draft,
+        representationRefs: [...input.draft.representationRefs, ...seed.representationRefs],
+      },
+      evidence: seed.evidence,
       candidates: [],
       reviewStatus: 'draft',
       createdAt: timestamp,

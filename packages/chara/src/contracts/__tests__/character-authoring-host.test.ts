@@ -49,6 +49,7 @@ describe('Character authoring Host contract', () => {
           characterProjectId: 'character-1',
           displayName: 'Wrong path',
           draft: definition(),
+          sources: { evidence: [], assetRepresentations: [] },
         },
       }),
     ).toThrow('is not permitted');

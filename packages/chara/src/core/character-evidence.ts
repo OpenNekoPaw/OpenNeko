@@ -1,9 +1,9 @@
 /** Character-domain evidence selection and projection. */
 import * as path from 'node:path';
 import type {
-  CreativeEntity,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
+  ProjectEntityRecord,
 } from '@neko/entity-domain';
 import type { FountainScriptIndex } from '@neko/screenplay-domain';
 import type { NpcProfileFact, NpcTranscriptMessage } from '@neko/chara/contracts';
@@ -142,7 +142,7 @@ export interface CharacterEvidenceTrimResult {
 }
 
 export interface CharacterEvidenceEntityReader {
-  getEntity(entityRef: CreativeEntityRef): Promise<CreativeEntity | undefined>;
+  getEntity(entityRef: CreativeEntityRef): Promise<ProjectEntityRecord | undefined>;
 }
 
 export interface CharacterEvidenceOccurrenceReader {
@@ -390,7 +390,7 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
     };
   }
 
-  private async loadEntity(entityRef: CreativeEntityRef): Promise<CreativeEntity | undefined> {
+  private async loadEntity(entityRef: CreativeEntityRef): Promise<ProjectEntityRecord | undefined> {
     if (!this.entityReader) return undefined;
     try {
       const entity = await this.entityReader.getEntity(entityRef);
@@ -407,7 +407,7 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
 
   private async collectLocators(input: {
     readonly request: CharacterEvidenceRequest;
-    readonly entity: CreativeEntity | undefined;
+    readonly entity: ProjectEntityRecord | undefined;
     readonly profileTokens: readonly string[];
     readonly omitted: CharacterEvidenceOmission[];
   }): Promise<readonly CharacterEvidenceLocator[]> {
@@ -447,7 +447,7 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
 
   private async collectProjectSearchLocators(input: {
     readonly request: CharacterEvidenceRequest;
-    readonly entity: CreativeEntity | undefined;
+    readonly entity: ProjectEntityRecord | undefined;
     readonly omitted: CharacterEvidenceOmission[];
   }): Promise<readonly CharacterEvidenceLocator[]> {
     const projectSearchReader = this.projectSearchReader;
@@ -1170,10 +1170,10 @@ function characterEvidenceChunkId(sourceRef: CharacterEvidenceSourceRef): string
   ].join(':');
 }
 
-function buildEvidenceSearchQueries(entity: CreativeEntity | undefined): readonly string[] {
+function buildEvidenceSearchQueries(entity: ProjectEntityRecord | undefined): readonly string[] {
   if (!entity) return [];
   return dedupeStrings(
-    [entity.displayName, entity.canonicalName, ...entity.aliases]
+    [entity.names.display, entity.names.canonical, ...entity.names.aliases]
       .filter((value): value is string => typeof value === 'string')
       .map((value) => value.trim())
       .filter((value) => value.length > 0),
@@ -1182,12 +1182,12 @@ function buildEvidenceSearchQueries(entity: CreativeEntity | undefined): readonl
 
 function collectProfileTokens(
   entityRef: CreativeEntityRef,
-  entity: CreativeEntity | undefined,
+  entity: ProjectEntityRecord | undefined,
 ): readonly string[] {
   return normalizeCharacterEvidenceTokens(
     [
       entityRef.entityId,
-      ...(entity ? [entity.displayName, entity.canonicalName, ...entity.aliases] : []),
+      ...(entity ? [entity.names.display, entity.names.canonical, ...entity.names.aliases] : []),
     ].filter((value): value is string => typeof value === 'string'),
   );
 }

@@ -7,6 +7,7 @@ export * from './character-storyline';
 export * from './character-presentation';
 
 export * from './character';
+export * from './character-creation-source';
 export * from './character-version-lineage';
 export * from './character-portable-package';
 export * from './character-companion-continuity';
@@ -17,4 +18,5 @@ export * from './character-authoring-host';
 export * from './character-room-workbench-host';
 export * from './character-avatar-host';
 export * from './character-conversation-launch';
+export * from './character-product-handoff';
 export * from './character-narrative-turn-receipt';

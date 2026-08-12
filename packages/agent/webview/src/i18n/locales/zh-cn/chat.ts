@@ -126,6 +126,8 @@ export const chat = {
   'chat.entryAuthoring.namePlaceholder': '为新角色草稿命名',
   'chat.entryAuthoring.nameRequired': '请先填写草稿名称，再选择创建位置。',
   'chat.entryAuthoring.creationUnavailable': '当前入口无法创建角色草稿。',
+  'chat.entryAuthoring.creationIncomplete': '已完成的角色创建步骤已保存，请仅重试缺失步骤。',
+  'chat.entryAuthoring.retryMissingStep': '重试缺失步骤',
   'chat.entryAuthoring.destinationLabel': '选择草稿创建位置',
   'chat.entryAuthoring.destinationTitle': '角色草稿创建位置',
   'chat.entryAuthoring.createDescription': '在此处新建草稿',

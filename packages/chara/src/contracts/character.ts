@@ -15,6 +15,8 @@ import {
 } from './codec';
 import {
   collectCharacterLoreEvidenceIds,
+  createEmptyCharacterBackgroundStory,
+  createEmptyCharacterOriginSetting,
   parseCharacterBackgroundStory,
   parseCharacterOriginSetting,
   type CharacterBackgroundStory,
@@ -70,6 +72,11 @@ export interface CharacterRepresentationRef {
   readonly resourceRef: string;
 }
 
+export interface CharacterCreationSeed {
+  readonly evidence: readonly CharacterEvidenceRef[];
+  readonly representationRefs: readonly CharacterRepresentationRef[];
+}
+
 export interface CharacterRepresentationDefaults {
   readonly portraitRepresentationId?: string;
   readonly avatarRepresentationId?: string;
@@ -93,6 +100,19 @@ export interface CharacterDefinition {
   readonly representationRefs: readonly CharacterRepresentationRef[];
   readonly representationDefaults?: CharacterRepresentationDefaults;
   readonly voiceDefaults?: CharacterVoiceDefaults;
+}
+
+export function createEmptyCharacterDefinition(): CharacterDefinition {
+  return {
+    summary: '',
+    backgroundStory: createEmptyCharacterBackgroundStory(),
+    originSetting: createEmptyCharacterOriginSetting(),
+    canon: [],
+    knowledgeBoundary: [],
+    behaviorPolicy: [],
+    expressionPolicy: [],
+    representationRefs: [],
+  };
 }
 
 export interface CharacterProject {
@@ -568,7 +588,7 @@ function validateCharacterDefinitionEvidence(
   }
 }
 
-function parseCharacterEvidenceRef(value: unknown): CharacterEvidenceRef {
+export function parseCharacterEvidenceRef(value: unknown): CharacterEvidenceRef {
   const record = requireExactRecord(
     value,
     ['evidenceId', 'sourceRef', 'excerpt', 'observedAt'],
@@ -637,6 +657,30 @@ export function parseCharacterRepresentationRef(value: unknown): CharacterRepres
       'Character representation kind',
     ),
     resourceRef,
+  };
+}
+
+export function parseCharacterCreationSeed(value: unknown): CharacterCreationSeed {
+  const record = requireExactRecord(
+    value,
+    ['evidence', 'representationRefs'],
+    'Character creation seed',
+  );
+  return {
+    evidence: requireUniqueIdentities(
+      requireArray(record['evidence'], parseCharacterEvidenceRef, 'Character creation evidence'),
+      (item) => item.evidenceId,
+      'Character creation evidence',
+    ),
+    representationRefs: requireUniqueIdentities(
+      requireArray(
+        record['representationRefs'],
+        parseCharacterRepresentationRef,
+        'Character creation representations',
+      ),
+      (item) => item.representationId,
+      'Character creation representations',
+    ),
   };
 }
 

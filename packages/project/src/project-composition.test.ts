@@ -51,6 +51,81 @@ describe('Content Project composition', () => {
     ).toThrow('unique exact identities');
   });
 
+  it('accepts only exact Entity-to-Character associations for linked CharacterProjects', () => {
+    const association = {
+      entityId: 'entity-character-1',
+      characterProjectId: 'character-1',
+    };
+    expect(
+      parseContentProjectComposition({
+        ...fixture(),
+        localTargets: [{ kind: 'character-project', characterProjectId: 'character-1' }],
+        entityCharacterAssociations: [association],
+      }),
+    ).toMatchObject({ entityCharacterAssociations: [association] });
+    expect(() =>
+      parseContentProjectComposition({
+        ...fixture(),
+        entityCharacterAssociations: [association],
+      }),
+    ).toThrow("references unlinked CharacterProject 'character-1'");
+    expect(() =>
+      parseContentProjectComposition({
+        ...fixture(),
+        localTargets: [
+          { kind: 'character-project', characterProjectId: 'character-1' },
+          { kind: 'character-project', characterProjectId: 'character-2' },
+        ],
+        entityCharacterAssociations: [
+          association,
+          { ...association, characterProjectId: 'character-2' },
+        ],
+      }),
+    ).toThrow('Entity identities must contain unique exact identities');
+    expect(() =>
+      parseContentProjectComposition({
+        ...fixture(),
+        localTargets: [{ kind: 'character-project', characterProjectId: 'character-1' }],
+        entityCharacterAssociations: [
+          association,
+          { ...association, entityId: 'entity-character-2' },
+        ],
+      }),
+    ).toThrow('CharacterProject identities must contain unique exact identities');
+  });
+
+  it('rejects inferred, latest-version and copied Character payload in an association', () => {
+    const localTargets = [
+      { kind: 'character-project' as const, characterProjectId: 'character-1' },
+    ];
+    for (const forbidden of [
+      { entityId: 'entity-1', characterProjectId: 'character-1', characterName: 'Rin' },
+      {
+        entityId: 'entity-1',
+        characterProjectId: 'character-1',
+        characterVersionId: 'latest',
+      },
+      {
+        entityId: 'entity-1',
+        characterProjectId: 'character-1',
+        characterDefinition: { background: 'copied' },
+      },
+      {
+        entityId: 'entity-1',
+        characterProjectId: 'character-1',
+        activeProjectId: 'content-project-1',
+      },
+    ]) {
+      expect(() =>
+        parseContentProjectComposition({
+          ...fixture(),
+          localTargets,
+          entityCharacterAssociations: [forbidden],
+        }),
+      ).toThrow('unknown or missing fields');
+    }
+  });
+
   it('mutates membership and dependencies through one repository path', async () => {
     const repository = new InMemoryProjectCompositionRepository();
     const service = new ProjectCompositionService(repository);
@@ -71,6 +146,57 @@ describe('Content Project composition', () => {
         characterProjectId: 'character-1',
       }),
     ).rejects.toMatchObject({ code: 'project-local-target-already-linked' });
+  });
+
+  it('owns exact Entity-to-Character association lifecycle without name or active-project inference', async () => {
+    const repository = new InMemoryProjectCompositionRepository();
+    const service = new ProjectCompositionService(repository);
+    await service.create('content-project-1');
+    await service.addLocalTarget('content-project-1', {
+      kind: 'character-project',
+      characterProjectId: 'character-1',
+    });
+    const association = {
+      entityId: 'entity-character-1',
+      characterProjectId: 'character-1',
+    };
+
+    await expect(
+      service.associateEntityCharacter('content-project-1', association),
+    ).resolves.toMatchObject({ entityCharacterAssociations: [association] });
+    await expect(
+      service.requireEntityCharacterAssociation('content-project-1', association.entityId),
+    ).resolves.toEqual(association);
+    await expect(
+      service.associateEntityCharacter('content-project-1', {
+        entityId: 'entity-character-same-name',
+        characterProjectId: 'character-1',
+      }),
+    ).rejects.toMatchObject({ code: 'project-entity-character-already-associated' });
+    await expect(
+      service.removeLocalTarget('content-project-1', {
+        kind: 'character-project',
+        characterProjectId: 'character-1',
+      }),
+    ).rejects.toMatchObject({ code: 'project-entity-character-target-associated' });
+    await service.disassociateEntityCharacter('content-project-1', association);
+    await expect(
+      service.removeLocalTarget('content-project-1', {
+        kind: 'character-project',
+        characterProjectId: 'character-1',
+      }),
+    ).resolves.toMatchObject({ localTargets: [], entityCharacterAssociations: [] });
+  });
+
+  it('rejects association before exact CharacterProject membership exists', async () => {
+    const service = new ProjectCompositionService(new InMemoryProjectCompositionRepository());
+    await service.create('content-project-1');
+    await expect(
+      service.associateEntityCharacter('content-project-1', {
+        entityId: 'entity-character-1',
+        characterProjectId: 'character-1',
+      }),
+    ).rejects.toMatchObject({ code: 'project-entity-character-target-not-linked' });
   });
 
   it('keeps unavailable and unlinked targets visible without changing composition', () => {
@@ -259,6 +385,9 @@ describe('Project authoring navigation service', () => {
             worldExperienceVersionId: 'world-experience-1',
           },
         ],
+        entityCharacterAssociations: [
+          { entityId: 'entity-character-1', characterProjectId: 'character-1' },
+        ],
       },
     });
 
@@ -299,6 +428,7 @@ describe('Project authoring navigation service', () => {
           { kind: 'world-project', worldProjectId: 'world-1' },
         ],
         dependencies: [],
+        entityCharacterAssociations: [],
       },
       characterDiagnostics: [
         {
@@ -334,6 +464,7 @@ describe('Project authoring navigation service', () => {
         dependencies: [
           { kind: 'character-version', characterVersionId: 'character-version-missing' },
         ],
+        entityCharacterAssociations: [],
       },
     });
 
@@ -361,7 +492,12 @@ describe('Project authoring navigation service', () => {
 });
 
 function fixture(): ContentProjectComposition {
-  return { contentProjectId: 'content-project-1', localTargets: [], dependencies: [] };
+  return {
+    contentProjectId: 'content-project-1',
+    localTargets: [],
+    dependencies: [],
+    entityCharacterAssociations: [],
+  };
 }
 
 function createNavigationService(options?: {

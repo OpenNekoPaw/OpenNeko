@@ -22,6 +22,7 @@ describe('CharacterFoundationCommandService', () => {
         expressionPolicy: [],
         representationRefs: [],
       },
+      sources: { evidence: [], assetRepresentations: [] },
     };
     await service.execute({ operation: 'character-project-create', input: characterInput });
     const storylineInput = {
@@ -46,7 +47,7 @@ describe('CharacterFoundationCommandService', () => {
       input: presentationInput,
     });
 
-    expect(services.characterAuthoring.createProject).toHaveBeenCalledWith(
+    expect(services.characterCreation.createProject).toHaveBeenCalledWith(
       characterInput,
       undefined,
     );
@@ -62,8 +63,10 @@ describe('CharacterFoundationCommandService', () => {
 
 function createServices() {
   return {
-    characterAuthoring: {
+    characterCreation: {
       createProject: vi.fn(async () => undefined),
+    },
+    characterAuthoring: {
       updateDraft: vi.fn(async () => undefined),
       setReviewStatus: vi.fn(async () => undefined),
       publish: vi.fn(async () => undefined),

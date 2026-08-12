@@ -4,6 +4,7 @@ import { useTranslation } from '../../i18n/I18nContext';
 import type {
   AgentComposerAuthoringCatalog,
   AgentComposerAuthoringCreationContext,
+  AgentComposerAuthoringCreationResult,
   AgentComposerAuthoringTargetOption,
   AgentComposerWorkspacePresentation,
   AgentComposerWorkspaceTarget,
@@ -31,6 +32,9 @@ export function AuthoringTargetSelector({
   const [catalog, setCatalog] = useState<AgentComposerAuthoringCatalog>();
   const [diagnostic, setDiagnostic] = useState<string>();
   const [draftName, setDraftName] = useState('');
+  const [repair, setRepair] =
+    useState<Extract<AgentComposerAuthoringCreationResult, { readonly status: 'incomplete' }>>();
+  const [repairPending, setRepairPending] = useState(false);
 
   useEffect(() => {
     if (!presentation.loadAuthoringCatalog) return;
@@ -54,6 +58,20 @@ export function AuthoringTargetSelector({
       await onChange(target);
     },
     [onChange],
+  );
+
+  const acceptCreationResult = useCallback(
+    async (result: AgentComposerAuthoringCreationResult) => {
+      if (result.status === 'created') {
+        setRepair(undefined);
+        setDiagnostic(undefined);
+        await commitTarget(result.target);
+        return;
+      }
+      setRepair(result);
+      setDiagnostic(t('chat.entryAuthoring.creationIncomplete'));
+    },
+    [commitTarget, t],
   );
 
   const selectTarget = useCallback(
@@ -86,13 +104,26 @@ export function AuthoringTargetSelector({
       setDiagnostic(undefined);
       try {
         const target = await presentation.onCreateAuthoringTarget(context, name);
-        if (target) await commitTarget(target);
+        if (target) await acceptCreationResult(target);
       } catch (error) {
         setDiagnostic(describeError(error));
       }
     },
-    [commitTarget, draftName, presentation, t],
+    [acceptCreationResult, draftName, presentation, t],
   );
+
+  const retryCreation = useCallback(async () => {
+    if (!repair) return;
+    setRepairPending(true);
+    setDiagnostic(undefined);
+    try {
+      await acceptCreationResult(await repair.retry());
+    } catch (error) {
+      setDiagnostic(describeError(error));
+    } finally {
+      setRepairPending(false);
+    }
+  }, [acceptCreationResult, repair]);
 
   const catalogProjectIds = useMemo(
     () =>
@@ -121,7 +152,7 @@ export function AuthoringTargetSelector({
             <input
               id="agent-entry-authoring-name"
               value={draftName}
-              disabled={pending}
+              disabled={pending || repair !== undefined}
               placeholder={t('chat.entryAuthoring.namePlaceholder')}
               onChange={(event) => {
                 setDraftName(event.target.value);
@@ -146,12 +177,21 @@ export function AuthoringTargetSelector({
               label={context.label}
               description={t('chat.entryAuthoring.createDescription')}
               media={creationIcon(context.targetKind)}
-              disabled={pending || draftName.trim().length === 0}
+              disabled={pending || repair !== undefined || draftName.trim().length === 0}
               onSelect={() => void createTarget(context)}
             />
           ))}
         </div>
         {diagnostic ? <p role="alert">{diagnostic}</p> : null}
+        {repair ? (
+          <button
+            type="button"
+            disabled={pending || repairPending}
+            onClick={() => void retryCreation()}
+          >
+            {t('chat.entryAuthoring.retryMissingStep')}
+          </button>
+        ) : null}
         {catalog?.diagnostics.map((item) => (
           <p key={item} role="status" className="is-error">
             {item}

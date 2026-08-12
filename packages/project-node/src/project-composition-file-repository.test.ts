@@ -23,6 +23,7 @@ describe('Project composition file repository', () => {
       contentProjectId: 'content-project-1',
       localTargets: [{ kind: 'world-project', worldProjectId: 'world-1' }],
       dependencies: [],
+      entityCharacterAssociations: [],
     });
     await expect(repository.read()).resolves.toMatchObject({
       contentProjectId: 'content-project-1',
@@ -32,6 +33,7 @@ describe('Project composition file repository', () => {
       contentProjectId: 'content-project-1',
       localTargets: [{ kind: 'world-project', worldProjectId: 'world-1' }],
       dependencies: [],
+      entityCharacterAssociations: [],
     });
   });
 
@@ -48,6 +50,41 @@ describe('Project composition file repository', () => {
     const repository = createProjectCompositionFileRepository({ workspaceRoot: root });
     await expect(repository.read()).rejects.toMatchObject({ code: 'project-composition-invalid' });
     await expect(readFile(path, 'utf8')).resolves.toBe('{broken');
+  });
+
+  it('preserves one invalid association document without disabling a sibling Project', async () => {
+    const invalidRoot = await workspace();
+    const siblingRoot = await workspace();
+    const invalidPath = join(invalidRoot, PROJECT_COMPOSITION_RELATIVE_PATH);
+    await mkdir(join(invalidRoot, 'neko'), { recursive: true });
+    const invalidBytes = `${JSON.stringify({
+      contentProjectId: 'content-project-invalid',
+      localTargets: [{ kind: 'character-project', characterProjectId: 'character-1' }],
+      dependencies: [],
+      entityCharacterAssociations: [
+        {
+          entityId: 'entity-1',
+          characterProjectId: 'character-1',
+          latestCharacterVersionId: 'character-version-latest',
+        },
+      ],
+    })}\n`;
+    await writeFile(invalidPath, invalidBytes, 'utf8');
+    const invalid = createProjectCompositionFileRepository({ workspaceRoot: invalidRoot });
+    const sibling = createProjectCompositionFileRepository({ workspaceRoot: siblingRoot });
+
+    await expect(invalid.read()).rejects.toMatchObject({ code: 'project-composition-invalid' });
+    await expect(readFile(invalidPath, 'utf8')).resolves.toBe(invalidBytes);
+    await sibling.save({
+      contentProjectId: 'content-project-sibling',
+      localTargets: [],
+      dependencies: [],
+      entityCharacterAssociations: [],
+    });
+    await expect(sibling.read()).resolves.toMatchObject({
+      contentProjectId: 'content-project-sibling',
+      entityCharacterAssociations: [],
+    });
   });
 
   it('rejects relative or unavailable roots instead of selecting another authority', async () => {
@@ -72,6 +109,7 @@ describe('Project composition file repository', () => {
         contentProjectId: 'content-project-1',
         localTargets: [],
         dependencies: [],
+        entityCharacterAssociations: [],
       }),
     ).rejects.toMatchObject({ code: 'project-workspace-path-escape' });
   });

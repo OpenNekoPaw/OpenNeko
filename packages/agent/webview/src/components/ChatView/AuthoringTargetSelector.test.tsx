@@ -194,7 +194,10 @@ describe('AuthoringTargetSelector', () => {
       },
       target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
     };
-    const onCreateAuthoringTarget = vi.fn(async () => created);
+    const onCreateAuthoringTarget = vi.fn(async () => ({
+      status: 'created' as const,
+      target: created,
+    }));
     const onChange = vi.fn(async () => undefined);
 
     render(
@@ -237,6 +240,65 @@ describe('AuthoringTargetSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /Characters \/ New/u }));
 
     await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledWith(standalone, 'Aster'));
+    expect(onChange).toHaveBeenCalledWith(created);
+  });
+
+  it('keeps an incomplete Character visible and retries only its supplied repair action', async () => {
+    const context = {
+      creationId: 'project-1-character',
+      label: 'Blame / Character',
+      targetKind: 'character-project' as const,
+      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
+    };
+    const created = {
+      label: 'Blame / Aster',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+      },
+      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+    };
+    const retry = vi.fn(async () => ({ status: 'created' as const, target: created }));
+    const onCreateAuthoringTarget = vi.fn(async () => ({
+      status: 'incomplete' as const,
+      retry,
+    }));
+    const onChange = vi.fn(async () => undefined);
+
+    render(
+      <AuthoringTargetSelector
+        presentation={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [context],
+            diagnostics: [],
+          })),
+          onCreateAuthoringTarget,
+        }}
+        pending={false}
+        creationOnlyKind="character-project"
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Aster' } });
+    fireEvent.click(await screen.findByRole('button', { name: /Blame \/ Character/u }));
+    expect((await screen.findByRole('alert', { name: '' })).textContent).toBe(
+      'chat.entryAuthoring.creationIncomplete',
+    );
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Blame \/ Character/u })).toHaveProperty(
+      'disabled',
+      true,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'chat.entryAuthoring.retryMissingStep' }));
+    await waitFor(() => expect(retry).toHaveBeenCalledOnce());
     expect(onChange).toHaveBeenCalledWith(created);
   });
 

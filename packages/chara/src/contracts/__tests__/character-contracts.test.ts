@@ -3,6 +3,7 @@ import {
   createEmptyCharacterOriginSetting,
 } from '../character-lore-storyline-memory';
 import {
+  createEmptyCharacterDefinition,
   decodeCharacterRecords,
   parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
@@ -30,6 +31,19 @@ function definition() {
 }
 
 describe('Character canonical contracts', () => {
+  it('creates one canonical unbound fresh Character definition', () => {
+    expect(createEmptyCharacterDefinition()).toEqual({
+      summary: '',
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
+      canon: [],
+      knowledgeBoundary: [],
+      behaviorPolicy: [],
+      expressionPolicy: [],
+      representationRefs: [],
+    });
+  });
+
   it('requires author defaults to select exact compatible representations', () => {
     const selected = parseCharacterVersion({
       characterVersionId: 'character-version-avatar',

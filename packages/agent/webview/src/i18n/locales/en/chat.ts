@@ -131,6 +131,9 @@ export const chat = {
   'chat.entryAuthoring.namePlaceholder': 'Name this Character draft',
   'chat.entryAuthoring.nameRequired': 'Enter a draft name before choosing its destination.',
   'chat.entryAuthoring.creationUnavailable': 'Character draft creation is unavailable here.',
+  'chat.entryAuthoring.creationIncomplete':
+    'The completed Character steps were saved. Retry only the missing step.',
+  'chat.entryAuthoring.retryMissingStep': 'Retry missing step',
   'chat.entryAuthoring.destinationLabel': 'Choose where to create the draft',
   'chat.entryAuthoring.destinationTitle': 'Character draft destination',
   'chat.entryAuthoring.createDescription': 'Create a new draft here',

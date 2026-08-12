@@ -15,6 +15,10 @@ import {
   type UserCharacterRelationship,
 } from './character';
 import {
+  parseCharacterCreationSourceSelection,
+  type CharacterCreationSourceSelection,
+} from './character-creation-source';
+import {
   parseCharacterCompanionContinuity,
   parseCompanionMemoryCandidate,
   parseCompanionMemoryProvenance,
@@ -74,6 +78,7 @@ export type CharacterFoundationCommand =
         readonly characterProjectId: string;
         readonly displayName: string;
         readonly draft: CharacterDefinition;
+        readonly sources: CharacterCreationSourceSelection;
       };
     }
   | {
@@ -351,7 +356,7 @@ export function parseCharacterFoundationCommandHostRequest(
     case 'character-project-create': {
       const input = exactRecord(
         record['input'],
-        ['characterProjectId', 'displayName', 'draft'],
+        ['characterProjectId', 'displayName', 'draft', 'sources'],
         'Character project create input',
       );
       return {
@@ -361,6 +366,7 @@ export function parseCharacterFoundationCommandHostRequest(
           characterProjectId: requireIdentity(input['characterProjectId'], 'CharacterProject'),
           displayName: requireIdentity(input['displayName'], 'Character display name'),
           draft: parseCharacterDefinition(input['draft']),
+          sources: parseCharacterCreationSourceSelection(input['sources']),
         },
       };
     }

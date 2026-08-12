@@ -196,14 +196,7 @@ describe('Character Management surfaces', () => {
     fireEvent.change(screen.getByLabelText('Summary'), {
       target: { value: 'An archivist who guards the sealed tower.' },
     });
-    const avatarResource = container.querySelector(
-      '[data-character-studio-section="avatar-resource"]',
-    );
-    if (!(avatarResource instanceof HTMLInputElement))
-      throw new Error('Avatar resource input is unavailable.');
-    fireEvent.change(avatarResource, {
-      target: { value: 'global-asset-library:avatar-lin' },
-    });
+    expect(container.querySelector('[data-character-studio-section="presentation"]')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
 
     await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
@@ -220,15 +213,9 @@ describe('Character Management surfaces', () => {
           knowledgeBoundary: [],
           behaviorPolicy: [],
           expressionPolicy: [],
-          representationRefs: [
-            {
-              representationId: 'avatar-main',
-              kind: 'vrm',
-              resourceRef: 'global-asset-library:avatar-lin',
-            },
-          ],
-          representationDefaults: { avatarRepresentationId: 'avatar-main' },
+          representationRefs: [],
         },
+        sources: { evidence: [], assetRepresentations: [] },
       },
     });
     expect(await screen.findByRole('heading', { name: 'Lin' })).toBeTruthy();

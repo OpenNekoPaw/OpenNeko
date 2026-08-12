@@ -5,6 +5,12 @@ export type ContentProjectId = string;
 export type CharacterProjectId = CharacterProject['characterProjectId'];
 export type CharacterVersionId = CharacterVersion['characterVersionId'];
 export type WorldProjectId = WorldProject['worldProjectId'];
+export type ProjectEntityId = string;
+
+export interface ProjectEntityCharacterAssociation {
+  readonly entityId: ProjectEntityId;
+  readonly characterProjectId: CharacterProjectId;
+}
 
 export type ProjectLocalTargetRef =
   | { readonly kind: 'character-project'; readonly characterProjectId: CharacterProjectId }
@@ -25,23 +31,71 @@ export interface ContentProjectComposition {
   readonly contentProjectId: ContentProjectId;
   readonly localTargets: readonly ProjectLocalTargetRef[];
   readonly dependencies: readonly ProjectPublicationDependencyRef[];
+  readonly entityCharacterAssociations: readonly ProjectEntityCharacterAssociation[];
 }
 
 export function parseContentProjectComposition(value: unknown): ContentProjectComposition {
   const record = requireExactRecord(
     value,
-    ['contentProjectId', 'localTargets', 'dependencies'],
+    ['contentProjectId', 'localTargets', 'dependencies', 'entityCharacterAssociations'],
     'ContentProjectComposition',
   );
   const localTargets = requireArray(record['localTargets'], parseProjectLocalTargetRef);
   const dependencies = requireArray(record['dependencies'], parseProjectPublicationDependencyRef);
+  const entityCharacterAssociations = requireArray(
+    record['entityCharacterAssociations'],
+    parseProjectEntityCharacterAssociation,
+  );
   requireUnique(localTargets, projectLocalTargetKey, 'Project local targets');
   requireUnique(dependencies, projectPublicationDependencyKey, 'Project dependencies');
+  requireUnique(
+    entityCharacterAssociations,
+    (association) => association.entityId,
+    'Project Entity Character association Entity identities',
+  );
+  requireUnique(
+    entityCharacterAssociations,
+    (association) => association.characterProjectId,
+    'Project Entity Character association CharacterProject identities',
+  );
+  const characterTargets = new Set(
+    localTargets.flatMap((target) =>
+      target.kind === 'character-project' ? [target.characterProjectId] : [],
+    ),
+  );
+  for (const association of entityCharacterAssociations) {
+    if (!characterTargets.has(association.characterProjectId)) {
+      throw new Error(
+        `Project Entity Character association references unlinked CharacterProject '${association.characterProjectId}'.`,
+      );
+    }
+  }
   return {
     contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project identity'),
     localTargets,
     dependencies,
+    entityCharacterAssociations,
   };
+}
+
+export function parseProjectEntityCharacterAssociation(
+  value: unknown,
+): ProjectEntityCharacterAssociation {
+  const record = requireExactRecord(
+    value,
+    ['entityId', 'characterProjectId'],
+    'Project Entity Character association',
+  );
+  return {
+    entityId: requireIdentity(record['entityId'], 'Project Entity identity'),
+    characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject identity'),
+  };
+}
+
+export function projectEntityCharacterAssociationKey(
+  association: ProjectEntityCharacterAssociation,
+): string {
+  return `${association.entityId}:${association.characterProjectId}`;
 }
 
 export function parseProjectLocalTargetRef(value: unknown): ProjectLocalTargetRef {

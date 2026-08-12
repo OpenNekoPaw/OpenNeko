@@ -12,11 +12,13 @@ export interface CharacterFoundationCommandPort {
 export class CharacterFoundationCommandService implements CharacterFoundationCommandPort {
   constructor(
     private readonly services: {
-      readonly characterAuthoring: {
+      readonly characterCreation: {
         createProject(
           input: CommandInput<'character-project-create'>,
           signal?: AbortSignal,
         ): Promise<unknown>;
+      };
+      readonly characterAuthoring: {
         updateDraft(
           input: CommandInput<'character-project-update-draft'>,
           signal?: AbortSignal,
@@ -122,7 +124,7 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
     signal?.throwIfAborted();
     switch (command.operation) {
       case 'character-project-create':
-        await this.services.characterAuthoring.createProject(command.input, signal);
+        await this.services.characterCreation.createProject(command.input, signal);
         return;
       case 'character-project-update-draft':
         await this.services.characterAuthoring.updateDraft(command.input, signal);

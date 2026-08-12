@@ -176,7 +176,12 @@ export function CharacterPanel({
       const characterProjectId = createDomainIdentity('character-project');
       await execute({
         operation: 'character-project-create',
-        input: { characterProjectId, displayName: fields.displayName, draft: definition },
+        input: {
+          characterProjectId,
+          displayName: fields.displayName,
+          draft: definition,
+          sources: { evidence: [], assetRepresentations: [] },
+        },
       });
       onCreated(characterProjectId);
       return;
@@ -471,134 +476,136 @@ export function CharacterPanel({
             </div>
           </details>
 
-          <details
-            className="character-foundation__panel character-foundation__disclosure"
-            data-character-studio-section="presentation"
-          >
-            <summary>
-              <FoundationSectionHeading
-                description={foundationLabel(
-                  locale,
-                  '连接全局资产、动态形象和默认语音。',
-                  'Connect Global Assets, an avatar, and default voice behavior.',
-                )}
-                eyebrow={foundationLabel(locale, '表现资源', 'Presentation')}
-                title={foundationLabel(locale, '形象与语音', 'Avatar and voice')}
-              />
-            </summary>
-            <div className="character-foundation__form-grid">
-              <FoundationField
-                hint={foundationLabel(
-                  locale,
-                  '使用全局资源库中的稳定 opaque identity，例如 global-asset-library:…',
-                  'Use a stable opaque identity from Global Assets, such as global-asset-library:…',
-                )}
-                label={foundationLabel(locale, '默认肖像资源', 'Default portrait resource')}
-              >
-                <input
-                  data-character-studio-section="portrait-resource"
-                  placeholder="global-asset-library:…"
-                  value={fields.portraitResourceRef}
-                  onChange={(event) =>
-                    setFields({ ...fields, portraitResourceRef: event.target.value })
-                  }
+          {!creating ? (
+            <details
+              className="character-foundation__panel character-foundation__disclosure"
+              data-character-studio-section="presentation"
+            >
+              <summary>
+                <FoundationSectionHeading
+                  description={foundationLabel(
+                    locale,
+                    '连接全局资产、动态形象和默认语音。',
+                    'Connect Global Assets, an avatar, and default voice behavior.',
+                  )}
+                  eyebrow={foundationLabel(locale, '表现资源', 'Presentation')}
+                  title={foundationLabel(locale, '形象与语音', 'Avatar and voice')}
                 />
-              </FoundationField>
-              <FoundationField
-                label={foundationLabel(locale, '默认动态形象格式', 'Default Avatar format')}
-              >
-                <select
-                  data-character-studio-section="avatar-kind"
-                  value={fields.avatarKind}
-                  onChange={(event) =>
-                    setFields({
-                      ...fields,
-                      avatarKind: event.target.value as CharacterDraftFields['avatarKind'],
-                    })
-                  }
+              </summary>
+              <div className="character-foundation__form-grid">
+                <FoundationField
+                  hint={foundationLabel(
+                    locale,
+                    '使用全局资源库中的稳定 opaque identity，例如 global-asset-library:…',
+                    'Use a stable opaque identity from Global Assets, such as global-asset-library:…',
+                  )}
+                  label={foundationLabel(locale, '默认肖像资源', 'Default portrait resource')}
                 >
-                  <option value="vrm">VRM</option>
-                  <option value="live2d">Live2D</option>
-                  <option value="mmd">MMD</option>
-                  <option value="pngtuber">PNGTuber</option>
-                </select>
-              </FoundationField>
-              <FoundationField
-                hint={foundationLabel(
-                  locale,
-                  '当前 Desktop 提供 VRM renderer；其他格式会在 Avatar Surface 局部显示不可用。',
-                  'Desktop currently provides the VRM renderer; other formats fail locally in the Avatar Surface.',
-                )}
-                label={foundationLabel(locale, '默认动态形象资源', 'Default Avatar resource')}
-              >
-                <input
-                  data-character-studio-section="avatar-resource"
-                  placeholder="global-asset-library:…"
-                  value={fields.avatarResourceRef}
-                  onChange={(event) =>
-                    setFields({ ...fields, avatarResourceRef: event.target.value })
-                  }
-                />
-              </FoundationField>
-              <FoundationField
-                hint={foundationLabel(
-                  locale,
-                  '使用稳定 provider identity，例如 provider:local-tts',
-                  'Use a stable provider identity, such as provider:local-tts',
-                )}
-                label={foundationLabel(locale, '语音提供方', 'Voice provider')}
-              >
-                <input
-                  data-character-studio-section="voice-provider"
-                  placeholder="provider:…"
-                  required={fields.voiceResourceRef.trim().length > 0}
-                  value={fields.voiceProviderRef}
-                  onChange={(event) =>
-                    setFields({ ...fields, voiceProviderRef: event.target.value })
-                  }
-                />
-              </FoundationField>
-              <FoundationField
-                label={foundationLabel(locale, '默认语音资源', 'Default voice resource')}
-              >
-                <input
-                  data-character-studio-section="voice-resource"
-                  placeholder="global-asset-library:…"
-                  required={fields.voiceProviderRef.trim().length > 0}
-                  value={fields.voiceResourceRef}
-                  onChange={(event) =>
-                    setFields({ ...fields, voiceResourceRef: event.target.value })
-                  }
-                />
-              </FoundationField>
-              <div className="character-foundation__voice-controls">
-                <FoundationField label={foundationLabel(locale, '语速', 'Voice speed')}>
                   <input
-                    data-character-studio-section="voice-speed"
-                    max="4"
-                    min="0.25"
-                    step="0.05"
-                    type="number"
-                    value={fields.voiceSpeed}
+                    data-character-studio-section="portrait-resource"
+                    placeholder="global-asset-library:…"
+                    value={fields.portraitResourceRef}
                     onChange={(event) =>
-                      setFields({ ...fields, voiceSpeed: Number(event.target.value) })
+                      setFields({ ...fields, portraitResourceRef: event.target.value })
                     }
                   />
                 </FoundationField>
-                <label className="character-foundation__toggle">
-                  <input
-                    checked={fields.voiceAutoRead}
-                    data-character-studio-section="voice-auto-read"
-                    type="checkbox"
+                <FoundationField
+                  label={foundationLabel(locale, '默认动态形象格式', 'Default Avatar format')}
+                >
+                  <select
+                    data-character-studio-section="avatar-kind"
+                    value={fields.avatarKind}
                     onChange={(event) =>
-                      setFields({ ...fields, voiceAutoRead: event.target.checked })
+                      setFields({
+                        ...fields,
+                        avatarKind: event.target.value as CharacterDraftFields['avatarKind'],
+                      })
+                    }
+                  >
+                    <option value="vrm">VRM</option>
+                    <option value="live2d">Live2D</option>
+                    <option value="mmd">MMD</option>
+                    <option value="pngtuber">PNGTuber</option>
+                  </select>
+                </FoundationField>
+                <FoundationField
+                  hint={foundationLabel(
+                    locale,
+                    '当前 Desktop 提供 VRM renderer；其他格式会在 Avatar Surface 局部显示不可用。',
+                    'Desktop currently provides the VRM renderer; other formats fail locally in the Avatar Surface.',
+                  )}
+                  label={foundationLabel(locale, '默认动态形象资源', 'Default Avatar resource')}
+                >
+                  <input
+                    data-character-studio-section="avatar-resource"
+                    placeholder="global-asset-library:…"
+                    value={fields.avatarResourceRef}
+                    onChange={(event) =>
+                      setFields({ ...fields, avatarResourceRef: event.target.value })
                     }
                   />
-                  <span>{foundationLabel(locale, '自动朗读', 'Auto read')}</span>
-                </label>
+                </FoundationField>
+                <FoundationField
+                  hint={foundationLabel(
+                    locale,
+                    '使用稳定 provider identity，例如 provider:local-tts',
+                    'Use a stable provider identity, such as provider:local-tts',
+                  )}
+                  label={foundationLabel(locale, '语音提供方', 'Voice provider')}
+                >
+                  <input
+                    data-character-studio-section="voice-provider"
+                    placeholder="provider:…"
+                    required={fields.voiceResourceRef.trim().length > 0}
+                    value={fields.voiceProviderRef}
+                    onChange={(event) =>
+                      setFields({ ...fields, voiceProviderRef: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField
+                  label={foundationLabel(locale, '默认语音资源', 'Default voice resource')}
+                >
+                  <input
+                    data-character-studio-section="voice-resource"
+                    placeholder="global-asset-library:…"
+                    required={fields.voiceProviderRef.trim().length > 0}
+                    value={fields.voiceResourceRef}
+                    onChange={(event) =>
+                      setFields({ ...fields, voiceResourceRef: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <div className="character-foundation__voice-controls">
+                  <FoundationField label={foundationLabel(locale, '语速', 'Voice speed')}>
+                    <input
+                      data-character-studio-section="voice-speed"
+                      max="4"
+                      min="0.25"
+                      step="0.05"
+                      type="number"
+                      value={fields.voiceSpeed}
+                      onChange={(event) =>
+                        setFields({ ...fields, voiceSpeed: Number(event.target.value) })
+                      }
+                    />
+                  </FoundationField>
+                  <label className="character-foundation__toggle">
+                    <input
+                      checked={fields.voiceAutoRead}
+                      data-character-studio-section="voice-auto-read"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setFields({ ...fields, voiceAutoRead: event.target.checked })
+                      }
+                    />
+                    <span>{foundationLabel(locale, '自动朗读', 'Auto read')}</span>
+                  </label>
+                </div>
               </div>
-            </div>
-          </details>
+            </details>
+          ) : null}
         </div>
       </form>
       {!creating && selectedProject ? (

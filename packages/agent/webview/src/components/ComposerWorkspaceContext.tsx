@@ -41,6 +41,16 @@ export interface AgentComposerAuthoringCreationContext {
     | { readonly kind: 'project-local'; readonly contentProjectId: string };
 }
 
+export type AgentComposerAuthoringCreationResult =
+  | {
+      readonly status: 'created';
+      readonly target: AgentComposerWorkspaceTarget;
+    }
+  | {
+      readonly status: 'incomplete';
+      readonly retry: () => Promise<AgentComposerAuthoringCreationResult>;
+    };
+
 export type AgentComposerWorkspacePresentation =
   | {
       readonly kind: 'entry';
@@ -56,7 +66,7 @@ export type AgentComposerWorkspacePresentation =
       readonly onCreateAuthoringTarget?: (
         context: AgentComposerAuthoringCreationContext,
         name: string,
-      ) => Promise<AgentComposerWorkspaceTarget | undefined>;
+      ) => Promise<AgentComposerAuthoringCreationResult | undefined>;
       readonly disabled?: boolean;
     }
   | {

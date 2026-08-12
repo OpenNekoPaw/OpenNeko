@@ -79,10 +79,20 @@ describe('Character Foundation host contract', () => {
           expressionPolicy: [],
           representationRefs: [],
         },
+        sources: { evidence: [], assetRepresentations: [] },
       },
     });
 
     expect(parseCharacterFoundationAnyHostRequest(request)).toEqual(request);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        ...request,
+        input: {
+          ...request.input,
+          seed: { evidence: [], representationRefs: [] },
+        },
+      }),
+    ).toThrow(/unsupported fields/u);
     expect(() =>
       parseCharacterFoundationAnyHostRequest({
         requestId: 'foundation-command-unavailable',

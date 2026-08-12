@@ -15,6 +15,8 @@
   },
   "dependencies": {
     "@neko/chara": "workspace:*",
+    "@neko/entity-domain": "workspace:*",
+    "@neko/search-domain": "workspace:*",
     "@neko/world": "workspace:*"
   },
   "devDependencies": {

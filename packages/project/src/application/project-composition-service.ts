@@ -2,6 +2,7 @@ import {
   parseContentProjectComposition,
   projectLocalTargetKey,
   projectPublicationDependencyKey,
+  type ProjectEntityCharacterAssociation,
   type ContentProjectComposition,
   type ContentProjectId,
   type ProjectLocalTargetRef,
@@ -20,7 +21,11 @@ export type ProjectCompositionErrorCode =
   | 'project-local-target-already-linked'
   | 'project-local-target-not-linked'
   | 'project-dependency-already-bound'
-  | 'project-dependency-not-bound';
+  | 'project-dependency-not-bound'
+  | 'project-entity-character-already-associated'
+  | 'project-entity-character-not-associated'
+  | 'project-entity-character-target-not-linked'
+  | 'project-entity-character-target-associated';
 
 export class ProjectCompositionError extends Error {
   constructor(
@@ -52,6 +57,7 @@ export class ProjectCompositionService {
       contentProjectId,
       localTargets: [],
       dependencies: [],
+      entityCharacterAssociations: [],
     });
     await this.repository.save(composition, signal);
     return structuredClone(composition);
@@ -95,6 +101,18 @@ export class ProjectCompositionService {
             contentProjectId,
           );
         }
+        if (
+          target.kind === 'character-project' &&
+          composition.entityCharacterAssociations.some(
+            (association) => association.characterProjectId === target.characterProjectId,
+          )
+        ) {
+          throw error(
+            'project-entity-character-target-associated',
+            `CharacterProject '${target.characterProjectId}' must be disassociated before it is unlinked.`,
+            contentProjectId,
+          );
+        }
         return {
           ...composition,
           localTargets: composition.localTargets.filter(
@@ -128,6 +146,99 @@ export class ProjectCompositionService {
       },
       signal,
     );
+  }
+
+  async associateEntityCharacter(
+    contentProjectId: ContentProjectId,
+    association: ProjectEntityCharacterAssociation,
+    signal?: AbortSignal,
+  ): Promise<ContentProjectComposition> {
+    return this.update(
+      contentProjectId,
+      (composition) => {
+        const linked = composition.localTargets.some(
+          (target) =>
+            target.kind === 'character-project' &&
+            target.characterProjectId === association.characterProjectId,
+        );
+        if (!linked) {
+          throw error(
+            'project-entity-character-target-not-linked',
+            `CharacterProject '${association.characterProjectId}' is not linked to Content Project '${contentProjectId}'.`,
+            contentProjectId,
+          );
+        }
+        const conflict = composition.entityCharacterAssociations.find(
+          (current) =>
+            current.entityId === association.entityId ||
+            current.characterProjectId === association.characterProjectId,
+        );
+        if (conflict) {
+          throw error(
+            'project-entity-character-already-associated',
+            `Project Entity '${association.entityId}' or CharacterProject '${association.characterProjectId}' is already associated.`,
+            contentProjectId,
+          );
+        }
+        return {
+          ...composition,
+          entityCharacterAssociations: [...composition.entityCharacterAssociations, association],
+        };
+      },
+      signal,
+    );
+  }
+
+  async disassociateEntityCharacter(
+    contentProjectId: ContentProjectId,
+    association: ProjectEntityCharacterAssociation,
+    signal?: AbortSignal,
+  ): Promise<ContentProjectComposition> {
+    return this.update(
+      contentProjectId,
+      (composition) => {
+        const exists = composition.entityCharacterAssociations.some(
+          (current) =>
+            current.entityId === association.entityId &&
+            current.characterProjectId === association.characterProjectId,
+        );
+        if (!exists) {
+          throw error(
+            'project-entity-character-not-associated',
+            `Project Entity '${association.entityId}' is not associated with CharacterProject '${association.characterProjectId}'.`,
+            contentProjectId,
+          );
+        }
+        return {
+          ...composition,
+          entityCharacterAssociations: composition.entityCharacterAssociations.filter(
+            (current) =>
+              current.entityId !== association.entityId ||
+              current.characterProjectId !== association.characterProjectId,
+          ),
+        };
+      },
+      signal,
+    );
+  }
+
+  async requireEntityCharacterAssociation(
+    contentProjectId: ContentProjectId,
+    entityId: string,
+    signal?: AbortSignal,
+  ): Promise<ProjectEntityCharacterAssociation> {
+    const composition = await this.require(contentProjectId, signal);
+    const association = composition.entityCharacterAssociations.find(
+      (current) => current.entityId === entityId,
+    );
+    if (!association) {
+      throw error(
+        'project-entity-character-not-associated',
+        `Project Entity '${entityId}' has no CharacterProject association.`,
+        contentProjectId,
+      );
+    }
+    return structuredClone(association);
   }
 
   async unbindDependency(

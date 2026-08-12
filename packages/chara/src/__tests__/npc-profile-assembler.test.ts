@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  CreativeEntity,
-  CreativeEntityCandidate,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
   CreativeEntityRelationshipProjection,
-  EntityRepresentationBinding,
-  VisualIdentityDraft,
+  ProjectEntityRecord,
 } from '@neko/entity-domain';
 import { isNpcProfileSource } from '@neko/chara/contracts';
 import {
@@ -22,13 +19,15 @@ const entityRef: CreativeEntityRef = {
   source: 'neko-entity',
 };
 
-function character(overrides: Partial<CreativeEntity> = {}): CreativeEntity {
+function character(overrides: Partial<ProjectEntityRecord> = {}): ProjectEntityRecord {
   return {
-    id: 'char_xiaoju',
+    entityId: 'char_xiaoju',
     kind: 'character',
-    canonicalName: '小橘',
-    aliases: ['Xiaoju'],
-    status: 'confirmed',
+    names: { canonical: '小橘', aliases: ['Xiaoju'] },
+    lifecycle: { state: 'active' },
+    representations: [],
+    createdAt: '2026-06-01T00:00:00.000Z',
+    updatedAt: '2026-06-01T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -58,49 +57,28 @@ describe('NpcProfileAssembler', () => {
     );
   });
 
-  it('assembles a partial profile from role, bindings, and visual facts', async () => {
+  it('uses accepted Entity representations without treating Entity as Character facts', async () => {
     const assembler = new NpcProfileAssembler({
       getEntity: async () =>
         character({
-          metadata: { role: 'protagonist', gender: 'female', ageRange: '16-18' },
-        }),
-      listBindings: async () => [
-        {
-          id: 'binding-portrait',
-          entityId: 'char_xiaoju',
-          entityKind: 'character',
-          representation: {
-            kind: 'workspace-file',
-            path: 'neko/assets/xiaoju-portrait.png',
-          },
-          role: 'portrait',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          isDefault: true,
-          updatedAt: '2026-06-01T00:00:00.000Z',
-        } satisfies EntityRepresentationBinding,
-      ],
-      listVisualDrafts: async () => [
-        {
-          id: 'draft-1',
-          characterId: 'char_xiaoju',
-          source: 'agent',
-          prompt: 'orange jacket, short hair',
-          generatedAssetIds: ['asset-1'],
-          status: 'selected',
-          extractedVisualFacts: [
-            { key: 'outfit', value: 'orange jacket', confidence: 0.9, accepted: true },
+          representations: [
+            {
+              bindingId: 'binding-portrait',
+              target: { kind: 'workspace-file', path: 'neko/assets/xiaoju-portrait.png' },
+              role: 'portrait',
+              source: 'user',
+              isDefault: true,
+              acceptedAt: '2026-06-01T00:00:00.000Z',
+            },
           ],
-        } satisfies VisualIdentityDraft,
-      ],
+        }),
     });
 
     const result = await assembler.assembleProfile({ entityRef });
 
     expect(result.status).toBe('assembled');
     if (result.status !== 'assembled') return;
-    expect(result.profile.sparsity).toBe('partial');
+    expect(result.profile.sparsity).toBe('thin');
     expect(result.profile.representationBindings).toEqual([
       expect.objectContaining({
         role: 'portrait',
@@ -111,17 +89,9 @@ describe('NpcProfileAssembler', () => {
         isDefault: true,
       }),
     ]);
-    expect(result.profile.facts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ key: 'metadata.role', authority: 'confirmed' }),
-        expect.objectContaining({ key: 'metadata.gender', authority: 'confirmed' }),
-        expect.objectContaining({
-          key: 'visual.outfit',
-          value: 'orange jacket',
-          source: 'visual-draft',
-        }),
-      ]),
-    );
+    expect(result.profile.facts).toEqual([
+      expect.objectContaining({ key: 'identity.name', authority: 'confirmed' }),
+    ]);
   });
 
   it('assembles a rich profile with relationships, occurrences, dialogue, assets, and suggestions', async () => {
@@ -162,25 +132,16 @@ describe('NpcProfileAssembler', () => {
     const assembler = new NpcProfileAssembler({
       getEntity: async () =>
         character({
-          metadata: {
-            role: 'protagonist',
-            personality: 'curious and direct',
-            dialogueSamples: ['小橘：我会自己确认。'],
-          },
+          representations: [
+            {
+              bindingId: 'binding-voice',
+              target: { kind: 'workspace-file', path: 'neko/assets/xiaoju-voice.wav' },
+              role: 'voice',
+              source: 'user',
+              acceptedAt: '2026-06-01T00:00:00.000Z',
+            },
+          ],
         }),
-      listBindings: async () => [
-        {
-          id: 'binding-voice',
-          entityId: 'char_xiaoju',
-          entityKind: 'character',
-          representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-voice.wav' },
-          role: 'voice',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          updatedAt: '2026-06-01T00:00:00.000Z',
-        } satisfies EntityRepresentationBinding,
-      ],
       listRelationships: async () => relationships,
       listOccurrences: async () => occurrences,
       describeRepresentation: async () => ({
@@ -205,10 +166,7 @@ describe('NpcProfileAssembler', () => {
     expect(result.status).toBe('assembled');
     if (result.status !== 'assembled') return;
     expect(result.profile.sparsity).toBe('rich');
-    expect(result.profile.dialogueSamples).toEqual([
-      '小橘：我会自己确认。',
-      '小橘：「我想先看看那里有什么。」',
-    ]);
+    expect(result.profile.dialogueSamples).toEqual(['小橘：「我想先看看那里有什么。」']);
     expect(result.profile.sceneAppearances).toEqual(['story/test.fountain:12']);
     expect(result.profile.relationships).toEqual([
       expect.objectContaining({
@@ -252,43 +210,19 @@ describe('NpcProfileAssembler', () => {
     );
   });
 
-  it('assembles candidate entities without persisting a CharacterCard', async () => {
-    const candidate: CreativeEntityCandidate = {
-      id: 'candidate:character:char_xiaoju',
-      kind: 'character',
-      name: '小橘',
-      aliases: ['Xiaoju'],
-      status: 'open',
-      identityBasis: 'user-named',
-      provenance: [
-        {
-          providerId: 'fountain-content',
-          sourceKind: 'story',
-          sourceRef: 'story/test.fountain:12',
-        },
-      ],
-      sourceRefs: ['story/test.fountain:12'],
-    };
+  it('does not promote an unconfirmed candidate into an Entity-backed profile', async () => {
     const assembler = new NpcProfileAssembler({
       getEntity: async () => undefined,
-      getCandidate: async () => candidate,
     });
 
     const result = await assembler.assembleProfile({
-      entityRef: { ...entityRef, entityId: candidate.id },
+      entityRef: { ...entityRef, entityId: 'candidate:character:char_xiaoju' },
     });
 
-    expect(result.status).toBe('assembled');
-    if (result.status !== 'assembled') return;
-    expect(result.profile.entityRef.entityId).toBe(candidate.id);
-    expect(result.profile.displayName).toBe('小橘');
-    expect(result.profile.facts).toEqual([
-      expect.objectContaining({
-        key: 'identity.name',
-        source: 'registry',
-        authority: 'confirmed',
-      }),
-    ]);
+    expect(result).toMatchObject({
+      status: 'missing-entity',
+      entityRef: { entityId: 'candidate:character:char_xiaoju' },
+    });
   });
 
   it('reports provider-unavailable when an injected evidence reader fails', async () => {
