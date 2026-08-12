@@ -59,7 +59,7 @@ export function registerDesktopIpc(
   ipcMain.handle(
     PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.createProjectLocalAuthoringTarget(requireSender(event), payload),
+      appHost.executeProjectLocalAuthoringRequest(requireSender(event), payload),
   );
   ipcMain.handle(CHARACTER_AVATAR_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeCharacterAvatarRequest(requireSender(event), payload),

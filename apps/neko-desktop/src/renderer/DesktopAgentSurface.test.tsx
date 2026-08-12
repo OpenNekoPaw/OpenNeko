@@ -917,6 +917,7 @@ function installBridge(
       },
       projectLocalAuthoring: {
         createTarget: vi.fn(),
+        retryCharacter: vi.fn(),
       },
       projectPortability: {
         inspect: vi.fn(),

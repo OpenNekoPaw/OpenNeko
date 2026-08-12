@@ -92,6 +92,7 @@ import {
   createProjectAuthoringCatalogHostRequest,
   createProjectAuthoringNavigationHostRequest,
   createProjectLocalAuthoringHostRequest,
+  createProjectLocalAuthoringRetryHostRequest,
 } from '@neko/project/contracts';
 
 const standardCapabilityConstraint = async (input: {
@@ -177,7 +178,7 @@ describe('DesktopAppHost', () => {
     } as const;
     const resourceProjection: ResourceBrowserProjection = {
       identity,
-      facet: 'files',
+      source: 'files',
       query: '',
       items: [],
     };
@@ -1158,7 +1159,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1471,7 +1475,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1570,7 +1577,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1964,7 +1974,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2135,7 +2148,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2232,7 +2248,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository,
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2772,7 +2791,7 @@ describe('DesktopAppHost', () => {
       },
     });
     await expect(
-      fixture.appHost.createProjectLocalAuthoringTarget(
+      fixture.appHost.executeProjectLocalAuthoringRequest(
         fixture.sender,
         createProjectLocalAuthoringHostRequest({
           requestId: 'project-local-character-create',
@@ -2788,6 +2807,12 @@ describe('DesktopAppHost', () => {
             characterProjectId: 'character-created',
             displayName: 'Created Character',
             draft: characterAuthoringSnapshot().project.draft,
+            sources: { evidence: [], assetRepresentations: [] },
+            entity: {
+              kind: 'create',
+              entityId: 'entity-created',
+              name: 'Created Character',
+            },
           },
         }),
       ),
@@ -2801,7 +2826,84 @@ describe('DesktopAppHost', () => {
       create: expect.objectContaining({
         kind: 'character-project',
         characterProjectId: 'character-created',
+        entity: expect.objectContaining({ kind: 'create', entityId: 'entity-created' }),
       }),
+    });
+    const receipt = {
+      authority: {
+        workspaceId: resolution.workspaceId,
+        contentProjectId: project.projectId,
+      },
+      target: {
+        kind: 'character-project' as const,
+        characterProjectId: 'character-created',
+      },
+      entityId: 'entity-created',
+      completedSteps: ['character-project', 'project-membership'] as const,
+      nextStep: 'project-entity' as const,
+    };
+    vi.mocked(projectAuthoring.createLocalTarget).mockResolvedValueOnce({
+      status: 'incomplete',
+      target: receipt.target,
+      receipt,
+    });
+    await expect(
+      fixture.appHost.executeProjectLocalAuthoringRequest(
+        fixture.sender,
+        createProjectLocalAuthoringHostRequest({
+          requestId: 'project-local-character-incomplete',
+          rendererSessionId: opened.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: {
+            workspaceId: resolution.workspaceId,
+            workspaceGrantId: scene.context.scope.workspaceGrantId,
+            contentProjectId: project.projectId,
+          },
+          create: {
+            kind: 'character-project',
+            characterProjectId: 'character-created',
+            displayName: 'Created Character',
+            draft: characterAuthoringSnapshot().project.draft,
+            sources: { evidence: [], assetRepresentations: [] },
+            entity: {
+              kind: 'create',
+              entityId: 'entity-created',
+              name: 'Created Character',
+            },
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'incomplete',
+      target: receipt.target,
+      receipt,
+    });
+    await expect(
+      fixture.appHost.executeProjectLocalAuthoringRequest(
+        fixture.sender,
+        createProjectLocalAuthoringRetryHostRequest({
+          requestId: 'project-local-character-retry',
+          rendererSessionId: opened.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: {
+            workspaceId: resolution.workspaceId,
+            workspaceGrantId: scene.context.scope.workspaceGrantId,
+            contentProjectId: project.projectId,
+          },
+          receipt,
+          entity: { kind: 'create', entityId: 'entity-created', name: 'Created Character' },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'created',
+      target: { kind: 'character-project', characterProjectId: 'character-created' },
+    });
+    expect(projectAuthoring.retryLocalCharacter).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      contentProjectId: project.projectId,
+      receipt,
+      entity: { kind: 'create', entityId: 'entity-created', name: 'Created Character' },
     });
     await fixture.appHost.dispose();
   });
@@ -4059,7 +4161,10 @@ function createConversationLifecycle() {
   return createAgentConversationLifecycleService({
     repository: createInMemoryAgentConversationLifecycleRepository(),
     grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-    domainContext: { resolveCapabilityConstraint: standardCapabilityConstraint, resolveForTurn: async () => [] },
+    domainContext: {
+      resolveCapabilityConstraint: standardCapabilityConstraint,
+      resolveForTurn: async () => [],
+    },
     scratch: {
       create: async () => undefined,
       release: async () => undefined,
@@ -4337,9 +4442,22 @@ function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
     getNavigation: vi.fn(async () => []),
     createLocalTarget: vi.fn(async ({ create }) =>
       create.kind === 'character-project'
-        ? { kind: 'character-project' as const, characterProjectId: create.characterProjectId }
-        : { kind: 'world-project' as const, worldProjectId: create.worldProjectId },
+        ? {
+            status: 'created' as const,
+            target: {
+              kind: 'character-project' as const,
+              characterProjectId: create.characterProjectId,
+            },
+          }
+        : {
+            status: 'created' as const,
+            target: { kind: 'world-project' as const, worldProjectId: create.worldProjectId },
+          },
     ),
+    retryLocalCharacter: vi.fn(async ({ receipt }) => ({
+      status: 'created' as const,
+      target: receipt.target,
+    })),
     getCharacterSnapshot: vi.fn(async () => {
       throw new Error('Character authoring snapshot is not expected by this test.');
     }),

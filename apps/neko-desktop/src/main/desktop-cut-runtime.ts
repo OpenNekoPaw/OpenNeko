@@ -245,7 +245,7 @@ export class DesktopCutRuntime {
 
   supportsOpen(item: ResourceBrowserItem): item is DesktopCutOpenResourceItem {
     this.requireActive();
-    if (item.facet !== 'files' && item.facet !== 'media') return false;
+    if (item.source !== 'files' && item.source !== 'media') return false;
     return (
       item.locator.kind === 'workspace-file' &&
       item.locator.path.toLocaleLowerCase().endsWith('.otio')
@@ -369,7 +369,7 @@ export class DesktopCutRuntime {
       },
       item: {
         resourceId: `canvas-material:${input.nodeId}`,
-        facet: 'files',
+        source: 'files',
         role: 'content',
         depth: 0,
         kind: 'file',
@@ -407,7 +407,7 @@ export class DesktopCutRuntime {
       },
       item: {
         resourceId: `canvas-material:${input.nodeId}:separate-audio`,
-        facet: 'files',
+        source: 'files',
         role: 'content',
         depth: 0,
         kind: 'file',

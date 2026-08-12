@@ -62,7 +62,7 @@ export async function openPreviewResource(evaluate, portablePath) {
       requestId: crypto.randomUUID(),
       identity,
       route: 'search',
-      facet: 'files',
+      source: 'files',
       query: ${JSON.stringify(portablePath)},
       limit: 100,
     });

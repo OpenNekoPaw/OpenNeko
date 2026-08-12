@@ -373,9 +373,6 @@ importers:
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../../cut/domain
-      '@neko/entity-domain':
-        specifier: workspace:*
-        version: link:../../entity/domain
       '@neko/entity-node':
         specifier: workspace:*
         version: link:../../entity/node
@@ -565,6 +562,9 @@ importers:
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain
+      '@neko/project':
+        specifier: workspace:*
+        version: link:../../project
       '@neko/shared':
         specifier: workspace:*
         version: link:../../shared
@@ -611,6 +611,9 @@ importers:
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain
+      '@neko/project':
+        specifier: workspace:*
+        version: link:../../project
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1482,6 +1485,12 @@ importers:
       '@neko/chara':
         specifier: workspace:*
         version: link:../chara
+      '@neko/entity-domain':
+        specifier: workspace:*
+        version: link:../entity/domain
+      '@neko/search-domain':
+        specifier: workspace:*
+        version: link:../search/domain
       '@neko/world':
         specifier: workspace:*
         version: link:../world

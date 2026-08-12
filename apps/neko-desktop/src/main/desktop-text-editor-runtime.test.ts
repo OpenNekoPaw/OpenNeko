@@ -713,7 +713,7 @@ function createShellProjection(
 function textItem(relativePath: string) {
   return {
     resourceId: `content:${relativePath}`,
-    facet: 'files' as const,
+    source: 'files' as const,
     role: 'content' as const,
     depth: 0,
     kind: 'file' as const,

@@ -304,12 +304,12 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
 function projection() {
   return {
     identity,
-    facet: 'media' as const,
+    source: 'media' as const,
     query: '',
     items: [
       {
         resourceId: 'library-1',
-        facet: 'media' as const,
+        source: 'media' as const,
         role: 'library-root' as const,
         depth: 0,
         kind: 'directory' as const,

@@ -242,9 +242,11 @@ import {
   parseProjectLocalAuthoringHostRequest,
   parseProjectAuthoringHostRequest,
   type ProjectAuthoringCatalogHostResult,
+  type ProjectLocalAuthoringOutcome,
   type ProjectLocalAuthoringCreateInput,
   type ProjectLocalAuthoringHostResult,
-  type ProjectLocalTargetRef,
+  type ProjectLocalCharacterCreationReceipt,
+  type ProjectLocalCharacterEntitySelection,
   type ProjectAuthoringNavigationHostResult,
   type ProjectAuthoringNavigationItem,
 } from '@neko/project/contracts';
@@ -269,7 +271,14 @@ export interface DesktopAppHostOptions {
       readonly workspaceId: string;
       readonly contentProjectId: string;
       readonly create: ProjectLocalAuthoringCreateInput;
-    }): Promise<ProjectLocalTargetRef>;
+    }): Promise<ProjectLocalAuthoringOutcome>;
+    retryLocalCharacter(input: {
+      readonly workspace: AssetWorkspaceResolution;
+      readonly workspaceId: string;
+      readonly contentProjectId: string;
+      readonly receipt: ProjectLocalCharacterCreationReceipt;
+      readonly entity: ProjectLocalCharacterEntitySelection;
+    }): Promise<ProjectLocalAuthoringOutcome>;
     getCharacterSnapshot(input: {
       readonly workspace: AssetWorkspaceResolution;
       readonly contentProjectId: string;
@@ -566,7 +575,7 @@ export class DesktopAppHost {
     };
   }
 
-  async createProjectLocalAuthoringTarget(
+  async executeProjectLocalAuthoringRequest(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<ProjectLocalAuthoringHostResult> {
@@ -577,18 +586,27 @@ export class DesktopAppHost {
       throw new Error('Project local authoring request belongs to another Window.');
     }
     const { workspace } = await this.resolveProjectAuthoringAuthority(request);
-    const target = await this.projectAuthoring.createLocalTarget({
-      workspace,
-      workspaceId: request.workspaceId,
-      contentProjectId: request.contentProjectId,
-      create: request.input,
-    });
+    const outcome =
+      request.operation === 'create-local-target'
+        ? await this.projectAuthoring.createLocalTarget({
+            workspace,
+            workspaceId: request.workspaceId,
+            contentProjectId: request.contentProjectId,
+            create: request.input,
+          })
+        : await this.projectAuthoring.retryLocalCharacter({
+            workspace,
+            workspaceId: request.workspaceId,
+            contentProjectId: request.contentProjectId,
+            receipt: request.input.receipt,
+            entity: request.input.entity,
+          });
     return {
       requestId: request.requestId,
       workspaceId: request.workspaceId,
       workspaceGrantId: request.workspaceGrantId,
       contentProjectId: request.contentProjectId,
-      target,
+      ...outcome,
     };
   }
 

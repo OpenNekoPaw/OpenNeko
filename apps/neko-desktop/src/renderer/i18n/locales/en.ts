@@ -349,7 +349,7 @@ export const en = {
   'workspace.preview': 'Preview',
   'workspace.preview.loading': 'Loading preview…',
   'workspace.agent': 'Agent',
-  'workspace.assets': 'Assets',
+  'workspace.assets': 'Installed assets',
   'workspace.assets.loading': 'Loading project resources…',
   'workspace.activityLabel': 'Project tools',
   'workspace.layoutControls': 'Workbench layout controls',
@@ -432,10 +432,10 @@ export const en = {
   'workspace.creativeMain': 'Creative main surface',
   'workspace.creativeMainDetail':
     "Canvas, Preview, and Cut views for '{project}' open here. Canvas is still unavailable in this slice.",
-  'workspace.resourceFacets': 'Resource facets',
-  'workspace.files': 'Files',
-  'workspace.media': 'Media',
-  'workspace.entities': 'Entities',
+  'workspace.resourceSources': 'Resource sources',
+  'workspace.files': 'Project files',
+  'workspace.media': 'Shared media',
+  'workspace.entities': 'Project elements',
   'workspace.canvas.unavailable': 'Canvas is not available yet',
   'workspace.canvas.detail':
     'The Canvas-owned workspace will connect in P1.4. This area is reserved for the canonical domain surface.',

@@ -719,7 +719,7 @@ describe('DesktopCutRuntime', () => {
     });
     const item = {
       resourceId: 'resource-story',
-      facet: 'files' as const,
+      source: 'files' as const,
       role: 'content' as const,
       depth: 0,
       kind: 'file' as const,
@@ -1307,7 +1307,7 @@ describe('DesktopCutRuntime', () => {
     };
     const item = {
       resourceId: 'content:clip',
-      facet: 'media' as const,
+      source: 'media' as const,
       role: 'content' as const,
       depth: 0,
       kind: 'video' as const,

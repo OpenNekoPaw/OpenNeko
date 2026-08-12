@@ -77,7 +77,6 @@ describe('Desktop Agent content effects', () => {
             entityId: 'char_小橘',
             kind: 'character',
             names: { canonical: '小橘', aliases: ['橘猫'] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-xiaoju-portrait',
@@ -95,7 +94,6 @@ describe('Desktop Agent content effects', () => {
             entityId: 'char_invalid',
             kind: 'character',
             names: { canonical: '', aliases: [] },
-            facts: {},
             representations: [],
             lifecycle: { state: 'active' },
             createdAt: '2026-07-29T00:00:00.000Z',

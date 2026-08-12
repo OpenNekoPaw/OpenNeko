@@ -211,6 +211,7 @@ import {
   PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
   createProjectAuthoringCatalogHostRequest,
   createProjectLocalAuthoringHostRequest,
+  createProjectLocalAuthoringRetryHostRequest,
   createProjectAuthoringNavigationHostRequest,
   parseProjectAuthoringCatalogHostResult,
   parseProjectLocalAuthoringHostResult,
@@ -742,7 +743,40 @@ const bridge: OpenNekoDesktopBridge &
         PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
         request,
       );
-      return parseProjectLocalAuthoringHostResult(response, request.requestId, binding);
+      const expectedTarget =
+        input.kind === 'character-project'
+          ? {
+              kind: 'character-project' as const,
+              characterProjectId: input.characterProjectId,
+            }
+          : { kind: 'world-project' as const, worldProjectId: input.worldProjectId };
+      return parseProjectLocalAuthoringHostResult(
+        response,
+        request.requestId,
+        binding,
+        expectedTarget,
+      );
+    },
+    async retryCharacter(windowId, binding, receipt, entity) {
+      const context = requireShellMutationContext();
+      const request = createProjectLocalAuthoringRetryHostRequest({
+        requestId: nextRequestId('project-local-authoring-retry'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+        receipt,
+        entity,
+      });
+      const response: unknown = await ipcRenderer.invoke(
+        PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
+        request,
+      );
+      return parseProjectLocalAuthoringHostResult(
+        response,
+        request.requestId,
+        binding,
+        receipt.target,
+      );
     },
   },
   agent: {
@@ -1429,7 +1463,9 @@ const bridge: OpenNekoDesktopBridge &
       const request = parseDesktopCanvasEmbeddedPreviewReleaseRequest(value);
       const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
       if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
-        throw new Error('Desktop Canvas embedded preview release requires a current owner-bound snapshot.');
+        throw new Error(
+          'Desktop Canvas embedded preview release requires a current owner-bound snapshot.',
+        );
       }
       await ipcRenderer.invoke(DESKTOP_CANVAS_CHANNELS.embeddedPreviewRelease, request);
     },

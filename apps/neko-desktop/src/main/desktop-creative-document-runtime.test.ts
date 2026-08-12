@@ -120,7 +120,7 @@ describe('openDesktopCanvasDocument', () => {
       },
       item: {
         resourceId: 'content:story',
-        facet: 'files' as const,
+        source: 'files' as const,
         role: 'content' as const,
         depth: 1,
         kind: 'document' as const,

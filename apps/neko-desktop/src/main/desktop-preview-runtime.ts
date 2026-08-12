@@ -572,11 +572,11 @@ export class DesktopPreviewRuntime {
 }
 
 function resolvePreviewContentLocator(item: ResourceBrowserItem): ResourceBrowserContentLocator {
-  if (item.facet === 'files' || item.facet === 'media') {
+  if (item.source === 'files' || item.source === 'media') {
     return item.locator;
   }
   if (
-    item.facet === 'entities' &&
+    item.source === 'entities' &&
     item.entityStatus !== 'candidate' &&
     item.representationLocator
   ) {
@@ -586,12 +586,12 @@ function resolvePreviewContentLocator(item: ResourceBrowserItem): ResourceBrowse
 }
 
 type ResourceBrowserContentLocator =
-  | Extract<ResourceBrowserItem, { readonly facet: 'files' | 'media' }>['locator']
+  | Extract<ResourceBrowserItem, { readonly source: 'files' | 'media' }>['locator']
   | NonNullable<
       Extract<
         ResourceBrowserItem,
         {
-          readonly facet: 'entities';
+          readonly source: 'entities';
           readonly entityStatus: 'confirmed' | 'needs-attention' | 'deprecated';
         }
       >['representationLocator']

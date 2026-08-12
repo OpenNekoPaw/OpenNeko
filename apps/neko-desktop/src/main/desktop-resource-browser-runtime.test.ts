@@ -97,7 +97,7 @@ describe('createResourceToCanvasInteraction', () => {
       identity: resourceIdentity,
       item: {
         resourceId: 'content:cat',
-        facet: 'media',
+        source: 'media',
         role: 'content',
         depth: 0,
         kind: 'image',
@@ -159,7 +159,7 @@ describe('createResourceToCanvasInteraction', () => {
         identity: resourceIdentity,
         item: {
           resourceId: 'content:cat',
-          facet: 'media',
+          source: 'media',
           role: 'content',
           depth: 0,
           kind: 'image',
@@ -190,7 +190,7 @@ describe('createResourceToCanvasInteraction', () => {
       identity: resourceIdentity,
       item: {
         resourceId: 'entity:character-neko',
-        facet: 'entities',
+        source: 'entities',
         role: 'entity',
         depth: 0,
         kind: 'character',
@@ -203,7 +203,6 @@ describe('createResourceToCanvasInteraction', () => {
           status: 'confirmed',
           kind: 'character',
           names: { canonical: 'Neko', aliases: [] },
-          facts: {},
           entityId: 'character-neko',
           bindings: [],
           operations: ['edit'],
@@ -307,7 +306,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
             entityId: 'character-rin',
             kind: 'character',
             names: { canonical: 'Rin', aliases: [] },
-            facts: {},
             representations: [],
             lifecycle: { state: 'active' },
             createdAt: '2026-08-05T00:00:00.000Z',
@@ -335,6 +333,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     const runtime = new ResourceBrowserNodeRuntime({
       globalAssetRoot: path.join(root, '.neko', 'assets'),
       globalMediaLibraryRoot: path.join(root, '.neko', 'media-libraries'),
+      readEntityCharacterResources: async () => [],
       shell,
       host,
       openPreview: async () => undefined,
@@ -420,18 +419,18 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
         createResourceBrowserSearchRequest({
           requestId: 'search-entities',
           identity,
-          facet: 'entities',
+          source: 'entities',
           query: 'Rin',
         }),
       );
       const entity = entities.items[0];
-      if (!entity || entity.facet !== 'entities' || entity.entityStatus === 'candidate') {
+      if (!entity || entity.source !== 'entities' || entity.entityStatus === 'candidate') {
         throw new Error('Project Resource runtime fixture did not project its canonical Entity.');
       }
       const intent = {
         type: 'edit' as const,
         entityId: 'character-rin',
-        changes: { facts: { role: 'lead' } },
+        changes: { names: { canonical: 'Rin Aoki', aliases: [] } },
       };
       await runtime.execute(
         windowId,
@@ -846,6 +845,7 @@ async function createGlobalLibraryRuntimeFixture(
     globalAssetRoot: assetRoot,
     globalMediaLibraryRoot: mediaLibraryRoot,
     assetLibraryMemberships: metadataStore.repositories.assetLibraryMemberships,
+    readEntityCharacterResources: async () => [],
     shell,
     host,
     openPreview: async () => undefined,

@@ -90,10 +90,8 @@ import {
 } from '@neko/project-webview/root';
 import type { ProjectAuthoringPresentationSnapshotRef } from '@neko/project/contracts';
 import {
-  createEmptyCharacterBackgroundStory,
-  createEmptyCharacterOriginSetting,
+  createEmptyCharacterDefinition,
   type CharacterAuthoringSnapshot,
-  type CharacterDefinition,
 } from '@neko/chara/contracts';
 import type { WorldAuthoringSnapshot, WorldDefinition } from '@neko/world/contracts';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
@@ -245,7 +243,7 @@ interface ShellActions {
   readonly onCreateAuthoringTarget: (
     context: import('@neko/agent-webview/root').AgentComposerAuthoringCreationContext,
     name: string,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerAuthoringCreationResult | undefined>;
 }
 
 export function DesktopApplication(): JSX.Element {
@@ -921,15 +919,18 @@ export function DesktopApplication(): JSX.Element {
           throw new Error(`Content Project creation returned '${created.status}'.`);
         }
         return {
-          label: created.grant.label,
-          context: {
-            kind: 'workspace' as const,
-            workspaceId: created.workspaceId,
-            workspaceGrantId: created.grant.workspaceGrantId,
-          },
+          status: 'created',
           target: {
-            kind: 'content-project' as const,
-            contentProjectId: created.projectId,
+            label: created.grant.label,
+            context: {
+              kind: 'workspace' as const,
+              workspaceId: created.workspaceId,
+              workspaceGrantId: created.grant.workspaceGrantId,
+            },
+            target: {
+              kind: 'content-project' as const,
+              contentProjectId: created.projectId,
+            },
           },
         };
       }
@@ -952,6 +953,15 @@ export function DesktopApplication(): JSX.Element {
         context.targetKind === 'character-project'
           ? { kind: 'character-project' as const, characterProjectId: targetId }
           : { kind: 'world-project' as const, worldProjectId: targetId };
+      const createdTarget = {
+        label: `${result.grant.label} / ${name}`,
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: result.workspaceId,
+          workspaceGrantId: result.grant.workspaceGrantId,
+        },
+        target,
+      };
       if (context.placement.kind === 'standalone-library') {
         if (context.targetKind === 'character-project') {
           await window.openNekoDesktop.characterFoundation.execute({
@@ -959,7 +969,8 @@ export function DesktopApplication(): JSX.Element {
             input: {
               characterProjectId: targetId,
               displayName: name,
-              draft: emptyCharacterDefinition(),
+              draft: createEmptyCharacterDefinition(),
+              sources: { evidence: [], assetRepresentations: [] },
             },
           });
         } else {
@@ -969,36 +980,62 @@ export function DesktopApplication(): JSX.Element {
           });
         }
       } else {
+        const binding = {
+          workspaceId: result.workspaceId,
+          workspaceGrantId: result.grant.workspaceGrantId,
+          contentProjectId: context.placement.contentProjectId,
+        };
+        if (context.targetKind === 'character-project') {
+          const entity = {
+            kind: 'create' as const,
+            entityId: `entity:${crypto.randomUUID()}`,
+            name,
+          };
+          const projectResult = await window.openNekoDesktop.projectLocalAuthoring.createTarget(
+            projection.window.windowId,
+            binding,
+            {
+              kind: 'character-project',
+              characterProjectId: targetId,
+              displayName: name,
+              draft: createEmptyCharacterDefinition(),
+              sources: { evidence: [], assetRepresentations: [] },
+              entity,
+            },
+          );
+          const projectCreationResult = (
+            outcome: typeof projectResult,
+          ): import('@neko/agent-webview/root').AgentComposerAuthoringCreationResult =>
+            outcome.status === 'created'
+              ? { status: 'created', target: createdTarget }
+              : {
+                  status: 'incomplete',
+                  retry: async () =>
+                    projectCreationResult(
+                      await window.openNekoDesktop.projectLocalAuthoring.retryCharacter(
+                        projection.window.windowId,
+                        binding,
+                        outcome.receipt,
+                        entity,
+                      ),
+                    ),
+                };
+          return projectCreationResult(projectResult);
+        }
         await window.openNekoDesktop.projectLocalAuthoring.createTarget(
           projection.window.windowId,
+          binding,
           {
-            workspaceId: result.workspaceId,
-            workspaceGrantId: result.grant.workspaceGrantId,
-            contentProjectId: context.placement.contentProjectId,
+            kind: 'world-project',
+            worldProjectId: targetId,
+            title: name,
+            draft: emptyWorldDefinition(),
           },
-          context.targetKind === 'character-project'
-            ? {
-                kind: 'character-project',
-                characterProjectId: targetId,
-                displayName: name,
-                draft: emptyCharacterDefinition(),
-              }
-            : {
-                kind: 'world-project',
-                worldProjectId: targetId,
-                title: name,
-                draft: emptyWorldDefinition(),
-              },
         );
       }
       return {
-        label: `${result.grant.label} / ${name}`,
-        context: {
-          kind: 'workspace' as const,
-          workspaceId: result.workspaceId,
-          workspaceGrantId: result.grant.workspaceGrantId,
-        },
-        target,
+        status: 'created',
+        target: createdTarget,
       };
     },
   };
@@ -1187,10 +1224,7 @@ function DesktopSceneWorkbench({
       : undefined;
   const characterTimelineRuns =
     characterInteractionScene && characterManagement.loadState.kind === 'ready'
-      ? resolveOwnerCharacterRuns(
-          characterManagement.loadState.snapshot,
-          scene.context.owner,
-        )
+      ? resolveOwnerCharacterRuns(characterManagement.loadState.snapshot, scene.context.owner)
       : [];
   const storylineTimelineVisible = Boolean(
     characterTimelineStack?.timelines.some(
@@ -1783,9 +1817,7 @@ function DesktopWorkbenchRuntimePortals({
           workbenchInstanceId={composition.workbenchInstanceId}
         />
       ) : (
-        <SceneSurfaceUnavailable
-          owner="character-presentation:unavailable"
-        />
+        <SceneSurfaceUnavailable owner="character-presentation:unavailable" />
       )
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
       workspaceSlots.main
@@ -1920,7 +1952,8 @@ function DesktopWorkbenchRuntimePortals({
       ? resolveOwnerCharacterRuns(characterSnapshot, characterInteraction.owner)
       : [];
   const storylineTimeline =
-    characterSnapshot && characterOwnerRuns.some((run) => run.runtimeBinding.kind === 'narrative') ? (
+    characterSnapshot &&
+    characterOwnerRuns.some((run) => run.runtimeBinding.kind === 'narrative') ? (
       <CharacterStorylineTimelineSurface
         characterRunIds={characterOwnerRuns.map((run) => run.characterRunId)}
         locale={locale}
@@ -1999,13 +2032,15 @@ const desktopCharacterPresentationRenderers =
 desktopCharacterPresentationRenderers.register({
   providerId: 'chara.representation',
   surfaceKind: 'avatar',
-  resolve: () => ({ runtime, surface, workbenchInstanceId }) => (
-    <CharacterAvatarSurface
-      owner={surface.owner}
-      runtime={runtime}
-      workbenchInstanceId={workbenchInstanceId}
-    />
-  ),
+  resolve:
+    () =>
+    ({ runtime, surface, workbenchInstanceId }) => (
+      <CharacterAvatarSurface
+        owner={surface.owner}
+        runtime={runtime}
+        workbenchInstanceId={workbenchInstanceId}
+      />
+    ),
 });
 
 function DesktopCharacterPresentationSurface({
@@ -2254,8 +2289,7 @@ function CharacterRuntimeManagerSurface({
           const agentConversation =
             agentSessionId !== undefined
               ? conversations.find(
-                  (conversation) =>
-                    conversation.navigation.conversationId === agentSessionId,
+                  (conversation) => conversation.navigation.conversationId === agentSessionId,
                 )
               : undefined;
           return (
@@ -2303,7 +2337,9 @@ function CharacterRuntimeManagerSurface({
                   {storylineNode ? (
                     <>
                       <span>{storylineNode.context.situation}</span>
-                      {storylineNode.context.time ? <span>{storylineNode.context.time}</span> : null}
+                      {storylineNode.context.time ? (
+                        <span>{storylineNode.context.time}</span>
+                      ) : null}
                       {storylineNode.context.location ? (
                         <span>{storylineNode.context.location}</span>
                       ) : null}
@@ -2409,7 +2445,7 @@ function createDesktopAgentSurfaceProps(input: {
   readonly onCreateAuthoringTarget?: (
     context: import('@neko/agent-webview/root').AgentComposerAuthoringCreationContext,
     name: string,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerAuthoringCreationResult | undefined>;
   readonly workspaceSelectionDisabled?: boolean;
 }): DesktopAgentSurfaceProps | undefined {
   const { interaction } = input;
@@ -2789,6 +2825,28 @@ function useContentProjectWorkbenchSlots({
             <div className="project-resource-dock__content">
               {assetsCapability?.status === 'ready' ? (
                 <DesktopResourceBrowserSurface
+                  characterCreationAuthority={workspaceScope}
+                  onCharacterCreated={(characterProjectId, displayName) => {
+                    const existing = workbench.main.views.find(
+                      (view) =>
+                        view.kind === 'character-authoring' &&
+                        view.characterProjectId === characterProjectId,
+                    );
+                    const view: DesktopWorkbenchViewRef = existing ?? {
+                      viewId: `character-authoring:${characterProjectId}`,
+                      viewInstanceId: `character-authoring-view:${crypto.randomUUID()}`,
+                      projectId: project.projectId,
+                      workspaceId: project.workspaceId,
+                      kind: 'character-authoring',
+                      ownerId: characterProjectId,
+                      displayLabel: displayName,
+                      characterProjectId,
+                    };
+                    actions.onUpdateWorkbench(
+                      instance.workbenchInstanceId,
+                      openOrFocusMainView(workbench, view),
+                    );
+                  }}
                   project={project}
                   projection={projection}
                   tab={tab}
@@ -3070,12 +3128,7 @@ function MainViewGroupSurface({
       );
       validatedSnapshots.current.set(item.identity, { kind: 'world', snapshot });
     },
-    [
-      authoringAuthority?.windowId,
-      authoringAuthority?.workspaceGrantId,
-      authoringAuthority?.workspaceId,
-      project.projectId,
-    ],
+    [authoringAuthority, project.projectId],
   );
   return (
     <WorkbenchMainPanelSurface
@@ -3682,12 +3735,19 @@ function ResourceBrowserUnavailable({ diagnostic }: { readonly diagnostic: strin
         </div>
         <span>{t('home.unavailable')}</span>
       </header>
-      <div className="resource-dock-tabs" role="tablist" aria-label={t('workspace.resourceFacets')}>
+      <div
+        className="resource-dock-tabs"
+        role="tablist"
+        aria-label={t('workspace.resourceSources')}
+      >
         <span role="tab" aria-selected="true">
           {t('workspace.files')}
         </span>
         <span role="tab" aria-selected="false">
           {t('workspace.media')}
+        </span>
+        <span role="tab" aria-selected="false">
+          {t('workspace.assets')}
         </span>
         <span role="tab" aria-selected="false">
           {t('workspace.entities')}
@@ -4655,19 +4715,6 @@ function ShellStatus({
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function emptyCharacterDefinition(): CharacterDefinition {
-  return {
-    summary: '',
-    backgroundStory: createEmptyCharacterBackgroundStory(),
-    originSetting: createEmptyCharacterOriginSetting(),
-    canon: [],
-    knowledgeBoundary: [],
-    behaviorPolicy: [],
-    expressionPolicy: [],
-    representationRefs: [],
-  };
 }
 
 function emptyWorldDefinition(): WorldDefinition {

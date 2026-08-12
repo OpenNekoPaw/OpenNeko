@@ -65,7 +65,6 @@ describe('Desktop Resource Browser source', () => {
             entityId: 'character-a',
             kind: 'character',
             names: { canonical: 'Character A', aliases: [] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-footage',
@@ -104,6 +103,7 @@ describe('Desktop Resource Browser source', () => {
       workspaceMediaLibrarySync: new WorkspaceMediaLibrarySyncService(
         path.join(fixture.root, '.openneko', 'media-libraries'),
       ),
+      readEntityCharacterResources: async () => [],
     });
 
     await expect(source.media.search({ identity, query: '', limit: 20 })).resolves.toEqual([
@@ -169,6 +169,7 @@ describe('Desktop Resource Browser source', () => {
       workspace,
       host,
       workspaceMediaLibrarySync,
+      readEntityCharacterResources: async () => [],
     });
 
     await expect(source.media.search({ identity, query: '', limit: 20 })).resolves.toEqual([
@@ -333,6 +334,7 @@ describe('Desktop Resource Browser source', () => {
         locator: { kind: 'relative', value: 'workspace' },
       },
       host,
+      readEntityCharacterResources: async () => [],
     });
 
     await expect(source.files.list({ identity, query: 'brief', limit: 20 })).resolves.toEqual([
@@ -368,7 +370,6 @@ describe('Desktop Resource Browser source', () => {
             entityId: 'character-neko',
             kind: 'character',
             names: { canonical: 'Neko', aliases: ['猫'] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-neko',
@@ -474,7 +475,7 @@ describe('Desktop Resource Browser source', () => {
     });
     const item = {
       resourceId: 'content:cat',
-      facet: 'media' as const,
+      source: 'media' as const,
       role: 'content' as const,
       depth: 0,
       kind: 'image' as const,
@@ -578,7 +579,7 @@ describe('Desktop Resource Browser source', () => {
       identity,
       item: {
         resourceId: 'content:story',
-        facet: 'media',
+        source: 'media',
         role: 'content',
         depth: 0,
         kind: 'file',
@@ -607,7 +608,6 @@ describe('Desktop Resource Browser source', () => {
             entityId: 'confirmed',
             kind: 'character',
             names: { canonical: 'Confirmed', aliases: [] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-confirmed',
@@ -625,7 +625,6 @@ describe('Desktop Resource Browser source', () => {
             entityId: 'deprecated',
             kind: 'character',
             names: { canonical: 'Deprecated', aliases: [] },
-            facts: {},
             representations: [],
             lifecycle: {
               state: 'deprecated',
@@ -669,7 +668,6 @@ describe('Desktop Resource Browser source', () => {
           entityId: 'foreign-character',
           kind: 'character',
           names: { canonical: 'Foreign', aliases: [] },
-          facts: {},
           representations: [],
           lifecycle: { state: 'active' },
           createdAt: '2026-08-07T00:00:00.000Z',
@@ -687,6 +685,7 @@ describe('Desktop Resource Browser source', () => {
       }),
     ).resolves.toEqual({
       projections: [],
+      characterAssociations: [],
       diagnostics: [
         {
           code: 'invalid-project-entity-document',
@@ -715,7 +714,6 @@ describe('Desktop Resource Browser source', () => {
             entityId: 'character-rin',
             kind: 'character',
             names: { canonical: 'Rin', aliases: [] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-rin',
@@ -794,7 +792,7 @@ describe('Desktop Resource Browser source', () => {
       partition: {
         scope: 'workspace',
         workspaceId: 'workspace-1',
-        domain: 'entity-asset-projection',
+        domain: 'project-entity-projection',
       },
       kinds: ['entity-candidate', 'binding-availability'],
     });
@@ -911,7 +909,7 @@ describe('Desktop Resource Browser source', () => {
     }).interactions.addDirectoryLibrary({ identity });
     const libraryItem = {
       resourceId: 'content:library',
-      facet: 'media' as const,
+      source: 'media' as const,
       role: 'library-root' as const,
       depth: 0,
       libraryName: 'First',
@@ -1086,6 +1084,7 @@ function createComposition(
     },
     entityProjections: effects.entityProjections,
     refreshEntityProjections: effects.refreshEntityProjections,
+    readEntityCharacterResources: async () => [],
     host,
     openPreview: effects.openPreview ?? (async () => undefined),
     openCreativeDocument: effects.openCreativeDocument ?? (async () => undefined),

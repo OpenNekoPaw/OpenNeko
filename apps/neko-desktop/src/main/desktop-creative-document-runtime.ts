@@ -18,7 +18,7 @@ export async function openDesktopCanvasDocument(input: {
 }): Promise<void> {
   const locator = input.item.locator;
   if (
-    input.item.facet !== 'files' ||
+    input.item.source !== 'files' ||
     locator.kind !== 'workspace-file' ||
     !locator.path.toLocaleLowerCase('en-US').endsWith('.nkc')
   ) {
