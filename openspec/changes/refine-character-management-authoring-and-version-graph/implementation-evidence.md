@@ -112,3 +112,26 @@ Residual risk for the next batch:
 - the graph service has not yet implemented edge-local recovery for a cyclic persisted aggregate, so task 4.1 remains open;
 - ZIP bytes are not yet read or written; only the strict manifest boundary exists;
 - no user-visible UI changed, so UI validation is not applicable to this batch.
+
+## Batch 2 portable ZIP evidence
+
+Implemented a byte-oriented `@neko/chara-node` transport adapter using `@zip.js/zip.js`. It accepts only explicitly supplied canonical records, embedded asset bytes and external dependency declarations; it has no Workspace discovery, raw-path or runtime API.
+
+Writer invariants:
+
+- strict manifest is derived from selected inputs with SHA-256 integrity and byte lengths;
+- records are decoded through their canonical Chara codecs before archive completion;
+- safe relative paths are unique and entries are emitted in deterministic lexical order;
+- entry count, individual bytes, total expanded bytes and final archive bytes are bounded.
+
+Reader invariants:
+
+- rejects unsafe/absolute/backslash paths, duplicate names, directories, symlinks, encrypted entries, excessive entry/expanded/archive sizes and suspicious compression ratios before installation;
+- requires one strict `manifest.json`, rejects undeclared or missing entries and verifies exact byte length/digest;
+- decodes every declared Character record with its canonical codec and checks record and CharacterProject identities;
+- returns validated bytes only and never writes a Workspace, starts a runtime or resolves an external dependency.
+
+Focused verification after implementation:
+
+- `pnpm --filter @neko/chara-node typecheck` — passed;
+- `pnpm --filter @neko/chara-node test` — 6 files, 28 tests passed, including self-contained Live2D, external voice, traversal, undeclared-entry, digest, resource-limit and symlink cases.
