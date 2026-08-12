@@ -182,3 +182,21 @@ Focused verification:
 - `git diff --check` — passed before recording this evidence.
 
 This task extends the live directory repository only. ZIP-to-Workspace preview/commit remains task 3.5, and Desktop wiring remains task 7.4; neither is represented as an alternate repository or runtime authority.
+
+## Batch 5 portable application workflow evidence
+
+`CharacterPortablePackageService` is a host-neutral Chara application workflow over one exact authorized `CharacterPortableWorkspaceRepository` and one bounded archive port. Export always reads the exact CharacterProject plus all of its immutable CharacterVersions and exact lineage, then adds only explicitly selected Storylines, authoring tests and localized asset files. Opaque representation refs remain in Character facts; representations without selected bytes are projected as external dependencies.
+
+Import decodes the already bounded archive result, validates cross-record ownership and closed CharacterVersion/Storyline references, checks the exact repository placement, and returns a strict `CharacterPortablePackagePreview` with branch heads, unlinked versions, Storylines, embedded assets, external dependencies and exact identity conflicts. Commit revalidates the archive and preview, rejects any different existing fact, installs only through the canonical directory repository and returns an exact CharacterProject identity. It does not overwrite, merge, remap, infer another Workspace or create a runtime.
+
+The Node archive port opens and closes the ZIP reader within each call. Preview and commit retain no package identity, raw path, reader, mount, watcher or synchronization state. Interrupted canonical writes return `CharacterPortableImportWriteError` with the exact records already installed; the same package and destination can be retried idempotently without rollback or forged success.
+
+Focused verification:
+
+- `pnpm --filter @neko/chara typecheck` — passed;
+- `pnpm --filter @neko/chara test` — 35 files, 183 tests passed;
+- `pnpm --filter @neko/chara-node typecheck` — passed;
+- `pnpm --filter @neko/chara-node test` — 7 files, 35 tests passed;
+- real file-repository plus real ZIP tests cover multi-branch export/import, StorylineVersion refs, embedded Live2D bytes, external voice inventory, exact mutable identity conflict, destination-scope mismatch and interrupted-install retry.
+
+Desktop sender-bound source/destination file selection remains task 7.4. The application service accepts only the exact repository capability and archive bytes supplied by that future Host adapter; no Renderer raw-path contract was added.

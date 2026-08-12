@@ -18,23 +18,12 @@ import {
   type CharacterPortableExternalDependency,
   type CharacterPortablePackageManifest,
   type CharacterPortableRecordKind,
-  type CharacterRepresentationKind,
 } from '@neko/chara/contracts';
-
-export interface CharacterPortableRecordSource {
-  readonly kind: CharacterPortableRecordKind;
-  readonly recordId: string;
-  readonly archivePath: string;
-  readonly bytes: Uint8Array;
-}
-
-export interface CharacterPortableAssetSource {
-  readonly representationId: string;
-  readonly kind: CharacterRepresentationKind;
-  readonly archivePath: string;
-  readonly mediaType: string;
-  readonly bytes: Uint8Array;
-}
+import type {
+  CharacterPortableArchivePort,
+  CharacterPortableAssetSource,
+  CharacterPortableRecordSource,
+} from '@neko/chara/application';
 
 export interface CharacterPortableArchiveLimits {
   readonly maxArchiveBytes: number;
@@ -69,6 +58,26 @@ export class CharacterPortableArchiveError extends Error {
     super(message, options);
     this.name = 'CharacterPortableArchiveError';
   }
+}
+
+export function createCharacterPortableArchivePort(
+  limitOverrides?: Partial<CharacterPortableArchiveLimits>,
+): CharacterPortableArchivePort {
+  const port: CharacterPortableArchivePort = {
+    async write(input, signal) {
+      signal?.throwIfAborted();
+      const result = await writeCharacterPortableArchive({ ...input, limits: limitOverrides });
+      signal?.throwIfAborted();
+      return result;
+    },
+    async read(archiveBytes, signal) {
+      signal?.throwIfAborted();
+      const result = await readCharacterPortableArchive(archiveBytes, limitOverrides);
+      signal?.throwIfAborted();
+      return result;
+    },
+  };
+  return Object.freeze(port);
 }
 
 export async function writeCharacterPortableArchive(input: {

@@ -52,6 +52,29 @@ export interface CharacterPortablePackageManifest {
   readonly externalDependencies: readonly CharacterPortableExternalDependency[];
 }
 
+export type CharacterPortableDestination =
+  | { readonly kind: 'standalone-library' }
+  | { readonly kind: 'content-project'; readonly contentProjectId: string };
+
+export interface CharacterPortableIdentityConflict {
+  readonly kind: CharacterPortableRecordKind | 'localized-asset';
+  readonly recordId: string;
+}
+
+export interface CharacterPortablePackagePreview {
+  readonly destination: CharacterPortableDestination;
+  readonly characterProjectId: string;
+  readonly displayName: string;
+  readonly characterVersionIds: readonly string[];
+  readonly branchHeadCharacterVersionIds: readonly string[];
+  readonly unlinkedCharacterVersionIds: readonly string[];
+  readonly characterStorylineIds: readonly string[];
+  readonly embeddedAssets: readonly CharacterPortableEmbeddedAssetEntry[];
+  readonly externalDependencies: readonly CharacterPortableExternalDependency[];
+  readonly conflicts: readonly CharacterPortableIdentityConflict[];
+  readonly canCommit: boolean;
+}
+
 export function parseCharacterPortablePackageManifest(
   value: unknown,
 ): CharacterPortablePackageManifest {
@@ -118,6 +141,141 @@ export function parseCharacterPortablePackageManifest(
     embeddedAssets,
     externalDependencies,
   };
+}
+
+export function parseCharacterPortablePackagePreview(
+  value: unknown,
+): CharacterPortablePackagePreview {
+  const record = requireExactRecord(
+    value,
+    [
+      'destination',
+      'characterProjectId',
+      'displayName',
+      'characterVersionIds',
+      'branchHeadCharacterVersionIds',
+      'unlinkedCharacterVersionIds',
+      'characterStorylineIds',
+      'embeddedAssets',
+      'externalDependencies',
+      'conflicts',
+      'canCommit',
+    ],
+    'Character portable package preview',
+  );
+  const conflicts = requireUniqueIdentities(
+    requireArray(
+      record['conflicts'],
+      parseCharacterPortableIdentityConflict,
+      'Character portable package preview conflicts',
+    ),
+    (entry) => `${entry.kind}:${entry.recordId}`,
+    'Character portable package preview conflicts',
+  );
+  const canCommit = requireBoolean(
+    record['canCommit'],
+    'Character portable package preview commit state',
+  );
+  if (canCommit !== (conflicts.length === 0)) {
+    throw new Error('Character portable package preview canCommit must match its conflicts.');
+  }
+  return {
+    destination: parseCharacterPortableDestination(record['destination']),
+    characterProjectId: requireIdentity(
+      record['characterProjectId'],
+      'Character portable package preview CharacterProject identity',
+    ),
+    displayName: requireIdentity(
+      record['displayName'],
+      'Character portable package preview display name',
+    ),
+    characterVersionIds: identityList(
+      record['characterVersionIds'],
+      'Character portable package preview CharacterVersions',
+    ),
+    branchHeadCharacterVersionIds: identityList(
+      record['branchHeadCharacterVersionIds'],
+      'Character portable package preview branch heads',
+    ),
+    unlinkedCharacterVersionIds: identityList(
+      record['unlinkedCharacterVersionIds'],
+      'Character portable package preview unlinked versions',
+    ),
+    characterStorylineIds: identityList(
+      record['characterStorylineIds'],
+      'Character portable package preview Storylines',
+    ),
+    embeddedAssets: requireArray(
+      record['embeddedAssets'],
+      parseCharacterPortableEmbeddedAssetEntry,
+      'Character portable package preview embedded assets',
+    ),
+    externalDependencies: requireArray(
+      record['externalDependencies'],
+      parseCharacterPortableExternalDependency,
+      'Character portable package preview external dependencies',
+    ),
+    conflicts,
+    canCommit,
+  };
+}
+
+export function parseCharacterPortableDestination(value: unknown): CharacterPortableDestination {
+  const record = requireExactRecord(
+    value,
+    ['kind', 'contentProjectId'],
+    'Character portable package destination',
+  );
+  const kind = requireOneOf(
+    record['kind'],
+    ['standalone-library', 'content-project'] as const,
+    'Character portable package destination kind',
+  );
+  if (kind === 'standalone-library') {
+    if (record['contentProjectId'] !== undefined) {
+      throw new Error('Standalone Character destination cannot identify a Content Project.');
+    }
+    return { kind };
+  }
+  return {
+    kind,
+    contentProjectId: requireIdentity(
+      record['contentProjectId'],
+      'Character portable package destination Content Project identity',
+    ),
+  };
+}
+
+function parseCharacterPortableIdentityConflict(value: unknown): CharacterPortableIdentityConflict {
+  const record = requireExactRecord(
+    value,
+    ['kind', 'recordId'],
+    'Character portable package identity conflict',
+  );
+  return {
+    kind: requireOneOf(
+      record['kind'],
+      [...CHARACTER_PORTABLE_RECORD_KINDS, 'localized-asset'] as const,
+      'Character portable package conflict kind',
+    ),
+    recordId: requireIdentity(
+      record['recordId'],
+      'Character portable package conflict record identity',
+    ),
+  };
+}
+
+function identityList(value: unknown, label: string): readonly string[] {
+  return requireUniqueIdentities(
+    requireArray(value, (item) => requireIdentity(item, label), label),
+    (identity) => identity,
+    label,
+  );
+}
+
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`);
+  return value;
 }
 
 export function parseCharacterPortableRecordEntry(value: unknown): CharacterPortableRecordEntry {

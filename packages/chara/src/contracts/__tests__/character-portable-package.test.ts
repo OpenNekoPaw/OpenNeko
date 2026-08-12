@@ -1,4 +1,7 @@
-import { parseCharacterPortablePackageManifest } from '../character-portable-package';
+import {
+  parseCharacterPortablePackageManifest,
+  parseCharacterPortablePackagePreview,
+} from '../character-portable-package';
 import { describe, expect, it } from 'vitest';
 
 const digest = `sha256:${'a'.repeat(64)}`;
@@ -88,6 +91,47 @@ describe('Character portable package contracts', () => {
     expect(() =>
       parseCharacterPortablePackageManifest({ ...validManifest(), [forbiddenField]: 1 }),
     ).toThrow(/unsupported fields/u);
+  });
+
+  it('parses an exact destination preview without package identity or path state', () => {
+    const preview = parseCharacterPortablePackagePreview({
+      destination: { kind: 'content-project', contentProjectId: 'content-project-a' },
+      characterProjectId: 'character-project-a',
+      displayName: 'Lin',
+      characterVersionIds: ['version-a'],
+      branchHeadCharacterVersionIds: ['version-a'],
+      unlinkedCharacterVersionIds: [],
+      characterStorylineIds: ['storyline-a'],
+      embeddedAssets: [asset('assets/live2d/model.json', 'application/json')],
+      externalDependencies: [],
+      conflicts: [],
+      canCommit: true,
+    });
+
+    expect(preview.destination).toEqual({
+      kind: 'content-project',
+      contentProjectId: 'content-project-a',
+    });
+    expect(Object.keys(preview)).not.toContain('packageId');
+    expect(Object.keys(preview)).not.toContain('path');
+  });
+
+  it('rejects a preview whose commit state hides exact conflicts', () => {
+    expect(() =>
+      parseCharacterPortablePackagePreview({
+        destination: { kind: 'standalone-library' },
+        characterProjectId: 'character-project-a',
+        displayName: 'Lin',
+        characterVersionIds: [],
+        branchHeadCharacterVersionIds: [],
+        unlinkedCharacterVersionIds: [],
+        characterStorylineIds: [],
+        embeddedAssets: [],
+        externalDependencies: [],
+        conflicts: [{ kind: 'character-project', recordId: 'character-project-a' }],
+        canCommit: true,
+      }),
+    ).toThrow(/must match its conflicts/u);
   });
 });
 

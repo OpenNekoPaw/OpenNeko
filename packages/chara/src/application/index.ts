@@ -3,6 +3,7 @@ export * from './character-authoring-service';
 export * from './character-version-lineage-repository';
 export * from './character-version-graph-service';
 export * from './character-localized-asset-repository';
+export * from './character-portable-package-service';
 export * from './character-authoring-host-service';
 export * from './character-room-service';
 export * from './character-room-conversation-service';
