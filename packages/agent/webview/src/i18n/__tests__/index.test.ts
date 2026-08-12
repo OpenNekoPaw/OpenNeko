@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { BUILTIN_SLASH_COMMANDS } from '@neko/agent-contracts';
 import { t, setLocale, getLocale, detectLocale } from '../index';
 
 describe('i18n module', () => {
@@ -50,6 +51,50 @@ describe('i18n module', () => {
 
       expect(enCancel).toBe('Cancel');
       expect(zhCancel).toBe('取消');
+    });
+
+    it('should localize builtin Skill descriptions without changing their catalog content', () => {
+      const builtinSkillNames = [
+        'audio-mixing',
+        'character-creator',
+        'color-grading',
+        'image',
+        'media-production',
+        'media-quality-review',
+        'scene-to-music',
+        'script-generation',
+        'script-to-timeline',
+        'skill-creator',
+        'storyboard',
+        'subtitle-assistant',
+        'video',
+        'video-editing',
+      ] as const;
+
+      for (const locale of ['en', 'zh-cn'] as const) {
+        setLocale(locale);
+        for (const skillName of builtinSkillNames) {
+          const key = `skillDescriptions.${skillName}`;
+          expect(t(key), `${locale} is missing ${skillName}`).not.toBe(key);
+        }
+      }
+
+      setLocale('zh-cn');
+      expect(t('skillDescriptions.character-creator')).toContain('可审阅的角色草稿');
+    });
+
+    it('should localize every builtin command description without translating command names', () => {
+      for (const locale of ['en', 'zh-cn'] as const) {
+        setLocale(locale);
+        for (const command of BUILTIN_SLASH_COMMANDS) {
+          const key = `commandDescriptions.${command.name}`;
+          expect(t(key), `${locale} is missing /${command.name}`).not.toBe(key);
+          if (locale === 'en') expect(t(key)).toBe(command.description);
+        }
+      }
+
+      setLocale('zh-cn');
+      expect(t('commandDescriptions.new')).toBe('开始新对话');
     });
 
     it('should translate Character Role labels', () => {

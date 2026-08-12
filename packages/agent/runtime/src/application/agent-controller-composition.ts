@@ -1182,9 +1182,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       if (!personalSkillOwnerId.trim()) {
         throw new Error('Agent Session input catalog has no personal Skill owner identity.');
       }
-      const [binding, capabilityConstraint] = await Promise.all([
+      const [binding, capabilityConstraint, entryTargetReceipt] = await Promise.all([
         readConversationContext(conversationId),
         readConversationCapabilityConstraint(conversationId),
+        readConversationEntryTargetReceipt(conversationId),
       ]);
       if (
         (binding.kind === 'workspace' && binding.workspaceId !== workspace.workspaceId) ||
@@ -1196,12 +1197,18 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       }
       const skills =
         capabilityConstraint.skills === 'none'
-          ? { records: [], diagnostics: [], warnings: [] }
+          ? {
+              records: [],
+              diagnostics: [],
+              warnings: [],
+              commands: { records: [], diagnostics: [] },
+            }
           : binding.kind === 'assistant'
             ? await readGlobalSkillCatalog()
             : await workspace.readSkillCatalog(true);
       return {
         binding,
+        entryTargetReceipt,
         entries: projectAgentInputCatalog({
           skills,
           phase: 'session',
@@ -1216,11 +1223,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       input: AgentInputInvocationIntent,
       context: AgentHostRouteEffectContext,
     ): void => {
-      const skillName = input.kind === 'skill' ? input.skillName : input.commandId;
-      const skillActivationId =
-        input.kind === 'skill'
-          ? input.activationId
-          : parseCommandArtifactActivationId(input.handlerId);
+      const skillName = input.kind === 'skill' ? input.skillName : undefined;
+      const skillActivationId = input.kind === 'skill' ? input.activationId : undefined;
       const prefix = input.kind === 'skill' ? '$' : '/';
       const request: AgentConversationControllerTurnRequest = {
         source: 'user-message',
@@ -1234,26 +1238,41 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         readConversationContext(conversationId),
         readConversationEntryTargetReceipt(conversationId),
         readConversationCapabilityConstraint(conversationId),
-      ]).then(([configuration, conversationContext, entryTargetReceipt, capabilityConstraint]) =>
-        this.executeTurn({
-          workspace,
-          config,
-          request,
-          context,
-          facts,
-          entryTargetReceipt,
+        input.kind === 'command'
+          ? workspace.invokeCommand(
+              input.commandId,
+              parseCommandActivationId(input.handlerId),
+              input.args,
+            )
+          : Promise.resolve(undefined),
+      ]).then(
+        ([
           configuration,
           conversationContext,
+          entryTargetReceipt,
           capabilityConstraint,
-          ...(resolveConversationDomainTurnContext === undefined
-            ? {}
-            : { resolveConversationDomainTurnContext }),
-          presentationText: `${prefix}${skillName}${input.args ? ` ${input.args}` : ''}`,
-          queueInput: input,
-          skillName,
-          skillActivationId,
-          ...(input.args ? { additionalInstructions: input.args } : {}),
-        }),
+          commandPrompt,
+        ]) =>
+          this.executeTurn({
+            workspace,
+            config,
+            request:
+              commandPrompt === undefined ? request : { ...request, messageText: commandPrompt },
+            context,
+            facts,
+            entryTargetReceipt,
+            configuration,
+            conversationContext,
+            capabilityConstraint,
+            ...(resolveConversationDomainTurnContext === undefined
+              ? {}
+              : { resolveConversationDomainTurnContext }),
+            presentationText: `${prefix}${input.kind === 'skill' ? input.skillName : input.commandId}${input.args ? ` ${input.args}` : ''}`,
+            queueInput: input,
+            ...(skillName === undefined ? {} : { skillName }),
+            ...(skillActivationId === undefined ? {} : { skillActivationId }),
+            ...(input.kind === 'skill' && input.args ? { additionalInstructions: input.args } : {}),
+          }),
       );
       this.track(operation);
     };
@@ -2445,12 +2464,12 @@ function assertConversationControlOperationIdle(
   }
 }
 
-function parseCommandArtifactActivationId(handlerId: string): string {
-  const prefix = 'command-artifact:';
+function parseCommandActivationId(handlerId: string): string {
+  const prefix = 'command:';
   if (!handlerId.startsWith(prefix) || handlerId.length === prefix.length) {
     throw new Error(`Agent Session command has no registered handler '${handlerId}'.`);
   }
-  return handlerId.slice(prefix.length);
+  return handlerId;
 }
 
 async function missingConversationContextDependency(): Promise<AgentBoundDomainBinding> {

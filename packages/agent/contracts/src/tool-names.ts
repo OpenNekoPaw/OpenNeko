@@ -159,6 +159,10 @@ export const TOOL_NAMES_CHARA = {
   FILL_CHARACTER_DRAFT: 'chara.character.fillDraft',
 } as const;
 
+export const TOOL_NAMES_SKILLS = {
+  CREATE_SKILL: 'CreateSkill',
+} as const;
+
 // =============================================================================
 // Dual-Flow — Execution ring tools (P2 W6)
 // =============================================================================
@@ -186,6 +190,7 @@ export const TOOL_NAMES = {
   ...TOOL_NAMES_SYSTEM,
   ...TOOL_NAMES_CREATION,
   ...TOOL_NAMES_CHARA,
+  ...TOOL_NAMES_SKILLS,
   ...TOOL_NAMES_EXECUTION,
 } as const;
 

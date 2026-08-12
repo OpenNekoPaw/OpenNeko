@@ -7,6 +7,7 @@
     "./validation": "./src/validation/index.ts",
     "./approval": "./src/approval/index.ts",
     "./application": "./src/application/index.ts",
+    "./command": "./src/command/index.ts",
     "./pi": "./src/pi/index.ts",
     "./input/mention-excludes": "./src/input/mention-excludes.ts",
     "./input/workspace-ignore": "./src/input/workspace-ignore.ts",

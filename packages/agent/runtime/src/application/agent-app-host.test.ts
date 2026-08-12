@@ -353,7 +353,10 @@ describe('AgentAppHost', () => {
     const contentResult = await workspace.executeTurn({
       conversationId: 'conversation-content-target',
       prompt: 'write content',
-      entryTargetReceipt: authoringTargetReceipt('content-project', 'content-1'),
+      entryTargetReceipt: {
+        ...authoringTargetReceipt('content-project', 'content-1'),
+        mode: 'assistant',
+      },
       modelPolicy: policy,
       configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
@@ -436,7 +439,7 @@ describe('AgentAppHost', () => {
     expect(authorize).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps structured project authoring providers out of Assistant Space runtimes', async () => {
+  it('keeps generic project editors out of Assistant Space while retaining target-bound providers', async () => {
     const fixture = await createFixture();
     const assistantSpaceId = 'assistant-space:local-user';
     const assistantSpacePath = join(fixture.root, 'assistant-space');
@@ -453,6 +456,24 @@ describe('AgentAppHost', () => {
         userDataRoot: assistantDataRoot,
       }),
       assistantSpaceIds: [assistantSpaceId],
+      resolveWorkspaceCapabilityProviders: () => [
+        {
+          id: 'character-draft-fixture',
+          getTools: () => [
+            {
+              name: 'CharacterDraftFixture',
+              description: 'Fill an explicitly authorized Character draft.',
+              category: 'project',
+              parameters: { type: 'object', properties: {}, additionalProperties: false },
+              requirements: {
+                writableProject: true,
+                authoringTargetKind: 'character-project',
+              },
+              execute: async () => ({ success: true }),
+            },
+          ],
+        },
+      ],
     });
     compositions.push(composition);
     const workspace = await composition.attachWorkspace({
@@ -464,6 +485,7 @@ describe('AgentAppHost', () => {
     const toolNames = workspace.tools.list().map((tool) => tool.name);
 
     expect(toolNames).toEqual(expect.arrayContaining(['Read', 'Write', 'ListDirectory', 'Grep']));
+    expect(toolNames).toContain('CharacterDraftFixture');
     expect(toolNames).not.toEqual(
       expect.arrayContaining([
         TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
@@ -651,7 +673,7 @@ describe('AgentAppHost', () => {
       },
     });
     const skillRecord = (await workspace.readSkillCatalog(true)).records.find(
-      (record) => record.name === 'desktop-fixture' && record.entryPoint.kind === 'skill',
+      (record) => record.name === 'desktop-fixture',
     );
     if (!skillRecord) throw new Error('Desktop fixture Skill is unavailable.');
     const skill = await workspace.executeTurn({

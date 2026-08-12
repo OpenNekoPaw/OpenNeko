@@ -21,6 +21,15 @@ describe('Agent Entry intent contract', () => {
 
   it.each([
     {
+      mode: 'assistant' as const,
+      binding: {
+        kind: 'authoring' as const,
+        workspaceId: 'character-library',
+        workspaceGrantId: 'grant-character-library',
+        target: { kind: 'character-project' as const, characterProjectId: 'character-project-1' },
+      },
+    },
+    {
       mode: 'authoring' as const,
       binding: {
         kind: 'authoring' as const,
@@ -64,6 +73,39 @@ describe('Agent Entry intent contract', () => {
         },
       }),
     ).toMatchObject({ mode, targetReceipt: { mode, binding } });
+  });
+
+  it('rejects runtime launch authorities from Assistant operation receipts', () => {
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'target-receipt-assistant-dialogue',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'assistant',
+        binding: {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [
+            {
+              characterProjectId: 'character-project-1',
+              characterVersionId: 'character-version-1',
+            },
+          ],
+        },
+      }),
+    ).toThrow('does not match');
+  });
+
+  it('rejects the removed Skill-specific authoring receipt shape', () => {
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'removed-skill-target',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'assistant',
+        binding: { kind: 'skill-authoring', destination: { kind: 'personal' } },
+      }),
+    ).toThrow("Unknown Agent Entry target binding 'skill-authoring'");
   });
 
   it('keeps mutable authoring targets distinct from published runtime launch targets', () => {

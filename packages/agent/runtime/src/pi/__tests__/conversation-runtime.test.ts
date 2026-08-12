@@ -902,7 +902,6 @@ describe('PiConversationRuntime', () => {
       {
         path: join(root, 'project-skills'),
         source: { kind: 'project' },
-        entryPointKind: 'skill',
       },
     ]);
     let capturedContext: Context | undefined;
@@ -989,7 +988,6 @@ describe('PiConversationRuntime', () => {
       {
         path: join(root, 'project-skills'),
         source: { kind: 'project' },
-        entryPointKind: 'skill',
       },
     ]);
     const locator = skills.records[0]!.locator.value;

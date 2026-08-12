@@ -12,6 +12,7 @@ interface HomeExperienceQuickActionsProps {
   readonly disabled?: boolean;
   readonly detailExpanded: boolean;
   readonly summary?: string;
+  readonly title?: string;
   readonly skills?: readonly SkillSummary[];
   readonly onSkillSelect?: (skill: SkillSummary) => void;
   readonly onExpandedChange: (expanded: boolean) => void;
@@ -24,6 +25,7 @@ export function HomeExperienceQuickActions({
   disabled = false,
   detailExpanded,
   summary,
+  title: titleOverride,
   skills = [],
   onSkillSelect,
   onExpandedChange,
@@ -42,10 +44,10 @@ export function HomeExperienceQuickActions({
       : mode === 'authoring'
         ? 'chat.entryPanel.authoringTitle'
         : 'chat.entryPanel.characterTitle';
-  const title = t(titleKey);
+  const title = titleOverride ?? t(titleKey);
   const accessibleLabel = summary ? `${title}: ${summary}` : title;
   const content =
-    mode === 'assistant' ? (
+    mode === 'assistant' && (children === undefined || children === null) ? (
       <div className="agent-entry-resource-grid">
         {globalActions.map((skill) => (
           <EntryResourceCard

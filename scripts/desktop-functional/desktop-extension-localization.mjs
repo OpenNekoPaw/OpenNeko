@@ -7,7 +7,7 @@ const EXTENSIONS_NAVIGATION =
 const SETTINGS_BUTTON = '.home-navigation-footer__actions button:last-child';
 const SETTINGS_NAVIGATION = '.desktop-settings__navigation .home-nav-button';
 const EXTENSION_ROOT = '.agent-extension-management-root';
-const EXTENSION_OPTION = `${EXTENSION_ROOT} [role="option"]`;
+const EXTENSION_OPTION = `${EXTENSION_ROOT} .agent-extension-catalog-row .management-surface-row__select`;
 const SEARCH_INPUT = `${EXTENSION_ROOT} .management-search-field input`;
 
 const ENGLISH_DESCRIPTION = 'Browser observation for approved domains';
@@ -250,9 +250,11 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
   );
   const catalog = await evaluate(`(() => {
     const option = document.querySelector(${JSON.stringify(EXTENSION_OPTION)});
+    const card = option?.closest('.agent-extension-catalog-row');
     return {
       name: option?.querySelector('strong')?.textContent ?? '',
       description: option?.querySelector('.management-surface-copy small')?.textContent ?? '',
+      enablementCount: card?.querySelectorAll('[role="switch"]').length ?? 0,
     };
   })()`);
   await click(EXTENSION_OPTION);
@@ -260,12 +262,17 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
   const detailDescription = await evaluate(`(() =>
     document.querySelector('.extension-configuration-header > div > p:last-child')?.textContent ?? ''
   )()`);
+  const detailEnablementCount = await evaluate(
+    `document.querySelectorAll('.agent-extension-configuration-root [role="switch"]').length`,
+  );
   const locale = await evaluate('document.documentElement.dataset.nekoLocale');
   const result = {
     locale,
     name: catalog.name,
     catalogDescription: catalog.description,
+    catalogEnablementCount: catalog.enablementCount,
     detailDescription,
+    detailEnablementCount,
     query,
   };
   assertIntroduction(result, locale, expected);
@@ -277,7 +284,9 @@ function assertIntroduction(result, locale, expected) {
     result.locale !== locale ||
     result.name !== 'Browser Use' ||
     result.catalogDescription !== expected ||
-    result.detailDescription !== expected
+    result.catalogEnablementCount !== 1 ||
+    result.detailDescription !== expected ||
+    result.detailEnablementCount !== 0
   ) {
     throw new Error(
       `Extension introduction localization is inconsistent: ${JSON.stringify({

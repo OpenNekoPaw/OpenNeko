@@ -254,7 +254,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       checkpoint('extension-management-skills-list-large', extensionsList);
 
       await click('[data-extension-catalog-tab="extensions"]');
-      await click('.agent-extension-management-root [role="option"]');
+      await click(
+        '.agent-extension-management-root .agent-extension-catalog-row .management-surface-row__select',
+      );
       await waitForSelector('[data-workbench-main-panel="extension-detail"]');
       await waitForSelector('[data-automation-endpoint-management="true"]');
       await waitForSelector('[data-automation-permission-management="true"]');
@@ -5378,7 +5380,8 @@ async function inspectExtensionsManagement(evaluate) {
       activeTab: root
         ?.querySelector('[data-extension-catalog-tab][aria-pressed="true"]')
         ?.getAttribute('data-extension-catalog-tab'),
-      selectedCount: root?.querySelectorAll('[role="option"][aria-selected="true"]').length ?? 0,
+      selectedCount:
+        root?.querySelectorAll('.agent-extension-catalog-row[data-selected="true"]').length ?? 0,
       configurationKind: secondary
         ?.querySelector('[data-extension-configuration-kind]')
         ?.getAttribute('data-extension-configuration-kind'),

@@ -934,6 +934,8 @@ function installBridge(
         readTextFilePreview: vi.fn(),
         executeIntent: vi.fn(),
         resolvePreviewVariant: vi.fn(),
+        resolveEmbeddedPreview: vi.fn(),
+        releaseEmbeddedPreview: vi.fn(),
         executeMediaRequest: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },

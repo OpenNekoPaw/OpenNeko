@@ -212,7 +212,7 @@ export function sortSkillInvocationsForDisplay(
 export function projectSlashCommandGroup(
   command: SlashCommandCatalogItem,
 ): SlashCommandDisplayGroup {
-  if (command.source === 'command-artifact') return 'command';
+  if (command.source === 'command') return 'command';
   if (command.source === 'plugin') return 'creation';
   if (creationBuiltinCommands.has(command.commandId ?? command.id)) return 'creation';
   return 'agent';

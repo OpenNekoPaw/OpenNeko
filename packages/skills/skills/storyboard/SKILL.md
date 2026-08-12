@@ -11,7 +11,7 @@ Interpret a prompt, prose, script, document, comic, ordered image sequence, or e
 1. Identify the source profile and preserve source order, scene boundaries, dialogue context, and visual evidence appropriate to that profile.
 2. For unspecified exploration, analysis, planning, alternatives, or a first draft, produce ordinary Markdown. Preserve useful narrative, visual, action, camera, dialogue, sound, duration, reference, source-trace, and uncertainty content without requiring fixed columns, complete production fields, or stable scene/shot identities.
 3. For explicit professional structured creation or revision, produce stable scene and shot identities, visual intent, narrative context, camera and duration guidance, source trace, and a revision identity, then validate the canonical structure before mutation.
-4. Use stable resource references for source and reference media. Cache paths, render URIs, provider task handles, and session handles are never Storyboard truth.
+4. Use stable source references for source and reference media. Temporary processing details are never Storyboard truth.
 5. Invalid, unsupported, or weakly evidenced source claims must remain explicit uncertainties or visible diagnostics. Do not invent production facts merely to fill a table.
 6. Source Markdown never silently creates or rewrites structured production facts. Later edits remain review input until an explicit validated structured apply is requested.
 

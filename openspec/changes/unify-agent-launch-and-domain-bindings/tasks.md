@@ -38,7 +38,7 @@
 
 ## 5. Unified Input Catalog And Composer
 
-- [x] 5.1 Compose builtin, personal, project, plugin and command-artifact entries into the canonical Agent input catalog with existing Skill precedence and exact command identity.
+- [x] 5.1 Compose builtin, personal, project, plugin Skill entries and independent CommandHost entries into the canonical Agent input catalog with exact execution identity.
 - [x] 5.2 Project launch-safe and Session-only availability for each entry, including a `session-required` result for `/compact` and other Conversation operations in Draft.
 - [x] 5.3 Replace Entry `presentation !== 'entry'` command-menu gating with projection-driven `/`, `$` and `@` discovery in the existing Agent composer.
 - [x] 5.4 Route selected and directly typed first-input commands/Skills through the typed Draft submit intent and preserve exact Skill/command receipts.

@@ -85,7 +85,7 @@ describe('Agent controller composition', () => {
         references: 'none',
       }),
       personalSkillOwnerId: 'assistant-space-1',
-      readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+      readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
     });
     const posted: AgentHostToWebviewMessage[] = [];
 
@@ -1661,7 +1661,9 @@ function createWorkspace(
       records: [],
       diagnostics: [],
       warnings: [],
+      commands: { records: [], diagnostics: [] },
     })),
+    invokeCommand: vi.fn(),
     readCapabilityPromptFragments: () => [],
     listConversations: () => records,
     readConversationEvidence,

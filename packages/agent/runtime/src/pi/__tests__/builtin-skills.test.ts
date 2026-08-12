@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { PiSkillHost } from '../skill-host';
+import { buildSkillActivationId, PiSkillHost, type PiSkillHostSnapshot } from '../skill-host';
 
 const BUILTIN_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -12,7 +12,7 @@ const BUILTIN_ROOT = resolve(
 );
 const EXPECTED_BUILTINS = [
   'audio-mixing',
-  'character-creation',
+  'character-creator',
   'color-grading',
   'image',
   'media-production',
@@ -43,18 +43,43 @@ describe('Pi builtin Skill packages', () => {
   it('keeps creation and storyboard methodology in Skill content without runtime authority', async () => {
     const snapshot = await discoverBuiltins(env);
 
-    expect(snapshot.invoke('skill-creator')).toContain('A root `manifest.json` is not part');
-    const characterCreation = snapshot.invoke('character-creation');
+    expect(invokeSelected(snapshot, 'skill-creator')).toContain(
+      'A root `manifest.json` is not part',
+    );
+    const characterCreation = invokeSelected(snapshot, 'character-creator');
     expect(characterCreation).toContain('source-backed facts from creative inferences');
-    expect(characterCreation).toContain('exact selected draft');
-    expect(characterCreation).not.toContain('CharacterProjectCreate');
-    expect(characterCreation).not.toContain('UpdateCharacterDraft');
-    expect(characterCreation).not.toContain('tool schema');
-    const storyboard = snapshot.invoke('storyboard');
+    expect(characterCreation).toContain('available authoring capability');
+    const storyboard = invokeSelected(snapshot, 'storyboard');
     expect(storyboard).toContain('actual pixel-level visual evidence, OCR, or panel boundaries');
     expect(storyboard).not.toContain('ReadDocument');
     expect(storyboard).not.toContain('ReadImage');
     expect(storyboard).not.toContain('QuerySemanticCoverage');
+  });
+
+  it('keeps the full builtin catalog free of OpenNeko runtime protocols', async () => {
+    const snapshot = await discoverBuiltins(env);
+    const forbidden = [
+      'CharacterProjectCreate',
+      'UpdateCharacterDraft',
+      'CreateTask',
+      'GetTask',
+      'ReadDocument',
+      'ReadImage',
+      'QuerySemanticCoverage',
+      'openneko.',
+      'agents/neko.yaml',
+      '.neko/skills',
+      'Webview',
+      'cache paths',
+      'provider task handles',
+      'polling state',
+    ];
+
+    for (const skill of snapshot.skills) {
+      for (const token of forbidden) {
+        expect(skill.content, `${skill.name} must not contain ${token}`).not.toContain(token);
+      }
+    }
   });
 });
 
@@ -62,5 +87,11 @@ function discoverBuiltins(env: NodeExecutionEnv) {
   return new PiSkillHost(env, {
     isTrusted: () => true,
     isEnabled: () => true,
-  }).discover([{ path: BUILTIN_ROOT, source: { kind: 'builtin' }, entryPointKind: 'skill' }]);
+  }).discover([{ path: BUILTIN_ROOT, source: { kind: 'builtin' } }]);
+}
+
+function invokeSelected(snapshot: PiSkillHostSnapshot, name: string): string {
+  const record = snapshot.records.find((candidate) => candidate.name === name);
+  if (!record) throw new Error(`Fixture Skill '${name}' is unavailable.`);
+  return snapshot.invokeExact(name, buildSkillActivationId(record));
 }

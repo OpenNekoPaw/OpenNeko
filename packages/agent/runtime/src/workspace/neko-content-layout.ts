@@ -6,7 +6,6 @@ export const NEKO_AGENTS_FILE_NAME = 'AGENTS.md' as const;
 
 export const NEKO_CONTENT_SUBDIRS = {
   prompts: 'prompts',
-  skills: 'skills',
   commands: 'commands',
 } as const;
 

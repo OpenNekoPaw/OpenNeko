@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentExtensionCatalogItem } from '@neko/agent-contracts';
 import type {
@@ -76,7 +76,11 @@ describe('AgentExtensionManagementRoot', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'home.capabilities.search' }), {
       target: { value: '已授权域名' },
     });
-    fireEvent.click(await screen.findByRole('option', { name: /Browser Use/u }));
+    fireEvent.click(
+      within(await screen.findByRole('listitem', { name: 'Browser Use' })).getByRole('button', {
+        name: /Browser Use/u,
+      }),
+    );
     expect(screen.getByTestId('configuration')).toBeTruthy();
     expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(true);
     view.unmount();
@@ -91,6 +95,7 @@ describe('AgentExtensionManagementRoot', () => {
       canDisable: false,
       agentStatus: 'disabled' as const,
     };
+    const enabled = extension('computer-use@openneko', 'Computer Use', true);
     const personal = {
       ...extension('personal@openneko', 'Personal', true),
       enabled: false,
@@ -100,9 +105,10 @@ describe('AgentExtensionManagementRoot', () => {
       deliverySource: 'personal' as const,
       agentStatus: 'disabled' as const,
     };
-    const runtime = createRuntime({ extensions: [disabled, personal] });
-    render(
-      <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
+    const runtime = createRuntime({ extensions: [disabled, enabled, personal] });
+    const confirmAction = vi.fn(() => true);
+    const view = render(
+      <AgentExtensionManagementRoot confirmAction={confirmAction} interactive runtime={runtime} />,
     );
 
     await screen.findByText('home.capabilities.noSkills');
@@ -110,11 +116,24 @@ describe('AgentExtensionManagementRoot', () => {
     await waitFor(() => expect(runtime.rescanSources).toHaveBeenCalledOnce());
 
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.extensions' }));
-    fireEvent.click(await screen.findByRole('option', { name: /Browser Use/u }));
-    fireEvent.click(screen.getByRole('switch', { name: 'home.capabilities.enablement' }));
+    const browserCard = await screen.findByRole('listitem', { name: 'Browser Use' });
+    fireEvent.click(within(browserCard).getByRole('switch'));
     await waitFor(() => expect(runtime.enablePlugin).toHaveBeenCalledWith('browser-use@openneko'));
+    expect(confirmAction).toHaveBeenCalledOnce();
+    expect(view.container.querySelector('.agent-extension-configuration-root')).toBeNull();
 
-    fireEvent.click(await screen.findByRole('option', { name: /Personal/u }));
+    const computerCard = screen.getByRole('listitem', { name: 'Computer Use' });
+    fireEvent.click(within(computerCard).getByRole('switch'));
+    await waitFor(() =>
+      expect(runtime.disablePlugin).toHaveBeenCalledWith('computer-use@openneko'),
+    );
+    expect(confirmAction).toHaveBeenCalledOnce();
+
+    const personalCard = screen.getByRole('listitem', { name: 'Personal' });
+    fireEvent.click(within(personalCard).getByRole('button', { name: /Personal/u }));
+    const configuration = view.container.querySelector('.agent-extension-configuration-root');
+    expect(configuration).not.toBeNull();
+    expect(within(configuration as HTMLElement).queryByRole('switch')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.remove' }));
     await waitFor(() => expect(runtime.removePlugin).toHaveBeenCalledWith('personal@openneko'));
   });
@@ -125,10 +144,10 @@ describe('AgentExtensionManagementRoot', () => {
       <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
     );
 
-    await screen.findByRole('option', { name: /Audio/u });
+    const audioCard = await screen.findByRole('listitem', { name: 'Audio' });
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.addSkill' }));
     await waitFor(() => expect(runtime.installPersonalSkill).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole('option', { name: /Audio/u }));
+    fireEvent.click(within(audioCard).getByRole('button', { name: /Audio/u }));
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.remove' }));
     await waitFor(() => expect(runtime.removePersonalSkill).toHaveBeenCalledWith('skill:Audio'));
   });

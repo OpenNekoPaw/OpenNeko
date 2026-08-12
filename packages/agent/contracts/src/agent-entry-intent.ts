@@ -108,7 +108,7 @@ export interface AgentEntryTargetReceipt {
   readonly targetReceiptId: string;
   readonly draftId: string;
   readonly connectionId: string;
-  readonly mode: Exclude<AgentEntryMode, 'assistant'>;
+  readonly mode: AgentEntryMode;
   readonly binding: AgentEntryTargetBinding;
 }
 
@@ -127,10 +127,7 @@ export function parseAgentEntryIntentProjection(value: unknown): AgentEntryInten
   const mode = parseAgentEntryMode(record['mode']);
   const targetReceipt =
     record['targetReceipt'] === null ? null : parseAgentEntryTargetReceipt(record['targetReceipt']);
-  if (mode === 'assistant' && targetReceipt !== null) {
-    throw new Error('Assistant Entry intent cannot carry a domain target receipt.');
-  }
-  if (mode !== 'assistant' && targetReceipt !== null && targetReceipt.mode !== mode) {
+  if (targetReceipt !== null && targetReceipt.mode !== mode) {
     throw new Error('Agent Entry target receipt does not match the selected mode.');
   }
   return { mode, targetReceipt };
@@ -144,11 +141,8 @@ export function parseAgentEntryTargetReceipt(value: unknown): AgentEntryTargetRe
     'Agent Entry target receipt',
   );
   const mode = parseAgentEntryMode(record['mode']);
-  if (mode === 'assistant') {
-    throw new Error('Assistant Entry intent does not use a target receipt.');
-  }
   const binding = parseAgentEntryTargetBinding(record['binding']);
-  if (binding.kind !== mode) {
+  if (!entryModeAcceptsTargetBinding(mode, binding)) {
     throw new Error('Agent Entry target receipt binding does not match its mode.');
   }
   return {
@@ -226,6 +220,13 @@ export function parseAgentEntryTargetBinding(value: unknown): AgentEntryTargetBi
     default:
       throw new Error(`Unknown Agent Entry target binding '${String(record['kind'])}'.`);
   }
+}
+
+export function entryModeAcceptsTargetBinding(
+  mode: AgentEntryMode,
+  binding: AgentEntryTargetBinding,
+): boolean {
+  return mode === 'assistant' ? binding.kind === 'authoring' : binding.kind === mode;
 }
 
 export function parseAgentCharacterDialogueTargetOptions(

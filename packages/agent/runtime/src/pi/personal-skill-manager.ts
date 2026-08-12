@@ -15,9 +15,17 @@ export interface PersonalSkillManager {
   >;
   remove(
     managementId: string,
-    records: readonly SkillHostRecord[],
+    records: readonly PersonalSkillManagementRecord[],
   ): Promise<{ readonly name: string }>;
-  resolveManagementId(record: SkillHostRecord): Promise<string | undefined>;
+  projectManagement(
+    records: readonly SkillHostRecord[],
+  ): Promise<readonly PersonalSkillManagementRecord[]>;
+}
+
+export interface PersonalSkillManagementRecord {
+  readonly managementId: string;
+  readonly name: string;
+  readonly fingerprint: string;
 }
 
 export function createPersonalSkillManager(options: {
@@ -75,7 +83,7 @@ class DefaultPersonalSkillManager implements PersonalSkillManager {
           isTrusted: () => true,
           isEnabled: () => true,
         },
-      }).discover([{ path: stagingRoot, source: { kind: 'personal' }, entryPointKind: 'skill' }]);
+      }).discover([{ path: stagingRoot, source: { kind: 'personal' } }]);
       if (
         snapshot.records.length !== 1 ||
         snapshot.diagnostics.length > 0 ||
@@ -105,35 +113,50 @@ class DefaultPersonalSkillManager implements PersonalSkillManager {
 
   async remove(
     managementId: string,
-    records: readonly SkillHostRecord[],
+    records: readonly PersonalSkillManagementRecord[],
   ): Promise<{ readonly name: string }> {
     requireManagementId(managementId);
-    const candidates = records.filter(
-      (record) =>
-        record.source.kind === 'personal' &&
-        createPersonalSkillManagementId(record) === managementId,
-    );
+    const candidates = records.filter((record) => record.managementId === managementId);
     if (candidates.length !== 1) {
       throw new Error('Personal Skill management identity is stale or unknown.');
     }
     const record = candidates[0];
     if (!record) throw new Error('Personal Skill management identity is stale or unknown.');
-    const target = await this.resolveManagedDirectory(record);
+    const target = await this.resolveManagedDirectory(record.name);
     if (!target) throw new Error('Personal Skill package is not safely removable.');
+    const current = await createNodePiSkillHost({
+      cwd: this.personalSkillRoot,
+      policy: { isTrusted: () => true, isEnabled: () => true },
+    }).discover([{ path: this.personalSkillRoot, source: { kind: 'personal' } }]);
+    const currentRecord = current.records.find((candidate) => candidate.name === record.name);
+    if (!currentRecord || currentRecord.fingerprint !== record.fingerprint) {
+      throw new Error('Personal Skill management identity is stale or unknown.');
+    }
     await this.options.trashItem(target);
     return { name: record.name };
   }
 
-  async resolveManagementId(record: SkillHostRecord): Promise<string | undefined> {
-    if (record.source.kind !== 'personal') return undefined;
-    return (await this.resolveManagedDirectory(record))
-      ? createPersonalSkillManagementId(record)
-      : undefined;
+  async projectManagement(
+    records: readonly SkillHostRecord[],
+  ): Promise<readonly PersonalSkillManagementRecord[]> {
+    const projected: PersonalSkillManagementRecord[] = [];
+    for (const record of records) {
+      if (record.source.kind !== 'personal') continue;
+      if (!(await this.resolveManagedDirectory(record.name))) continue;
+      projected.push(
+        Object.freeze({
+          managementId: createPersonalSkillManagementId(record),
+          name: record.name,
+          fingerprint: record.fingerprint,
+        }),
+      );
+    }
+    return Object.freeze(projected);
   }
 
-  private async resolveManagedDirectory(record: SkillHostRecord): Promise<string | undefined> {
-    if (!isSafeSkillDirectoryName(record.name)) return undefined;
-    const configured = join(this.personalSkillRoot, record.name);
+  private async resolveManagedDirectory(name: string): Promise<string | undefined> {
+    if (!isSafeSkillDirectoryName(name)) return undefined;
+    const configured = join(this.personalSkillRoot, name);
     try {
       const [canonicalRoot, canonicalTarget, info, rootInfo] = await Promise.all([
         realpath(this.personalSkillRoot),

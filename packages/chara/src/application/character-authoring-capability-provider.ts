@@ -35,7 +35,7 @@ export interface CharacterCreationProposal {
   readonly inferredSuggestions: readonly string[];
 }
 
-export interface CharacterRoleSkillPrimitivePorts {
+export interface CharacterAuthoringCapabilityPorts {
   proposeCreation(input: CharacterCreationProposalInput): CharacterCreationProposal;
   fillDraft(input: {
     readonly binding: AgentAuthoringBinding & {
@@ -73,33 +73,33 @@ export function createCharacterCreationProposal(
   };
 }
 
-export function createCharacterRoleSkillCapabilityProvider(
-  fillDraft: CharacterRoleSkillPrimitivePorts['fillDraft'],
+export function createCharacterAuthoringCapabilityProvider(
+  fillDraft: CharacterAuthoringCapabilityPorts['fillDraft'],
 ): AgentCapabilityProvider {
-  return new CharacterRoleSkillCapabilityProvider({
+  return new CharacterAuthoringCapabilityProvider({
     proposeCreation: createCharacterCreationProposal,
     fillDraft,
   });
 }
 
-class CharacterRoleSkillCapabilityProvider implements AgentCapabilityProvider {
-  readonly id = 'neko-chara-character-creation';
+class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
+  readonly id = 'neko-chara-authoring';
   readonly hostRequirements = [{ host: 'desktop' as const }];
   readonly requirements = { writableProject: true } as const;
 
-  constructor(private readonly ports: CharacterRoleSkillPrimitivePorts) {}
+  constructor(private readonly ports: CharacterAuthoringCapabilityPorts) {}
 
   getPromptFragments(_context: AgentCapabilityContext): PromptFragment[] {
     return [
       {
-        id: 'neko-chara:character-creation',
+        id: 'neko-chara:authoring',
         priority: 72,
         content:
-          'Character creation fills only the exact selected CharacterProject draft. Separate source-backed facts from inferred suggestions, review the complete proposal with the user, and use the Character draft operation only after confirmation. It never publishes a CharacterVersion or creates runtime, Room, Storyline, memory, model, Skill, or Tool configuration facts.',
+          'Character authoring fills only the exact CharacterProject draft authorized for the current Conversation. Separate source-backed facts from inferred suggestions, present the complete proposal together with the pending draft operation, and treat the standard Tool approval as the single mutation confirmation without adding a text-confirmation gate. It never publishes a CharacterVersion or creates runtime, Room, Storyline, memory, model, Skill, or Tool configuration facts.',
         locales: {
           zh: {
             content:
-              '角色创建只填写当前精确选择的 CharacterProject 草案。必须区分素材事实与推断建议，先向用户展示完整提案并确认，再使用角色草案操作；不得发布 CharacterVersion，也不得创建运行时、Room、Storyline、记忆、模型、Skill 或 Tool 配置事实。',
+              '角色创作只填写当前会话已授权的精确 CharacterProject 草案。必须区分素材事实与推断建议，先展示完整提案，再使用标准 Tool 审批执行草案操作；不得发布 CharacterVersion，也不得创建运行时、Room、Storyline、记忆、模型、Skill 或 Tool 配置事实。',
           },
         },
       },

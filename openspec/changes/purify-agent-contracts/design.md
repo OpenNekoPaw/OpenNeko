@@ -53,6 +53,11 @@ the behavior is host-neutral and reusable by runtime and renderer-side presentat
 - protocol messages and side-effect-free constructors whose output is determined directly from their
   fields without domain decisions.
 
+For Agent Skills, this allowlist is narrower still: Contracts owns only the portable authoring request
+and public creation receipt plus the typed executable/management projections consumed across runtime
+boundaries. Pi owns the runtime Skill shape, parser, discovery and invocation. Contracts must not
+reintroduce a parallel `Skill` runtime interface, Host overlay, workflow metadata or command loader.
+
 It may not own:
 
 - `derive*`, `project*`, `recommend*`, `transition*`, `plan*`, or review/presentation builders that apply

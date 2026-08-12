@@ -15,9 +15,9 @@
     },
     {
       "kind": "builtin-skill",
-      "id": "character-creation",
+      "id": "character-creator",
       "disposition": "suite",
-      "suiteIds": ["skill.character-creation"]
+      "suiteIds": ["skill.character-creator"]
     },
     { "kind": "builtin-skill", "id": "image", "disposition": "suite", "suiteIds": ["skill.image"] },
     { "kind": "builtin-skill", "id": "video", "disposition": "suite", "suiteIds": ["skill.video"] },

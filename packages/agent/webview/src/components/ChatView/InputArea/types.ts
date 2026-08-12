@@ -7,7 +7,7 @@ import type { AgentFileReference } from '@neko/agent-contracts';
 export type { AttachmentType, MessageAttachment } from '@neko/agent-contracts';
 
 // Command source type
-export type CommandSource = 'builtin' | 'command-artifact' | 'plugin';
+export type CommandSource = 'builtin' | 'command' | 'plugin';
 
 // Slash command definition
 export interface SlashCommand {
@@ -19,7 +19,7 @@ export interface SlashCommand {
   icon: string;
   /** Command source: builtin, command artifact, or plugin */
   source?: CommandSource;
-  /** Backing Skill ID if source is 'command-artifact' */
+  /** Backing command document id if source is 'command' */
   skillId?: string;
   /** Plugin ID if source is 'plugin'. */
   pluginId?: string;
@@ -157,7 +157,6 @@ export interface MentionItem {
   characterLaunchSelection?: {
     readonly characterProjectId: string;
     readonly characterVersionId: string;
-    readonly characterStorylineVersionId?: string;
   };
   /** Host-provided normalized or expanded search text */
   searchText?: string;
@@ -170,7 +169,6 @@ export interface MentionItem {
 export interface SelectedCharacterLaunch {
   readonly characterProjectId: string;
   readonly characterVersionId: string;
-  readonly characterStorylineVersionId?: string;
   readonly label: string;
 }
 

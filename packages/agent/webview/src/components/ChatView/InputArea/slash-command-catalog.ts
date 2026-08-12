@@ -8,9 +8,15 @@ import {
   type ParsedAgentInputTrigger,
 } from '@neko/agent-contracts';
 import type { SkillSummary } from './types';
+import {
+  projectCommandDescription,
+  projectSkillDescription,
+  resolveAgentInputDescription,
+  type AgentInputDescriptionKind,
+} from '../../../presenters/agent-input-description-presenter';
 
-export type SlashCommandSource = 'builtin' | 'command-artifact' | 'plugin';
-export type SlashCommandDescriptionKind = 'i18n' | 'literal';
+export type SlashCommandSource = 'builtin' | 'command' | 'plugin';
+export type SlashCommandDescriptionKind = AgentInputDescriptionKind;
 export type SkillInvocationSource = SkillSummary['source'];
 
 export interface SlashCommandCatalogItem {
@@ -99,7 +105,7 @@ export type SlashCommandTranslateFn = (key: string) => string;
 
 const SLASH_COMMAND_SOURCE_LABELS: Record<SlashCommandSource, string | null> = {
   builtin: null,
-  'command-artifact': 'command',
+  command: 'command',
   plugin: 'plugin',
 };
 
@@ -118,31 +124,41 @@ export function projectAgentComposerInputCatalog(input: {
   return {
     commands: executable.flatMap((entry): readonly SlashCommandCatalogItem[] => {
       if (entry.trigger !== 'command') return [];
+      const description = projectCommandDescription({
+        name: entry.name,
+        canonicalDescription: entry.description,
+        isOpenNekoBuiltin: entry.source.kind === 'builtin',
+      });
       return [
         {
           id: entry.id,
           commandId: entry.executable.commandId,
           name: `/${entry.name}`,
-          descriptionKey: entry.description,
+          descriptionKey: description.descriptionKey,
           icon: entry.icon ?? '⌨️',
           source: projectCommandSource(entry),
           ...(entry.source.kind === 'plugin' ? { pluginId: entry.source.pluginId } : {}),
-          descriptionKind: 'literal',
+          descriptionKind: description.descriptionKind,
         },
       ];
     }),
     skills: executable.flatMap((entry): readonly SkillInvocationCatalogItem[] => {
       if (entry.trigger !== 'skill') return [];
+      const description = projectSkillDescription({
+        name: entry.name,
+        canonicalDescription: entry.description,
+        isOpenNekoBuiltin: entry.source.kind === 'builtin',
+      });
       return [
         {
           id: entry.id,
           skillName: entry.executable.skillName,
           name: `$${entry.name}`,
-          descriptionKey: entry.description,
+          descriptionKey: description.descriptionKey,
           icon: entry.icon ?? '🔧',
           source: projectSkillSource(entry),
           enabled: true,
-          descriptionKind: 'literal',
+          descriptionKind: description.descriptionKind,
         },
       ];
     }),
@@ -153,9 +169,7 @@ export function resolveSlashCommandDescription(
   command: Pick<SlashCommandCatalogItem, 'descriptionKey' | 'descriptionKind'>,
   translate: SlashCommandTranslateFn,
 ): string {
-  return command.descriptionKind === 'i18n'
-    ? translate(command.descriptionKey)
-    : command.descriptionKey;
+  return resolveAgentInputDescription(command, translate);
 }
 
 export function resolveSlashCommandSourceLabel(
@@ -242,7 +256,7 @@ function projectCommandSource(
   if (entry.source.kind === 'builtin' || entry.source.kind === 'plugin') {
     return entry.source.kind;
   }
-  return 'command-artifact';
+  return 'command';
 }
 
 function projectSkillSource(
@@ -254,7 +268,6 @@ function projectSkillSource(
     case 'personal':
       return 'user';
     case 'project':
-    case 'command-artifact':
       return 'project';
     case 'plugin':
       return 'community';

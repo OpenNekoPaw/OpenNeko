@@ -1370,6 +1370,92 @@ describe('InputArea composer controls', () => {
     expect(textarea.value).toBe('$quality-review ');
   });
 
+  it('submits direct skill arguments instead of replacing them with the selected menu item', () => {
+    const onSend = vi.fn();
+    render(
+      <Harness
+        inputCatalog={[
+          {
+            id: 'skill:project:character-creator',
+            name: 'character-creator',
+            description: 'Create a character draft',
+            trigger: 'skill',
+            prefix: '$',
+            phaseRequirement: 'any',
+            bindingRequirement: 'workspace',
+            source: { kind: 'project', workspaceId: 'workspace-1', sourceId: 'skill-source-2' },
+            availability: { status: 'available' },
+            executable: {
+              kind: 'skill',
+              skillName: 'character-creator',
+              activationId: 'skill:project:skill:skill-source-2',
+            },
+          },
+        ]}
+        inputCatalogPhase="session"
+        inputCatalogBindingKind="workspace"
+      >
+        <InputAreaStatefulHarness initialInputValue="" onSend={onSend} />
+      </Harness>,
+    );
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: { value: '$character-creator 保留这段完整角色提示词' },
+    });
+    expect(screen.queryByRole('menuitem', { name: /\$character-creator/ })).toBeNull();
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageText: '$character-creator 保留这段完整角色提示词',
+        displayMessageText: '$character-creator 保留这段完整角色提示词',
+      }),
+    );
+  });
+
+  it('submits direct slash-command arguments without reopening completion', () => {
+    const onSend = vi.fn();
+    render(
+      <Harness
+        inputCatalog={[
+          {
+            id: 'command:builtin:review',
+            name: 'review',
+            description: 'Review files',
+            trigger: 'command',
+            prefix: '/',
+            phaseRequirement: 'any',
+            bindingRequirement: 'any',
+            source: { kind: 'builtin', sourceId: 'review' },
+            availability: { status: 'available' },
+            executable: {
+              kind: 'command',
+              commandId: 'review',
+              handlerId: 'builtin:review',
+            },
+          },
+        ]}
+        inputCatalogPhase="session"
+        inputCatalogBindingKind="workspace"
+      >
+        <InputAreaStatefulHarness initialInputValue="" onSend={onSend} />
+      </Harness>,
+    );
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '/review changed files' } });
+    expect(screen.queryByRole('menuitem', { name: /\/review/ })).toBeNull();
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ messageText: '/review changed files' }),
+    );
+  });
+
   it('suppresses slash and skill command affordances in roleplay while keeping mentions', () => {
     render(
       <Harness
@@ -2368,6 +2454,27 @@ describe('InputArea composer controls', () => {
       '请分析 @cases/1080',
     );
     expect(document.querySelector('[data-agent-reference-token="true"]')).toBeNull();
+  });
+
+  it('preserves the controlled draft when a pre-submit action does not consume it', () => {
+    const onSend = vi.fn(() => false as const);
+    render(
+      <Harness>
+        <InputAreaStatefulHarness
+          initialInputValue="$skill-creator keep this complete request"
+          onSend={onSend}
+          presentation="entry"
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(screen.getByRole('textbox')).toHaveProperty(
+      'value',
+      '$skill-creator keep this complete request',
+    );
   });
 });
 

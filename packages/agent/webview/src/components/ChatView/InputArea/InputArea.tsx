@@ -96,7 +96,7 @@ interface InputAreaProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-  }) => void;
+  }) => void | false;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
@@ -525,7 +525,7 @@ export function InputArea({
     }
 
     // Check for slash command
-    if (allowCommandMenus && value.startsWith('/')) {
+    if (allowCommandMenus && /^\/[^\s]*$/u.test(value)) {
       const filter = value.slice(1).split(' ')[0] ?? '';
       setSlashFilter(filter);
       setShowSlashMenu(true);
@@ -535,7 +535,7 @@ export function InputArea({
       setShowSlashMenu(false);
     }
 
-    if (allowCommandMenus && value.startsWith('$')) {
+    if (allowCommandMenus && /^\$[^\s]*$/u.test(value)) {
       const filter = value.slice(1).split(' ')[0] ?? '';
       setSkillFilter(filter);
       setShowSkillMenu(true);
@@ -800,7 +800,7 @@ export function InputArea({
     }
     const files = attachedFiles.length > 0 ? attachedFiles : undefined;
     const contextPayloads = contextChips.length > 0 ? contextChips : undefined;
-    onSend({
+    const consumed = onSend({
       messageText: inputValue,
       displayMessageText: inputValue,
       sessionMode,
@@ -809,6 +809,7 @@ export function InputArea({
       fileReferences: hasSelectedFileReferences ? selectedFileReferences : undefined,
       ...(sessionMode === 'agent' ? buildAgentModelSendConfig(selectedModel, availableModels) : {}),
     });
+    if (consumed === false) return;
     contextChips.forEach((c) => onRemoveContextChip(c.id));
     onInputChange('');
     updateAttachedFiles([]);
@@ -927,9 +928,6 @@ export function InputArea({
     onAddCharacterLaunch({
       characterProjectId: selection.characterProjectId,
       characterVersionId: selection.characterVersionId,
-      ...(selection.characterStorylineVersionId === undefined
-        ? {}
-        : { characterStorylineVersionId: selection.characterStorylineVersionId }),
       label: item.label,
     });
     textareaRef.current?.focus();

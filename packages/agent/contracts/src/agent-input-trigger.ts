@@ -17,12 +17,7 @@ export type AgentInputSourceReceipt =
       readonly workspaceId: string;
       readonly sourceId: string;
     }
-  | { readonly kind: 'plugin'; readonly pluginId: string; readonly sourceId: string }
-  | {
-      readonly kind: 'command-artifact';
-      readonly workspaceId: string;
-      readonly artifactId: string;
-    };
+  | { readonly kind: 'plugin'; readonly pluginId: string; readonly sourceId: string };
 
 interface AgentInputCatalogEntryBase {
   readonly id: string;
@@ -278,13 +273,6 @@ function parseSource(value: unknown): AgentInputSourceReceipt {
         kind: 'plugin',
         pluginId: requireIdentity(record['pluginId'], 'plugin'),
         sourceId: requireIdentity(record['sourceId'], 'source'),
-      };
-    case 'command-artifact':
-      requireExactKeys(record, ['kind', 'workspaceId', 'artifactId'], 'command artifact source');
-      return {
-        kind: 'command-artifact',
-        workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-        artifactId: requireIdentity(record['artifactId'], 'command artifact'),
       };
     default:
       throw new Error(`Unknown Agent input source '${String(record['kind'])}'.`);

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Character Creation"
-  short_description: "Create reviewable characters from prompts and evidence"
-  default_prompt: "Use $character-creation to create a reviewable character draft from my prompt and authorized references."

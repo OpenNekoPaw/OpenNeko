@@ -6,6 +6,10 @@ import type { ILogger } from '@neko/shared/logger';
 import sharp from 'sharp';
 
 import { classifyAgentContentPath } from '../input/content-path-classification';
+import {
+  resolvePersonalAgentSkillsDir,
+  resolveProjectAgentSkillsDir,
+} from '../workspace/agent-skill-layout';
 
 import {
   NodePiConversationAuthority,
@@ -31,6 +35,12 @@ import {
   type SkillSourceRoot,
   type SkillSourceKind,
 } from '@neko/agent-runtime/pi';
+import {
+  createNodeCommandHost,
+  type CommandHostRecord,
+  type CommandHostSnapshot,
+  type CommandSourceRoot,
+} from '@neko/agent-runtime/command';
 import {
   createConversationProjectionStore,
   type ConversationProjectionListener,
@@ -291,6 +301,7 @@ export interface AgentWorkspaceRuntime {
     contextWindow: number,
   ): Promise<Awaited<ReturnType<PiConversationRuntime['compactContext']>>>;
   readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog>;
+  invokeCommand(name: string, activationId: string, args?: string): Promise<string>;
   readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[];
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']>;
   readConversationEvidence(conversationId: string): AgentConversationEvidence;
@@ -314,6 +325,14 @@ export interface AgentWorkspaceRuntime {
   dispose(): Promise<void>;
 }
 
+export interface AgentCommandCatalog {
+  readonly records: readonly CommandHostRecord[];
+  readonly diagnostics: readonly {
+    readonly code: CommandHostSnapshot['diagnostics'][number]['code'];
+    readonly source: CommandHostRecord['source']['kind'];
+  }[];
+}
+
 export interface AgentSkillCatalog {
   readonly records: readonly SkillHostRecord[];
   readonly diagnostics: readonly {
@@ -326,6 +345,7 @@ export interface AgentSkillCatalog {
     readonly selectedSource: SkillSourceKind;
     readonly shadowedSource: SkillSourceKind;
   }[];
+  readonly commands: AgentCommandCatalog;
 }
 
 export interface AgentAppHost {
@@ -466,14 +486,19 @@ class DefaultAgentAppHost implements AgentAppHost {
         ? {}
         : { builtinSkillRoot: this.options.builtinSkillRoot }),
     });
-    const snapshot = await createNodePiSkillHost({
-      cwd: this.options.userHome,
-      policy: {
-        isTrusted: () => true,
-        isEnabled: () => true,
-      },
-    }).discover([...roots, ...(this.pluginRuntime?.skillRoots ?? [])]);
-    return projectAgentSkillCatalog(snapshot);
+    const [snapshot, commandSnapshot] = await Promise.all([
+      createNodePiSkillHost({
+        cwd: this.options.userHome,
+        policy: {
+          isTrusted: () => true,
+          isEnabled: () => true,
+        },
+      }).discover([...roots, ...(this.pluginRuntime?.skillRoots ?? [])]),
+      createNodeCommandHost(this.options.userHome).discover(
+        await existingGlobalCommandRoots({ userHome: this.options.userHome }),
+      ),
+    ]);
+    return projectAgentSkillCatalog(snapshot, commandSnapshot);
   }
 
   hasActiveTurns(): boolean {
@@ -1613,7 +1638,16 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   }
 
   async readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog> {
-    return projectAgentSkillCatalog(await this.discoverSkills(workspaceTrusted));
+    const [skills, commands] = await Promise.all([
+      this.discoverSkills(workspaceTrusted),
+      this.discoverCommands(),
+    ]);
+    return projectAgentSkillCatalog(skills, commands);
+  }
+
+  async invokeCommand(name: string, activationId: string, args?: string): Promise<string> {
+    this.requireActive();
+    return (await this.discoverCommands()).invokeExact(name, activationId, args);
   }
 
   readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[] {
@@ -1975,6 +2009,14 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }).discover(forceEmpty ? [] : [...roots, ...pluginSkillRoots]);
   }
 
+  private async discoverCommands(): Promise<CommandHostSnapshot> {
+    const roots = await existingCommandRoots({
+      workspacePath: this.options.workspace.workspacePath,
+      userHome: this.options.userHome,
+    });
+    return createNodeCommandHost(this.options.workspace.workspacePath).discover(roots);
+  }
+
   private reconcileRuntimeResidency(): Promise<void> {
     const reconcile = async (): Promise<void> => {
       if (this.disposed) return;
@@ -2173,7 +2215,7 @@ function bindAgentAuthoringMutationAuthority(
     if (expectedTargetKind === undefined) return [tool];
     if (
       authority === undefined ||
-      receipt?.mode !== 'authoring' ||
+      receipt === null ||
       receipt.binding.kind !== 'authoring' ||
       receipt.binding.target.kind !== expectedTargetKind
     ) {
@@ -2980,26 +3022,16 @@ async function existingSkillRoots(input: {
   readonly userHome: string;
   readonly builtinSkillRoot?: string;
 }): Promise<readonly SkillSourceRoot[]> {
+  const projectRoot = resolveProjectAgentSkillsDir(input.workspacePath);
+  if (!projectRoot) throw new Error('Workspace Skill root requires an exact Workspace path.');
   const candidates: readonly SkillSourceRoot[] = [
     {
-      path: join(input.workspacePath, '.agents', 'skills'),
+      path: projectRoot,
       source: { kind: 'project' },
-      entryPointKind: 'skill',
     },
     {
-      path: join(input.workspacePath, 'neko', 'commands'),
-      source: { kind: 'project' },
-      entryPointKind: 'command-artifact',
-    },
-    {
-      path: join(input.userHome, '.agents', 'skills'),
+      path: resolvePersonalAgentSkillsDir(input.userHome),
       source: { kind: 'personal' },
-      entryPointKind: 'skill',
-    },
-    {
-      path: join(input.userHome, '.neko', 'commands'),
-      source: { kind: 'personal' },
-      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -3007,7 +3039,6 @@ async function existingSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
-            entryPointKind: 'skill' as const,
           },
         ]),
   ];
@@ -3020,14 +3051,8 @@ async function existingGlobalSkillRoots(input: {
 }): Promise<readonly SkillSourceRoot[]> {
   const candidates: readonly SkillSourceRoot[] = [
     {
-      path: join(input.userHome, '.agents', 'skills'),
+      path: resolvePersonalAgentSkillsDir(input.userHome),
       source: { kind: 'personal' },
-      entryPointKind: 'skill',
-    },
-    {
-      path: join(input.userHome, '.neko', 'commands'),
-      source: { kind: 'personal' },
-      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -3035,7 +3060,6 @@ async function existingGlobalSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
-            entryPointKind: 'skill' as const,
           },
         ]),
   ];
@@ -3060,7 +3084,43 @@ async function existingSkillSourceRoots(
   return Object.freeze(roots);
 }
 
-function projectAgentSkillCatalog(snapshot: PiSkillHostSnapshot): AgentSkillCatalog {
+async function existingCommandRoots(input: {
+  readonly workspacePath: string;
+  readonly userHome: string;
+}): Promise<readonly CommandSourceRoot[]> {
+  return existingCommandSourceRoots([
+    { path: join(input.workspacePath, 'neko', 'commands'), source: { kind: 'project' } },
+    { path: join(input.userHome, '.neko', 'commands'), source: { kind: 'personal' } },
+  ]);
+}
+
+async function existingGlobalCommandRoots(input: {
+  readonly userHome: string;
+}): Promise<readonly CommandSourceRoot[]> {
+  return existingCommandSourceRoots([
+    { path: join(input.userHome, '.neko', 'commands'), source: { kind: 'personal' } },
+  ]);
+}
+
+async function existingCommandSourceRoots(
+  candidates: readonly CommandSourceRoot[],
+): Promise<readonly CommandSourceRoot[]> {
+  const roots: CommandSourceRoot[] = [];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate.path);
+      roots.push(candidate);
+    } catch (error) {
+      if (!isMissingPath(error)) throw error;
+    }
+  }
+  return Object.freeze(roots);
+}
+
+function projectAgentSkillCatalog(
+  snapshot: PiSkillHostSnapshot,
+  commands: CommandHostSnapshot,
+): AgentSkillCatalog {
   return Object.freeze({
     records: snapshot.records,
     diagnostics: Object.freeze(
@@ -3081,6 +3141,14 @@ function projectAgentSkillCatalog(snapshot: PiSkillHostSnapshot): AgentSkillCata
         }),
       ),
     ),
+    commands: Object.freeze({
+      records: commands.records,
+      diagnostics: Object.freeze(
+        commands.diagnostics.map((diagnostic) =>
+          Object.freeze({ code: diagnostic.code, source: diagnostic.source.kind }),
+        ),
+      ),
+    }),
   });
 }
 

@@ -1528,18 +1528,21 @@ code {
   overflow-y: auto;
 }
 
-.agent-extension-management-root .management-surface-row__select {
+.agent-extension-management-root .agent-extension-catalog-row {
   min-height: 72px;
   padding: 10px;
 }
 
-.agent-extension-management-root .management-surface-row__select[data-selected='true'] {
+.agent-extension-management-root .agent-extension-catalog-row[data-selected='true'] {
   border-color: color-mix(in srgb, var(--neko-accent) 30%, var(--neko-border));
   background: var(--neko-hover, #f4f6f7);
 }
 
-.agent-extension-management-root .management-surface-list.is-grid .management-surface-row__select {
+.agent-extension-management-root .management-surface-list.is-grid .agent-extension-catalog-row {
   min-height: 126px;
+}
+
+.agent-extension-management-root .management-surface-list.is-grid .management-surface-row__select {
   grid-template-columns: 1fr;
   align-content: start;
 }
@@ -1551,6 +1554,33 @@ code {
 
 .agent-extension-management-root .management-surface-list.is-grid .management-surface-copy {
   width: 100%;
+}
+
+.agent-extension-management-root .agent-extension-catalog-row .management-surface-row-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.agent-extension-management-root
+  .management-surface-list.is-grid
+  .agent-extension-catalog-row
+  .management-surface-row-actions {
+  width: 100%;
+  margin-left: 0;
+}
+
+.agent-extension-management-root .management-surface-row-actions .extension-catalog-enablement {
+  width: auto;
+  height: 28px;
+  padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.agent-extension-management-root
+  .management-surface-row-actions
+  .extension-catalog-enablement:hover:not(:disabled) {
+  background: var(--neko-desktop-control-hover);
 }
 
 .desktop-extension-configuration-composition {
@@ -1630,8 +1660,7 @@ code {
   flex-wrap: wrap;
 }
 
-.extension-configuration-actions > button,
-.extension-configuration-switch {
+.extension-configuration-actions > button {
   display: inline-flex;
   min-height: 32px;
   align-items: center;

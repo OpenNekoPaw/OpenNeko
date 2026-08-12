@@ -11,7 +11,6 @@ import {
 describe('neko-content-layout', () => {
   it('resolves personal content directories under the user neko directory', () => {
     expect(resolvePersonalNekoContentDir('/home/user', 'prompts')).toBe('/home/user/.neko/prompts');
-    expect(resolvePersonalNekoContentDir('/home/user', 'skills')).toBe('/home/user/.neko/skills');
   });
 
   it('resolves project content directories only when a workspace root exists', () => {

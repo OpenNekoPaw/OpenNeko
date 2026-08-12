@@ -1,7 +1,7 @@
 {
   "schema": "neko.agent-eval.scenario",
   "id": "roleplay-request-does-not-author",
-  "suiteId": "skill.character-creation",
+  "suiteId": "skill.character-creator",
   "caseGroup": "boundary",
   "visibility": "public",
   "evidenceContract": {

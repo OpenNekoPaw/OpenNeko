@@ -6,6 +6,7 @@ export * from './agent-domain-binding-service';
 export * from './agent-domain-conversation-service';
 export * from './agent-entry-target-service';
 export * from './agent-authoring-mutation-authority';
+export * from './skill-creation-capability-provider';
 export * from './agent-launch-submit-service';
 export * from './agent-conversation-lifecycle-service';
 export * from './agent-conversation-lifecycle-repository';

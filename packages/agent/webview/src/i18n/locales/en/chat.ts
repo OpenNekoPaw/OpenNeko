@@ -108,7 +108,7 @@ export const chat = {
   'chat.entryExperience.characterDialogue.modeDaily': 'Daily',
   'chat.entryExperience.characterDialogue.modeNarrative': 'Narrative',
   'chat.entryExperience.characterDialogue.modeNarrativeUnavailable':
-    'Narrative requires an external Composition owner, which is not composed yet. Dialogue and Room remain in Daily mode.',
+    'Narrative configuration is not connected to this Character entry yet. The selected mode is never downgraded to Daily.',
   'chat.entryContext.authoringTitle': 'Authoring target',
   'chat.entryContext.authoringDescription':
     'Choose a Workspace and exact authoring object for this draft.',
@@ -127,6 +127,14 @@ export const chat = {
   'chat.entryContext.loadingProject': 'Loading project targets…',
   'chat.entryContext.projectEmpty': 'This Project has no Character or World targets yet.',
   'chat.entryContext.close': 'Close target selector',
+  'chat.entryAuthoring.nameLabel': 'Draft name',
+  'chat.entryAuthoring.namePlaceholder': 'Name this Character draft',
+  'chat.entryAuthoring.nameRequired': 'Enter a draft name before choosing its destination.',
+  'chat.entryAuthoring.creationUnavailable': 'Character draft creation is unavailable here.',
+  'chat.entryAuthoring.destinationLabel': 'Choose where to create the draft',
+  'chat.entryAuthoring.destinationTitle': 'Character draft destination',
+  'chat.entryAuthoring.createDescription': 'Create a new draft here',
+  'chat.entryAuthoring.cancel': 'Cancel',
   'chat.entryExperience.worldExperience.title': 'Enter a world experience',
   'chat.entryExperience.worldExperience.description':
     'World requires a WorldExperienceVersion and a World-owned run launcher.',

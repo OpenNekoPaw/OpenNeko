@@ -369,97 +369,75 @@ export function projectAgentInputCatalog(input: {
       },
     };
   });
-  const commandArtifacts: AgentInputCatalogEntry[] = input.skills.records.flatMap((artifact) => {
-    if (artifact.entryPoint.kind !== 'command-artifact') return [];
-    const entryPoint = artifact.entryPoint;
-    const bindingRequirement = artifact.source.kind === 'project' ? 'workspace' : 'any';
-    const available =
-      artifact.enabled &&
-      artifact.trusted &&
-      (bindingRequirement === 'any' || bindingKind === bindingRequirement);
-    const activationId = buildSkillActivationId(artifact);
-    return [
-      {
-        id: `command-artifact:${artifact.source.kind}:${artifact.entryPoint.artifactId}`,
-        name: artifact.entryPoint.commandId,
-        description: artifact.description,
-        trigger: 'command' as const,
-        prefix: '/' as const,
-        phaseRequirement: 'any' as const,
-        bindingRequirement,
-        source: projectCommandArtifactSource({
-          artifact,
-          entryPoint,
-          binding: input.binding,
-          personalSkillOwnerId: input.personalSkillOwnerId,
-        }),
-        availability: available
-          ? ({ status: 'available' } as const)
-          : {
-              status: 'unavailable' as const,
-              diagnostic: {
-                code: !artifact.enabled
-                  ? 'command-artifact-disabled'
-                  : !artifact.trusted
-                    ? 'command-artifact-untrusted'
-                    : 'binding-required',
-                owner: 'agent-skill-runtime',
-                message: `Command /${artifact.entryPoint.commandId} is unavailable for this ${input.phase}.`,
-              },
+  const commands: AgentInputCatalogEntry[] = input.skills.commands.records.map((command) => {
+    const bindingRequirement = command.source.kind === 'project' ? 'workspace' : 'any';
+    const available = bindingRequirement === 'any' || bindingKind === bindingRequirement;
+    return {
+      id: `command:${command.source.kind}:${command.fingerprint}`,
+      name: command.name,
+      description: command.description,
+      trigger: 'command' as const,
+      prefix: '/' as const,
+      phaseRequirement: 'any' as const,
+      bindingRequirement,
+      source: projectSkillSource({
+        source: command.source,
+        sourceId: command.fingerprint,
+        binding: input.binding,
+        personalSkillOwnerId: input.personalSkillOwnerId,
+      }),
+      availability: available
+        ? ({ status: 'available' } as const)
+        : {
+            status: 'unavailable' as const,
+            diagnostic: {
+              code: 'binding-required',
+              owner: 'agent-skill-runtime',
+              message: `Command /${command.name} is unavailable for this ${input.phase}.`,
             },
-        executable: {
-          kind: 'command' as const,
-          commandId: artifact.entryPoint.commandId,
-          handlerId: `command-artifact:${activationId}`,
-        },
+          },
+      executable: {
+        kind: 'command' as const,
+        commandId: command.name,
+        handlerId: command.activationId,
       },
-    ];
+    };
   });
-  const skills: AgentInputCatalogEntry[] = input.skills.records.flatMap((skill) => {
-    if (skill.entryPoint.kind !== 'skill') return [];
+  const skills: AgentInputCatalogEntry[] = input.skills.records.map((skill) => {
     const bindingRequirement = skill.source.kind === 'project' ? 'workspace' : 'any';
-    const available =
-      skill.enabled &&
-      skill.trusted &&
-      (bindingRequirement === 'any' || bindingKind === bindingRequirement);
-    return [
-      {
-        id: `skill:${skill.source.kind}:${skill.fingerprint}`,
-        name: skill.name,
-        description: skill.description,
-        trigger: 'skill',
-        prefix: '$',
-        phaseRequirement: 'any',
-        bindingRequirement,
-        source: projectSkillSource({
-          source: skill.source,
-          sourceId: skill.fingerprint,
-          binding: input.binding,
-          personalSkillOwnerId: input.personalSkillOwnerId,
-        }),
-        availability: available
-          ? { status: 'available' }
-          : {
-              status: 'unavailable',
-              diagnostic: {
-                code: !skill.enabled
-                  ? 'skill-disabled'
-                  : !skill.trusted
-                    ? 'skill-untrusted'
-                    : 'binding-required',
-                owner: 'agent-skill-runtime',
-                message: `Skill ${skill.name} is unavailable for this ${input.phase}.`,
-              },
+    const available = bindingRequirement === 'any' || bindingKind === bindingRequirement;
+    return {
+      id: `skill:${skill.source.kind}:${skill.fingerprint}`,
+      name: skill.name,
+      description: skill.description,
+      trigger: 'skill',
+      prefix: '$',
+      phaseRequirement: 'any',
+      bindingRequirement,
+      source: projectSkillSource({
+        source: skill.source,
+        sourceId: skill.fingerprint,
+        binding: input.binding,
+        personalSkillOwnerId: input.personalSkillOwnerId,
+      }),
+      availability: available
+        ? { status: 'available' }
+        : {
+            status: 'unavailable',
+            diagnostic: {
+              code: 'binding-required',
+              owner: 'agent-skill-runtime',
+              message: `Skill ${skill.name} is unavailable for this ${input.phase}.`,
             },
-        executable: {
-          kind: 'skill',
-          skillName: skill.name,
-          activationId: buildSkillActivationId(skill),
-        },
+          },
+      executable: {
+        kind: 'skill',
+        skillName: skill.name,
+        activationId: buildSkillActivationId(skill),
       },
-    ];
+    };
   });
-  return [...builtinCommands, ...commandArtifacts, ...skills];
+  return [...builtinCommands, ...commands, ...skills];
 }
 
 const workspaceCommandNames = new Set(['as', 'exit-as', 'init']);
@@ -951,6 +929,7 @@ function initialEntryIntent(binding: AgentDomainBinding): AgentEntryIntentProjec
 }
 
 function entryIntentDomainBinding(intent: AgentEntryIntentProjection): AgentDomainBinding {
+  if (intent.mode === 'assistant') return { kind: 'unbound' };
   const binding = intent.targetReceipt?.binding;
   if (binding?.kind === 'authoring') {
     return {
@@ -1239,33 +1218,6 @@ function projectSkillSource(input: {
         sourceId: input.sourceId,
       };
   }
-}
-
-function projectCommandArtifactSource(input: {
-  readonly artifact: AgentSkillCatalog['records'][number];
-  readonly entryPoint: Extract<
-    AgentSkillCatalog['records'][number]['entryPoint'],
-    { kind: 'command-artifact' }
-  >;
-  readonly binding: AgentDomainBinding;
-  readonly personalSkillOwnerId: string;
-}): AgentInputSourceReceipt {
-  if (input.artifact.source.kind === 'project') {
-    if (input.binding.kind !== 'workspace') {
-      throw new Error('Project command artifact source requires an exact Workspace binding.');
-    }
-    return {
-      kind: 'command-artifact',
-      workspaceId: input.binding.workspaceId,
-      artifactId: input.entryPoint.artifactId,
-    };
-  }
-  return projectSkillSource({
-    source: input.artifact.source,
-    sourceId: input.entryPoint.artifactId,
-    binding: input.binding,
-    personalSkillOwnerId: input.personalSkillOwnerId,
-  });
 }
 
 function createWorkspaceMentionEntry(input: {

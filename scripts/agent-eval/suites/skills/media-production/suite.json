@@ -2,7 +2,7 @@
   "schema": "neko.agent-eval.suite",
   "id": "skill.media-production",
   "owner": { "kind": "skill", "id": "media-production" },
-  "target": { "kind": "skill", "identity": { "name": "media-production", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-production", "fingerprint": "sha256:cd7aa733360d635f68721a334e5732daff9898a38fea0af768b8c1fca21945e1" } },
+  "target": { "kind": "skill", "identity": { "name": "media-production", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-production", "fingerprint": "sha256:c58aa7959e49f109b187f8d392738d8d5b308e4948773f585cb0ce14bc6ecfb0" } },
   "runtimeProfiles": [
     { "id": "plan-markdown", "settings": { "executionMode": "plan", "outputFormat": "markdown" }, "configurationHash": "sha256:ee3b5595b40c66f9dfa03dd1c9f84b1088c79a5e159aacc015040592ea304f5e" },
     { "id": "ask-markdown", "settings": { "executionMode": "ask", "outputFormat": "markdown" }, "configurationHash": "sha256:8f78f7165c321ad88c733dbbba2545cb1370d5de3480d33245c1243615e11e3e" }

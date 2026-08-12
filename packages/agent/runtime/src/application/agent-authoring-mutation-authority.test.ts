@@ -24,6 +24,25 @@ describe('Agent authoring mutation authority', () => {
     }
   });
 
+  it('revalidates the same exact Character authority for an Assistant operation receipt', async () => {
+    const fixture = createFixture();
+    const receipt = {
+      ...authoringReceipt({
+        kind: 'character-project' as const,
+        characterProjectId: 'character-1',
+      }),
+      mode: 'assistant' as const,
+    };
+
+    await expect(
+      fixture.authority.authorize({
+        receipt,
+        expectedTargetKind: 'character-project',
+      }),
+    ).resolves.toEqual(receipt.binding);
+    expect(fixture.character.validate).toHaveBeenCalledOnce();
+  });
+
   it('rejects cross-target and runtime receipts without touching any owner', async () => {
     const fixture = createFixture();
     const character = authoringReceipt({

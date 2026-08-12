@@ -2009,6 +2009,86 @@
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
       "path": "scripts/agent-eval/suites/agent-runtime/creative-media-workflow/suite.json",
       "token": "-v4-"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "Node Skill package validation copy of the optional portable compatibility declaration",
+      "id": "266d65a36fcedb4611d1",
+      "isolationRule": "The value remains external portable Skill frontmatter and cannot dispatch an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "Node Skill package serialization of the optional portable compatibility declaration",
+      "id": "1bf8b4bb9a3a2adff5f2",
+      "isolationRule": "The value is written only to external portable SKILL.md frontmatter and cannot dispatch an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill Tool schema declaration of the optional portable compatibility field",
+      "id": "ea11ba9f14eda0589e55",
+      "isolationRule": "The field is external portable Skill metadata only and cannot select an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill input allow-list entry for the optional portable compatibility field",
+      "id": "7530a835496cde70d5ea",
+      "isolationRule": "The field is external portable Skill metadata only and cannot select an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill parser presence check for the optional portable compatibility field",
+      "id": "d7972ddf61641a2f1f7a",
+      "isolationRule": "The field is copied as external portable Skill metadata and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill portable definition copy of the optional compatibility field",
+      "id": "93e378f3105ed25418ad",
+      "isolationRule": "The field is copied as external portable Skill metadata and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill parser read of the optional portable compatibility field",
+      "id": "f541cb4b46cf04e7cb2b",
+      "isolationRule": "The field is read as external portable Skill metadata and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill parser diagnostic label for the optional portable compatibility field",
+      "id": "2db43a6c8fdb40d8cf5b",
+      "isolationRule": "The text labels one external portable Skill field and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
     }
   ]
 }

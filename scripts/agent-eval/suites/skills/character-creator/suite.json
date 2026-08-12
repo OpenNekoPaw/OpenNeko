@@ -1,16 +1,16 @@
 {
   "schema": "neko.agent-eval.suite",
-  "id": "skill.character-creation",
-  "owner": { "kind": "skill", "id": "character-creation" },
+  "id": "skill.character-creator",
+  "owner": { "kind": "skill", "id": "character-creator" },
   "target": {
     "kind": "skill",
     "identity": {
-      "name": "character-creation",
+      "name": "character-creator",
       "source": "builtin",
       "provenance": "builtin",
       "rootId": "builtin-skills",
-      "relativePath": "character-creation",
-      "fingerprint": "sha256:bdac09667a50b0717aa373f8781412f1b5ade9615b0f82f3b93955cc3098fe7b"
+      "relativePath": "character-creator",
+      "fingerprint": "sha256:7b1f3165de0a5de86314f56bcd84dbae3eadb529a4880e2c62859ace93494c8a"
     }
   },
   "runtimeProfiles": [

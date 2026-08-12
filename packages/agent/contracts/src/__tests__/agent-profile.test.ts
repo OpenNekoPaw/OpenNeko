@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  collectSkillProfileReferences,
   toAgentProfileCatalogPackage,
   validateAgentProfileDescriptorSet,
   validateArtifactProfileDescriptor,
@@ -132,32 +131,6 @@ describe('Agent profile shared contracts', () => {
         expect.objectContaining({ code: 'provider-expression-secrets-forbidden' }),
       ]),
     );
-  });
-
-  it('collects supported Skill profile references and mediaWorkflow shorthand', () => {
-    expect(
-      collectSkillProfileReferences({
-        profileReferences: [
-          {
-            profileId: 'provider-expression:studio',
-            kind: 'provider-expression',
-            relationship: 'prefers',
-          },
-        ],
-        mediaWorkflow: { artifactProfiles: ['studio.shot-review'] },
-      }),
-    ).toEqual([
-      {
-        profileId: 'provider-expression:studio',
-        kind: 'provider-expression',
-        relationship: 'prefers',
-      },
-      {
-        profileId: 'studio.shot-review',
-        kind: 'artifact',
-        relationship: 'produces',
-      },
-    ]);
   });
 
   it('projects profile-only packages into a non-runnable profile catalog entry', () => {

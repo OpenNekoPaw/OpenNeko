@@ -163,6 +163,7 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.entryExperience.characterDialogue.loading': 'Loading published Characters',
         'chat.entryExperience.characterDialogue.empty': 'No published Characters',
         'chat.entryPanel.assistantTitle': 'Skills',
+        'skillDescriptions.character-creator': 'Create a localized character draft.',
         'chat.entryPanel.authoringTitle': 'Projects, Characters, and Worlds',
         'chat.entryPanel.characterTitle': 'Characters and rooms',
         'chat.entryContext.authoringTitle': 'Authoring target',
@@ -173,6 +174,14 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.entryContext.chooseCharacters': 'Choose Characters',
         'chat.entryContext.characterSummary': 'Characters selected',
         'chat.entryContext.close': 'Close target selector',
+        'chat.entryAuthoring.nameLabel': 'Draft name',
+        'chat.entryAuthoring.namePlaceholder': 'Name this Character draft',
+        'chat.entryAuthoring.nameRequired': 'Enter a draft name.',
+        'chat.entryAuthoring.creationUnavailable': 'Character draft creation is unavailable.',
+        'chat.entryAuthoring.destinationLabel': 'Choose where to create the draft',
+        'chat.entryAuthoring.destinationTitle': 'Character draft destination',
+        'chat.entryAuthoring.createDescription': 'Create a new draft here',
+        'chat.entryAuthoring.cancel': 'Cancel',
         'chat.entryAction.openDirectory': 'Open directory',
         'chat.entryExperience.worldExperience.title': 'Enter a world experience',
         'chat.entryExperience.worldExperience.description': 'World owner required.',
@@ -1140,11 +1149,18 @@ describe('ConversationController entry state', () => {
 
   it('submits the exact configured Authoring target receipt', async () => {
     vi.clearAllMocks();
-    const launchCatalog = createDraftLaunchCatalog('draft-authoring-submit', {
-      kind: 'workspace',
-      workspaceId: 'workspace-1',
-      workspaceGrantId: 'workspace-grant-1',
-    });
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-authoring-submit', {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      }),
+      inputs: [
+        {
+          ...createDraftSkillCatalogEntry('character-creator', 'any'),
+        },
+      ],
+    };
     const targetReceipt = {
       targetReceiptId: 'target-receipt:authoring-1',
       draftId: launchCatalog.interaction.draftId,
@@ -1176,7 +1192,9 @@ describe('ConversationController entry state', () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Refine this character' } });
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: '$character-creator Refine this character' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
@@ -1184,7 +1202,11 @@ describe('ConversationController entry state', () => {
       expect.objectContaining({
         draft: launchCatalog.interaction,
         entryTargetReceipt: targetReceipt,
-        input: { kind: 'message', text: 'Refine this character' },
+        input: expect.objectContaining({
+          kind: 'skill',
+          skillName: 'character-creator',
+          args: 'Refine this character',
+        }),
       }),
     );
   });
@@ -1516,6 +1538,162 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: /^storyboard/u }));
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('renders a builtin Skill card with its localized Webview description', () => {
+    const builtinCharacterCreator = {
+      ...createDraftSkillCatalogEntry('character-creator', 'any'),
+      id: 'skill:builtin:character-creator',
+      description: 'Canonical portable description',
+      source: { kind: 'builtin' as const, sourceId: 'character-creator' },
+      executable: {
+        kind: 'skill' as const,
+        skillName: 'character-creator',
+        activationId: 'skill:builtin:character-creator',
+      },
+    };
+    const launchCatalog = {
+      ...createBoundAssistantLaunchCatalog('draft-localized-skill'),
+      inputs: [builtinCharacterCreator],
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    expect(screen.getByText('Create a localized character draft.')).toBeTruthy();
+    expect(screen.queryByText('Canonical portable description')).toBeNull();
+  });
+
+  it('keeps an unbound character creator in Assistant without opening a target selector', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-character-creator', { kind: 'unbound' }),
+      inputs: [createDraftSkillCatalogEntry('character-creator', 'any')],
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.submitDraft.mockResolvedValueOnce({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-character-creator',
+        binding: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant-space:local-user',
+          baseGrantIds: [],
+        },
+      },
+      turnId: 'turn-character-creator',
+      turnStatus: 'running',
+    });
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [],
+            diagnostics: [],
+          })),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, {
+      target: { value: '$character-creator 保留这段完整角色提示词' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: 'Draft name' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Assistant' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
+      entryTargetReceipt: null,
+      input: {
+        kind: 'skill',
+        skillName: 'character-creator',
+        args: '保留这段完整角色提示词',
+      },
+    });
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('submits skill-creator through the ordinary Skill path without configuring a target', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-skill-creator-personal', { kind: 'unbound' }),
+      inputs: [createDraftSkillCatalogEntry('skill-creator', 'any')],
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.submitDraft.mockResolvedValueOnce({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-skill-creator-personal',
+        binding: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant-space:local-user',
+          baseGrantIds: [],
+        },
+      },
+      turnId: 'turn-skill-creator-personal',
+      turnStatus: 'running',
+    });
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'Project One' }],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '$skill-creator 保留完整 Skill 需求' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
+      entryTargetReceipt: null,
+      input: {
+        kind: 'skill',
+        skillName: 'skill-creator',
+        args: '保留完整 Skill 需求',
+      },
+    });
+    expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 

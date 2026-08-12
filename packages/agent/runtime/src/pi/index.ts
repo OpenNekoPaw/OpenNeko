@@ -29,12 +29,6 @@ export {
   SkillHostError,
   buildSkillActivationId,
   createNodePiSkillHost,
-  type ExecuteSkillExternalProcessorInput,
-  type SkillExternalProcessorAuthorizer,
-  type SkillExternalProcessorExecutor,
-  type SkillExternalProcessorPermissionDecision,
-  type SkillExternalProcessorPermissionInput,
-  type SkillExternalProcessorResult,
   type SkillHostErrorCode,
   type SkillHostPolicy,
   type SkillHostRecord,
@@ -182,4 +176,9 @@ export {
   createPersonalSkillManagementId,
   createPersonalSkillManager,
   type PersonalSkillManager,
+  type PersonalSkillManagementRecord,
 } from './personal-skill-manager';
+export {
+  createNodeSkillPackageCreationService,
+  type SkillPackageCreationService,
+} from './skill-package-creation-service';

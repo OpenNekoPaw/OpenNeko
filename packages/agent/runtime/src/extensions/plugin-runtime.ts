@@ -450,7 +450,6 @@ async function validatePluginSkillRoot(
   const root: SkillSourceRoot = {
     path: descriptor.skillRoot,
     source: { kind: 'plugin', pluginId: descriptor.pluginId },
-    entryPointKind: 'skill',
   };
   const snapshot = await createNodePiSkillHost({
     cwd: descriptor.pluginRoot,

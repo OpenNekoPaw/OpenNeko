@@ -1805,7 +1805,10 @@ export class DesktopAppHost {
       }
       case 'skill.remove': {
         const skills = await this.agent.readGlobalSkillCatalog();
-        await this.options.personalSkillManager.remove(request.managementId, skills.records);
+        const management = await this.options.personalSkillManager.projectManagement(
+          skills.records,
+        );
+        await this.options.personalSkillManager.remove(request.managementId, management);
         break;
       }
     }
@@ -2003,15 +2006,21 @@ export class DesktopAppHost {
         throw new Error('Agent global Skill catalog returned a Workspace-scoped Skill.');
       }
     }
-    const skills = await Promise.all(
+    const personalManagement = await this.options.personalSkillManager.projectManagement(
+      skillCatalog.records,
+    );
+    const personalByFingerprint = new Map(
+      personalManagement.map((record) => [record.fingerprint, record]),
+    );
+    const skills =
       skillCatalog.records
         .filter((skill) => skill.source.kind !== 'builtin')
-        .map(async (skill) => {
+        .map((skill) => {
           const source = requireGlobalSkillSource(skill.source);
           const sourceId = skill.source.kind === 'plugin' ? skill.source.pluginId : source;
           const managementId =
             source === 'personal'
-              ? await this.options.personalSkillManager.resolveManagementId(skill)
+              ? personalByFingerprint.get(skill.fingerprint)?.managementId
               : undefined;
           return {
             id: `${source}:${sourceId}:${skill.name}`,
@@ -2022,8 +2031,7 @@ export class DesktopAppHost {
             managementId: managementId ?? '',
             canRemove: managementId !== undefined,
           };
-        }),
-    );
+        });
     return {
       identity,
       skills,

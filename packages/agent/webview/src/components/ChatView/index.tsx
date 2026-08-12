@@ -67,7 +67,7 @@ interface ChatViewProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-  }) => void;
+  }) => void | false;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;

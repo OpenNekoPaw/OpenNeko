@@ -71,12 +71,14 @@ import {
   createAgentRuntimeSettingsAuthority,
   createAgentRuntimeSettingsRepository,
   createAssistantResourceService,
+  createSkillCreationCapabilityProvider,
   createPersistentAgentConversationLifecycleRepository,
   createPersistentAgentConversationContextAuthority,
   initializeAgentConversationLifecycleTables,
   projectAgentDraftInputText,
   type AgentDomainConversationService,
 } from '@neko/agent-runtime/application';
+import { resolveAgentSkillsDir } from '@neko/agent-runtime/workspace';
 import { createCharacterAgentConversationAdapter } from './character-agent-conversation-adapter';
 import {
   prepareCharacterAgentTurnContext,
@@ -85,7 +87,10 @@ import {
 } from './character-agent-domain-context-adapter';
 import { DesktopCharacterAvatarRuntime } from './desktop-character-avatar-runtime';
 import { setRootLogger as setAgentRootLogger } from '@neko/agent-runtime';
-import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
+import {
+  createNodeSkillPackageCreationService,
+  NodePiConversationCatalogReader,
+} from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
   NodeProjectEntityInspectorRuntime,
@@ -163,7 +168,7 @@ import {
   CharacterRoomInteractionService,
   CharacterRoomService,
   CharacterStorylineService,
-  createCharacterRoleSkillCapabilityProvider,
+  createCharacterAuthoringCapabilityProvider,
   createCharacterDurableCatalogPort,
   UserCharacterRelationshipService,
 } from '@neko/chara/application';
@@ -691,6 +696,7 @@ async function startDesktop(): Promise<void> {
     }
     return automationPluginToolAdapter;
   };
+  const skillPackageCreationService = createNodeSkillPackageCreationService();
   const agentComposition = createAgentAppHost({
     userDataRoot: globalStorage.root,
     userHome: homedir,
@@ -701,48 +707,69 @@ async function startDesktop(): Promise<void> {
     assistantSpaceIds: [assistantSpaceId],
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     authoringMutationAuthority: agentAuthoringMutationAuthority,
-    resolveWorkspaceCapabilityProviders: (workspace) => [
-      createCharacterRoleSkillCapabilityProvider(async ({ binding, proposal, signal }) => {
-        if (binding.workspaceId !== workspace.workspaceId) {
-          throw new Error(
-            `Character creation binding Workspace '${binding.workspaceId}' does not match '${workspace.workspaceId}'.`,
+    resolveWorkspaceCapabilityProviders: (workspace) => {
+      const source = workspace.workspaceId === assistantSpaceId ? 'personal' : 'project';
+      return [
+        createSkillCreationCapabilityProvider({
+          source,
+          createSkill: async ({ request, signal }) => {
+            const skillRoot = resolveAgentSkillsDir({
+              source,
+              homeDir: homedir,
+              ...(source === 'project' ? { workspaceRoot: workspace.workspacePath } : {}),
+            });
+            if (!skillRoot) {
+              throw new Error('Conversation-owned Skill root is unavailable.');
+            }
+            return skillPackageCreationService.create({
+              skillRoot,
+              authorityRoot: source === 'personal' ? homedir : workspace.workspacePath,
+              request,
+              ...(signal ? { signal } : {}),
+            });
+          },
+        }),
+        createCharacterAuthoringCapabilityProvider(async ({ binding, proposal, signal }) => {
+          const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+            binding.workspaceGrantId,
+            binding.workspaceId,
           );
-        }
-        const workspaceRoot = workspace.workspacePath;
-        if ((await realpath(workspaceRoot)) === (await realpath(characterLibraryRoot))) {
-          return new CharacterAuthoringService({
-            repository: characterAuthoringRepository,
-          }).fillFreshDraft(
+          const workspaceRoot = resolution.workspace.workspacePath;
+          if ((await realpath(workspaceRoot)) === (await realpath(characterLibraryRoot))) {
+            return new CharacterAuthoringService({
+              repository: characterAuthoringRepository,
+            }).fillFreshDraft(
+              {
+                characterProjectId: binding.target.characterProjectId,
+                draft: proposal.draft,
+              },
+              signal,
+            );
+          }
+          const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
+          const composition = await compositionRepository.read(signal);
+          if (!composition) {
+            throw new Error('Character creation target has no exact Project composition.');
+          }
+          await new ProjectCompositionService(compositionRepository).requireLocalTarget(
+            composition.contentProjectId,
+            binding.target,
+            signal,
+          );
+          const repository = createCharacterAuthoringFileRepository({
+            workspaceRoot,
+            scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+          });
+          return new CharacterAuthoringService({ repository }).fillFreshDraft(
             {
               characterProjectId: binding.target.characterProjectId,
               draft: proposal.draft,
             },
             signal,
           );
-        }
-        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
-        const composition = await compositionRepository.read(signal);
-        if (!composition) {
-          throw new Error('Character creation target has no exact Project composition.');
-        }
-        await new ProjectCompositionService(compositionRepository).requireLocalTarget(
-          composition.contentProjectId,
-          binding.target,
-          signal,
-        );
-        const repository = createCharacterAuthoringFileRepository({
-          workspaceRoot,
-          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
-        });
-        return new CharacterAuthoringService({ repository }).fillFreshDraft(
-          {
-            characterProjectId: binding.target.characterProjectId,
-            draft: proposal.draft,
-          },
-          signal,
-        );
-      }),
-    ],
+        }),
+      ];
+    },
     pluginToolAdapters: {
       build: (descriptor) => requireAutomationPluginToolAdapter().build(descriptor),
     },
@@ -2044,16 +2071,21 @@ async function startDesktop(): Promise<void> {
         if (!agentControllerComposition.startInitialTurn) {
           throw new Error('Agent initial-turn provider adapter is unavailable.');
         }
-        const commandArtifactActivationId =
+        const commandPrompt =
           request.input.kind === 'command'
-            ? parseCommandArtifactHandlerId(request.input.handlerId)
+            ? await workspace.invokeCommand(
+                request.input.commandId,
+                parseCommandHandlerId(request.input.handlerId),
+                request.input.args,
+              )
             : undefined;
         return agentControllerComposition.startInitialTurn({
           workspace,
           conversationId: request.conversationId,
           turnId: request.turnId,
           messageText:
-            request.input.kind === 'message' ? request.input.text : (request.input.args ?? ''),
+            commandPrompt ??
+            (request.input.kind === 'message' ? request.input.text : (request.input.args ?? '')),
           presentationText: projectAgentDraftInputText(request.input),
           configuration: request.configuration,
           capabilityConstraint: request.capabilityConstraint,
@@ -2068,13 +2100,7 @@ async function startDesktop(): Promise<void> {
                 skillActivationId: request.input.activationId,
                 additionalInstructions: request.input.args,
               }
-            : request.input.kind === 'command'
-              ? {
-                  skillName: request.input.commandId,
-                  skillActivationId: commandArtifactActivationId,
-                  additionalInstructions: request.input.args,
-                }
-              : {}),
+            : {}),
         });
       },
     },
@@ -2376,7 +2402,7 @@ async function startDesktop(): Promise<void> {
           }
           return;
         }
-        parseCommandArtifactHandlerId(intent.handlerId);
+        parseCommandHandlerId(intent.handlerId);
       },
     },
   });
@@ -3286,10 +3312,10 @@ function sendApplicationSettingsProjectionEvent(
   }
 }
 
-function parseCommandArtifactHandlerId(handlerId: string): string {
-  const prefix = 'command-artifact:';
+function parseCommandHandlerId(handlerId: string): string {
+  const prefix = 'command:';
   if (!handlerId.startsWith(prefix) || handlerId.length === prefix.length) {
     throw new Error(`Agent Draft command has no registered launch handler '${handlerId}'.`);
   }
-  return handlerId.slice(prefix.length);
+  return handlerId;
 }

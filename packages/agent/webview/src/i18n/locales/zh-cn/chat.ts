@@ -105,7 +105,7 @@ export const chat = {
   'chat.entryExperience.characterDialogue.modeDaily': '日常',
   'chat.entryExperience.characterDialogue.modeNarrative': '叙事',
   'chat.entryExperience.characterDialogue.modeNarrativeUnavailable':
-    '叙事模式需要外部叙事组合，当前尚未接入；角色对话与聊天室将继续使用日常模式。',
+    '当前角色入口尚未接入叙事配置；已选择的叙事意图不会降级为日常模式。',
   'chat.entryContext.authoringTitle': '创作目标',
   'chat.entryContext.authoringDescription': '为当前草稿选择工作区和明确的创作对象。',
   'chat.entryContext.characterTitle': '角色与聊天室',
@@ -122,6 +122,14 @@ export const chat = {
   'chat.entryContext.loadingProject': '正在加载项目内目标…',
   'chat.entryContext.projectEmpty': '这个项目中还没有角色或世界目标。',
   'chat.entryContext.close': '关闭目标选择',
+  'chat.entryAuthoring.nameLabel': '草稿名称',
+  'chat.entryAuthoring.namePlaceholder': '为新角色草稿命名',
+  'chat.entryAuthoring.nameRequired': '请先填写草稿名称，再选择创建位置。',
+  'chat.entryAuthoring.creationUnavailable': '当前入口无法创建角色草稿。',
+  'chat.entryAuthoring.destinationLabel': '选择草稿创建位置',
+  'chat.entryAuthoring.destinationTitle': '角色草稿创建位置',
+  'chat.entryAuthoring.createDescription': '在此处新建草稿',
+  'chat.entryAuthoring.cancel': '取消',
   'chat.entryExperience.worldExperience.title': '进入世界体验',
   'chat.entryExperience.worldExperience.description':
     '世界模式需要世界体验版本，以及由世界领域提供的运行入口。',

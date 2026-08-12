@@ -1,0 +1,85 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "reviewable-character-proposal",
+  "suiteId": "skill.character-creator",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Invoke the ordinary Character Creator Skill in an unbound Assistant Entry and request a reviewable proposal without granting Character mutation authority.",
+    "canonicalPath": [
+      "visible unbound Entry Draft",
+      "globally available builtin character-creator catalog entry",
+      "explicit ordinary Skill invocation with preserved arguments",
+      "Assistant Conversation turn",
+      "reviewable proposal without Character mutation"
+    ],
+    "observables": [
+      {
+        "ref": "character-creator-facts",
+        "kind": "runtime-fact",
+        "description": "Exact builtin Skill identity, available unbound catalog entry, Assistant response and absent Character mutation.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The complete Character Creator invocation stays in Assistant, produces a reviewable proposal and does not call the Character mutation capability because no exact CharacterProject authority exists.",
+    "expectedFailure": "Dropping the prompt arguments, navigating to Workspace, allocating or inferring a target, or mutating a Character draft fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "canonical-submit",
+      "kind": "submit",
+      "prompt": "$character-creator 请根据以下信息给出一份可审阅的角色提案，但不要创建、编辑或保存角色：林澈是旧城区钟表修复师，左手有烧伤疤痕，不懂现代电子设备。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "binding",
+      "kind": "interaction-binding",
+      "initialPhase": "draft",
+      "initialBindingKind": "unbound",
+      "finalPhase": "session",
+      "finalBindingKind": "assistant",
+      "conversationCreated": true,
+      "evidenceRef": "character-creator-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "character-creator",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "character-creator",
+        "fingerprint": "sha256:7b1f3165de0a5de86314f56bcd84dbae3eadb529a4880e2c62859ace93494c8a"
+      },
+      "status": "injected",
+      "evidenceRef": "character-creator-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "character-creator-facts"
+    },
+    {
+      "id": "no-draft-mutation",
+      "kind": "tool-call",
+      "name": "chara.character.fillDraft",
+      "status": "absent",
+      "evidenceRef": "character-creator-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 },
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
+    "startSurface": "entry"
+  }
+}

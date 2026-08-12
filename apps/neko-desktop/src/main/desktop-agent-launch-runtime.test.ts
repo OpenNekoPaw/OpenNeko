@@ -123,7 +123,7 @@ describe('Desktop Agent launch native adapter', () => {
     let identity = 0;
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       },
       config: createConfig(),
       selectResource,
@@ -131,7 +131,7 @@ describe('Desktop Agent launch native adapter', () => {
       workspaceMentions: {
         search: async ({ filter }) => ({ filter, files: [], mentionExtras: [] }),
       },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       resolveWorkspaceReferenceContext: async () => {
         throw new Error('Workspace reference resolution is not expected by this test.');
       },
@@ -187,7 +187,7 @@ describe('Desktop Agent launch native adapter', () => {
     let identity = 0;
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       },
       config: createConfig(),
       selectResource: async () => ({
@@ -198,7 +198,7 @@ describe('Desktop Agent launch native adapter', () => {
       workspaceMentions: {
         search: async ({ filter }) => ({ filter, files: [], mentionExtras: [] }),
       },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       resolveWorkspaceReferenceContext: async () => {
         throw new Error('Workspace reference resolution is not expected by this test.');
       },
@@ -259,7 +259,7 @@ describe('Desktop Agent launch native adapter', () => {
     let identity = 0;
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       },
       config: createConfig(),
       selectResource: async () => ({ label: 'brief.txt', hostResource: '/private/brief.txt' }),
@@ -267,7 +267,7 @@ describe('Desktop Agent launch native adapter', () => {
       workspaceMentions: {
         search: async ({ filter }) => ({ filter, files: [], mentionExtras: [] }),
       },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       resolveWorkspaceReferenceContext: async () => {
         throw new Error('Workspace reference resolution is not expected by this test.');
       },
@@ -310,6 +310,7 @@ describe('Desktop Agent launch native adapter', () => {
       records: [],
       diagnostics: [],
       warnings: [],
+      commands: { records: [], diagnostics: [] },
     }));
     const readWorkspaceSkillCatalog = vi.fn(async () => ({
       records: [
@@ -317,39 +318,30 @@ describe('Desktop Agent launch native adapter', () => {
           name: 'project-review',
           description: 'Review this project',
           source: { kind: 'project' as const },
-          trusted: true,
-          enabled: true,
           fingerprint: 'sha256:project-review',
           locator: {
             kind: 'skill' as const,
             value: '/__neko_skills/fixture/project-review',
             fingerprint: 'sha256:project-review',
           },
-          entryPoint: { kind: 'skill' as const },
-        },
-        {
-          name: 'project-review',
-          description: 'Run the project review command',
-          source: { kind: 'project' as const },
-          trusted: true,
-          enabled: true,
-          fingerprint: 'sha256:project-review-command',
-          locator: {
-            kind: 'skill' as const,
-            value: '/__neko_skills/fixture/project-review-command',
-            fingerprint: 'sha256:project-review-command',
-          },
-          entryPoint: {
-            kind: 'command-artifact' as const,
-            commandId: 'project-review',
-            artifactId: 'command:project-review',
-            argumentHint: '<scope>',
-            supportsArguments: true,
-          },
         },
       ],
       diagnostics: [],
       warnings: [],
+      commands: {
+        records: [
+          {
+            name: 'project-review',
+            description: 'Run the project review command',
+            source: { kind: 'project' as const },
+            fingerprint: 'sha256:project-review-command',
+            activationId: 'command:project:sha256:project-review-command',
+            argumentHint: '<scope>',
+            supportsArguments: true,
+          },
+        ],
+        diagnostics: [],
+      },
     }));
     const runtime = createDesktopAgentLaunchRuntime({
       agent: { readGlobalSkillCatalog },
@@ -400,22 +392,21 @@ describe('Desktop Agent launch native adapter', () => {
     );
     expect(catalog.inputs).toContainEqual(
       expect.objectContaining({
-        id: 'command-artifact:project:command:project-review',
+        id: 'command:project:sha256:project-review-command',
         trigger: 'command',
         name: 'project-review',
         phaseRequirement: 'any',
         bindingRequirement: 'workspace',
         source: {
-          kind: 'command-artifact',
+          kind: 'project',
           workspaceId: 'workspace-one',
-          artifactId: 'command:project-review',
+          sourceId: 'sha256:project-review-command',
         },
         availability: { status: 'available' },
         executable: {
           kind: 'command',
           commandId: 'project-review',
-          handlerId:
-            'command-artifact:skill:project:command-artifact:sha256:project-review-command',
+          handlerId: 'command:project:sha256:project-review-command',
         },
       }),
     );
@@ -451,13 +442,13 @@ describe('Desktop Agent launch native adapter', () => {
     }));
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       },
       config: createConfig(),
       selectResource: async () => undefined,
       readTextResource: async () => '',
       workspaceMentions: { search },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [] }),
+      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
       resolveWorkspaceReferenceContext: async ({ reference }) => ({
         type: reference.kind === 'file' ? 'file' : 'entity',
         id:

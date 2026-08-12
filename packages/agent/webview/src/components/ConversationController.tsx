@@ -100,6 +100,10 @@ import {
 } from '../presenters/history-menu-presenter';
 import { projectOptimisticQueuedMessageItem } from '../presenters/message-queue-presenter';
 import {
+  projectSkillDescription,
+  resolveAgentInputDescription,
+} from '../presenters/agent-input-description-presenter';
+import {
   projectChatWorkspaceModelState,
   projectMessageModelSelection,
   projectMediaModelSelectionDefaults,
@@ -391,7 +395,7 @@ export function ConversationController({
         const intent = await requireAgentDraftHostRuntimeAdapter(
           hostRuntimeAdapter,
         ).configureEntryTarget(
-          'authoring',
+          entryMode,
           target?.target
             ? {
                 kind: 'authoring',
@@ -408,7 +412,7 @@ export function ConversationController({
         setIsEntryBindingPending(false);
       }
     },
-    [hostRuntimeAdapter, setMentionItems, setProjectFiles, updateMentionSearchFilter],
+    [entryMode, hostRuntimeAdapter, setMentionItems, setProjectFiles, updateMentionSearchFilter],
   );
   const clearEntryAuthoringTarget = useCallback(async () => {
     try {
@@ -736,7 +740,7 @@ export function ConversationController({
   const draftLaunchCatalog = isDraftPresentation
     ? requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog()
     : undefined;
-  const draftSkills = projectDraftSkillSummaries(draftLaunchCatalog);
+  const draftSkills = projectDraftSkillSummaries(draftLaunchCatalog, t);
   const homeExperienceProjection =
     draftLaunchCatalog && composerWorkspace?.kind === 'entry'
       ? projectHomeExperienceEntry({
@@ -1320,7 +1324,7 @@ export function ConversationController({
   const handleEntryInputSend = useCallback(
     (input?: PendingSendInput) => {
       const messageText = (input?.messageText ?? entryInputValue).trim();
-      if (!messageText) return;
+      if (!messageText) return false;
       const contextPayloads = input?.contextPayloads ?? entryContextReferences;
 
       if (isDraftPresentation) {
@@ -1348,7 +1352,7 @@ export function ConversationController({
           });
           if (validation.submissionBlockedReasonKey) {
             setGlobalError(t(validation.submissionBlockedReasonKey));
-            return;
+            return false;
           }
         }
         const configuration = launchCatalog.configuration.request;
@@ -1357,7 +1361,7 @@ export function ConversationController({
           launchCatalog.configuration.fields.model.policy.status === 'unavailable'
         ) {
           setGlobalError(t('chat.input.configurationRequired'));
-          return;
+          return false;
         }
         let references: readonly AgentInputReferenceReceipt[];
         let inputIntent: import('@neko/agent-contracts').AgentDraftInputIntent;
@@ -1371,7 +1375,7 @@ export function ConversationController({
           });
         } catch (error) {
           setGlobalError(describeError(error));
-          return;
+          return false;
         }
         const resourceGrantIds = contextPayloads.flatMap((payload) => {
           const data = readRecord(payload.data);
@@ -1878,11 +1882,9 @@ export function ConversationController({
                             }
                           : undefined
                   }
-                  entryWorkspaceTarget={
-                    entryMode === 'authoring' ? entryWorkspaceTarget : undefined
-                  }
+                  entryWorkspaceTarget={entryWorkspaceTarget}
                   onClearEntryWorkspaceTarget={
-                    entryMode === 'authoring' && entryWorkspaceTarget && !isEntryBindingPending
+                    entryWorkspaceTarget && !isEntryBindingPending
                       ? clearEntryAuthoringTarget
                       : undefined
                   }
@@ -1923,7 +1925,9 @@ export function ConversationController({
                       : undefined
                   }
                   skills={homeExperienceProjection.showSkillSuggestions ? draftSkills : []}
-                  onSkillSelect={(skill) => updateEntryInputValue(`$${skill.name} `)}
+                  onSkillSelect={(skill) => {
+                    updateEntryInputValue(`$${skill.name} `);
+                  }}
                   onExpandedChange={handleEntryQuickDetailOpenChange}
                 >
                   {entryMode === 'authoring' && composerWorkspace?.kind === 'entry' ? (
@@ -2064,11 +2068,12 @@ function describeError(error: unknown): string {
 
 function projectDraftSkillSummaries(
   catalog: AgentLaunchCatalogProjection | undefined,
+  translate: (key: string) => string,
 ): readonly SkillSummary[] {
   if (!catalog) return [];
   return catalog.inputs.flatMap((entry): readonly SkillSummary[] => {
+    if (entry.trigger !== 'skill') return [];
     if (
-      entry.trigger !== 'skill' ||
       !isAgentInputCatalogEntryExecutable({
         entry,
         phase: catalog.interaction.phase,
@@ -2089,7 +2094,14 @@ function projectDraftSkillSummaries(
       {
         id: entry.id,
         name: entry.name,
-        description: entry.description,
+        description: resolveAgentInputDescription(
+          projectSkillDescription({
+            name: entry.name,
+            canonicalDescription: entry.description,
+            isOpenNekoBuiltin: entry.source.kind === 'builtin',
+          }),
+          translate,
+        ),
         ...(entry.icon === undefined ? {} : { icon: entry.icon }),
         tags: [],
         source,

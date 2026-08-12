@@ -1,4 +1,5 @@
 import {
+  entryModeAcceptsTargetBinding,
   parseAgentEntryIntentProjection,
   parseAgentEntryTargetBinding,
   type AgentAuthoringBinding,
@@ -62,15 +63,9 @@ export function createAgentEntryTargetApplicationService(input: {
       if (connection.draftId !== draftId) {
         throw new Error('Agent Entry target configuration belongs to another Draft.');
       }
-      if (mode === 'assistant') {
-        if (bindingValue !== undefined) {
-          throw new Error('Assistant Entry mode cannot accept a domain target.');
-        }
-        return { mode, targetReceipt: null };
-      }
       if (bindingValue === undefined) return { mode, targetReceipt: null };
       const binding = parseAgentEntryTargetBinding(bindingValue);
-      if (binding.kind !== mode) {
+      if (!entryModeAcceptsTargetBinding(mode, binding)) {
         throw new Error('Agent Entry target does not match the requested mode.');
       }
       const result = await validateTarget(input, connection, binding);

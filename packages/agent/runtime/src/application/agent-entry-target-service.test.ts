@@ -43,6 +43,27 @@ describe('AgentEntryTargetApplicationService', () => {
     },
   );
 
+  it('validates an explicit Character draft target without changing Assistant Entry mode', async () => {
+    const fixture = createFixture();
+    const binding = authoringBinding({
+      kind: 'character-project',
+      characterProjectId: 'character-1',
+    });
+
+    const result = await fixture.service.configure({
+      connection,
+      draftId: 'draft-1',
+      mode: 'assistant',
+      binding,
+    });
+
+    expect(fixture.providers.characterAuthoring.validate).toHaveBeenCalledWith(connection, binding);
+    expect(result).toMatchObject({
+      mode: 'assistant',
+      targetReceipt: { mode: 'assistant', binding },
+    });
+  });
+
   it('keeps selection without authority as a visible incomplete mode', async () => {
     const { service } = createFixture();
     await expect(
@@ -70,6 +91,18 @@ describe('AgentEntryTargetApplicationService', () => {
         draftId: 'draft-1',
         mode: 'world-experience',
         binding,
+      }),
+    ).rejects.toThrow('does not match');
+    await expect(
+      fixture.service.configure({
+        connection,
+        draftId: 'draft-1',
+        mode: 'assistant',
+        binding: {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [{ characterProjectId: 'character-1', characterVersionId: 'version-1' }],
+        },
       }),
     ).rejects.toThrow('does not match');
 

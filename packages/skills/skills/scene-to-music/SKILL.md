@@ -24,19 +24,19 @@ Examples:
 If the user provided explicit preferences (genre, mood, style), prioritize those.
 
 ### Step 3: Plan generation and placement
-Use the runtime music generation capability only after the user intent and duration are clear. Use the runtime timeline authoring capability for durable placement when a target timeline exists.
+Generate music only after the user intent and duration are clear. Place it durably only when a target timeline exists.
 
 The handoff should preserve:
 - Music prompt
 - Target duration
 - Mood or genre hints
 - Placement intent, such as background bed, transition sting, or scene score
-- Any approval or diagnostic state
+- Any unresolved decision or limitation
 
 ### Step 4: Confirm
-Report what was planned, generated, or placed based on capability results. Do not claim a generated track or timeline placement exists until the relevant capability reports success.
+Report what was planned, generated, or placed based on observed results. Do not claim a track or timeline placement exists until the result is available.
 
 ## Notes
 - Always match music duration to timeline length unless user specifies otherwise
 - If timeline has no elements yet, ask the user to describe the scene mood instead of reading an empty timeline
-- If generation fails, report the capability diagnostic and suggest the smallest recoverable next step
+- If generation fails, report the limitation and suggest the smallest recoverable next step

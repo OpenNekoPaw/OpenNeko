@@ -5,17 +5,20 @@ import {
 } from '@neko/agent-contracts';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createCharacterRoleSkillCapabilityProvider,
+  createCharacterAuthoringCapabilityProvider,
   type CharacterCreationProposal,
 } from '@neko/chara/application';
 import type { CharacterProject } from '@neko/chara/contracts';
 
-describe('CharacterRoleSkillCapabilityProvider', () => {
+describe('CharacterAuthoringCapabilityProvider', () => {
   it('fills only the exact CharacterProject binding and keeps evidence classifications observable', async () => {
     const fillDraft = vi.fn(async ({ binding, proposal }) =>
       project(binding.target.characterProjectId, proposal),
     );
-    const provider = createCharacterRoleSkillCapabilityProvider(fillDraft);
+    const provider = createCharacterAuthoringCapabilityProvider(fillDraft);
+    const promptFragments = provider.getPromptFragments?.({ hostContext: null });
+    expect(promptFragments?.[0]?.content).toContain('single mutation confirmation');
+    expect(promptFragments?.[0]?.content).toContain('without adding a text-confirmation gate');
     const [tool] = provider.getTools({ hostContext: null } satisfies AgentCapabilityContext);
     expect(tool?.name).toBe(TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT);
     expect(tool?.requiresConfirmation).toBe(true);
@@ -62,7 +65,7 @@ describe('CharacterRoleSkillCapabilityProvider', () => {
 
   it('rejects execution without an authorized runtime binding', async () => {
     const fillDraft = vi.fn();
-    const [tool] = createCharacterRoleSkillCapabilityProvider(fillDraft).getTools({
+    const [tool] = createCharacterAuthoringCapabilityProvider(fillDraft).getTools({
       hostContext: null,
     });
 

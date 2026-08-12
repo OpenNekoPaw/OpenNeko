@@ -3149,8 +3149,6 @@ describe('DesktopAppHost', () => {
           name: 'audio-mixing',
           description: 'Mix audio.',
           source: { kind: 'builtin' as const },
-          trusted: true,
-          enabled: true,
           fingerprint: 'builtin-must-stay-in-main',
           locator: {
             kind: 'skill' as const,
@@ -3162,8 +3160,6 @@ describe('DesktopAppHost', () => {
           name: 'story-planner',
           description: 'Plan a story.',
           source: { kind: 'personal' as const },
-          trusted: true,
-          enabled: true,
           fingerprint: 'must-stay-in-main',
           locator: {
             kind: 'skill' as const,
@@ -3175,8 +3171,6 @@ describe('DesktopAppHost', () => {
           name: 'shot-list',
           description: 'Build a shot list.',
           source: { kind: 'plugin' as const, pluginId: 'story-tools@openneko' },
-          trusted: true,
-          enabled: true,
           fingerprint: 'plugin-must-stay-in-main',
           locator: {
             kind: 'skill' as const,
@@ -3213,6 +3207,7 @@ describe('DesktopAppHost', () => {
           shadowedSource: 'plugin' as const,
         },
       ],
+      commands: { records: [], diagnostics: [] },
     });
     fixture.extensionManager.readCatalog.mockResolvedValue({
       records: [
@@ -3259,8 +3254,8 @@ describe('DesktopAppHost', () => {
         description: 'Plan a story.',
         source: 'personal',
         sourceId: 'personal',
-        managementId: '',
-        canRemove: false,
+        managementId: `skill:${'a'.repeat(64)}`,
+        canRemove: true,
       },
       {
         id: 'plugin:story-tools@openneko:shot-list',
@@ -4586,7 +4581,15 @@ function createPersonalSkillManager(): PersonalSkillManager {
   return {
     install: vi.fn(),
     remove: vi.fn(),
-    resolveManagementId: vi.fn(async () => undefined),
+    projectManagement: vi.fn<PersonalSkillManager['projectManagement']>(async (records) =>
+      records
+        .filter((record) => record.source.kind === 'personal')
+        .map((record) => ({
+          managementId: `skill:${'a'.repeat(64)}`,
+          name: record.name,
+          fingerprint: record.fingerprint,
+        })),
+    ),
   };
 }
 
@@ -4637,6 +4640,7 @@ function createAgentComposition(): AgentAppHost & {
       records: [],
       diagnostics: [],
       warnings: [],
+      commands: { records: [], diagnostics: [] },
     })),
     hasActiveTurns: vi.fn(() => false),
     listActivePluginTurns: vi.fn(() => []),
@@ -4788,6 +4792,7 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
     clearContext: unavailable,
     compactContext: unavailable,
     readSkillCatalog: unavailable,
+    invokeCommand: unavailable,
     readCapabilityPromptFragments: () => [],
     listConversations: () => [],
     readConversationEvidence: () => {

@@ -171,4 +171,102 @@ describe('AuthoringTargetSelector', () => {
     await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
     expect(onChange).toHaveBeenCalledWith(selectedProject);
   });
+
+  it('creates a fresh Character target in an explicit standalone or project-local destination', async () => {
+    const standalone = {
+      creationId: 'standalone-character',
+      label: 'Characters / New',
+      targetKind: 'character-project' as const,
+      placement: { kind: 'standalone-library' as const, library: 'character' as const },
+    };
+    const projectLocal = {
+      creationId: 'project-1-character',
+      label: 'Blame / Character',
+      targetKind: 'character-project' as const,
+      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
+    };
+    const created = {
+      label: 'Characters / Aster',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'character-library',
+        workspaceGrantId: 'grant-character',
+      },
+      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+    };
+    const onCreateAuthoringTarget = vi.fn(async () => created);
+    const onChange = vi.fn(async () => undefined);
+
+    render(
+      <AuthoringTargetSelector
+        presentation={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [
+              standalone,
+              projectLocal,
+              {
+                creationId: 'standalone-world',
+                label: 'Worlds / New',
+                targetKind: 'world-project' as const,
+                placement: { kind: 'standalone-library' as const, library: 'world' as const },
+              },
+            ],
+            diagnostics: [],
+          })),
+          onCreateAuthoringTarget,
+        }}
+        pending={false}
+        creationOnlyKind="character-project"
+        onChange={onChange}
+      />,
+    );
+
+    const name = screen.getByRole('textbox', { name: 'chat.entryAuthoring.nameLabel' });
+    expect(await screen.findByRole('button', { name: /Characters \/ New/u })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.queryByText('Worlds / New')).toBeNull();
+
+    fireEvent.change(name, { target: { value: 'Aster' } });
+    fireEvent.click(screen.getByRole('button', { name: /Characters \/ New/u }));
+
+    await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledWith(standalone, 'Aster'));
+    expect(onChange).toHaveBeenCalledWith(created);
+  });
+
+  it('cancels destination selection without creating a Character target', async () => {
+    const onCreateAuthoringTarget = vi.fn();
+    const onCancelCreation = vi.fn();
+
+    render(
+      <AuthoringTargetSelector
+        presentation={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [],
+            diagnostics: [],
+          })),
+          onCreateAuthoringTarget,
+        }}
+        pending={false}
+        creationOnlyKind="character-project"
+        onCancelCreation={onCancelCreation}
+        onChange={vi.fn(async () => undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'chat.entryAuthoring.cancel' }));
+    expect(onCancelCreation).toHaveBeenCalledOnce();
+    expect(onCreateAuthoringTarget).not.toHaveBeenCalled();
+  });
 });

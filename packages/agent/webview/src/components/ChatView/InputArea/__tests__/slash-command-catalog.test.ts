@@ -186,7 +186,8 @@ describe('slash-command-catalog', () => {
       phase: 'session',
       bindingKind: 'workspace',
     });
-    const translate = (key: string) => key;
+    const translate = (key: string) =>
+      key === 'commandDescriptions.compact' ? 'Compact the exact Conversation' : key;
 
     expect(filterSlashCommands(projected.commands, 'exact', translate)).toHaveLength(1);
     expect(filterSkillInvocations(projected.skills, 'context', translate)).toHaveLength(1);
@@ -196,19 +197,111 @@ describe('slash-command-catalog', () => {
     expect(extractSlashCommandArgs('/other keep recent', projected.commands[0]!)).toBeUndefined();
   });
 
-  it('keeps literal descriptions and Host source labels in menu projections', () => {
+  it('localizes only exact builtin command descriptions in menu projections', () => {
+    const artifactWithSameName: AgentInputCatalogEntry = {
+      ...compactEntry,
+      id: 'command:project:compact',
+      description: 'Project-authored compact command',
+      phaseRequirement: 'any',
+      bindingRequirement: 'workspace',
+      source: {
+        kind: 'project',
+        workspaceId: 'workspace-1',
+        sourceId: 'compact-artifact',
+      },
+      executable: {
+        kind: 'command',
+        commandId: 'compact',
+        handlerId: 'command:project:compact-artifact',
+      },
+    };
     const projected = projectAgentComposerInputCatalog({
-      entries: [compactEntry, workspaceSkillEntry],
+      entries: [compactEntry, artifactWithSameName, workspaceSkillEntry],
       phase: 'session',
       bindingKind: 'workspace',
     });
-    const command = projected.commands[0]!;
+    const builtinCommand = projected.commands[0]!;
+    const artifactCommand = projected.commands[1]!;
     const skill = projected.skills[0]!;
 
-    expect(resolveSlashCommandDescription(command, () => 'translated')).toBe(
-      'Compact the exact Conversation',
+    expect(builtinCommand).toEqual(
+      expect.objectContaining({
+        descriptionKey: 'commandDescriptions.compact',
+        descriptionKind: 'i18n',
+      }),
     );
-    expect(resolveSlashCommandSourceLabel(command)).toBeNull();
+    expect(resolveSlashCommandDescription(builtinCommand, () => '压缩对话上下文')).toBe(
+      '压缩对话上下文',
+    );
+    expect(artifactCommand).toEqual(
+      expect.objectContaining({
+        descriptionKey: 'Project-authored compact command',
+        descriptionKind: 'literal',
+      }),
+    );
+    expect(resolveSlashCommandDescription(artifactCommand, () => '不应使用')).toBe(
+      'Project-authored compact command',
+    );
+    expect(resolveSlashCommandSourceLabel(builtinCommand)).toBeNull();
+    expect(resolveSlashCommandSourceLabel(artifactCommand)).toBe('command');
     expect(resolveSkillInvocationSourceLabel(skill)).toBe('project');
+  });
+
+  it('localizes only exact builtin Skill descriptions in menu projections', () => {
+    const builtin: AgentInputCatalogEntry = {
+      ...workspaceSkillEntry,
+      id: 'skill:builtin:character-creator',
+      name: 'character-creator',
+      description: 'Canonical builtin description',
+      bindingRequirement: 'any',
+      source: { kind: 'builtin', sourceId: 'character-creator' },
+      executable: {
+        kind: 'skill',
+        skillName: 'character-creator',
+        activationId: 'skill:builtin:character-creator',
+      },
+    };
+    const personalWithSameName: AgentInputCatalogEntry = {
+      ...builtin,
+      id: 'skill:personal:character-creator',
+      description: 'Personal package description',
+      source: {
+        kind: 'personal',
+        ownerId: 'assistant:default',
+        sourceId: 'personal-character-creator',
+      },
+      executable: {
+        kind: 'skill',
+        skillName: 'character-creator',
+        activationId: 'skill:personal:character-creator',
+      },
+    };
+
+    const builtinProjection = projectAgentComposerInputCatalog({
+      entries: [builtin],
+      phase: 'draft',
+      bindingKind: 'assistant',
+    }).skills[0]!;
+    const personalProjection = projectAgentComposerInputCatalog({
+      entries: [personalWithSameName],
+      phase: 'draft',
+      bindingKind: 'assistant',
+    }).skills[0]!;
+
+    expect(builtinProjection).toEqual(
+      expect.objectContaining({
+        descriptionKey: 'skillDescriptions.character-creator',
+        descriptionKind: 'i18n',
+      }),
+    );
+    expect(resolveSlashCommandDescription(builtinProjection, () => '本地化角色创作说明')).toBe(
+      '本地化角色创作说明',
+    );
+    expect(personalProjection).toEqual(
+      expect.objectContaining({
+        descriptionKey: 'Personal package description',
+        descriptionKind: 'literal',
+      }),
+    );
   });
 });
