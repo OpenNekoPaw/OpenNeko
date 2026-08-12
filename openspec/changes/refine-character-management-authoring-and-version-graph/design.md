@@ -96,10 +96,11 @@ neko/characters/<characterProjectId>/
   versions/<characterVersionId>.json
   storylines/<characterStorylineId>/...
   authoring-tests/<authoringTestSnapshotId>.json
+  localized-assets.json                       # exact opaque-ref/representation -> owned file inventory
   assets/...                                  # only explicitly localized Character-owned copies
 ```
 
-`project.json` 持有 mutable metadata/draft 与 opaque representation refs；immutable version、lineage、Storyline 和 tests 各自保持 owner-qualified record。`assets/` 不是所有引用素材的镜像，只保存用户显式本地化且 Host 已授权复制的角色自有副本。Asset library、Content Project 或第三方 provider 仍拥有其原始 bytes；普通 Character record 只保留 `asset:`、`voice:` 等非 file opaque ref。Renderer 不接收 raw path。
+`project.json` 持有 mutable metadata/draft 与 opaque representation refs；immutable version、lineage、Storyline 和 tests 各自保持 owner-qualified record。`localized-assets.json` 只持有 exact `representationId + kind + resourceRef`、入口相对路径和所属文件 inventory，不复制角色定义、raw path 或 ZIP identity。`assets/` 不是所有引用素材的镜像，只保存用户显式本地化且 Host 已授权复制的角色自有副本。Asset library、Content Project 或第三方 provider 仍拥有其原始 bytes；普通 Character record 只保留 `asset:`、`voice:` 等非 file opaque ref。Chara 只有在 exact binding 存在且完整时才把本地副本作为该 opaque ref 的 canonical realization；不得按文件存在、目录名、representationId 猜测或回退。Renderer 不接收 raw path。
 
 `.neko-character` 是 ZIP transport，而不是 live Workspace：
 
@@ -130,7 +131,7 @@ manifest 只承担包入口、所含用户领域 identity、record inventory、e
 
 导出必须显式选择 record scope 与素材策略。未内嵌的表示素材保留为 external opaque dependency，并在预览中标记“非自包含”；不得静默复制全局库或项目 sibling 素材。Conversation/Room transcript、Companion memory/continuity、narrative run、provider/model selection、Skill/Tool grant、approval、credential、cache 和 presentation snapshot 永不进入包。
 
-导入在 Host/Node trust boundary 先做 ZIP containment、entry/expanded-size 上限、duplicate/symlink、manifest/codec、identity 和 digest 校验；Chara application 再展示 placement、branches、Storylines、assets、missing dependency 与 identity conflict preview。用户授权 exact destination 后才写入 canonical repository，完成或取消后都释放归档 reader/bytes，不建立 watcher、mount、recent-package binding 或同步任务。ZIP 不原地执行，冲突不覆盖、不自动 merge、不静默 remap，也不回退 active/recent Workspace。
+导入在 Host/Node trust boundary 先做 ZIP containment、entry/expanded-size 上限、duplicate/symlink、manifest/codec、identity 和 digest 校验；Chara application 再展示 placement、branches、Storylines、assets、missing dependency 与 identity conflict preview。用户授权 exact destination 后才写入 canonical repository；内嵌素材必须先落入角色自有 assets 范围，再提交独立 canonical localized binding，部分失败保留已写入 bytes 但不得把未绑定副本报告为可用。完成或取消后都释放归档 reader/bytes，不建立 watcher、mount、recent-package binding 或同步任务。ZIP manifest 不得在导入后充当本地 binding。ZIP 不原地执行，冲突不覆盖、不自动 merge、不静默 remap，也不回退 active/recent Workspace。
 
 未采用“一个 JSON 内嵌所有 base64 素材”，因为它破坏大媒体流式处理、差异审计和局部失败隔离。未采用“把所有外部引用自动复制进 ZIP”，因为素材 ownership、许可、体积和依赖可用性需要用户显式判断。未采用“直接挂载 ZIP 为 Studio”，因为归档会成为第二事实源并复制 repository/runtime path。
 

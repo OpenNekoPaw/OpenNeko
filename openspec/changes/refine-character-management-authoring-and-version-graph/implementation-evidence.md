@@ -200,3 +200,17 @@ Focused verification:
 - real file-repository plus real ZIP tests cover multi-branch export/import, StorylineVersion refs, embedded Live2D bytes, external voice inventory, exact mutable identity conflict, destination-scope mismatch and interrupted-install retry.
 
 Desktop sender-bound source/destination file selection remains task 7.4. The application service accepts only the exact repository capability and archive bytes supplied by that future Host adapter; no Renderer raw-path contract was added.
+
+## Batch 6 quality correction: localized asset binding remains open
+
+The L3 post-implementation review found that storing embedded bytes under `assets/` is insufficient by itself: after the one-shot ZIP reader closes, no canonical live record currently associates the exact opaque `resourceRef` and representation with the imported entry file/tree. Treating file presence or the released ZIP manifest as that association would create an implicit fallback or a transport-backed runtime authority.
+
+Tasks 3.2 and 3.5 are therefore reopened. The next implementation batch must add one Chara-owned `localized-assets.json` binding aggregate, validate exact representation/resource ownership, make export consume those bindings, and commit imported files before the binding. Unbound partial bytes remain locally diagnosable but unavailable; retry may finish the exact binding without overwriting different facts. Existing Storyline persistence, ZIP containment, preview/conflict logic and tests remain valid groundwork, but the package cannot yet be described as self-contained after installation.
+
+Quality commands at this correction point:
+
+- `pnpm check:application-boundaries` — passed, 1,676 files checked;
+- `pnpm check:storage-authorities` — passed, 1,680 sources checked;
+- `pnpm check:legacy-debt` — passed with zero blocking production debt;
+- `pnpm check:no-internal-versioning` — self-tests passed, repository audit remained red because the shared dirty worktree has stale allowances and 246 new occurrences across unrelated Agent/Desktop/continuity work; no internal schema/format generation was added by the portable package code;
+- `pnpm check:unused` — red only for unrelated existing `@neko/generation` and `@earendil-works/pi-ai` manifest entries.

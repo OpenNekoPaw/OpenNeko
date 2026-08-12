@@ -149,8 +149,11 @@ neko/characters/<characterProjectId>/
   versions/...
   storylines/...
   authoring-tests/...
+  localized-assets.json # exact opaque ref/representation 到入口文件与所属文件的绑定
   assets/... # 仅用户显式本地化的角色自有副本
 ```
+
+`assets/` 中存在文件并不表示该素材可用。只有 `localized-assets.json` 中 exact `resourceRef + representationId + kind` 与入口相对路径、所属文件 inventory 完整匹配时，本地副本才是该 opaque ref 的 canonical realization；不得从目录名、文件存在或已释放的 ZIP manifest 推断或回退。
 
 `.neko-character` ZIP 只服务用户显式触发的导入和导出，不是 Character identity、live repository、Workspace、runtime 或同步源：
 
@@ -159,7 +162,7 @@ export: canonical Workspace records -> bounded ZIP snapshot
 import: ZIP validation/preview -> explicit Workspace install -> release ZIP resources
 ```
 
-导入完成后，管理、Studio、Dialogue 和 Room 只读取已安装的 Workspace records；移动、修改或删除源 ZIP 不影响已安装角色。产品不得保存 ZIP 路径或打开状态作为角色事实，不得挂载、监听、回读、同步或从 ZIP 原地编辑/运行。导出包不包含 Conversation、Room、Companion continuity/memory、Narrative run、provider/model 配置、Skill/Tool grant、approval、credential、cache 或 presentation snapshot。
+导入时先写入角色自有 bytes，再提交 canonical localized-asset binding；若中途失败，未绑定 bytes 不得被报告为可用，精确重试可以继续安装。导入完成后，管理、Studio、Dialogue 和 Room 只读取已安装的 Workspace records；移动、修改或删除源 ZIP 不影响已安装角色。产品不得保存 ZIP 路径、manifest 或打开状态作为角色事实，不得挂载、监听、回读、同步或从 ZIP 原地编辑/运行。导出包不包含 Conversation、Room、Companion continuity/memory、Narrative run、provider/model 配置、Skill/Tool grant、approval、credential、cache 或 presentation snapshot。
 
 普通 representation/voice 继续保存 opaque ref。只有用户明确选择、Host 授权且允许复制的素材 bytes 才可进入角色包；未内嵌资源作为 external dependency 显示，不静默复制全局库、项目 sibling 或任意本地路径。
 

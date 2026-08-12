@@ -50,6 +50,11 @@ describe('Character portable package service', () => {
         kind: 'voice',
         resourceRef: 'voice:provider-voice-a',
       },
+      {
+        representationId: 'vrm-main',
+        kind: 'vrm',
+        resourceRef: 'asset:vrm-source',
+      },
     ]);
 
     const destination = createCharacterAuthoringFileRepository({
@@ -140,6 +145,44 @@ describe('Character portable package service', () => {
     });
   });
 
+  it('blocks a different immutable CharacterVersion with the same exact identity', async () => {
+    const source = createCharacterAuthoringFileRepository({
+      workspaceRoot: await workspace(),
+      scope: { kind: 'standalone-library' },
+    });
+    await seedCharacter(source);
+    const archive = createCharacterPortableArchivePort();
+    const exported = await new CharacterPortablePackageService(source, archive).exportPackage({
+      characterProjectId: 'character-project-a',
+      characterStorylineIds: [],
+      authoringTestSnapshotIds: [],
+      embeddedAssets: [],
+      maxEmbeddedAssetBytes: 1024,
+    });
+    const destination = createCharacterAuthoringFileRepository({
+      workspaceRoot: await workspace(),
+      scope: { kind: 'standalone-library' },
+    });
+    const project = await source.readProject('character-project-a');
+    const rootVersion = await source.readPublication('character-version-root');
+    if (!project || !rootVersion) throw new Error('Source fixture is incomplete.');
+    await destination.saveProject(project);
+    await destination.storePublication({ ...rootVersion, label: 'Conflicting immutable facts' });
+
+    await expect(
+      new CharacterPortablePackageService(destination, archive).previewImport({
+        archiveBytes: exported.archiveBytes,
+        destination: { kind: 'standalone-library' },
+      }),
+    ).resolves.toMatchObject({
+      canCommit: false,
+      conflicts: [{ kind: 'character-version', recordId: 'character-version-root' }],
+    });
+    await expect(destination.readPublication('character-version-root')).resolves.toMatchObject({
+      label: 'Conflicting immutable facts',
+    });
+  });
+
   it('returns an exact partial-install diagnostic and supports idempotent retry', async () => {
     const source = createCharacterAuthoringFileRepository({
       workspaceRoot: await workspace(),
@@ -212,6 +255,35 @@ describe('Character portable package service', () => {
         destination: { kind: 'content-project', contentProjectId: 'content-project-a' },
       }),
     ).rejects.toMatchObject({ code: 'character-package-destination-mismatch' });
+  });
+
+  it('rejects one invalid archive while preserving a valid destination sibling', async () => {
+    const destination = createCharacterAuthoringFileRepository({
+      workspaceRoot: await workspace(),
+      scope: { kind: 'standalone-library' },
+    });
+    await new CharacterAuthoringService({
+      repository: destination,
+      lineage: destination,
+      now: () => NOW,
+    }).createProject({
+      characterProjectId: 'character-sibling',
+      displayName: 'Sibling',
+      draft: definition(),
+    });
+
+    await expect(
+      new CharacterPortablePackageService(
+        destination,
+        createCharacterPortableArchivePort(),
+      ).previewImport({
+        archiveBytes: new Uint8Array([1, 2, 3, 4]),
+        destination: { kind: 'standalone-library' },
+      }),
+    ).rejects.toMatchObject({ code: 'character-package-invalid' });
+    await expect(destination.readProject('character-sibling')).resolves.toMatchObject({
+      displayName: 'Sibling',
+    });
   });
 });
 
@@ -309,6 +381,11 @@ function definition() {
         representationId: 'voice-main',
         kind: 'voice' as const,
         resourceRef: 'voice:provider-voice-a',
+      },
+      {
+        representationId: 'vrm-main',
+        kind: 'vrm' as const,
+        resourceRef: 'asset:vrm-source',
       },
     ],
   };

@@ -64,6 +64,45 @@ describe('Character portable archive', () => {
     await expect(readCharacterPortableArchive(traversal)).rejects.toMatchObject({
       code: 'character-package-invalid',
     });
+
+    const duplicateSource = await rawArchive([
+      ['manifest.json', jsonBytes(manifest)],
+      ['character/project.json', jsonBytes(project())],
+      ['character/projecx.json', jsonBytes(project())],
+    ]);
+    const duplicate = replaceAscii(
+      duplicateSource,
+      'character/projecx.json',
+      'character/project.json',
+    );
+    await expect(readCharacterPortableArchive(duplicate)).rejects.toMatchObject({
+      code: 'character-package-invalid',
+    });
+  });
+
+  it('rejects a runtime record kind outside the closed Character authoring inventory', async () => {
+    await expect(
+      writeCharacterPortableArchive({
+        characterProjectId: 'character-project-a',
+        entryRecordPath: 'character/project.json',
+        records: [
+          {
+            kind: 'character-project',
+            recordId: 'character-project-a',
+            archivePath: 'character/project.json',
+            bytes: jsonBytes(project()),
+          },
+          {
+            kind: 'agent-conversation' as never,
+            recordId: 'conversation-a',
+            archivePath: 'character/conversations/conversation-a.json',
+            bytes: jsonBytes({ conversationId: 'conversation-a' }),
+          },
+        ],
+        embeddedAssets: [],
+        externalDependencies: [],
+      }),
+    ).rejects.toThrow(/record kind/u);
   });
 
   it('rejects digest mismatch and bounded-resource excess', async () => {
@@ -171,4 +210,17 @@ function jsonBytes(value: unknown): Uint8Array {
 
 function digest(bytes: Uint8Array): string {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
+function replaceAscii(bytes: Uint8Array, before: string, after: string): Uint8Array {
+  if (before.length !== after.length)
+    throw new Error('ZIP filename replacement must be equal length.');
+  const source = new TextEncoder().encode(before);
+  const replacement = new TextEncoder().encode(after);
+  const result = bytes.slice();
+  for (let offset = 0; offset <= result.length - source.length; offset += 1) {
+    if (!source.every((value, index) => result[offset + index] === value)) continue;
+    result.set(replacement, offset);
+  }
+  return result;
 }

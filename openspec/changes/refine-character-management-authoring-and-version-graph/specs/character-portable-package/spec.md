@@ -4,6 +4,8 @@
 
 OpenNeko SHALL keep editable Character facts in the authorized Workspace under one canonical `neko/characters/<characterProjectId>/...` record set owned by Chara. The record set SHALL contain the mutable CharacterProject metadata/draft and owner-qualified records for immutable CharacterVersions, lineage, Storylines and authoring evidence or tests. Character authoring SHALL operate on these records through the Chara repository and exact Workspace authority; a ZIP archive MUST NOT become a live editing authority, mounted runtime or second repository path.
 
+An explicitly localized Character-owned representation SHALL additionally have one canonical binding record that maps its exact opaque resource ref and representation identity/kind to one entry relative path and a bounded owned-file inventory under `assets/`. File presence, directory naming and a released ZIP manifest MUST NOT be used to infer this binding.
+
 #### Scenario: User authors a Character in Workspace
 
 - **WHEN** Workspace Authoring opens one exact CharacterProject under a valid sender-bound directory grant
@@ -15,6 +17,12 @@ OpenNeko SHALL keep editable Character facts in the authorized Workspace under o
 - **WHEN** equivalent standalone and project-local CharacterProjects are stored under their respective authorized roots
 - **THEN** both use the same Chara-owned relative record layout and codecs
 - **AND** their catalog scope and Project membership remain external placement facts rather than alternate file formats
+
+#### Scenario: Imported Live2D bytes are installed
+
+- **WHEN** a validated package installs an embedded Live2D tree into an exact CharacterProject
+- **THEN** Chara stores the owned files and commits a canonical binding for the exact opaque resource ref, representation and Live2D entry file
+- **AND** subsequent authoring/runtime resolution does not read the ZIP manifest or guess from asset paths
 
 ### Requirement: A portable Character package is an explicit ZIP transport container
 

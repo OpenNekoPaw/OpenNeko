@@ -90,7 +90,7 @@ Companion turn 可以携带用户显式选择的 owner-qualified Workspace/Conte
 
 角色草稿、可用版本、lineage、Storyline 和创作测试只在授权 Workspace 的 `neko/characters/<characterProjectId>/...` 目录记录中管理和运行。standalone 与 project-local Character 使用相同相对布局，区别只来自外部 placement authority。
 
-`.neko-character` ZIP 仅是导入导出快照：导出从 canonical 目录读取用户选定记录和显式授权素材；导入先校验和预览，再写入 canonical 目录并释放归档资源。ZIP 不被挂载为 Workspace，不保存为角色 identity，不参与后续编辑、对话、Room、监听或同步；导入后源 ZIP 可以移动或删除而不影响已安装角色。
+`.neko-character` ZIP 仅是导入导出快照：导出从 canonical 目录读取用户选定记录和已有 exact 本地化素材绑定；导入先校验和预览，再写入角色自有 bytes 与 canonical `resourceRef/representation -> entry/files` 绑定并释放归档资源。文件存在或 ZIP manifest 不能替代该绑定。ZIP 不被挂载为 Workspace，不保存为角色 identity，不参与后续编辑、对话、Room、监听或同步；导入后源 ZIP 可以移动或删除而不影响已安装角色。
 
 ## Character Interaction Workbench
 
