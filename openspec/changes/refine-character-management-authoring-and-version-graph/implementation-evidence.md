@@ -164,3 +164,21 @@ Residual integration risk: the current Host contract does not yet project the ty
 Full Desktop Vitest ran 102 files: 101 files and 670 tests passed; three failures in `desktop-agent-resource-display-projector.test.ts` expect the prior `renderUri` projection while the shared dirty worktree currently produces `previewDescriptor`. That adjacent Agent/Preview assertion drift is unrelated to the two Character repository injections and was not modified or hidden.
 
 `pnpm check:no-internal-versioning` self-tests passed, while the repository audit remains red from the shared dirty worktree's stale allowance hashes and 213 new occurrences across Agent/Desktop/Character continuity work. The occurrences in this batch use user-managed CharacterVersion domain identities inside the Chara owner; no schema, format, contract generation or dispatch field was added.
+
+## Batch 4 directory Storyline and localized-asset evidence
+
+The canonical `CharacterAuthoringFileRepository` now implements the existing `CharacterStorylineRepository` and a narrow `CharacterLocalizedAssetRepository`. Both standalone-library and Content Project authorities use the same owner-qualified relative records under `neko/characters/<characterProjectId>/...`; no SQLite, active-root or package-backed authoring route was added.
+
+Storyline reads and writes validate the exact CharacterProject, CharacterStoryline, CharacterStorylineVersion and referenced CharacterVersion ownership. Immutable StorylineVersion and localized-asset conflicts are idempotent for equal bytes/facts and fail visibly for different content. Localized assets accept only safe relative paths, use no-follow bounded reads and atomic writes, and require an existing exact CharacterProject. The Character definition continues to retain its opaque `asset:` representation ref; localizing bytes does not rewrite it.
+
+Focused verification:
+
+- `pnpm --filter @neko/chara typecheck` — passed;
+- `pnpm --filter @neko/chara test` — 35 files, 181 tests passed;
+- `pnpm --filter @neko/chara-node typecheck` — passed;
+- `pnpm --filter @neko/chara-node test -- character-authoring-file-repository.test.ts` — 6 files, 31 tests passed;
+- the placement matrix verifies identical standalone/project-local paths for project, usable version, authoring test, Storyline metadata/draft/version and localized Live2D bytes;
+- traversal, symlink, byte-limit and immutable overwrite rejection are covered;
+- `git diff --check` — passed before recording this evidence.
+
+This task extends the live directory repository only. ZIP-to-Workspace preview/commit remains task 3.5, and Desktop wiring remains task 7.4; neither is represented as an alternate repository or runtime authority.
