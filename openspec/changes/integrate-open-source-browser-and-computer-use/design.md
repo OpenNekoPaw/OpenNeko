@@ -17,11 +17,11 @@ Browser Use 和 Cua Driver 不应产生第二套插件市场、安装器、权�
 
 上游版本仍是第三方事实，但不再是 OpenNeko 内部资格代际。当前已审计基线可用于文档、测试和问题诊断：
 
-| Dependency | Audited baseline | Reused boundary |
-| --- | --- | --- |
-| Browser Use | `browser-use/browser-use` `0.13.7` | `uvx --from 'browser-use[cli]' browser-use --mcp` |
-| Cua Driver | `trycua/cua` `0.19.2` | Cua Driver MCP |
-| MCP SDK | `@modelcontextprotocol/sdk@1.30.0` | stdio/Streamable HTTP protocol adapter |
+| Dependency  | Audited baseline                   | Reused boundary                        |
+| ----------- | ---------------------------------- | -------------------------------------- |
+| Browser Use | `browser-use/browser-use` `0.13.7` | `uv tool install 'browser-use[cli]'`   |
+| Cua Driver  | `trycua/cua` `0.19.2`              | Cua Driver MCP                         |
+| MCP SDK     | `@modelcontextprotocol/sdk@1.30.0` | stdio/Streamable HTTP protocol adapter |
 
 该基线不表示只有相同字符串版本才能运行。能否接入由当前 MCP handshake、server identity、所需 operation
 和 adapter 依赖字段的结构兼容性决定。
@@ -46,13 +46,13 @@ Browser Use 和 Cua Driver 不应产生第二套插件市场、安装器、权�
 
 ## Five-layer analysis
 
-| Layer | Decision |
-| --- | --- |
+| Layer          | Decision                                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Responsibility | Extension service 只拥有发现、启停和诊断；MCP Manager 拥有协议连接；Automation 拥有 session/target/action；Desktop Host 拥有路径、进程、OS 权限和窗口 concrete adapter。 |
-| Dependency | Agent/Automation contracts 保持 host-neutral；Renderer 不接触 Node/Electron；上游 runtime 不成为 workspace package 依赖。 |
-| Interface | Plugin、Skill、MCP 使用公开 contract；Browser/CUA adapter 只声明所需 operation 和字段，不声明完整上游实现。 |
-| Extension | 新第三方 Plugin/Skill/MCP 不需要 OpenNeko 注册表；新 Browser/Computer adapter 只有在需要产品目标/动作语义时才加入 Automation。 |
-| Testing | 通用接入验证发现、启停、MCP handshake/schema parse 和 fail-local；Automation 额外验证精确目标、OS 权限、审批和结构兼容。 |
+| Dependency     | Agent/Automation contracts 保持 host-neutral；Renderer 不接触 Node/Electron；上游 runtime 不成为 workspace package 依赖。                                                |
+| Interface      | Plugin、Skill、MCP 使用公开 contract；Browser/CUA adapter 只声明所需 operation 和字段，不声明完整上游实现。                                                              |
+| Extension      | 新第三方 Plugin/Skill/MCP 不需要 OpenNeko 注册表；新 Browser/Computer adapter 只有在需要产品目标/动作语义时才加入 Automation。                                           |
+| Testing        | 通用接入验证发现、启停、MCP handshake/schema parse 和 fail-local；Automation 额外验证精确目标、OS 权限、审批和结构兼容。                                                 |
 
 ## Decisions
 
@@ -120,10 +120,16 @@ OpenNeko 保存 opaque `runtimeId`，Host 保存用户明确选择的 exact real
 `PATH`、不猜测最近安装、不执行 `pip`/`uvx`/`curl`/PowerShell，不更新或删除外部文件。重新选择替换当前
 authority；断开只删除 OpenNeko 授权。
 
-Browser Use 直接使用上游公开的 PyPI/`uvx` 分发，不 fork 或维护 OpenNeko 专用构建；当前推荐命令采用
-上游 MCP 文档的 `uvx --from 'browser-use[cli]' browser-use --mcp`。`uvx` 是用户侧的外部运行方式，命令
-只是 OpenNeko 展示和复制的文本，不参与 runtime identity，也不构成效果保证。用户若自行选择
-`uv tool install` 获得持久命令，其安装、更新与卸载仍完全属于用户和 `uv`，OpenNeko 不接管该生命周期。
+Browser Use 直接使用上游公开的 PyPI 分发，不 fork 或维护 OpenNeko 专用构建。OpenNeko 复制
+`uv tool install 'browser-use[cli]'` 作为持久安装命令，使用户随后可以明确选择生成的 `browser-use` 入口；
+上游 MCP 文档的 `uvx --from 'browser-use[cli]' browser-use --mcp` 仅是用户手动启动服务的示例，不是
+OpenNeko 的安装或运行时授权路径。两种命令均不参与 runtime identity，也不构成效果保证；安装、更新与
+卸载完全属于用户和 `uv`，OpenNeko 不接管该生命周期。
+
+标准 `uv tool install` 入口可以通过符号链接指向工具环境脚本，脚本 shebang 也可以指向工具环境的 Python
+链接。Desktop Host 必须解析并冻结入口 realpath、shebang interpreter realpath 和独立浏览器 executable
+realpath；启动时直接使用冻结的解释器执行冻结入口，并在连接前重验三者。符号链接目标变化只使当前
+runtime 失败，不扫描 `PATH` 或选择替代解释器。
 
 当前交付只组合一个显式选择的 `user-managed-local-runtime`。Browser/CUA 专用 remote endpoint manager 不进入
 Extensions UI、Desktop IPC 或 Automation provider 选择；普通远程 MCP endpoint 继续走既有通用 MCP Manager。
@@ -164,11 +170,20 @@ UI 不显示“已资格化”“未资格化”“第三方/未验证”。失�
 
 Browser 首期保留 `observe` 的直接读取 operation；不暴露任意 Python、`browser_exec`、嵌套 Agent、文件访问
 或 cloud fallback。每个 session 使用隔离 home/temp/browser-data，运行时和 browser executable 分别授权。
+这里的 browser executable 是用户安装的外部 Chrome/Chromium 兼容浏览器进程，不是 OpenNeko Renderer
+WebView；WebView 不拥有浏览器进程、CDP、页面 session、文件或网络授权。
 
-当前 Browser Use MCP 的 direct observe operation 不接受 tab/session identity，而 discovery client 与 execution
-client 各自拥有隔离 browser session；因此 discovery 看到的 tab 不能安全转交给 execution。生产注册必须等待
-官方上游提供原子 exact-target operation，不 fork Browser Use，也不得在 OpenNeko 内以 active-tab 切换、共享
-可变 discovery client 或平行 CDP controller 绕过。这个限制不阻塞 Cua 的独立、精确 window adapter 注册。
+Browser 首期不接管用户已经打开的 Chrome tab，也不在 discovery client 与 execution client 之间转交上游 tab
+identity。用户为当前 Tool Call 确认一个 canonical HTTP(S) origin；Automation session 为该 origin 创建一个独占
+Browser Use MCP client、隔离 browser profile 和唯一 page。Host 可以在 client 连接后通过上游
+`browser_navigate` 完成一次受限的 session bootstrap，但该 operation 不注册为 Agent Tool；之后只允许 direct
+observe operation。连接后、每次 observe 前后都必须通过上游 `browser_list_tabs` 验证 client 仍只有一个 page，
+且 page origin 仍等于授权 origin。popup、新 tab、跨 origin redirect 或第二 client 都使当前 session fail-visible。
+
+这一边界不依赖上游 atomic tab-target operation，因为唯一 page 就是 session-owned exact target；也不允许 fork
+Browser Use、active-tab switching、共享可变 client、默认浏览器推断或平行 CDP controller。未来若要接管用户已有
+tab，必须通过独立变更等待上游提供可转交的完整 session/tab identity 和原子 observe operation。这个限制不阻塞
+Cua 的独立、精确 window adapter 注册。
 
 Computer session 绑定 exact app/process/window/region。Host 在 mutation approval 前及输入前重新验证 target；
 Screen Recording、Accessibility/Input 使用当前 OS 状态。Pause、Stop、Take over 只作用于精确 session。
@@ -178,13 +193,13 @@ Screen Recording、Accessibility/Input 使用当前 OS 状态。Pause、Stop、T
 
 ### 7. 权限只存在于真实执行边界
 
-| Boundary | Authority | Scope |
-| --- | --- | --- |
-| Plugin enablement | Extension service + user action | 是否加载该 Plugin 的贡献 |
-| Tool invocation | Pi permission/preflight | 当前 Tool Call 的副作用 |
-| OS permission | Host/operating system | 当前文件、屏幕、Accessibility/Input 能力 |
-| Automation session | Automation application service | exact profile/target/mode/owner/budget |
-| Mutation approval | Pi Tool Call | 当前 target/effect/action |
+| Boundary           | Authority                       | Scope                                    |
+| ------------------ | ------------------------------- | ---------------------------------------- |
+| Plugin enablement  | Extension service + user action | 是否加载该 Plugin 的贡献                 |
+| Tool invocation    | Pi permission/preflight         | 当前 Tool Call 的副作用                  |
+| OS permission      | Host/operating system           | 当前文件、屏幕、Accessibility/Input 能力 |
+| Automation session | Automation application service  | exact profile/target/mode/owner/budget   |
+| Mutation approval  | Pi Tool Call                    | 当前 target/effect/action                |
 
 这些 authority 相互独立且不可替代。版本字符串、安装成功、Skill 文本、MCP annotation、process exit code 或
 成功文本都不能授予权限。

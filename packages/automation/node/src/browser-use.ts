@@ -13,8 +13,6 @@ export const BROWSER_USE_OBSERVE_PROFILE: AutomationProfile = Object.freeze({
     reviewedObserveOperation('browser_get_state'),
     reviewedObserveOperation('browser_get_html'),
     reviewedObserveOperation('browser_screenshot'),
-    reviewedObserveOperation('browser_list_tabs'),
-    reviewedObserveOperation('browser_list_sessions'),
   ]),
   requiredPermissions: Object.freeze({}),
 });

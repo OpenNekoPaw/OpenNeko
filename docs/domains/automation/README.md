@@ -5,13 +5,13 @@ an adapter domain, not a package manager, extension certification service, or se
 
 ## Ownership
 
-| Owner | Responsibility |
-| --- | --- |
-| Agent Extension service | Discover Plugin contributions, persist enablement, load Skills/ordinary MCP/Apps, and expose local diagnostics |
-| MCP Manager | Own standard MCP connection, Tool discovery, calls, cancellation, and fail-local protocol errors |
-| Automation package | Own compatible operation selection, exact session/target/mode/budget, action approval, and observation projection |
-| Desktop Main | Own file/app selection, realpath authority, process environment, OS permissions, window/process adapters, clipboard, and Cua signature/TCC checks |
-| Renderer/Webview | Render opaque identity, commands, actions, current state, and safe diagnostics through typed ports |
+| Owner                   | Responsibility                                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent Extension service | Discover Plugin contributions, persist enablement, load Skills/ordinary MCP/Apps, and expose local diagnostics                                    |
+| MCP Manager             | Own standard MCP connection, Tool discovery, calls, cancellation, and fail-local protocol errors                                                  |
+| Automation package      | Own compatible operation selection, exact session/target/mode/budget, action approval, and observation projection                                 |
+| Desktop Main            | Own file/app selection, realpath authority, process environment, OS permissions, window/process adapters, clipboard, and Cua signature/TCC checks |
+| Renderer/Webview        | Render opaque identity, commands, actions, current state, and safe diagnostics through typed ports                                                |
 
 The canonical Agent path remains:
 
@@ -41,11 +41,15 @@ are required.
 
 OpenNeko displays upstream guidance and a copyable command but never executes install/update/uninstall commands.
 
-- Browser Use: `uvx --from 'browser-use[cli]' browser-use --mcp`
+- Browser Use: `uv tool install 'browser-use[cli]'`
 - Cua Driver on macOS/Linux: `/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"`
 
 The user explicitly selects required assets. Package/domain contracts receive only opaque runtime identities; exact Host
 paths remain in Desktop Main. Disconnect removes OpenNeko authority and never deletes external files.
+
+Browser Use requires a separately selected external Chrome/Chromium-compatible executable. It does not control an
+OpenNeko Renderer WebView. Standard `uv tool install` entrypoint and Python links are accepted only after Desktop Main
+freezes their exact realpaths and revalidates them before every launch.
 
 Public runtime and endpoint state is intentionally small:
 
@@ -76,6 +80,11 @@ path and operation contract. Failure never selects another provider, installatio
 
 - Browser runtime and browser executable authorities are selected separately. Session home/temp/data are isolated and
   do not inherit model credentials or general Host secrets.
+- A Browser Tool Call declares one canonical HTTP(S) origin for explicit user confirmation. The Automation session owns
+  one Browser Use MCP client, one isolated profile, and exactly one page. Host bootstrap navigation is internal; the
+  Agent cannot call navigation or tab-management Tools. Extra pages, cross-origin navigation, target transfer, or a
+  second client for the same session fail visibly. Existing user browser tabs and the default browser are never inferred
+  or taken over.
 - Computer sessions bind exact app/process/window/region identities. Target and applicable OS permission are checked
   again before approval and before input.
 - Mutation approval is single-action and bound to the current Tool Call, target, and effect.
@@ -84,7 +93,8 @@ path and operation contract. Failure never selects another provider, installatio
 
 ## Current delivery status
 
-The open Extension/local-runtime/endpoint management contracts and deterministic compatibility tests are implemented.
-Production Browser/Cua provider/profile registration, real Browser domain binding, macOS permission fixtures, packaged
-Desktop verification, and provider-backed visible Agent Evaluation remain explicit follow-up work in
+The open Extension/local-runtime management contracts and deterministic compatibility tests are implemented. Cua and
+Browser Use are composed through the production Plugin contribution lifecycle. Browser first-release scope is one
+user-confirmed origin, one session-owned client, and one page rather than existing-tab takeover. Real local-runtime UI,
+packaged Desktop, and provider-backed visible Agent Evaluation remain explicit follow-up work in
 [`../../../openspec/changes/integrate-open-source-browser-and-computer-use/`](../../../openspec/changes/integrate-open-source-browser-and-computer-use/).

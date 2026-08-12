@@ -48,7 +48,7 @@ const DESKTOP_AUTOMATION_LOCAL_RUNTIME_SOURCES = Object.freeze([
     profile: BROWSER_USE_OBSERVE_PROFILE,
     installationGuideUrl:
       'https://docs.browser-use.com/open-source/customize/integrations/mcp-server',
-    installationCommand: "uvx --from 'browser-use[cli]' browser-use --mcp",
+    installationCommand: "uv tool install 'browser-use[cli]'",
     assets: Object.freeze([
       Object.freeze({ key: 'provider-runtime', label: 'Browser Use runtime' }),
       Object.freeze({ key: 'browser-executable', label: 'Browser executable' }),

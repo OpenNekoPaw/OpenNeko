@@ -41,6 +41,9 @@ Extension 记录存在即表示本地已配置来源；不再维护重复的 ins
 - Scoped ESLint、Prettier、`git diff --check`、Agent/Application/Webview boundary checks 通过。
 - `openspec validate integrate-open-source-browser-and-computer-use --type change --strict --no-interactive` 通过；
   全仓 `check:openspec` 86 项全部通过。
+- P0 Browser runtime 增量：Desktop Browser/Host/provider-inspector 聚焦测试 3 files / 15 tests、Desktop strict
+  typecheck、scoped ESLint、Prettier、`git diff --check` 和 OpenSpec strict validation 全部通过。验证覆盖持久安装
+  命令、标准 uv entrypoint/shebang link、冻结解释器启动，以及解释器链接换目标后的局部拒绝。
 - 全仓 `check:no-internal-versioning` 未通过：当前 dirty worktree 同时包含 Character/Canvas 等并行改动、大量 stale
   allowance 和新 occurrence；本变更保留的 Plugin manifest/MCP protocol 版本属于第三方事实。未修改共享 audit
   baseline 来掩盖这项仓库级阻塞。
@@ -50,9 +53,11 @@ Extension 记录存在即表示本地已配置来源；不再维护重复的 ins
 - Authoritative runtime：可见 Electron Desktop development runtime。
 - Scenario：`desktop-extension-localization` 通过；报告位于
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-11T20-15-26.059Z-desktop-extension-localization-development/report.json`。
-- Functional evidence：Browser 详情只显示 Browser Use local runtime 和
-  `uvx --from 'browser-use[cli]' browser-use --mcp`；Computer 详情只显示 Cua Driver、官方安装命令和系统权限区；
-  普通 Extension 不显示 Automation controls；英文与中文介绍一致。
+- Prior functional evidence：既有报告证明 Browser/Computer 控件范围、长命令布局、系统权限区和中英文介绍；
+  该报告捕获的是变更前命令，不作为本次精确命令文本的证据。
+- P0 functional attempt：场景已将 Browser 断言更新为 `uv tool install 'browser-use[cli]'`，并保留 Cua 精确命令
+  断言；development authoritative runtime 连续两次在进入产品页面前因 Desktop CDP target 未就绪而超时，
+  因此本次 UI 验收为 `blocked`。Host 命令复制和“不执行安装”仍由聚焦测试通过。
 - Visual review：首次像素检查发现长命令下操作按钮互相覆盖；已改为命令可换行、按钮按内容宽度自动换行，复跑
   同一场景并直接检查 Browser/Computer 截图后通过。未发现截断、重叠或权限区串位。
 - Advisory residual：本轮未覆盖深色主题、Windows/Linux、真实系统拒绝提示或 packaged build。
@@ -63,9 +68,11 @@ Extension 记录存在即表示本地已配置来源；不再维护重复的 ins
 - Key-free harness 既有全量结果：45 files / 307 tests；all-suite dry-run：25 suites / 74 cases。
 - Cleanup 后重新选择 `agent-runtime.external-automation`：1 suite / 6 cases dry-run 全部通过；该结果只证明
   suite/schema/runner readiness。
-- Provider-backed Browser/Computer visible Desktop cases 保持 `infrastructure-blocked`：production
-  Cua provider/profile 已完成生产组合但尚未在当前机器完成真实 CuaDriver/UI 验收；Browser exact-target 上游边界
-  尚未完成。不以组件测试、mock、最终文本或 dry-run 替代真实 Agent 行为验收。
+- P0 完成后再次 dry-run `agent-runtime.external-automation`：1 suite / 6 cases 通过；未把该结果解释为真实
+  Browser 行为或 UI 验收。
+- Provider-backed Browser/Computer visible Desktop cases 保持 `infrastructure-blocked`：production Cua 与 Browser
+  provider/profile 均已完成生产组合；本轮 Browser 用例在 Desktop 启动前因缺少显式 provider、model 和 cost
+  authorization 返回 blocker，Cua 未执行。不以组件测试、mock、最终文本或 dry-run 替代真实 Agent 行为验收。
 
 ## Quality Review
 
@@ -75,27 +82,48 @@ Extension 记录存在即表示本地已配置来源；不再维护重复的 ins
 - Fail-visible：缺失/变化的授权资产、provider identity/operation 不兼容、OS 权限丢失和 stale runtime identity 均只
   使当前 source/session 失败，不注册 raw Tool，也不切换 provider。
 
-## Remaining Production Boundary
+## Browser Production Registration Increment
 
-OpenSpec 仅剩 `5.4b`，不能通过静态 Tool 注册或 active-target fallback 宣称 Browser 完成：
+`5.4b` 已按首期单页面边界完成，未使用静态 Tool 注册或 active-target fallback：
 
 - Cua local runtime 通过现有插件 contribution lifecycle 构造唯一 Automation application service、session-owned MCP
   runtime、target discovery、authorization 和 product Tool；授权、复查、断开与插件启停会重新 reconcile 同一
   Tool Registry，活跃 session 会阻止断开。
-- Cua 已有稳定 application/process/window discovery；Browser Use factory 当前为每个 MCP client 建立隔离 browser
-  session，inspection/discovery client 看到的 tab 不能作为另一个 execution client 的精确目标。
-- Browser 必须先收敛 target/session authority，再注册 product-owned Tool；在此之前保持
-  `automation-adapter-unavailable`，不得伪造可用 Tool、退化为 active tab 或暴露 raw Browser/Cua MCP Tool。
+- Browser Tool 参数只接受 canonical HTTP(S) origin，Host 将其投影为用户确认的脱敏目标；每个 Automation
+  session 独占一个 Browser Use MCP client、隔离 profile 和唯一 page。
+- Desktop Browser factory 只在连接后通过内部 `browser_navigate` 启动授权 origin，并在启动、每次 observe 前后
+  和 session revalidation 时通过内部 tab inventory 强制 exactly-one-page 与 same-origin。Agent registry 只暴露
+  `browser_get_state`、`browser_get_html`、`browser_screenshot`，不暴露导航、tab management 或 raw MCP Tool。
+- Browser production adapter 已复用 Plugin contribution lifecycle、session grant、target selector、transient
+  observation receipt 和 runtime disposal；断开后删除 session-owned profile 数据，不接管现有用户 tab。
+- Deterministic verification：Automation Node 12 files / 63 tests、Agent adapter 1 file / 4 tests、Desktop Browser/
+  production adapter 2 files / 12 tests 通过；Automation Node、Agent Runtime、Desktop strict typecheck 通过。
+- Quality verification：scoped ESLint、Prettier、`git diff --check`、application/Agent boundary checks、legacy-debt
+  gate 和 OpenSpec strict validation 通过。`check:unused` 被并行 worktree 的 `@neko/generation` 与既有 Desktop
+  `pi-ai` dependency 报告阻塞，未修改这些无关文件。
+
+## 5.4b UI Validation
+
+- Scope：Browser origin target confirmation 与 Browser Tool availability，属于用户可见交互；未新增或修改 UI
+  组件、布局或样式。
+- Authoritative runtime：可见 Electron Desktop + 真实 provider，因为 target selector、Tool approval、外部进程和
+  transient screenshot 跨越 Main/Renderer/Agent runtime。
+- Inventory：Tool approval -> origin candidate confirmation -> single-page observation -> terminal result；额外页面、
+  跨 origin、现有 tab 接管和取消必须 fail-visible；相邻 Computer selector 不变。
+- Evidence：contract/adapter/Factory deterministic tests 通过；真实 visible case 在启动 Desktop 前因缺少显式
+  provider/model/cost authorization 返回 `infrastructure-blocked`，因此没有可审阅的当前截图。
+- Result：`blocked`（advisory）。功能实现不以 key-free 或 mock 证据替代视觉/真实 provider 验收。
 
 ## Residual Risk
 
-- `uvx` 和 Cua shell 命令只是上游安装说明文本；用户自行执行并承担第三方供应链与更新风险。
-- Browser Use 继续直接跟随官方 PyPI/`uvx` 分发，不 fork；用户若改用 `uv tool install`，其安装、更新和卸载
-  仍由用户及 `uv` 管理，不进入 OpenNeko Extension 生命周期。
+- `uv tool install` 和 Cua shell 命令只是上游安装说明文本；用户自行执行并承担第三方供应链与更新风险。
+- Browser Use 继续直接跟随官方 PyPI 分发，不 fork；安装、更新和卸载由用户及 `uv` 管理，不进入
+  OpenNeko Extension 生命周期。Browser runtime 使用用户单独选择的外部 Chrome/Chromium executable，不使用
+  Renderer WebView。
 - 外部 runtime 更新后会重新做路径、publisher/signing/TCC、server、operation/field/annotation 检查，但 OpenNeko
   不保证第三方行为质量。
-- 真实 Browser redirect/new-tab、Computer mutation、跨平台输入和 provider-backed Evaluation 仍待独立实现与
-  验收；Browser production Tool registration 仍待 `5.4b`。
+- 真实 Browser redirect/new-tab、Computer mutation、跨平台输入和 provider-backed Evaluation 仍待独立验收；
+  existing-tab takeover 不属于首期范围。
 
 ## Cua Production Registration Increment
 

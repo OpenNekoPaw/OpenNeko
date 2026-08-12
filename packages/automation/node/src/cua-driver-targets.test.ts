@@ -10,7 +10,7 @@ describe('Cua Driver Computer target discovery', () => {
       createTargetKey: () => 'opaque-target-1',
     });
 
-    await expect(discovery.listCandidates()).resolves.toEqual([
+    await expect(discovery.listCandidates({ sessionId: 'session-1' })).resolves.toEqual([
       {
         kind: 'computer',
         targetKey: 'opaque-target-1',
@@ -64,7 +64,7 @@ describe('Cua Driver Computer target discovery', () => {
       clients: { createTargetDiscoveryClient: () => client },
     });
 
-    await expect(discovery.listCandidates()).rejects.toThrow(
+    await expect(discovery.listCandidates({ sessionId: 'session-1' })).rejects.toThrow(
       "Cua Driver target Tool 'list_windows' structure is incompatible.",
     );
     expect(client.callTool).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('Cua Driver Computer target discovery', () => {
       createTargetKey: () => 'repeated-target',
     });
 
-    await expect(discovery.listCandidates()).rejects.toThrow(
+    await expect(discovery.listCandidates({ sessionId: 'session-1' })).rejects.toThrow(
       "Computer target issuer repeated opaque identity 'repeated-target'.",
     );
   });

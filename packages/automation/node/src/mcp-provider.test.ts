@@ -28,8 +28,6 @@ describe('reviewed MCP Automation provider', () => {
       'browser_get_state',
       'browser_get_html',
       'browser_screenshot',
-      'browser_list_tabs',
-      'browser_list_sessions',
     ]);
     expect(
       BROWSER_USE_OBSERVE_PROFILE.operations.every(

@@ -43,6 +43,9 @@
 - [x] 3.4 Keep guide, select/reselect, recheck and disconnect actions; disconnect removes only OpenNeko authority and
       never modifies user-installed files.
 - [x] 3.5 Add contract, Desktop IPC and Webview tests proving command copy and no install/update/uninstall execution path.
+- [x] 3.6 Replace the Browser Use manual `uvx` launch example with a persistent `uv tool install` command, accept the
+      standard uv entrypoint/shebang link layout through exact realpath freezing and revalidation, and state that the
+      selected browser is an external Chrome/Chromium executable rather than a Renderer WebView.
 
 ## 4. Minimal Browser/Cua compatibility
 
@@ -70,9 +73,10 @@
       retained hidden Root.
 - [x] 5.4a Register the production Cua provider/profile through the existing Automation session owner and canonical
       Agent Tool Registry; reconcile local-runtime authorization through the existing plugin contribution lifecycle.
-- [ ] 5.4b Register the production Browser Use provider/profile only after the upstream MCP can bind a direct observe
-      operation atomically to the exact user-selected tab/session; consume the official PyPI/`uvx` distribution without
-      maintaining a fork, active-tab switching or a parallel CDP controller.
+- [x] 5.4b Register the production Browser Use provider/profile with one exclusive MCP client, isolated profile and
+      single page per Automation session. Bootstrap only the user-confirmed HTTP(S) origin through the upstream
+      navigation operation, keep navigation/raw execution unavailable to Agent, reject additional pages or origin
+      changes, and consume the official PyPI distribution without a fork, shared client or parallel CDP controller.
 - [x] 5.5 For the current observe-only profile, query macOS Screen Recording and Accessibility at use time, keep Input
       Control explicitly unavailable, and interrupt the exact running session through Stop/Take over. Do not add a
       global input monitor before an interact profile has a real correctness consumer.

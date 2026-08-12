@@ -18,7 +18,9 @@ export interface CuaDriverTargetClientFactoryPort {
 }
 
 export interface ComputerTargetDiscoveryPort extends AutomationTargetRevalidationPort {
-  listCandidates(input?: {
+  listCandidates(input: {
+    readonly sessionId: string;
+    readonly targetHint?: unknown;
     readonly signal?: AbortSignal;
   }): Promise<readonly ComputerAutomationTarget[]>;
 }
@@ -29,7 +31,11 @@ export function createCuaDriverComputerTargetDiscovery(options: {
 }): ComputerTargetDiscoveryPort {
   const createTargetKey = options.createTargetKey ?? (() => `computer-target:${randomUUID()}`);
   return Object.freeze({
-    async listCandidates(input: { readonly signal?: AbortSignal } = {}) {
+    async listCandidates(input: {
+      readonly sessionId: string;
+      readonly targetHint?: unknown;
+      readonly signal?: AbortSignal;
+    }) {
       return await withDiscoveryClient(options.clients, input.signal, async (client) => {
         await requireReviewedTargetTools(client, input.signal);
         const [appsResult, windowsResult] = await Promise.all([

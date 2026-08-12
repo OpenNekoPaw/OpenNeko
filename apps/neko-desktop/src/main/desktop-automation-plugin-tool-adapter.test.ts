@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AutomationMcpClientPort } from '@neko/automation-node';
 
 import type { DesktopAutomationLocalRuntimeHost } from './desktop-automation-local-runtime-host';
+import type { DesktopBrowserUseMcpClientFactory } from './desktop-browser-use-mcp-client-factory';
 import type { DesktopCuaDriverMcpClientFactory } from './desktop-cua-driver-mcp-client-factory';
 import { createDesktopAutomationPluginToolAdapter } from './desktop-automation-plugin-tool-adapter';
 
@@ -118,11 +119,59 @@ describe('Desktop Automation plugin Tool adapter', () => {
     expect(inspectionClient.disconnect).toHaveBeenCalledOnce();
   });
 
-  it('keeps Browser Use unavailable until its upstream MCP can bind an exact selected tab', async () => {
+  it('projects Browser Use as one user-confirmed origin on one session-owned client', async () => {
+    const inspectionClient = client({
+      tools: [
+        {
+          name: 'browser_get_state',
+          inputSchema: { type: 'object', properties: {} },
+          annotations: { readOnlyHint: true, destructiveHint: false },
+        },
+        {
+          name: 'browser_get_html',
+          inputSchema: { type: 'object', properties: {} },
+          annotations: { readOnlyHint: true, destructiveHint: false },
+        },
+        {
+          name: 'browser_screenshot',
+          inputSchema: { type: 'object', properties: {} },
+          annotations: { readOnlyHint: true, destructiveHint: false },
+        },
+        {
+          name: 'browser_navigate',
+          inputSchema: { type: 'object', properties: { url: {}, new_tab: {} } },
+        },
+        {
+          name: 'browser_list_tabs',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+    });
+    const sessionClient = client({
+      tools: [],
+      callTool: async () => ({
+        content: [
+          { type: 'text', text: '{"url":"https://example.test"}' },
+          { type: 'image', data: PNG_BASE64, mimeType: 'image/png' },
+        ],
+      }),
+    });
+    const createBrowserClients = vi.fn((): DesktopBrowserUseMcpClientFactory => ({
+      createInspectionClient: () => inspectionClient,
+      createSessionClient: () => sessionClient,
+      inspectProvider: async () => ({
+        server: { name: 'browser-use', version: 'fixture' },
+        tools: [],
+      }),
+      revalidateSessionTarget: async ({ target }) => target,
+    }));
     const adapter = createDesktopAutomationPluginToolAdapter({
       localRuntimes: localRuntimeHost(),
       targetSelections: {
-        select: async () => undefined,
+        select: async (projection) => ({
+          authorizationId: projection.authorizationId,
+          targetKey: projection.candidates[0]?.targetKey,
+        }),
         listPending: () => [],
         resolve: () => undefined,
         subscribe: () => () => undefined,
@@ -131,23 +180,86 @@ describe('Desktop Automation plugin Tool adapter', () => {
       hostPermissions: { query: async () => 'granted' },
       storageRoot: '/tmp/openneko-automation-fixture',
       platform: 'darwin',
+      createBrowserClients,
     });
 
-    await expect(
-      adapter.build({
-        pluginId: 'browser-use@openneko',
-        pluginRoot: '/fixture/browser-use',
-        mcpServerIds: ['browser-use'],
-        appIds: [],
-        mcpToolExposure: 'adapter-only',
-      }),
-    ).resolves.toBeUndefined();
+    const contribution = await adapter.build({
+      pluginId: 'browser-use@openneko',
+      pluginRoot: '/fixture/browser-use',
+      mcpServerIds: ['browser-use'],
+      appIds: [],
+      mcpToolExposure: 'adapter-only',
+    });
+
+    expect(contribution?.tools.map((tool) => tool.name)).toEqual([
+      'automation_browser-use_browser_get_state',
+      'automation_browser-use_browser_get_html',
+      'automation_browser-use_browser_screenshot',
+    ]);
+    expect(contribution?.tools.map((tool) => tool.name)).not.toContain('browser_navigate');
+    expect(createBrowserClients).toHaveBeenCalledWith({
+      executablePath: '/Users/fixture/.local/bin/browser-use',
+      browserExecutablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      storageRoot: '/tmp/openneko-automation-fixture/browser-use',
+    });
+
+    const toolResult = await contribution?.tools[2]?.execute(
+      {
+        arguments: { full_page: false },
+        timeoutMs: 30_000,
+        stepBudget: 1,
+        targetOrigin: 'https://example.test',
+      },
+      {
+        metadata: {
+          workspaceId: 'workspace-1',
+          conversationId: 'conversation-1',
+          runId: 'run-1',
+          toolCallId: 'tool-call-browser-1',
+        },
+      },
+    );
+    expect(toolResult).toMatchObject({ success: true, attachments: [{ type: 'image' }] });
+    expect(sessionClient.callTool).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'browser_screenshot', arguments: { full_page: false } }),
+    );
+
+    await contribution?.dispose();
     await adapter.dispose();
   });
 });
 
 function localRuntimeHost(): DesktopAutomationLocalRuntimeHost {
   const runtimes = [
+    {
+      sourceId: 'browser-use.observe.local',
+      displayName: 'Browser Use',
+      providerKind: 'browser' as const,
+      installationGuideUrl: 'https://docs.browser-use.com',
+      installationCommand: "uv tool install 'browser-use[cli]'",
+      authorized: true,
+      runtimeId: 'local-runtime:browser-fixture',
+      state: 'ready' as const,
+      assets: [
+        {
+          key: 'provider-runtime' as const,
+          label: 'Browser Use runtime',
+          authorized: true,
+          runtimeId: 'local-runtime-asset:browser-runtime-fixture',
+          displayName: 'browser-use',
+          status: 'valid' as const,
+        },
+        {
+          key: 'browser-executable' as const,
+          label: 'Browser executable',
+          authorized: true,
+          runtimeId: 'local-runtime-asset:browser-executable-fixture',
+          displayName: 'Google Chrome',
+          status: 'valid' as const,
+        },
+      ],
+      diagnostics: [],
+    },
     {
       sourceId: 'computer-use.observe.local',
       displayName: 'Cua Driver',
@@ -179,11 +291,21 @@ function localRuntimeHost(): DesktopAutomationLocalRuntimeHost {
       recheck: async () => runtimes,
       disconnect: async () => [],
     },
-    resolve: async () => ({
-      sourceId: 'computer-use.observe.local',
-      runtimeId: 'local-runtime:cua-fixture',
-      assets: { 'provider-runtime': '/Applications/CuaDriver.app' },
-    }),
+    resolve: async (sourceId) =>
+      sourceId === 'browser-use.observe.local'
+        ? {
+            sourceId,
+            runtimeId: 'local-runtime:browser-fixture',
+            assets: {
+              'provider-runtime': '/Users/fixture/.local/bin/browser-use',
+              'browser-executable': '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            },
+          }
+        : {
+            sourceId: 'computer-use.observe.local',
+            runtimeId: 'local-runtime:cua-fixture',
+            assets: { 'provider-runtime': '/Applications/CuaDriver.app' },
+          },
     dispose: () => undefined,
   };
 }

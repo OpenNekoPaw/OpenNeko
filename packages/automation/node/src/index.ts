@@ -37,6 +37,7 @@ import {
 } from './compatibility';
 
 export * from './browser-use';
+export * from './browser-use-targets';
 export * from './computer-use';
 export * from './cua-driver-targets';
 export * from './local-runtime-management';

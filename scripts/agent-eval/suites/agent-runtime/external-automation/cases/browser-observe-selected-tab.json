@@ -11,12 +11,14 @@
     "lifecycleChecks": ["graceful-close"]
   },
   "evidenceContract": {
-    "userBehavior": "Select the exact Browser evaluation tab in the visible Desktop and observe its real viewport through the reviewed Browser Use screenshot Tool.",
+    "userBehavior": "Confirm one exact Browser origin in the visible Desktop and observe the single isolated page through the reviewed Browser Use screenshot Tool.",
     "canonicalPath": [
       "visible Desktop Agent composer",
       "Pi agent.main Tool call",
       "explicitly authorized user-managed Browser Use runtime",
-      "explicit Browser target selector",
+      "explicit Browser origin selector",
+      "one session-owned Browser Use client and isolated profile",
+      "single-page invariant before and after the observation",
       "browser-use.observe profile",
       "compatible Browser Use MCP operation",
       "transient screenshot receipt",
@@ -30,8 +32,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The selected OpenNeko Evaluation Browser tab is observed once through browser-use.observe and the Agent receives transient screenshot evidence without raw bytes.",
-    "expectedFailure": "Implicit active-tab routing, inherited model credentials, Computer provider fallback, raw or nested Browser access, missing screenshot receipt, or fabricated observation fails visibly."
+    "expectedResult": "The user-confirmed https://example.com origin is opened as the only page in one isolated Browser Use client and observed once without raw screenshot bytes.",
+    "expectedFailure": "Existing-tab takeover, a second page, cross-origin navigation, shared client ownership, inherited model credentials, Computer provider fallback, raw Browser access, missing screenshot receipt, or fabricated observation fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -40,7 +42,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "Use automation_browser-use_browser_screenshot exactly once with arguments {\"full_page\":false}, timeoutMs 30000, and stepBudget 1. In the visible selector choose only the tab labelled OpenNeko Evaluation Browser. Base the answer on the returned evidence and finish with BROWSER_OBSERVE_OK. Do not call browser_exec or retry_with_browser_use_agent."
+      "prompt": "Use automation_browser-use_browser_screenshot exactly once with arguments {\"full_page\":false}, targetOrigin \"https://example.com\", timeoutMs 30000, and stepBudget 1. In the visible selector confirm only https://example.com. Base the answer on the returned evidence and finish with BROWSER_OBSERVE_OK. Do not call browser_navigate, browser_list_tabs, browser_exec, or retry_with_browser_use_agent."
     },
     {
       "id": "approve",
@@ -60,6 +62,7 @@
       "status": "success",
       "expectedArguments": {
         "arguments": { "full_page": false },
+        "targetOrigin": "https://example.com",
         "timeoutMs": 30000,
         "stepBudget": 1
       },
@@ -70,7 +73,7 @@
       "kind": "automation-tool-result",
       "name": "automation_browser-use_browser_screenshot",
       "profileId": "browser-use.observe",
-      "targetLabel": "OpenNeko Evaluation Browser",
+      "targetLabel": "https://example.com",
       "mode": "observe",
       "sessionStatus": "active",
       "remainingSteps": 0,
@@ -83,6 +86,20 @@
       "kind": "timeline-projection",
       "terminalStatus": "completed",
       "toolName": "automation_browser-use_browser_screenshot",
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "no-browser-navigate",
+      "kind": "tool-call",
+      "name": "browser_navigate",
+      "status": "absent",
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "no-browser-list-tabs",
+      "kind": "tool-call",
+      "name": "browser_list_tabs",
+      "status": "absent",
       "evidenceRef": "browser-observe-facts"
     },
     {

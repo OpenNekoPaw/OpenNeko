@@ -48,9 +48,9 @@ runtime.
 #### Scenario: User needs Browser Use
 
 - **WHEN** Browser Use is not configured
-- **THEN** Extensions SHALL show a copyable upstream installation command and installation-guide action
+- **THEN** Extensions SHALL show `uv tool install 'browser-use[cli]'` as a copyable persistent installation command and an upstream installation-guide action
 - **AND** SHALL allow the user to select the provider runtime and browser executable independently
-- **AND** SHALL NOT execute `uvx`, `pip`, shell or any installer
+- **AND** SHALL NOT execute `uv tool`, `uvx`, `pip`, shell or any installer
 
 #### Scenario: User needs Cua Driver
 

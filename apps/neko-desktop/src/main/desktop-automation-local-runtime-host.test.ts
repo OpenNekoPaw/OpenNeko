@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,11 +17,13 @@ describe('Desktop Automation local runtime Host', () => {
   it('keeps Host paths private behind opaque runtime identities', async () => {
     const root = await temporaryRoot();
     const runtimePath = path.join(root, 'browser-use');
+    const runtimeLink = path.join(root, 'browser-use-command');
     const browserPath = path.join(root, 'Chromium');
     await writeFile(runtimePath, 'runtime');
+    await symlink(runtimePath, runtimeLink);
     await writeFile(browserPath, 'browser');
     const selections = new Map([
-      ['provider-runtime', runtimePath],
+      ['provider-runtime', runtimeLink],
       ['browser-executable', browserPath],
     ]);
     const host = createDesktopAutomationLocalRuntimeHost({
@@ -154,7 +156,7 @@ describe('Desktop Automation local runtime Host', () => {
     });
   });
 
-  it('opens only the descriptor-owned guide and disconnects without deleting files', async () => {
+  it('copies only descriptor-owned install commands and disconnects without deleting files', async () => {
     const root = await temporaryRoot();
     const runtimePath = path.join(root, 'cua-driver');
     await writeFile(runtimePath, 'runtime');
@@ -174,6 +176,8 @@ describe('Desktop Automation local runtime Host', () => {
     expect(writeClipboardText).toHaveBeenCalledWith(
       '/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"',
     );
+    await host.management.copyInstallationCommand('browser-use.observe.local');
+    expect(writeClipboardText).toHaveBeenCalledWith("uv tool install 'browser-use[cli]'");
     await host.management.authorizeAsset(
       'computer-use.observe.local',
       'provider-runtime',

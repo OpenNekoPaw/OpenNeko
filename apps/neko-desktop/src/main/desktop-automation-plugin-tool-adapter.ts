@@ -1,6 +1,10 @@
 import path from 'node:path';
 
-import { parseAutomationProfile, type AutomationSessionSnapshot } from '@neko/automation-contracts';
+import {
+  parseAutomationProfile,
+  type AutomationProfile,
+  type AutomationSessionSnapshot,
+} from '@neko/automation-contracts';
 import {
   parseAutomationSessionControlCommand,
   type AutomationSessionControlProjection,
@@ -8,11 +12,16 @@ import {
 import type {
   AutomationApplicationService,
   AutomationHostPermissionPort,
+  AutomationProviderPort,
   AutomationSessionGrantAuthority,
+  AutomationTargetDiscoveryPort,
   AutomationTargetSelectionCoordinator,
   AutomationTransientObservationStore,
+  SessionOwnedAutomationMcpRuntime,
 } from '@neko/automation-node';
 import {
+  BROWSER_USE_OBSERVE_PROFILE,
+  BROWSER_USE_OBSERVE_TOOL_NAMES,
   CUA_DRIVER_OBSERVE_PROFILE,
   CUA_DRIVER_OBSERVE_TOOL_NAMES,
   createAutomationApplicationService,
@@ -20,8 +29,10 @@ import {
   createAutomationSessionGrantAuthority,
   createAutomationTransientObservationStore,
   createCuaDriverComputerTargetDiscovery,
+  createIsolatedBrowserTargetDiscovery,
   createReviewedMcpAutomationProvider,
   createSessionOwnedAutomationMcpRuntime,
+  browserUseMcpResultProjector,
   cuaDriverArgumentProjector,
   cuaDriverResultProjector,
 } from '@neko/automation-node';
@@ -31,6 +42,10 @@ import type {
   AgentPluginToolAdapterRuntime,
 } from '@neko/agent-runtime/extensions';
 import {
+  createDesktopBrowserUseMcpClientFactory,
+  type DesktopBrowserUseMcpClientFactory,
+} from './desktop-browser-use-mcp-client-factory';
+import {
   createDesktopCuaDriverMcpClientFactory,
   type DesktopCuaDriverMcpClientFactory,
 } from './desktop-cua-driver-mcp-client-factory';
@@ -38,6 +53,8 @@ import type { DesktopAutomationLocalRuntimeHost } from './desktop-automation-loc
 
 const COMPUTER_USE_PLUGIN_ID = 'computer-use@openneko';
 const COMPUTER_USE_SOURCE_ID = 'computer-use.observe.local';
+const BROWSER_USE_PLUGIN_ID = 'browser-use@openneko';
+const BROWSER_USE_SOURCE_ID = 'browser-use.observe.local';
 
 interface ActiveAdapterRuntime {
   readonly pluginId: string;
@@ -71,6 +88,11 @@ export function createDesktopAutomationPluginToolAdapter(options: {
     readonly storageRoot: string;
     readonly platform: NodeJS.Platform;
   }) => DesktopCuaDriverMcpClientFactory;
+  readonly createBrowserClients?: (input: {
+    readonly executablePath: string;
+    readonly browserExecutablePath: string;
+    readonly storageRoot: string;
+  }) => DesktopBrowserUseMcpClientFactory;
 }): DesktopAutomationPluginToolAdapter {
   const platform = options.platform ?? process.platform;
   const runtimes = new Set<ActiveAdapterRuntime>();
@@ -80,40 +102,72 @@ export function createDesktopAutomationPluginToolAdapter(options: {
   const adapter: DesktopAutomationPluginToolAdapter = {
     async build(descriptor) {
       requireActive(disposed);
-      if (
-        descriptor.pluginId !== COMPUTER_USE_PLUGIN_ID ||
-        descriptor.mcpToolExposure !== 'adapter-only'
-      ) {
-        return undefined;
-      }
+      if (descriptor.mcpToolExposure !== 'adapter-only') return undefined;
+      const sourceId =
+        descriptor.pluginId === COMPUTER_USE_PLUGIN_ID
+          ? COMPUTER_USE_SOURCE_ID
+          : descriptor.pluginId === BROWSER_USE_PLUGIN_ID
+            ? BROWSER_USE_SOURCE_ID
+            : undefined;
+      if (!sourceId) return undefined;
       const projection = (await options.localRuntimes.management.list()).find(
-        (candidate) => candidate.sourceId === COMPUTER_USE_SOURCE_ID,
+        (candidate) => candidate.sourceId === sourceId,
       );
       if (!projection || projection.state !== 'ready') return undefined;
-      const resolution = await options.localRuntimes.resolve(
-        COMPUTER_USE_SOURCE_ID,
-        projection.runtimeId,
-      );
-      const appBundlePath = requireAsset(resolution.assets['provider-runtime']);
-      const executablePath = path.join(appBundlePath, 'Contents', 'MacOS', 'cua-driver');
-      const storageRoot = path.join(options.storageRoot, 'cua-driver');
-      const clients = options.createCuaClients
-        ? options.createCuaClients({ appBundlePath, executablePath, storageRoot, platform })
-        : createDesktopCuaDriverMcpClientFactory({
-            runtime: { appBundlePath, executablePath },
-            storageRoot,
-            platform,
-          });
-      const targets = createCuaDriverComputerTargetDiscovery({ clients });
-      const providerRuntime = createSessionOwnedAutomationMcpRuntime({ clients, targets });
-      const profile = createLocalComputerProfile(projection.runtimeId);
-      const provider = createReviewedMcpAutomationProvider({
-        identity: profile.provider,
-        allowedOperations: CUA_DRIVER_OBSERVE_TOOL_NAMES,
-        runtime: providerRuntime,
-        resultProjector: cuaDriverResultProjector,
-        argumentProjector: cuaDriverArgumentProjector,
-      });
+      const resolution = await options.localRuntimes.resolve(sourceId, projection.runtimeId);
+      let profile: AutomationProfile;
+      let targets: AutomationTargetDiscoveryPort;
+      let providerRuntime: SessionOwnedAutomationMcpRuntime;
+      let provider: AutomationProviderPort;
+      let providerLabel: string;
+      if (sourceId === BROWSER_USE_SOURCE_ID) {
+        const executablePath = requireAsset(resolution.assets['provider-runtime']);
+        const browserExecutablePath = requireAsset(resolution.assets['browser-executable']);
+        const storageRoot = path.join(options.storageRoot, 'browser-use');
+        const clients = options.createBrowserClients
+          ? options.createBrowserClients({ executablePath, browserExecutablePath, storageRoot })
+          : createDesktopBrowserUseMcpClientFactory({
+              runtime: { executablePath, browserExecutablePath },
+              storageRoot,
+            });
+        targets = createIsolatedBrowserTargetDiscovery();
+        providerRuntime = createSessionOwnedAutomationMcpRuntime({
+          clients,
+          targets: {
+            revalidate: (input) => clients.revalidateSessionTarget(input),
+          },
+        });
+        profile = createLocalBrowserProfile(projection.runtimeId);
+        provider = createReviewedMcpAutomationProvider({
+          identity: profile.provider,
+          allowedOperations: BROWSER_USE_OBSERVE_TOOL_NAMES,
+          runtime: providerRuntime,
+          resultProjector: browserUseMcpResultProjector,
+        });
+        providerLabel = 'Browser Use';
+      } else {
+        const appBundlePath = requireAsset(resolution.assets['provider-runtime']);
+        const executablePath = path.join(appBundlePath, 'Contents', 'MacOS', 'cua-driver');
+        const storageRoot = path.join(options.storageRoot, 'cua-driver');
+        const clients = options.createCuaClients
+          ? options.createCuaClients({ appBundlePath, executablePath, storageRoot, platform })
+          : createDesktopCuaDriverMcpClientFactory({
+              runtime: { appBundlePath, executablePath },
+              storageRoot,
+              platform,
+            });
+        targets = createCuaDriverComputerTargetDiscovery({ clients });
+        providerRuntime = createSessionOwnedAutomationMcpRuntime({ clients, targets });
+        profile = createLocalComputerProfile(projection.runtimeId);
+        provider = createReviewedMcpAutomationProvider({
+          identity: profile.provider,
+          allowedOperations: CUA_DRIVER_OBSERVE_TOOL_NAMES,
+          runtime: providerRuntime,
+          resultProjector: cuaDriverResultProjector,
+          argumentProjector: cuaDriverArgumentProjector,
+        });
+        providerLabel = 'Cua Driver';
+      }
       const grants: AutomationSessionGrantAuthority = createAutomationSessionGrantAuthority();
       const observations = createAutomationTransientObservationStore({
         ttlMs: 60_000,
@@ -139,7 +193,7 @@ export function createDesktopAutomationPluginToolAdapter(options: {
       if (service.listAvailableOperations(profile.id).length !== profile.operations.length) {
         observations.dispose();
         await providerRuntime.dispose();
-        throw new Error('Cua Driver did not expose every reviewed Computer operation.');
+        throw new Error(`${providerLabel} did not expose every reviewed operation.`);
       }
       const authorization = createAutomationSessionAuthorizationService({
         registrations: [{ profile, targets }],
@@ -171,14 +225,17 @@ export function createDesktopAutomationPluginToolAdapter(options: {
             result.status === 'rejected' ? [result.reason] : [],
           );
           if (errors.length > 0) {
-            throw new AggregateError(errors, 'Failed to dispose the Cua Driver adapter runtime.');
+            throw new AggregateError(
+              errors,
+              `Failed to dispose the ${providerLabel} adapter runtime.`,
+            );
           }
         },
       };
       runtimes.add(active);
       notify(listeners);
       return Object.freeze({
-        sourceFingerprint: `${COMPUTER_USE_SOURCE_ID}:${projection.runtimeId}`,
+        sourceFingerprint: `${sourceId}:${projection.runtimeId}`,
         tools,
         readiness: Object.freeze({ status: 'ready' as const, diagnosticCode: '' }),
         dispose: active.dispose,
@@ -268,7 +325,6 @@ export function createDesktopAutomationPluginToolAdapter(options: {
 function createLocalComputerProfile(runtimeId: string) {
   return parseAutomationProfile({
     ...CUA_DRIVER_OBSERVE_PROFILE,
-    id: COMPUTER_USE_SOURCE_ID,
     provider: {
       ...CUA_DRIVER_OBSERVE_PROFILE.provider,
       deliverySource: { kind: 'user-managed-local-runtime', runtimeId },
@@ -276,8 +332,18 @@ function createLocalComputerProfile(runtimeId: string) {
   });
 }
 
+function createLocalBrowserProfile(runtimeId: string) {
+  return parseAutomationProfile({
+    ...BROWSER_USE_OBSERVE_PROFILE,
+    provider: {
+      ...BROWSER_USE_OBSERVE_PROFILE.provider,
+      deliverySource: { kind: 'user-managed-local-runtime', runtimeId },
+    },
+  });
+}
+
 function requireAsset(value: string | undefined): string {
-  if (!value) throw new Error('Cua Driver application authorization is unavailable.');
+  if (!value) throw new Error('Desktop Automation runtime asset authorization is unavailable.');
   return value;
 }
 

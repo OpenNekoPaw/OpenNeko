@@ -57,6 +57,7 @@ describe('Automation session authorization', () => {
     expect(JSON.stringify(selection.mock.calls[0]?.[0])).not.toMatch(
       /applicationId|processId|windowId/u,
     );
+    expect(targets.listCandidates).toHaveBeenCalledWith({ sessionId: 'session-1' });
     expect(targets.revalidate).toHaveBeenCalledWith({ target });
     expect(issue).toHaveBeenCalledOnce();
     await expect(grants.consume(authorized.grant)).resolves.toBe(true);
@@ -110,6 +111,12 @@ describe('Automation session authorization', () => {
     const authorized = await service.authorizeSession({
       ...request(),
       profile: BROWSER_USE_OBSERVE_PROFILE,
+      targetHint: { origin: 'https://example.test' },
+    });
+
+    expect(targets.listCandidates).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      targetHint: { origin: 'https://example.test' },
     });
 
     expect(authorized.target).toEqual(browserTarget);

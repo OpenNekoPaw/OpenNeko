@@ -76,6 +76,8 @@ equality and exact upstream/server version equality MUST NOT be required.
 
 Every Browser Use session MUST bind an isolated browser profile, allowed domains, exact mode, owner Tool Call and bounded
 lifetime. Browser runtime and browser executable MUST be independently selected exact Host authorities.
+The browser executable MUST be an external Chrome/Chromium-compatible browser process and MUST NOT be a Renderer WebView.
+The initial delivery MUST bind one exclusive Browser Use MCP client and one isolated page to each Automation session.
 
 #### Scenario: Browser observe session starts
 
@@ -84,11 +86,36 @@ lifetime. Browser runtime and browser executable MUST be independently selected 
 - **AND** Pi SHALL analyze returned state, HTML and screenshot without another model
 - **AND** navigation, arbitrary code/files, download/upload and nested Agent operations SHALL remain unavailable
 
+#### Scenario: User confirms an isolated Browser origin
+
+- **WHEN** a Browser observe Tool Call proposes one canonical HTTP(S) origin and the user selects that projected target
+- **THEN** Host SHALL create one exclusive MCP client, one isolated browser profile and one page for that session
+- **AND** Host MAY use the upstream navigation operation once to bootstrap the selected origin without registering navigation as an Agent Tool
+- **AND** the observe operation SHALL run only after the sole page still resolves to the selected origin
+
+#### Scenario: Browser session opens another page
+
+- **WHEN** the isolated client contains a popup, second tab or any additional page before or after observation
+- **THEN** the current session SHALL fail visibly and release its client and browser profile
+- **AND** OpenNeko SHALL NOT choose an active/recent page, close a user-owned page or create another client
+
+#### Scenario: User requests an existing browser tab
+
+- **WHEN** the user wants to attach to a tab that was not created by the current isolated Automation session
+- **THEN** the initial Browser profile SHALL remain unavailable for that target
+- **AND** OpenNeko SHALL NOT infer the default browser, switch an active tab, share a mutable client or start a parallel CDP controller
+
 #### Scenario: Runtime path changes
 
 - **WHEN** an authorized provider entrypoint or browser executable resolves to a different path identity
 - **THEN** only that resource/source SHALL require explicit reselection
 - **AND** OpenNeko SHALL NOT scan `PATH`, choose a recent install or start a managed fallback
+
+#### Scenario: User selects a uv tool entrypoint
+
+- **WHEN** the selected Browser Use entrypoint or its Python shebang uses a symbolic link created by `uv tool install`
+- **THEN** Host SHALL freeze and revalidate the entrypoint realpath and interpreter realpath before launch
+- **AND** SHALL execute the exact entrypoint with the exact interpreter rather than reject standard uv layout or follow a changed link
 
 ### Requirement: Computer automation binds a visible target
 
@@ -149,7 +176,7 @@ owned by the generic MCP Manager.
 #### Scenario: User requests installation help
 
 - **WHEN** an external runtime is missing
-- **THEN** OpenNeko MAY copy a documented `uvx`, package-manager or upstream installer command and open its guide
+- **THEN** OpenNeko MAY copy a persistent package-manager or upstream installer command and open its guide
 - **AND** SHALL NOT execute the command or infer authorization from its presence
 - **AND** any `uvx` execution or `uv tool install` lifecycle SHALL remain user-owned
 
@@ -170,6 +197,12 @@ paths. They MUST NOT inherit the real user home, general Host environment, model
 - **WHEN** Host starts an Automation runtime
 - **THEN** environment SHALL contain only explicitly owned values and scoped directories
 - **AND** real `HOME`, general `PATH`, unrelated application secrets and model-provider credentials SHALL be absent
+
+#### Scenario: Browser Tool Calls run concurrently
+
+- **WHEN** separate Browser Automation sessions execute concurrently
+- **THEN** each session SHALL own exactly one distinct MCP client, profile directory and page
+- **AND** no client or page identity SHALL be shared across sessions
 
 ### Requirement: Failure remains local and no fallback is introduced
 

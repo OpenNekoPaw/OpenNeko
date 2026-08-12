@@ -202,12 +202,16 @@ async function scrollAutomationControlsIntoView(evaluate) {
 function assertAutomationControls(result, expectedSourceId, expectPermissions) {
   const expectedName =
     expectedSourceId === 'browser-use.observe.local' ? 'Browser Use' : 'Cua Driver';
+  const expectedCommand =
+    expectedSourceId === 'browser-use.observe.local'
+      ? "uv tool install 'browser-use[cli]'"
+      : '/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"';
   if (
     result.localRuntimeCount !== 1 ||
     result.sourceNames.length !== 1 ||
     result.sourceNames[0] !== expectedName ||
     result.sourceCommands.length !== 1 ||
-    result.sourceCommands[0].length === 0 ||
+    result.sourceCommands[0] !== expectedCommand ||
     result.permissionCount !== (expectPermissions ? 1 : 0)
   ) {
     throw new Error(

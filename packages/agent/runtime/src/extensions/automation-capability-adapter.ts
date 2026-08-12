@@ -44,7 +44,7 @@ export function createAgentAutomationCapabilityTools(options: {
             description: `在用户明确授权的目标上通过 ${profile.provider.providerId} 执行已审核的 ${operation.name}；目标、模式、预算和 Tool Call owner 会被冻结。`,
           },
         },
-        parameters: AUTOMATION_TOOL_PARAMETERS,
+        parameters: createAutomationToolParameters(profile.provider.kind),
         category: 'system',
         requiresConfirmation: true,
         isReadOnly: operation.trait.readOnly,
@@ -61,7 +61,7 @@ export function createAgentAutomationCapabilityTools(options: {
               : 'high',
         },
         async execute(args, executionOptions) {
-          const input = parseAdapterArguments(args);
+          const input = parseAdapterArguments(args, profile.provider.kind);
           const owner = requireOwner(executionOptions);
           const sessionId = requireCreatedIdentity(createId(), 'session');
           const actionId = requireCreatedIdentity(createId(), 'action');
@@ -72,6 +72,9 @@ export function createAgentAutomationCapabilityTools(options: {
             timeoutMs: input.timeoutMs,
             stepBudget: input.stepBudget,
             owner,
+            ...(input.targetOrigin === undefined
+              ? {}
+              : { targetHint: Object.freeze({ origin: input.targetOrigin }) }),
             ...(executionOptions?.signal === undefined ? {} : { signal: executionOptions.signal }),
           });
           const target = parseAutomationTarget(authorized.target);
@@ -185,9 +188,10 @@ export function createAgentAutomationCapabilityTools(options: {
   );
 }
 
-const AUTOMATION_TOOL_PARAMETERS: ToolParameters = {
-  type: 'object',
-  properties: {
+function createAutomationToolParameters(
+  kind: AutomationProfile['provider']['kind'],
+): ToolParameters {
+  const commonProperties = {
     arguments: {
       type: 'object',
       description: 'Reviewed upstream operation arguments. Target routing fields are Host-owned.',
@@ -205,30 +209,64 @@ const AUTOMATION_TOOL_PARAMETERS: ToolParameters = {
       minimum: 1,
       maximum: 100,
     },
-  },
-  required: ['arguments', 'timeoutMs', 'stepBudget'],
-  additionalProperties: false,
-};
+  } as const;
+  if (kind === 'browser') {
+    return {
+      type: 'object',
+      properties: {
+        ...commonProperties,
+        targetOrigin: {
+          type: 'string',
+          description:
+            'Canonical HTTP(S) origin for the isolated Browser session. The Host asks the user to confirm it.',
+        },
+      },
+      required: ['arguments', 'timeoutMs', 'stepBudget', 'targetOrigin'],
+      additionalProperties: false,
+    };
+  }
+  return {
+    type: 'object',
+    properties: commonProperties,
+    required: ['arguments', 'timeoutMs', 'stepBudget'],
+    additionalProperties: false,
+  };
+}
 
-function parseAdapterArguments(value: Readonly<Record<string, unknown>>): {
+function parseAdapterArguments(
+  value: Readonly<Record<string, unknown>>,
+  kind: AutomationProfile['provider']['kind'],
+): {
   readonly arguments: Readonly<Record<string, unknown>>;
   readonly timeoutMs: number;
   readonly stepBudget: number;
+  readonly targetOrigin?: string;
 } {
   const keys = Object.keys(value);
   if (
-    keys.length !== 3 ||
-    keys.some((key) => !['arguments', 'timeoutMs', 'stepBudget'].includes(key))
+    (keys.length !== 3 && keys.length !== 4) ||
+    keys.some((key) => !['arguments', 'timeoutMs', 'stepBudget', 'targetOrigin'].includes(key))
   ) {
     throw new Error('Automation Tool arguments contain unsupported fields.');
   }
   if (!isRecord(value['arguments'])) {
     throw new Error('Automation Tool operation arguments must be an object.');
   }
+  const targetOrigin = value['targetOrigin'];
+  if (kind === 'browser' && typeof targetOrigin !== 'string') {
+    throw new Error('Browser Automation Tool requires an exact target origin.');
+  }
+  if (kind === 'computer' && targetOrigin !== undefined) {
+    throw new Error('Computer Automation Tool does not accept a browser target origin.');
+  }
+  if (targetOrigin !== undefined && typeof targetOrigin !== 'string') {
+    throw new Error('Automation Tool target origin must be a string.');
+  }
   return {
     arguments: Object.freeze({ ...value['arguments'] }),
     timeoutMs: boundedInteger(value['timeoutMs'], 1, 120_000, 'timeout'),
     stepBudget: boundedInteger(value['stepBudget'], 1, 100, 'step budget'),
+    ...(targetOrigin === undefined ? {} : { targetOrigin }),
   };
 }
 

@@ -19,7 +19,11 @@ import type { AutomationTargetRevalidationPort } from './session-owned-mcp-runti
 const MAX_SELECTION_CANDIDATES = 100;
 
 export interface AutomationTargetDiscoveryPort extends AutomationTargetRevalidationPort {
-  listCandidates(input?: { readonly signal?: AbortSignal }): Promise<readonly AutomationTarget[]>;
+  listCandidates(input: {
+    readonly sessionId: string;
+    readonly targetHint?: unknown;
+    readonly signal?: AbortSignal;
+  }): Promise<readonly AutomationTarget[]>;
 }
 
 export interface AutomationTargetSelectionPort {
@@ -39,6 +43,7 @@ export interface AutomationSessionAuthorizationInput {
     readonly runId: string;
     readonly toolCallId: string;
   };
+  readonly targetHint?: unknown;
   readonly signal?: AbortSignal;
 }
 
@@ -110,6 +115,8 @@ export function createAutomationSessionAuthorizationService(options: {
       });
       const authorizationId = identity(createAuthorizationId(), 'Automation target authorization');
       const discovered = await registration.targets.listCandidates({
+        sessionId,
+        ...(input.targetHint === undefined ? {} : { targetHint: input.targetHint }),
         ...(input.signal === undefined ? {} : { signal: input.signal }),
       });
       throwIfAborted(input.signal);

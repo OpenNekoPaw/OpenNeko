@@ -15,8 +15,9 @@
 
 ## Cases
 
-- Updated：`browser-observe-selected-tab`、`browser-mutation-denied-in-observe-profile` 删除固定 Browser Use
-  版本和“资格化”语义，保留兼容 operation、显式目标、观察证据和 raw/nested fallback rejection。
+- Updated：`browser-observe-selected-tab`、`browser-mutation-denied-in-observe-profile` 改为显式确认 canonical
+  origin，并要求一会话一客户端、一隔离 profile 和一页面；保留观察证据、mutation denial、raw/nested Tool
+  rejection，并禁止 existing-tab takeover、Agent navigation/tab management 和 provider fallback。
 - Updated：`computer-observe-selected-window`、`computer-target-routing-fields-rejected`、
   `computer-observation-cancelled` 删除固定 Cua release 和“资格化”语义，保留签名/TCC owner、精确目标、
   Host 注入路由字段、取消和 raw fallback rejection；permission loss 与显式 Take over 由同一 Automation owner 的
@@ -31,19 +32,21 @@
 
 - Key-free：`pnpm test:agent:eval` passed（45 files / 307 tests）；全 suite dry-run passed（25 suites / 74
   cases）。它们只证明 suite/schema/runner readiness。
-- Real Browser/Computer cases：当前 production Automation provider/profile 注册仍未完成，无法从可见 Desktop
-  用户路径创建真实 Browser/Cua Tool；保持 `infrastructure-blocked`，不以组件测试、mock、最终文本或 key-free
-  dry-run 替代。
+- 5.4b focused key-free：更新后的 `agent-runtime.external-automation` 1 suite / 6 cases dry-run 通过；Evaluation
+  evidence、Desktop scenario 和 discovery 聚焦测试 3 files / 14 tests 通过。
+- Real Browser/Computer cases：Cua 与 Browser production provider/profile 已通过 Plugin contribution lifecycle
+  完成组合，但当前 Browser 可见用例因未提供显式 provider、model 和 cost authorization 在 Desktop 启动前返回
+  `infrastructure-blocked`；Cua 本轮未执行。两者都不以组件测试、mock、最终文本或 key-free dry-run 替代。
 - Foundational Agent matrix：本批不改变 Conversation/session persistence、compaction、generation record、
   conversation switching 或 isolation owner，均为 unaffected；Tool registration 的受影响范围由
   `agent-runtime.external-automation` cases 拥有。
 
 ## Residual Risk
 
-- Browser Use `uvx` 命令已按上游文档作为可复制文本提供，但 OpenNeko 不执行该命令，也不保证上游依赖、浏览器
-  runtime 或模型凭据可用。
+- Browser Use 使用 `uv tool install 'browser-use[cli]'` 作为可复制的持久安装文本；OpenNeko 不执行该命令，
+  也不保证上游依赖、外部 Chrome/Chromium runtime 或模型凭据可用。
 - 当前 Cua observe profile 只消费 Screen Recording；Accessibility 可查询并仅在显式请求时触发系统提示，Input
   Control 保持 unavailable，直到真实 interact profile 成为正确性消费者。bundle identifier、Team ID、Developer ID
   和 notarization 的 deterministic tests 不替代 TCC 行为验收。
-- Browser 页面域绑定、真实 redirect/new-tab 行为、Computer mutation 和跨平台输入在 production provider
-  registration 完成前均未获得真实行为证据。
+- Browser 单页面/同源限制已有 deterministic 边界测试，但真实 redirect/new-tab 行为、Computer mutation 和
+  跨平台输入仍未获得 provider-backed 行为证据。

@@ -39,6 +39,9 @@ describe('Agent Automation Capability adapter', () => {
       requiresConfirmation: true,
       isReadOnly: true,
       category: 'system',
+      parameters: expect.objectContaining({
+        required: ['arguments', 'timeoutMs', 'stepBudget', 'targetOrigin'],
+      }),
     });
 
     const result = await screenshot?.execute(
@@ -46,6 +49,7 @@ describe('Agent Automation Capability adapter', () => {
         arguments: { full_page: false },
         timeoutMs: 30_000,
         stepBudget: 1,
+        targetOrigin: 'https://example.test',
       },
       {
         metadata: {
@@ -83,6 +87,7 @@ describe('Agent Automation Capability adapter', () => {
           runId: 'run-1',
           toolCallId: 'tool-call-1',
         },
+        targetHint: { origin: 'https://example.test' },
       }),
     );
     expect(service.openSession).toHaveBeenCalledWith(
@@ -141,7 +146,12 @@ describe('Agent Automation Capability adapter', () => {
     const tool = tools[0]!;
     await expect(
       tool.execute(
-        { arguments: {}, timeoutMs: 30_000, stepBudget: 1 },
+        {
+          arguments: {},
+          timeoutMs: 30_000,
+          stepBudget: 1,
+          targetOrigin: 'https://example.test',
+        },
         {
           metadata: {
             workspaceId: 'workspace-1',
@@ -198,7 +208,12 @@ describe('Agent Automation Capability adapter', () => {
 
     await expect(
       tools[0]!.execute(
-        { arguments: {}, timeoutMs: 30_000, stepBudget: 1 },
+        {
+          arguments: {},
+          timeoutMs: 30_000,
+          stepBudget: 1,
+          targetOrigin: 'https://example.test',
+        },
         {
           metadata: {
             workspaceId: 'workspace-1',
@@ -228,6 +243,7 @@ describe('Agent Automation Capability adapter', () => {
           arguments: {},
           timeoutMs: 30_000,
           stepBudget: 1,
+          targetOrigin: 'https://example.test',
         },
         {
           metadata: {

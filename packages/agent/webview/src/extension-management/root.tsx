@@ -49,10 +49,6 @@ export function AgentExtensionManagementRoot({
   const [projection, setProjection] = useState<AgentExtensionManagementProjection>();
   const [error, setError] = useState<string>();
   const [operationKey, setOperationKey] = useState<string>();
-  const hasActiveArtifactOperation =
-    projection?.operations.some((operation) => operation.status === 'active') ?? false;
-  const isStartingArtifactOperation =
-    operationKey?.startsWith('install:') === true || operationKey?.startsWith('update:') === true;
 
   useEffect(() => {
     if (!interactive) return;
@@ -70,27 +66,6 @@ export function AgentExtensionManagementRoot({
       active = false;
     };
   }, [interactive, refreshRequestId, runtime]);
-
-  useEffect(() => {
-    if (!interactive || (!hasActiveArtifactOperation && !isStartingArtifactOperation)) return;
-    let active = true;
-    let timer: number | undefined;
-    const poll = async (): Promise<void> => {
-      try {
-        const next = await runtime.getSnapshot();
-        if (active) setProjection(next);
-      } catch (reason: unknown) {
-        if (active) setError(describeError(reason));
-      } finally {
-        if (active) timer = window.setTimeout(() => void poll(), 500);
-      }
-    };
-    timer = window.setTimeout(() => void poll(), 0);
-    return () => {
-      active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [hasActiveArtifactOperation, interactive, isStartingArtifactOperation, runtime]);
 
   useEffect(() => {
     const skills = projection?.skills ?? [];
@@ -143,18 +118,6 @@ export function AgentExtensionManagementRoot({
     },
     [operationKey],
   );
-  const cancelArtifactOperation = useCallback(
-    async (artifactOperationId: string): Promise<void> => {
-      setError(undefined);
-      try {
-        await runtime.cancelPluginOperation(artifactOperationId);
-        setProjection(await runtime.getSnapshot());
-      } catch (reason: unknown) {
-        setError(describeError(reason));
-      }
-    },
-    [runtime],
-  );
   const issueCount =
     (projection?.skillDiscovery.diagnostics.reduce((total, item) => total + item.count, 0) ?? 0) +
     (projection?.skillDiscovery.duplicateCount ?? 0) +
@@ -167,12 +130,9 @@ export function AgentExtensionManagementRoot({
   const selectedItemId = selectedItem?.id;
   const detail = selectedItem ? (
     <AgentExtensionConfigurationRoot
-      cancelArtifactOperation={cancelArtifactOperation}
       confirmAction={confirmAction}
-      hasActiveArtifactOperation={hasActiveArtifactOperation}
       interactive={interactive}
       operationKey={operationKey}
-      operations={projection?.operations ?? []}
       runMutation={runMutation}
       runtime={runtime}
       selectedExtension={tab === 'extensions' ? selectedExtension : undefined}
@@ -193,13 +153,8 @@ export function AgentExtensionManagementRoot({
           <div className="management-surface-actions">
             <button
               type="button"
-              disabled={
-                !interactive ||
-                !projection ||
-                operationKey !== undefined ||
-                hasActiveArtifactOperation
-              }
-              onClick={() => void runMutation('refresh', () => runtime.refreshMarketplaces())}
+              disabled={!interactive || !projection || operationKey !== undefined}
+              onClick={() => void runMutation('refresh', () => runtime.rescanSources())}
             >
               {t('home.capabilities.refresh')}
             </button>
@@ -346,24 +301,18 @@ export function AgentExtensionManagementRoot({
 }
 
 function AgentExtensionConfigurationRoot({
-  cancelArtifactOperation,
   confirmAction,
-  hasActiveArtifactOperation,
   interactive,
   operationKey,
-  operations,
   runMutation,
   runtime,
   selectedExtension,
   selectedSkill,
   tab,
 }: {
-  readonly cancelArtifactOperation: (operationId: string) => Promise<void>;
   readonly confirmAction: (message: string) => boolean | Promise<boolean>;
-  readonly hasActiveArtifactOperation: boolean;
   readonly interactive: boolean;
   readonly operationKey: string | undefined;
-  readonly operations: AgentExtensionManagementProjection['operations'];
   readonly runMutation: (key: string, operation: () => Promise<void>) => Promise<void>;
   readonly runtime: AgentExtensionManagementRuntime;
   readonly selectedExtension: AgentExtensionCatalogItem | undefined;
@@ -380,8 +329,7 @@ function AgentExtensionConfigurationRoot({
   const description = selectedExtension
     ? resolveAgentExtensionDescription(selectedExtension, locale)
     : item.description;
-  const mutationsDisabled =
-    !interactive || operationKey !== undefined || hasActiveArtifactOperation;
+  const mutationsDisabled = !interactive || operationKey !== undefined;
   return (
     <section className="agent-extension-configuration-root" data-configuration-kind={tab}>
       <header className="extension-configuration-header">
@@ -412,36 +360,6 @@ function AgentExtensionConfigurationRoot({
 
       {selectedExtension ? (
         <>
-          {operations
-            .filter((operation) => operation.pluginId === selectedExtension.id)
-            .map((operation) => (
-              <div
-                className="management-surface-diagnostic"
-                data-extension-operation-status={operation.status}
-                key={operation.operationId}
-                role="status"
-              >
-                <span>
-                  {t('home.capabilities.artifactOperation', {
-                    kind: t(`home.capabilities.artifactOperationKind.${operation.kind}`),
-                    status: t(`home.capabilities.artifactOperationStatus.${operation.status}`),
-                    phase: t(`home.capabilities.artifactOperationPhase.${operation.phase}`),
-                    progress:
-                      operation.totalBytes > 0
-                        ? `${formatByteSize(operation.transferredBytes)} / ${formatByteSize(operation.totalBytes)}`
-                        : t('home.capabilities.artifactOperationPending'),
-                  })}
-                </span>
-                {operation.canCancel ? (
-                  <button
-                    type="button"
-                    onClick={() => void cancelArtifactOperation(operation.operationId)}
-                  >
-                    {t('home.capabilities.cancelOperation')}
-                  </button>
-                ) : null}
-              </div>
-            ))}
           <div className="extension-configuration-facts">
             <Definition label={t('home.capabilities.detail.version')}>
               {selectedExtension.version}
@@ -458,89 +376,12 @@ function AgentExtensionConfigurationRoot({
                 ? ` · ${describeRuntimeDiagnostic(selectedExtension.runtimeDiagnosticCode, t)}`
                 : ''}
             </Definition>
-            <Definition label={t('home.capabilities.detail.artifact')}>
-              {t(`home.capabilities.artifactStatus.${selectedExtension.artifactStatus}`)}
-              {selectedExtension.deliverySource
-                ? ` · ${t(`home.capabilities.deliverySource.${selectedExtension.deliverySource}`)}`
-                : ''}
-              {selectedExtension.downloadSizeBytes > 0
-                ? ` · ${formatByteSize(selectedExtension.downloadSizeBytes)}`
-                : ''}
-            </Definition>
-            <Definition label={t('home.capabilities.detail.runtime')}>
-              {t('home.capabilities.runtimeFacts', {
-                dependency: t(
-                  `home.capabilities.dependencyStatus.${selectedExtension.dependencyStatus}`,
-                ),
-                enableGrant: t(
-                  `home.capabilities.enableGrantStatus.${selectedExtension.enableGrantStatus}`,
-                ),
-                hostPermission: t(
-                  `home.capabilities.hostPermissionStatus.${selectedExtension.hostPermissionStatus}`,
-                ),
-                qualification: t(
-                  `home.capabilities.qualificationStatus.${selectedExtension.qualificationStatus}`,
-                ),
-              })}
-            </Definition>
-            <Definition label={t('home.capabilities.detail.permissions')}>
-              {selectedExtension.declaredPermissions.join(', ') ||
-                t('home.capabilities.permissions.none')}
-            </Definition>
           </div>
         </>
       ) : null}
 
       <div className="extension-configuration-actions">
-        {selectedExtension?.canInstall ? (
-          <button
-            type="button"
-            disabled={mutationsDisabled}
-            onClick={() => {
-              void Promise.resolve(
-                confirmAction(
-                  t('home.capabilities.confirmInstallPlugin', {
-                    name: selectedExtension.displayName,
-                  }),
-                ),
-              ).then((confirmed) => {
-                if (confirmed) {
-                  void runMutation(`install:${selectedExtension.id}`, () =>
-                    runtime.installPlugin(selectedExtension.id),
-                  );
-                }
-              });
-            }}
-          >
-            <PlusIcon size={14} />
-            <span>{t('home.capabilities.install')}</span>
-          </button>
-        ) : null}
-        {selectedExtension?.canUpdate ? (
-          <button
-            type="button"
-            disabled={mutationsDisabled}
-            onClick={() => {
-              void Promise.resolve(
-                confirmAction(
-                  t('home.capabilities.confirmUpdatePlugin', {
-                    name: selectedExtension.displayName,
-                    release: selectedExtension.updatePackageRelease,
-                  }),
-                ),
-              ).then((confirmed) => {
-                if (confirmed) {
-                  void runMutation(`update:${selectedExtension.id}`, () =>
-                    runtime.updatePlugin(selectedExtension.id),
-                  );
-                }
-              });
-            }}
-          >
-            <span>{t('home.capabilities.update')}</span>
-          </button>
-        ) : null}
-        {selectedExtension?.installed ? (
+        {selectedExtension ? (
           <label className="extension-configuration-switch">
             <span>{t('home.capabilities.enabled')}</span>
             <Switch
@@ -562,9 +403,6 @@ function AgentExtensionConfigurationRoot({
                   confirmAction(
                     t('home.capabilities.confirmEnablePlugin', {
                       name: selectedExtension.displayName,
-                      permissions:
-                        selectedExtension.declaredPermissions.join(', ') ||
-                        t('home.capabilities.permissions.none'),
                     }),
                   ),
                 ).then((confirmed) => {
@@ -653,7 +491,6 @@ export function searchAndOrderAgentExtensions(
         .includes(normalized),
     )
     .sort((left, right) => {
-      if (left.installed !== right.installed) return left.installed ? -1 : 1;
       return left.displayName.localeCompare(right.displayName);
     });
 }
@@ -689,14 +526,5 @@ function describeRuntimeDiagnostic(
   code: string,
   t: (key: string, values?: Record<string, string | number>) => string,
 ): string {
-  if (code === 'artifact-unavailable') {
-    return t('home.capabilities.runtimeDiagnostic.artifact-unavailable');
-  }
   return t('home.capabilities.runtimeDiagnostic.other', { code });
-}
-
-function formatByteSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
