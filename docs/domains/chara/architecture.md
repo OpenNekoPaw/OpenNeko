@@ -8,13 +8,13 @@
 
 ## 五层分析
 
-| 层   | 结论 |
-| ---- | ---- |
-| 职责 | Chara 拥有角色与故事线创作事实、Companion continuity、Dialogue/Room policy 和角色上下文；Agent 拥有消息、turn、provider 和任务；外部资料/表现由来源 owner 拥有；Desktop 只拥有 Electron 边界。 |
-| 依赖 | Chara core/application 只依赖 package contracts 和注入 port；不导入 Electron、React、Agent runtime implementation、World/Game 私有实现或本地资源路径。 |
+| 层   | 结论                                                                                                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Chara 拥有角色与故事线创作事实、Companion continuity、Dialogue/Room policy 和角色上下文；Agent 拥有消息、turn、provider 和任务；外部资料/表现由来源 owner 拥有；Desktop 只拥有 Electron 边界。             |
+| 依赖 | Chara core/application 只依赖 package contracts 和注入 port；不导入 Electron、React、Agent runtime implementation、World/Game 私有实现或本地资源路径。                                                     |
 | 接口 | 使用一个严格 Conversation mode union、精确 Storyline/Version/Node ref、稳定 continuity identity、owner-qualified context/presentation ref；无 optional bag、active identity 或 internal contract version。 |
-| 扩展 | 新 Storyline 内容扩展 node authoring context；新资料/表现类型由真实 owning provider 扩展 public union/registry；不得在 Chara 或 Desktop 添加 wildcard/default adapter。 |
-| 测试 | producer codec、application service、Node repository、Agent consumer、Host/Webview、Desktop delegation 和真实 Electron/Agent Evaluation 分层验证，旧路径必须 poison/fail-closed。 |
+| 扩展 | 新 Storyline 内容扩展 node authoring context；新资料/表现类型由真实 owning provider 扩展 public union/registry；不得在 Chara 或 Desktop 添加 wildcard/default adapter。                                    |
+| 测试 | producer codec、application service、Node repository、Agent consumer、Host/Webview、Desktop delegation 和真实 Electron/Agent Evaluation 分层验证，旧路径必须 poison/fail-closed。                          |
 
 ## Owner 与事实模型
 
@@ -43,18 +43,18 @@ CharacterConversationSelection
   -> primary AgentSession per agent-controlled participant
 ```
 
-| 数据 | 唯一 owner |
-| ---- | ---------- |
-| Character draft、Background/Origin、canon、知识和行为策略 | CharacterProject |
-| 用户管理的 immutable Character publication | CharacterVersion |
-| Storyline identity、draft、publication、node authoring context | CharacterStoryline owner under CharacterProject |
-| 日常角色主观记忆 | CompanionContinuity / CharacterMemory service |
-| 日常用户—角色关系记忆 | CompanionContinuity / UserCharacterRelationship service |
-| Character/Room identity、participant policy、RoomEvent | CharacterRun / CharacterRoom / RoomRun |
-| Conversation、turn、transcript、compaction、provider/model execution | Agent application/session owner |
-| 外部资料 bytes、授权和 locator | Workspace / Content / Assets / Host owner |
-| 图片、模型、音频、Web/Game/Scene facts 与昂贵 runtime | 对应 Presentation/Media/Game owner |
-| Window Scene、slot 和 presentation geometry | Host / Desktop Window presentation |
+| 数据                                                                 | 唯一 owner                                              |
+| -------------------------------------------------------------------- | ------------------------------------------------------- |
+| Character draft、Background/Origin、canon、知识和行为策略            | CharacterProject                                        |
+| 用户管理的 immutable Character publication                           | CharacterVersion                                        |
+| Storyline identity、draft、publication、node authoring context       | CharacterStoryline owner under CharacterProject         |
+| 日常角色主观记忆                                                     | CompanionContinuity / CharacterMemory service           |
+| 日常用户—角色关系记忆                                                | CompanionContinuity / UserCharacterRelationship service |
+| Character/Room identity、participant policy、RoomEvent               | CharacterRun / CharacterRoom / RoomRun                  |
+| Conversation、turn、transcript、compaction、provider/model execution | Agent application/session owner                         |
+| 外部资料 bytes、授权和 locator                                       | Workspace / Content / Assets / Host owner               |
+| 图片、模型、音频、Web/Game/Scene facts 与昂贵 runtime                | 对应 Presentation/Media/Game owner                      |
+| Window Scene、slot 和 presentation geometry                          | Host / Desktop Window presentation                      |
 
 UI selection、Timeline、context cache、transcript summary、模型输出和 active/recent identity 都不是领域事实 owner。
 
@@ -138,6 +138,31 @@ Narrative parser、UI 和 application service 都拒绝 external-material refs�
 
 Character representation 只保存语义和稳定 ref。Presentation provider 将它解析为 exact authorized Surface ref；Host registry 精确映射唯一 handler，duplicate/unknown/mismatched ref 局部失败。Chara 不拥有 Web content、World state、Gameplay rules、engine runtime 或外部资源 bytes。
 
+## Workspace 目录与可移植角色包
+
+角色管理、创作和运行的唯一持久 authority 是 Host 授权 Workspace 下的 Chara 目录记录：
+
+```text
+neko/characters/<characterProjectId>/
+  project.json
+  lineage.json
+  versions/...
+  storylines/...
+  authoring-tests/...
+  assets/... # 仅用户显式本地化的角色自有副本
+```
+
+`.neko-character` ZIP 只服务用户显式触发的导入和导出，不是 Character identity、live repository、Workspace、runtime 或同步源：
+
+```text
+export: canonical Workspace records -> bounded ZIP snapshot
+import: ZIP validation/preview -> explicit Workspace install -> release ZIP resources
+```
+
+导入完成后，管理、Studio、Dialogue 和 Room 只读取已安装的 Workspace records；移动、修改或删除源 ZIP 不影响已安装角色。产品不得保存 ZIP 路径或打开状态作为角色事实，不得挂载、监听、回读、同步或从 ZIP 原地编辑/运行。导出包不包含 Conversation、Room、Companion continuity/memory、Narrative run、provider/model 配置、Skill/Tool grant、approval、credential、cache 或 presentation snapshot。
+
+普通 representation/voice 继续保存 opaque ref。只有用户明确选择、Host 授权且允许复制的素材 bytes 才可进入角色包；未内嵌资源作为 external dependency 显示，不静默复制全局库、项目 sibling 或任意本地路径。
+
 ## 分层与依赖
 
 ```text
@@ -149,7 +174,8 @@ Character representation 只保存语义和稳定 ref。Presentation provider �
   -> package-local Agent / Context / Asset / Voice / Presentation ports
 
 @neko/chara-node
-  -> public Chara repository ports
+  -> public Chara directory repository ports
+  -> bounded import/export ZIP byte adapter only
 
 @neko/chara-webview
   -> public Chara contracts and projections

@@ -20,7 +20,7 @@ OpenNeko 已经具备 standalone/project-local Character file authoring、精确
 
 - 将 Character Management、quick creation、Workspace Character Authoring capability 和 Character Interaction 的 owner、identity、入口与生命周期分开。
 - 让 standalone 与 project-local Character 直接复用目录授权 Authoring Workspace、target switching、Workbench composition 和同一个 Chara surface/service/repository path。
-- 让 Workspace live records 与 `.neko-character` 可移植 ZIP 各有单一职责：前者是 authoring authority，后者是显式 import/export transport，并对素材 ownership、依赖和敏感数据建立可验证边界。
+- 让 Workspace live records 与 `.neko-character` 可移植 ZIP 各有单一职责：前者是唯一 authoring/runtime authority，后者只是在用户显式操作期间存在的 import/export transport，并对素材 ownership、依赖和敏感数据建立可验证边界。
 - 让用户无需进入 Studio 即可通过 canonical Character Creator 创建草稿。
 - 将 CharacterVersion 表达为本地可用快照，并提供明确、可测试的多分支 lineage 图。
 - 保持所有 Storyline、Conversation、Room、memory 和 Project dependency 对 exact CharacterVersion 的稳定引用。
@@ -33,7 +33,7 @@ OpenNeko 已经具备 standalone/project-local Character file authoring、精确
 - 不把 CharacterVersion lineage、Storyline graph 和 Conversation branch 合并。
 - 不在 Character Management 复制 Agent Composer、provider/model selector 或 Character authoring surface。
 - 不建立独立 Character Studio application、Workspace kind、Scene、Workbench、controller 或 target registry。
-- 不从 ZIP 原地编辑或运行角色，不把 portable package 变成第二 repository，不在包内携带 Conversation、Room、memory、模型配置、凭据或运行状态。
+- 不挂载、监听、同步、回读或从 ZIP 原地编辑/运行角色，不把 portable package identity、文件位置或打开状态变成 durable fact、第二 repository 或 runtime authority，不在包内携带 Conversation、Room、memory、模型配置、凭据或运行状态。
 - 不改变 Character Dialogue/Room 的 exact-version runtime owner，不引入 Character 全局模型配置。
 
 ## Decisions
@@ -114,11 +114,23 @@ character/
 assets/...                                    # declared embedded files only
 ```
 
+它只有两条一次性数据流：
+
+```text
+export: canonical Workspace records + explicitly authorized asset bytes
+        -> bounded ZIP bytes -> user-selected destination
+
+import: user-selected ZIP bytes -> bounded validation/preview
+        -> explicit commit into canonical Workspace records -> release ZIP resources
+```
+
+ZIP 文件名、文件位置、打开状态和归档 entry 不成为 Character identity 或持久引用。导入成功后，即使原 ZIP 被移动或删除，已安装 Character 仍必须只依赖 Workspace records 正常管理、创作和运行；源 ZIP 后续变化也不得同步到已安装 Character。导出完成后的 ZIP 同样只是当时所选 facts 的快照，Workspace 后续修改不会反向改写它。
+
 manifest 只承担包入口、所含用户领域 identity、record inventory、embedded asset inventory、external dependency inventory、media metadata、byte length 和 integrity digest；角色内容不在 manifest 重复成为第二事实源。manifest 不含 `schemaVersion`/`formatVersion` 或等价内部代际字段。CharacterVersion 与 StorylineVersion 的 identity 是允许且必须保留的用户领域版本；VRM、Live2D 等第三方格式版本只保留在对应 asset/provider metadata 中。
 
 导出必须显式选择 record scope 与素材策略。未内嵌的表示素材保留为 external opaque dependency，并在预览中标记“非自包含”；不得静默复制全局库或项目 sibling 素材。Conversation/Room transcript、Companion memory/continuity、narrative run、provider/model selection、Skill/Tool grant、approval、credential、cache 和 presentation snapshot 永不进入包。
 
-导入在 Host/Node trust boundary 先做 ZIP containment、entry/expanded-size 上限、duplicate/symlink、manifest/codec、identity 和 digest 校验；Chara application 再展示 placement、branches、Storylines、assets、missing dependency 与 identity conflict preview。用户授权 exact destination 后才写入 canonical repository。ZIP 不原地执行，冲突不覆盖、不自动 merge、不静默 remap，也不回退 active/recent Workspace。
+导入在 Host/Node trust boundary 先做 ZIP containment、entry/expanded-size 上限、duplicate/symlink、manifest/codec、identity 和 digest 校验；Chara application 再展示 placement、branches、Storylines、assets、missing dependency 与 identity conflict preview。用户授权 exact destination 后才写入 canonical repository，完成或取消后都释放归档 reader/bytes，不建立 watcher、mount、recent-package binding 或同步任务。ZIP 不原地执行，冲突不覆盖、不自动 merge、不静默 remap，也不回退 active/recent Workspace。
 
 未采用“一个 JSON 内嵌所有 base64 素材”，因为它破坏大媒体流式处理、差异审计和局部失败隔离。未采用“把所有外部引用自动复制进 ZIP”，因为素材 ownership、许可、体积和依赖可用性需要用户显式判断。未采用“直接挂载 ZIP 为 Studio”，因为归档会成为第二事实源并复制 repository/runtime path。
 

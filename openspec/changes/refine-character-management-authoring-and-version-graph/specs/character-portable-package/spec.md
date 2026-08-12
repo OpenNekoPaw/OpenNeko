@@ -18,13 +18,14 @@ OpenNeko SHALL keep editable Character facts in the authorized Workspace under o
 
 ### Requirement: A portable Character package is an explicit ZIP transport container
 
-OpenNeko SHALL support an explicitly imported or exported `.neko-character` ZIP container for portable Character transfer. The archive SHALL contain one strict manifest plus a bounded mirror of selected canonical Character records and selected embedded assets. The manifest SHALL identify the entry CharacterProject, enumerate included user-domain CharacterVersion and Storyline identities, declare every embedded asset and unresolved external dependency, and provide integrity metadata without introducing an internal schema/format version or alternate contract generation. Export MUST NOT imply remote publication, sharing permission or synchronization.
+OpenNeko SHALL support an explicitly imported or exported `.neko-character` ZIP container only for portable Character transfer. The archive SHALL contain one strict manifest plus a bounded snapshot of selected canonical Character records and selected embedded assets. The manifest SHALL identify the entry CharacterProject, enumerate included user-domain CharacterVersion and Storyline identities, declare every embedded asset and unresolved external dependency, and provide integrity metadata without introducing an internal schema/format version or alternate contract generation. Export MUST NOT imply remote publication, sharing permission or synchronization. ZIP location, package identity, open state and entries MUST NOT become durable Character facts, live repository keys, runtime references, watchers, mounts or synchronization sources.
 
 #### Scenario: User exports a portable Character
 
 - **WHEN** the user chooses an exact CharacterProject, export scope and asset inclusion policy and authorizes a destination
 - **THEN** Chara produces one `.neko-character` archive whose manifest inventories the included records, exact domain identities, embedded files and external dependencies
 - **AND** the source Workspace records remain the only live authoring authority
+- **AND** later Workspace changes do not update or depend on that exported snapshot
 
 #### Scenario: Character has multiple version branches
 
@@ -60,13 +61,14 @@ A Character package SHALL contain Character authoring facts and explicitly inclu
 
 ### Requirement: Character package import is validated before Workspace installation
 
-Host/Node SHALL treat the archive as untrusted input and validate its containment, entry count, expanded size, duplicate paths, symlinks, compression behavior, manifest inventory, record codecs, exact identities and integrity digests before Chara writes any records. Chara SHALL present an import preview with placement, included branches/Storylines/assets, unresolved dependencies and exact identity conflicts. Import SHALL require an explicitly authorized standalone-library or project-local destination and MUST NOT execute in place, overwrite existing records, infer the active/recent Workspace or silently remap references.
+Host/Node SHALL treat the archive as untrusted input and validate its containment, entry count, expanded size, duplicate paths, symlinks, compression behavior, manifest inventory, record codecs, exact identities and integrity digests before Chara writes any records. Chara SHALL present an import preview with placement, included branches/Storylines/assets, unresolved dependencies and exact identity conflicts. Import SHALL require an explicitly authorized standalone-library or project-local destination and MUST NOT execute in place, overwrite existing records, infer the active/recent Workspace or silently remap references. Completion, rejection or cancellation SHALL release the archive reader and temporary bytes without retaining a package binding, mount, watcher, recent-package authority or synchronization task.
 
 #### Scenario: User imports a valid self-contained package
 
 - **WHEN** validation succeeds and the user authorizes one exact destination and confirms the conflict-free preview
 - **THEN** Chara installs the records and embedded assets through the canonical Workspace repository and returns the exact CharacterProject identity
 - **AND** subsequent authoring uses normal Workspace records rather than reading from the ZIP
+- **AND** moving, changing or deleting the source ZIP does not change the installed Character
 
 #### Scenario: Package contains an unsafe or invalid entry
 

@@ -46,10 +46,10 @@ CharacterConversationSelection
 
 Character Conversation 创建时必须选择一种模式，已有 Conversation 不得原地切换：
 
-| 模式        | 角色上下文                                             | 长期记忆                                      | 原生模型/外部资料                                      |
-| ----------- | ------------------------------------------------------ | --------------------------------------------- | ------------------------------------------------------ |
-| `companion` | 精确 CharacterVersion + 已接受的角色/关系连续性        | 跨 Conversation 读取并产生带来源的候选       | 可使用独立 AssistantSession；资料仅作为当前 turn context |
-| `narrative` | 精确 CharacterVersion + 可选 StorylineVersion/Node     | 只使用节点作者发布的 narrative memories      | 禁止原生模型通道和任意外部资料                         |
+| 模式        | 角色上下文                                         | 长期记忆                                | 原生模型/外部资料                                        |
+| ----------- | -------------------------------------------------- | --------------------------------------- | -------------------------------------------------------- |
+| `companion` | 精确 CharacterVersion + 已接受的角色/关系连续性    | 跨 Conversation 读取并产生带来源的候选  | 可使用独立 AssistantSession；资料仅作为当前 turn context |
+| `narrative` | 精确 CharacterVersion + 可选 StorylineVersion/Node | 只使用节点作者发布的 narrative memories | 禁止原生模型通道和任意外部资料                           |
 
 一个角色选择创建 Dialogue，多个角色选择创建 Room。Narrative Room 为每个 participant 保存独立的可选 StorylineVersion/Node；不得共享私人故事信息、模型配置或 memory view。
 
@@ -85,6 +85,12 @@ Narrative 不绑定、读取或写入 CompanionContinuity。删除或重开 Narr
 Companion turn 可以携带用户显式选择的 owner-qualified Workspace/Content/Asset ref。资料 bytes、路径与访问权限仍由来源 owner 保存；Agent 只在当前 turn 通过授权 context provider 物化有界内容。引用不持久化为 Character facts，也不因 UI 保持挂载而成为后续 context。
 
 图片、Live2D、VRM、MMD、PNGTuber、音频、Web、动态场景和 Gameplay 资源/runtime 继续由 Assets/Content/Media/Voice/Presentation/Game owner 管理。Chara 只保存角色表示语义和稳定 ref；Desktop 只授权 opaque descriptor/lease，不暴露 raw path。
+
+## 本地角色目录与导入导出
+
+角色草稿、可用版本、lineage、Storyline 和创作测试只在授权 Workspace 的 `neko/characters/<characterProjectId>/...` 目录记录中管理和运行。standalone 与 project-local Character 使用相同相对布局，区别只来自外部 placement authority。
+
+`.neko-character` ZIP 仅是导入导出快照：导出从 canonical 目录读取用户选定记录和显式授权素材；导入先校验和预览，再写入 canonical 目录并释放归档资源。ZIP 不被挂载为 Workspace，不保存为角色 identity，不参与后续编辑、对话、Room、监听或同步；导入后源 ZIP 可以移动或删除而不影响已安装角色。
 
 ## Character Interaction Workbench
 
