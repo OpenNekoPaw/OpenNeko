@@ -1,5 +1,7 @@
 export * from './character-purpose-operations';
 export * from './character-authoring-service';
+export * from './character-version-lineage-repository';
+export * from './character-version-graph-service';
 export * from './character-authoring-host-service';
 export * from './character-room-service';
 export * from './character-room-conversation-service';

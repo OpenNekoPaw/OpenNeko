@@ -19,6 +19,10 @@ export interface CharacterAuthoringRepository {
     signal?: AbortSignal,
   ): Promise<CharacterProject | undefined>;
   saveProject(project: CharacterProject, signal?: AbortSignal): Promise<void>;
+  readPublication(
+    characterVersionId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterVersion | undefined>;
   storePublication(publication: CharacterVersion, signal?: AbortSignal): Promise<void>;
   saveAuthoringTestSnapshot(
     snapshot: CharacterAuthoringTestSnapshot,
@@ -89,6 +93,12 @@ export interface PublishCharacterInput {
 export interface CaptureCharacterAuthoringTestInput {
   readonly characterProjectId: string;
   readonly authoringTestSnapshotId: string;
+}
+
+export interface ContinueCharacterFromVersionInput {
+  readonly characterProjectId: string;
+  readonly characterVersionId: string;
+  readonly replaceWorkingDraft: true;
 }
 
 export type CharacterAuthoringDiagnosticCode =
@@ -357,6 +367,40 @@ export class CharacterAuthoringService {
     );
     await this.options.repository.saveAuthoringTestSnapshot(snapshot, signal);
     return snapshot;
+  }
+
+  async continueFromVersion(
+    input: ContinueCharacterFromVersionInput,
+    signal?: AbortSignal,
+  ): Promise<CharacterProject> {
+    if (input.replaceWorkingDraft !== true) {
+      throw authoringError(
+        'character-authoring-operation-invalid',
+        'Continuing from a CharacterVersion requires explicit working-draft replacement.',
+        input.characterProjectId,
+      );
+    }
+    const publication = await this.options.repository.readPublication(
+      input.characterVersionId,
+      signal,
+    );
+    if (!publication || publication.characterProjectId !== input.characterProjectId) {
+      throw authoringError(
+        'character-authoring-operation-invalid',
+        `CharacterVersion '${input.characterVersionId}' does not belong to exact CharacterProject '${input.characterProjectId}'.`,
+        input.characterProjectId,
+      );
+    }
+    return this.updateProject(
+      input.characterProjectId,
+      (project) => ({
+        ...project,
+        draft: clone(publication.definition),
+        draftBasisCharacterVersionId: publication.characterVersionId,
+        reviewStatus: 'draft',
+      }),
+      signal,
+    );
   }
 
   async publish(input: PublishCharacterInput, signal?: AbortSignal): Promise<CharacterVersion> {

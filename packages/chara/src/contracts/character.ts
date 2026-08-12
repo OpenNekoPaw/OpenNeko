@@ -99,6 +99,7 @@ export interface CharacterProject {
   readonly characterProjectId: string;
   readonly displayName: string;
   readonly draft: CharacterDefinition;
+  readonly draftBasisCharacterVersionId?: string;
   readonly evidence: readonly CharacterEvidenceRef[];
   readonly candidates: readonly CharacterCanonCandidate[];
   readonly reviewStatus: CharacterReviewStatus;
@@ -220,6 +221,7 @@ export function parseCharacterProject(value: unknown): CharacterProject {
       'characterProjectId',
       'displayName',
       'draft',
+      'draftBasisCharacterVersionId',
       'evidence',
       'candidates',
       'reviewStatus',
@@ -248,6 +250,10 @@ export function parseCharacterProject(value: unknown): CharacterProject {
     }
   }
   const draft = parseCharacterDefinition(record['draft']);
+  const draftBasisCharacterVersionId = optionalIdentity(
+    record['draftBasisCharacterVersionId'],
+    'CharacterProject draft basis CharacterVersion identity',
+  );
   validateCharacterDefinitionEvidence(draft, evidenceIds, 'CharacterProject');
   return {
     characterProjectId: requireIdentity(
@@ -256,6 +262,7 @@ export function parseCharacterProject(value: unknown): CharacterProject {
     ),
     displayName: requireIdentity(record['displayName'], 'CharacterProject displayName'),
     draft,
+    ...(draftBasisCharacterVersionId === undefined ? {} : { draftBasisCharacterVersionId }),
     evidence,
     candidates,
     reviewStatus: requireOneOf(

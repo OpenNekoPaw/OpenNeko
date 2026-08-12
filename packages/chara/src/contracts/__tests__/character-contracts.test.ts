@@ -70,6 +70,7 @@ describe('Character canonical contracts', () => {
       characterProjectId: 'character-project-a',
       displayName: 'Lin',
       draft: definition(),
+      draftBasisCharacterVersionId: 'character-version-basis',
       evidence: [
         {
           evidenceId: 'evidence-a',
@@ -102,11 +103,27 @@ describe('Character canonical contracts', () => {
     });
 
     expect(published.characterVersionId).toBe('character-version-a');
+    expect(project.draftBasisCharacterVersionId).toBe('character-version-basis');
     expect(published.definition).not.toBe(project.draft);
     const forbiddenField = ['schema', 'Version'].join('');
     expect(() => parseCharacterVersion({ ...published, [forbiddenField]: 1 })).toThrow(
       /unsupported fields/u,
     );
+  });
+
+  it('keeps an absent draft basis as the canonical unbased state', () => {
+    const project = parseCharacterProject({
+      characterProjectId: 'character-project-unbased',
+      displayName: 'Unbased',
+      draft: definition(),
+      evidence: [],
+      candidates: [],
+      reviewStatus: 'draft',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    expect(project).not.toHaveProperty('draftBasisCharacterVersionId');
   });
 
   it('keeps an authoring-test snapshot separate from CharacterVersion identity', () => {

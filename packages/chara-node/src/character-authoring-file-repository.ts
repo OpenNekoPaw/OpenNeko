@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { mkdir, open, readFile, readdir, realpath, rename, rm } from 'node:fs/promises';
+import { mkdir, open, readdir, realpath, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
   parseCharacterVersion,
+  parseCharacterVersionLineage,
   type CharacterAuthoringTestSnapshot,
   type CharacterProject,
   type CharacterVersion,
@@ -15,6 +17,7 @@ import type {
   CharacterAuthoringCatalogScope,
   CharacterAuthoringRepository,
   CharacterDurableRecordDiagnostic,
+  CharacterVersionLineageRepository,
 } from '@neko/chara/application';
 
 export interface CharacterPublicationFilePort {
@@ -27,6 +30,7 @@ export interface CharacterPublicationFilePort {
 export interface CharacterAuthoringFileRepository
   extends
     CharacterAuthoringRepository,
+    CharacterVersionLineageRepository,
     CharacterPublicationFilePort,
     CharacterAuthoringCatalogPort {}
 
@@ -68,6 +72,24 @@ export function createCharacterAuthoringFileRepository(options: {
       return writeRecord(
         options.workspaceRoot,
         characterProjectPath(canonical.characterProjectId),
+        canonical.characterProjectId,
+        canonical,
+        signal,
+      );
+    },
+    readLineage: (identity, signal) =>
+      readRecord(
+        options.workspaceRoot,
+        characterLineagePath(identity),
+        identity,
+        parseCharacterVersionLineage,
+        signal,
+      ),
+    saveLineage: (lineage, signal) => {
+      const canonical = parseCharacterVersionLineage(lineage);
+      return writeRecord(
+        options.workspaceRoot,
+        characterLineagePath(canonical.characterProjectId),
         canonical.characterProjectId,
         canonical,
         signal,
@@ -137,6 +159,10 @@ export function createCharacterAuthoringFileRepository(options: {
 
 export function characterProjectPath(characterProjectId: string): string {
   return `neko/characters/${pathIdentity(characterProjectId)}/project.json`;
+}
+
+export function characterLineagePath(characterProjectId: string): string {
+  return `neko/characters/${pathIdentity(characterProjectId)}/lineage.json`;
 }
 
 export function characterVersionPath(
@@ -284,9 +310,33 @@ async function readRecord<T>(
   const target = await resolveWorkspacePath(workspaceRoot, relativePath, 'read', recordId, false);
   let source: string;
   try {
-    source = await readFile(target, 'utf8');
+    const file = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const entry = await file.stat();
+      if (!entry.isFile()) {
+        throw new CharacterAuthoringStorageError(
+          'character-workspace-path-escape',
+          'read',
+          recordId,
+          `Character authoring record '${recordId}' must be a regular file below the authorized Workspace root.`,
+        );
+      }
+      source = await file.readFile('utf8');
+    } finally {
+      await file.close();
+    }
   } catch (cause) {
     if (isErrorCode(cause, 'ENOENT')) return undefined;
+    if (isErrorCode(cause, 'ELOOP')) {
+      throw new CharacterAuthoringStorageError(
+        'character-workspace-path-escape',
+        'read',
+        recordId,
+        `Character authoring record '${recordId}' cannot be a symbolic link.`,
+        { cause },
+      );
+    }
+    if (cause instanceof CharacterAuthoringStorageError) throw cause;
     throw storageError('character-record-read-failed', 'read', recordId, cause);
   }
   try {

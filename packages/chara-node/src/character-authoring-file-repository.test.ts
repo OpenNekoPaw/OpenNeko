@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -9,6 +9,7 @@ import { CharacterAuthoringService } from '@neko/chara/application';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   characterAuthoringTestPath,
+  characterLineagePath,
   characterProjectPath,
   characterVersionPath,
   createCharacterAuthoringFileRepository,
@@ -161,6 +162,79 @@ describe('Character authoring file repository', () => {
     });
     await expect(repository.readPublication('character-version-1')).resolves.toMatchObject({
       label: 'First',
+    });
+  });
+
+  it.each([
+    { kind: 'standalone-library' as const },
+    { kind: 'content-project' as const, contentProjectId: 'content-project-1' },
+  ])('stores the same lineage record for $kind placement', async (scope) => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({ workspaceRoot: root, scope });
+    const lineage = {
+      characterProjectId: 'character-project-lineage',
+      relations: [
+        { characterVersionId: 'version-root', parentCharacterVersionIds: [] },
+        {
+          characterVersionId: 'version-branch',
+          parentCharacterVersionIds: ['version-root'],
+        },
+      ],
+    };
+
+    await expect(repository.readLineage(lineage.characterProjectId)).resolves.toBeUndefined();
+    await repository.saveLineage(lineage);
+
+    await expect(repository.readLineage(lineage.characterProjectId)).resolves.toEqual(lineage);
+    await expect(
+      readFile(join(root, characterLineagePath(lineage.characterProjectId)), 'utf8'),
+    ).resolves.toContain('version-branch');
+  });
+
+  it('fails one corrupt lineage locally while preserving sibling records', async () => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    await repository.saveLineage({
+      characterProjectId: 'character-valid',
+      relations: [{ characterVersionId: 'version-valid', parentCharacterVersionIds: [] }],
+    });
+    const invalid = join(root, characterLineagePath('character-invalid'));
+    await mkdir(join(root, 'neko/characters/character-invalid'), { recursive: true });
+    await writeFile(invalid, JSON.stringify({ characterProjectId: 'character-invalid' }), 'utf8');
+
+    await expect(repository.readLineage('character-invalid')).rejects.toMatchObject({
+      code: 'character-record-invalid',
+      recordId: 'character-invalid',
+    });
+    await expect(repository.readLineage('character-valid')).resolves.toMatchObject({
+      relations: [expect.objectContaining({ characterVersionId: 'version-valid' })],
+    });
+    await expect(readFile(invalid, 'utf8')).resolves.toContain('character-invalid');
+  });
+
+  it('rejects a symlink lineage record without following it', async () => {
+    const root = await workspace();
+    const outside = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    const outsideRecord = join(outside, 'lineage.json');
+    await writeFile(
+      outsideRecord,
+      JSON.stringify({ characterProjectId: 'character-link', relations: [] }),
+      'utf8',
+    );
+    const linkedRecord = join(root, characterLineagePath('character-link'));
+    await mkdir(join(root, 'neko/characters/character-link'), { recursive: true });
+    await symlink(outsideRecord, linkedRecord);
+
+    await expect(repository.readLineage('character-link')).rejects.toMatchObject({
+      code: 'character-workspace-path-escape',
+      recordId: 'character-link',
     });
   });
 });

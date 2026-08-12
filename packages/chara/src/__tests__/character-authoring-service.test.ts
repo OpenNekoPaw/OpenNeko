@@ -57,6 +57,11 @@ class MemoryCharacterAuthoringRepository implements CharacterAuthoringRepository
     this.projects.set(project.characterProjectId, structuredClone(project));
   }
 
+  async readPublication(characterVersionId: string): Promise<CharacterVersion | undefined> {
+    const publication = this.versions.get(characterVersionId);
+    return publication === undefined ? undefined : structuredClone(publication);
+  }
+
   async storePublication(publication: CharacterVersion): Promise<void> {
     if (this.versions.has(publication.characterVersionId)) {
       throw new Error(`CharacterVersion '${publication.characterVersionId}' already exists.`);
@@ -73,6 +78,76 @@ class MemoryCharacterAuthoringRepository implements CharacterAuthoringRepository
 }
 
 describe('CharacterAuthoringService', () => {
+  it('continues the one working draft from an exact owned CharacterVersion', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    await service.createProject({
+      characterProjectId: 'character-project-branch',
+      displayName: 'Branch',
+      draft: emptyDefinition(),
+    });
+    repository.versions.set('character-version-basis', {
+      characterVersionId: 'character-version-basis',
+      characterProjectId: 'character-project-branch',
+      label: 'Basis',
+      definition: { ...emptyDefinition(), summary: 'Historical definition' },
+      acceptedEvidenceIds: [],
+      publishedAt: firstTime,
+    });
+
+    const project = await service.continueFromVersion({
+      characterProjectId: 'character-project-branch',
+      characterVersionId: 'character-version-basis',
+      replaceWorkingDraft: true,
+    });
+
+    expect(project.draft.summary).toBe('Historical definition');
+    expect(project.draftBasisCharacterVersionId).toBe('character-version-basis');
+    expect(repository.versions.get('character-version-basis')?.definition.summary).toBe(
+      'Historical definition',
+    );
+  });
+
+  it('rejects a basis owned by another CharacterProject', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    await service.createProject({
+      characterProjectId: 'character-project-local',
+      displayName: 'Local',
+      draft: emptyDefinition(),
+    });
+    repository.versions.set('character-version-foreign', {
+      characterVersionId: 'character-version-foreign',
+      characterProjectId: 'character-project-foreign',
+      label: 'Foreign',
+      definition: emptyDefinition(),
+      acceptedEvidenceIds: [],
+      publishedAt: firstTime,
+    });
+
+    await expect(
+      service.continueFromVersion({
+        characterProjectId: 'character-project-local',
+        characterVersionId: 'character-version-foreign',
+        replaceWorkingDraft: true,
+      }),
+    ).rejects.toMatchObject({ code: 'character-authoring-operation-invalid' });
+  });
+
+  it('requires explicit working-draft replacement', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+
+    await expect(
+      Reflect.apply(service.continueFromVersion, service, [
+        {
+          characterProjectId: 'character-project-a',
+          characterVersionId: 'character-version-a',
+        },
+      ]),
+    ).rejects.toMatchObject({ code: 'character-authoring-operation-invalid' });
+  });
+
   it('fills only a fresh exact character creation target', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
     const service = new CharacterAuthoringService({ repository, now: () => firstTime });
