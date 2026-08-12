@@ -348,9 +348,20 @@ function resolveActions(
     selectedIds,
     host,
     reportExecutionDiagnostic,
-    resolveCanvasEmbeddedPreviewRequest(node),
-    onCanvasEmbeddedPreview,
   );
+  const embeddedPreviewRequest = resolveCanvasEmbeddedPreviewRequest(node);
+  if (embeddedPreviewRequest && onCanvasEmbeddedPreview) {
+    actions.push({
+      key: 'canvas:preview',
+      label: t('action.openCanvasPreview'),
+      icon: <FullscreenIcon size={14} />,
+      placement: 'visible',
+      priority: 100,
+      display: 'icon',
+      section: 'utility',
+      run: () => onCanvasEmbeddedPreview(embeddedPreviewRequest),
+    });
+  }
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
     const path = node.data.canvasPath;
     actions.push({
@@ -402,8 +413,6 @@ function resolveOwnerActions(
   selectedNodeIds: readonly string[],
   host: ReturnType<typeof useOptionalCanvasHost>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
-  canvasEmbeddedPreviewRequest?: CanvasEmbeddedPreviewRequest,
-  onCanvasEmbeddedPreview?: (request: CanvasEmbeddedPreviewRequest) => void,
 ): ToolbarAction[] {
   if (!host) return [];
   return descriptors
@@ -417,14 +426,6 @@ function resolveOwnerActions(
         ...presentation,
         run: () => {
           reportExecutionDiagnostic(undefined);
-          if (
-            descriptor.id === CANVAS_PREVIEW_ACTION_ID &&
-            canvasEmbeddedPreviewRequest &&
-            onCanvasEmbeddedPreview
-          ) {
-            onCanvasEmbeddedPreview(canvasEmbeddedPreviewRequest);
-            return;
-          }
           void host
             .executeMaterialAction(
               descriptor.id,
@@ -456,7 +457,7 @@ function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNo
   }
   switch (descriptor.id) {
     case CANVAS_PREVIEW_ACTION_ID:
-      return <FullscreenIcon size={14} />;
+      return <OpenIcon size={14} />;
     case CANVAS_EDIT_TEXT_ACTION_ID:
       return <EditIcon size={14} />;
     case CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID:

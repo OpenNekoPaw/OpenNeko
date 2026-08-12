@@ -34,6 +34,7 @@ export interface UseConnectionDragOptions {
   ) => CanvasConnectionValidationResult;
   onConnectionCancel?: () => void;
   onConnectionStateChange?: (isConnecting: boolean) => void;
+  enabled?: boolean;
 }
 
 export interface PendingConnection {
@@ -86,6 +87,7 @@ export function useConnectionDrag({
   validateConnection,
   onConnectionCancel,
   onConnectionStateChange,
+  enabled = true,
 }: UseConnectionDragOptions): UseConnectionDragReturn {
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -109,6 +111,7 @@ export function useConnectionDrag({
   // Start a new connection from a handle.
   const startConnection = useCallback(
     (nodeId: string, handleId: string, e: React.MouseEvent) => {
+      if (!enabled) return;
       e.stopPropagation();
       e.preventDefault();
 
@@ -132,7 +135,7 @@ export function useConnectionDrag({
       setTargetState(null);
       onConnectionStart?.(nodeId, handleId);
     },
-    [nodes, screenToCanvas, onConnectionStart],
+    [enabled, nodes, screenToCanvas, onConnectionStart],
   );
 
   // Update the pending connection position
@@ -174,6 +177,11 @@ export function useConnectionDrag({
   }, [clearConnection, onConnectionCancel]);
 
   // Handle mouse events for connection dragging
+  useEffect(() => {
+    if (enabled || !isConnecting) return;
+    cancelConnection();
+  }, [cancelConnection, enabled, isConnecting]);
+
   useEffect(() => {
     if (!isConnecting) return;
 

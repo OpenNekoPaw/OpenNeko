@@ -627,6 +627,48 @@ describe('PreviewRoot', () => {
     expect(chineseContainer.querySelector('[aria-label="图片缩放"]')).toBeTruthy();
   });
 
+  it('renders embedded text in a Preview-owned readable page with local error chrome', async () => {
+    const fetch = vi.fn(async () => new Response('# Heading\n\nReadable body', { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const descriptor = {
+      ...embeddedImageDescriptor('embedded-text', 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk'),
+      contentKind: 'text' as const,
+      mediaType: 'text/markdown',
+      displayName: 'notes.md',
+    };
+
+    await act(async () => {
+      root.render(<EmbeddedPreviewSurface locale="en" descriptor={descriptor} />);
+    });
+    await act(async () => Promise.resolve());
+
+    expect(container.querySelector('[data-preview-text-reader="embedded"]')).toBeTruthy();
+    expect(container.querySelector('.neko-preview-text-reader__page')).toBeTruthy();
+    expect(container.querySelector('[data-markdown-document="ready"]')?.textContent).toContain(
+      'Readable body',
+    );
+    expect(rootStyles).toMatch(/\.neko-preview-text-reader\s*\{[^}]*background:/u);
+    expect(rootStyles).toMatch(/\.neko-preview-text-reader__page\s*\{[^}]*background:/u);
+    expect(rootStyles).toMatch(/\.neko-preview-text-reader\s*\{[^}]*user-select:\s*text;/u);
+
+    fetch.mockRejectedValueOnce(new Error('transport unavailable'));
+    await act(async () => {
+      root.render(
+        <EmbeddedPreviewSurface
+          locale="en"
+          descriptor={{ ...descriptor, descriptorId: 'embedded-text-error' }}
+        />,
+      );
+    });
+    await act(async () => Promise.resolve());
+    expect(container.querySelector('.neko-preview-text-reader__diagnostic')?.textContent).toContain(
+      'Unable to load text',
+    );
+  });
+
   it('rejects arbitrary transport URLs locally and does not fetch full text in Quick Preview', async () => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);

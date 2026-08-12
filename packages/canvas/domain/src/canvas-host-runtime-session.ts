@@ -20,6 +20,7 @@ import {
 } from './canvas-host-runtime-contract';
 import {
   createUnavailableCanvasTextFilePreview,
+  resolveCanvasTextFilePreviewKind,
   type CanvasTextFilePreviewRequest,
   type CanvasTextFilePreviewResult,
 } from './canvas-text-file-preview';
@@ -237,6 +238,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     readonly nodeId: string;
     readonly outputId: string;
     readonly locator: ContentLocator;
+    readonly contentKind: 'image' | 'video' | 'audio' | 'text' | 'document' | 'model';
   }): void {
     this.assertActive();
     const node = this.canvas.nodes.find((candidate) => candidate.id === input.nodeId);
@@ -246,12 +248,21 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       if (!output || !contentLocatorsEqual(output.locator, input.locator)) {
         throw new Error(`Canvas embedded preview output "${input.outputId}" is stale.`);
       }
+      if (output.kind !== input.contentKind) {
+        throw new Error(`Canvas embedded preview output "${input.outputId}" kind is stale.`);
+      }
       return;
     }
     const locator =
       node.type === 'media' || node.type === 'file' ? node.data.contentLocator : undefined;
     if (input.outputId !== node.id || !locator || !contentLocatorsEqual(locator, input.locator)) {
       throw new Error(`Canvas embedded preview source "${input.outputId}" is stale.`);
+    }
+    if (node.type !== 'media' && node.type !== 'file') {
+      throw new Error(`Canvas embedded preview source "${input.outputId}" kind is unavailable.`);
+    }
+    if (!isAuthorizedEmbeddedPreviewKind(node, input.contentKind)) {
+      throw new Error(`Canvas embedded preview source "${input.outputId}" kind is unavailable.`);
     }
   }
 
@@ -908,6 +919,23 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     );
     return result;
   }
+}
+
+function isAuthorizedEmbeddedPreviewKind(
+  node: Extract<CanvasData['nodes'][number], { readonly type: 'media' | 'file' }>,
+  contentKind: 'image' | 'video' | 'audio' | 'text' | 'document' | 'model',
+): boolean {
+  if (node.type === 'media') return node.data.mediaType === contentKind;
+  if (contentKind === 'image' || contentKind === 'video' || contentKind === 'audio') {
+    return node.data.mediaKind === contentKind;
+  }
+  if (contentKind !== 'text') return false;
+  return Boolean(
+    resolveCanvasTextFilePreviewKind({
+      path: node.data.path || node.data.title,
+      ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),
+    }),
+  );
 }
 
 function areJsonValuesEqual(left: unknown, right: unknown): boolean {

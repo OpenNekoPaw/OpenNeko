@@ -2791,7 +2791,18 @@ html.canvas-webview-document #root,
   overflow: hidden;
   border-radius: 10px;
   touch-action: none;
+}
+
+.canvas-image-preview-overlay__content:not([data-preview-kind='text']) {
   user-select: none;
+}
+
+.canvas-image-preview-overlay__content[data-preview-kind='text'] {
+  align-items: stretch;
+  border: 1px solid color-mix(in srgb, #fff 12%, transparent);
+  background: #ecefed;
+  box-shadow: 0 18px 54px color-mix(in srgb, #000 22%, transparent);
+  touch-action: auto;
 }
 
 .canvas-image-preview-overlay__content > .neko-preview-surface {
@@ -2909,7 +2920,6 @@ html.canvas-webview-document #root,
     width: 48px;
     height: 38px;
   }
-
 }
 
 .selection-action-overflow-surface {

@@ -1,8 +1,10 @@
 import {
+  resolveCanvasTextFilePreviewKind,
   selectedCanvasGenerationOutput,
   type CanvasGenerationOutputBinding,
   type CanvasNode,
 } from '@neko/canvas-domain';
+import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@neko/ui/icons';
 import { IconButton } from '@neko/ui/primitives';
 import {
@@ -17,7 +19,7 @@ import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
 import type { PreviewSourceDescriptor } from '../../preview/types';
 
-type CanvasEmbeddedPreviewKind = 'image' | 'video' | 'audio';
+type CanvasEmbeddedPreviewKind = 'image' | 'video' | 'audio' | 'text';
 export type CanvasEmbeddedPreviewSource = PreviewSourceDescriptor & {
   readonly previewKind: CanvasEmbeddedPreviewKind;
 };
@@ -91,12 +93,14 @@ export function resolveCanvasEmbeddedPreviewRequest(
     };
   }
 
-  if (
-    node.type === 'file' &&
-    isEmbeddedPreviewKind(node.data.mediaKind) &&
-    node.data.contentLocator
-  ) {
-    const previewKind = node.data.mediaKind;
+  if (node.type === 'file' && node.data.contentLocator) {
+    const fileName = node.data.path || node.data.title;
+    const previewKind = resolveFileEmbeddedPreviewKind(
+      node.data.mediaKind,
+      fileName,
+      node.data.mediaType,
+    );
+    if (!previewKind) return undefined;
     return {
       nodeId: node.id,
       items: [
@@ -186,6 +190,12 @@ export function CanvasEmbeddedPreviewOverlay({
       aria-modal="true"
       aria-label={t('selection.mediaPreview')}
       tabIndex={-1}
+      {...getKeyboardBoundaryMetadata({
+        scope: 'modal',
+        ownerId: 'canvas-embedded-preview',
+        priority: 0,
+        ownedKeys: ['Escape', 'ArrowLeft', 'ArrowRight'],
+      })}
       onPointerDown={(event) => {
         event.stopPropagation();
         if (event.target === event.currentTarget) onClose();
@@ -218,6 +228,7 @@ export function CanvasEmbeddedPreviewOverlay({
       </div>
       <div
         className="canvas-image-preview-overlay__content"
+        data-preview-kind={activeSource.previewKind}
         onPointerDown={(event) => {
           event.stopPropagation();
         }}
@@ -251,8 +262,8 @@ export function CanvasEmbeddedPreviewOverlay({
           </>
         ) : null}
       </div>
-      <div className="canvas-image-preview-overlay__footer">
-        {request.items.length > 1 ? (
+      {request.items.length > 1 ? (
+        <div className="canvas-image-preview-overlay__footer">
           <div className="canvas-image-preview-overlay__thumbnails" role="group">
             {request.items.map((item, index) => (
               <button
@@ -269,11 +280,8 @@ export function CanvasEmbeddedPreviewOverlay({
               </button>
             ))}
           </div>
-        ) : (
-          <span />
-        )}
-        <span />
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -407,17 +415,31 @@ function embeddedPreviewItemAt(
 }
 
 function isEmbeddedPreviewKind(value: unknown): value is CanvasEmbeddedPreviewKind {
-  return value === 'image' || value === 'video' || value === 'audio';
+  return value === 'image' || value === 'video' || value === 'audio' || value === 'text';
 }
 
 function previewRole(kind: CanvasEmbeddedPreviewKind): PreviewSourceDescriptor['role'] {
   if (kind === 'image') return 'image';
-  return kind === 'video' ? 'video-proxy' : 'audio-waveform';
+  if (kind === 'video') return 'video-proxy';
+  return kind === 'audio' ? 'audio-waveform' : 'text';
 }
 
 function defaultMediaType(kind: CanvasEmbeddedPreviewKind): string {
   if (kind === 'image') return 'image/png';
-  return kind === 'video' ? 'video/mp4' : 'audio/mpeg';
+  if (kind === 'video') return 'video/mp4';
+  return kind === 'audio' ? 'audio/mpeg' : 'text/plain';
+}
+
+function resolveFileEmbeddedPreviewKind(
+  mediaKind: unknown,
+  fileName: string,
+  mediaType: string | undefined,
+): CanvasEmbeddedPreviewKind | undefined {
+  if (mediaKind === 'image' || mediaKind === 'video' || mediaKind === 'audio') return mediaKind;
+  if (resolveCanvasTextFilePreviewKind({ path: fileName, ...(mediaType ? { mediaType } : {}) })) {
+    return 'text';
+  }
+  return undefined;
 }
 
 function basename(value: string | undefined): string | undefined {

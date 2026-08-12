@@ -112,6 +112,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Interaction tool: select/marquee by default, hand tool pans on drag.
   const [interactionTool, setInteractionTool] = useState<'select' | 'pan'>('select');
   const [isSpacePanActive, setIsSpacePanActive] = useState(false);
+  const [isEmbeddedPreviewOpen, setIsEmbeddedPreviewOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const isHudVisible = true;
   const isGridVisible = true;
@@ -119,6 +120,10 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const zoomControlsRef = useRef<HTMLDivElement | null>(null);
   const [zoomControlsElement, setZoomControlsElement] = useState<HTMLDivElement | null>(null);
   const [miniMapWidth, setMiniMapWidth] = useState(200);
+  const handleEmbeddedPreviewOpenChange = useCallback((open: boolean) => {
+    setIsEmbeddedPreviewOpen(open);
+    if (open) setIsSpacePanActive(false);
+  }, []);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const { isKeyboardFocused, isKeyboardFocusedRef, setKeyboardFocused } = useFocusedWebviewRoot(
@@ -692,8 +697,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       canDeleteSelection: selectedNodeIds.length > 0 || selectedConnectionIds.length > 0,
       hasNodes: nodes.length > 0,
       isKeyboardFocused,
+      isModalPreviewOpen: isEmbeddedPreviewOpen,
     }),
-    [isKeyboardFocused, nodes, selectedConnectionIds, selectedNodeIds],
+    [isEmbeddedPreviewOpen, isKeyboardFocused, nodes, selectedConnectionIds, selectedNodeIds],
   );
 
   useCanvasKeyboardController({
@@ -720,7 +726,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   });
 
   // Keep ref in sync with latest handler (for Host message dispatch)
-  keyboardActionRef.current = handleKeyboardAction;
+  keyboardActionRef.current = isEmbeddedPreviewOpen ? () => undefined : handleKeyboardAction;
 
   useEffect(() => {
     if (!hostPort || !canvasData) {
@@ -1044,6 +1050,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   onMarqueeSelect={handleMarqueeSelect}
                   onDocumentOpen={handleDocumentOpen}
                   onCanvasEmbedOpen={handleCanvasEmbedOpen}
+                  onEmbeddedPreviewOpenChange={handleEmbeddedPreviewOpenChange}
                   onConnectionUpdate={updateConnection}
                   isPanMode={isPanMode}
                   isSpacePanActive={isSpacePanActive}

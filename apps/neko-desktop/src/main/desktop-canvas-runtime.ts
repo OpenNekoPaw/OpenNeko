@@ -159,6 +159,7 @@ export class DesktopCanvasRuntime {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly workspace: DesktopCanvasViewGrant['workspace'];
         readonly locator: ContentLocator;
+        readonly purpose: 'inline-variant' | 'embedded-source';
         readonly mediaType?: string;
       }) => Promise<DesktopCanvasPreviewResourceLease>;
       readonly resolveCut?: (input: {
@@ -282,6 +283,7 @@ export class DesktopCanvasRuntime {
       identity: request.identity,
       workspace: entry.workspace,
       locator: request.locator,
+      purpose: 'inline-variant',
       ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
     });
     this.previewLeases.set(key, {
@@ -306,25 +308,23 @@ export class DesktopCanvasRuntime {
     const entry = await this.requireSession(windowId, request.identity);
     entry.session.authorizeEmbeddedPreviewSource(request);
     const registerPreviewResource = this.options.registerPreviewResource;
-    if (!registerPreviewResource) throw new Error('Canvas embedded preview capability is unavailable.');
+    if (!registerPreviewResource)
+      throw new Error('Canvas embedded preview capability is unavailable.');
+    const leaseId = randomUUID();
     const descriptorId = [
       'canvas-embedded',
       request.identity.sessionId,
       request.nodeId,
       request.outputId,
+      leaseId,
     ].join(':');
-    const key = `embedded:${sessionKey(request.identity)}:${request.nodeId}:${request.outputId}`;
+    const key = `embedded:${sessionKey(request.identity)}:${leaseId}`;
     const locatorKey = contentLocatorKey(request.locator);
-    const current = this.previewLeases.get(key);
-    if (current?.locatorKey === locatorKey && current.descriptor) {
-      return { requestId: request.requestId, descriptor: current.descriptor };
-    }
-    current?.lease.release();
-    this.previewLeases.delete(key);
     const lease = await registerPreviewResource({
       identity: request.identity,
       workspace: entry.workspace,
       locator: request.locator,
+      purpose: 'embedded-source',
       mediaType: request.mediaType,
     });
     const descriptor = {

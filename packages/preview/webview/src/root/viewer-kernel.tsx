@@ -289,7 +289,11 @@ function TextPreview(props: PreviewViewerKernelProps): ReactElement {
   return <ReadOnlyTextPreview {...props} />;
 }
 
-function ReadOnlyTextPreview({ descriptor }: PreviewViewerKernelProps): ReactElement {
+function ReadOnlyTextPreview({
+  descriptor,
+  locale,
+  presentation,
+}: PreviewViewerKernelProps): ReactElement {
   const [state, setState] = useState<
     | { readonly kind: 'loading' }
     | { readonly kind: 'ready'; readonly text: string }
@@ -308,12 +312,28 @@ function ReadOnlyTextPreview({ descriptor }: PreviewViewerKernelProps): ReactEle
       });
     return () => abort.abort();
   }, [descriptor.url]);
-  if (state.kind === 'loading') return <ViewerLoading />;
-  if (state.kind === 'error') return <span role="alert">{state.message}</span>;
-  if (descriptor.mediaType === 'text/markdown' || descriptor.mediaType === 'text/x-markdown') {
-    return <MarkdownDocumentView value={state.text} className="neko-preview-root__markdown" />;
-  }
-  return <pre className="neko-preview-root__text">{state.text}</pre>;
+  const body =
+    state.kind === 'loading' ? (
+      <ViewerLoading label={label(locale, '正在载入文本…', 'Loading text…')} />
+    ) : state.kind === 'error' ? (
+      <div className="neko-preview-text-reader__diagnostic" role="alert">
+        <strong>{label(locale, '无法载入文本', 'Unable to load text')}</strong>
+        <span>{state.message}</span>
+      </div>
+    ) : descriptor.mediaType === 'text/markdown' || descriptor.mediaType === 'text/x-markdown' ? (
+      <MarkdownDocumentView value={state.text} className="neko-preview-root__markdown" />
+    ) : (
+      <pre className="neko-preview-root__text">{state.text}</pre>
+    );
+  return (
+    <div
+      className="neko-preview-text-reader"
+      data-preview-text-reader={presentation}
+      data-preview-text-state={state.kind}
+    >
+      <div className="neko-preview-text-reader__page">{body}</div>
+    </div>
+  );
 }
 
 function DocumentPreview(props: PreviewViewerKernelProps): ReactElement {

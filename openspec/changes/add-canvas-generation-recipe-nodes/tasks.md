@@ -47,6 +47,7 @@
 - [x] 4.22 Replace the completed multi-image collapsed stack/comparison toggle with one always-visible bounded two-column result grid whose cells directly update the canonical selected output while preserving one node, stable size and Job-level status.
 - [x] 4.23 Omit project/global Media Library archival actions from every Canvas selected-node toolbar position and flatten More into one ordered operation list without category headings or grouped containers.
 - [x] 4.24 Move duplicate/content editing and Canvas-local Image full-screen preview into the selected-node toolbar, remove duplicated edit commands from the node context menu, omit Finder/resource-management actions from Canvas, and order local document synchronization before capability resolution for newly duplicated nodes.
+- [x] 4.25 Extend the Canvas-local Image preview into one presentation-only gallery for an exact Generation Job, with direct-result double-click entry, previous/next and thumbnail navigation, fit-relative zoom/pan and complete input isolation from the covered Canvas viewport without mutating selected-output facts.
 
 ## 5. Agent Direct-Mode Removal
 
@@ -89,3 +90,4 @@
 - [x] 7.21 Add focused AI SDK, Generation executor/coordinator and Canvas Webview regressions for ambiguous synchronous submission classification, no automatic resubmission and centered failed Image placeholder; then complete visible UI inspection without starting another paid request.
 - [x] 7.22 Add focused Canvas Webview regressions and visible browser-owned UI evidence proving resource-library actions remain absent while direct and overflow operations stay available in one flat More list.
 - [x] 7.23 Add focused Canvas Webview/Host regressions and visible UI evidence for duplicate-then-resolve ordering, context-menu de-duplication, absence of Finder/resource-management operations and Canvas-local Image preview close/selection/viewport behavior.
+- [ ] 7.24 Add focused Canvas Webview interaction and visible UI evidence for exact multi-Image preview entry, previous/next and thumbnail navigation, zoom/reset/pan, overlay event isolation, compact layout and unchanged canonical selected-output/Canvas viewport state.

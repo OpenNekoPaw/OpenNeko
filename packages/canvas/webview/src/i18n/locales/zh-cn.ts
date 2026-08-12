@@ -293,6 +293,7 @@ export const zhCN = {
   'canvasEmbed.badge': '画布 · 嵌入',
   'action.open': '打开',
   'action.openPreview': '打开预览',
+  'action.openCanvasPreview': '画布内预览',
   'action.quickGenerate': '快速生成',
   'action.duplicateShort': '创建节点副本',
   'preset.media.preview': '预览',

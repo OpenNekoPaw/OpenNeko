@@ -39,7 +39,7 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain(
       'contentLocator && onEmbeddedPreview ? () => onEmbeddedPreview(node.id) : undefined',
     );
-    expect(source).toContain('isEmbeddedPreviewMediaKind(node.data.mediaKind)');
+    expect(source).toContain('isEmbeddedPreviewFile(node.data)');
     expect(source).toContain('contentLocator && onOpen');
   });
 

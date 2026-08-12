@@ -434,7 +434,7 @@ export function FileNode({
       presentation="foundational"
       opaqueSurface
       onActivate={
-        contentLocator && isEmbeddedPreviewMediaKind(node.data.mediaKind) && onEmbeddedPreview
+        contentLocator && isEmbeddedPreviewFile(node.data) && onEmbeddedPreview
           ? () => onEmbeddedPreview(node.id)
           : contentLocator && onOpen
             ? () => onOpen(contentLocator)
@@ -459,6 +459,16 @@ export function FileNode({
 
 function isEmbeddedPreviewMediaKind(value: unknown): value is 'image' | 'video' | 'audio' {
   return value === 'image' || value === 'video' || value === 'audio';
+}
+
+function isEmbeddedPreviewFile(data: FileCanvasNode['data']): boolean {
+  if (isEmbeddedPreviewMediaKind(data.mediaKind)) return true;
+  return Boolean(
+    resolveCanvasTextFilePreviewKind({
+      path: data.path || data.title,
+      ...(data.mediaType ? { mediaType: data.mediaType } : {}),
+    }),
+  );
 }
 
 function CanvasFileNodeContent({

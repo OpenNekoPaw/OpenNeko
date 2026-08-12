@@ -353,6 +353,15 @@ Canvas SHALL present selected referenced File/Media content, plus a Generation N
 - **THEN** Canvas opens an immersive preview over the Canvas viewport using that exact authorized locator without navigating the main editor or Preview scene
 - **AND** Escape, the close control or the overlay backdrop closes the preview while preserving the current Canvas viewport and node selection
 
+#### Scenario: A generated Image group is explored in Canvas preview
+
+- **GIVEN** the selected Generation Node contains multiple committed Image outputs from one exact Job
+- **WHEN** the user opens preview from the toolbar or double-clicks one visible result
+- **THEN** the immersive Canvas overlay opens at that exact result and exposes every Image output from the same Job through previous/next controls, Left/Right keys and direct thumbnail selection
+- **AND** preview navigation does not mutate the node's canonical selected-output identity or downstream connection value
+- **AND** fit-relative zoom, pointer pan and reset remain local to the overlay, reset when the active item changes and do not pan or zoom the covered Canvas viewport
+- **AND** the toolbar preview action remains available as the explicit keyboard-accessible entry point when double-click is not used
+
 #### Scenario: A node context menu opens
 
 - **WHEN** the user right-clicks a selected content node

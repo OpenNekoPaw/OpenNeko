@@ -296,6 +296,7 @@ export const en = {
   'canvasEmbed.badge': 'CANVAS · EMBED',
   'action.open': 'Open',
   'action.openPreview': 'Open preview',
+  'action.openCanvasPreview': 'Preview in canvas',
   'action.quickGenerate': 'Quick generate',
   'action.duplicateShort': 'Duplicate node',
   'preset.media.preview': 'Preview',

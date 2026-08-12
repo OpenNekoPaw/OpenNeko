@@ -180,6 +180,21 @@ describe('useCanvasKeyboardController', () => {
     expect(options.onSpacePanStart).not.toHaveBeenCalled();
   });
 
+  it('suspends Canvas shortcuts while the embedded preview modal is open', () => {
+    options = createOptions({ isModalPreviewOpen: true });
+
+    act(() => {
+      root.render(<KeyboardHarness options={options} />);
+      window.dispatchEvent(createKeyEvent('Delete', 'Delete'));
+      window.dispatchEvent(createKeyEvent('=', 'Equal', { ctrlKey: true }));
+      window.dispatchEvent(createKeyEvent(' ', 'Space'));
+    });
+
+    expect(options.onDeleteSelected).not.toHaveBeenCalled();
+    expect(options.onZoomIn).not.toHaveBeenCalled();
+    expect(options.onSpacePanStart).not.toHaveBeenCalled();
+  });
+
   it('owns viewport tool shortcuts at viewport scope', () => {
     const viewport = document.createElement('div');
     setBoundary(viewport, 'viewport');

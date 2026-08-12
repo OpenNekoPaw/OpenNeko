@@ -94,6 +94,8 @@ export interface InfiniteCanvasProps {
   onDocumentOpen?: (locator: ContentLocator) => void;
   /** Called when user opens an embedded canvas. */
   onCanvasEmbedOpen?: (canvasPath: string) => void;
+  /** Reports whether the Canvas-owned modal preview currently owns input. */
+  onEmbeddedPreviewOpenChange?: (open: boolean) => void;
 }
 
 // =============================================================================
@@ -124,6 +126,7 @@ export function InfiniteCanvas({
   isSpacePanActive = false,
   onDocumentOpen,
   onCanvasEmbedOpen,
+  onEmbeddedPreviewOpenChange,
   isGridVisible = true,
 }: InfiniteCanvasProps) {
   const [generationInputLayout, setGenerationInputLayout] = useState<{
@@ -142,6 +145,12 @@ export function InfiniteCanvas({
   const frozenVisibleNodeIdsRef = useRef<readonly string[] | null>(null);
   const renderPlan = useMemo(() => projectCanvasNodeRenderPlan(nodes), [nodes]);
 
+  useEffect(() => {
+    onEmbeddedPreviewOpenChange?.(embeddedPreviewRequest !== undefined);
+  }, [embeddedPreviewRequest, onEmbeddedPreviewOpenChange]);
+
+  useEffect(() => () => onEmbeddedPreviewOpenChange?.(false), [onEmbeddedPreviewOpenChange]);
+
   // Viewport transform hook
   const { state: viewportState, handlers: viewportHandlers } = useViewportTransform({
     viewport,
@@ -149,6 +158,7 @@ export function InfiniteCanvas({
     containerRef,
     isPanMode,
     isSpacePanActive,
+    disabled: embeddedPreviewRequest !== undefined,
   });
 
   // Connection drag hook - enables drag-to-connect with mouse-follow preview
@@ -166,6 +176,7 @@ export function InfiniteCanvas({
       validateCanvasConnectionDraft(nodes, connections, connection),
     onConnectionCancel,
     onConnectionStateChange,
+    enabled: embeddedPreviewRequest === undefined,
   });
 
   // Marquee selection hook
@@ -178,7 +189,11 @@ export function InfiniteCanvas({
     containerRef: containerRef as React.RefObject<HTMLElement | null>,
     nodes: [...renderPlan.nodes],
     onSelect: onMarqueeSelect,
-    enabled: !viewportState.isPanning && !isDraggingConnection && !isPanMode,
+    enabled:
+      embeddedPreviewRequest === undefined &&
+      !viewportState.isPanning &&
+      !isDraggingConnection &&
+      !isPanMode,
   });
 
   useEffect(() => {
@@ -405,6 +420,7 @@ export function InfiniteCanvas({
     <div
       ref={containerRef}
       data-canvas-viewport-root="true"
+      data-canvas-interaction-suspended={embeddedPreviewRequest ? 'true' : undefined}
       className="relative w-full h-full overflow-hidden select-none"
       style={{ cursor: getCursor() }}
       {...getKeyboardBoundaryMetadata({
@@ -414,6 +430,7 @@ export function InfiniteCanvas({
       })}
       tabIndex={-1}
       onMouseDown={(e) => {
+        if (embeddedPreviewRequest) return;
         if (
           e.target === e.currentTarget ||
           (e.target as HTMLElement).hasAttribute('data-canvas-viewport-layer') ||
@@ -426,15 +443,21 @@ export function InfiniteCanvas({
         handleCanvasClick(e);
       }}
       onMouseMove={(e) => {
+        if (embeddedPreviewRequest) return;
         viewportHandlers.onMouseMove(e);
         marqueeHandlers.onMouseMove(e);
       }}
       onMouseUp={(e) => {
+        if (embeddedPreviewRequest) return;
         viewportHandlers.onMouseUp();
         marqueeHandlers.onMouseUp(e);
       }}
-      onMouseLeave={viewportHandlers.onMouseLeave}
-      onContextMenu={viewportHandlers.onContextMenu}
+      onMouseLeave={() => {
+        if (!embeddedPreviewRequest) viewportHandlers.onMouseLeave();
+      }}
+      onContextMenu={(event) => {
+        if (!embeddedPreviewRequest) viewportHandlers.onContextMenu(event);
+      }}
     >
       {isGridVisible && (
         <CanvasGrid viewport={viewport} width={containerSize.width} height={containerSize.height} />
@@ -520,7 +543,11 @@ export function InfiniteCanvas({
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
-        hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
+        hidden={
+          embeddedPreviewRequest !== undefined ||
+          (transformingNodeIds.length > 0 && !dragPreview) ||
+          isMarqueeSelecting
+        }
         onCanvasEmbeddedPreview={setEmbeddedPreviewRequest}
       />
       <SelectionGenerationInputPanel
@@ -529,7 +556,11 @@ export function InfiniteCanvas({
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
-        hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
+        hidden={
+          embeddedPreviewRequest !== undefined ||
+          (transformingNodeIds.length > 0 && !dragPreview) ||
+          isMarqueeSelecting
+        }
         onLayoutMeasure={setGenerationInputLayout}
       />
       <SelectionMaterialGenerationBar
@@ -537,7 +568,11 @@ export function InfiniteCanvas({
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
-        hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
+        hidden={
+          embeddedPreviewRequest !== undefined ||
+          transformingNodeIds.length > 0 ||
+          isMarqueeSelecting
+        }
       />
       {/* Marquee selection rectangle */}
       {marqueeRect && (

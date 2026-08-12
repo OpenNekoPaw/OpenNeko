@@ -119,7 +119,12 @@ function parseEmbeddedPreviewMessage(message: Record<string, unknown>) {
   const locator = readPreviewContentLocator(message);
   if (!locator) throw new Error('Desktop Canvas embedded preview source is invalid.');
   const contentKind = message['contentKind'];
-  if (contentKind !== 'image' && contentKind !== 'video' && contentKind !== 'audio') {
+  if (
+    contentKind !== 'image' &&
+    contentKind !== 'video' &&
+    contentKind !== 'audio' &&
+    contentKind !== 'text'
+  ) {
     throw new Error('Desktop Canvas embedded preview kind is invalid.');
   }
   return {

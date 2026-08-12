@@ -54,3 +54,18 @@
 - [ ] 7.4 Run the authoritative visible Electron media qualification with `pnpm test:local:media-openneko` and targeted `pnpm test:local:ui` inventory for Agent cards, Resource Browser quick preview, Canvas immersive image/video/audio, Main Preview text/document and Cut playback.
 - [ ] 7.5 Use the Neko UI validation workflow to capture direct image-capable review of compact/immersive/main layouts, concurrent Agent+Canvas style isolation, multi-output switching, zoom/playback, keyboard close and fail-visible states.
 - [x] 7.6 Use the Neko quality review workflow to audit owner/dependency/interface/extension/test boundaries, confirm deleted/poisoned parallel paths, record all executed commands and list residual risks including deferred Canvas inline player convergence and large-document performance.
+
+## 8. Canvas preview routing and interaction isolation
+
+- [x] 8.1 Add separate Canvas-owned embedded-preview and Preview-owned Main Preview toolbar actions with distinct identities, labels and icons; keep EPUB/PDF/DOCX/CBZ Main Preview-only.
+- [x] 8.2 Add Canvas embedded text/Markdown/JSON file viewing through the shared Embedded Preview Surface without creating a Text Editor or Main Preview session.
+- [x] 8.3 Split inline-variant and embedded-source resource registration purposes so video/audio/text viewers receive exact authorized content instead of thumbnails.
+- [x] 8.4 Suspend Canvas viewport gestures and editor shortcuts while the embedded Overlay owns focus, preserving viewport state and restoring focus on close.
+- [x] 8.5 Add Canvas Webview/Desktop tests for dual action routing, text embedded preview, document-only Main Preview, exact embedded media projection and input isolation.
+
+## 9. Embedded text reader presentation
+
+- [x] 9.1 Add a Preview-owned solid reading page for embedded plain text, JSON and Markdown with bounded measure, independent scrolling, selectable content and high-contrast local loading/error states.
+- [x] 9.2 Remove the empty Canvas gallery footer for single-resource previews and keep caller chrome outside the shared Viewer.
+- [x] 9.3 Add scoped-style and rendering tests proving the embedded text reader does not inherit the translucent Canvas Overlay presentation.
+- [x] 9.4 Isolate embedded Preview descriptors and resource leases per request so stale React effect cleanup cannot invalidate a remounted text Surface.

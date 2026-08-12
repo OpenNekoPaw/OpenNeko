@@ -234,3 +234,27 @@
   `pnpm typecheck` is independently blocked in `@neko/chara-webview` because two existing test fixtures
   omit the required `getConversationLaunchCatalog` port; neither fixture is in this change's dependency
   or modification set.
+
+### Follow-up: Canvas-local Multi-Image Preview Gallery
+
+- Canvas preview remains a Webview-owned, discardable presentation state. An ordinary Image resolves to
+  one preview item; a generated Image resolves only the Image outputs that share the selected output's
+  exact Generation Job identity. Gallery navigation never writes `selectedOutputId`, Canvas viewport or
+  downstream connection facts.
+- The selected-node toolbar opens at the canonical selected output, while double-clicking an exact
+  generated result opens at that result. The overlay supports previous/next buttons, arrow keys,
+  numbered thumbnails, bounded `1x..8x` fit-relative zoom, pointer pan, reset and Escape. Captured key,
+  wheel, pointer and context-menu input cannot reach the covered Canvas viewport.
+- Deterministic evidence passed: Canvas Webview 64 files / 397 tests; focused preview, toolbar and node
+  interaction coverage 4 files / 36 tests; Canvas Webview TypeScript build; focused ESLint and Prettier;
+  strict OpenSpec validation; Webview boundaries; `git diff --check`. Coverage proves exact-Job grouping,
+  historical-Job exclusion, exact-output double-click entry, local navigation/zoom, wheel isolation and
+  unchanged Host execution for Canvas-local Image preview.
+- The authoritative Electron scenario was attempted four times. The first, third and fourth runs reached
+  the Workspace, then concurrent unrelated Automation/Character source edits triggered Vite HMR and
+  invalidated or refreshed the active Canvas renderer before the preview checkpoint. The second attempt was
+  blocked by the first failed run's isolated Vite owner and was cleaned up by terminating only that exact
+  validation process. Reports under
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/` contain zero
+  console errors, warnings or poisoned resource requests, but no current preview screenshot; therefore
+  graphical evidence task `7.24` remains open and no visible pass is claimed.

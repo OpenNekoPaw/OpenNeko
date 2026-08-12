@@ -14,13 +14,13 @@ Cut 的 Preview Panel 名称相近但职责不同：它是 OTIO 时间线的合�
 
 ### Five-layer analysis
 
-| Layer | Decision |
-| --- | --- |
-| Responsibility | Preview 拥有单资源只读 Viewer、轻量/嵌入式 presentation 与 viewer snapshot 语义；Agent/Canvas/Assets 拥有场景外壳和动作；Cut 拥有时间线监视器；Desktop 仅拥有授权和组合。 |
-| Dependency | Agent、Canvas、Assets Webview 只依赖 `@neko/preview-domain` 与 `@neko/preview-webview/embedded`；Preview Webview 依赖 `@neko/media` browser runtime；Cut 不依赖 Preview Webview。 |
-| Interface | 一个 canonical `PreviewMediaDescriptor` 输入，一个精确 Surface owner，一个 Viewer registry；调用方只传 descriptor、locale 和明确 presentation state owner，不传 raw URL/path 或业务动作表。 |
-| Extension | 新只读内容类型在 Preview registry 中显式注册；新业务快捷操作留在调用方；不使用 wildcard renderer、mode JSON bag 或 first-compatible registry。 |
-| Test | Domain codec、Webview lifecycle、消费者 poison-path、Desktop sender/resource authorization、可见 Electron 功能和 UI 证据共同验证唯一调用链与局部失败。 |
+| Layer          | Decision                                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responsibility | Preview 拥有单资源只读 Viewer、轻量/嵌入式 presentation 与 viewer snapshot 语义；Agent/Canvas/Assets 拥有场景外壳和动作；Cut 拥有时间线监视器；Desktop 仅拥有授权和组合。                   |
+| Dependency     | Agent、Canvas、Assets Webview 只依赖 `@neko/preview-domain` 与 `@neko/preview-webview/embedded`；Preview Webview 依赖 `@neko/media` browser runtime；Cut 不依赖 Preview Webview。           |
+| Interface      | 一个 canonical `PreviewMediaDescriptor` 输入，一个精确 Surface owner，一个 Viewer registry；调用方只传 descriptor、locale 和明确 presentation state owner，不传 raw URL/path 或业务动作表。 |
+| Extension      | 新只读内容类型在 Preview registry 中显式注册；新业务快捷操作留在调用方；不使用 wildcard renderer、mode JSON bag 或 first-compatible registry。                                              |
+| Test           | Domain codec、Webview lifecycle、消费者 poison-path、Desktop sender/resource authorization、可见 Electron 功能和 UI 证据共同验证唯一调用链与局部失败。                                      |
 
 ## Goals / Non-Goals
 
@@ -114,15 +114,36 @@ locale 通过当前 Surface 的 provider/props 绑定，不依赖多个挂载 Su
 
 ### 8. Boundary and canonical path inventory
 
-| Owner / role | Canonical public path | Producer -> consumer | Runtime boundary / retained responsibility | Replaced path / user-data impact |
-| --- | --- | --- | --- | --- |
-| `@neko/preview-domain` L0 | root + authorized-session | Host authorization -> all Preview Surfaces | strict descriptor、owner identity、diagnostic | 更新 owner union；不改 durable user content |
-| `@neko/preview-webview` L2 | `/embedded`, `/root` | descriptor -> Viewer | registry、native elements、ephemeral/persistent viewer state | 替换 Agent/Assets/Canvas Overlay 平行 renderers；无数据迁移 |
-| `@neko/agent-webview` L2 | package root | transcript projection -> Quick Surface | card、Tool status、collapse、result grouping | 删除 ImagePreview/VideoCard/AudioCard 的成功渲染实现；transcript facts 不变 |
-| `@neko/canvas-webview` L2 | package root | exact node/output -> Embedded Surface | node、actions、collection、Overlay、Canvas playback coordination | 替换 image-only immersive renderer；`.nkc` facts 不变 |
-| `@neko/assets-*` | package roots | item projection -> Quick Surface | catalog/selection/Inspector | 替换 Resource Browser 专用 quick rendering；Asset facts 不变 |
-| `@neko/cut-*` | package roots | OTIO timeline -> Cut monitor | dual video、Canvas、PCM、clock、seek | 无替换；poison test 阻止 Preview Surface 进入 Cut monitor |
-| `apps/neko-desktop` | package Root wiring + typed IPC | sender/locator -> descriptor | Electron trust、resource registration/release | 删除 viewer/business rendering wiring；无用户数据影响 |
+| Owner / role               | Canonical public path           | Producer -> consumer                       | Runtime boundary / retained responsibility                       | Replaced path / user-data impact                                            |
+| -------------------------- | ------------------------------- | ------------------------------------------ | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `@neko/preview-domain` L0  | root + authorized-session       | Host authorization -> all Preview Surfaces | strict descriptor、owner identity、diagnostic                    | 更新 owner union；不改 durable user content                                 |
+| `@neko/preview-webview` L2 | `/embedded`, `/root`            | descriptor -> Viewer                       | registry、native elements、ephemeral/persistent viewer state     | 替换 Agent/Assets/Canvas Overlay 平行 renderers；无数据迁移                 |
+| `@neko/agent-webview` L2   | package root                    | transcript projection -> Quick Surface     | card、Tool status、collapse、result grouping                     | 删除 ImagePreview/VideoCard/AudioCard 的成功渲染实现；transcript facts 不变 |
+| `@neko/canvas-webview` L2  | package root                    | exact node/output -> Embedded Surface      | node、actions、collection、Overlay、Canvas playback coordination | 替换 image-only immersive renderer；`.nkc` facts 不变                       |
+| `@neko/assets-*`           | package roots                   | item projection -> Quick Surface           | catalog/selection/Inspector                                      | 替换 Resource Browser 专用 quick rendering；Asset facts 不变                |
+| `@neko/cut-*`              | package roots                   | OTIO timeline -> Cut monitor               | dual video、Canvas、PCM、clock、seek                             | 无替换；poison test 阻止 Preview Surface 进入 Cut monitor                   |
+| `apps/neko-desktop`        | package Root wiring + typed IPC | sender/locator -> descriptor               | Electron trust、resource registration/release                    | 删除 viewer/business rendering wiring；无用户数据影响                       |
+
+### 9. Canvas 使用两个显式预览入口并隔离 Overlay 交互
+
+Canvas selection toolbar SHALL NOT reinterpret the Preview-owned `preview:open` material action as an embedded Canvas action. For an exact node/output that supports immersive viewing, Canvas adds a caller-owned `canvas:preview` action with a fullscreen icon; the Preview-owned `preview:open` action remains a separate Main Preview handoff with an external/open icon. The two buttons therefore have different action identity, label, icon and lifecycle:
+
+- `canvas:preview` mounts `EmbeddedPreviewSurface` inside the current Canvas scene and never creates or navigates a Main Preview View/session.
+- `preview:open` executes the canonical Host material action and opens/focuses Main Preview.
+
+Image, video, audio and bounded text/Markdown/JSON file projections support Canvas embedded preview. PDF、DOCX、EPUB、CBZ and other document/model formats remain Main Preview-only because their navigation, Range/dependency and persistent snapshot capabilities belong to Main Preview. Node double-click follows the same policy rather than silently selecting another route.
+
+Canvas Overlay is a modal interaction owner. While mounted, the viewport wheel listener, pan/marquee/connection gestures and Canvas editor shortcut dispatcher are suspended; the Overlay owns Escape and gallery arrow keys through a modal keyboard boundary. Viewer zoom/playback events stay inside the Overlay. Closing the Overlay restores the unchanged Canvas viewport and the previous keyboard focus.
+
+Preview resource registration carries an explicit presentation purpose. Inline variants may register a thumbnail/proxy, while embedded sources register the exact authorized content bytes/file. The adapter MUST NOT give a video/audio/text Viewer an image thumbnail merely because the same locator is also used by an inline node preview.
+
+### 10. 沉浸式文本使用独立阅读页而不是透明媒体场
+
+Embedded text is a document-reading presentation, not an image black-field variant. Preview owns a solid, high-contrast reading page inside the caller-owned dark Overlay: the page has an explicit foreground/background pair, a bounded readable line length, document padding, independent vertical scrolling and selectable text. Markdown and plain text share this shell while retaining their canonical read-only renderers. The shell MUST NOT inherit the translucent Overlay foreground or expose the underlying Canvas through the document body.
+
+Canvas keeps the modal title and close action, but does not reserve an empty gallery footer for a single text resource. Loading and failure remain local to the reading page with an explicit diagnostic; a transport failure MUST NOT be presented as faint unscoped text over the Canvas backdrop.
+
+Every embedded mount owns a request-scoped Preview descriptor and resource lease. A stale effect cleanup may release only the descriptor returned for that exact request; it MUST NOT release a remounted Surface's lease merely because both requests target the same Canvas output. This keeps React remount and rapid reopen behavior fail-local without retaining stale resources.
 
 ## Risks / Trade-offs
 

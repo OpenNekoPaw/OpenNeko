@@ -192,6 +192,7 @@ import {
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
+import { CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES } from '@neko/canvas-domain';
 import { GenerationApplicationRuntime } from '@neko/generation/job';
 import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
 import {
@@ -1057,7 +1058,7 @@ async function startDesktop(): Promise<void> {
     host,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
     materialActionLabels: {
-      preview: canvasUsesChineseLabels ? '全屏预览' : 'Full-screen preview',
+      preview: canvasUsesChineseLabels ? '主面板预览' : 'Open Main Preview',
       reveal: canvasUsesChineseLabels ? '在访达中显示' : 'Reveal in Finder',
       openInCut: canvasUsesChineseLabels ? '打开剪辑' : 'Open Cut',
       editText: canvasUsesChineseLabels ? '编辑文本' : 'Edit text',
@@ -1315,6 +1316,7 @@ async function startDesktop(): Promise<void> {
       identity,
       workspace,
       locator,
+      purpose,
       mediaType,
     }): Promise<DesktopCanvasPreviewResourceLease> => {
       const owner = {
@@ -1325,8 +1327,31 @@ async function startDesktop(): Promise<void> {
       };
       const contentType = requireCanvasPreviewContentType(locator, mediaType);
       if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
+        if (purpose === 'embedded-source' && isCanvasEmbeddedTextContentType(contentType)) {
+          const contentRead = createNodeHostContentReadService({
+            workspaceRoot: workspace.workspacePath,
+            documentEntryReader: {
+              readEntry: (sourcePath, entryPath) =>
+                canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+            },
+          });
+          const loaded = await contentRead.read(locator, {
+            maxBytes: CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
+          });
+          if (loaded.status !== 'ready') {
+            throw new Error(
+              `Canvas embedded text preview is unavailable: ${loaded.diagnostic.code}.`,
+            );
+          }
+          return registerCanvasPreviewBytes(
+            resourceRegistry,
+            owner,
+            loaded.bytes,
+            loaded.mimeType ?? contentType,
+          );
+        }
         const absolutePath = await resolveWorkspaceContentLocator(workspace, locator);
-        if (contentType.startsWith('image/')) {
+        if (purpose === 'embedded-source' || contentType.startsWith('image/')) {
           const metadata = await lstat(absolutePath);
           const lease = await resourceRegistry.registerFile(owner, {
             absolutePath,
@@ -1352,7 +1377,12 @@ async function startDesktop(): Promise<void> {
             canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
         },
       });
-      const loaded = await contentRead.read(locator, { maxBytes: 64 * 1024 * 1024 });
+      const loaded = await contentRead.read(locator, {
+        maxBytes:
+          purpose === 'embedded-source' && isCanvasEmbeddedTextContentType(contentType)
+            ? CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES
+            : 64 * 1024 * 1024,
+      });
       if (loaded.status !== 'ready') {
         throw new Error(`Canvas preview content is unavailable: ${loaded.diagnostic.code}.`);
       }
@@ -3202,11 +3232,28 @@ function requireCanvasPreviewContentType(
       return 'audio/mpeg';
     case '.wav':
       return 'audio/wav';
+    case '.md':
+    case '.markdown':
+      return 'text/markdown';
+    case '.txt':
+    case '.log':
+    case '.fountain':
+      return 'text/plain';
+    case '.json':
+      return 'application/json';
     case '.pdf':
       return 'application/pdf';
     default:
       throw new Error('Canvas preview content type is unavailable.');
   }
+}
+
+function isCanvasEmbeddedTextContentType(contentType: string): boolean {
+  return (
+    contentType.startsWith('text/') ||
+    contentType === 'application/json' ||
+    contentType.endsWith('+json')
+  );
 }
 
 function canvasContentDisplayName(locator: ContentLocator): string {

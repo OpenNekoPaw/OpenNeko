@@ -124,15 +124,14 @@
 
 .neko-preview-root__text {
   box-sizing: border-box;
-  width: 100%;
-  height: 100%;
+  width: min(100%, 920px);
+  min-height: 100%;
   margin: 0;
-  padding: 18px;
-  overflow: auto;
+  padding: 0;
   color: inherit;
   background: transparent;
   font:
-    12px/1.55 ui-monospace,
+    13px/1.7 ui-monospace,
     SFMono-Regular,
     Menlo,
     Monaco,
@@ -144,11 +143,83 @@
 
 .neko-preview-root__markdown {
   box-sizing: border-box;
+  width: min(100%, 920px);
+  min-height: 100%;
+  padding: 0;
+  color: inherit;
+}
+
+.neko-preview-text-reader {
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
-  padding: 18px;
+  min-height: 0;
+  padding: clamp(12px, 2.4vw, 32px);
   overflow: auto;
-  color: inherit;
+  color: var(--neko-preview-document-fg, var(--neko-fg, #1f2523));
+  background: var(--neko-preview-document-field, #ecefed);
+  scrollbar-gutter: stable;
+  user-select: text;
+}
+
+.neko-preview-text-reader__page {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 1040px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: clamp(24px, 4vw, 64px) clamp(22px, 5vw, 76px);
+  border: 1px solid var(--neko-preview-document-border, rgba(31, 37, 35, 0.12));
+  border-radius: 12px;
+  color: var(--neko-preview-document-fg, #1f2523);
+  background: var(--neko-preview-document-bg, #fff);
+  box-shadow: 0 18px 52px rgba(18, 22, 20, 0.16);
+}
+
+.neko-preview-text-reader__page > .neko-preview-viewer__status {
+  position: absolute;
+  color: var(--neko-preview-document-muted, #66706b);
+}
+
+.neko-preview-text-reader__diagnostic {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--neko-preview-document-error, #a23b35);
+  text-align: center;
+}
+
+.neko-preview-text-reader__diagnostic strong {
+  font-size: 14px;
+}
+
+.neko-preview-text-reader__diagnostic span {
+  max-width: 56ch;
+  color: var(--neko-preview-document-muted, #66706b);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.neko-preview-text-reader .neko-preview-root__markdown {
+  --node-fg: var(--neko-preview-document-fg, #1f2523);
+  --node-fg-secondary: var(--neko-preview-document-muted, #66706b);
+  --node-divider: var(--neko-preview-document-border, rgba(31, 37, 35, 0.14));
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+@media (max-width: 640px), (max-height: 520px) {
+  .neko-preview-text-reader {
+    padding: 8px;
+  }
+
+  .neko-preview-text-reader__page {
+    padding: 20px 18px;
+    border-radius: 8px;
+  }
 }
 .neko-preview-surface {
   position: relative;

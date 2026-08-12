@@ -150,6 +150,7 @@ describe('CanvasHostRuntimeSession', () => {
         nodeId: 'generation-1',
         outputId: 'output-1',
         locator: firstLocator,
+        contentKind: 'image',
       }),
     ).not.toThrow();
     expect(() =>
@@ -157,6 +158,7 @@ describe('CanvasHostRuntimeSession', () => {
         nodeId: 'generation-1',
         outputId: 'output-1',
         locator: { ...firstLocator, path: 'neko/generated/other.png' },
+        contentKind: 'image',
       }),
     ).toThrow('output "output-1" is stale');
     expect(() =>
@@ -164,6 +166,7 @@ describe('CanvasHostRuntimeSession', () => {
         nodeId: 'generation-1',
         outputId: 'output-2',
         locator: secondLocator,
+        contentKind: 'image',
       }),
     ).not.toThrow();
   });

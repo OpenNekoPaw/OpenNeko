@@ -86,7 +86,7 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
-  it('opens an Image preview inside Canvas without dispatching the Host preview action', async () => {
+  it('keeps Canvas embedded preview distinct from the Host-owned Main Preview action', async () => {
     const node = mediaNode('image-preview', 'image', 'assets/image.png');
     const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
     const onCanvasEmbeddedPreview = vi.fn();
@@ -115,7 +115,9 @@ describe('SelectionContextToolbar', () => {
     });
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-selection-action="preview:open"]')?.click();
+      container
+        .querySelector<HTMLButtonElement>('[data-selection-action="canvas:preview"]')
+        ?.click();
     });
 
     expect(onCanvasEmbeddedPreview).toHaveBeenCalledWith(
@@ -131,6 +133,59 @@ describe('SelectionContextToolbar', () => {
       }),
     );
     expect(executeMaterialAction).not.toHaveBeenCalled();
+    expect(
+      container
+        .querySelector('[data-selection-action="canvas:preview"]')
+        ?.getAttribute('aria-label'),
+    ).toBe('Preview in canvas');
+    expect(
+      container.querySelector('[data-selection-action="preview:open"]')?.getAttribute('aria-label'),
+    ).toBe('Full-screen preview');
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-selection-action="preview:open"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(executeMaterialAction).toHaveBeenCalledWith('preview:open', [node.id], {});
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('offers Canvas preview for text files but leaves EPUB files Main Preview-only', async () => {
+    const textNode = fileNode('notes', 'notes/scene.md');
+    const epubNode = fileNode('book', 'books/story.epub');
+    const onCanvasEmbeddedPreview = vi.fn();
+    const host = createMaterialHost([descriptor('preview:open', 'Main Preview', 'read')]);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = (node: CanvasNode): void =>
+      root.render(
+        <CanvasHostProvider host={host}>
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+            onCanvasEmbeddedPreview={onCanvasEmbeddedPreview}
+          />
+        </CanvasHostProvider>,
+      );
+
+    await act(async () => {
+      render(textNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.querySelector('[data-selection-action="canvas:preview"]')).not.toBeNull();
+    expect(container.querySelector('[data-selection-action="preview:open"]')).not.toBeNull();
+
+    await act(async () => {
+      render(epubNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.querySelector('[data-selection-action="canvas:preview"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="preview:open"]')).not.toBeNull();
+
     await act(async () => root.unmount());
     container.remove();
   });

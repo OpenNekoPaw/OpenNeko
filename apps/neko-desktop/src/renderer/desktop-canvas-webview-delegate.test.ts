@@ -177,6 +177,51 @@ describe('Desktop Canvas Webview delegate', () => {
     );
   });
 
+  it('forwards an embedded text Preview request without reclassifying it as a document', async () => {
+    const locator = { kind: 'workspace-file' as const, path: 'notes/scene.md' };
+    const descriptor = {
+      descriptorId: 'canvas-text-preview-notes',
+      sourceFingerprint: 'sha256-notes',
+      contentLocator: locator,
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
+      contentKind: 'text' as const,
+      mediaType: 'text/markdown',
+      displayName: 'scene.md',
+      byteLength: 42,
+    };
+    const resolveEmbeddedPreview = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      descriptor,
+    }));
+    vi.stubGlobal('openNekoDesktop', {
+      canvas: { resolveEmbeddedPreview, releaseEmbeddedPreview: vi.fn() },
+    });
+    const delegate = createDesktopCanvasWebviewDelegate(identity);
+
+    delegate.postMessage({
+      type: 'preview:resolveEmbedded',
+      requestId: 'embedded-text-1',
+      nodeId: 'notes',
+      outputId: 'notes',
+      contentLocator: locator,
+      contentKind: 'text',
+      mediaType: 'text/markdown',
+      displayName: 'scene.md',
+    });
+
+    await vi.waitFor(() => expect(resolveEmbeddedPreview).toHaveBeenCalled());
+    expect(resolveEmbeddedPreview).toHaveBeenCalledWith({
+      identity,
+      requestId: 'embedded-text-1',
+      nodeId: 'notes',
+      outputId: 'notes',
+      locator,
+      contentKind: 'text',
+      mediaType: 'text/markdown',
+      displayName: 'scene.md',
+    });
+  });
+
   it('rejects unsupported messages and path-only sources instead of inferring locators', () => {
     vi.stubGlobal('openNekoDesktop', {
       canvas: { resolvePreviewVariant: vi.fn() },

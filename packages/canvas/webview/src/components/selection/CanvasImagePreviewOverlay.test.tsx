@@ -85,6 +85,25 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     );
   });
 
+  it('resolves bounded text files but rejects document containers from embedded preview', () => {
+    const markdown = fileNode('notes', 'notes/scene.md', 'text/markdown');
+    const epub = fileNode('book', 'books/story.epub', 'application/epub+zip');
+
+    expect(resolveCanvasEmbeddedPreviewRequest(markdown)).toEqual(
+      expect.objectContaining({
+        nodeId: 'notes',
+        items: [
+          expect.objectContaining({
+            previewKind: 'text',
+            role: 'text',
+            asset: { kind: 'asset-identity', mediaType: 'text' },
+          }),
+        ],
+      }),
+    );
+    expect(resolveCanvasEmbeddedPreviewRequest(epub)).toBeUndefined();
+  });
+
   it('switches between Job siblings in the shared embedded Viewer and releases each lease', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -181,6 +200,38 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     });
     container.remove();
   });
+
+  it('does not reserve an empty gallery footer for a single embedded text document', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('# Readable document', { status: 200 })),
+    );
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const host = createTextPreviewHost();
+    const request = resolveCanvasEmbeddedPreviewRequest(
+      fileNode('notes', 'notes/scene.md', 'text/markdown'),
+    );
+    if (!request) throw new Error('Expected an embedded text preview request.');
+
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider host={host.port}>
+          <CanvasEmbeddedPreviewOverlay request={request} onClose={() => undefined} />
+        </CanvasHostProvider>,
+      );
+    });
+    await act(async () => Promise.resolve());
+
+    expect(container.querySelector('[data-preview-kind="text"]')).toBeTruthy();
+    expect(container.querySelector('[data-preview-text-reader="embedded"]')).toBeTruthy();
+    expect(container.querySelector('.canvas-image-preview-overlay__footer')).toBeNull();
+
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  });
 });
 
 function galleryRequest(): CanvasEmbeddedPreviewRequest {
@@ -233,6 +284,23 @@ function mediaNode(id: string, mediaType: 'video' | 'audio', path: string): Canv
     data: {
       mediaType,
       assetPath: path,
+      contentLocator: { kind: 'workspace-file', path },
+    },
+  };
+}
+
+function fileNode(nodeId: string, path: string, mediaType: string): CanvasNode {
+  return {
+    id: nodeId,
+    type: 'file',
+    position: { x: 0, y: 0 },
+    size: { width: 240, height: 180 },
+    zIndex: 1,
+    data: {
+      title: path,
+      path,
+      mediaKind: 'document',
+      mediaType,
       contentLocator: { kind: 'workspace-file', path },
     },
   };
@@ -320,6 +388,42 @@ function createDeferredPreviewHost(): {
       }
     },
   };
+}
+
+function createTextPreviewHost(): {
+  readonly port: CanvasWebviewHostPort;
+  readonly postMessage: ReturnType<typeof vi.fn>;
+} {
+  const listeners = new Set<(message: unknown) => void>();
+  const postMessage = vi.fn((message: unknown) => {
+    if (!isRecord(message) || message['type'] !== 'preview:resolveEmbedded') return;
+    for (const listener of listeners) {
+      listener({
+        type: 'preview:embeddedResolved',
+        requestId: message['requestId'],
+        descriptor: {
+          descriptorId: 'descriptor-notes',
+          sourceFingerprint: 'sha256-notes',
+          contentLocator: message['contentLocator'],
+          url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/preview',
+          contentKind: 'text',
+          mediaType: 'text/markdown',
+          displayName: String(message['displayName']),
+          byteLength: 19,
+        },
+      });
+    }
+  });
+  const port = {
+    documentId: 'neko/boards/workspace.nkc',
+    postMessage,
+    supportsMessage: () => true,
+    subscribe(listener: (message: unknown) => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  } as unknown as CanvasWebviewHostPort;
+  return { port, postMessage };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

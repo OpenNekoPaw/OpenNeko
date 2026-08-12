@@ -1523,6 +1523,7 @@ describe('DesktopCanvasRuntime', () => {
       identity,
       workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
       locator: { kind: 'workspace-file', path: 'media/cat.png' },
+      purpose: 'inline-variant',
       mediaType: 'image',
     });
 
@@ -1593,18 +1594,21 @@ describe('DesktopCanvasRuntime', () => {
         connections: [],
       }),
     );
-    const releases = [vi.fn(), vi.fn()];
-    const registerPreviewResource = vi.fn(async ({ locator }: { readonly locator: ContentLocator }) => {
-      const outputId = locator.kind === 'generated-output' ? locator.outputId : 'unknown';
-      const index = outputId === 'output-1' ? 0 : 1;
-      return {
-        url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}`,
-        sourceFingerprint: `sha256-${outputId}`,
-        byteLength: 42,
-        mediaType: 'image/png',
-        release: releases[index]!,
-      };
-    });
+    const releases = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+    let registrationIndex = 0;
+    const registerPreviewResource = vi.fn(
+      async ({ locator }: { readonly locator: ContentLocator }) => {
+        const outputId = locator.kind === 'generated-output' ? locator.outputId : 'unknown';
+        const index = registrationIndex++;
+        return {
+          url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}-${index}`,
+          sourceFingerprint: `sha256-${outputId}`,
+          byteLength: 42,
+          mediaType: 'image/png',
+          release: releases[index]!,
+        };
+      },
+    );
     const runtime = createRuntime(workspacePath, identity, registerPreviewResource);
     await runtime.getSnapshot('window-1', identity);
 
@@ -1637,11 +1641,47 @@ describe('DesktopCanvasRuntime', () => {
       contentKind: 'image',
       url: expect.stringMatching(/^openneko:\/\/resource\//u),
     });
+    expect(registerPreviewResource).toHaveBeenLastCalledWith(
+      expect.objectContaining({ purpose: 'embedded-source' }),
+    );
     await runtime.releaseEmbeddedPreview('window-1', {
       identity,
       descriptorId: first.descriptor.descriptorId,
     });
     expect(releases[0]).toHaveBeenCalledOnce();
+
+    const staleMount = await runtime.resolveEmbeddedPreview('window-1', {
+      identity,
+      requestId: 'embedded-remount-stale',
+      nodeId: 'generation-1',
+      outputId: 'output-1',
+      locator: firstLocator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      displayName: 'Output 1',
+    });
+    const activeMount = await runtime.resolveEmbeddedPreview('window-1', {
+      identity,
+      requestId: 'embedded-remount-active',
+      nodeId: 'generation-1',
+      outputId: 'output-1',
+      locator: firstLocator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      displayName: 'Output 1',
+    });
+    expect(staleMount.descriptor.descriptorId).not.toBe(activeMount.descriptor.descriptorId);
+    await runtime.releaseEmbeddedPreview('window-1', {
+      identity,
+      descriptorId: staleMount.descriptor.descriptorId,
+    });
+    expect(releases[1]).toHaveBeenCalledOnce();
+    expect(releases[2]).not.toHaveBeenCalled();
+    await runtime.releaseEmbeddedPreview('window-1', {
+      identity,
+      descriptorId: activeMount.descriptor.descriptorId,
+    });
+    expect(releases[2]).toHaveBeenCalledOnce();
 
     await expect(
       runtime.resolveEmbeddedPreview('window-1', {
@@ -1655,7 +1695,7 @@ describe('DesktopCanvasRuntime', () => {
         displayName: 'Output 2',
       }),
     ).resolves.toMatchObject({ descriptor: { contentLocator: secondLocator } });
-    expect(registerPreviewResource).toHaveBeenCalledTimes(2);
+    expect(registerPreviewResource).toHaveBeenCalledTimes(4);
   });
 
   it('routes package media requests through the owner-bound Canvas session workspace', async () => {
@@ -2513,6 +2553,7 @@ function createRuntime(
     readonly identity: CanvasHostRuntimeIdentity;
     readonly workspace: DesktopCanvasViewGrant['workspace'];
     readonly locator: import('@neko/content').ContentLocator;
+    readonly purpose: 'inline-variant' | 'embedded-source';
     readonly mediaType?: string;
   }) => Promise<{
     readonly url: string;
