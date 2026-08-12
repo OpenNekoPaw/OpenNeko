@@ -117,6 +117,7 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly assetLibraryMemberships?: AssetLibraryMembershipRepository;
   readonly localMetadataRepositories?: LocalMetadataRepositories;
   readonly refreshEntityProjections?: ResourceBrowserNodeSourceOptions['refreshEntityProjections'];
+  readonly readEntityCharacterResources: ResourceBrowserNodeSourceOptions['readEntityCharacterResources'];
   readonly shell: ResourceBrowserShellPort;
   readonly host: Pick<NekoHostPorts, 'files' | 'external' | 'diagnostics'>;
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
@@ -1053,8 +1054,9 @@ export class ResourceBrowserNodeRuntime {
         : {}),
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
-      entityProjections: this.options.localMetadataRepositories?.entityAssetProjections,
+      entityProjections: this.options.localMetadataRepositories?.projectEntityProjections,
       refreshEntityProjections: this.options.refreshEntityProjections,
+      readEntityCharacterResources: this.options.readEntityCharacterResources,
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
@@ -1073,7 +1075,7 @@ export class ResourceBrowserNodeRuntime {
       identity: expected,
       source: composition.source,
       interactions: composition.interactions,
-      initialFacet: 'files',
+      initialSource: 'files',
       canvasAvailable: true,
     });
     this.controllers.set(key, controller);
@@ -1159,11 +1161,11 @@ export function createResourceToCanvasInteraction(options: {
       rendererSessionId: resourceIdentity.rendererSessionId,
     };
     const locator =
-      item.facet === 'entities'
+      item.source === 'entities'
         ? item.entityStatus === 'candidate'
           ? undefined
           : item.representationLocator
-        : item.facet === 'assets'
+        : item.source === 'assets'
           ? undefined
           : item.locator;
     if (!locator) {
@@ -1200,7 +1202,7 @@ export function createResourceToCanvasInteraction(options: {
             locator,
             mediaKind: resourceItemMediaKind(item),
             title: item.label,
-            ...(item.facet === 'entities' && item.entityStatus !== 'candidate'
+            ...(item.source === 'entities' && item.entityStatus !== 'candidate'
               ? {
                   entity: {
                     entityId: item.entityRef.entityId,
@@ -1220,7 +1222,7 @@ export function createResourceToCanvasInteraction(options: {
 }
 
 function requireEntityRepresentationBindingId(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+  item: Extract<ResourceBrowserItem, { readonly source: 'entities' }>,
 ): string {
   if (item.entityStatus === 'candidate') {
     throw new Error('Resource Browser candidate has no representation binding identity.');
@@ -1232,7 +1234,7 @@ function requireEntityRepresentationBindingId(
 }
 
 function requireEntityRepresentationRole(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+  item: Extract<ResourceBrowserItem, { readonly source: 'entities' }>,
 ) {
   if (item.entityStatus === 'candidate') {
     throw new Error('Resource Browser candidate has no representation role.');

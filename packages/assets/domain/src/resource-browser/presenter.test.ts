@@ -24,7 +24,7 @@ describe('Resource Browser presenter', () => {
     });
 
     expect(item).toMatchObject({
-      facet: 'media',
+      source: 'media',
       kind: 'image',
       locator: entry.locator,
       capabilities: ['preview', 'reveal', 'add-to-canvas'],
@@ -38,7 +38,6 @@ describe('Resource Browser presenter', () => {
       entityId: 'character-neko',
       kind: 'character',
       names: { canonical: 'Neko', display: 'Neko', aliases: ['猫'] },
-      facts: {},
       representations: [
         {
           bindingId: 'binding-neko',
@@ -66,7 +65,7 @@ describe('Resource Browser presenter', () => {
     );
 
     expect(item).toMatchObject({
-      facet: 'entities',
+      source: 'entities',
       kind: 'character',
       entityStatus: 'confirmed',
       sourceOwners: ['project-entity'],
@@ -122,7 +121,7 @@ describe('Resource Browser presenter', () => {
     });
 
     expect(item).toMatchObject({
-      facet: 'assets',
+      source: 'assets',
       kind: 'asset',
       role: 'asset',
       assetRef: { assetId: 'global-asset-library:lighting' },

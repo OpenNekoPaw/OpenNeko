@@ -44,7 +44,7 @@ describe('Resource Browser Workspace File mutations', () => {
     const composition = createComposition(workspacePath, createFilePort());
     const parent = {
       resourceId: 'content:references',
-      facet: 'files' as const,
+      source: 'files' as const,
       kind: 'directory' as const,
       label: 'references',
       role: 'directory' as const,
@@ -68,7 +68,7 @@ describe('Resource Browser Workspace File mutations', () => {
     const composition = createComposition(workspacePath, createFilePort());
     const parent = {
       resourceId: 'content:references',
-      facet: 'files' as const,
+      source: 'files' as const,
       kind: 'directory' as const,
       label: 'references',
       role: 'directory' as const,
@@ -173,7 +173,7 @@ describe('Resource Browser Workspace File mutations', () => {
     ).rejects.toThrow('content-conflict');
     const item = {
       resourceId: 'content:notes.txt',
-      facet: 'files' as const,
+      source: 'files' as const,
       kind: 'file' as const,
       label: 'notes.txt',
       role: 'content' as const,
@@ -202,6 +202,44 @@ describe('Resource Browser Workspace File mutations', () => {
     ).rejects.toThrow('portable path segment');
     await expect(readdir(workspacePath)).resolves.toEqual([]);
   });
+
+  it('delegates exact linked Character presentation to the Project-owned reader', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-character-link-'));
+    roots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(workspacePath);
+    const readEntityCharacterResources = vi.fn(async () => [
+      {
+        entityId: 'entity-rin',
+        characterProjectId: 'character-project-rin',
+        displayName: 'Rin',
+        placement: 'project-local' as const,
+        availability: 'available' as const,
+        handoffs: [
+          { kind: 'open-character' as const, characterProjectId: 'character-project-rin' },
+          { kind: 'open-character-studio' as const, characterProjectId: 'character-project-rin' },
+        ],
+        publishedVersionCount: 1,
+        interactionStatus: 'select-version' as const,
+      },
+    ]);
+    const composition = createComposition(workspacePath, createFilePort(), {
+      readEntityCharacterResources,
+    });
+
+    const result = await composition.source.entities.list({ identity, query: '', limit: 20 });
+
+    expect(result.characterAssociations).toEqual([
+      expect.objectContaining({
+        entityId: 'entity-rin',
+        characterProjectId: 'character-project-rin',
+      }),
+    ]);
+    expect(readEntityCharacterResources).toHaveBeenCalledWith({
+      identity,
+      workspace: expect.objectContaining({ workspaceId: identity.workspaceId, workspacePath }),
+    });
+  });
 });
 
 function createComposition(
@@ -212,6 +250,9 @@ function createComposition(
     readonly openCreativeDocument?: Parameters<
       typeof createResourceBrowserNodeProjectionSource
     >[0]['openCreativeDocument'];
+    readonly readEntityCharacterResources?: Parameters<
+      typeof createResourceBrowserNodeProjectionSource
+    >[0]['readEntityCharacterResources'];
   } = {},
 ) {
   return createResourceBrowserNodeProjectionSource({
@@ -223,6 +264,7 @@ function createComposition(
       displayName: 'Workspace',
       locator: { kind: 'relative', value: 'workspace' },
     },
+    readEntityCharacterResources: overrides.readEntityCharacterResources ?? (async () => []),
     host: {
       files,
       external: { openExternal: async () => undefined },

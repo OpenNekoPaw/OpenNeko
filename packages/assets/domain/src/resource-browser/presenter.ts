@@ -15,19 +15,20 @@ import type {
   ResourceBrowserItemKind,
 } from './contract';
 import type { ResourceBrowserContentEntry } from './ports';
+import type { ProjectEntityCharacterResourceProjection } from '@neko/project/contracts';
 
 export function presentResourceBrowserContentItem(
   entry: ResourceBrowserContentEntry,
-  facet: 'files' | 'media',
+  source: 'files' | 'media',
   options: { readonly canvasAvailable?: boolean } = {},
 ): ResourceBrowserContentItem {
   const kind = presentContentKind(entry.metadata?.mediaType);
   const parentResourceId = entry.parentLocator
-    ? stableResourceId('content', `${facet}:${contentLocatorKey(entry.parentLocator)}`)
+    ? stableResourceId('content', `${source}:${contentLocatorKey(entry.parentLocator)}`)
     : undefined;
   return {
-    resourceId: stableResourceId('content', `${facet}:${contentLocatorKey(entry.locator)}`),
-    facet,
+    resourceId: stableResourceId('content', `${source}:${contentLocatorKey(entry.locator)}`),
+    source,
     kind,
     label: entry.label,
     role: entry.role,
@@ -47,7 +48,7 @@ export function presentResourceBrowserContentItem(
       entry.capabilities,
       options.canvasAvailable ?? false,
       entry.metadata?.mediaType,
-      facet,
+      source,
       entry.locator,
     ),
   };
@@ -58,6 +59,7 @@ export function presentResourceBrowserEntityItem(
   options: {
     readonly canvasAvailable?: boolean;
     readonly capabilities?: ProjectEntityInspectorOwnerCapabilities;
+    readonly characterAssociation?: ProjectEntityCharacterResourceProjection | undefined;
   },
 ): ResourceBrowserEntityItem {
   const inspector = projectEntityInspector({
@@ -68,7 +70,7 @@ export function presentResourceBrowserEntityItem(
     const candidate = projection.candidate;
     return {
       resourceId: stableResourceId('candidate', candidate.candidateId),
-      facet: 'entities',
+      source: 'entities',
       kind: candidate.kind,
       label: candidate.proposedNames.display ?? candidate.proposedNames.canonical,
       ...(candidate.proposedNames.aliases.length > 0
@@ -93,7 +95,7 @@ export function presentResourceBrowserEntityItem(
     .map((candidate) => candidate.bindingId);
   return {
     resourceId: stableResourceId('entity', `${entity.kind}:${entity.entityId}`),
-    facet: 'entities',
+    source: 'entities',
     kind: entity.kind,
     label: entity.names.display ?? entity.names.canonical,
     ...(entity.names.aliases.length > 0 ? { description: entity.names.aliases.join(', ') } : {}),
@@ -105,6 +107,7 @@ export function presentResourceBrowserEntityItem(
     sourceOwners: projection.sourceOwners,
     attentionBindingIds,
     inspector,
+    ...(options.characterAssociation ? { characterAssociation: options.characterAssociation } : {}),
     representationAvailability:
       attentionBindingIds.length > 0
         ? 'needs-attention'
@@ -139,7 +142,7 @@ export function presentResourceBrowserEntityItem(
 export function presentResourceBrowserAssetItem(asset: GlobalAssetItem): ResourceBrowserAssetItem {
   return {
     resourceId: stableResourceId('asset', asset.id),
-    facet: 'assets',
+    source: 'assets',
     kind: 'asset',
     label: asset.label,
     ...(asset.description ? { description: asset.description } : {}),
@@ -194,12 +197,12 @@ function presentContentCapabilities(
   capabilities: MediaLibraryProjectionEntry['capabilities'],
   canvasAvailable: boolean,
   mediaType: string | undefined,
-  facet: 'files' | 'media',
+  source: 'files' | 'media',
   locator: ResourceBrowserContentItem['locator'],
 ): readonly ResourceBrowserCapability[] {
   const result: ResourceBrowserCapability[] = [];
   if (
-    facet === 'files' &&
+    source === 'files' &&
     locator.kind === 'workspace-file' &&
     capabilities.includes('read') &&
     modeForTextDocument(locator.path)

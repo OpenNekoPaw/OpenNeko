@@ -345,7 +345,6 @@ async function writeBindings(
             entityId: 'character-a',
             kind: 'character',
             names: { canonical: 'Character A', aliases: [] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-a',

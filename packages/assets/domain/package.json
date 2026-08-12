@@ -32,6 +32,7 @@
     "@neko/text-editor-domain": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
+    "@neko/project": "workspace:*",
     "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*"
   },

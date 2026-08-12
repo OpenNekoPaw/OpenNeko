@@ -14,6 +14,78 @@
   flex: 0 1 auto;
 }
 
+.neko-resource-browser__character-association {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border-top: 1px solid var(--neko-border, #e2e5e3);
+  background: var(--neko-sideBar-background, #ffffff);
+  font-size: 9px;
+}
+
+.neko-resource-browser__character-association > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.neko-resource-browser__character-association > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.neko-resource-browser__character-association > header span,
+.neko-resource-browser__character-association small,
+.neko-resource-browser__character-association dt {
+  color: var(--neko-descriptionForeground, #747d78);
+}
+
+.neko-resource-browser__character-association[data-availability='available'] > header > svg {
+  color: var(--neko-successForeground, #2f765d);
+}
+
+.neko-resource-browser__character-association[data-availability='needs-attention'] > header > svg,
+.neko-resource-browser__character-association[data-availability='needs-attention'] > p {
+  color: var(--neko-warningForeground, #8a6418);
+}
+
+.neko-resource-browser__character-association dl,
+.neko-resource-browser__character-association p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.neko-resource-browser__character-association dl > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 5px;
+}
+
+.neko-resource-browser__character-association dt,
+.neko-resource-browser__character-association dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.neko-resource-browser__character-association > section {
+  display: grid;
+  gap: 5px;
+}
+
+.neko-resource-browser__character-handoffs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.neko-resource-browser__character-handoffs > span {
+  padding: 3px 6px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 999px;
+  background: var(--neko-hover, #ecefed);
+}
+
 .neko-resource-browser__header {
   display: flex;
   align-items: center;
@@ -204,7 +276,7 @@
   background: var(--neko-hover, #eef2f0);
 }
 
-.neko-resource-browser__facets {
+.neko-resource-browser__sources {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 3px;
@@ -212,7 +284,7 @@
   border-bottom: 1px solid var(--neko-border, #e2e5e3);
 }
 
-.neko-resource-browser__facets button {
+.neko-resource-browser__sources button {
   font-size: 9px;
 }
 

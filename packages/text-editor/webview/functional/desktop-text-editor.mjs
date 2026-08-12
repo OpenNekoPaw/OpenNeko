@@ -68,8 +68,8 @@ export const desktopTextEditorScenario = Object.freeze({
     await openFixtureWorkspace(evaluate);
     await resizeDesktopWindow(evaluate, 1800, 1000);
     await waitForSelector('.desktop-scene-workbench--workspace');
-    await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
-    await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
+    await waitForSelector('.project-resource-dock .neko-resource-browser__sources [role="tab"]');
+    await click('.project-resource-dock .neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
 
     await openTextDocument(evaluate, 'notes.md', 'markdown');
@@ -202,8 +202,8 @@ export const desktopTextEditorScenario = Object.freeze({
       editor: cleanSessionRecovery,
       error: cleanSessionRecoveryError,
     });
-    await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
-    await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
+    await waitForSelector('.project-resource-dock .neko-resource-browser__sources [role="tab"]');
+    await click('.project-resource-dock .neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
 
     await openTextDocument(evaluate, 'ime.txt', 'plain-text');
@@ -374,8 +374,8 @@ export const desktopTextEditorScenario = Object.freeze({
 
     await resizeDesktopWindow(evaluate, 1800, 1000);
     await ensureResourceDockVisible(evaluate);
-    await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
-    await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
+    await waitForSelector('.project-resource-dock .neko-resource-browser__sources [role="tab"]');
+    await click('.project-resource-dock .neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
     let capacityDocumentIndex = 0;
     let mainViewCount = await readMainViewCount(evaluate);
@@ -714,7 +714,7 @@ async function waitForResourceBrowserIdle(evaluate) {
         const rect = candidate.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
       });
-      const tabs = [...(dock?.querySelectorAll('.neko-resource-browser__facets [role="tab"]') ?? [])];
+      const tabs = [...(dock?.querySelectorAll('.neko-resource-browser__sources [role="tab"]') ?? [])];
       const first = tabs[0];
       if (!(first instanceof HTMLButtonElement) || tabs.length !== 4) return false;
       const rect = first.getBoundingClientRect();

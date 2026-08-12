@@ -193,7 +193,6 @@ async function writeCanonicalEntities(workspacePath: string): Promise<void> {
             entityId: 'character-a',
             kind: 'character',
             names: { canonical: 'Character A', aliases: [] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-a',

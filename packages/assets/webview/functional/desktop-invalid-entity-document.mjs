@@ -15,9 +15,9 @@ export const resourceBrowserInvalidEntityDocumentScenario = Object.freeze({
     await openFixtureWorkspace(evaluate);
     await writeInvalidEntityDocument(prepared.workspacePath);
     await waitForSelector('.desktop-scene-workbench--workspace');
-    await waitForSelector('.neko-resource-browser__facets [role="tab"]');
+    await waitForSelector('.neko-resource-browser__sources [role="tab"]');
 
-    await click('.neko-resource-browser__facets [role="tab"]', 3);
+    await click('.neko-resource-browser__sources [role="tab"]', 3);
     await waitForResourceBrowserIdle(evaluate);
     await waitForCondition(
       evaluate,
@@ -27,19 +27,19 @@ export const resourceBrowserInvalidEntityDocumentScenario = Object.freeze({
           diagnostic.textContent.includes('workspace-foreign') &&
           document.querySelector('.neko-resource-browser-status.is-error') === null;
       })()`,
-      'Invalid Project Entity document did not remain inside the Entity facet.',
+      'Invalid Project Entity document did not remain inside the Entity source.',
     );
     const entityState = await inspectState(evaluate);
     const entityScreenshot = await screenshot('entity-document-local-diagnostic');
     checkpoint('entity-document-local-diagnostic', entityState);
 
-    await click('.neko-resource-browser__facets [role="tab"]', 0);
+    await click('.neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
     await waitForCondition(
       evaluate,
       `(() => [...document.querySelectorAll('.neko-resource-browser__item')]
         .some((item) => item.textContent?.includes('notes.txt')))()`,
-      'Files facet was unavailable beside the invalid Entity document.',
+      'Files source was unavailable beside the invalid Entity document.',
     );
     const filesState = await inspectState(evaluate);
     const filesScreenshot = await screenshot('files-beside-invalid-entity-document');
@@ -55,7 +55,7 @@ export const resourceBrowserInvalidEntityDocumentScenario = Object.freeze({
 
 async function inspectState(evaluate) {
   return evaluate(`(() => ({
-    activeFacet: document.querySelector('.neko-resource-browser__facets [aria-selected="true"]')
+    activeSource: document.querySelector('.neko-resource-browser__sources [aria-selected="true"]')
       ?.textContent?.trim(),
     diagnostics: [...document.querySelectorAll('.neko-resource-browser__diagnostics span')]
       .map((item) => item.textContent?.trim() ?? '')
@@ -71,10 +71,10 @@ async function waitForResourceBrowserIdle(evaluate) {
   await waitForCondition(
     evaluate,
     `(() => {
-      const tabs = [...document.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
+      const tabs = [...document.querySelectorAll('.neko-resource-browser__sources [role="tab"]')];
       return tabs.length === 4 && tabs.every((tab) => !(tab instanceof HTMLButtonElement) || !tab.disabled);
     })()`,
-    'Resource Browser did not finish its facet transition.',
+    'Resource Browser did not finish its source transition.',
   );
 }
 

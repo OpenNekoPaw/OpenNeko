@@ -148,7 +148,7 @@ export class CutApplicationRuntime {
   }): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
     if (
-      (input.item.facet !== 'files' && input.item.facet !== 'media') ||
+      (input.item.source !== 'files' && input.item.source !== 'media') ||
       !input.item.capabilities.includes('add-to-cut')
     ) {
       throw new Error('Cut does not support this Resource Browser item.');

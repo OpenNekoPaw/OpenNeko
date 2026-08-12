@@ -4,15 +4,7 @@ import {
   isMediaLibraryProjectionEntry,
   type MediaLibraryProjectionEntry,
 } from '../media-library-projection';
-import {
-  assertEntityRepresentationBindingFile,
-  createEmptyEntityRepresentationBindingFile,
-  decodeEntityRepresentationBindingFile,
-  encodeEntityRepresentationBindingFile,
-  isEntityRepresentationBinding,
-  isEntityRepresentationBindingFile,
-  type EntityRepresentationBinding,
-} from '@neko/entity-domain';
+import { decodeProjectEntityDocument, type ProjectEntityDocument } from '@neko/entity-domain';
 
 const representations = [
   {
@@ -47,20 +39,6 @@ const mediaEntry: MediaLibraryProjectionEntry = {
   availability: 'available',
   capabilities: ['read', 'preview', 'bind'],
   metadata: { mediaType: 'image/png', byteLength: 1024, width: 512, height: 512 },
-};
-
-const binding: EntityRepresentationBinding = {
-  id: 'binding-alice-portrait',
-  entityId: 'char_alice',
-  entityKind: 'character',
-  representation: representations[0],
-  role: 'portrait',
-  isDefault: true,
-  status: 'confirmed',
-  availability: 'active',
-  source: 'user',
-  confidence: 1,
-  updatedAt: '2026-07-21T00:00:00.000Z',
 };
 
 describe('Media Library projection contract', () => {
@@ -100,58 +78,33 @@ describe('Media Library projection contract', () => {
   });
 });
 
-describe('Creative Entity representation binding contract', () => {
-  it('accepts all four direct representation targets', () => {
-    for (const representation of representations) {
-      expect(isEntityRepresentationBinding({ ...binding, representation })).toBe(true);
-    }
-  });
+describe('Project Entity accepted representation contract', () => {
+  it('accepts all four direct representation targets in the canonical Entity document', () => {
+    const document: ProjectEntityDocument = {
+      projectId: 'project-alice',
+      entities: [
+        {
+          entityId: 'char_alice',
+          kind: 'character',
+          names: { canonical: 'Alice', aliases: [] },
+          lifecycle: { state: 'active' },
+          representations: representations.map((target, index) => ({
+            bindingId: `binding-alice-${String(index)}`,
+            role: index === 0 ? 'portrait' : 'reference',
+            target,
+            source: 'user',
+            acceptedAt: '2026-07-21T00:00:00.000Z',
+          })),
+          createdAt: '2026-07-21T00:00:00.000Z',
+          updatedAt: '2026-07-21T00:00:00.000Z',
+        },
+      ],
+    };
 
-  it('rejects unsupported fields', () => {
-    expect(isEntityRepresentationBinding({ ...binding, unexpectedField: true })).toBe(false);
-  });
-
-  it('enforces strict persistence and visible orphan/default state', () => {
-    expect(isEntityRepresentationBindingFile({ bindings: [binding] })).toBe(true);
-    expect(isEntityRepresentationBindingFile({ unexpectedField: 1, bindings: [binding] })).toBe(
-      false,
-    );
-    expect(
-      isEntityRepresentationBinding({
-        ...binding,
-        isDefault: false,
-        availability: 'orphaned',
-        orphanedAt: '2026-07-21T01:00:00.000Z',
-      }),
-    ).toBe(true);
-    expect(
-      isEntityRepresentationBinding({
-        ...binding,
-        isDefault: false,
-        availability: 'orphaned',
-      }),
-    ).toBe(false);
-    expect(
-      isEntityRepresentationBinding({
-        ...binding,
-        status: 'suggested',
-      }),
-    ).toBe(false);
-  });
-
-  it('decodes only the canonical file and rejects unknown fields', () => {
-    const file = { bindings: [binding] };
-    expect(decodeEntityRepresentationBindingFile(file)).toMatchObject({ ok: true });
-    expect(
-      decodeEntityRepresentationBindingFile({ unexpectedField: 1, bindings: [] }),
-    ).toMatchObject({
-      ok: false,
-      code: 'invalid-file',
+    expect(decodeProjectEntityDocument(document)).toEqual({
+      ok: true,
+      document,
+      diagnostics: [],
     });
-    expect(() =>
-      assertEntityRepresentationBindingFile({ unexpectedField: 1, bindings: [] }),
-    ).toThrow('binding data is invalid');
-    expect(createEmptyEntityRepresentationBindingFile()).toEqual({ bindings: [] });
-    expect(JSON.parse(encodeEntityRepresentationBindingFile(file))).toEqual(file);
   });
 });

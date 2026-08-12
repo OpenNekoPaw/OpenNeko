@@ -215,6 +215,7 @@ async function createFixture(): Promise<{
     globalAssetRoot: assetRoot,
     globalMediaLibraryRoot: mediaLibraryRoot,
     assetLibraryMemberships: memberships.repository,
+    readEntityCharacterResources: async () => [],
     shell: {
       getProjection: async () => ({}) as ResourceBrowserShellProjection,
       resolveProjectWorkspace: async () => {

@@ -167,8 +167,8 @@ export const desktopMarkdownMediaScenario = Object.freeze({
     await openFixtureWorkspace(evaluate);
     await resizeDesktopWindow(evaluate, 1800, 1000);
     await waitForSelector('.desktop-scene-workbench--workspace');
-    await waitForSelector('.project-resource-dock .neko-resource-browser__facets [role="tab"]');
-    await click('.project-resource-dock .neko-resource-browser__facets [role="tab"]', 0);
+    await waitForSelector('.project-resource-dock .neko-resource-browser__sources [role="tab"]');
+    await click('.project-resource-dock .neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
 
     await openTextDocument(evaluate, 'media.md');
@@ -864,7 +864,7 @@ async function waitForResourceBrowserIdle(evaluate) {
         const rect = candidate.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
       });
-      const tabs = [...(dock?.querySelectorAll('.neko-resource-browser__facets [role="tab"]') ?? [])];
+      const tabs = [...(dock?.querySelectorAll('.neko-resource-browser__sources [role="tab"]') ?? [])];
       return tabs.length === 4 && tabs.every((tab) => !(tab instanceof HTMLButtonElement) || !tab.disabled);
     })()`,
     'Resource Browser did not finish its interactive facet transition.',

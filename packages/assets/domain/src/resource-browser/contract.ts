@@ -15,6 +15,10 @@ import {
   type WorkspaceMediaLibraryStatus,
 } from '@neko/assets-domain/contracts';
 import { isPortablePathSegment } from '@neko/shared/path';
+import {
+  parseProjectEntityCharacterResourceProjection,
+  type ProjectEntityCharacterResourceProjection,
+} from '@neko/project/contracts';
 
 export function createResourceBrowserViewId(projectViewId: string): string {
   return `resource-browser:${projectViewId}`;
@@ -50,7 +54,7 @@ export const RESOURCE_BROWSER_ROUTES = {
 
 export type ResourceBrowserRoute =
   (typeof RESOURCE_BROWSER_ROUTES)[keyof typeof RESOURCE_BROWSER_ROUTES];
-export type ResourceBrowserFacet = 'files' | 'media' | 'assets' | 'entities';
+export type ResourceBrowserSource = 'files' | 'media' | 'assets' | 'entities';
 export type ResourceBrowserItemKind =
   | 'directory'
   | 'file'
@@ -100,7 +104,7 @@ export interface ResourceBrowserThumbnailDescriptor {
 
 interface ResourceBrowserItemBase {
   readonly resourceId: string;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly kind: ResourceBrowserItemKind;
   readonly label: string;
   readonly description?: string;
@@ -114,12 +118,12 @@ interface ResourceBrowserItemBase {
 }
 
 export interface ResourceBrowserContentItem extends ResourceBrowserItemBase {
-  readonly facet: 'files' | 'media';
+  readonly source: 'files' | 'media';
   readonly locator: ContentLocator;
 }
 
 export interface ResourceBrowserAssetItem extends ResourceBrowserItemBase {
-  readonly facet: 'assets';
+  readonly source: 'assets';
   readonly kind: 'asset';
   readonly role: 'asset';
   readonly assetRef: {
@@ -129,7 +133,7 @@ export interface ResourceBrowserAssetItem extends ResourceBrowserItemBase {
 }
 
 interface ResourceBrowserEntityItemBase extends ResourceBrowserItemBase {
-  readonly facet: 'entities';
+  readonly source: 'entities';
   readonly sourceOwners: readonly string[];
   readonly inspector: ProjectEntityInspectorProjection;
 }
@@ -140,6 +144,7 @@ export type ResourceBrowserEntityItem =
       readonly entityStatus: 'confirmed' | 'needs-attention' | 'deprecated';
       readonly representationAvailability: 'active' | 'unbound' | 'needs-attention';
       readonly attentionBindingIds: readonly string[];
+      readonly characterAssociation?: ProjectEntityCharacterResourceProjection;
       readonly representationLocator?: ContentLocator;
       readonly representationBindingId?: string;
       readonly representationRole?: EntityRepresentationRole;
@@ -155,7 +160,7 @@ export type ResourceBrowserItem =
 
 export interface ResourceBrowserProjection {
   readonly identity: ResourceBrowserIdentity;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly query: string;
   readonly items: readonly ResourceBrowserItem[];
   readonly diagnostics?: readonly ResourceBrowserDiagnostic[];
@@ -168,14 +173,14 @@ export interface ResourceBrowserRequest {
 
 export interface ResourceBrowserSearchRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.search;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly query: string;
   readonly limit: number;
 }
 
 export interface ResourceBrowserChildrenRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.children;
-  readonly facet: 'files' | 'media';
+  readonly source: 'files' | 'media';
   readonly parentResourceId: string;
   readonly limit: number;
 }
@@ -391,7 +396,7 @@ export class ResourceBrowserOperationRejectedError extends Error {
 export function createResourceBrowserSearchRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly query: string;
   readonly limit?: number;
 }): ResourceBrowserSearchRequest {
@@ -399,7 +404,7 @@ export function createResourceBrowserSearchRequest(input: {
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.search,
-    facet: input.facet,
+    source: input.source,
     query: input.query,
     limit: input.limit ?? 100,
   });
@@ -408,7 +413,7 @@ export function createResourceBrowserSearchRequest(input: {
 export function createResourceBrowserChildrenRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
-  readonly facet: 'files' | 'media';
+  readonly source: 'files' | 'media';
   readonly parentResourceId: string;
   readonly limit?: number;
 }): ResourceBrowserChildrenRequest {
@@ -416,7 +421,7 @@ export function createResourceBrowserChildrenRequest(input: {
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.children,
-    facet: input.facet,
+    source: input.source,
     parentResourceId: input.parentResourceId,
     limit: input.limit ?? 100,
   });
@@ -925,7 +930,7 @@ export function parseResourceBrowserSearchRequest(value: unknown): ResourceBrows
     ),
     identity: parseResourceBrowserIdentity(record['identity']),
     route: RESOURCE_BROWSER_ROUTES.search,
-    facet: requireFacet(record['facet']),
+    source: requireSource(record['source']),
     query: requireString(record['query'], 'Resource Browser query is invalid.').trim(),
     limit: requireBoundedInteger(
       record['limit'],
@@ -943,9 +948,9 @@ export function parseResourceBrowserChildrenRequest(
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.children) {
     throw invalidPayload('Resource Browser children route is invalid.');
   }
-  const facet = requireFacet(record['facet']);
-  if (facet !== 'files' && facet !== 'media') {
-    throw invalidPayload('Resource Browser children facet must be Directory or Media.');
+  const source = requireSource(record['source']);
+  if (source !== 'files' && source !== 'media') {
+    throw invalidPayload('Resource Browser children source must be Directory or Media.');
   }
   return {
     requestId: requireNonEmptyString(
@@ -954,7 +959,7 @@ export function parseResourceBrowserChildrenRequest(
     ),
     identity: parseResourceBrowserIdentity(record['identity']),
     route: RESOURCE_BROWSER_ROUTES.children,
-    facet,
+    source,
     parentResourceId: requireOpaqueIdentity(
       record['parentResourceId'],
       'Resource Browser parent identity is required.',
@@ -1202,14 +1207,14 @@ function requirePortableEntryName(value: unknown): string {
 
 export function parseResourceBrowserProjection(value: unknown): ResourceBrowserProjection {
   const record = requireRecord(value, 'Resource Browser projection must be an object.');
-  requireOnlyKeys(record, ['identity', 'facet', 'query', 'items', 'diagnostics']);
-  const facet = requireFacet(record['facet']);
+  requireOnlyKeys(record, ['identity', 'source', 'query', 'items', 'diagnostics']);
+  const source = requireSource(record['source']);
   const items = requireArray(
     record['items'],
     'Resource Browser projection items must be an array.',
   ).map(parseResourceBrowserItem);
-  if (items.some((item) => item.facet !== facet)) {
-    throw invalidPayload('Resource Browser item facet does not match the active facet.');
+  if (items.some((item) => item.source !== source)) {
+    throw invalidPayload('Resource Browser item source does not match the active source.');
   }
   const resourceIds = new Set(items.map((item) => item.resourceId));
   if (resourceIds.size !== items.length) {
@@ -1223,7 +1228,7 @@ export function parseResourceBrowserProjection(value: unknown): ResourceBrowserP
         );
   return {
     identity: parseResourceBrowserIdentity(record['identity']),
-    facet,
+    source,
     query: requireString(record['query'], 'Resource Browser query is invalid.'),
     items,
     ...(diagnostics && diagnostics.length > 0 ? { diagnostics } : {}),
@@ -1311,7 +1316,7 @@ function parseResourceBrowserIdentity(value: unknown): ResourceBrowserIdentity {
 
 function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
   const record = requireRecord(value, 'Resource Browser item must be an object.');
-  const facet = requireFacet(record['facet']);
+  const source = requireSource(record['source']);
   const base = {
     resourceId: requireOpaqueIdentity(
       record['resourceId'],
@@ -1334,7 +1339,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     ...readOptionalLibraryName(record['libraryName']),
     ...readOptionalLibraryStatus(record['libraryStatus']),
   };
-  if (facet === 'entities') {
+  if (source === 'entities') {
     if (base.libraryStatus) {
       throw invalidPayload('Resource Browser Entity must not contain Media Library status.');
     }
@@ -1361,13 +1366,14 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
         record['attentionBindingIds'] !== undefined ||
         record['representationLocator'] !== undefined ||
         record['representationBindingId'] !== undefined ||
-        record['representationRole'] !== undefined
+        record['representationRole'] !== undefined ||
+        record['characterAssociation'] !== undefined
       ) {
         throw invalidPayload('Resource Browser candidate contains confirmed Entity fields.');
       }
       return {
         ...base,
-        facet,
+        source,
         candidateRef,
         entityStatus,
         sourceOwners,
@@ -1388,6 +1394,10 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     const representationAvailability = requireRepresentationAvailability(
       record['representationAvailability'],
     );
+    const characterAssociation = readCharacterAssociation(
+      record['characterAssociation'],
+      entityRef.entityId,
+    );
     const representation = readEntityRepresentation(
       representationAvailability,
       record['representationLocator'],
@@ -1396,7 +1406,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     );
     return {
       ...base,
-      facet,
+      source,
       entityRef,
       entityStatus,
       sourceOwners,
@@ -1405,11 +1415,12 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
         record['attentionBindingIds'],
         'Entity attention binding identities',
       ),
+      ...characterAssociation,
       representationAvailability,
       ...representation,
     };
   }
-  if (facet === 'assets') {
+  if (source === 'assets') {
     if (base.libraryStatus) {
       throw invalidPayload('Resource Browser Asset must not contain Media Library status.');
     }
@@ -1418,7 +1429,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     }
     return {
       ...base,
-      facet,
+      source,
       kind: base.kind,
       role: base.role,
       assetRef: parseResourceBrowserAssetRef(record['assetRef']),
@@ -1436,9 +1447,25 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
   }
   return {
     ...base,
-    facet,
+    source,
     locator: requireContentLocator(record['locator'], 'locator'),
   };
+}
+
+function readCharacterAssociation(
+  value: unknown,
+  entityId: string,
+): { readonly characterAssociation?: ProjectEntityCharacterResourceProjection } {
+  if (value === undefined) return {};
+  try {
+    const characterAssociation = parseProjectEntityCharacterResourceProjection(value);
+    if (characterAssociation.entityId !== entityId) {
+      throw new Error('Project Entity identity does not match.');
+    }
+    return { characterAssociation };
+  } catch {
+    throw invalidPayload('Resource Browser Character association projection is invalid.');
+  }
 }
 
 function parseEntityInspector(value: unknown): ProjectEntityInspectorProjection {
@@ -1783,9 +1810,9 @@ function requireContentLocator(value: unknown, field: string): ContentLocator {
   return result.locator;
 }
 
-function requireFacet(value: unknown): ResourceBrowserFacet {
+function requireSource(value: unknown): ResourceBrowserSource {
   if (value !== 'files' && value !== 'media' && value !== 'assets' && value !== 'entities') {
-    throw invalidPayload('Resource Browser facet is invalid.');
+    throw invalidPayload('Resource Browser source is invalid.');
   }
   return value;
 }

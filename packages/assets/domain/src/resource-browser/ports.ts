@@ -5,6 +5,7 @@ import type {
   ProjectEntityManagementProjection,
 } from '@neko/entity-domain';
 import type { ContentLocator } from '@neko/content';
+import type { ProjectEntityCharacterResourceProjection } from '@neko/project/contracts';
 import type { GlobalAssetItem } from '../global-library/contract';
 import type {
   MediaLibraryProjectionEntry,
@@ -67,6 +68,7 @@ export interface ResourceBrowserEntityReader {
       readonly projectionId: string;
       readonly capabilities: ProjectEntityInspectorOwnerCapabilities;
     }[];
+    readonly characterAssociations?: readonly ProjectEntityCharacterResourceProjection[];
   }>;
 }
 
@@ -112,7 +114,7 @@ export interface ResourceBrowserInteractionPort {
   }): Promise<void>;
   manageEntity(input: {
     readonly identity: ResourceBrowserIdentity;
-    readonly item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>;
+    readonly item: Extract<ResourceBrowserItem, { readonly source: 'entities' }>;
     readonly intent: ProjectEntityInspectorIntent;
   }): Promise<void>;
   linkGlobalLibrary(input: {

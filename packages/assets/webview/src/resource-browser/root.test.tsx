@@ -23,12 +23,12 @@ const projection: ResourceBrowserProjection = {
     viewInstanceId: 'view-instance-1',
     rendererSessionId: 'endpoint-1',
   },
-  facet: 'media',
+  source: 'media',
   query: '',
   items: [
     {
       resourceId: 'content:cat',
-      facet: 'media',
+      source: 'media',
       role: 'content',
       depth: 0,
       kind: 'image',
@@ -64,7 +64,7 @@ describe('ResourceBrowserRoot', () => {
   it('does not create a presentation snapshot for the default reconstructable page', async () => {
     const defaultProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'files',
+      source: 'files',
       items: [],
     };
     const store = createResourceBrowserPresentationSnapshotStore();
@@ -101,11 +101,11 @@ describe('ResourceBrowserRoot', () => {
   it('keeps resources visible when Main View capacity rejects an open and clears the alert after retry', async () => {
     const filesProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:ninth',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'file',
@@ -144,7 +144,7 @@ describe('ResourceBrowserRoot', () => {
   it('shows an Entity record diagnostic without hiding valid siblings', async () => {
     const entityProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'entities',
+      source: 'entities',
       diagnostics: [
         {
           code: 'invalid-project-entity-document',
@@ -155,7 +155,7 @@ describe('ResourceBrowserRoot', () => {
       items: [
         {
           resourceId: 'entity:character-rin',
-          facet: 'entities',
+          source: 'entities',
           role: 'entity',
           depth: 0,
           kind: 'character',
@@ -169,7 +169,6 @@ describe('ResourceBrowserRoot', () => {
             status: 'confirmed',
             kind: 'character',
             names: { canonical: 'Rin', aliases: [] },
-            facts: {},
             entityId: 'character-rin',
             bindings: [],
             operations: ['edit'],
@@ -180,11 +179,114 @@ describe('ResourceBrowserRoot', () => {
       ],
     };
 
-    render(<ResourceBrowserRoot runtime={createRuntime(entityProjection)} locale="en" />);
+    const runtime = createRuntime(entityProjection);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
     expect(await screen.findByText('Rin')).toBeTruthy();
     expect(screen.getByText("Project Entity 'character-invalid' is invalid.")).toBeTruthy();
     expect(screen.queryByText('Resource Browser unavailable')).toBeNull();
+  });
+
+  it('shows one linked Entity and Character card without generic Character mutations', async () => {
+    const entityProjection: ResourceBrowserProjection = {
+      ...projection,
+      source: 'entities',
+      items: [
+        {
+          resourceId: 'entity:character-rin',
+          source: 'entities',
+          role: 'entity',
+          depth: 0,
+          kind: 'character',
+          label: 'Rin element',
+          entityRef: { entityId: 'character-rin', entityKind: 'character' },
+          entityStatus: 'confirmed',
+          sourceOwners: ['project-entity'],
+          attentionBindingIds: [],
+          representationAvailability: 'unbound',
+          inspector: {
+            status: 'confirmed',
+            kind: 'character',
+            names: { canonical: 'Rin element', aliases: [] },
+            entityId: 'character-rin',
+            bindings: [],
+            operations: ['edit'],
+            blockers: [],
+          },
+          characterAssociation: {
+            entityId: 'character-rin',
+            characterProjectId: 'character-project-rin',
+            displayName: 'Rin',
+            placement: 'project-local',
+            availability: 'available',
+            handoffs: [
+              { kind: 'open-character', characterProjectId: 'character-project-rin' },
+              { kind: 'open-character-studio', characterProjectId: 'character-project-rin' },
+            ],
+            publishedVersionCount: 2,
+            interactionStatus: 'select-version',
+          },
+          capabilities: [],
+        },
+      ],
+    };
+
+    const runtime = createRuntime(entityProjection);
+    render(
+      <ResourceBrowserRoot
+        runtime={runtime}
+        locale="en"
+        characterCreation={{ destinationLabel: 'Project', create: vi.fn() }}
+      />,
+    );
+    fireEvent.click(await screen.findByText('Rin element'));
+
+    expect(document.querySelectorAll('.neko-resource-browser__item-row')).toHaveLength(1);
+    expect(screen.getByRole('complementary', { name: 'Linked character' })).toBeTruthy();
+    expect(screen.getByText('Project-local character')).toBeTruthy();
+    expect(screen.getByText('character-rin')).toBeTruthy();
+    expect(screen.getByText('character-project-rin')).toBeTruthy();
+    expect(screen.getByText('Open Character')).toBeTruthy();
+    expect(screen.getByText('Open Studio')).toBeTruthy();
+    expect(screen.getByText('Select an exact version to interact')).toBeTruthy();
+    expect(screen.queryByText(/start interaction/i)).toBeNull();
+    expect(screen.queryByText(/room/i)).toBeNull();
+    fireEvent.contextMenu(document.querySelector('.neko-resource-browser__item')!);
+    expect(
+      screen.queryByRole('menuitem', { name: 'Create Character from this resource' }),
+    ).toBeNull();
+
+    const item = entityProjection.items[0];
+    if (!item || item.source !== 'entities' || item.entityStatus === 'candidate') {
+      throw new Error('Missing linked Character fixture.');
+    }
+    act(() =>
+      runtime.emit({
+        sequence: 1,
+        projection: {
+          ...entityProjection,
+          items: [
+            {
+              ...item,
+              characterAssociation: {
+                entityId: 'character-rin',
+                characterProjectId: 'character-project-rin',
+                placement: 'project-local',
+                availability: 'needs-attention',
+                handoffs: [],
+                publishedVersionCount: 0,
+                interactionStatus: 'unavailable',
+                diagnostic: 'Associated Character record is invalid.',
+              },
+            },
+          ],
+        },
+      }),
+    );
+    expect(await screen.findByText('Character needs attention')).toBeTruthy();
+    expect(screen.getByText('Associated Character record is invalid.')).toBeTruthy();
+    expect(screen.queryByText('Open Character')).toBeNull();
+    expect(screen.queryByText('Open Studio')).toBeNull();
   });
 
   it('routes Files context actions and never offers generic deletion for Media content', async () => {
@@ -195,11 +297,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-file-context',
         workspaceId: 'workspace-file-context',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:notes',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'file',
@@ -270,7 +372,7 @@ describe('ResourceBrowserRoot', () => {
   it('cancels and resets inline entry naming with Escape', async () => {
     const runtime = createRuntime({
       ...projection,
-      facet: 'files',
+      source: 'files',
       items: [],
     });
     render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
@@ -316,7 +418,7 @@ describe('ResourceBrowserRoot', () => {
   it('exposes all four Files creation kinds through one discoverable add menu', async () => {
     const filesProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'files',
+      source: 'files',
       items: [],
     };
     const runtime = createRuntime(filesProjection);
@@ -353,11 +455,11 @@ describe('ResourceBrowserRoot', () => {
     const fileId = 'content:references-notes';
     const filesProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: directoryId,
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -368,7 +470,7 @@ describe('ResourceBrowserRoot', () => {
         {
           resourceId: fileId,
           parentResourceId: directoryId,
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 1,
           kind: 'file',
@@ -494,14 +596,48 @@ describe('ResourceBrowserRoot', () => {
     expect(document.querySelector('.neko-resource-browser__actions')).toBeNull();
   });
 
+  it('creates a Character from an exact resource only after confirming its project destination', async () => {
+    const retry = vi.fn(async () => ({ status: 'created' as const }));
+    const create = vi.fn(async () => ({ status: 'incomplete' as const, retry }));
+    render(
+      <ResourceBrowserRoot
+        runtime={createRuntime()}
+        locale="en"
+        characterCreation={{ destinationLabel: 'Moon Project', create }}
+      />,
+    );
+
+    const resource = await screen.findByText('cat.png');
+    fireEvent.contextMenu(resource.closest('button')!);
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Create Character from this resource' }),
+    );
+
+    expect(screen.getByText('Create in Moon Project')).toBeTruthy();
+    const name = screen.getByRole('textbox', { name: 'Character name' });
+    expect((name as HTMLInputElement).value).toBe('cat');
+    fireEvent.change(name, { target: { value: 'Luna' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(projection.items[0], 'Luna');
+    expect(
+      await screen.findByText('The Character was created, but project linking is incomplete.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry linking' }));
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('opens admitted text in the editor by default and Preview only from the explicit menu', async () => {
     const textProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:story',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'document',
@@ -661,7 +797,7 @@ describe('ResourceBrowserRoot', () => {
       items: [
         {
           resourceId: 'content:cut',
-          facet: 'media',
+          source: 'media',
           role: 'content',
           depth: 0,
           kind: 'file',
@@ -691,7 +827,7 @@ describe('ResourceBrowserRoot', () => {
       items: [
         {
           resourceId: 'content:clip',
-          facet: 'media',
+          source: 'media',
           role: 'content',
           depth: 0,
           kind: 'video',
@@ -726,26 +862,26 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.queryByRole('button', { name: 'Add to Canvas' })).toBeNull();
   });
 
-  it('changes facets through the injected runtime instead of owning catalog state', async () => {
+  it('changes sources through the injected runtime instead of owning catalog state', async () => {
     const runtime = createRuntime();
     render(<ResourceBrowserRoot runtime={runtime} locale="zh-cn" />);
 
     await screen.findByText('cat.png');
     expect(screen.queryByRole('tab', { name: '全部' })).toBeNull();
-    expect(screen.getByRole('tab', { name: '目录' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '媒体库' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '素材库' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: '实体' }));
+    expect(screen.getByRole('tab', { name: '项目文件' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '共享媒体' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '已安装素材' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '项目元素' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
-        expect.objectContaining({ facet: 'entities', route: 'search' }),
+        expect.objectContaining({ source: 'entities', route: 'search' }),
       ),
     );
     expect(screen.queryByRole('button', { name: '配置媒体库' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: '媒体库' }));
+    fireEvent.click(screen.getByRole('tab', { name: '共享媒体' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
-        expect.objectContaining({ facet: 'media', route: 'search' }),
+        expect.objectContaining({ source: 'media', route: 'search' }),
       ),
     );
     fireEvent.click(screen.getByRole('button', { name: '配置媒体库' }));
@@ -764,19 +900,19 @@ describe('ResourceBrowserRoot', () => {
     );
   });
 
-  it('preserves selection independently while switching owner facets', async () => {
+  it('preserves selection independently while switching owner sources', async () => {
     const filesProjection: ResourceBrowserProjection = {
       ...projection,
       identity: {
         ...projection.identity,
-        projectId: 'project-facet-selection',
-        workspaceId: 'workspace-facet-selection',
+        projectId: 'project-source-selection',
+        workspaceId: 'workspace-source-selection',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:brief',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'file',
@@ -788,11 +924,11 @@ describe('ResourceBrowserRoot', () => {
     };
     const assetsProjection: ResourceBrowserProjection = {
       ...filesProjection,
-      facet: 'assets',
+      source: 'assets',
       items: [
         {
           resourceId: 'asset:lighting',
-          facet: 'assets',
+          source: 'assets',
           role: 'asset',
           depth: 0,
           kind: 'asset',
@@ -805,17 +941,17 @@ describe('ResourceBrowserRoot', () => {
     };
     const runtime = createRuntime(filesProjection);
     runtime.search.mockImplementation(async (request) =>
-      request.facet === 'assets' ? assetsProjection : filesProjection,
+      request.source === 'assets' ? assetsProjection : filesProjection,
     );
     render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
     const file = await screen.findByText('brief.md');
     fireEvent.click(file);
-    fireEvent.click(screen.getByRole('tab', { name: 'Asset library' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Installed assets' }));
     const asset = await screen.findByText('Lighting preset');
     expect(screen.queryByText('brief.md')).toBeNull();
     fireEvent.click(asset);
-    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Project files' }));
     await waitFor(() =>
       expect(
         screen
@@ -824,7 +960,7 @@ describe('ResourceBrowserRoot', () => {
           ?.getAttribute('data-selected'),
       ).toBe('true'),
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Asset library' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Installed assets' }));
     await waitFor(() =>
       expect(
         screen
@@ -835,7 +971,7 @@ describe('ResourceBrowserRoot', () => {
     );
   });
 
-  it('switches a concrete facet between list and grid without changing source state', async () => {
+  it('switches a concrete source between list and grid without changing source state', async () => {
     const filesProjection: ResourceBrowserProjection = {
       ...projection,
       identity: {
@@ -843,11 +979,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-all-view-mode',
         workspaceId: 'workspace-all-view-mode',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:directory',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -908,7 +1044,7 @@ describe('ResourceBrowserRoot', () => {
     ).toBe('list');
   });
 
-  it('returns a remounted Media facet to root when retained navigation has no loaded children', async () => {
+  it('returns a remounted Media source to root when retained navigation has no loaded children', async () => {
     const mediaRoot: ResourceBrowserProjection = {
       ...projection,
       identity: {
@@ -919,7 +1055,7 @@ describe('ResourceBrowserRoot', () => {
       items: [
         {
           resourceId: 'content:media-library-assets',
-          facet: 'media',
+          source: 'media',
           role: 'library-root',
           depth: 0,
           kind: 'directory',
@@ -937,7 +1073,7 @@ describe('ResourceBrowserRoot', () => {
         {
           resourceId: 'content:media-library-assets:portrait',
           parentResourceId: 'content:media-library-assets',
-          facet: 'media' as const,
+          source: 'media' as const,
           role: 'content' as const,
           depth: 1,
           kind: 'image' as const,
@@ -976,11 +1112,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-files-mutation-root',
         workspaceId: 'workspace-files-mutation-root',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:references',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -997,7 +1133,7 @@ describe('ResourceBrowserRoot', () => {
         {
           resourceId: 'content:references:notes',
           parentResourceId: 'content:references',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 1,
           kind: 'file',
@@ -1066,7 +1202,7 @@ describe('ResourceBrowserRoot', () => {
     await waitFor(() => expect(runtime.search).toHaveBeenCalledTimes(2));
     expect(runtime.search).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        facet: 'media',
+        source: 'media',
         query: 'nested-image',
         identity: queryProjection.identity,
       }),
@@ -1081,11 +1217,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-directory-tree-grid',
         workspaceId: 'workspace-directory-tree-grid',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:characters',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -1095,7 +1231,7 @@ describe('ResourceBrowserRoot', () => {
         },
         {
           resourceId: 'content:worlds',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -1106,7 +1242,7 @@ describe('ResourceBrowserRoot', () => {
         {
           resourceId: 'content:hero',
           parentResourceId: 'content:characters',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 1,
           kind: 'image',
@@ -1144,7 +1280,7 @@ describe('ResourceBrowserRoot', () => {
     expect(runtime.children).toHaveBeenCalledWith(
       expect.objectContaining({
         route: 'children',
-        facet: 'files',
+        source: 'files',
         parentResourceId: 'content:characters',
       }),
     );
@@ -1171,11 +1307,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-directory-compact-tree',
         workspaceId: 'workspace-directory-compact-tree',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:analysis-pages',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -1186,7 +1322,7 @@ describe('ResourceBrowserRoot', () => {
         },
         {
           resourceId: 'content:preview-video',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'video',
@@ -1197,7 +1333,7 @@ describe('ResourceBrowserRoot', () => {
         },
         {
           resourceId: 'content:project-notes',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'document',
@@ -1234,11 +1370,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-directory-nested',
         workspaceId: 'workspace-directory-nested',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:characters',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -1249,7 +1385,7 @@ describe('ResourceBrowserRoot', () => {
         {
           resourceId: 'content:portraits',
           parentResourceId: 'content:characters',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 1,
           kind: 'directory',
@@ -1260,7 +1396,7 @@ describe('ResourceBrowserRoot', () => {
         {
           resourceId: 'content:hero',
           parentResourceId: 'content:portraits',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 2,
           kind: 'image',
@@ -1313,11 +1449,11 @@ describe('ResourceBrowserRoot', () => {
   it('keeps media library management on the selected library row', async () => {
     const libraryProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'media',
+      source: 'media',
       items: [
         {
           resourceId: 'content:library',
-          facet: 'media',
+          source: 'media',
           role: 'library-root',
           libraryName: 'Footage',
           depth: 0,
@@ -1363,11 +1499,11 @@ describe('ResourceBrowserRoot', () => {
   it('submits Entity edits through the canonical Resource Browser runtime', async () => {
     const entityProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'entities',
+      source: 'entities',
       items: [
         {
           resourceId: 'entity:character-rin',
-          facet: 'entities',
+          source: 'entities',
           role: 'entity',
           depth: 0,
           kind: 'character',
@@ -1381,7 +1517,6 @@ describe('ResourceBrowserRoot', () => {
             status: 'confirmed',
             kind: 'character',
             names: { canonical: 'Rin', aliases: [] },
-            facts: {},
             entityId: 'character-rin',
             bindings: [],
             operations: ['edit'],
@@ -1422,7 +1557,7 @@ describe('ResourceBrowserRoot', () => {
       label: string,
     ): ResourceBrowserProjection['items'][number] => ({
       resourceId,
-      facet: 'entities',
+      source: 'entities',
       role: 'entity',
       depth: 0,
       kind: 'character',
@@ -1436,7 +1571,6 @@ describe('ResourceBrowserRoot', () => {
         status: 'confirmed',
         kind: 'character',
         names: { canonical: label, aliases: [] },
-        facts: {},
         entityId,
         bindings: [],
         operations: ['edit'],
@@ -1448,7 +1582,7 @@ describe('ResourceBrowserRoot', () => {
     const second = entity('entity:mika', 'mika', 'Mika');
     const entityProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'entities',
+      source: 'entities',
       items: [first, second],
     };
     const runtime = createRuntime(entityProjection);
@@ -1477,11 +1611,11 @@ describe('ResourceBrowserRoot', () => {
   it('keeps missing library identity across list/grid and confirms revisioned recovery', async () => {
     const libraryProjection: ResourceBrowserProjection = {
       ...projection,
-      facet: 'media',
+      source: 'media',
       items: [
         {
           resourceId: 'content:missing-library',
-          facet: 'media',
+          source: 'media',
           role: 'library-root',
           libraryName: 'Footage',
           libraryStatus: {
@@ -1654,11 +1788,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-canvas-open',
         workspaceId: 'workspace-canvas-open',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:board',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'document',
@@ -1692,11 +1826,11 @@ describe('ResourceBrowserRoot', () => {
         projectId: 'project-canvas-double-click',
         workspaceId: 'workspace-canvas-double-click',
       },
-      facet: 'files',
+      source: 'files',
       items: [
         {
           resourceId: 'content:board',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 0,
           kind: 'document',
@@ -1789,7 +1923,7 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
     children: vi.fn(async () => snapshot),
     search: vi.fn(async (request) => ({
       ...snapshot,
-      facet: request.facet,
+      source: request.source,
       query: request.query,
       items: [],
     })),

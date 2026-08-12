@@ -61,15 +61,29 @@ export interface ResourceBrowserLabels {
   readonly breadcrumbs: string;
   readonly workspaceRoot: string;
   readonly mediaLibraries: string;
+  readonly linkedCharacter: string;
+  readonly projectLocalCharacter: string;
+  readonly characterNeedsAttention: string;
+  readonly openCharacter: string;
+  readonly openCharacterStudio: string;
+  readonly selectCharacterVersion: string;
+  readonly noPublishedCharacterVersion: string;
+  readonly entityIdentity: string;
+  readonly characterProjectIdentity: string;
+  readonly createCharacter: string;
+  readonly characterName: string;
+  readonly characterDestination: string;
+  readonly characterCreationIncomplete: string;
+  readonly retryCharacterCreation: string;
 }
 
 const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   en: {
-    title: 'Resource management',
-    files: 'Files',
-    media: 'Media library',
-    assets: 'Asset library',
-    entities: 'Entities',
+    title: 'Resources',
+    files: 'Project files',
+    media: 'Shared media',
+    assets: 'Installed assets',
+    entities: 'Project elements',
     search: 'Search',
     searchPlaceholder: 'Search project resources…',
     createMenu: 'New',
@@ -127,13 +141,27 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     breadcrumbs: 'Resource location',
     workspaceRoot: 'Workspace',
     mediaLibraries: 'Media libraries',
+    linkedCharacter: 'Linked character',
+    projectLocalCharacter: 'Project-local character',
+    characterNeedsAttention: 'Character needs attention',
+    openCharacter: 'Open Character',
+    openCharacterStudio: 'Open Studio',
+    selectCharacterVersion: 'Select an exact version to interact',
+    noPublishedCharacterVersion: 'Publish a Character version before interaction',
+    entityIdentity: 'Project element',
+    characterProjectIdentity: 'Character project',
+    createCharacter: 'Create Character from this resource',
+    characterName: 'Character name',
+    characterDestination: 'Create in {destination}',
+    characterCreationIncomplete: 'The Character was created, but project linking is incomplete.',
+    retryCharacterCreation: 'Retry linking',
   },
   'zh-cn': {
-    title: '资源管理',
-    files: '目录',
-    media: '媒体库',
-    assets: '素材库',
-    entities: '实体',
+    title: '资源',
+    files: '项目文件',
+    media: '共享媒体',
+    assets: '已安装素材',
+    entities: '项目元素',
     search: '搜索',
     searchPlaceholder: '搜索项目资源…',
     createMenu: '新建',
@@ -189,6 +217,20 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     breadcrumbs: '资源位置',
     workspaceRoot: '工作区',
     mediaLibraries: '媒体库',
+    linkedCharacter: '关联角色',
+    projectLocalCharacter: '项目内角色',
+    characterNeedsAttention: '角色需要处理',
+    openCharacter: '打开角色',
+    openCharacterStudio: '打开创作工作区',
+    selectCharacterVersion: '选择一个确定版本后开始互动',
+    noPublishedCharacterVersion: '发布角色版本后才能互动',
+    entityIdentity: '项目元素',
+    characterProjectIdentity: '角色项目',
+    createCharacter: '基于此资源创建角色',
+    characterName: '角色名称',
+    characterDestination: '创建到 {destination}',
+    characterCreationIncomplete: '角色已创建，但项目关联尚未完成。',
+    retryCharacterCreation: '重试关联',
   },
 };
 

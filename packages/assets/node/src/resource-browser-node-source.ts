@@ -32,7 +32,7 @@ import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/globa
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { resolveWorkspaceContentLocator } from './workspace-content-locator';
 import { readProjectEntityManagementResources } from '@neko/entity-node';
-import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
+import type { ProjectEntityProjectionRepository } from '@neko/entity-domain';
 import {
   listGlobalMediaLibraryConnections,
   type GlobalMediaLibraryConnection,
@@ -52,6 +52,7 @@ import {
 } from '@neko/canvas-domain/project-file-io';
 import { createEmptyCutDocumentBytes, isValidCutDocumentBytes } from '@neko/cut-domain';
 import type { WorkspaceFileContentLocator } from '@neko/content';
+import type { ProjectEntityCharacterResourceProjection } from '@neko/project/contracts';
 
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
@@ -70,8 +71,12 @@ export interface ResourceBrowserNodeSourceOptions {
   readonly globalMediaLibraryRoot: string;
   readonly workspaceMediaLibrarySync?: WorkspaceMediaLibrarySyncService;
   readonly workspace: AssetWorkspaceResolution;
-  readonly entityProjections?: Pick<EntityAssetProjectionRepository, 'list'>;
+  readonly entityProjections?: Pick<ProjectEntityProjectionRepository, 'list'>;
   readonly refreshEntityProjections?: (workspace: AssetWorkspaceResolution) => Promise<void>;
+  readonly readEntityCharacterResources: (input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly workspace: AssetWorkspaceResolution;
+  }) => Promise<readonly ProjectEntityCharacterResourceProjection[]>;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: (input: {
     readonly identity: ResourceBrowserIdentity;
@@ -114,6 +119,7 @@ export type ResourceBrowserNodeReadSourceOptions = Pick<
   | 'workspaceMediaLibrarySync'
   | 'entityProjections'
   | 'refreshEntityProjections'
+  | 'readEntityCharacterResources'
 >;
 
 export async function searchGlobalAssetCatalog(input: {
@@ -289,25 +295,29 @@ export function createResourceBrowserNodeReadSource(
         }),
     },
     entities: {
-      list: async () => {
+      list: async ({ identity }) => {
         await options.refreshEntityProjections?.(options.workspace);
-        const result = await readProjectEntityManagementResources({
-          workspace: options.workspace,
-          ...(options.entityProjections
-            ? {
-                derivedProjection: {
-                  repository: options.entityProjections,
-                  partition: {
-                    scope: 'workspace',
-                    workspaceId: options.workspace.workspaceId,
-                    domain: 'entity-asset-projection',
+        const [result, characterAssociations] = await Promise.all([
+          readProjectEntityManagementResources({
+            workspace: options.workspace,
+            ...(options.entityProjections
+              ? {
+                  derivedProjection: {
+                    repository: options.entityProjections,
+                    partition: {
+                      scope: 'workspace',
+                      workspaceId: options.workspace.workspaceId,
+                      domain: 'project-entity-projection',
+                    },
                   },
-                },
-              }
-            : {}),
-        });
+                }
+              : {}),
+          }),
+          options.readEntityCharacterResources({ identity, workspace: options.workspace }),
+        ]);
         return {
           ...result,
+          characterAssociations,
           inspectorCapabilities: result.projections.map((projection) => ({
             projectionId: projection.projectionId,
             capabilities: {
@@ -637,7 +647,7 @@ async function resolveWorkspaceFileParent(
 ): Promise<string> {
   const workspaceRoot = await realpath(workspace.workspacePath);
   if (!parent) return '';
-  if (parent.facet !== 'files' || parent.kind !== 'directory') {
+  if (parent.source !== 'files' || parent.kind !== 'directory') {
     throw new Error('Resource Browser Workspace File parent must be a Files directory.');
   }
   const absoluteParent = await resolveWorkspaceContentLocator(workspace, parent.locator);
@@ -1085,7 +1095,7 @@ export async function resolveResourceBrowserItemPath(input: {
   readonly memberships?: AssetLibraryMembershipRepository;
   readonly item: Parameters<ResourceBrowserInteractionPort['preview']>[0]['item'];
 }): Promise<string> {
-  if (input.item.facet === 'assets') {
+  if (input.item.source === 'assets') {
     return resolveGlobalAssetItemPath({
       globalAssetRoot: input.globalAssetRoot,
       memberships: requireAssetLibraryMemberships(input.memberships),
@@ -1093,7 +1103,7 @@ export async function resolveResourceBrowserItemPath(input: {
     });
   }
   const locator =
-    input.item.facet === 'entities'
+    input.item.source === 'entities'
       ? input.item.entityStatus === 'candidate'
         ? undefined
         : input.item.representationLocator

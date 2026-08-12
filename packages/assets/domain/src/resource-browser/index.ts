@@ -24,7 +24,7 @@ export type {
   ResourceBrowserDiagnostic,
   ResourceBrowserEntityItem,
   ResourceBrowserEntityRef,
-  ResourceBrowserFacet,
+  ResourceBrowserSource,
   ResourceBrowserHostRuntime,
   ResourceBrowserIdentity,
   ResourceBrowserIntentRequest,

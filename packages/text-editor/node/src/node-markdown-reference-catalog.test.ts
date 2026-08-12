@@ -40,7 +40,6 @@ beforeEach(() => {
         entityId: 'character-1',
         kind: 'character',
         names: { canonical: '小橘', aliases: ['橘子'] },
-        facts: {},
         representations: [],
         lifecycle: { state: 'active' },
         createdAt: '2026-08-09T00:00:00.000Z',

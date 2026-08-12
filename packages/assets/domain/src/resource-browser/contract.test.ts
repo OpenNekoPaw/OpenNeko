@@ -65,14 +65,14 @@ describe('Resource Browser contract', () => {
       createResourceBrowserSearchRequest({
         requestId: 'request-1',
         identity,
-        facet: 'media',
+        source: 'media',
         query: 'cat',
       }),
     ).toEqual({
       requestId: 'request-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.search,
-      facet: 'media',
+      source: 'media',
       query: 'cat',
       limit: 100,
     });
@@ -90,14 +90,14 @@ describe('Resource Browser contract', () => {
       createResourceBrowserChildrenRequest({
         requestId: 'children-1',
         identity,
-        facet: 'files',
+        source: 'files',
         parentResourceId: 'directory-1',
       }),
     ).toEqual({
       requestId: 'children-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.children,
-      facet: 'files',
+      source: 'files',
       parentResourceId: 'directory-1',
       limit: 100,
     });
@@ -108,7 +108,7 @@ describe('Resource Browser contract', () => {
       projection('media', [
         {
           resourceId: 'media-1',
-          facet: 'media',
+          source: 'media',
           role: 'content',
           depth: 0,
           kind: 'image',
@@ -127,7 +127,7 @@ describe('Resource Browser contract', () => {
       projection('assets', [
         {
           resourceId: 'asset-1',
-          facet: 'assets',
+          source: 'assets',
           role: 'asset',
           depth: 0,
           kind: 'asset',
@@ -142,7 +142,7 @@ describe('Resource Browser contract', () => {
       projection('entities', [
         {
           resourceId: 'entity-1',
-          facet: 'entities',
+          source: 'entities',
           role: 'entity',
           depth: 0,
           kind: 'character',
@@ -152,6 +152,19 @@ describe('Resource Browser contract', () => {
           sourceOwners: ['project-entity'],
           attentionBindingIds: [],
           inspector: inspector({ status: 'confirmed', entityId: 'character-1' }),
+          characterAssociation: {
+            entityId: 'character-1',
+            characterProjectId: 'character-project-1',
+            displayName: 'Neko',
+            placement: 'project-local',
+            availability: 'available',
+            handoffs: [
+              { kind: 'open-character', characterProjectId: 'character-project-1' },
+              { kind: 'open-character-studio', characterProjectId: 'character-project-1' },
+            ],
+            publishedVersionCount: 1,
+            interactionStatus: 'select-version',
+          },
           representationAvailability: 'active',
           representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
           representationBindingId: 'binding-neko-portrait',
@@ -162,9 +175,74 @@ describe('Resource Browser contract', () => {
     );
 
     expect(media.items[0]?.capabilities).toContain('add-to-cut');
-    expect(media.items[0]?.facet).toBe('media');
-    expect(assets.items[0]?.facet).toBe('assets');
-    expect(entities.items[0]?.facet).toBe('entities');
+    expect(media.items[0]?.source).toBe('media');
+    expect(assets.items[0]?.source).toBe('assets');
+    expect(entities.items[0]).toMatchObject({
+      source: 'entities',
+      characterAssociation: {
+        entityId: 'character-1',
+        characterProjectId: 'character-project-1',
+      },
+    });
+  });
+
+  it('rejects a Character association copied onto another Entity or a candidate', () => {
+    const characterAssociation = {
+      entityId: 'character-other',
+      characterProjectId: 'character-project-1',
+      displayName: 'Neko',
+      placement: 'project-local',
+      availability: 'available',
+      handoffs: [
+        { kind: 'open-character', characterProjectId: 'character-project-1' },
+        { kind: 'open-character-studio', characterProjectId: 'character-project-1' },
+      ],
+      publishedVersionCount: 1,
+      interactionStatus: 'select-version',
+    };
+    expect(() =>
+      parseResourceBrowserProjection(
+        projection('entities', [
+          {
+            resourceId: 'entity-1',
+            source: 'entities',
+            role: 'entity',
+            depth: 0,
+            kind: 'character',
+            label: 'Neko',
+            entityRef: { entityId: 'character-1', entityKind: 'character' },
+            entityStatus: 'confirmed',
+            sourceOwners: ['project-entity'],
+            attentionBindingIds: [],
+            inspector: inspector({ status: 'confirmed', entityId: 'character-1' }),
+            representationAvailability: 'unbound',
+            characterAssociation,
+            capabilities: [],
+          },
+        ]),
+      ),
+    ).toThrow('association projection is invalid');
+    expect(() =>
+      parseResourceBrowserProjection(
+        projection('entities', [
+          {
+            resourceId: 'candidate-1',
+            source: 'entities',
+            role: 'entity',
+            depth: 0,
+            kind: 'character',
+            label: 'Neko',
+            candidateRef: { candidateId: 'candidate-1', entityKind: 'character' },
+            entityStatus: 'candidate',
+            sourceOwners: ['document'],
+            evidenceCount: 1,
+            inspector: inspector({ status: 'candidate', candidateId: 'candidate-1' }),
+            characterAssociation,
+            capabilities: [],
+          },
+        ]),
+      ),
+    ).toThrow('candidate contains confirmed Entity fields');
   });
 
   it('parses hierarchical File projections and library management', () => {
@@ -172,7 +250,7 @@ describe('Resource Browser contract', () => {
       projection('files', [
         {
           resourceId: 'directory-1',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -183,7 +261,7 @@ describe('Resource Browser contract', () => {
         {
           resourceId: 'file-1',
           parentResourceId: 'directory-1',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 1,
           kind: 'image',
@@ -212,6 +290,18 @@ describe('Resource Browser contract', () => {
   it('rejects unknown fields, absolute paths and stale owner identity', () => {
     expect(() =>
       parseResourceBrowserProjection({
+        identity,
+        facet: 'files',
+        query: '',
+        items: [],
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<ResourceBrowserContractError>>({
+        code: 'invalid-resource-browser-payload',
+      }),
+    );
+    expect(() =>
+      parseResourceBrowserProjection({
         ...projection('files', []),
         obsoleteField: 3,
       }),
@@ -225,7 +315,7 @@ describe('Resource Browser contract', () => {
         projection('files', [
           {
             resourceId: 'file-1',
-            facet: 'files',
+            source: 'files',
             kind: 'file',
             label: 'secret',
             locator: { kind: 'workspace-file', path: '/Users/private/secret.txt' },
@@ -239,7 +329,7 @@ describe('Resource Browser contract', () => {
         projection('entities', [
           {
             resourceId: 'entity-1',
-            facet: 'entities',
+            source: 'entities',
             kind: 'character',
             label: 'Neko',
             entityRef: {
@@ -324,7 +414,7 @@ describe('Resource Browser contract', () => {
         projection('media', [
           {
             resourceId: 'library-1',
-            facet: 'media',
+            source: 'media',
             role: 'library-root',
             depth: 0,
             kind: 'directory',
@@ -453,7 +543,7 @@ describe('Resource Browser contract', () => {
       projection('entities', [
         {
           resourceId: 'candidate-1',
-          facet: 'entities',
+          source: 'entities',
           role: 'entity',
           depth: 0,
           kind: 'character',
@@ -484,7 +574,7 @@ describe('Resource Browser contract', () => {
         entityIntent: {
           type: 'edit',
           entityId: 'entity-nova',
-          changes: { facts: { role: 'lead' } },
+          changes: { names: { canonical: 'Rin Aoki', aliases: [] } },
         },
       }),
     ).toMatchObject({
@@ -548,10 +638,10 @@ describe('Resource Browser contract', () => {
   });
 });
 
-function projection(facet: 'files' | 'media' | 'assets' | 'entities', items: readonly unknown[]) {
+function projection(source: 'files' | 'media' | 'assets' | 'entities', items: readonly unknown[]) {
   return {
     identity,
-    facet,
+    source,
     query: '',
     items,
   };
@@ -566,7 +656,6 @@ function inspector(
     status: identity.status,
     kind: 'character',
     names: { canonical: 'Nova', aliases: [] },
-    facts: {},
     ...('entityId' in identity
       ? { entityId: identity.entityId }
       : { candidateId: identity.candidateId, evidence: [] }),

@@ -9,8 +9,8 @@ export const workspaceFileCreationScenario = Object.freeze({
   async run({ click, evaluate, prepared, pressKey, screenshot, type, waitForSelector }) {
     await openFixtureWorkspace(evaluate);
     await waitForSelector('.desktop-scene-workbench--workspace');
-    await waitForSelector('.neko-resource-browser__facets [role="tab"]');
-    await click('.neko-resource-browser__facets [role="tab"]', 0);
+    await waitForSelector('.neko-resource-browser__sources [role="tab"]');
+    await click('.neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
     await waitForResourceItem(evaluate, 'notes.txt');
     return verifyWorkspaceFileCreation({
@@ -42,7 +42,7 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
     const opened = await openFixtureWorkspace(evaluate);
     await writeCanonicalEntityDocument(prepared.workspacePath, opened.project.workspaceId);
     await waitForSelector('.desktop-scene-workbench--workspace');
-    await waitForSelector('.neko-resource-browser__facets [role="tab"]');
+    await waitForSelector('.neko-resource-browser__sources [role="tab"]');
     const canonical = JSON.parse(
       await readFile(join(prepared.workspacePath, 'neko', 'entities.json'), 'utf8'),
     );
@@ -50,6 +50,18 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
       canonical.projectId !== opened.project.workspaceId ||
       Object.keys(canonical).some((field) => !['projectId', 'entities'].includes(field)) ||
       canonical.entities?.length !== 1 ||
+      Object.keys(canonical.entities[0] ?? {}).some(
+        (field) =>
+          ![
+            'entityId',
+            'kind',
+            'names',
+            'representations',
+            'lifecycle',
+            'createdAt',
+            'updatedAt',
+          ].includes(field),
+      ) ||
       canonical.entities[0]?.names?.canonical !== 'Rin'
     ) {
       throw new Error(`Workspace Entity facts are not canonical: ${JSON.stringify(canonical)}`);
@@ -61,7 +73,7 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
       );
     }
 
-    await click('.neko-resource-browser__facets [role="tab"]', 0);
+    await click('.neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
     await waitForResourceItem(evaluate, 'notes.txt');
     const fileContext = await verifyWorkspaceFileCreation({
@@ -72,9 +84,10 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
       type,
       waitForSelector,
       workspacePath: prepared.workspacePath,
+      includeCut: false,
     });
 
-    await click('.neko-resource-browser__facets [role="tab"]', 1);
+    await click('.neko-resource-browser__sources [role="tab"]', 1);
     await waitForResourceBrowserIdle(evaluate);
     await waitForResourceItem(evaluate, 'Assets');
     await click('.neko-resource-browser__view-modes button', 1);
@@ -87,20 +100,20 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
     await evaluate(
       `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
     );
-    await click('.neko-resource-browser__facets [role="tab"]', 0);
+    await click('.neko-resource-browser__sources [role="tab"]', 0);
     await waitForResourceBrowserIdle(evaluate);
     await waitForResourceItem(evaluate, 'notes.txt');
-    await click('.neko-resource-browser__facets [role="tab"]', 1);
+    await click('.neko-resource-browser__sources [role="tab"]', 1);
     await waitForResourceBrowserIdle(evaluate);
     await waitForResourceItem(evaluate, 'Assets');
     const mediaRestore = await inspectResourcePresentation(evaluate);
     if (!mediaRestore.visibleLabels.includes('portrait.png')) {
       throw new Error(
-        `Media facet did not restore its loaded child container: ${JSON.stringify(mediaRestore)}`,
+        `Shared Media source did not restore its loaded child container: ${JSON.stringify(mediaRestore)}`,
       );
     }
 
-    await click('.neko-resource-browser__facets [role="tab"]', 3);
+    await click('.neko-resource-browser__sources [role="tab"]', 3);
     await waitForResourceBrowserIdle(evaluate);
     await waitForEntityItem(evaluate, 'MIO');
     await waitForEntityItem(evaluate, 'Rin');
@@ -145,6 +158,15 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
     }
     checkpoint('entity-confirmed-reference-blockers', confirmed);
 
+    const characterCreation = await verifyCharacterCreationFromEntity({
+      click,
+      evaluate,
+      screenshot,
+      type,
+      waitForSelector,
+    });
+    checkpoint('entity-character-creation', characterCreation);
+
     await type(
       `${ACTIVE_ENTITY_DETAIL_SELECTOR} .neko-entity-inspector__input-action input`,
       'characters/missing.png',
@@ -179,16 +201,86 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
     return {
       candidate,
       confirmed,
+      characterCreation,
       attention,
       canonicalEntityCount: document.entities.length,
       fileContext,
       mediaContext,
       mediaRestore,
       resourcePresentation,
-      screenshots: [candidateScreenshot, attentionScreenshot],
+      screenshots: [candidateScreenshot, ...characterCreation.screenshots, attentionScreenshot],
     };
   },
 });
+
+async function verifyCharacterCreationFromEntity({
+  click,
+  evaluate,
+  screenshot,
+  type,
+  waitForSelector,
+}) {
+  const actions = await inspectContextMenu(evaluate, 'MIO', 'pointer');
+  const actionIndex = actions.findIndex((label) =>
+    /create character from this resource|基于此资源创建角色/iu.test(label),
+  );
+  if (actionIndex < 0) {
+    throw new Error(
+      `Confirmed unassociated Entity did not offer Character creation: ${JSON.stringify(actions)}`,
+    );
+  }
+  await click('.neko-resource-browser__context-menu button', actionIndex);
+  await waitForSelector('.neko-resource-browser__dialog input[aria-label]');
+  const dialog = await evaluate(`(() => {
+    const surface = document.querySelector('.neko-resource-browser__dialog');
+    const input = surface?.querySelector('input');
+    return {
+      title: surface?.querySelector('strong')?.textContent?.trim() ?? '',
+      source: surface?.querySelector('p')?.textContent?.trim() ?? '',
+      destination: surface?.querySelector('small')?.textContent?.trim() ?? '',
+      name: input instanceof HTMLInputElement ? input.value : '',
+    };
+  })()`);
+  if (
+    !/create character|创建角色/iu.test(dialog.title) ||
+    dialog.source !== 'MIO' ||
+    !/workspace|工作区/iu.test(dialog.destination) ||
+    dialog.name !== 'MIO'
+  ) {
+    throw new Error(`Character creation confirmation is invalid: ${JSON.stringify(dialog)}`);
+  }
+  const dialogScreenshot = await screenshot('entity-character-create-confirmation');
+  const characterNameInput = '.neko-resource-browser__dialog input';
+  await type(characterNameInput, '');
+  await waitForCondition(
+    evaluate,
+    `document.querySelector(${JSON.stringify(characterNameInput)})?.value === ''`,
+    'Character name input did not clear before replacement.',
+  );
+  await type(characterNameInput, 'MIO Companion', 0, { clear: false });
+  await waitForCondition(
+    evaluate,
+    `document.querySelector(${JSON.stringify(characterNameInput)})?.value === 'MIO Companion'`,
+    'Character name input did not accept the replacement value.',
+  );
+  await click('.neko-resource-browser__dialog button[type="submit"]');
+  await waitForSelector('[data-character-authoring-studio="true"]');
+  const opened = await evaluate(`(() => ({
+    dialogVisible: document.querySelector('.neko-resource-browser__dialog') !== null,
+    studioCount: document.querySelectorAll('[data-character-authoring-studio="true"]').length,
+    activeTab: document.querySelector(
+      '.neko-workbench-editor-tab[data-active="true"] .neko-workbench-editor-tab__label'
+    )?.textContent?.trim() ?? '',
+    linkedCharacter: document.querySelector(
+      '.neko-resource-browser__character-association strong'
+    )?.textContent?.trim() ?? '',
+  }))()`);
+  if (opened.dialogVisible || opened.studioCount !== 1 || opened.activeTab !== 'MIO Companion') {
+    throw new Error(`Character Studio handoff is invalid: ${JSON.stringify(opened)}`);
+  }
+  const studioScreenshot = await screenshot('entity-character-studio-open');
+  return { actions, dialog, opened, screenshots: [dialogScreenshot, studioScreenshot] };
+}
 
 async function prepareResourceBrowserFixture({ fixtureHome }) {
   const workspacePath = join(fixtureHome, 'workspace');
@@ -214,6 +306,7 @@ async function verifyWorkspaceFileCreation({
   type,
   waitForSelector,
   workspacePath,
+  includeCut = true,
 }) {
   await evaluate(`(() => {
     const surface = document.querySelector('.neko-resource-browser__items');
@@ -280,38 +373,41 @@ async function verifyWorkspaceFileCreation({
   await ensureDirectoryChildVisible(evaluate, 'References', 'Board.nkc');
   await clickResourceItem(click, evaluate, 'References');
 
-  const cutToolbar = await openCreateMenu(click, evaluate);
-  if (!cutToolbar.target.includes('References')) {
-    throw new Error(
-      `Files toolbar did not preserve the selected directory target: ${JSON.stringify(cutToolbar)}`,
+  let cutDocument;
+  if (includeCut) {
+    const cutToolbar = await openCreateMenu(click, evaluate);
+    if (!cutToolbar.target.includes('References')) {
+      throw new Error(
+        `Files toolbar did not preserve the selected directory target: ${JSON.stringify(cutToolbar)}`,
+      );
+    }
+    await click('.neko-resource-browser__library-menu-content button', 3);
+    await assertFixedCreateExtension(evaluate, '.otio');
+    await typeAndCommit(type, evaluate, pressKey, 'Rough Cut');
+    await waitForCreativeDocumentOpen(evaluate, 'cut', 'Rough Cut.otio');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('[data-workbench-slot="main"] .cut-basic-editor') !== null &&
+        document.querySelector('[data-workbench-slot="main"] .cut-basic-timeline') !== null`,
+      'New Cut owner did not finish loading its editor and Timeline.',
     );
+    cutDocument = JSON.parse(
+      await readFile(join(workspacePath, 'References', 'Rough Cut.otio'), 'utf8'),
+    );
+    if (cutDocument.OTIO_SCHEMA !== 'Timeline.1') {
+      throw new Error(`New Cut bytes are invalid: ${JSON.stringify(cutDocument)}`);
+    }
+    await ensureDirectoryChildVisible(evaluate, 'References', 'Rough Cut.otio');
+    await clickDirectoryDisclosure(evaluate, 'References');
+    await waitForCondition(
+      evaluate,
+      `(() => ![...document.querySelectorAll('.neko-resource-browser__item')]
+        .some((item) => item.querySelector('strong')?.textContent?.trim() === 'Rough Cut.otio'))()`,
+      'Directory disclosure did not collapse its children on a single click.',
+    );
+    await clickDirectoryDisclosure(evaluate, 'References');
+    await waitForResourceItem(evaluate, 'Rough Cut.otio');
   }
-  await click('.neko-resource-browser__library-menu-content button', 3);
-  await assertFixedCreateExtension(evaluate, '.otio');
-  await typeAndCommit(type, evaluate, pressKey, 'Rough Cut');
-  await waitForCreativeDocumentOpen(evaluate, 'cut', 'Rough Cut.otio');
-  await waitForCondition(
-    evaluate,
-    `document.querySelector('[data-workbench-slot="main"] .cut-basic-editor') !== null &&
-      document.querySelector('[data-workbench-slot="main"] .cut-basic-timeline') !== null`,
-    'New Cut owner did not finish loading its editor and Timeline.',
-  );
-  const cutDocument = JSON.parse(
-    await readFile(join(workspacePath, 'References', 'Rough Cut.otio'), 'utf8'),
-  );
-  if (cutDocument.OTIO_SCHEMA !== 'Timeline.1') {
-    throw new Error(`New Cut bytes are invalid: ${JSON.stringify(cutDocument)}`);
-  }
-  await ensureDirectoryChildVisible(evaluate, 'References', 'Rough Cut.otio');
-  await clickDirectoryDisclosure(evaluate, 'References');
-  await waitForCondition(
-    evaluate,
-    `(() => ![...document.querySelectorAll('.neko-resource-browser__item')]
-      .some((item) => item.querySelector('strong')?.textContent?.trim() === 'Rough Cut.otio'))()`,
-    'Directory disclosure did not collapse its children on a single click.',
-  );
-  await clickDirectoryDisclosure(evaluate, 'References');
-  await waitForResourceItem(evaluate, 'Rough Cut.otio');
 
   await clickResourceItem(click, evaluate, 'References');
   await pressKey('F10', ['Shift']);
@@ -380,14 +476,16 @@ async function verifyWorkspaceFileCreation({
   if (visibleControls.buttonLabels.some((label) => /^(?:refresh|刷新)$/iu.test(label))) {
     throw new Error(`Files exposed a normal Refresh control: ${JSON.stringify(visibleControls)}`);
   }
-  await clickResourceItem(click, evaluate, 'Rough Cut.otio');
-  await waitForCreativeDocumentOpen(evaluate, 'cut', 'Rough Cut.otio');
-  await waitForCondition(
-    evaluate,
-    `document.querySelector('[data-workbench-slot="main"] .cut-basic-editor') !== null &&
-      document.querySelector('[data-workbench-slot="main"] .cut-basic-timeline') !== null`,
-    'Final Cut evidence did not settle.',
-  );
+  if (includeCut) {
+    await clickResourceItem(click, evaluate, 'Rough Cut.otio');
+    await waitForCreativeDocumentOpen(evaluate, 'cut', 'Rough Cut.otio');
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('[data-workbench-slot="main"] .cut-basic-editor') !== null &&
+        document.querySelector('[data-workbench-slot="main"] .cut-basic-timeline') !== null`,
+      'Final Cut evidence did not settle.',
+    );
+  }
   const finalScreenshot = await screenshot('workspace-files-created');
 
   await resizeWindow(evaluate, 1440, 900);
@@ -421,9 +519,9 @@ async function verifyWorkspaceFileCreation({
     directoryActions,
     fileActions,
     canvasDocumentName: canvasDocument.name,
-    cutSchema: cutDocument.OTIO_SCHEMA,
-    fixedCreativeDocumentExtensions: ['.nkc', '.otio'],
-    directoryDisclosure: 'single-click-collapse-expand',
+    ...(cutDocument ? { cutSchema: cutDocument.OTIO_SCHEMA } : {}),
+    fixedCreativeDocumentExtensions: cutDocument ? ['.nkc', '.otio'] : ['.nkc'],
+    directoryDisclosure: cutDocument ? 'single-click-collapse-expand' : 'not-exercised',
     externalObservation: 'add-remove-reconciled',
     narrowToolbar,
     narrowLayout,
@@ -684,7 +782,7 @@ async function waitForResourceBrowserIdle(evaluate) {
   await waitForCondition(
     evaluate,
     `(() => {
-      const tabs = [...document.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
+      const tabs = [...document.querySelectorAll('.neko-resource-browser__sources [role="tab"]')];
       return tabs.length === 4 && tabs.every((tab) => !(tab instanceof HTMLButtonElement) || !tab.disabled);
     })()`,
     'Resource Browser did not finish its facet transition.',
@@ -739,16 +837,13 @@ async function waitForActiveEntityDetail(evaluate, label) {
 async function inspectEntityDetailPresentation(evaluate) {
   return evaluate(`(() => ({
     selected: document
-      .querySelector('[data-resource-facet-instance]:not([hidden]) .neko-resource-browser__item-row[data-selected="true"] strong')
+      .querySelector('.neko-resource-browser__item-row[data-selected="true"] strong')
       ?.textContent?.trim(),
     active: document
       .querySelector(${JSON.stringify(`${ACTIVE_ENTITY_DETAIL_SELECTOR} .neko-entity-inspector header strong`)})
       ?.textContent?.trim(),
-    details: [...document.querySelectorAll('[data-resource-detail-instance]')].map((detail) => ({
-      id: detail.getAttribute('data-resource-detail-instance'),
-      active: detail.getAttribute('data-active'),
-      hidden: detail.hasAttribute('hidden'),
-      label: detail.querySelector('.neko-entity-inspector header strong')?.textContent?.trim(),
+    details: [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_ENTITY_DETAIL_SELECTOR} .neko-entity-inspector`)})].map((detail) => ({
+      label: detail.querySelector('header strong')?.textContent?.trim(),
     })),
   }))()`);
 }
@@ -771,7 +866,7 @@ async function inspectEntity(evaluate) {
   })()`);
 }
 
-const ACTIVE_ENTITY_DETAIL_SELECTOR = '[data-resource-detail-instance][data-active="true"]';
+const ACTIVE_ENTITY_DETAIL_SELECTOR = '.neko-resource-browser';
 
 async function waitForCondition(evaluate, expression, message, timeoutMs = 30_000) {
   const startedAt = Date.now();
@@ -795,7 +890,6 @@ async function writeCanonicalEntityDocument(workspacePath, projectId) {
         entityId: 'character-rin',
         kind: 'character',
         names: { canonical: 'Rin', aliases: ['Lin'] },
-        facts: {},
         representations: [],
         lifecycle: { state: 'active' },
         createdAt: timestamp,

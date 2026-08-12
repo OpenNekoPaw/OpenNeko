@@ -9,7 +9,7 @@ describe('Resource Browser presentation snapshot store', () => {
     const expandedResourceIds = ['content:shots'];
     store.write(first, {
       query: 'shot',
-      activeFacet: 'files',
+      activeSource: 'files',
       viewMode: 'list',
       expandedResourceIds,
       selectedResourceIds: { files: 'content:shots/one.png' },
@@ -22,7 +22,7 @@ describe('Resource Browser presentation snapshot store', () => {
 
     expect(store.read(first)).toEqual({
       query: 'shot',
-      activeFacet: 'files',
+      activeSource: 'files',
       viewMode: 'list',
       expandedResourceIds: ['content:shots'],
       selectedResourceIds: { files: 'content:shots/one.png' },
@@ -42,7 +42,7 @@ describe('Resource Browser presentation snapshot store', () => {
     const identity = { projectId: 'project-1', workspaceId: 'workspace-1' };
     store.write(identity, {
       query: 'shot',
-      activeFacet: 'files',
+      activeSource: 'files',
       viewMode: 'list',
       expandedResourceIds: [],
       selectedResourceIds: {},
