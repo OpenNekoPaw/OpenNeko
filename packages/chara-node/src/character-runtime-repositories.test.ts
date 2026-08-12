@@ -69,6 +69,7 @@ describe('Character runtime repositories', () => {
     });
     const authoring = new CharacterAuthoringService({
       repository: authoringRepository,
+      lineage: authoringRepository,
       now: () => '2026-08-11T00:00:00.000Z',
     });
     await authoring.createProject({

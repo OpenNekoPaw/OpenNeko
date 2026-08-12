@@ -37,7 +37,39 @@ describe('CharacterVersion graph service', () => {
     expect(graph.unlinkedCharacterVersionIds).toEqual(['version-unlinked']);
     expect(graph.nodes.find((node) => node.characterVersionId === 'version-left')).toMatchObject({
       parentCharacterVersionId: 'version-root',
+      ancestorCharacterVersionIds: ['version-root'],
       isDraftBasis: true,
+    });
+  });
+
+  it('excludes cycle edges while preserving valid sibling branches', () => {
+    const graph = projectCharacterVersionGraph({
+      project: project(),
+      versions: [
+        version('version-a'),
+        version('version-b'),
+        version('version-root'),
+        version('version-valid'),
+      ],
+      lineage: {
+        characterProjectId: 'character-project-a',
+        relations: [
+          { characterVersionId: 'version-a', parentCharacterVersionIds: ['version-b'] },
+          { characterVersionId: 'version-b', parentCharacterVersionIds: ['version-a'] },
+          { characterVersionId: 'version-root', parentCharacterVersionIds: [] },
+          { characterVersionId: 'version-valid', parentCharacterVersionIds: ['version-root'] },
+        ],
+      },
+    });
+
+    expect(
+      graph.diagnostics.filter((diagnostic) => diagnostic.code === 'lineage-cycle'),
+    ).toHaveLength(2);
+    expect(graph.unlinkedCharacterVersionIds).toEqual(['version-a', 'version-b']);
+    expect(graph.rootCharacterVersionIds).toEqual(['version-root']);
+    expect(graph.headCharacterVersionIds).toEqual(['version-valid']);
+    expect(graph.nodes.find((node) => node.characterVersionId === 'version-valid')).toMatchObject({
+      ancestorCharacterVersionIds: ['version-root'],
     });
   });
 

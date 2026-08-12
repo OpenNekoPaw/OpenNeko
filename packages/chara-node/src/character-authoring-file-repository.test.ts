@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -29,7 +29,11 @@ describe('Character authoring file repository', () => {
   ])('uses the same service and file shape for $kind placement', async (scope) => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({ workspaceRoot: root, scope });
-    const service = new CharacterAuthoringService({ repository, now: () => NOW });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => NOW,
+    });
     await service.createProject({
       characterProjectId: 'character-project-1',
       displayName: 'Lin',
@@ -213,6 +217,60 @@ describe('Character authoring file repository', () => {
       relations: [expect.objectContaining({ characterVersionId: 'version-valid' })],
     });
     await expect(readFile(invalid, 'utf8')).resolves.toContain('character-invalid');
+  });
+
+  it('does not infer lineage from publication timestamps or file order', async () => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    await repository.storePublication({
+      characterVersionId: 'version-newer',
+      characterProjectId: 'character-unlinked',
+      label: 'Newer',
+      definition: definition(),
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-12T01:00:00.000Z',
+    });
+    await repository.storePublication({
+      characterVersionId: 'version-older',
+      characterProjectId: 'character-unlinked',
+      label: 'Older',
+      definition: definition(),
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-12T00:00:00.000Z',
+    });
+
+    await expect(repository.readLineage('character-unlinked')).resolves.toBeUndefined();
+    await expect(
+      readFile(join(root, characterLineagePath('character-unlinked')), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('removes a temporary lineage write when atomic replacement fails', async () => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    const projectDirectory = join(root, 'neko/characters/character-interrupted');
+    await mkdir(join(projectDirectory, 'lineage.json'), { recursive: true });
+
+    await expect(
+      repository.saveLineage({
+        characterProjectId: 'character-interrupted',
+        relations: [{ characterVersionId: 'version-root', parentCharacterVersionIds: [] }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'character-record-write-failed',
+      recordId: 'character-interrupted',
+    });
+    expect(await readdir(projectDirectory)).toEqual(['lineage.json']);
+    await expect(repository.readLineage('character-interrupted')).rejects.toMatchObject({
+      code: 'character-workspace-path-escape',
+      recordId: 'character-interrupted',
+    });
   });
 
   it('rejects a symlink lineage record without following it', async () => {

@@ -6,6 +6,7 @@ import {
   createEmptyCharacterOriginSetting,
   type CharacterRoom,
   type CharacterRun,
+  type CharacterVersionLineage,
   type RoomRun,
 } from '@neko/chara/contracts';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
@@ -35,6 +36,7 @@ describe('persistent Character repository', () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
+      lineage: fixture.lineage,
       now: () => NOW,
     });
     await authoring.createProject({
@@ -151,6 +153,7 @@ describe('persistent Character repository', () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
+      lineage: fixture.lineage,
       now: () => NOW,
     });
     await authoring.createProject({
@@ -249,6 +252,7 @@ describe('persistent Character repository', () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
+      lineage: fixture.lineage,
       now: () => NOW,
     });
     for (const suffix of ['valid', 'invalid']) {
@@ -289,6 +293,7 @@ describe('persistent Character repository', () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
+      lineage: fixture.lineage,
       now: () => NOW,
     });
     await authoring.createProject({
@@ -418,6 +423,7 @@ describe('persistent Character repository', () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
+      lineage: fixture.lineage,
       now: () => NOW,
     });
     await authoring.createProject({
@@ -522,6 +528,7 @@ describe('persistent Character repository', () => {
     const fixture = await createFixture();
     const authoring = new CharacterAuthoringService({
       repository: fixture.repository,
+      lineage: fixture.lineage,
       now: () => NOW,
     });
     await authoring.createProject({
@@ -579,7 +586,20 @@ async function createFixture() {
   const store = createNodeSqliteLocalMetadataStore({ homedir: root });
   await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
   await initializeCharacterPersistenceTables(store);
-  return { store, repository: createPersistentCharacterRepository({ metadataStore: store }) };
+  const lineages = new Map<string, CharacterVersionLineage>();
+  return {
+    store,
+    repository: createPersistentCharacterRepository({ metadataStore: store }),
+    lineage: {
+      readLineage: async (characterProjectId: string) => {
+        const lineage = lineages.get(characterProjectId);
+        return lineage === undefined ? undefined : structuredClone(lineage);
+      },
+      saveLineage: async (lineage: CharacterVersionLineage) => {
+        lineages.set(lineage.characterProjectId, structuredClone(lineage));
+      },
+    },
+  };
 }
 
 function definition() {

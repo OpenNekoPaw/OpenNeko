@@ -135,3 +135,32 @@ Focused verification after implementation:
 
 - `pnpm --filter @neko/chara-node typecheck` — passed;
 - `pnpm --filter @neko/chara-node test` — 6 files, 28 tests passed, including self-contained Live2D, external voice, traversal, undeclared-entry, digest, resource-limit and symlink cases.
+
+## Batch 3 usable-version lineage evidence
+
+The existing `CharacterAuthoringService.publish` operation is now the single lineage-aware usable-version producer. It validates the exact draft basis before publication, reads and validates the candidate lineage before storing the version, stores the immutable CharacterVersion first and then writes only the zero-or-one-parent relation derived from that exact basis. A missing lineage repository fails before version storage; there is no retained lineage-free successful publication route.
+
+If the second write fails, the service returns `lineage-write-pending` with the exact version and relation. The immutable version remains readable and appears as an unlinked graph node; no deletion, forged relation or automatic retry occurs. `retryLineage` is an explicit idempotent operation and does not create the CharacterVersion again.
+
+The graph projection now exposes root-to-parent ancestor identities and diagnoses/excludes each cyclic child relation while retaining the involved versions as unlinked nodes and rendering valid sibling branches. Strict lineage persistence still rejects cyclic aggregates before a write.
+
+Additional Node evidence covers identical lineage layout across standalone/project-local authorities, missing and corrupt records, sibling isolation, no-follow reads, failed atomic replacement cleanup and the absence of chronological/file-order inference.
+
+Focused verification:
+
+- `pnpm --filter @neko/chara typecheck` — passed;
+- `pnpm --filter @neko/chara test` — 35 files, 181 tests passed;
+- `pnpm --filter @neko/chara-node typecheck` — passed;
+- `pnpm --filter @neko/chara-node test` — 6 files, 30 tests passed.
+- `pnpm --filter @neko/app-desktop typecheck` — passed;
+- `pnpm check:application-boundaries` — passed, 1,674 files checked;
+- `openspec validate refine-character-management-authoring-and-version-graph --strict --no-interactive` — passed;
+- `git diff --check` — passed.
+
+Desktop Foundation and Workspace Character authoring composition inject the exact file repository as both publication and lineage authority. Legacy SQLite runtime fixtures use a test-local lineage port only to construct exact runtime records; no SQLite lineage production path was added.
+
+Residual integration risk: the current Host contract does not yet project the typed partial-commit diagnostic and retry operation into Renderer UI. The application operation and exact retry behavior are implemented, but tasks 7.4 and 5.5 remain responsible for the typed Desktop wiring and visible recovery action.
+
+Full Desktop Vitest ran 102 files: 101 files and 670 tests passed; three failures in `desktop-agent-resource-display-projector.test.ts` expect the prior `renderUri` projection while the shared dirty worktree currently produces `previewDescriptor`. That adjacent Agent/Preview assertion drift is unrelated to the two Character repository injections and was not modified or hidden.
+
+`pnpm check:no-internal-versioning` self-tests passed, while the repository audit remains red from the shared dirty worktree's stale allowance hashes and 213 new occurrences across Agent/Desktop/Character continuity work. The occurrences in this batch use user-managed CharacterVersion domain identities inside the Chara owner; no schema, format, contract generation or dispatch field was added.

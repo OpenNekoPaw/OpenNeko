@@ -2,6 +2,7 @@ import {
   parseCharacterProject,
   parseCharacterVersion,
   parseCharacterVersionLineage,
+  parseCharacterVersionRelation,
   type CharacterProject,
   type CharacterVersion,
   type CharacterVersionLineage,
@@ -22,13 +23,14 @@ export interface CharacterVersionGraphNode {
   readonly label: string;
   readonly parentCharacterVersionId?: string;
   readonly childCharacterVersionIds: readonly string[];
+  readonly ancestorCharacterVersionIds: readonly string[];
   readonly state: CharacterVersionGraphNodeState;
   readonly isHead: boolean;
   readonly isDraftBasis: boolean;
 }
 
 export interface CharacterVersionGraphDiagnostic {
-  readonly code: 'lineage-child-unavailable' | 'lineage-parent-unavailable';
+  readonly code: 'lineage-child-unavailable' | 'lineage-parent-unavailable' | 'lineage-cycle';
   readonly characterVersionId: string;
   readonly relatedCharacterVersionId?: string;
   readonly message: string;
@@ -63,15 +65,14 @@ export function projectCharacterVersionGraph(
       `CharacterProject '${project.characterProjectId}' contains duplicate CharacterVersion identities.`,
     );
   }
-  const lineage =
-    input.lineage === undefined ? undefined : parseCharacterVersionLineage(input.lineage);
+  const lineage = parseLineageForProjection(input.lineage);
   if (lineage && lineage.characterProjectId !== project.characterProjectId) {
     throw new Error(
       `CharacterVersion lineage '${lineage.characterProjectId}' does not belong to exact CharacterProject '${project.characterProjectId}'.`,
     );
   }
 
-  const validRelations = new Map<
+  const candidateRelations = new Map<
     string,
     { readonly parentCharacterVersionId?: string; readonly declaredRoot: boolean }
   >();
@@ -95,9 +96,24 @@ export function projectCharacterVersionGraph(
       });
       continue;
     }
-    validRelations.set(relation.characterVersionId, {
+    candidateRelations.set(relation.characterVersionId, {
       ...(parentCharacterVersionId === undefined ? {} : { parentCharacterVersionId }),
       declaredRoot: parentCharacterVersionId === undefined,
+    });
+  }
+
+  const cyclicCharacterVersionIds = findCyclicCharacterVersionIds(candidateRelations);
+  const validRelations = new Map(candidateRelations);
+  for (const characterVersionId of cyclicCharacterVersionIds) {
+    const relation = validRelations.get(characterVersionId);
+    validRelations.delete(characterVersionId);
+    diagnostics.push({
+      code: 'lineage-cycle',
+      characterVersionId,
+      ...(relation?.parentCharacterVersionId === undefined
+        ? {}
+        : { relatedCharacterVersionId: relation.parentCharacterVersionId }),
+      message: `Lineage relation for '${characterVersionId}' creates a directed cycle and was excluded.`,
     });
   }
 
@@ -120,6 +136,10 @@ export function projectCharacterVersionGraph(
         ? {}
         : { parentCharacterVersionId: relation.parentCharacterVersionId }),
       childCharacterVersionIds: children,
+      ancestorCharacterVersionIds: collectAncestorCharacterVersionIds(
+        version.characterVersionId,
+        validRelations,
+      ),
       state,
       isHead: relation !== undefined && children.length === 0,
       isDraftBasis: project.draftBasisCharacterVersionId === version.characterVersionId,
@@ -139,6 +159,67 @@ export function projectCharacterVersionGraph(
       .map((node) => node.characterVersionId),
     diagnostics,
   };
+}
+
+function parseLineageForProjection(
+  lineage: CharacterVersionLineage | undefined,
+): CharacterVersionLineage | undefined {
+  if (lineage === undefined) return undefined;
+  const header = parseCharacterVersionLineage({ ...lineage, relations: [] });
+  const relations = lineage.relations.map(parseCharacterVersionRelation);
+  const childIds = new Set<string>();
+  for (const relation of relations) {
+    if (childIds.has(relation.characterVersionId)) {
+      throw new Error(
+        `CharacterVersion lineage contains duplicate child '${relation.characterVersionId}'.`,
+      );
+    }
+    childIds.add(relation.characterVersionId);
+  }
+  return { characterProjectId: header.characterProjectId, relations };
+}
+
+function findCyclicCharacterVersionIds(
+  relations: ReadonlyMap<
+    string,
+    { readonly parentCharacterVersionId?: string; readonly declaredRoot: boolean }
+  >,
+): ReadonlySet<string> {
+  const cyclic = new Set<string>();
+  for (const start of relations.keys()) {
+    const path: string[] = [];
+    const pathIndex = new Map<string, number>();
+    let cursor: string | undefined = start;
+    while (cursor !== undefined && relations.has(cursor)) {
+      const repeatedAt = pathIndex.get(cursor);
+      if (repeatedAt !== undefined) {
+        for (const characterVersionId of path.slice(repeatedAt)) {
+          cyclic.add(characterVersionId);
+        }
+        break;
+      }
+      pathIndex.set(cursor, path.length);
+      path.push(cursor);
+      cursor = relations.get(cursor)?.parentCharacterVersionId;
+    }
+  }
+  return cyclic;
+}
+
+function collectAncestorCharacterVersionIds(
+  characterVersionId: string,
+  relations: ReadonlyMap<
+    string,
+    { readonly parentCharacterVersionId?: string; readonly declaredRoot: boolean }
+  >,
+): readonly string[] {
+  const ancestors: string[] = [];
+  let parentCharacterVersionId = relations.get(characterVersionId)?.parentCharacterVersionId;
+  while (parentCharacterVersionId !== undefined) {
+    ancestors.unshift(parentCharacterVersionId);
+    parentCharacterVersionId = relations.get(parentCharacterVersionId)?.parentCharacterVersionId;
+  }
+  return ancestors;
 }
 
 export interface CharacterVersionComparisonGroup {

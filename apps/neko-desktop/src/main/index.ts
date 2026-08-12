@@ -1723,7 +1723,10 @@ async function startDesktop(): Promise<void> {
     agentConversations: characterAgentConversations,
   });
   const characterFoundationCommands = new CharacterFoundationCommandService({
-    characterAuthoring: new CharacterAuthoringService({ repository: characterAuthoringRepository }),
+    characterAuthoring: new CharacterAuthoringService({
+      repository: characterAuthoringRepository,
+      lineage: characterAuthoringRepository,
+    }),
     relationships: new UserCharacterRelationshipService(characterRuntimeRepositories.relationship),
     interactions: characterInteractions,
     rooms: characterRooms,
@@ -2415,7 +2418,7 @@ async function startDesktop(): Promise<void> {
     return new CharacterAuthoringHostService({
       contentProjectId: input.contentProjectId,
       catalog: repository,
-      authoring: new CharacterAuthoringService({ repository }),
+      authoring: new CharacterAuthoringService({ repository, lineage: repository }),
     });
   };
   const resolveWorldAuthoring = async (input: {

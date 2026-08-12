@@ -10,10 +10,10 @@
 
 - [x] 2.1 Add strict `CharacterVersionLineage` and relation codecs under `@neko/chara/contracts`, including exact CharacterProject ownership, unique child relation, unique parents, no self-parent/cycle acceptance and stable unlinked/root semantics.
 - [x] 2.2 Extend CharacterProject with the stable optional draft-basis domain semantic, where absence permanently means unbased and never selects an old codec/compatibility path; update all canonical producers, consumers and fixtures atomically.
-- [ ] 2.3 Add producer/codec tests for root, branch, head derivation input, invalid cross-project refs, duplicate/cyclic relationships, unbased/derived drafts, user CharacterVersion identities and absence of internal contract generation.
+- [x] 2.3 Add producer/codec tests for root, branch, head derivation input, invalid cross-project refs, duplicate/cyclic relationships, unbased/derived drafts, user CharacterVersion identities and absence of internal contract generation.
 - [x] 2.4 Extend `@neko/chara-node` with the single relative `neko/characters/<characterProjectId>/lineage.json` repository path, atomic single-record writes, containment/symlink checks and record-local diagnostics; missing record means no declared lineage while corrupt bytes fail visibly.
-- [ ] 2.5 Add Chara Node tests for standalone/project-local identical behavior, missing/corrupt lineage, interrupted writes, invalid sibling isolation, exact relative paths and no SQLite/cache/active-root/chronological fallback.
-- [ ] 2.6 Add explicit partial-commit result/diagnostic and retry-link behavior for immutable CharacterVersion stored successfully but lineage relation write failed; prove the version remains usable/unlinked and no automatic repair, deletion or forged edge occurs.
+- [x] 2.5 Add Chara Node tests for standalone/project-local identical behavior, missing/corrupt lineage, interrupted writes, invalid sibling isolation, exact relative paths and no SQLite/cache/active-root/chronological fallback.
+- [x] 2.6 Add explicit partial-commit result/diagnostic and retry-link behavior for immutable CharacterVersion stored successfully but lineage relation write failed; prove the version remains usable/unlinked and no automatic repair, deletion or forged edge occurs.
 
 ## 3. Portable Character package
 
@@ -27,9 +27,9 @@
 
 ## 4. Lineage, draft and reference application services
 
-- [ ] 4.1 Implement Chara lineage validation and graph projection services for declared roots, unlinked nodes, branch heads, ancestor paths, missing refs and cycles using exact CharacterVersions plus authoritative lineage only.
+- [x] 4.1 Implement Chara lineage validation and graph projection services for declared roots, unlinked nodes, branch heads, ancestor paths, missing refs and cycles using exact CharacterVersions plus authoritative lineage only.
 - [x] 4.2 Implement `continueFromVersion` as the only successful historical-version-to-working-draft path, requiring explicit unsaved-change resolution, copying the exact immutable definition and setting the exact draft basis without hidden branch drafts.
-- [ ] 4.3 Update local usable-version creation so ordinary finalization declares zero or one exact parent from the working draft basis, stores immutable content first and writes lineage through the canonical repository; delete any latest/current/time-based parent selection.
+- [x] 4.3 Update local usable-version creation so ordinary finalization declares zero or one exact parent from the working draft basis, stores immutable content first and writes lineage through the canonical repository; delete any latest/current/time-based parent selection.
 - [x] 4.4 Implement field-grouped immutable CharacterVersion comparison for identity, background/origin, canon, knowledge, behavior, expression, representation, voice and accepted evidence as a read-only projection.
 - [ ] 4.5 Define and implement narrow `CharacterVersionReferenceReader` ports for Chara-owned Storyline/Room/memory refs plus injected Agent Conversation and Project dependency refs; keep the destructive decision in Chara and source facts in their owners.
 - [ ] 4.6 Implement reference-aware deletion that blocks referenced versions, preserves exact inventory diagnostics, removes only an unreferenced version's owned relations and never rebinds consumers to a head/latest/sibling.

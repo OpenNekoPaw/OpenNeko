@@ -5,11 +5,14 @@ import {
   type CharacterDefinition,
   type CharacterProject,
   type CharacterVersion,
+  type CharacterVersionLineage,
 } from '@neko/chara/contracts';
 import {
   CharacterAuthoringService,
+  CharacterVersionLineageWriteError,
   type CharacterAuthoringRepository,
 } from '../application/character-authoring-service';
+import type { CharacterVersionLineageRepository } from '../application/character-version-lineage-repository';
 import { describe, expect, it } from 'vitest';
 
 const firstTime = '2026-08-09T10:00:00.000Z';
@@ -43,10 +46,15 @@ function emptyDefinition(): CharacterDefinition {
   };
 }
 
-class MemoryCharacterAuthoringRepository implements CharacterAuthoringRepository {
+class MemoryCharacterAuthoringRepository
+  implements CharacterAuthoringRepository, CharacterVersionLineageRepository
+{
   readonly projects = new Map<string, CharacterProject>();
   readonly versions = new Map<string, CharacterVersion>();
   readonly snapshots = new Map<string, CharacterAuthoringTestSnapshot>();
+  readonly lineages = new Map<string, CharacterVersionLineage>();
+  publicationWriteCount = 0;
+  failNextLineageWrite = false;
 
   async readProject(characterProjectId: string): Promise<CharacterProject | undefined> {
     const project = this.projects.get(characterProjectId);
@@ -66,6 +74,7 @@ class MemoryCharacterAuthoringRepository implements CharacterAuthoringRepository
     if (this.versions.has(publication.characterVersionId)) {
       throw new Error(`CharacterVersion '${publication.characterVersionId}' already exists.`);
     }
+    this.publicationWriteCount += 1;
     this.versions.set(publication.characterVersionId, structuredClone(publication));
   }
 
@@ -75,12 +84,29 @@ class MemoryCharacterAuthoringRepository implements CharacterAuthoringRepository
     }
     this.snapshots.set(snapshot.authoringTestSnapshotId, structuredClone(snapshot));
   }
+
+  async readLineage(characterProjectId: string): Promise<CharacterVersionLineage | undefined> {
+    const lineage = this.lineages.get(characterProjectId);
+    return lineage === undefined ? undefined : structuredClone(lineage);
+  }
+
+  async saveLineage(lineage: CharacterVersionLineage): Promise<void> {
+    if (this.failNextLineageWrite) {
+      this.failNextLineageWrite = false;
+      throw new Error('simulated lineage write interruption');
+    }
+    this.lineages.set(lineage.characterProjectId, structuredClone(lineage));
+  }
 }
 
 describe('CharacterAuthoringService', () => {
   it('continues the one working draft from an exact owned CharacterVersion', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-branch',
       displayName: 'Branch',
@@ -110,7 +136,11 @@ describe('CharacterAuthoringService', () => {
 
   it('rejects a basis owned by another CharacterProject', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-local',
       displayName: 'Local',
@@ -136,7 +166,11 @@ describe('CharacterAuthoringService', () => {
 
   it('requires explicit working-draft replacement', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
 
     await expect(
       Reflect.apply(service.continueFromVersion, service, [
@@ -150,7 +184,11 @@ describe('CharacterAuthoringService', () => {
 
   it('fills only a fresh exact character creation target', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-fresh',
       displayName: 'Lin',
@@ -180,7 +218,11 @@ describe('CharacterAuthoringService', () => {
   it('reviews sourced candidates and publishes an immutable CharacterVersion', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
     let currentTime = firstTime;
-    const service = new CharacterAuthoringService({ repository, now: () => currentTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => currentTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-a',
       displayName: 'Lin',
@@ -223,13 +265,120 @@ describe('CharacterAuthoringService', () => {
     expect(published.acceptedEvidenceIds).toEqual(['evidence-a']);
     expect(Object.isFrozen(published)).toBe(true);
     expect(Object.isFrozen(published.definition.canon)).toBe(true);
+    expect(repository.lineages.get('character-project-a')?.relations).toEqual([
+      { characterVersionId: 'character-version-a', parentCharacterVersionIds: [] },
+    ]);
     expect(repository.versions.get('character-version-a')).not.toHaveProperty('providerSecret');
     expect(repository.versions.get('character-version-a')).not.toHaveProperty('transcript');
   });
 
+  it('declares only the exact working-draft basis as the usable-version parent', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
+    await service.createProject({
+      characterProjectId: 'character-project-branch',
+      displayName: 'Branch',
+      draft: emptyDefinition(),
+    });
+    repository.versions.set('character-version-basis', {
+      characterVersionId: 'character-version-basis',
+      characterProjectId: 'character-project-branch',
+      label: 'Basis',
+      definition: definition('Historical definition'),
+      acceptedEvidenceIds: [],
+      publishedAt: firstTime,
+    });
+    await service.continueFromVersion({
+      characterProjectId: 'character-project-branch',
+      characterVersionId: 'character-version-basis',
+      replaceWorkingDraft: true,
+    });
+    await service.setReviewStatus({
+      characterProjectId: 'character-project-branch',
+      reviewStatus: 'ready',
+    });
+
+    await service.publish({
+      characterProjectId: 'character-project-branch',
+      characterVersionId: 'character-version-child',
+      label: 'Child',
+      changeSummary: 'Continue the historical branch.',
+    });
+
+    expect(repository.lineages.get('character-project-branch')?.relations).toEqual([
+      {
+        characterVersionId: 'character-version-child',
+        parentCharacterVersionIds: ['character-version-basis'],
+        changeSummary: 'Continue the historical branch.',
+      },
+    ]);
+  });
+
+  it('keeps a usable version unlinked until explicit retry after lineage write failure', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
+    await service.createProject({
+      characterProjectId: 'character-project-partial',
+      displayName: 'Partial',
+      draft: definition(),
+    });
+    await service.setReviewStatus({
+      characterProjectId: 'character-project-partial',
+      reviewStatus: 'ready',
+    });
+    repository.failNextLineageWrite = true;
+
+    let partial: CharacterVersionLineageWriteError | undefined;
+    try {
+      await service.publish({
+        characterProjectId: 'character-project-partial',
+        characterVersionId: 'character-version-partial',
+        label: 'Partial',
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(CharacterVersionLineageWriteError);
+      if (!(error instanceof CharacterVersionLineageWriteError)) throw error;
+      partial = error;
+    }
+
+    expect(partial).toMatchObject({
+      code: 'character-version-lineage-write-failed',
+      version: { characterVersionId: 'character-version-partial' },
+      relation: {
+        characterVersionId: 'character-version-partial',
+        parentCharacterVersionIds: [],
+      },
+    });
+    expect(repository.versions.has('character-version-partial')).toBe(true);
+    expect(repository.lineages.has('character-project-partial')).toBe(false);
+    expect(repository.publicationWriteCount).toBe(1);
+
+    await service.retryVersionLineage({
+      characterProjectId: 'character-project-partial',
+      characterVersionId: 'character-version-partial',
+    });
+
+    expect(repository.publicationWriteCount).toBe(1);
+    expect(repository.lineages.get('character-project-partial')?.relations).toEqual([
+      { characterVersionId: 'character-version-partial', parentCharacterVersionIds: [] },
+    ]);
+  });
+
   it('keeps a publication unchanged when the draft changes later', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-a',
       displayName: 'Lin',
@@ -260,7 +409,11 @@ describe('CharacterAuthoringService', () => {
 
   it('publishes reviewed BackgroundStory and OriginSetting evidence without creating runtime authority', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-lore',
       displayName: 'Lin',
@@ -321,7 +474,11 @@ describe('CharacterAuthoringService', () => {
 
   it('keeps authoring-test snapshots out of the publication repository', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-a',
       displayName: 'Lin',
@@ -339,7 +496,11 @@ describe('CharacterAuthoringService', () => {
 
   it('rejects publication while review is incomplete', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-a',
       displayName: 'Lin',
@@ -358,9 +519,36 @@ describe('CharacterAuthoringService', () => {
     });
   });
 
-  it('rejects raw local paths in a published representation', async () => {
+  it('fails visibly instead of creating a version through a lineage-free publication path', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
     const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    await service.createProject({
+      characterProjectId: 'character-project-no-lineage',
+      displayName: 'No lineage',
+      draft: definition(),
+    });
+    await service.setReviewStatus({
+      characterProjectId: 'character-project-no-lineage',
+      reviewStatus: 'ready',
+    });
+
+    await expect(
+      service.publish({
+        characterProjectId: 'character-project-no-lineage',
+        characterVersionId: 'character-version-no-lineage',
+        label: 'Must not publish',
+      }),
+    ).rejects.toMatchObject({ code: 'character-version-lineage-repository-unavailable' });
+    expect(repository.versions.size).toBe(0);
+  });
+
+  it('rejects raw local paths in a published representation', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
 
     await expect(
       service.createProject({
@@ -383,7 +571,11 @@ describe('CharacterAuthoringService', () => {
 
   it('rejects lore that cites evidence outside the owning CharacterProject', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
-    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+    const service = new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => firstTime,
+    });
     await service.createProject({
       characterProjectId: 'character-project-a',
       displayName: 'Lin',

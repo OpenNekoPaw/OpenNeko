@@ -2,6 +2,8 @@ import {
   parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
   parseCharacterVersion,
+  parseCharacterVersionLineage,
+  parseCharacterVersionRelation,
   collectCharacterLoreEvidenceIds,
   type CharacterAuthoringTestSnapshot,
   type CharacterCanonCandidate,
@@ -11,7 +13,10 @@ import {
   type CharacterRepresentationRef,
   type CharacterReviewStatus,
   type CharacterVersion,
+  type CharacterVersionLineage,
+  type CharacterVersionRelation,
 } from '@neko/chara/contracts';
+import type { CharacterVersionLineageRepository } from './character-version-lineage-repository';
 
 export interface CharacterAuthoringRepository {
   readProject(
@@ -39,6 +44,7 @@ export interface CharacterPublicationReader {
 
 export interface CharacterAuthoringServiceOptions {
   readonly repository: CharacterAuthoringRepository;
+  readonly lineage?: CharacterVersionLineageRepository;
   readonly now?: () => string;
 }
 
@@ -88,6 +94,14 @@ export interface PublishCharacterInput {
   readonly characterProjectId: string;
   readonly characterVersionId: string;
   readonly label: string;
+  readonly changeSummary?: string;
+}
+
+export interface RetryCharacterVersionLineageInput {
+  readonly characterProjectId: string;
+  readonly characterVersionId: string;
+  readonly parentCharacterVersionId?: string;
+  readonly changeSummary?: string;
 }
 
 export interface CaptureCharacterAuthoringTestInput {
@@ -110,6 +124,10 @@ export type CharacterAuthoringDiagnosticCode =
   | 'character-representation-already-exists'
   | 'character-representation-not-found'
   | 'character-publication-not-ready'
+  | 'character-version-lineage-conflict'
+  | 'character-version-lineage-owner-mismatch'
+  | 'character-version-lineage-repository-unavailable'
+  | 'character-version-lineage-version-unavailable'
   | 'character-authoring-operation-invalid';
 
 export class CharacterAuthoringError extends Error {
@@ -120,6 +138,22 @@ export class CharacterAuthoringError extends Error {
   ) {
     super(message);
     this.name = 'CharacterAuthoringError';
+  }
+}
+
+export class CharacterVersionLineageWriteError extends Error {
+  readonly code = 'character-version-lineage-write-failed';
+
+  constructor(
+    readonly version: CharacterVersion,
+    readonly relation: CharacterVersionRelation,
+    options?: ErrorOptions,
+  ) {
+    super(
+      `CharacterVersion '${version.characterVersionId}' is usable, but its lineage relation was not stored. Retry the exact lineage operation.`,
+      options,
+    );
+    this.name = 'CharacterVersionLineageWriteError';
   }
 }
 
@@ -415,6 +449,27 @@ export class CharacterAuthoringService {
         project.characterProjectId,
       );
     }
+    const lineageRepository = this.requireLineageRepository(input.characterProjectId);
+    const parentCharacterVersionId = project.draftBasisCharacterVersionId;
+    if (parentCharacterVersionId !== undefined) {
+      await this.requireOwnedPublication(
+        project.characterProjectId,
+        parentCharacterVersionId,
+        signal,
+      );
+    }
+    const relation = parseCharacterVersionRelation({
+      characterVersionId: input.characterVersionId,
+      parentCharacterVersionIds:
+        parentCharacterVersionId === undefined ? [] : [parentCharacterVersionId],
+      ...(input.changeSummary === undefined ? {} : { changeSummary: input.changeSummary }),
+    });
+    const preparedLineage = await this.prepareLineage(
+      lineageRepository,
+      project.characterProjectId,
+      relation,
+      signal,
+    );
     const acceptedEvidenceIds = new Set([
       ...project.candidates
         .filter((candidate) => candidate.status === 'accepted')
@@ -432,7 +487,57 @@ export class CharacterAuthoringService {
       }),
     );
     await this.options.repository.storePublication(published, signal);
+    if (!preparedLineage.relationAlreadyStored) {
+      await this.writeLineage(
+        lineageRepository,
+        published,
+        relation,
+        preparedLineage.lineage,
+        signal,
+      );
+    }
     return published;
+  }
+
+  async retryVersionLineage(
+    input: RetryCharacterVersionLineageInput,
+    signal?: AbortSignal,
+  ): Promise<CharacterVersionLineage> {
+    const lineageRepository = this.requireLineageRepository(input.characterProjectId);
+    const version = await this.requireOwnedPublication(
+      input.characterProjectId,
+      input.characterVersionId,
+      signal,
+    );
+    if (input.parentCharacterVersionId !== undefined) {
+      await this.requireOwnedPublication(
+        input.characterProjectId,
+        input.parentCharacterVersionId,
+        signal,
+      );
+    }
+    const relation = parseCharacterVersionRelation({
+      characterVersionId: input.characterVersionId,
+      parentCharacterVersionIds:
+        input.parentCharacterVersionId === undefined ? [] : [input.parentCharacterVersionId],
+      ...(input.changeSummary === undefined ? {} : { changeSummary: input.changeSummary }),
+    });
+    const preparedLineage = await this.prepareLineage(
+      lineageRepository,
+      input.characterProjectId,
+      relation,
+      signal,
+    );
+    if (!preparedLineage.relationAlreadyStored) {
+      await this.writeLineage(
+        lineageRepository,
+        version,
+        relation,
+        preparedLineage.lineage,
+        signal,
+      );
+    }
+    return preparedLineage.lineage;
   }
 
   async requireProject(
@@ -459,6 +564,93 @@ export class CharacterAuthoringService {
     const updated = parseCharacterProject({ ...update(current), updatedAt: this.now() });
     await this.options.repository.saveProject(updated, signal);
     return clone(updated);
+  }
+
+  private requireLineageRepository(characterProjectId: string): CharacterVersionLineageRepository {
+    if (this.options.lineage) return this.options.lineage;
+    throw authoringError(
+      'character-version-lineage-repository-unavailable',
+      'CharacterVersion lineage repository is required to create a usable version.',
+      characterProjectId,
+    );
+  }
+
+  private async requireOwnedPublication(
+    characterProjectId: string,
+    characterVersionId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterVersion> {
+    const publication = await this.options.repository.readPublication(characterVersionId, signal);
+    if (!publication) {
+      throw authoringError(
+        'character-version-lineage-version-unavailable',
+        `CharacterVersion '${characterVersionId}' is unavailable.`,
+        characterProjectId,
+      );
+    }
+    if (publication.characterProjectId !== characterProjectId) {
+      throw authoringError(
+        'character-version-lineage-owner-mismatch',
+        `CharacterVersion '${characterVersionId}' does not belong to exact CharacterProject '${characterProjectId}'.`,
+        characterProjectId,
+      );
+    }
+    return publication;
+  }
+
+  private async prepareLineage(
+    repository: CharacterVersionLineageRepository,
+    characterProjectId: string,
+    relation: CharacterVersionRelation,
+    signal?: AbortSignal,
+  ): Promise<{
+    readonly lineage: CharacterVersionLineage;
+    readonly relationAlreadyStored: boolean;
+  }> {
+    const current = await repository.readLineage(characterProjectId, signal);
+    if (current !== undefined && current.characterProjectId !== characterProjectId) {
+      throw authoringError(
+        'character-version-lineage-owner-mismatch',
+        `CharacterVersion lineage '${current.characterProjectId}' does not belong to exact CharacterProject '${characterProjectId}'.`,
+        characterProjectId,
+      );
+    }
+    if (current !== undefined) {
+      const existing = current.relations.find(
+        (candidate) => candidate.characterVersionId === relation.characterVersionId,
+      );
+      if (existing !== undefined) {
+        if (sameLineageRelation(existing, relation)) {
+          return { lineage: current, relationAlreadyStored: true };
+        }
+        throw authoringError(
+          'character-version-lineage-conflict',
+          `CharacterVersion '${relation.characterVersionId}' already has a different lineage relation.`,
+          characterProjectId,
+        );
+      }
+    }
+    return {
+      lineage: parseCharacterVersionLineage({
+        characterProjectId,
+        relations: [...(current?.relations ?? []), relation],
+      }),
+      relationAlreadyStored: false,
+    };
+  }
+
+  private async writeLineage(
+    repository: CharacterVersionLineageRepository,
+    version: CharacterVersion,
+    relation: CharacterVersionRelation,
+    lineage: CharacterVersionLineage,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    try {
+      await repository.saveLineage(lineage, signal);
+    } catch (cause) {
+      throw new CharacterVersionLineageWriteError(version, relation, { cause });
+    }
   }
 }
 
@@ -507,4 +699,19 @@ function authoringError(
   characterProjectId?: string,
 ): CharacterAuthoringError {
   return new CharacterAuthoringError(code, message, characterProjectId);
+}
+
+function sameLineageRelation(
+  left: CharacterVersionRelation,
+  right: CharacterVersionRelation,
+): boolean {
+  return (
+    left.characterVersionId === right.characterVersionId &&
+    left.parentCharacterVersionIds.length === right.parentCharacterVersionIds.length &&
+    left.parentCharacterVersionIds.every(
+      (parentCharacterVersionId, index) =>
+        parentCharacterVersionId === right.parentCharacterVersionIds[index],
+    ) &&
+    left.changeSummary === right.changeSummary
+  );
 }
