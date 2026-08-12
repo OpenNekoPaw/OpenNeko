@@ -56,17 +56,29 @@ The Character Workbench role/participant manager SHALL read and update provider/
 - **THEN** the next turn uses that participant's selected provider/model with an empty effective Skill/Tool receipt
 - **AND** the manager does not offer a successful Skill/Tool activation, republish CharacterVersion or alter another participant
 
-### Requirement: Workspace Agent creates Character drafts through public authoring capabilities
+### Requirement: Assistant and Workspace Agents create Character drafts through public authoring capabilities
 
-A Workspace-bound Agent MAY discover an authoring-only `character-creation` Skill and Chara-contributed capability after the existing Authoring target chooser creates and binds one exact fresh CharacterProject under an authorized Workspace/ContentProject. The primary workflow SHALL transform user prompt text and Agent-authorized reference projections into one reviewable Character definition, separate confirmed source facts from inferred suggestions, and fill only that bound draft through a confirmation-gated Chara authoring command. It MUST NOT allocate or infer a CharacterProject identity, rebind the Workspace Conversation, publish CharacterVersion, create Storyline/CharacterRun/Room/Companion continuity, or call a Character provider/runtime directly.
+An Assistant or Workspace Agent MAY discover one authoring-only `character-creator` Skill and Chara-contributed capability. Selecting or directly typing the Skill SHALL preserve the full `$character-creator <prompt>` invocation and open an operation-level destination chooser without changing the selected Entry mode or originating Conversation binding. The user SHALL explicitly choose the standalone Character library or an authorized Content Project and provide the new draft label before Desktop authorizes that exact root and Chara creates one fresh CharacterProject. The primary workflow SHALL transform prompt text and Agent-authorized reference projections into one reviewable Character definition, separate confirmed source facts from inferred suggestions, and fill only that exact draft through the standard identity-bound Tool approval. The Tool approval SHALL be the single mutation confirmation. It MUST NOT infer active/recent Workspace authority, publish CharacterVersion, create Storyline/CharacterRun/Room/Companion continuity, call a Character provider/runtime directly, or retain a `character-creation` compatibility alias.
 
 Preview, validation and improvement MAY operate on an exact created CharacterProject or authoring-test snapshot as explicit secondary workflows. Automated Character validation SHALL compose one tool-free Character responder and one independent Probe Agent. Evidence SHALL remain scoped to validation turns, reports MAY be saved only under the authorized project-local character-test artifact location, and suggested profile, relationship, knowledge or story changes MUST remain unapplied until the user confirms the existing Chara owning command.
 
-#### Scenario: Workspace Agent creates a draft character from prompt and material
+#### Scenario: Workspace Agent creates a project-local draft from prompt and material
 
 - **WHEN** the user asks the Workspace Agent to create a character from prompt text and exact authorized source references
-- **THEN** the Authoring chooser first creates and binds one exact fresh CharacterProject, after which the Skill proposes a bounded Character definition with source-backed facts separated from inferred suggestions and asks for mutation confirmation
-- **AND** confirmation fills only that draft without publishing a CharacterVersion or creating a Conversation, Room, continuity or memory record
+- **THEN** the operation chooser defaults visibly to that exact Content Project, creates and binds one fresh project-local CharacterProject only after explicit selection, and the Skill receives the complete prompt while the Workspace Conversation keeps its original binding
+- **AND** one standard Tool approval fills only that draft without a second text-confirmation gate, publishing a CharacterVersion, or creating a Conversation, Room, continuity or memory record
+
+#### Scenario: Global Assistant creates a standalone draft
+
+- **WHEN** the user selects or directly types `$character-creator <prompt>` in the global Assistant
+- **THEN** the composer preserves the complete input and offers the standalone Character library plus authorized project-local destinations without switching to Authoring mode
+- **AND** choosing the standalone library creates one exact fresh CharacterProject while the Agent Conversation remains Assistant-bound
+
+#### Scenario: Character creation destination is cancelled
+
+- **WHEN** the user cancels or fails the destination/name step before submitting `$character-creator <prompt>`
+- **THEN** the invocation remains local and fail-visible without starting a model turn
+- **AND** no CharacterProject, target receipt, Conversation rebind or active/recent Workspace inference occurs
 
 #### Scenario: Workspace Agent previews an exact draft Character
 
@@ -79,6 +91,22 @@ Preview, validation and improvement MAY operate on an exact created CharacterPro
 - **WHEN** an authorized Workspace Agent requests Character validation for an exact authoring-test snapshot
 - **THEN** a tool-free Character responder and separate Probe Agent produce a project-local report covering identity, voice, knowledge boundaries, relationships and reliability
 - **AND** no formal Dialogue/Room, CharacterRun, Companion continuity, Workspace tool grant or unconfirmed entity mutation is created
+
+### Requirement: Builtin Agent input descriptions follow the active Webview locale
+
+Agent Webview SHALL render OpenNeko builtin Skill and command descriptions through its locale-owned presentation catalog in Entry Skill cards and composer suggestions. Canonical descriptions, command names, source identity, invocation arguments, activation contracts and prompt content SHALL remain unchanged. Personal, project and plugin Skill descriptions plus command-artifact and plugin-command descriptions MUST remain package-authored and MUST NOT be replaced by an OpenNeko translation solely because their names match a builtin input.
+
+#### Scenario: User changes the Desktop locale to Simplified Chinese
+
+- **WHEN** Entry cards or composer suggestions contain OpenNeko builtin inputs and third-party inputs
+- **THEN** builtin descriptions are rendered in Simplified Chinese while third-party descriptions remain exactly as authored by their packages
+- **AND** invoking either entry still uses the original exact catalog identity and canonical Skill content
+
+#### Scenario: Keyboard selection does not add a leading accent bar
+
+- **WHEN** a composer command, Skill or mention candidate is hovered, focused or selected with the keyboard
+- **THEN** the row communicates its state through background, border and text contrast without a leading inset accent bar
+- **AND** the exact selected candidate, accessibility state and invocation behavior remain unchanged
 
 ### Requirement: External materials are companion-only authorized turn context
 

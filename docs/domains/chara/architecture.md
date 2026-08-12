@@ -4,7 +4,7 @@
 
 `@neko/chara` 是 CharacterProject/Version、CharacterStoryline authoring、Companion continuity、Dialogue/Room、CharacterRun、UserCharacterRelationship 和角色语义的 host-neutral owner。当前 foundation 中的 `CharacterStorylineRun`、运行时 transition/revision、run-scoped `CharacterMemoryScope`、Narrative external Composition requirement 和固定 Avatar Runtime Manager 是待删除的原型路径，不构成目标架构。
 
-目标调用链是：Chara 产出精确角色/模式/上下文投影，Agent application/session owner 执行 Conversation/turn，Host 组合 owner-qualified Scene surfaces，Desktop 只完成 Electron trust-boundary wiring。
+目标调用链是：Chara 产出精确角色/模式/上下文投影，Agent application/session owner 执行 Conversation/turn，Host 组合 owner-qualified Scene surfaces，Desktop 只完成 Electron trust-boundary wiring。跨资源、Entity 与 World 的组合边界见 [`creative-resource-semantic-boundaries.md`](../../architecture/creative-resource-semantic-boundaries.md)。
 
 ## 五层分析
 
@@ -57,6 +57,27 @@ CharacterConversationSelection
 | Window Scene、slot 和 presentation geometry                          | Host / Desktop Window presentation                      |
 
 UI selection、Timeline、context cache、transcript summary、模型输出和 active/recent identity 都不是领域事实 owner。
+
+## 创建、管理与 Project Entity 关联
+
+手动输入、提示词、文件 evidence、普通 Asset representation 和 confirmed Entity context 都是同一个
+fresh CharacterProject 创建操作的 seed。快速创建可以跳过 Studio，但必须写入与 Studio 相同的 Chara
+repository；Studio 只是继续编辑 definition、representation、voice、storyline 与版本图的创作工作区，
+不拥有第二套角色类型、格式或保存路径。
+
+`.neko-character` 是独立的 untrusted ZIP 导入导出 workflow，用于恢复精确用户管理的角色记录；它不是
+Character Creator seed、实时 repository 或 Workspace。创建与导入都不得自动发布 CharacterVersion、
+启动 Dialogue/Room、选择 provider/model 或授予 Agent 能力。
+
+Standalone Character 不需要 Entity。项目内 Character 由 Project composition owner 在精确
+`contentProjectId` 下保存 `entityId + characterProjectId` 关联；CharacterProject 不保存项目
+`entityId`。一个项目本地
+Character 必须有一个精确 Character Entity association，但 Character Entity 可以没有 CharacterProject。
+Chara 只在关联有效且用户选择了精确 CharacterVersion 时提供 Open Character、Open Studio 或 Start
+Interaction handoff。Entity 不拥有 Dialogue、Room、Embody、Conversation 或 Agent launch lifecycle。
+
+项目内创建跨 CharacterProject、membership、Entity 与 association 时，部分 commit 必须返回可见 receipt，
+只重试缺失的精确步骤；不得删除已保存用户内容、改绑另一角色，或回退 active/recent Project。
 
 ## Conversation mode contract
 

@@ -91,12 +91,16 @@ runtime 入口。
 
 ### `@neko/project`
 
-`@neko/project` 只拥有 Content Project composition：项目本地 Character/World target membership、精确外部 publication reference、组合校验与 target-tree projection。它不拥有 Content、Character 或 World payload，也不解释 Workspace raw path。
+`@neko/project` 只拥有 Content Project composition：项目本地 Character/World target membership、精确外部 publication reference、ProjectEntity/CharacterProject association、组合校验与 target-tree projection。它不拥有 Content、Entity、Character 或 World payload，也不解释 Workspace raw path。
 
 - `@neko/project-node` 只在 Host 已授权的 Workspace root 内原子读写 `neko/project-composition.json`，不得扫描其他 Workspace、读取用户级 SQLite 或提供 fallback repository。
 - `@neko/project-webview` 拥有 Project catalog 和 composition browser presentation；Desktop 只组合其 public Root。
 - standalone Character/World library root 由 Host settings 授权，portable locator 分别为 `${NEKO_HOME}/libraries/characters` 与 `${NEKO_HOME}/libraries/worlds`；Renderer 和领域事实不得接收展开后的绝对路径。
 - Project-local Character/World facts 仍由 `@neko/chara` / `@neko/world` 及其 Node repositories 拥有，Project composition 只保存 exact identity。
+- standalone Character 不要求 Entity；项目本地 Character 由 Project composition 保存精确
+  `contentProjectId` owner 下的 `entityId + characterProjectId` 关联。不得把 `entityId` 写入
+  CharacterProject，或按名称、
+  active/current Project 自动推断关联。
 
 ### `@neko/generation`
 
@@ -310,10 +314,10 @@ Tools media-diff 原型因没有 Desktop producer、产品入口或运行态验�
 
 Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 Agent、应用根或现有 Assets/Preview 内部。`@neko/chara` 与 `@neko/world` 均已建立 Foundation owner；完整 Character Storyline/Memory 和 AI-native World Story/Gameplay/Experience/Presentation 仍按各自活跃 OpenSpec 演进：
 
-| 包                                                         | 状态                                   | 聚合主线                                                       | 主要职责                                                                                                                       | 关键边界                                                                                                                                                                    |
-| ---------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 包                                                         | 状态                                   | 聚合主线                                                                                            | 主要职责                                                                                                                                             | 关键边界                                                                                                                                                                              |
+| ---------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion + Storyline authoring + Companion continuity + Dialogue/Room` | 角色背景故事与原生背景设定、角色创作与发布、个人故事线创作、日常角色/关系记忆、Dialogue/Chatroom policy、上下文投影、持久化和 package-owned 产品视图 | 完全复用 AgentSession；Narrative 不绑定外部 Composition/World/Save；Entity、Assets、Voice、Presentation、Media/Game 只通过公共 ref/port/provider 组合，Chara 不拥有外部 facts/runtime |
-| `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Foundation / Node adapter / browser UI | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` | 世界书、事实、规则/事件、运行、存档、分支、WorldView、Foundation 创作与确定性检查；Node/Webview 分别只拥有 adapter 与展示状态  | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；基础预览不得冒充需要 Story/Experience/实时 AI 的完整 World 成功路径                                 |
+| `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Foundation / Node adapter / browser UI | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`                                      | 世界书、事实、规则/事件、运行、存档、分支、WorldView、Foundation 创作与确定性检查；Node/Webview 分别只拥有 adapter 与展示状态                        | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；基础预览不得冒充需要 Story/Experience/实时 AI 的完整 World 成功路径                                           |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
 Agent、Renderer、Device、表现 runtime 和 host adapter。Agent package 不导入 Character/World；

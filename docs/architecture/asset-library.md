@@ -1,17 +1,20 @@
 # 资源库架构：媒体库与素材库
 
-更新日期：2026-08-05
+更新日期：2026-08-12
 
 > 当前稳定约束仍是：普通文件通过 **Media Library / 媒体库** 和 `ContentLocator`
 > 直接访问，不需要 catalog membership。独立 **Asset Library / 素材库** 仅管理显式导入、
 > 安装或发布的版本化素材包，其完整实现由活跃 OpenSpec
 > [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
-> 跟踪；不得据此把尚未完成的云同步描述为当前能力。
+> 跟踪；资源展示与 Entity/Character/World 的边界由
+> [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
+> 收敛。不得据此把尚未完成的云同步描述为当前能力。
 
 本文定义媒体库文件入口、素材包生命周期、工作区 link、搜索投影、显式操作及其与
 Project Entity、Content I/O、DocumentAccess、生成结果和 package owner 的边界。跨领域决策见
 [`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md)，
-路径安全见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)。
+路径安全见 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)，跨领域 owner 模型见
+[`creative-resource-semantic-boundaries.md`](creative-resource-semantic-boundaries.md)。
 
 ## Media Library 职责
 
@@ -39,7 +42,7 @@ Project Entity、Content I/O、DocumentAccess、生成结果和 package owner �
   管理素材包；
 - 管理依赖闭包、安装、更新、卸载、发布、许可/来源和完整性诊断；
 - 以本地已验证素材包作为离线运行 authority，通过云端 repository 复制不可变 revision；
-- 作为 Entity Asset 的通用发布与分发 owner，但不拥有可变 Project Entity 事实。
+- 为普通可复用 representation 提供 package owner；不打包或发布 Project Entity、Character 或 World 事实。
 
 素材库不得扫描或上传工作区、Media Library link target 或 `neko/entities.json`。工作区文件、
 linked file 和 provider 已同步到本地目录的文件仍走原 `ContentLocator`；只有用户明确发布为
@@ -59,7 +62,7 @@ Physical local/NAS/synchronized directory
 workspace-file ContentLocator: neko/assets/<libraryName>/...
                   |
                   +----> ContentReadService / ContentRepresentationService
-                  +----> Project Media facet / search / recent projection
+                  +----> Resources presentation / search / recent projection
                   +----> EntityRepresentationBinding (explicit user decision)
 
 Explicit import/install/publish
@@ -96,7 +99,7 @@ external Media Library 字节。项目打开时，Desktop 从 Canvas、Cut、Ent
 等 owning codec 的权威引用重建必需库，不读取 `library.json`、target registry 或缓存
 membership。
 
-项目媒体 facet 区分：
+项目 Resources 中的媒体来源区分：
 
 - `available`、`required-unlinked`、`global-connection-missing`；
 - `target-unavailable`、`content-incomplete`、`entry-conflict`；
@@ -109,16 +112,17 @@ SQLite metadata 都不得修改 link、项目事实或 target。
 需要把项目交给另一台机器且不依赖 relink 时，用户显式创建独立便携快照。Desktop 在 sibling
 staging 中只收集权威引用的 linked bytes，校验 fingerprint，重写 staged owning documents，
 完整验证后一次 atomic rename 发布。source workspace 与 external library 全程只读；它不是
-普通同步、add/relink 或项目 Media facet 的隐式步骤。
+普通同步、add/relink 或项目 Resources presentation 的隐式步骤。
 
 全局资源中心与项目资源管理器是独立 surface：前者管理机器级连接和 owned Asset，后者只浏览
 当前项目、投影缺失需求并提交恢复 intent。两者不得共享 selection、filter、layout 或 active
 state；便携快照进度属于项目生命周期 surface。
 
-项目 Resource Browser 固定提供 `files`、`media`、`assets` 和 `entities` 四个 owner-preserving
-facet。`assets` 结果始终保留精确 Asset identity，不因选择、预览或搜索而复制成 Project Entity；
-`entities` 结果保留 Project Entity 或 candidate identity。facet 切换只是 Resource Browser 展示状态，
-不得创建第二个 Workbench/Inspector tab strip。
+项目 Resource Browser 提供一个 Resources presentation，并可按 Project Files、Shared Media、
+Installed Assets、Project Elements 等 owner-preserving 来源筛选。来源不是固定的平级业务对象：筛选
+只改变 package-owned 展示状态，结果始终保留原 owner 与精确 identity，不因选择、预览、搜索或关联
+Character 而复制或转换记录。Resource Browser 不建立第二个可变 catalog、Workbench 或 Inspector
+tab strip。
 
 全局资源中心由 Assets-owned `AssetCenterSession` 独立拥有 catalog、filter、selection 和 revision。
 在统一 Desktop Workbench 中，Asset Management Root 始终位于 Main；选择可预览内容后，Assets
@@ -210,18 +214,10 @@ authority。`EntityRepresentationBinding` 直接保存 workspace、document-entr
 
 文件移动或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以给出候选，但只有显式 rebind 可以修改 confirmed binding；不得通过旁路 catalog、fingerprint registry 或文件名猜测自动迁移。
 
-Entity Asset 是特殊的 `identity` 素材包：它保存冻结的语义快照和 package-owned representation，
-复用素材库 revision、dependency 和云分发。安装 Entity Asset 不自动创建或更新 Project Entity；
-实例化后生成独立 Project Entity ID 并记录 origin revision，后续更新必须由 Entity owner 做
-three-way diff 与显式 apply。完整目标由
-[`manage-project-entities-as-publishable-assets`](../../openspec/changes/manage-project-entities-as-publishable-assets/)
-跟踪。
-
-Entity owner 已提供 instantiate、publish、diff 和 apply-update 的 typed intent/service contract，
-Resource Browser 也能按 capability 投影这些操作；但在 manifest-backed package runtime、精确 revision
-reader、publication lifecycle 和 remote provider 接入前，生产 Inspector 必须隐藏这些 capability 并
-显示 owner-qualified blocker。当前 flat global Asset 文件不能作为兼容 provider，也不能让这些操作
-返回成功。
+Asset package 只打包普通可复用资源。Project Entity 保持项目本地语义事实；Character portability 使用
+Chara-owned `.neko-character`；World portability/publication 由 World 在依赖闭包完整时定义。Entity Asset
+publish、instantiate、provenance 和 three-way update 已退出当前 canonical 产品路径。已存在的相关 bytes
+必须保留并显示 unsupported diagnostic，不得经普通 Asset import 推断或迁移为其他领域记录。
 
 ## 存储归属
 
@@ -253,6 +249,7 @@ reader、publication lifecycle 和 remote provider 接入前，生产 Inspector 
 
 - 任何媒体文件无需 catalog membership 即可读取、预览和引用。
 - 只有显式 import/install/publish 才创建 Asset identity；文件 discovery 与 provider-synced directory 不创建素材。
+- Asset package 不创建、复制或发布 Project Entity、CharacterProject 或 WorldProject identity。
 - 已安装素材离线可用；云端失败、remote tombstone 或 projection 重建不删除本地 package 和项目事实。
 - link target 不出现在项目事实、Agent payload、Webview state 或 safe diagnostic。
 - projection 可删除重建，且不会创建 Entity facts。

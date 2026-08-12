@@ -1,5 +1,9 @@
 ## 1. Contracts and package ownership
 
+> Entity Asset package types and Project Entity conversion are superseded by
+> `simplify-resource-entity-character-world-boundaries`. Every task in this change applies only to ordinary
+> reusable Asset packages.
+
 - [ ] 1.1 Replace flat global Asset item identity with strict manifest, immutable revision, digest, member, dependency, lifecycle, and diagnostic contracts exported by `@neko/assets-domain`; narrow `remote`/`registry` source fields to portable non-secret provenance.
 - [ ] 1.2 Add `AssetRemoteRepositoryPort`, instance-scoped sync operation/events, expected-head publication, tombstone, and transfer-plan contracts without provider SDK or credential types.
 - [ ] 1.3 Add contract/codec tests for valid packages, unknown fields, absolute/cache/provider paths, revision-digest collisions, dependency cycles, stale request events, and forbidden ordinary-file promotion.
@@ -24,7 +28,9 @@
 ## 4. Metadata and Resource Browser
 
 - [ ] 4.1 Add rebuildable Asset manifest/search, remote-head, reconciliation-cursor, and transfer-checkpoint storage through the local-metadata public port with no credentials or installed-byte authority.
-- [ ] 4.2 Replace the flat Asset surface with a distinct Asset Library source showing package identity, revision, dependency, local/remote, transfer, conflict, tombstone, and account states.
+- [ ] 4.2 Replace the flat Asset surface with an owner-preserving Installed Assets source/filter inside the
+      unified Resources presentation, showing package identity, revision, dependency, local/remote, transfer,
+      conflict, tombstone and account states without creating a peer semantic authority.
 - [ ] 4.3 Add typed import, install, update, publish, sync, cancel, inspect, and uninstall intents while keeping ordinary files on Media Library/content ports.
 - [ ] 4.4 Add Webview consumer tests proving cross-source search preserves owner identity and no file discovery creates Asset membership.
 - [x] 4.5 Rename the ordinary delete affordance/confirmation to record removal and add restart/source-preservation UI coverage.

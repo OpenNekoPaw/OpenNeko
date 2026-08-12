@@ -1,3 +1,7 @@
+> Gated by [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/):
+> Foundation surfaces may consume only existing exact World owners. Experience-ready UI or success paths
+> remain unavailable until their runtime producer, persistence and product qualification are complete.
+
 ## Why
 
 Headless World 能力只有通过 package-owned Interaction Surface 和薄 Desktop composition 才能形成真实用户闭环。该工作必须独立于业务事实与 provider/Gameplay 实现，并在产品晋级后才能开放默认入口。

@@ -47,6 +47,10 @@
 
 ## 6. Quick creation and exact handoffs
 
+> All quick/manual/evidence/Asset/Entity-context seeds must commit through the same fresh CharacterProject
+> creator. Project-local success also requires exact Project membership and Entity/Character association;
+> partial completion remains visible and retries only the missing exact step.
+
 - [ ] 6.1 Add a typed Character Management quick-generation intent that opens/focuses the canonical Agent Entry/Composer with exact builtin `character-creator` activation and a minimal management return identity; do not create a management-owned Agent runtime or duplicate provider/model controls.
 - [ ] 6.2 Preserve the complete prompt, mentions and authorized references through the handoff, then reuse the existing operation-level standalone/project-local destination chooser, fresh-target receipt and standard Tool approval without changing Entry mode or inferring current/recent Workspace.
 - [ ] 6.3 Project exact `View Character` and `Open Studio` actions from successful Character Creator Tool results; selection/navigation occurs only when the user invokes one, and cancellation creates no Character/Project/runtime facts.

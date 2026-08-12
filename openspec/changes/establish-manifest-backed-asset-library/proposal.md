@@ -1,3 +1,8 @@
+> Scope reconciliation (2026-08-12):
+> [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/)
+> retains ordinary managed Asset packages but supersedes `identity`/Entity Asset conversion and publication.
+> Asset results appear as an owner-preserving source/filter inside Resources, not a peer semantic authority.
+
 ## Why
 
 OpenNeko already exposes a global Asset Library runtime and an `identity` Asset type, but current

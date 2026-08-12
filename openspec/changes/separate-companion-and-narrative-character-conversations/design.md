@@ -11,17 +11,17 @@
 
 ### Ownership and runtime boundaries
 
-| Responsibility | Owner/package | Canonical producer | Consumer/runtime boundary |
-| --- | --- | --- | --- |
-| Character/Storyline authoring facts | `@neko/chara` | Character authoring/storyline application services | Chara Webview、Agent context projector |
-| Companion continuity and accepted memories | `@neko/chara` | CharacterMemory/UserCharacterRelationship services | Character turn context materializer |
-| Conversation, Turn, transcript, compaction, participant model/Skill/Tool/Approval/permission/provider execution | `@neko/agent-runtime` | Agent application/session/configuration owner | Agent Webview、Chara domain-binding/context provider |
-| Workspace Character creation/preview/validation | `@neko/chara` public authoring primitives composed by Agent | owner-qualified Chara authoring capability operations | Workspace Agent draft artifact and confirmation-gated CharacterProject mutation |
-| External material bytes and access | Workspace/Content/Assets/Host owner | owner-qualified context provider | Agent turn context only |
-| Character/Room Scene contract | `@neko/host` | Desktop Shell application service | Desktop Renderer composition |
-| Browser-only Character surfaces | `@neko/chara-webview` | Chara projections | Desktop portal slots |
-| Local persistence | `@neko/chara-node` | Chara repository ports | Node filesystem boundary |
-| Electron sender, Window, resource lease and native path authorization | `apps/neko-desktop` | Main/preload concrete adapters | Electron Main/preload/Renderer trust boundary |
+| Responsibility                                                                                                  | Owner/package                                               | Canonical producer                                    | Consumer/runtime boundary                                            |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Character/Storyline authoring facts                                                                             | `@neko/chara`                                               | Character authoring/storyline application services    | Chara Webview、Agent context projector                               |
+| Companion continuity and accepted memories                                                                      | `@neko/chara`                                               | CharacterMemory/UserCharacterRelationship services    | Character turn context materializer                                  |
+| Conversation, Turn, transcript, compaction, participant model/Skill/Tool/Approval/permission/provider execution | `@neko/agent-runtime`                                       | Agent application/session/configuration owner         | Agent Webview、Chara domain-binding/context provider                 |
+| Assistant/Workspace Character creation/preview/validation                                                       | `@neko/chara` public authoring primitives composed by Agent | owner-qualified Chara authoring capability operations | Agent turn artifact and confirmation-gated CharacterProject mutation |
+| External material bytes and access                                                                              | Workspace/Content/Assets/Host owner                         | owner-qualified context provider                      | Agent turn context only                                              |
+| Character/Room Scene contract                                                                                   | `@neko/host`                                                | Desktop Shell application service                     | Desktop Renderer composition                                         |
+| Browser-only Character surfaces                                                                                 | `@neko/chara-webview`                                       | Chara projections                                     | Desktop portal slots                                                 |
+| Local persistence                                                                                               | `@neko/chara-node`                                          | Chara repository ports                                | Node filesystem boundary                                             |
+| Electron sender, Window, resource lease and native path authorization                                           | `apps/neko-desktop`                                         | Main/preload concrete adapters                        | Electron Main/preload/Renderer trust boundary                        |
 
 `apps/neko-desktop` 保留的生产逻辑必须真实依赖 Electron sender/WebContents、Window/Scene identity、preload IPC、本地路径授权或资源 lease。Conversation mode、Storyline selection、memory eligibility、context filtering、participant scheduling 和 Presentation selection policy 都是 host-neutral 业务行为，必须位于 owning package；Desktop 只验证 sender-bound request、调用 public port 并投影结果。
 
@@ -34,7 +34,7 @@
 - 让 Companion 与 Narrative 作为标准 Neko Agent domain binding 执行；Chara 只提供角色/模式/记忆/Storyline/Room 上下文，Agent 继续唯一拥有 Conversation、Turn、模型、Skill、Tool、Approval 与权限。
 - 让 Companion 在精确参与者 Agent 配置和标准授权策略下调用 Agent Skill/Tool，并让 Narrative 在同一 Agent 运行链上强制不注入、不暴露和不执行任何 Skill/Tool。
 - 让 Character/Room Workbench 的角色/参与者管理器管理每个精确 Agent Conversation 的 provider/model 与 Companion 能力，而不是读取一个全局 Character 模型设置。
-- 让 Workspace-bound Agent 通过标准 capability 与 authoring-only `character-creation` Skill 创建可审阅的 CharacterProject draft，并保留预览、验证和改进辅助操作，而不重绑 Workspace Conversation 或复制 Character runtime。
+- 让 Assistant 与 Workspace Agent 通过标准 capability 与 authoring-only `character-creator` Skill 创建可审阅的 standalone 或 project-local CharacterProject draft，并保留预览、验证和改进辅助操作，而不切换 Entry 模式、重绑 Conversation 或复制 Character runtime。
 - 允许 Companion Character turn 使用授权外部资料，同时保持资料、模型输出、角色事实和长期记忆的 owner 分离。
 - 将 Storyline 收敛为稳定 authoring identity、draft、不可变 publication 和节点叙事上下文；运行时只读消费。
 - 删除 Runtime StorylineRun/transition/CAS 与 Narrative external Composition 路径，不保留兼容或 fallback。
@@ -106,7 +106,11 @@ The already introduced `CharacterCompanionAssistantLane`, its AssistantSession s
 
 Alternative considered: create a restricted role-only Agent runtime. Rejected because it would still be a Character-specific execution path and would prevent qualified Characters from using standard Agent Skill/Tool capabilities. Model comparison instead records the exact standard Agent configuration used for each independent Character Conversation.
 
-Workspace-bound Agent Conversations may discover an authoring-only `character-creation` Skill and Chara-contributed authoring capability through the normal Agent catalog. The existing Authoring target chooser first creates and binds one exact fresh CharacterProject under an authorized Workspace/ContentProject; the Skill never allocates or infers that owner. An exact creation invocation consumes only user prompt text and Agent-authorized reference projections, produces one proposed Character definition with confirmed facts separated from inferred suggestions, and fills the bound draft only after explicit confirmation. The originating Workspace Conversation keeps its owner; creation never publishes CharacterVersion, creates CharacterRun/Room/continuity, or promotes model output to canon automatically.
+Assistant and Workspace Agent Conversations may discover one authoring-only `character-creator` Skill and Chara-contributed authoring capability through the normal Agent catalog. Selecting or directly typing the Skill preserves the complete `$character-creator <prompt>` input and opens a compact operation-level destination chooser without changing the top-level Entry mode or Conversation binding. The user explicitly chooses a standalone Character library or an authorized Content Project and supplies the new draft identity label; Desktop authorizes that exact root, Chara creates one exact fresh CharacterProject, and Agent freezes the resulting authoring-target receipt for the creation operation. The chooser never infers active/recent Workspace, and cancellation creates no target, Conversation or model turn.
+
+The exact target receipt is mutation authority, not Conversation ownership. A global Assistant remains bound to its Assistant space when creating a standalone or explicitly selected project-local draft. A Workspace Conversation remains bound to its original Workspace when creating a local or standalone draft. The selected target root may therefore differ from the Conversation context root, but the standard authoring mutation authority validates the exact Host grant and CharacterProject again when the Tool executes. This is one target-qualified Tool path, not a second Character creation runner or hidden Conversation rebind.
+
+An exact creation invocation consumes only the preserved user prompt text and Agent-authorized reference projections, produces one proposed Character definition with confirmed facts separated from inferred suggestions, and submits the resulting `fillDraft` mutation through the standard identity-bound Tool approval. That Tool approval is the single mutation confirmation: the Skill must not add a preceding natural-language confirmation that creates a second gate. The originating Workspace Conversation keeps its owner; creation never publishes CharacterVersion, creates CharacterRun/Room/continuity, or promotes model output to canon automatically.
 
 Creation is the primary Chara Skill workflow. Preview, validation and improvement remain secondary, explicit authoring operations over an exact CharacterProject or authoring-test snapshot. They do not create a second roleplay runtime or turn Workspace Agent into the formal Character Conversation owner.
 
@@ -213,6 +217,18 @@ It must not select mode, resolve continuity compatibility, filter Narrative fact
 
 All new package paths and isolated fixtures remain unreachable from the production Character Entry until the existing promotion contract is satisfied by a later change. The gate is not a feature flag and no legacy Character route remains as fallback. Visible unavailable behavior and durable-record preservation continue to be tested at Desktop Host and Agent Entry boundaries.
 
+### 12. Builtin Agent input descriptions are localized only at the Webview presentation boundary
+
+The canonical Skill and command catalogs keep their exact portable descriptions used for discovery, execution and Agent behavior. Agent Webview maps an exact OpenNeko builtin Skill or command identity to a locale-owned presentation key when rendering Entry cards or composer suggestions. Locale switching therefore rebuilds display text without changing command names, Skill content, catalog identity, invocation arguments, prompt injection or execution receipts.
+
+Personal, project and plugin Skills plus project and plugin commands retain the description authored by their package and are never overwritten by a name-only OpenNeko translation. An unknown builtin description also remains visible as its canonical source text; missing presentation coverage cannot make an input unavailable or substitute another input. This is a bounded presentation projection, not a localized command alias, Skill protocol, package mutation or second catalog authority.
+
+Agent Evaluation disposition is `excluded`: this change does not alter command or Skill selection, activation, prompt composition, Tool routing or model behavior. Deterministic Webview presenter, menu, locale-bundle and Entry-card tests prove the affected presentation path; real provider execution cannot observe a different Agent behavior from this projection-only change.
+
+### 13. Composer candidate selection uses background and border without a leading accent bar
+
+Composer command, Skill and mention candidates share one row presentation. Hover, focus and keyboard selection retain their existing background, border, text contrast, `aria` state and navigation behavior, but do not render an inset leading-edge accent. This is a visual-only change at the Webview boundary and does not alter candidate ranking, selected identity or invocation.
+
 ## Risks / Trade-offs
 
 - [Stable continuity crosses CharacterVersion boundaries incorrectly] → every memory keeps exact source version; the canonical projector validates compatibility against the selected publication and exposes local diagnostics without rewriting facts.
@@ -220,7 +236,8 @@ All new package paths and isolated fixtures remain unreachable from the producti
 - [A Character tool call bypasses Agent authorization] → Character context may influence intent but Agent remains the only Skill/Tool catalog, Approval and permission owner; validate exact Conversation configuration and standard tool lifecycle in producer/consumer tests.
 - [Narrative accidentally inherits Companion capabilities] → Agent intersects the exact participant configuration with the frozen mode constraint, freezes an empty Narrative Skill/Tool receipt and rejects activation or tool requests before prompt exposure/provider execution.
 - [One role's model or capabilities leak to Room siblings] → role/participant manager commands name the exact participant Agent Conversation; receipts and tests prove updates affect only later turns for that owner and never a global Character setting.
-- [Workspace Chara invocation becomes a hidden roleplay path] → expose only owner-qualified Chara capability operations through the Agent catalog, keep Workspace binding unchanged, return explicit artifacts/Conversation handoff refs and poison direct responder/runtime calls outside the public primitives.
+- [Assistant/Workspace Chara invocation becomes a hidden roleplay path] → expose only owner-qualified Chara capability operations through the Agent catalog, keep Conversation binding unchanged, return explicit artifacts/Conversation handoff refs and poison direct responder/runtime calls outside the public primitives.
+- [Global and project-local destinations become implicit routing] → require an explicit operation-level destination and fresh CharacterProject label, freeze the exact Host grant/target receipt, and create nothing on cancellation; never choose active/recent Workspace.
 - [Character validation mutates facts or gains Workspace tools] → validation responder always uses no tools, evidence stays turn-scoped, reports are project-local and every suggestion requires the existing confirmation path.
 - [Removed Assistant lane remains reachable through stored rows or package exports] → delete its contract/service/repository/table/exports and add source/decode poison tests; preserve any pre-promotion fixture rows only as invalid local diagnostics or explicit offline cleanup data.
 - [External material silently becomes memory or canon] → per-turn owner refs only; promotion requires an explicit Chara candidate/authoring command and provenance receipt.
@@ -231,6 +248,8 @@ All new package paths and isolated fixtures remain unreachable from the producti
 - [Large Character/Room context exceeds model budget] → package-owned bounded projection selects current node, accepted memory view and visibility-filtered RoomView; full Timeline and author notes remain UI-only.
 - [Old StorylineRun records are lost] → preserve stored bytes and catalog diagnostics; provide explicit offline export/cleanup or author reconstruction, with no silent conversion into new Storyline facts.
 - [Overlapping active OpenSpec changes encode opposite behavior] → update or supersede conflicting requirements before implementation and run cross-change OpenSpec checks; no code lands while both canonical paths are claimed.
+- [A third-party Skill reuses an OpenNeko builtin name] → localize only entries whose Host source is exactly `builtin`; personal, project and plugin entries keep their package-authored description.
+- [A third-party command reuses an OpenNeko builtin name] → localize only entries whose Host source is exactly `builtin`; command artifacts and plugin commands keep their package-authored description and exact executable identity.
 
 ## Migration Plan
 
@@ -240,7 +259,7 @@ All new package paths and isolated fixtures remain unreachable from the producti
 4. Introduce stable Companion continuity and exact memory provenance, then atomically replace CharacterRun-owned memory scope reads. Validate existing accepted memory data without rewriting source content.
 5. Replace Narrative external Composition rejection with independent exact Narrative launch and bounded node context. Delete StorylineRun creation/transition/CAS and poison the removed public operations.
 6. Delete the package-only Companion Assistant lane and migrate Character/Room execution from Desktop special branches and direct AgentWorkspace calls to the canonical Agent launch/turn/domain-binding path. Register Chara context and mode-constraint providers, keep Agent-owned per-participant model/Skill/Tool/permission receipts, prove Companion tool calls use the normal Agent lifecycle and Narrative exposes none.
-7. Register the authoring-only `character-creation` Skill and owner-qualified creation/preview/validation primitives as a standard Workspace Agent capability. Keep Workspace binding stable, fill only the confirmation-gated exact CharacterProject fresh draft, keep validation responders tool-free, and remove any direct package/runtime shortcut.
+7. Register the authoring-only `character-creator` Skill and owner-qualified creation/preview/validation primitives as a standard Assistant/Workspace Agent capability. Preserve direct typed invocation arguments, collect an explicit standalone/project-local destination and create an exact fresh CharacterProject before model execution, keep the originating Conversation binding stable, use the standard Tool approval as the single mutation confirmation, keep validation responders tool-free, and remove any direct package/runtime shortcut or legacy Skill alias.
 8. Replace fixed Avatar Main/Runtime summary with strict Presentation Main, Companion/Narrative context manager, participant manager and separate Timeline projections. Make provider/model and Companion capability controls target an exact participant through Agent public configuration ports. Update Host Scene, preload and Desktop composition atomically.
 9. Run focused package, Node persistence, Agent, Host, Webview and Desktop tests/typechecks plus boundary, internal-versioning, legacy-debt and unused-code gates. Run visible isolated Electron flows for every reachable prototype state.
 10. Add provider-backed Agent Evaluation covering prompt/material-driven Character draft creation, explicit confirmation, no implicit publication/runtime creation, the same minimal CharacterVersion across exact per-participant Agent configurations, a Companion tool call, Narrative no-tool enforcement, Companion memory/material context, validation and Room participant isolation. Keep unavailable provider/capability/permission failures blocked rather than adding Character fallback execution.

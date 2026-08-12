@@ -1,64 +1,62 @@
 # 统一实体架构
 
-更新日期：2026-08-05
+更新日期：2026-08-12
 
-> Project Entity 单一文档、候选/可用性投影、Resource Browser Entity Inspector 与基础
-> confirm/edit/bind/unbind Desktop 路径已经建立。引用安全的 merge/deprecate 只有在全部 reference
-> owner 可参与时才开放。Entity Asset 发布/安装的领域 contract 和确定性 service 已建立，但生产
-> Asset provider 仍由活跃 OpenSpec
-> [`manage-project-entities-as-publishable-assets`](../../openspec/changes/manage-project-entities-as-publishable-assets/)
-> 与 [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
-> 跟踪；不得据此把 Asset publish/install/cloud sync 描述为当前可用能力。
+> Project Entity 的 repository、候选/可用性投影和基础 Inspector 已建立。当前收敛目标由
+> [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
+> 跟踪：Entity Asset 与 Entity-owned Character interaction 退出 canonical 路径；严格数据 contract
+> 必须在旧记录资格化后实施。本文不把尚未完成的路径描述为可用能力。
 
-[English](unified-entity.en.md)
-
-本文定义 Creative Entity 的身份、候选、representation binding、requirement、视觉草案和搜索投影。媒体文件入口见 [`asset-library.md`](asset-library.md)，跨领域决策见 [`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md)。
+本文定义 Project Entity 的最小语义身份、候选、representation binding 和搜索投影。文件与素材入口见
+[`asset-library.md`](asset-library.md)，完整跨领域关系见
+[`creative-resource-semantic-boundaries.md`](creative-resource-semantic-boundaries.md)。
 
 ## 核心原则
 
-- Project Entity 回答“这是谁/是什么”；Media Library 回答“哪些文件可直接访问”；Asset Library
-  回答“哪些可复用版本化素材已安装或可分发”。
-- character、scene、object、location 和 style 只有一个 semantic identity authority。
+- Project Entity 回答项目内“这是谁/是什么”，不回答“角色如何运行”或“世界当前发生了什么”。
+- character、scene、object、location 和 style 在一个项目内只有一个 semantic identity authority。
 - Entity ID 是持久锚点；名称、alias、路径和表现可以变化。
-- 用户确认事实高于 AI、Importer、Matcher 与 Search 的推断。
-- candidate、suggestion、draft、mention 和 semantic evidence 不能静默覆盖 confirmed Entity。
-- Entity 不拥有文件、generated output、document entry、package、thumbnail 或 cache。
-- 删除资源不删除 Entity；deprecate Entity 不删除资源或历史引用。
-- Project Entity 是可变项目实例；Entity Asset 是不可变发布快照，两者不做隐式双向同步。
+- 用户确认事实高于 AI、Importer、Matcher 与 Search 推断。
+- candidate、suggestion、draft、mention 与 semantic evidence 不能静默覆盖 confirmed Entity。
+- Entity 不拥有文件、Asset package、Character、World、thumbnail、cache、usage 或 interaction lifecycle。
+- 删除资源不删除 Entity；deprecate Entity 不删除资源、角色、世界或历史引用。
 
-## 核心模型
+Entity 是跨文档语义锚点，不是 Character/World 的基类。Standalone Character/World 可以没有 Entity；
+项目组合通过精确 identity 关联它们。
+
+## 最小模型
 
 ```text
-CreativeEntity
-  id, kind, canonicalName, displayName, aliases, status, metadata
+ProjectEntity
+  entityId, projectId, kind
+  canonicalName, displayName, aliases
+  status, replacementEntityId?
+  createdAt, updatedAt
         |
         v
 EntityRepresentationBinding
-  role, representation, status, availability, default, source, confidence
-        |
-        v
-ContentLocator
-  workspace-file | document-entry | generated-output | package-resource
+  role, durable resource ref, status, default, source, confidence
         |
         v
 ContentReadService / ContentRepresentationService / owner adapter
 ```
 
-Alice 不是一张图片或一个模型文件。Alice 是稳定实体；立绘、Live2D、声音、动作和参考图是可以独立变化的 representation。
+Entity contract 不提供任意 facts bag。Character/World 定义、provider/model、运行状态、记忆、故事线、
+使用次数、出现位置、包来源和 publication revision 都属于其他 owner 或可重建投影。
 
-## 数据模型与存储目标
+## 数据归属
 
-| 数据                                     | 语义                                                                                           | Owner / location                                           |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `ProjectEntity`                          | 稳定 project identity、kind、名称、alias、status、accepted semantic metadata、Asset provenance | `neko/entities.json` canonical project facts               |
-| `CreativeEntityCandidate`                | 自动发现但未经确认的身份候选                                                                   | user SQLite projection；显式决策才进入 project fact        |
-| `EntityRepresentationBinding`            | Entity 与 durable representation 的关系                                                        | canonical `neko/entities.json` fact                        |
-| `EntityAssetRequirement`                 | portrait/live2d/voice 等缺失需求；名称暂保留为领域术语                                         | owning authoring workflow；不是 identity fact              |
-| `VisualIdentityDraft`                    | AI 视觉草案与可审阅建议                                                                        | owning authoring workflow；接受后才进入 fact/binding       |
-| occurrence / relationship / availability | 可重建 read model                                                                              | user SQLite projection                                     |
-| `EntityAsset`                            | immutable semantic snapshot、package representation、revision/digest/dependencies              | Asset Library managed package / optional cloud replication |
+| 数据                                             | 语义                                      | Owner / persistence            |
+| ------------------------------------------------ | ----------------------------------------- | ------------------------------ |
+| `ProjectEntity`                                  | 项目 identity、kind、名称、alias、status  | 项目 canonical Entity document |
+| `CreativeEntityCandidate`                        | 自动发现但未经确认的候选                  | user SQLite projection         |
+| `EntityRepresentationBinding`                    | Entity 与 durable resource ref 的确认关系 | 项目 canonical Entity document |
+| `VisualIdentityDraft` / requirement              | 可审阅建议或创作需求                      | owning authoring workflow      |
+| occurrence / relationship / availability / usage | 可重建 read model                         | Search / local metadata        |
+| Entity/Character association                     | 项目语义身份与角色的精确组合              | Project composition owner      |
 
-Entity metadata 只保存语义或领域中立属性。文件路径、thumbnail/cache path、Renderer URL、runtime token、provider raw response、license 或任意非 canonical catalog metadata 不得写入 Entity metadata。
+SQLite 不保存 Entity authoritative payload。现有记录中超出最小 contract 的字段在切换严格 reader 前必须
+先资格化；无法支持的记录原样保留并在对应项目显示 diagnostic，不通过普通启动迁移或丢弃。
 
 ## Identity 生命周期
 
@@ -66,51 +64,40 @@ Entity metadata 只保存语义或领域中立属性。文件路径、thumbnail/
 Observation
   -> mention / match / candidate projection
   -> explicit confirm / reject / merge / dismiss
-  -> CreativeEntity fact
+  -> ProjectEntity fact
   -> requirement / binding / visual draft
   -> Inspector / Search / Agent projection
 ```
 
 - rename 不改变 Entity ID；旧名称可以进入 aliases。
-- merge 保留 surviving ID，并为旧引用提供明确 redirect/diagnostic。
+- merge 保留 surviving ID，并要求全部 typed reference owners 参与；覆盖不全时操作被阻止。
 - deprecate 保留历史引用。
 - bind、unbind、set-default 与 rebind 只修改 binding fact。
 - discovery 与 Search 不得直接创建或确认 Entity/binding。
 
 ## Representation binding
 
-`EntityRepresentationBinding.representation` 是 validated `ContentLocator`：
+binding 保存 owner-qualified durable resource ref，而不是任意路径：
 
-| Kind               | 身份与校验                                                                      |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `workspace-file`   | normalized workspace-relative path + optional fingerprint                       |
-| `document-entry`   | stable workspace document source + normalized entry path + optional fingerprint |
-| `generated-output` | owner output ID + revision + digest + durable workspace path                    |
-| `package-resource` | package ID + exact revision/digest + package-relative member                    |
+| Kind             | 身份与校验                                                                    |
+| ---------------- | ----------------------------------------------------------------------------- |
+| workspace file   | normalized workspace-relative locator + optional fingerprint                  |
+| document entry   | stable document source + normalized entry identity + optional fingerprint     |
+| generated output | output owner identity + revision/digest + durable locator                     |
+| package resource | Asset identity + exact user-managed revision/digest + package-relative member |
 
-binding 还保存 role、status、default、source、confidence 与 durable precondition；availability 和
-attention 是可重建 projection。普通文件 binding 不保存 Asset ID；package binding 保存精确的现代
-`assetId + revision/digest + member`，但不得保存 legacy AssetEntity ID、`project://assets/`、
-absolute/link-target path、cache path、provider URL 或 runtime token。
+availability 与 attention 是可重建投影。公共或持久 Entity contract 不包含 absolute/link-target path、
+cache path、provider URL、Renderer URI 或 runtime token。
 
-Resolver 按 consumer 的候选 role 顺序选 confirmed、active binding。`canvas`、`agent` 与 `cut` 可以有不同 role order，但不得改用另一种 locator resolver。没有可用表现时返回 `missing-representation` 与明确 next action。
+workspace path 缺失或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以提供候选 evidence，只有
+显式 rebind 才能修改 confirmed binding；禁止按同名文件、旧 catalog 或 active workspace 自动修复。
 
-### Orphan 与 rebind
+unbind 不删除 bytes；资源删除只让 binding orphaned；deprecate Entity 不修改 Media link、Asset package、
+Character 或 World。
 
-普通 workspace path 缺失或 fingerprint 不匹配时，binding 变为 `orphaned`。Search 可以按 fingerprint/name 提供 candidate evidence，但不得自动改写 confirmed binding。用户显式 rebind 后才写入新 locator。
+## 候选、发现与展示
 
-generated/package owner 的 revision、digest 或 manifest 不匹配同样 fail-visible。任何情况都不能回退到旧 Asset catalog、同名路径或 active workspace。
-
-### 生命周期隔离
-
-- unbind 不删除 resource bytes；
-- explicit resource delete 不删除 Entity，而使 binding orphaned；
-- deprecate Entity 不删除 package、generated output 或 Media Library link；
-- package owner 解析真实多文件成员，Entity 只保存 package reference。
-
-## 候选与视觉草案
-
-AI 与文本分析只产生候选证据：
+AI 与内容分析只产生候选证据：
 
 ```text
 source locator
@@ -120,78 +107,64 @@ source locator
   -> Entity fact or representation binding
 ```
 
-正文、page/chapter/paragraph text 和 document bytes 只在 bounded analysis batch 中存在。SQLite 保存 fingerprint、locator/range、content hash、mention、candidate 与 freshness；需要上下文时通过 ContentRead/DocumentAccess 回读并校验 fingerprint。
+正文和 document bytes 只存在于 bounded analysis batch；SQLite 只保存 locator/range、fingerprint、hash、
+candidate 与 freshness。需要上下文时通过 Content/Document owner 回读并重新校验。
 
-扫描 PDF 返回 `ocr-required`，DRM fail-visible。普通 JSON/YAML 不进入文本 analyzer，除非 owning domain 注册了明确 creative schema adapter。
+Entity card 是 read-only composition：名称和 status 来自 Entity；头像和可用表现来自 confirmed binding；
+occurrence、relationship、usage 和 availability 来自投影。Search 按稳定 Entity ID 去重，不写 Entity facts。
 
-## 展示与搜索
+Agent `@` mention 可以先查 Search，provider dispatch 前必须通过 Entity facade 重读 canonical record。缺失、
+kind mismatch、workspace ambiguity 或 invalid record 必须 fail-visible，不能回退搜索摘要或旧 snapshot。
 
-Entity card 是投影，不是单个 JSON 原样展示：
+## 与 Character 和 World 的关系
 
-- 名称、alias、status 来自 `CreativeEntity`；
-- 主头像与可用表现来自 confirmed binding + representation projection；
-- missing requirement、orphan state 与来源证据必须可见；
-- occurrence 与 relationship 来自可重建 projection。
+Project owner 记录 exact Entity/Character association，只保存 `projectId + entityId + characterProjectId`。
+CharacterProject 不保存项目 Entity identity。有效关联可让组合层展示 Chara-owned action，但 Entity 不拥有
+Dialogue、Room、Embody、Conversation、AgentSession 或 CharacterVersion 选择。
 
-UI 可以消费短生命周期 projected URI，但持久状态只保存 Entity ID 或 `ContentLocator`。Search 提供 `creative-entities` partition，并按 stable Entity ID 去重；Search 只返回 projection、suggestion 与 navigation data，不写 Entity facts。
+World 可将 world-local location/object 与 ProjectEntity 关联用于检索，但 World definition、actor binding、
+run/save/branch 仍归 World；Character actor 必须引用精确 CharacterVersion。
 
-Agent `@` mention 先使用 Search projection，再在 turn boundary 通过 Entity facade 读取 canonical confirmed Entity。删除、kind mismatch、workspace ambiguity 或 facade diagnostic 必须在 provider dispatch 前失败，不得回退搜索摘要或旧 snapshot。
+## 与资源和 Asset 的关系
 
-Resource Browser 的 Entity source 使用 `entities`，不再使用语义模糊的 `materials`。它统一投影
-confirmed、candidate、needs-attention 和 deprecated，但必须显示其不同 lifecycle；candidate
-可搜索，不可在未 confirm/import 前作为稳定 Entity reference。
+Media Library discovery 可以提供 evidence 或 rebind candidate，但不能确认文件“就是某个角色”。Asset
+只拥有显式导入、安装或发布的普通可复用包；Project Entity 可以绑定 package member，但不拥有 Asset
+manifest、revision 或安装状态。
 
-Resource Browser 只有一个 package-owned `entity.manage` intent path。Webview 提交版本化 intent，
-controller 在调用 owner 前校验当前 item capability、Entity/candidate identity 和 project revision；
-Node application runtime 生成 Entity/binding ID、时间和 binding source，再通过 canonical operation
-service 提交。Desktop Main 只注入 workspace 与 local-metadata public repository，不解释 Entity
-语义。缺失 Asset、Character、Room、Conversation 或完整 reference-rewrite owner 时，Inspector 必须
-显示 blocker 并隐藏对应操作，不能合成 Agent 命令或 fallback 会话。
+当前 canonical 产品路径不提供 Entity Asset publish、instantiate、provenance、update availability 或
+three-way diff/apply：
 
-candidate confirmation 跨 `neko/entities.json` 与可重建 SQLite projection 时使用 workspace-scoped
-operation journal。调用只在 canonical commit 与 candidate decision 都完成后返回成功；进程在两步
-之间退出时，下一次 Entity operation 先恢复 journal。journal 是短生命周期 workflow recovery state，
-不是第二份 Entity authority；损坏、未知版本或与 canonical revision 冲突必须 fail-visible。
+- 普通可复用资源使用 Asset package；
+- Character 可移植包由 Chara 拥有；
+- World 可移植/发布由 World 在依赖闭包完整时拥有；
+- ProjectEntity 保持项目本地可变事实。
 
-## 与 Asset Library 的关系
+已实现但被取代的 Entity Asset contract/service 必须在 consumer reachability 审计后从公共入口和生产注册
+移除。现有用户 bytes 保留并显示 unsupported diagnostic，不引入 compatibility reader。
 
-Project Entity 可以显式发布为 Entity Asset，也可以从 Entity Asset 实例化：
+## Entity Inspector
 
-```text
-Project Entity --explicit publish--> immutable Entity Asset revision
-Project Entity <--explicit instantiate-- installed Entity Asset revision
-Project Entity <--three-way diff/apply-- newer Entity Asset revision
-```
+Inspector 只提供：
 
-- publish 由 Entity owner 冻结语义快照，外部 representation 必须复制进 package 或转为精确
-  Asset dependency，再交给通用 Asset publish/cloud sync；
-- instantiate 创建新的 Project Entity ID，并记录 origin Asset、applied revision/digest 和 import base；
-- 后续 update 比较 import base、当前 Project Entity 与新 snapshot，冲突字段必须显式处理；
-- Asset install、uninstall、remote tombstone 不创建、删除或覆盖 Project Entity；
-- 不增加 Entity 专用 global catalog、credential、cursor 或 `EntitySyncService`。
+- candidate confirm/reject/dismiss；
+- rename、alias、merge、deprecate；
+- bind/unbind/rebind/set-default；
+- occurrence、usage、availability 与引用 blocker 的只读展示；
+- 有有效关联时，由 Chara/World 等 owner 提供的精确 navigation/action projection。
 
-## 与 Media Library 的关系
-
-Media Library discovery 可以提供文件 evidence 或 rebind candidate，但不能确认文件“就是某个角色”。Creative Entity 可以绑定 Media Library locator，但不读取 link target、不拥有 library membership，也不修改文件结构。
-
-```text
-Media Library locator
-  -> explicit bind/rebind
-  -> EntityRepresentationBinding
-  -> owner/content port resolves source
-  -> ContentRepresentationService projects preview
-```
+Desktop 只注入 Workspace、local metadata 与 typed package ports，不解释 Entity 语义。缺少 association、
+CharacterVersion、完整 reference reader 或资源 adapter 时，操作必须被禁用并展示 owner-qualified blocker。
 
 ## 反模式
 
-| 反模式                                   | 正确边界                                                            |
-| ---------------------------------------- | ------------------------------------------------------------------- |
-| 文件名作为 Entity identity               | stable Entity ID + alias + provenance                               |
-| AI 自动覆盖 confirmed metadata           | candidate/draft/suggestion + explicit decision                      |
-| 发现媒体文件时自动建 Entity              | projection only                                                     |
-| 普通文件通过 Asset ID 间接绑定           | direct `ContentLocator`；package member 才保存 exact Asset revision |
-| 把 Asset revision 当作 Project Entity ID | 独立 Project Entity ID + origin provenance                          |
-| Asset 云同步直接上传 Project Entity      | explicit Entity Asset publication                                   |
-| 自动 relocation confirmed binding        | orphan + candidate + explicit rebind                                |
-| 把 cache/thumbnail path 写入 Entity      | semantic representation port                                        |
-| 删除文件时删除 Entity                    | orphan binding，Entity 保留                                         |
+| 反模式                                   | 正确边界                                     |
+| ---------------------------------------- | -------------------------------------------- |
+| 文件名作为 Entity identity               | stable Entity ID + alias + explicit evidence |
+| AI 自动覆盖 confirmed metadata           | candidate/draft + explicit decision          |
+| 发现文件时自动建 Entity/Character        | projection only；显式创建                    |
+| 把 Character/World 字段放进 Entity facts | 对应 owning aggregate + exact association    |
+| 把使用次数放进 Entity                    | Search/local-metadata projection             |
+| Entity 启动 Dialogue/Room                | Chara-owned exact handoff                    |
+| Entity Asset 复制角色或世界 publication  | Chara/World-owned portability                |
+| 自动 relocation confirmed binding        | orphan + candidate + explicit rebind         |
+| 删除文件时删除 Entity                    | orphan binding，Entity 保留                  |

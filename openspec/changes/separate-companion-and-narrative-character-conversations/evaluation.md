@@ -20,6 +20,14 @@ therefore required before promotion.
 These are key-free contract/application evidence only. They are not model-quality, real-provider or
 visible-product evidence.
 
+The builtin `character-creator` suite also keeps a strict missing-target boundary case: the Skill is
+available from an unbound Assistant Draft, but typed execution without the exact operation target
+receipt is rejected before Conversation/model execution and cannot mutate a Character draft. The
+current Scenario vocabulary cannot create a standalone or project-local Character draft through
+the visible destination chooser, so the successful global and Workspace paths remain covered by
+contract, Runtime, Desktop composition and Webview interaction tests rather than being represented
+as unsupported Evaluation steps.
+
 ### Required evaluation work still open
 
 The package-only Companion Assistant/attachment lane has been deleted. Single-Character initial

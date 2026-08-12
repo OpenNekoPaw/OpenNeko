@@ -1,3 +1,9 @@
+> Composition reconciliation (2026-08-12): project-local Character creation additionally commits the
+> Project-owned exact Entity/CharacterProject association defined by
+> [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/).
+> Chara remains the only CharacterProject repository; manual, prompt, file, Asset and Entity seeds cannot
+> create parallel Character types.
+
 ## Why
 
 当前 Character 管理页把目录浏览、快速新增、完整角色设定编辑和本地版本发布叠在同一个 Main/Secondary Main 场景中；同时 CharacterVersion 只有时间排序列表，无法表达从任意历史版本继续创作产生的多分支关系。用户因此难以判断自己是在管理角色、创作草稿、创建本地可用版本，还是执行共享/服务端发布。

@@ -1,3 +1,8 @@
+> Current-production clarification (2026-08-12): completion of this design change does not promote World
+> Story, Gameplay or Experience into the first production closure. Their availability is governed by
+> [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/)
+> and requires real producer, consumer, persistence and UI evidence.
+
 ## Why
 
 OpenNeko 已有 `@neko/world` / `@neko/world-node` Foundation，能够表达 `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` 的最小事实链，但尚未把用户的创作意图以及剧本、角色、场景、素材和玩法说明编译成可审核、可发布、可运行并可在运行中继续改造的互动世界。现有设计还没有把 Content-to-Experience 编译、能力缺口诊断、持续世界改造与 World Story、World Gameplay、Experience composition 的独立生命周期讲清楚，容易继续要求作者围绕代码或某个引擎实现具体体验，或让 Agent、Renderer、游戏引擎和世界模型成为第二事实来源。

@@ -84,10 +84,10 @@ Resource Browser 的 `entity.manage` 继续复用同一个 sender-bound Desktop 
 workspace 构造 `@neko/entity-node` runtime，并注入 canonical Entity repository 与 local-metadata public
 repository；`@neko/assets-node` controller 校验选择、capability、Entity/candidate identity 和 expected
 project revision 后委托 exact Entity owner。Entity ID、binding ID、时间、canonical commit、candidate
-decision 和恢复 journal 都由 Entity package 持有，应用根不复制其业务语义或文件 workflow。生产环境
-缺失 manifest-backed Asset lifecycle、完整 reference-rewrite participant、Character、Room 或
-Conversation owner 时，对应 Inspector capability 必须隐藏或返回 owner-qualified blocker，不得在
-Desktop 中以 flat Asset、Agent command、fallback conversation 或 no-op handler 补齐。
+decision 和恢复 journal 都由 Entity package 持有，应用根不复制其业务语义或文件 workflow。完整
+reference reader 或 resource owner 缺失时，对应 Entity operation 必须隐藏或返回 owner-qualified
+blocker。Character/World action 只能由 Project association 与对应 owner 投影；Desktop 不得用 flat
+Asset、Agent command、fallback conversation 或 no-op handler 补齐。
 
 workspace package 的角色、拆分条件、领域家族命名和 inactive capability 语义统一遵循
 [`package-taxonomy.md`](package-taxonomy.md)，应用根不得通过私有 source alias 或 wildcard export

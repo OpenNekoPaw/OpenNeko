@@ -1,3 +1,10 @@
+> Production-scope reconciliation (2026-08-12):
+> [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/)
+> limits the first production closure to `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`,
+> exact CharacterVersion actor refs and optional ProjectEntity object association. Story and Experience
+> contracts remain unavailable until their complete producer, consumer, persistence and UI paths are
+> qualified; this change must not pre-register empty production paths.
+
 ## Why
 
 World Foundation 已有最小事实链，但完整 World、World Story 与 World Experience 仍缺少经依赖闭包验证的 package topology、canonical public contracts 和跨 owner 引用规则。先冻结数据边界，避免后续 runtime、Desktop 或 Agent 各自发明 shape。
