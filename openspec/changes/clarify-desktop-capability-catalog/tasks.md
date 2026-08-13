@@ -1,86 +1,57 @@
-## 1. Contract and owner
+## 1. Delivered Foundation
 
-- [x] 1.1 Replace the Home builtin capability DTO/channel with a canonical extension catalog contract, safe discovery diagnostics and rejection coverage for the removed capability payload.
-- [x] 1.2 Add a Desktop Main extension catalog reader that projects only valid OpenNeko package
-      manifests and safe MCP Server/Skill/App contribution summaries.
+- [x] 1.1 Replace the Home builtin capability channel with typed Extensions/Skill management contracts, sender-bound IPC and bilingual management presentation.
+- [x] 1.2 Implement Pi SkillHost discovery for project, personal, plugin and builtin sources with deterministic precedence, fingerprint, locator, receipt and duplicate diagnostics.
+- [x] 1.3 Implement contained personal Skill staging, Pi validation, atomic installation and recoverable removal through opaque management identity.
+- [x] 1.4 Compose verified Plugin Skill roots and compatible MCP Tools through the existing Pi SkillHost, MCPManager and ToolRegistry paths with idle-only runtime replacement and disposal.
+- [x] 1.5 Project Plugin runtime readiness and fail-visible unsupported/App/OAuth/connection diagnostics without manifest-only success.
+- [x] 1.6 Add deterministic Agent, Desktop producer/consumer and Renderer coverage for the delivered foundation and exclude foreign application state and Desktop product modules.
 
-## 2. Main and preload composition
+## 2. OpenSpec and Canonical Contract Replacement
 
-- [x] 2.1 Inject the extension reader into Desktop AppHost, preserve global personal/builtin Skill discovery, remove Shell domain projection and return the new extension result.
-- [x] 2.2 Migrate Main IPC and preload to the extensions channel/bridge, with no fallback to the removed capabilities path.
+- [x] 2.1 Revise proposal, design, delta spec, evaluation and task scope to remove Marketplace from P0 and define independent Skill, local Plugin, SQLite and runtime authorities.
+- [x] 2.2 Atomically replace marketplace-backed catalog fields/intents with bundled/local Plugin records, local install intent, enable/disable/remove/rescan and component-local readiness across Agent contracts, AppHost, preload and Renderer.
+- [x] 2.3 Delete `marketplace`, available inventory, marketplace refresh, catalog-category recommendation and `name@openneko` identity from production contracts, fixtures, locale copy and tests; add rejection/poison tests for each removed payload.
 
-## 3. Extension catalog experience
+## 3. Canonical Plugin Package
 
-- [x] 3.1 Rename the Home navigation and management Surface to Extensions, replace Built-in capabilities with Extensions, and render manifest metadata plus contribution labels.
-- [x] 3.2 Preserve personal-first deterministic Skill ordering and author-owned
-      personal/plugin metadata.
-- [x] 3.3 Add complete English and Simplified Chinese extension-shell copy while preserving extension manifest metadata verbatim.
+- [x] 3.1 Implement the root `plugin.json` minimal codec and fixed `skills/` / `mcp.json` discovery in `@neko/agent-runtime/extensions`, with reverse-domain validation for OpenNeko-specific metadata.
+- [x] 3.2 Convert first-party Browser Use and Computer Use packages to the canonical layout and inject them as exact bundled Plugin roots from Desktop composition.
+- [x] 3.3 Delete `.openneko-plugin` and `marketplace.json` readers, parser helpers, bundled index/resources and tests; prove `.openneko-plugin`, `.codex-plugin`, foreign marketplace and manifest-version paths cannot satisfy discovery.
+- [x] 3.4 Add producer tests for missing optional components, duplicate Plugin identity, path/symlink escape, unknown top-level/private fields, invalid extensions namespace and independent Skill/MCP/App verification.
 
-## 4. Tests and validation
+## 4. SQLite Plugin State and Local Installation
 
-- [x] 4.1 Add reader, producer/consumer and Renderer regressions proving invalid/foreign plugins
-      and Desktop modules are excluded, supported Skill/MCP fixture contributions are projected,
-      paths and execution fields are absent, and both locales render correctly.
-- [x] 4.2 Run focused Desktop tests, Desktop typecheck/build, strict OpenSpec validation, `git diff --check`, and applicable boundary/debt checks.
-- [x] 4.3 Restart and validate the Extensions Surface in a real Electron Desktop host for both
-      locales, Skill filtering, the honest empty OpenNeko catalog and absence of builtin capability
-      claims.
-- [x] 4.4 Perform the Neko quality review across responsibility, dependency, interface, extension and testing layers; record residual risk.
+- [x] 4.1 Define the package-owned Plugin state repository contract and stable `neko.db#state` table for identity, delivery source, contained relative install locator, install lifecycle, enabled state and non-sensitive configuration references.
+- [x] 4.2 Implement the `@neko/local-metadata` SQLite repository and inject it from Desktop's single metadata Store owner; add transaction, reopen, corrupt-row fail-local and sibling-preservation tests.
+- [x] 4.3 Replace JSON enable grants with the SQLite repository and delete all production reads/writes of `${NEKO_HOME}/extensions/state/*.json`; add reachability tests proving old grants remain untouched and cannot control runtime.
+- [x] 4.4 Add the typed local Plugin picker/install workflow with contained staging validation, exact identity conflict handling, canonical rename and visible cross-filesystem/SQLite interruption diagnostics.
+- [x] 4.5 Implement exact enable, disable and recoverable remove coordination with runtime ownership checks, system trash, invalid durable-record preservation and no arbitrary installed-root auto-registration.
 
-## 5. Management contract and OpenNeko owner
+## 5. Skill and Contribution Independence
 
-- [x] 5.1 Replace the manifest-only extension result with installed/available, compatibility,
-      runtime readiness, catalog fingerprint and typed plugin/Skill mutation contracts.
-- [x] 5.2 Replace the manifest-only reader with an injected OpenNeko repository adapter for list,
-      install, remove and catalog refresh, preserving safe manifest projection and diagnostics.
-- [x] 5.3 Add a personal Skill manager with staged Pi validation, contained atomic install and
-      recoverable removal using opaque management identity.
+- [x] 5.1 Add path-level tests proving personal/project/builtin Skills discover, select and execute with no Plugin manager, MCP config or Marketplace source present.
+- [x] 5.2 Change Plugin verification/runtime projection so valid Skill, MCP and App contributions have independent readiness; a failing MCP cannot hide or disable a valid sibling Skill.
+- [x] 5.3 Preserve valid installed Plugins with no currently executable contribution as manageable unsupported records without synthetic Tools, Skills or manifest-only readiness.
+- [x] 5.4 Maintain Skill-content boundary tests proving builtin/personal/plugin Skill prompts contain no concrete Tool name tutorial, parameter table, polling protocol or Host authoring schema.
 
-## 6. Pi Agent integration
+## 6. Package Ownership and Executable Identity
 
-- [x] 6.1 Add plugin Skill source identity/provenance and deterministic
-      project > personal > plugin > builtin selection to Pi SkillHost.
-- [x] 6.2 Parse compatible plugin MCP definitions into the existing MCP runtime, including contained
-      stdio cwd/command, allowlisted inherited env and supported HTTP bearer configuration.
-- [x] 6.3 Compose plugin Skill roots and connected MCP Tools into Desktop Pi turns with idle-only,
-      atomic runtime generation replacement and explicit disposal.
-- [x] 6.4 Project per-plugin runtime readiness and fail-visible unsupported/App/OAuth/connection
-      diagnostics without manifest-only success or fallback.
+- [x] 6.1 Finalize the `@neko/agent-runtime/extensions` public application entry for manifest, catalog, mutation, state port, personal Skill and runtime-generation lifecycle without Electron DTO or policy ownership.
+- [x] 6.2 Reduce Desktop Main to app/resource/install roots, SQLite/file/picker/trash/process/env/credential adapters, sender-bound typed IPC composition and disposal; add consumer/delegation tests proving Agent package ownership.
+- [x] 6.3 Project verified Pi SkillHost records into the canonical Entry/Session input catalog with exact source, Plugin identity and fingerprint; reject stale/same-name invocation without management-card, active/recent or source fallback.
+- [x] 6.4 Add application/package boundary and poison tests proving removed marketplace, JSON grant, private manifest and Desktop policy paths cannot be imported, registered or return success.
 
-## 7. Management experience and i18n
+## 7. Management Experience
 
-- [x] 7.1 Implement localized plugin install, remove, refresh, busy, confirmation and operation
-      states.
-- [x] 7.2 Implement personal Skill add/remove management, plugin Skill provenance and immutable
-      builtin/plugin action states.
-- [x] 7.3 Complete `en` and `zh-cn` coverage while preserving author-owned plugin and Skill metadata.
-- [x] 7.4 Filter available inventory through the Pi SkillHost/OpenNeko MCP support policy and add
-      content-creation-first recommended sorting without hiding installed unsupported plugins.
-- [x] 7.5 Replace the Codex/OpenAI marketplace and `.codex-plugin` path with an OpenNeko-owned
-      repository snapshot, `.openneko-plugin` package contract and isolated OpenNeko install root;
-      prove foreign application marketplace/config/cache access is absent.
-- [x] 7.6 Exclude builtin Skills and builtin-only diagnostics from the Home management contract,
-      cards and counts while preserving builtin discovery for Pi Agent turns.
-- [x] 7.7 Remove the low-value Skill source and extension status/category/sort selectors while
-      preserving search, tabs and deterministic product ordering.
+- [x] 7.1 Replace installed/available Marketplace presentation with Skills and local Plugins, Add local, Enable, Disable, Remove, Rescan and honest empty states.
+- [x] 7.2 Remove Marketplace/category recommendation copy and state; retain stable display-name/identity ordering, search, author-owned metadata and `en`/`zh-cn` coverage.
+- [x] 7.3 Render durable invalid installation and per-component readiness diagnostics without exposing physical path, process arguments, environment, credentials, database details or raw errors.
 
-## 8. Package Ownership Convergence
+## 8. Verification and Acceptance
 
-- [ ] 8.1 Define the `@neko/agent-runtime/extensions` public application contract for catalog, support policy, mutation, personal Skill and plugin runtime-generation lifecycle without Electron or Desktop DTO ownership.
-- [ ] 8.2 Move extension manifest/repository validation, contained install/remove planning, personal Skill validation and Plugin Skill/MCP contribution/readiness logic from Desktop Main to the Agent runtime entry with producer tests.
-- [ ] 8.3 Reduce `desktop-extension-manager.ts` and `desktop-plugin-runtime.ts` to bundled-resource/install-root, native trash/picker, process/env/credential adapters, typed IPC composition and disposal; delete app-owned policy/state paths.
-- [ ] 8.4 Add Desktop consumer/delegation and path-absence tests proving all catalog/mutation/instance outcomes come from the Agent package and no foreign marketplace or app-owned fallback returns success.
-- [ ] 8.5 Project verified Pi SkillHost receipts into the canonical Entry/Session input catalog with full source identity and no management-card, display-name or same-name fallback success path.
-
-## 9. Agent evaluation and verification
-
-- [x] 9.1 Add deterministic producer/consumer, repository adapter, personal Skill, Pi plugin Skill,
-      MCP registration/call, generation swap and no-fallback tests.
-- [x] 9.2 Record and validate the Agent Evaluation authoring decision for plugin Skill/MCP routing;
-      update/create focused canonical and failure coverage as required.
-- [ ] 9.3 Run focused tests, Desktop and affected package typecheck/build, `pnpm test:agent:eval`,
-      strict OpenSpec, boundary/debt/unused checks and `git diff --check`.
-- [ ] 9.4 Validate plugin install/remove state, personal Skill management, both locales and Agent
-      runtime readiness in a real Electron Desktop host without mutating non-fixture user data.
-- [x] 9.5 Perform the Neko quality review and record unavailable provider-backed Desktop
-      complete-session evidence as an explicit infrastructure blocker when applicable.
+- [x] 8.1 Run `pnpm --filter @neko/agent-contracts test`, `pnpm --filter @neko/agent-runtime test`, `pnpm --filter @neko/agent-webview test`, `pnpm --filter @neko/app-desktop test` and affected package typechecks.
+- [ ] 8.2 Run `pnpm test:agent:eval`, `pnpm check:storage-authorities`, `pnpm check:application-boundaries`, `pnpm check:agent-boundaries`, `pnpm check:no-internal-versioning`, `pnpm check:legacy-debt`, `pnpm check:unused`, strict OpenSpec validation and `git diff --check`.
+- [ ] 8.3 Package and launch a visible real Electron Desktop with isolated fixture storage; verify standalone Skill use, local Plugin install/enable/disable/remove/reopen, invalid-record locality, Skill-only/MCP-only/mixed contribution readiness and both locales.
+- [ ] 8.4 Run provider-backed complete-session Plugin Skill and MCP cases through the public Agent input path; record infrastructure-blocked status when fixture installation or provider authority is genuinely unavailable.
+- [x] 8.5 Perform Neko quality review across responsibility, dependency, interface, extension and testing layers and record remaining risks for deferred Marketplace, App connector and OAuth ownership.

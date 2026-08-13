@@ -1,217 +1,192 @@
 ## Context
 
-第一轮实现已经把 Home 从产品模块目录改成 Codex enabled plugin manifest 目录，后续又
-错误地把 Codex CLI 和 OpenAI marketplace 当成分发 authority。OpenNeko 是基于 Pi Agent
-的独立应用，不得读取、修改或展示其他应用的 marketplace、安装状态和本地缓存。用户要求
-OpenNeko 自己维护真实插件，并让安装后的 portable Skill/MCP contribution 被 Agent 感知和
-执行。
+当前实现已经具备四类 Skill source、personal Skill 安装、Plugin Skill/MCP composition、runtime
+readiness、idle-only generation replacement 和 Extensions 管理 UI。现存问题集中在 distribution 与
+authority：`AgentExtensionRepository` 同时读取 bundled `marketplace.json` 和 install root，Plugin
+identity 固定为 `name@openneko`，manifest 位于私有 `.openneko-plugin` 目录，enable grant 写入独立
+JSON 文件。官方仓库尚不存在，因此 marketplace 并没有真实远程发布、发现或更新消费者。
 
-真实 owner 边界：
-
-1. OpenNeko public repository 中的 canonical marketplace snapshot 拥有可安装插件事实；
-2. OpenNeko 安装根拥有已安装 package 事实，`.openneko-plugin/plugin.json` 拥有展示
-   metadata 与 contribution locator；
-3. Pi SkillHost 拥有 Skill discovery、fingerprint、selection 与 read receipt；
-4. `MCPManager`、MCP Tool wrapper 与 Pi Tool projection 拥有 MCP 连接和调用；
-5. `@neko/agent-runtime/extensions` 的 support policy 组合 Pi SkillHost 与 OpenNeko MCP parser，拥有
-   可安装插件的产品兼容性判定；
-6. `@neko/agent-runtime/extensions` 拥有 catalog、contained atomic install/remove workflow、runtime
-   generation 和 operation state；Desktop Main 只拥有 marketplace snapshot/install-root、文件/进程/
-   credential concrete adapter、typed IPC、composition 与 disposal；
-7. Renderer 只拥有搜索、固定内容创作优先排序、operation 状态、确认与本地化展示。
-
-公共能力与复用审计结论：
-
-- 复用 Pi SkillHost、现有 MCP runtime、ToolRegistry、Desktop global storage、双语 i18n
-  和 management Surface primitives。
-- 不复用 Shell `domains`、Webview `pluginsAvailable` 或 plugin transfer runtime；它们是产品
-  模块与 send-to target，不是插件 lifecycle。
-- 不读取或写入 `~/.codex`、Codex config/cache/marketplace，不调用其他应用 CLI，不创建
-  第二套 Agent 或 MCP protocol。
-- App connector 没有可复用的 OpenNeko runtime owner，因此本次只投影 unsupported 状态。
+本地产品边界要求只有一条 canonical path。P0 不能保留 marketplace/local、旧/新 manifest 或
+JSON/SQLite 双读，也不能因为 MCP/App runtime 尚未就绪而让合法 Skill package 消失。现有
+`~/.neko/neko.db` 已是 machine-local UI-managed state authority，适合保存 Plugin lifecycle 和
+enablement；Plugin bytes、`SKILL.md`、MCP document 与图标仍由 package filesystem owner 保存。
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Home 管理 installed/available 插件和 personal/plugin Skill；builtin Skill 仅属于 Pi Agent
-  runtime，不进入管理目录。
-- installed 目录只保留 OpenNeko 安装根中的插件；available 目录只包含 OpenNeko repository
-  中由 Pi Agent / OpenNeko 当前支持的 Skill 或 MCP contribution。
-- 默认优先显示内容创作相关插件，其次通用生产力，再显示其他受支持插件。
-- 插件 add/remove/reload 只作用于 OpenNeko marketplace snapshot 和 OpenNeko global
-  install root。
-- personal Skill 本地安装/移除进入 Pi SkillHost 的同一全局 root。
-- plugin Skill 和兼容 MCP contribution 进入 Pi Agent canonical path。
-- Computer Use 的 MCP Tool 只有在实际连接和 Tool discovery 成功后才标记 ready。
-- 物理路径、命令、参数、env、credential 和 raw diagnostic 不跨 preload 边界。
-- project > personal > plugin > builtin 的 Skill selection 确定且可诊断。
-- 插件 mutation 不打断 active turn；runtime generation 只在 idle 时切换。
-- `en` / `zh-cn` UI 完整；作者 metadata 保持原文。
+- Skill 在没有 Plugin、MCP 和 marketplace 时仍可发现、管理、选择和执行。
+- Plugin 使用一个根目录 `plugin.json` 和固定 component locations，减少 OpenNeko-specific shape。
+- P0 只支持明确 bundled roots 与用户显式选择的本地 package，不维护 available marketplace catalog。
+- SQLite 保存 Plugin 安装 lifecycle、启用状态和非敏感配置引用；filesystem 保存 package bytes。
+- Skill、MCP 和未来 App contribution 独立验证与加载，单项失败不扩大到 sibling contribution。
+- 保留唯一 Pi SkillHost、MCPManager、ToolRegistry、Agent turn 和 Desktop typed IPC 路径。
+- Desktop Main 保持 Electron trust boundary 与 concrete adapter，host-neutral 策略归 Agent package。
 
 **Non-Goals:**
 
-- 任意 foreign marketplace source 的新增/删除或导入 UI。
-- 为 App connector、OAuth MCP 或远程 connector 新建认证系统。
-- 翻译第三方 manifest/personal Skill 内容。
-- 在 active Agent turn 中热卸载或切换 Tool implementation。
-- 把“已安装”当成“已连接”；runtime readiness 必须来自实际 Skill/MCP composition。
+- 官方/第三方 marketplace、远程搜索、下载、更新、发布者认证、签名和版本选择。
+- 兼容读取 `.openneko-plugin/plugin.json`、`.codex-plugin`、Claude manifest 或旧 JSON grant。
+- 为外部生态建立多个长期 parser 或运行时 contract；外部导入适配属于未来独立变更。
+- 新建第二套 MCP manager、Agent loop、App/OAuth credential owner 或通用 package manager framework。
+- 把 Plugin package bytes、secret、process handle、runtime health 或 Skill content 写入 SQLite。
 
 ## Decisions
 
-### 1. Home Surface 命名为“扩展”
+### 1. 四层 authority 保持单一职责
 
-一级导航和页面标题使用 `Extensions / 扩展`。页面保留两个页签：
+| 层 | Canonical owner | 保存内容 | 不保存内容 |
+| --- | --- | --- | --- |
+| 发布内容 | Plugin/Skill package filesystem | `plugin.json`、`SKILL.md`、`mcp.json`、assets | 用户启用、授权、runtime state |
+| 安装与用户状态 | `neko.db#state` package-owned repository | plugin identity、delivery source、relative install locator、install lifecycle、enabled、非敏感配置引用 | package bytes、secret、健康状态 |
+| Host authority | Desktop Main adapters | exact root、picker grant、trash、SQLite connection、process/env/credential access | manifest policy、Agent routing |
+| Runtime | Agent extension service / Pi / MCPManager | verified descriptor、read receipt、Tool、connection、readiness、cancellation | durable user choice |
 
-- `Skills / Skill`：Pi SkillHost 发现的 personal/plugin 全局 Skill；
-- `Extensions / 扩展`：OpenNeko marketplace 或 OpenNeko 安装根中的插件包。
+Filesystem package 是内容 authority；SQLite row 是用户安装和启用 lifecycle authority。普通 catalog
+不得仅通过扫描任意目录创建成功的 installed record，也不得仅凭 SQLite row 报告 package ready。
+SQLite row 指向 exact contained relative locator；package 缺失或损坏时保留 row 并投影局部 invalid
+diagnostic，用户可以显式移除或重新安装。Builtin package root 是产品组合事实，不进入 personal install
+registry，但其 enabled choice 仍由 SQLite 按 exact plugin id 保存。
 
-页面不再出现“内置能力”页签，也不从 Shell `domains` 读取目录项。
+选择 SQLite 而不是每 Plugin JSON grant，是因为 enablement/installation 是 machine-local、UI-managed、
+需要查询和一致更新的 application state，并且现有 Desktop 已有单一 SQLite connection owner。不会新建
+Plugin 专用数据库，也不会把 manifest 当作用户配置写回。
 
-### 2. OpenNeko repository 是唯一 inventory/mutation authority
+### 2. P0 没有 Marketplace
 
-Agent extension application service 通过注入的 repository/file ports 读取 canonical OpenNeko
-marketplace snapshot，并只管理 `${NEKO_HOME}/extensions/plugins` 下的 installed package。Desktop
-Main 解析实际 app path 并注入受限 adapter，不解释 manifest 或决定 mutation。首阶段 snapshot 位于公开
-`OpenNekoPaw/OpenNeko` 仓库并随 Desktop 打包，因此不需要 registry 服务，也不依赖用户
-机器上的 Codex/OpenAI marketplace。未来远程 Git snapshot 只能替换 repository port，不能
-改变安装根、package contract、trust 或 Pi runtime owner。
+Agent extension application service 接收两个精确 source port：
 
-available 项必须再经过 Agent runtime 拥有的 support policy：
+- `bundledPluginRoots`：Desktop composition 显式注入的第一方 package roots；
+- `installedPluginRepository`：SQLite rows 与 OpenNeko install root 的精确映射。
 
-- Skill contribution 必须能被 Pi SkillHost 发现且没有 diagnostic/warning；
-- MCP contribution 必须至少包含一个 OpenNeko 当前支持且通过 containment/auth 校验的
-  stdio 或 HTTPS transport；
-- App-only、OAuth-only、无 Agent contribution、非法 Skill/MCP 的 available 项不进入目录；
-- 已安装项始终保留用于状态诊断和卸载，即使当前 unsupported/error。
+不存在 `marketplaceRoot`、available inventory、publisher index、refresh marketplace 或
+`name@marketplace` identity。Extensions 的 rescan 只重新验证上述精确 sources。空 source 返回真实空
+catalog，不读取 `~/.codex`、其他应用 cache 或未知文件夹。
 
-`.openneko-plugin/plugin.json` 只允许 contained relative contribution locator。OpenNeko
-repository index 只接受 publisher `OpenNeko`、唯一 package id、用户管理的 package version 和 contained
-package path。没有真实 entry 时必须返回空 available catalog；不得扫描 `~/.codex`、其他应用
-缓存或把 builtin Skill 包装成插件。
+未来官方仓库必须通过独立 OpenSpec 增加 distribution source adapter；下载并验证后的 package 仍进入
+同一个 local install workflow。Marketplace 不得成为 runtime、enablement 或 Plugin identity owner。
 
-每次 list 计算 immutable catalog fingerprint。mutation 携带 exact request id、snapshot fingerprint；陈旧请求、
-无效 repository/index/package 明确失败，不能假成功。安装复制到 sibling staging，完成
-containment、manifest、Pi/MCP support 校验后原子 rename；移除移动到系统废纸篓。成功
-mutation 后重新读取 catalog，再更新 Agent runtime。
+### 3. Canonical Plugin package 使用 portable subset
 
-### 3. 插件 runtime instance
+Plugin 根目录必须包含 `plugin.json`。P0 portable top-level metadata 为：
 
-Agent runtime extension service 拥有一个当前 plugin runtime instance：
+- `name`：稳定 Plugin identity，在本地 catalog 唯一；
+- `version`：发布者管理的第三方 package version；
+- 可选 `description`、`author`、`homepage`、`repository`、`license`、`keywords`；
+- 可选 `extensions`，其中 OpenNeko-specific metadata 只能位于 reverse-domain key。
 
-- verified plugin Skill roots；
-- 已连接 MCP manager 和动态发现的 MCP Tool；
-- 每个 plugin 的 readiness/diagnostic；
-- instance identity 与 cancellation scope。
+Component 使用固定位置：`skills/`、`mcp.json`，不存在的位置表示未贡献该 component，不是错误。
+OpenNeko-specific `mcpToolExposure`、展示 localization 或 automation profile 如确有消费者，进入
+`extensions.io.openneko`；Skill content 不包含工具名、参数、轮询或 Host 协议。
 
-构建新 instance 时先完整发现并连接；只有没有 active turn 时才交换到所有 workspace。
-workspace unregister 旧 plugin Tool、register 新 Tool，然后旧 MCP manager 显式 dispose。构建
-失败保留旧 generation并返回明确 diagnostic；不回退 manifest-only success。
+Parser 使用 closed canonical shape，不读取 `.openneko-plugin/plugin.json`，不按 provider/version
+切换 shape。Plugin `name` 直接作为 `pluginId`；冲突在 exact package scope fail visibly，不尝试按加载
+顺序、publisher 或 marketplace 选择一个成功实现。
 
-MCP stdio `cwd`、相对 command、允许继承的 env 名称和 timeout 由 Agent extension service 解析并
-通过受限 process/env port 执行。HTTP bearer credential 通过 Desktop 注入的 secret adapter 解析；
-OAuth 尚无 owner，标记 unsupported。MCP Server id 冲突
-或 Tool name 冲突使对应 plugin 不进入 ready instance。
+选择根目录 `plugin.json` 而不是继续私有目录，是为了让 package metadata 与 Agent Plugins 类生态的
+通用结构可映射。P0 只承诺本仓库选定的稳定 subset，不声称兼容任一仍变化的完整外部规范；未来外部
+格式只能在显式安装边界转换为这一 canonical package，不能加入 runtime 双读。
 
-### 4. Skill source 与管理
+### 4. Skill 与 Plugin/MCP 解耦
 
-`SkillSource` 增加 `{ kind: 'plugin'; pluginId: string }`。选择优先级固定为：
+Pi SkillHost 继续直接发现 builtin、personal、plugin 和 project roots，固定 precedence 为
+`project > personal > plugin > builtin`。Personal/project/builtin Skill lifecycle 不调用 Plugin manager。
+Plugin 只向 Pi SkillHost 提供 verified skill root 与 exact `pluginId` provenance。
 
-`project > personal > plugin > builtin`
+一个 Plugin 的 components 分别产生 verification result：
 
-多个 plugin 提供同名 Skill 时使用 stable plugin id 排序并产生 duplicate diagnostic。Plugin
-Skill fingerprint、locator 和 read receipt 继续由 Pi SkillHost 计算；manifest metadata 不能
-代替 Skill receipt。
+- valid Skill 可以进入 Pi，即使同包没有 MCP 或 MCP 连接失败；
+- valid MCP 可以进入既有 MCPManager，即使同包没有 Skill；
+- unsupported App/OAuth 只产生该 component diagnostic；
+- manifest/containment/identity 失败才拒绝整个 package；
+- enabled Plugin 没有任何当前可执行 component 时显示 `unsupported`，但仍是可管理的 installed record。
 
-personal Skill 安装由 Desktop native picker 返回授权来源，Agent extension service 在临时 staging
-内进行 containment、symlink、大小和 Pi discovery 校验，再经注入 file port 原子写入
-`~/.agents/skills/<name>`。已存在目标 fail-visible。
-移除只接受 Main 重新解析出的 opaque management id，并移动到系统废纸篓。builtin 与 plugin
-Skill 不提供单独移除。
+Runtime generation 只消费 enabled、package-valid、component-valid descriptors。交换仍由 owning Agent
+application service 串行化并要求相关 active turn/Automation session idle；新 generation 构建失败不替换
+旧 generation，但失败 contribution 不从 manifest-only 或 sibling provider 获得成功状态。
 
-Pi SkillHost record 继续保留 canonical `name/description`。Home management projection 在 Main
-侧只投影 personal/plugin Skill，并排除 builtin record、builtin diagnostic 以及仅由 builtin
-参与的 duplicate warning。personal/plugin Skill 显示作者原文。UI locale 不改变
-fingerprint、调用 identity、模型可见 description 或 Skill content。
+### 5. 本地安装与跨 filesystem/SQLite 失败语义
 
-Pi SkillHost 已验证并纳入当前 generation 的插件 Skill 进入 Skill 页签，使用 plugin source 与
-pluginId provenance 展示；它们不能单独删除，只随插件 install/remove 生命周期管理。manifest
-仅声明但 Pi validation 失败的 Skill 不进入页签，也不能标记为 Agent ready。
+Renderer 只发送 `installLocalPlugin` intent。Desktop picker 返回的绝对 path 仅进入 Main adapter；Agent
+application service 通过 file port 完成 containment、symlink、大小、manifest、identity 和 component
+验证，并规划 exact target。安装步骤为：
 
-Extension/Skill management catalog 只拥有安装、来源和 runtime readiness 事实。可执行的 Entry/Session `$` catalog 由 `unify-agent-launch-and-domain-bindings` 的 Agent input catalog owner 从 Pi SkillHost receipt 投影，保留 project/personal/plugin/builtin 的完整 Host identity、fingerprint 和 precedence。管理卡片、manifest 名称或 installed 状态不得直接充当 executable identity，也不得在 invocation 失败后切换同名来源。
+1. 复制到 install root sibling staging；
+2. 验证 staging package 与目标 identity 唯一性；
+3. 在 SQLite 创建可见 install lifecycle record；
+4. 原子 rename 到 canonical relative locator；
+5. 将 row 收敛为 installed，并重新计算 runtime generation。
 
-### 5. 管理 contract
+跨 filesystem/SQLite 无法形成单一物理事务，因此 interruption 必须保留一个 exact、可见、不可执行的
+install diagnostic，不得扫描 orphan bytes 自动注册、删除未知 package、回退旧 package 或伪装成功。
+用户可以对精确记录重试安装或移除。Staging 只包含当前 operation 新建且尚未成为 package authority 的
+临时 bytes，可以在失败时精确清理。
 
-Extension item 包含 installed/available 状态、category、contribution summary、
-compatibility 和 runtime readiness。Skill item 包含 source、pluginId（适用时）、
-management id 与 allowed actions。mutation contract 独立于 list：
+移除先验证 row、locator、manifest identity 和 runtime ownership，再移动 exact package 到系统废纸篓，
+最后更新 SQLite。任一步失败保留 record 与 diagnostic；不得因文件缺失清空整个 catalog。Builtin Plugin
+不可移除。启用/禁用只更新 SQLite，并在 idle boundary 重建 runtime。
 
-- install/remove plugin；
-- reload OpenNeko marketplace；
-- install/remove personal Skill。
+旧 `${NEKO_HOME}/extensions/state/*.json` 不属于新产品输入：不读取、不导入、不删除，现有 bytes 原样
+保留。新 SQLite 初始状态使用当前 canonical defaults，避免 migration/compatibility path。
 
-所有 mutation 都携带 sender-bound renderer session identity、request id 和 catalog fingerprint；
-不保留旧 capability 或只读 extension fallback。
+### 6. Package ownership 与公共路径
 
-### 6. 搜索与固定排序保持确定性
+| Responsibility | Owner / public entry | Producer | Consumer | Runtime boundary |
+| --- | --- | --- | --- | --- |
+| manifest/catalog/install policy | `@neko/agent-runtime/extensions` | Agent application service | Desktop AppHost、Agent composition | host-neutral Node application |
+| durable Plugin state | `@neko/local-metadata` Plugin repository port | Desktop-owned SQLite adapter | Agent extension service | Desktop Main single DB connection |
+| Skill discovery/receipt | `@neko/agent-runtime` Pi public entry | Pi SkillHost | Entry/Session input catalog、Agent turn | Node Agent runtime |
+| MCP connection/Tool | existing Agent MCP public entry | Plugin runtime generation | ToolRegistry/Pi | Node process/network boundary |
+| native selection/trash/process/secret | `apps/neko-desktop/src/main` adapters | Electron Main | Agent application ports | Electron trust boundary |
+| management presentation | Agent contracts + Webview public entry | AppHost typed projection | Renderer | preload sender-bound IPC |
 
-Extensions 默认使用产品推荐排序：`Creativity` 优先，其次 `Productivity`，再到研究/数据相关
-类别，最后是其他 OpenNeko 支持的类别；同级 installed 优先，再按稳定 display name/id 排序。
-Skills 固定按 personal、plugin 来源顺序和稳定名称排序。插件作者 metadata 保持原文。
+保留在 `apps/neko-desktop` 的代码必须真实依赖 Electron `dialog`、`shell.trashItem`、app/resources path、
+sender identity、SQLite connection composition、process environment 或 credential store。Manifest decode、
+install state machine、support policy、sorting、readiness 和 runtime generation 都是 host-neutral 业务行为，
+不得回流到 AppHost。
 
-Renderer 只提供跨两个页签的文本搜索，不再暴露来源、状态、分类或排序 select。这些控件
-在当前目录规模下没有足够价值，并增加了理解和操作成本。删除只影响 Renderer presentation；
-Main contract、目录记录、卡片状态/来源标识和 Agent runtime 保持不变。
+### 7. Management UI 只展示真实本地状态
 
-### 7. Internationalization
+Extensions 保留 Skills/Plugins 页签与文本搜索：
 
-`en` / `zh-cn` 覆盖标题、搜索、来源、状态、compatibility、runtime readiness、安装、卸载、
-刷新、确认、busy/error 和空态。personal/plugin Skill 与 extension manifest 的作者 metadata
-不翻译。
+- Skills 展示 personal/plugin management projection；builtin/project 不作为全局可管理记录；
+- Plugins 展示 bundled 与 SQLite-registered local records；
+- 操作为 Add local、Enable、Disable、Remove、Rescan exact sources；
+- 不展示 Available、Marketplace、Refresh marketplace、publisher catalog 或 marketplace category sorting；
+- 排序使用稳定 Plugin display name/id，不把内容相关性或安装来源变成隐藏业务路由；
+- author metadata 原样显示，产品 shell/diagnostics 支持 `en` 与 `zh-cn`。
 
-### 8. Home management contract 原子替换
+### 8. 可执行 Skill identity 只能来自 Pi receipt
 
-contract 与全部 producer/consumer 一次性替换，不添加版本字段：
-
-- IPC channel 从 `home:capabilities:list` 改为 `home:extensions:list`；
-- request/result 从 `Capabilities` 改为 `Extensions`；
-- 删除 `DesktopHomeBuiltinCapabilityItem` 与 `capabilities`；
-- 增加 `DesktopHomeExtensionItem`、`extensionDiscovery` 与 `extensions`；
-- bridge 从 `home.capabilities` 改为 `home.extensions`。
-
-Main、preload、Renderer 和测试同时切换。旧 payload/channel 不保留兼容分支。
-
-### 9. Renderer 在 Home 请求前建立 sender-bound identity
-
-Home management request 必须携带当前 Desktop renderer session identity。Renderer 入口在挂载 React 前并行完成基础 `bootstrap.get()` 与 settings 初始化；只有两者都完成后，Extensions Surface 才可能发起目录请求。preload 只接受 bootstrap 记住的 sender-bound identity，缺失或陈旧 session 直接失败，不回退当前 active window 或无 identity 请求。
+Management card、manifest display name、SQLite row 和 same-name search result 都不能直接成为 Agent invocation
+identity。Entry/Session input catalog 必须从当前 Pi SkillHost records 投影完整 source、pluginId、fingerprint
+和 locator identity；首发和后续 turn 使用同一 receipt。失效或同名冲突必须拒绝当前 invocation，不回退
+personal/builtin/recent Skill。
 
 ## Risks / Trade-offs
 
-- [OpenNeko marketplace shape 漂移] → canonical strict codec 和 package-local fail-visible diagnostic。
-- [误读其他应用状态] → repository root 与 install root 均由 OpenNeko Desktop Main 显式
-  注入；测试通过 path spy 和 reachability assertion 证明不会读取 `~/.codex`/foreign marketplace。
-- [第三方 category 不稳定] → 未知类别进入最低推荐优先级，不影响支持判定或显式名称排序。
-- [安装会修改 OpenNeko 用户数据] → 明确用户命令、确认、request/snapshot identity、contained atomic
-  install 和 recoverable removal。
-- [MCP process/HTTP 生命周期] → instance owner、idle-only swap、超时和显式 dispose。
-- [插件代码信任] → 只有用户安装且 manifest 可验证的 contribution 进入 runtime；外部 processor
-  仍受 workspace trust/permission；OAuth/App 无 owner 时拒绝。
-- [中文 UI 出现英文插件描述] → 作者 metadata 保持原文；所有产品 shell 和状态完整本地化。
+- [Agent Plugins 外部规范仍可能变化] → P0 只采用最小 canonical subset；未来在安装边界一次性转换，不污染 runtime contract。
+- [没有 Marketplace 限制发现与更新] → 当前只承诺 bundled/local 安装；等真实官方仓库和治理 owner 出现后再设计。
+- [Filesystem 与 SQLite 跨资源中断] → 持久 lifecycle row、exact operation identity、可见 invalid 状态和用户显式重试/移除。
+- [删除旧 reader 使开发期旧 package 不再出现] → 这是有意 breaking replacement；旧 bytes 不删除，但不提供兼容成功路径。
+- [Contribution 局部成功增加展示复杂度] → 公共状态保持 plugin summary + per-component safe diagnostics，不暴露 raw process/path/auth details。
+- [本地 Plugin 包含可执行 MCP 配置] → 显式用户安装与 enable、路径 containment、credential port、Tool/action approval 和 runtime ownership 继续作为独立真实门禁。
 
-## Replacement Plan
+## Migration Plan
 
-1. 更新 OpenSpec 与 typed management contract，删除 Codex/foreign marketplace path。
-2. 以 OpenNeko repository/installer 替换 Codex CLI adapter并实现 plugin mutation。
-3. 扩展 Pi Skill source并组合 plugin Skill roots。
-4. 组合 MCP runtime instance、Tool projection和 idle-only replacement。
-5. 增加 personal Skill install/remove manager。
-6. 更新双语管理 UI 与 producer/consumer tests。
-7. 运行 Agent evaluation harness、Desktop build、真实 Electron 和聚焦 Agent path 验证。
+1. 原子更新 Agent/Desktop contracts，删除 marketplace/available 字段和操作，增加 local install 与 SQLite state port。
+2. 在 `@neko/local-metadata` 增加 Plugin state repository，并由 Desktop 单一 SQLite owner 注入。
+3. 实现根 `plugin.json` codec、固定 component discovery 和 contribution-local validation；删除旧 manifest/index parser。
+4. 将第一方 Browser/Computer package 转为明确 bundled roots，删除 `extension-marketplace/marketplace.json`。
+5. 实现本地 picker、staging、install lifecycle、trash removal 和 invalid-record projection。
+6. 更新 runtime generation，使 Skill/MCP/App readiness 独立且 Skill-only Plugin 可用。
+7. 更新 Extensions UI、Pi executable input catalog、双语 copy 和全部 producer/consumer tests。
+8. 运行严格 OpenSpec、SQLite、Agent、Desktop、boundary、unused、build、真实 Electron 和 Agent Evaluation 门禁。
 
-替换过程不导入 Codex/OpenAI 已安装插件；OpenNeko install root 初始为空。用户的其他应用插件、
-Skill、设置、凭据和缓存保持不变。
+替换不提供 runtime rollback/dual-read。若本次发布整体回退，代码与资源作为一个 release 一起回退；新代码
+不会读取旧 JSON grant 或旧 manifest。真实用户 package bytes 不由迁移脚本删除。
 
 ## Open Questions
 
-OAuth MCP 与 App connector 需要独立认证/connector owner。本次必须显示 unsupported，不得以
-manifest 声明或 Codex 安装状态代替 OpenNeko runtime readiness。
+- 官方仓库采用何种 index/API、签名和 publisher identity，留待存在真实发布治理 owner 后的独立 OpenSpec。
+- App connector 与 OAuth MCP 的 credential/session owner 尚未定义，P0 继续逐 component 显示 unsupported。
