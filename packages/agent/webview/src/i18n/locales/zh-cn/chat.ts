@@ -1,6 +1,7 @@
 import type { MessageBundle } from '@neko/ui/i18n';
 
 export const chat = {
+  'chat.diagnostic.globalError': '错误',
   'chat.placeholder': '输入任何问题... (Shift+Enter 换行)',
   'chat.placeholderWithAgent': '与 {agent} 对话... (Shift+Enter 换行)',
   'chat.send': '发送',
@@ -127,6 +128,9 @@ export const chat = {
   'chat.entryAuthoring.nameRequired': '请先填写草稿名称，再选择创建位置。',
   'chat.entryAuthoring.creationUnavailable': '当前入口无法创建角色草稿。',
   'chat.entryAuthoring.creationIncomplete': '已完成的角色创建步骤已保存，请仅重试缺失步骤。',
+  'chat.entryAuthoring.characterCreatorUnavailable':
+    '当前 Agent 草稿中没有可用的内置角色生成 Skill。',
+  'chat.entryAuthoring.characterCreatorCannotRun': '当前 Agent 草稿无法运行内置角色生成 Skill。',
   'chat.entryAuthoring.retryMissingStep': '重试缺失步骤',
   'chat.entryAuthoring.destinationLabel': '选择草稿创建位置',
   'chat.entryAuthoring.destinationTitle': '角色草稿创建位置',

@@ -1,6 +1,7 @@
 import type { MessageBundle } from '@neko/ui/i18n';
 
 export const chat = {
+  'chat.diagnostic.globalError': 'Error',
   'chat.placeholder': 'Ask anything... (Shift+Enter for new line)',
   'chat.placeholderWithAgent': 'Chat with {agent}... (Shift+Enter for new line)',
   'chat.send': 'Send',
@@ -133,6 +134,10 @@ export const chat = {
   'chat.entryAuthoring.creationUnavailable': 'Character draft creation is unavailable here.',
   'chat.entryAuthoring.creationIncomplete':
     'The completed Character steps were saved. Retry only the missing step.',
+  'chat.entryAuthoring.characterCreatorUnavailable':
+    'The builtin Character Creator is unavailable in this Agent draft.',
+  'chat.entryAuthoring.characterCreatorCannotRun':
+    'The builtin Character Creator cannot run in this Agent draft.',
   'chat.entryAuthoring.retryMissingStep': 'Retry missing step',
   'chat.entryAuthoring.destinationLabel': 'Choose where to create the draft',
   'chat.entryAuthoring.destinationTitle': 'Character draft destination',

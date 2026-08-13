@@ -9,6 +9,7 @@ import type {
   OpenNekoDesktopCharacterBridge,
 } from '@neko/chara/contracts';
 import {
+  BotIcon,
   EmptyState,
   GridIcon,
   LayersIcon,
@@ -104,12 +105,14 @@ export function useCharacterManagementRuntime(input: {
 export function CharacterCatalogSurface({
   locale,
   onCreate,
+  onQuickGenerate,
   onSelect,
   runtime,
   selectedProjectId,
 }: {
   readonly locale: SupportedLocale;
   readonly onCreate: () => void;
+  readonly onQuickGenerate: () => void;
   readonly onSelect: (characterProjectId: string) => void;
   readonly runtime: CharacterManagementRuntime;
   readonly selectedProjectId?: string;
@@ -149,6 +152,10 @@ export function CharacterCatalogSurface({
           </p>
         </div>
         <div className="character-management__header-actions">
+          <button type="button" onClick={onQuickGenerate}>
+            <BotIcon size={15} />
+            <span>{foundationLabel(locale, '快速生成', 'Quick generate')}</span>
+          </button>
           <button type="button" onClick={onCreate}>
             <PlusIcon size={15} />
             <span>{foundationLabel(locale, '新建角色', 'New character')}</span>

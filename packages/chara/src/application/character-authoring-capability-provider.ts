@@ -12,6 +12,7 @@ import {
 import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
+  createCharacterProductHandoffs,
   parseCharacterDefinition,
   type CharacterDefinition,
   type CharacterProject,
@@ -95,11 +96,11 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
         id: 'neko-chara:authoring',
         priority: 72,
         content:
-          'Character authoring fills only the exact CharacterProject draft authorized for the current Conversation. Separate source-backed facts from inferred suggestions, present the complete proposal together with the pending draft operation, and treat the standard Tool approval as the single mutation confirmation without adding a text-confirmation gate. It never publishes a CharacterVersion or creates runtime, Room, Storyline, memory, model, Skill, or Tool configuration facts.',
+          'Character authoring fills only the exact CharacterProject draft authorized for the current Conversation. Separate source-backed facts from inferred suggestions, present the complete proposal together with the pending draft operation, and treat the standard Tool approval as the single mutation confirmation without adding a text-confirmation gate. When no exact CharacterProject authoring target is bound, return a proposal and state that the current Conversation has no writable Character draft target; do not conflate this with CharacterVersion publication or suggest that capability may appear later. It never publishes a CharacterVersion or creates runtime, Room, Storyline, memory, model, Skill, or Tool configuration facts.',
         locales: {
           zh: {
             content:
-              '角色创作只填写当前会话已授权的精确 CharacterProject 草案。必须区分素材事实与推断建议，先展示完整提案，再使用标准 Tool 审批执行草案操作；不得发布 CharacterVersion，也不得创建运行时、Room、Storyline、记忆、模型、Skill 或 Tool 配置事实。',
+              '角色创作只填写当前会话已授权的精确 CharacterProject 草案。必须区分素材事实与推断建议，先展示完整提案，再使用标准 Tool 审批执行草案操作，不得增加文字确认门槛。未绑定精确 CharacterProject 创作目标时，只返回提案并明确当前会话没有可写角色草稿目标；不得把它与 CharacterVersion 定稿混为一谈，也不得暗示能力稍后会自行出现。不得创建 CharacterVersion、运行时、Room、Storyline、记忆、模型、Skill 或 Tool 配置事实。',
           },
         },
       },
@@ -139,6 +140,9 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
               reviewStatus: project.reviewStatus,
               sourceFacts: proposal.sourceFacts,
               inferredSuggestions: proposal.inferredSuggestions,
+              handoffs: createCharacterProductHandoffs({
+                characterProjectId: project.characterProjectId,
+              }),
             },
           };
         } catch (error) {

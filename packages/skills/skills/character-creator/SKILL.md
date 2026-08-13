@@ -39,3 +39,6 @@ Return:
 - inferred suggestions with rationale;
 - open questions or conflicts;
 - whether the result is a proposal or was saved through an available authoring capability.
+- when it remains a proposal, identify the missing writable draft target without treating local
+  CharacterVersion finalization as the missing operation or implying that capability will appear
+  later.

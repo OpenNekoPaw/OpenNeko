@@ -67,6 +67,19 @@ describe('Character Management surfaces', () => {
     expect(screen.queryByRole('button', { name: 'World Foundation' })).toBeNull();
   });
 
+  it('hands quick generation to the Agent entry without creating a Character', async () => {
+    const execute = vi.fn();
+    const { container } = render(<Harness host={createHost(execute)} />);
+
+    await screen.findByRole('heading', { name: 'Characters' });
+    fireEvent.click(screen.getByRole('button', { name: 'Quick generate' }));
+
+    expect(container.querySelector('output')?.getAttribute('data-quick-generation-count')).toBe(
+      '1',
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('mounts the project-local authoring-only Studio from validated authority', async () => {
     const foundation = projectSnapshot();
     const project = foundation.character.projects[0]!;
@@ -782,15 +795,18 @@ function Harness({
 }): JSX.Element {
   const runtime = useCharacterManagementRuntime({ active: true, host });
   const [selection, setSelection] = useState<CharacterDetailSelection>();
+  const [quickGenerationCount, setQuickGenerationCount] = useState(0);
   return (
     <>
       <CharacterCatalogSurface
         locale="en"
         onCreate={() => setSelection({ kind: 'create' })}
+        onQuickGenerate={() => setQuickGenerationCount((count) => count + 1)}
         onSelect={(characterProjectId) => setSelection({ kind: 'project', characterProjectId })}
         runtime={runtime}
         selectedProjectId={selection?.kind === 'project' ? selection.characterProjectId : undefined}
       />
+      <output data-quick-generation-count={quickGenerationCount} />
       <CharacterDetailSurface
         locale="en"
         onCreated={(characterProjectId) => setSelection({ kind: 'project', characterProjectId })}

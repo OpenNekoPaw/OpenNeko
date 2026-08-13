@@ -1,11 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Button, RefreshIcon } from '@neko/ui';
+import { Button, OpenIcon, RefreshIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import type {
   AgentInteractionProjection,
   AgentLaunchHostResult,
+  CharacterCreationHandoffIntent,
   DesktopAgentConnectionIdentity,
 } from '@neko/agent-contracts';
+import { TOOL_NAMES_CHARA } from '@neko/agent-contracts';
+import { parseCharacterProductHandoff, type CharacterProductHandoff } from '@neko/chara/contracts';
 import { AutomationTargetSelectionRoot } from '@neko/automation-webview/target-selection/root';
 import {
   AutomationSessionControlProvider,
@@ -47,6 +50,67 @@ const renderAutomationSessionControl: AgentToolCallAccessoryRenderer = ({
   />
 );
 
+function CharacterProductHandoffAccessory({
+  onHandoff,
+  toolCall,
+}: {
+  readonly onHandoff?: (handoff: CharacterProductHandoff) => void;
+  readonly toolCall: Parameters<AgentToolCallAccessoryRenderer>[0]['toolCall'];
+}): JSX.Element | null {
+  const { t } = useTranslation();
+  if (toolCall.name !== TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT || !toolCall.result?.success) {
+    return null;
+  }
+  const data = readRecord(toolCall.result.data);
+  const rawHandoffs = data?.['handoffs'];
+  if (!Array.isArray(rawHandoffs)) {
+    return (
+      <p className="desktop-character-handoff__diagnostic" role="alert">
+        {t('characterHandoff.invalidResult')}
+      </p>
+    );
+  }
+  let handoffs: readonly CharacterProductHandoff[];
+  try {
+    handoffs = rawHandoffs.map(parseCharacterProductHandoff);
+  } catch {
+    return (
+      <p className="desktop-character-handoff__diagnostic" role="alert">
+        {t('characterHandoff.invalidResult')}
+      </p>
+    );
+  }
+  const viewCharacter = handoffs.find((handoff) => handoff.kind === 'open-character');
+  const openStudio = handoffs.find((handoff) => handoff.kind === 'open-character-studio');
+  if (!viewCharacter && !openStudio) return null;
+  return (
+    <div className="desktop-character-handoff" data-character-product-handoff="true">
+      {viewCharacter ? (
+        <Button
+          disabled={!onHandoff}
+          leadingIcon={<OpenIcon size={13} />}
+          size="xs"
+          variant="secondary"
+          onClick={() => onHandoff?.(viewCharacter)}
+        >
+          {t('characterHandoff.viewCharacter')}
+        </Button>
+      ) : null}
+      {openStudio ? (
+        <Button
+          disabled
+          leadingIcon={<OpenIcon size={13} />}
+          size="xs"
+          title={t('characterHandoff.studioUnavailable')}
+          variant="secondary"
+        >
+          {t('characterHandoff.openStudio')}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 type DesktopAgentSurfaceState =
   | { readonly kind: 'loading' }
   | {
@@ -77,6 +141,9 @@ export type DesktopAgentSurfaceProps =
       readonly initialInput?: { readonly id: string; readonly value: string };
       readonly tab: DesktopProjectTabProjection;
       readonly agentPresentation?: AgentInteractionProjection;
+      readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
+      readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
+      readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly conversationFeed?: ReactNode;
     }
@@ -86,6 +153,9 @@ export type DesktopAgentSurfaceProps =
       readonly agentSurfaceId: string;
       readonly agentPresentation: AgentInteractionProjection;
       readonly viewId: string;
+      readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
+      readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
+      readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly conversationFeed?: ReactNode;
     };
@@ -318,6 +388,8 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
                     : state.initialConversation
                 }
                 initialInput={state.initialInput}
+                characterCreationHandoff={props.characterCreationHandoff}
+                onCharacterCreationHandoffConsumed={props.onCharacterCreationHandoffConsumed}
                 locale={locale}
                 presentation="desktop-dock"
                 conversationFeed={
@@ -328,9 +400,17 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
                       }
                     : undefined
                 }
-                toolCallAccessoryRenderer={
-                  automationSessionControlRuntime ? renderAutomationSessionControl : undefined
-                }
+                toolCallAccessoryRenderer={({ conversationId, toolCall }) => (
+                  <>
+                    {automationSessionControlRuntime
+                      ? renderAutomationSessionControl({ conversationId, toolCall })
+                      : null}
+                    <CharacterProductHandoffAccessory
+                      onHandoff={props.onCharacterProductHandoff}
+                      toolCall={toolCall}
+                    />
+                  </>
+                )}
               />
             </DesktopAutomationSessionControlBoundary>
           </Suspense>
@@ -355,6 +435,12 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
       <DesktopAgentAdapterDisposer adapter={activeAdapter} />
     </>
   );
+}
+
+function readRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined;
 }
 
 function DesktopAutomationTargetSelectionSurface({

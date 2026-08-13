@@ -9,6 +9,7 @@ import {
 import {
   applyWorkbenchDisplayMode,
   createManagementMainSplitResizeBinding,
+  createDesktopAgentSurfaceProps,
   DesktopShellView,
   MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO,
   MANAGEMENT_MAIN_SPLIT_MIN_RATIO,
@@ -42,6 +43,54 @@ import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?ra
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 describe('Desktop scene Workbench', () => {
+  it('binds Character creation handoff only to its exact fresh Agent Draft', () => {
+    const projection = agentProjection();
+    const composition = resolveActiveDesktopWindowWorkbench(projection.window);
+    const interaction = composition.scene.slots.interaction;
+    if (!interaction) throw new Error('Agent projection requires an interaction surface.');
+    const handoff = {
+      kind: 'character-creation' as const,
+      intentId: 'character-creation-1',
+      skill: {
+        name: 'character-creator' as const,
+        source: { kind: 'builtin' as const },
+      },
+      prompt: '',
+      references: [],
+      returnTarget: { kind: 'character-management' as const },
+    };
+    const common = {
+      projection,
+      workbenchInstanceId: composition.workbenchInstanceId,
+      interaction,
+      onChooseWorkspaceTarget: vi.fn(async () => undefined),
+      onSelectWorkspaceProjectTarget: vi.fn(async () => undefined),
+      onLoadAuthoringTargets: vi.fn(async () => ({
+        targets: [],
+        creationContexts: [],
+        diagnostics: [],
+      })),
+      onSelectAuthoringTarget: vi.fn(async () => undefined),
+      onCreateAuthoringTarget: vi.fn(async () => undefined),
+    };
+
+    expect(
+      createDesktopAgentSurfaceProps({
+        ...common,
+        characterCreationHandoff: {
+          draftId:
+            interaction.scope.kind === 'workspace' ? 'wrong-draft' : interaction.scope.draftId,
+          intent: handoff,
+        },
+      }),
+    ).toMatchObject({ characterCreationHandoff: handoff });
+    expect(
+      createDesktopAgentSurfaceProps({
+        ...common,
+        characterCreationHandoff: { draftId: 'wrong-draft', intent: handoff },
+      }),
+    ).not.toHaveProperty('characterCreationHandoff');
+  });
   it('locks only controls owned by the pending Shell mutation scope', () => {
     const base = {
       scene: false,

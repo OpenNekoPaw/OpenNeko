@@ -3225,6 +3225,21 @@ code {
   margin: -8px -8px 0;
 }
 
+.desktop-character-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--neko-border);
+}
+
+.desktop-character-handoff__diagnostic {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--neko-errorForeground, var(--neko-foreground));
+  border-top: 1px solid var(--neko-border);
+}
+
 .automation-session-control__header {
   display: flex;
   align-items: flex-start;

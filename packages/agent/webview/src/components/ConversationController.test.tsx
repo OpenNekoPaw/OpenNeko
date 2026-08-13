@@ -178,6 +178,10 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.entryAuthoring.namePlaceholder': 'Name this Character draft',
         'chat.entryAuthoring.nameRequired': 'Enter a draft name.',
         'chat.entryAuthoring.creationUnavailable': 'Character draft creation is unavailable.',
+        'chat.entryAuthoring.characterCreatorUnavailable':
+          'The builtin Character Creator is unavailable.',
+        'chat.entryAuthoring.characterCreatorCannotRun':
+          'The builtin Character Creator cannot run here.',
         'chat.entryAuthoring.destinationLabel': 'Choose where to create the draft',
         'chat.entryAuthoring.destinationTitle': 'Character draft destination',
         'chat.entryAuthoring.createDescription': 'Create a new draft here',
@@ -1642,6 +1646,314 @@ describe('ConversationController entry state', () => {
       },
     });
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('consumes a Character Management handoff with the exact builtin Skill and fresh target receipt', async () => {
+    vi.clearAllMocks();
+    const draftId = 'draft-character-management-handoff';
+    const projectSkill = createDraftSkillCatalogEntry('character-creator', 'any');
+    const builtinSkill = {
+      ...createDraftSkillCatalogEntry('character-creator', 'any'),
+      id: 'skill:builtin:character-creator',
+      source: { kind: 'builtin' as const, sourceId: 'sha256:character-creator-fixture' },
+      executable: {
+        kind: 'skill' as const,
+        skillName: 'character-creator',
+        activationId: 'activation:builtin:character-creator',
+      },
+    };
+    const launchCatalog = {
+      ...createDraftLaunchCatalog(draftId, { kind: 'unbound' }),
+      inputs: [projectSkill, builtinSkill],
+    };
+    const reference: AgentContextPayload = {
+      type: 'asset',
+      id: 'asset-reference-1',
+      label: 'Portrait',
+      summary: 'A clockmaker portrait.',
+      data: {
+        catalogEntryId: 'reference:asset:portrait-1',
+        ownerKind: 'assistant',
+        ownerId: 'assistant-space:local-user',
+        bindingReceiptId: 'binding-receipt:portrait-1',
+      },
+    };
+    const target = {
+      label: 'Character library / Lin',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'character-library-workspace',
+        workspaceGrantId: 'character-library-grant',
+      },
+      target: { kind: 'character-project' as const, characterProjectId: 'character-project-lin' },
+    };
+    const onCreateAuthoringTarget = vi.fn(async () => ({ status: 'created' as const, target }));
+    const onConsumed = vi.fn();
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.readEntryIntent.mockReturnValue({ mode: 'assistant', targetReceipt: null });
+    hostMocks.configureEntryTarget.mockImplementation(async (mode, binding) => ({
+      mode,
+      targetReceipt:
+        binding === undefined
+          ? null
+          : {
+              targetReceiptId: 'entry-target:character-project-lin',
+              draftId,
+              connectionId: launchCatalog.connection.connectionId,
+              mode,
+              binding,
+            },
+    }));
+    hostMocks.submitDraft.mockResolvedValueOnce({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-character-project-lin',
+        binding: {
+          kind: 'workspace',
+          workspaceId: 'character-library-workspace',
+          workspaceGrantId: 'character-library-grant',
+        },
+      },
+      turnId: 'turn-character-project-lin',
+      turnStatus: 'running',
+    });
+
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [
+              {
+                creationId: 'standalone-character',
+                label: 'Character library / New',
+                targetKind: 'character-project' as const,
+                placement: {
+                  kind: 'standalone-library' as const,
+                  library: 'character' as const,
+                },
+              },
+            ],
+            diagnostics: [],
+          })),
+          onCreateAuthoringTarget,
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          characterCreationHandoff={{
+            kind: 'character-creation',
+            intentId: 'character-creation-handoff-1',
+            skill: {
+              name: 'character-creator',
+              source: { kind: 'builtin' },
+            },
+            prompt: '保留这段完整角色提示词',
+            references: [reference],
+            returnTarget: { kind: 'character-management' },
+          }}
+          onCharacterCreationHandoffConsumed={onConsumed}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('authoring', undefined),
+    );
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Type anything...')).toHaveProperty(
+        'value',
+        '$character-creator 保留这段完整角色提示词',
+      ),
+    );
+    expect(onConsumed).toHaveBeenCalledWith('character-creation-handoff-1');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Draft name' }), {
+      target: { value: 'Lin' },
+    });
+    fireEvent.click(await screen.findByText('Character library / New'));
+    await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('authoring', {
+        kind: 'authoring',
+        workspaceId: 'character-library-workspace',
+        workspaceGrantId: 'character-library-grant',
+        target: {
+          kind: 'character-project',
+          characterProjectId: 'character-project-lin',
+        },
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+
+    expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
+      entryTargetReceipt: {
+        targetReceiptId: 'entry-target:character-project-lin',
+        draftId,
+      },
+      input: {
+        kind: 'skill',
+        catalogEntryId: 'skill:builtin:character-creator',
+        skillName: 'character-creator',
+        activationId: 'activation:builtin:character-creator',
+        args: '保留这段完整角色提示词',
+      },
+      references: [
+        {
+          catalogEntryId: 'reference:asset:portrait-1',
+          referenceId: 'asset-reference-1',
+          ownerKind: 'assistant',
+          ownerId: 'assistant-space:local-user',
+          bindingReceiptId: 'binding-receipt:portrait-1',
+        },
+      ],
+    });
+  });
+
+  it('cancels Character Management quick generation without creating a target', async () => {
+    vi.clearAllMocks();
+    const builtinSkill = {
+      ...createDraftSkillCatalogEntry('character-creator', 'any'),
+      id: 'skill:builtin:character-creator',
+      source: { kind: 'builtin' as const, sourceId: 'sha256:character-creator-fixture' },
+    };
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-character-cancel', { kind: 'unbound' }),
+      inputs: [builtinSkill],
+    };
+    const onCreateAuthoringTarget = vi.fn();
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [],
+            diagnostics: [],
+          })),
+          onCreateAuthoringTarget,
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          characterCreationHandoff={{
+            kind: 'character-creation',
+            intentId: 'character-creation-cancel',
+            skill: {
+              name: 'character-creator',
+              source: { kind: 'builtin' },
+            },
+            prompt: '',
+            references: [],
+            returnTarget: { kind: 'character-management' },
+          }}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('assistant', undefined),
+    );
+    expect(onCreateAuthoringTarget).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+  });
+
+  it('keeps a Character Management handoff pending when authoring mode configuration fails', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-character-config-failure', { kind: 'unbound' }),
+      inputs: [
+        {
+          ...createDraftSkillCatalogEntry('character-creator', 'any'),
+          source: { kind: 'builtin' as const, sourceId: 'sha256:character-creator-fixture' },
+        },
+      ],
+    };
+    const onConsumed = vi.fn();
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.configureEntryTarget.mockRejectedValueOnce(new Error('Authoring mode unavailable.'));
+
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={launchCatalog.interaction}
+        characterCreationHandoff={{
+          kind: 'character-creation',
+          intentId: 'character-creation-config-failure',
+          skill: { name: 'character-creator', source: { kind: 'builtin' } },
+          prompt: '保留这段提示词',
+          references: [],
+          returnTarget: { kind: 'character-management' },
+        }}
+        onCharacterCreationHandoffConsumed={onConsumed}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(await screen.findByText('Authoring mode unavailable.')).toBeTruthy();
+    expect(onConsumed).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '');
+  });
+
+  it('projects committed authoring mode when the builtin Character Creator is unavailable', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-character-catalog-miss', { kind: 'unbound' }),
+      inputs: [createDraftSkillCatalogEntry('character-creator', 'any')],
+    };
+    const onConsumed = vi.fn();
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [],
+            diagnostics: [],
+          })),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          characterCreationHandoff={{
+            kind: 'character-creation',
+            intentId: 'character-creation-catalog-miss',
+            skill: { name: 'character-creator', source: { kind: 'builtin' } },
+            prompt: '保留这段提示词',
+            references: [],
+            returnTarget: { kind: 'character-management' },
+          }}
+          onCharacterCreationHandoffConsumed={onConsumed}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    expect(await screen.findByText('The builtin Character Creator is unavailable.')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Authoring' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(onConsumed).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('Type anything...')).toHaveProperty('value', '');
   });
 
   it('submits skill-creator through the ordinary Skill path without configuring a target', async () => {

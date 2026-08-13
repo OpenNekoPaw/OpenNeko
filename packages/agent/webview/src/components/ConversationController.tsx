@@ -32,6 +32,7 @@ import {
   type AgentSessionDiagnosticMessage,
   type AgentInteractionProjection,
   type AgentInputCatalogEntry,
+  type AgentSkillInvocationCatalogEntry,
   type AgentInputReferenceReceipt,
   type AgentCharacterDialogueTargetOption,
   type ParsedAgentInputTrigger,
@@ -42,6 +43,8 @@ import {
   SessionMode,
   TabType,
   requireAgentDraftHostRuntimeAdapter,
+  parseCharacterCreationHandoffIntent,
+  type CharacterCreationHandoffIntent,
 } from '@neko/agent-contracts';
 import type {
   SkillSummary,
@@ -155,6 +158,8 @@ export interface ConversationControllerProps {
   // From AppShell (config + resource state)
   initialConversation?: { readonly id: string; readonly title: string };
   initialInput?: { readonly id: string; readonly value: string };
+  characterCreationHandoff?: CharacterCreationHandoffIntent;
+  onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   emptyStatePresentation?: 'default' | 'desktop-dock';
   agentPresentation?: AgentInteractionProjection;
   conversationFeed?: {
@@ -212,6 +217,8 @@ export function ConversationController({
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
+  characterCreationHandoff,
+  onCharacterCreationHandoffConsumed,
   settings,
   hasConfigSnapshot,
   setSettings,
@@ -231,6 +238,8 @@ export function ConversationController({
   renderHeader,
 }: ConversationControllerProps) {
   const { t } = useTranslation();
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const hostRuntimeAdapter = useAgentHostRuntimeAdapter();
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
@@ -306,6 +315,11 @@ export function ConversationController({
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
   const [isEntryBindingPending, setIsEntryBindingPending] = useState(false);
   const [entryQuickDetailOpen, setEntryQuickDetailOpen] = useState(true);
+  const [characterCreationLock, setCharacterCreationLock] = useState<{
+    readonly intentId: string;
+    readonly draftId: string;
+    readonly catalogEntry: AgentSkillInvocationCatalogEntry;
+  }>();
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
   const [entryExecutionMode, setEntryExecutionMode] = useState<SettingsState['executionMode']>(
     settings.executionMode,
@@ -315,6 +329,9 @@ export function ConversationController({
   const activeDraftIdRef = useRef<string>();
   const skipEntryDraftWriteRef = useRef<string>();
   const committedEntryDraftIdRef = useRef<string>();
+  const consumedCharacterCreationHandoffIdsRef = useRef(new Set<string>());
+  const pendingCharacterCreationHandoffIdsRef = useRef(new Set<string>());
+  const activeCharacterCreationHandoffIntentIdRef = useRef<string>();
 
   // ---- Per-conversation ref Maps ----
   const conversationTokenCountRef = useRef<Map<string, number>>(new Map());
@@ -385,7 +402,7 @@ export function ConversationController({
   );
   const configureEntryAuthoringTarget = useCallback(
     async (target: AgentComposerWorkspaceTarget | undefined) => {
-      setEntryContextReferences([]);
+      if (!characterCreationLock) setEntryContextReferences([]);
       setEntryCharacterLaunches([]);
       setProjectFiles([]);
       setMentionItems([]);
@@ -412,7 +429,14 @@ export function ConversationController({
         setIsEntryBindingPending(false);
       }
     },
-    [entryMode, hostRuntimeAdapter, setMentionItems, setProjectFiles, updateMentionSearchFilter],
+    [
+      characterCreationLock,
+      entryMode,
+      hostRuntimeAdapter,
+      setMentionItems,
+      setProjectFiles,
+      updateMentionSearchFilter,
+    ],
   );
   const clearEntryAuthoringTarget = useCallback(async () => {
     try {
@@ -593,6 +617,8 @@ export function ConversationController({
     setIsForegroundConversationActivationPending(false);
     setForegroundAvailabilityByConversation(new Map());
     isTablessConversationViewRef.current = true;
+    activeCharacterCreationHandoffIntentIdRef.current = undefined;
+    setCharacterCreationLock(undefined);
   }, [
     agentPresentation,
     clearVisibleState,
@@ -603,6 +629,102 @@ export function ConversationController({
     hostRuntimeAdapter,
     settings.executionMode,
   ]);
+
+  useEffect(() => {
+    if (!characterCreationHandoff || agentPresentation?.phase !== 'draft') return;
+    if (activeDraftIdRef.current !== agentPresentation.draftId) return;
+    let handoff: CharacterCreationHandoffIntent;
+    try {
+      handoff = parseCharacterCreationHandoffIntent(characterCreationHandoff);
+      if (consumedCharacterCreationHandoffIdsRef.current.has(handoff.intentId)) return;
+      if (pendingCharacterCreationHandoffIdsRef.current.has(handoff.intentId)) return;
+      if (activeCharacterCreationHandoffIntentIdRef.current === handoff.intentId) return;
+      const draftAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
+      const draftId = agentPresentation.draftId;
+      pendingCharacterCreationHandoffIdsRef.current.add(handoff.intentId);
+      activeCharacterCreationHandoffIntentIdRef.current = handoff.intentId;
+      setIsEntryBindingPending(true);
+      void draftAdapter
+        .configureEntryTarget('authoring', undefined)
+        .then((intent) => {
+          if (
+            activeDraftIdRef.current !== draftId ||
+            activeCharacterCreationHandoffIntentIdRef.current !== handoff.intentId
+          ) {
+            return;
+          }
+          setEntryIntent(intent);
+          setEntryWorkspaceTarget(undefined);
+          setEntryMode('authoring');
+          setEntryQuickDetailOpen(true);
+          const launchCatalog = draftAdapter.readLaunchCatalog();
+          const catalogEntry = launchCatalog.inputs.find(
+            (entry): entry is AgentSkillInvocationCatalogEntry =>
+              entry.trigger === 'skill' &&
+              entry.name === handoff.skill.name &&
+              entry.source.kind === handoff.skill.source.kind,
+          );
+          if (!catalogEntry) {
+            setCharacterCreationLock(undefined);
+            setGlobalError(translateRef.current('chat.entryAuthoring.characterCreatorUnavailable'));
+            return;
+          }
+          if (
+            !isAgentInputCatalogEntryExecutable({
+              entry: catalogEntry,
+              phase: 'draft',
+              bindingKind: launchCatalog.interaction.binding.kind,
+            })
+          ) {
+            setCharacterCreationLock(undefined);
+            setGlobalError(translateRef.current('chat.entryAuthoring.characterCreatorCannotRun'));
+            return;
+          }
+          setCharacterCreationLock({ intentId: handoff.intentId, draftId, catalogEntry });
+          updateEntryInputValue(
+            `$${handoff.skill.name}${handoff.prompt.length > 0 ? ` ${handoff.prompt}` : ' '}`,
+          );
+          setEntryContextReferences([...handoff.references]);
+          setGlobalError(null);
+          consumedCharacterCreationHandoffIdsRef.current.add(handoff.intentId);
+          onCharacterCreationHandoffConsumed?.(handoff.intentId);
+        })
+        .catch((error: unknown) => {
+          if (
+            activeDraftIdRef.current === draftId &&
+            activeCharacterCreationHandoffIntentIdRef.current === handoff.intentId
+          ) {
+            setGlobalError(describeError(error));
+          }
+        })
+        .finally(() => {
+          pendingCharacterCreationHandoffIdsRef.current.delete(handoff.intentId);
+          if (
+            activeDraftIdRef.current === draftId &&
+            activeCharacterCreationHandoffIntentIdRef.current === handoff.intentId
+          ) {
+            setIsEntryBindingPending(false);
+          }
+        });
+    } catch (error) {
+      setCharacterCreationLock(undefined);
+      setGlobalError(describeError(error));
+    }
+  }, [
+    agentPresentation,
+    characterCreationHandoff,
+    hostRuntimeAdapter,
+    onCharacterCreationHandoffConsumed,
+    updateEntryInputValue,
+  ]);
+
+  useEffect(() => {
+    if (!characterCreationLock) return;
+    const trigger = parseAgentInputTrigger(entryInputValue);
+    if (trigger?.trigger !== 'skill' || trigger.name !== characterCreationLock.catalogEntry.name) {
+      setCharacterCreationLock(undefined);
+    }
+  }, [characterCreationLock, entryInputValue]);
 
   useEffect(() => {
     if (agentPresentation?.phase !== 'draft') return;
@@ -1269,6 +1391,7 @@ export function ConversationController({
         .then((intent) => {
           setEntryQuickDetailOpen(true);
           setEntryMode(mode);
+          setCharacterCreationLock(undefined);
           setEntryIntent(intent);
           if (mode !== 'authoring') setEntryWorkspaceTarget(undefined);
           setEntrySessionMode('agent');
@@ -1373,9 +1496,17 @@ export function ConversationController({
             trigger: parseAgentInputTrigger(messageText),
             catalog: launchCatalog.inputs,
             bindingKind: authoritativeDraft.binding.kind,
+            exactCharacterCreatorEntry:
+              characterCreationLock?.draftId === agentPresentation.draftId
+                ? characterCreationLock.catalogEntry
+                : undefined,
           });
         } catch (error) {
-          setGlobalError(describeError(error));
+          setGlobalError(
+            error instanceof CharacterCreatorInvocationUnavailableError
+              ? t('chat.entryAuthoring.characterCreatorCannotRun')
+              : describeError(error),
+          );
           return false;
         }
         const resourceGrantIds = contextPayloads.flatMap((payload) => {
@@ -1438,6 +1569,7 @@ export function ConversationController({
       entryIntent,
       entryMode,
       entryInputValue,
+      characterCreationLock,
       entryModelState.agentMediaModels,
       entrySelectedModel,
       entrySessionMode,
@@ -1938,6 +2070,15 @@ export function ConversationController({
                       selected={entryWorkspaceTarget}
                       pending={isEntryBindingPending}
                       onChange={configureEntryAuthoringTarget}
+                      creationOnlyKind={characterCreationLock ? 'character-project' : undefined}
+                      onCancelCreation={
+                        characterCreationLock
+                          ? () => {
+                              setCharacterCreationLock(undefined);
+                              handleEntryModeChange('assistant');
+                            }
+                          : undefined
+                      }
                     />
                   ) : entryMode === 'character-dialogue' &&
                     entryCharacterTargetsStatus === 'ready' &&
@@ -2058,7 +2199,9 @@ export function ConversationController({
       })}
 
       {globalError ? (
-        <AgentDiagnosticToast title="全局错误">{globalError}</AgentDiagnosticToast>
+        <AgentDiagnosticToast title={t('chat.diagnostic.globalError')}>
+          {globalError}
+        </AgentDiagnosticToast>
       ) : null}
     </>
   );
@@ -2066,6 +2209,13 @@ export function ConversationController({
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+class CharacterCreatorInvocationUnavailableError extends Error {
+  constructor() {
+    super('character-creator-invocation-unavailable');
+    this.name = 'CharacterCreatorInvocationUnavailableError';
+  }
 }
 
 function projectDraftSkillSummaries(
@@ -2118,9 +2268,33 @@ function projectDraftInputIntent(input: {
   readonly trigger: ParsedAgentInputTrigger | null;
   readonly catalog: readonly AgentInputCatalogEntry[];
   readonly bindingKind: import('@neko/agent-contracts').AgentBindingKind;
+  readonly exactCharacterCreatorEntry?: AgentSkillInvocationCatalogEntry;
 }): import('@neko/agent-contracts').AgentDraftInputIntent {
   if (input.trigger?.trigger !== 'command' && input.trigger?.trigger !== 'skill') {
     return { kind: 'message', text: input.messageText };
+  }
+  if (
+    input.exactCharacterCreatorEntry &&
+    input.trigger.trigger === 'skill' &&
+    input.trigger.name === input.exactCharacterCreatorEntry.name
+  ) {
+    const entry = input.exactCharacterCreatorEntry;
+    if (
+      !isAgentInputCatalogEntryExecutable({
+        entry,
+        phase: 'draft',
+        bindingKind: input.bindingKind,
+      })
+    ) {
+      throw new CharacterCreatorInvocationUnavailableError();
+    }
+    return {
+      kind: 'skill',
+      catalogEntryId: entry.id,
+      skillName: entry.executable.skillName,
+      activationId: entry.executable.activationId,
+      ...(input.trigger.args === undefined ? {} : { args: input.trigger.args }),
+    };
   }
   return resolveAgentInputInvocationIntent({
     trigger: input.trigger as ParsedAgentInputTrigger & { readonly trigger: 'command' | 'skill' },

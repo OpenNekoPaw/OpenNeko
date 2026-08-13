@@ -214,3 +214,138 @@ Quality commands at this correction point:
 - `pnpm check:legacy-debt` — passed with zero blocking production debt;
 - `pnpm check:no-internal-versioning` — self-tests passed, repository audit remained red because the shared dirty worktree has stale allowances and 246 new occurrences across unrelated Agent/Desktop/continuity work; no internal schema/format generation was added by the portable package code;
 - `pnpm check:unused` — red only for unrelated existing `@neko/generation` and `@earendil-works/pi-ai` manifest entries.
+
+## Batch 7 Character Creator management handoff evidence
+
+The missing runtime capability was not Character draft mutation: `@neko/chara` already owns
+`chara.character.fillDraft`, and the Agent turn snapshot correctly exposes it only after an exact
+CharacterProject authoring receipt exists. The missing link was a typed Character Management handoff
+to one fresh canonical Agent Draft and its exact builtin Character Creator catalog entry.
+
+Implemented canonical path:
+
+```text
+Character Management Quick generate
+  -> Host open-agent-entry transition and exact returned draftId
+  -> CharacterCreationHandoffIntent (exact builtin source + management return identity)
+  -> existing Agent Entry authoring destination chooser
+  -> exact fresh CharacterProject receipt
+  -> existing chara.character.fillDraft Tool and standard Tool approval
+  -> Chara-owned open-character/open-character-studio result handoffs
+```
+
+The handoff contract rejects same-named personal/project Skills and unknown return targets. Agent
+Webview resolves the builtin through the authoritative launch catalog and submits its exact
+`catalogEntryId`, `skillName` and `activationId`; Skill metadata or prompt text grants no Tool access.
+Desktop stores the intent against the Host-returned draft identity and injects it only into that
+Draft. Cancellation returns to Assistant and creates no Character or Project fact.
+
+`character-creator/SKILL.md` remains method/output guidance only. Chara capability prompt and Tool
+schema retain authoring lifecycle, exact-target availability, mutation and diagnostics. A missing
+target now reports that the current Conversation has no writable Character draft target and does not
+misstate CharacterVersion publication as a capability that may appear later.
+
+Successful `fillDraft` results project exact `View character` and `Open Studio` product handoffs.
+`View character` uses the canonical Creative Management transition followed by exact detail
+selection. `Open Studio` remains visible but disabled because Host does not yet expose one canonical
+CharacterProject-to-directory-authorized Workspace Authoring transition; guessing a current/recent
+Workspace would violate the target authority contract. Tasks 6.3, 7.1 and 7.2 therefore remain open.
+
+Task 6.2 also remains open. The implementation preserves prompt and authorized reference receipts
+and reuses the only existing operation-level fresh-target chooser, but that chooser is currently the
+Agent Entry `authoring` mode. The task text says not to change Entry mode. A second Character-specific
+chooser path was not added to hide this artifact conflict.
+
+Focused verification:
+
+- `@neko/agent-contracts`: 45 files, 281 tests passed; typecheck passed;
+- `@neko/chara`: 37 files, 195 tests passed; typecheck passed;
+- `@neko/chara-webview`: 4 files, 16 tests passed; typecheck passed;
+- `@neko/agent-webview`: 102 files, 778 tests passed; build passed;
+- focused Desktop renderer tests: 3 files, 106 tests passed; Desktop typecheck passed;
+- `pnpm test:agent:eval`: 45 files, 307 tests passed; all-suite dry-run selected 26 suites / 76 cases;
+- Character Creator Evaluation fingerprint coverage: 2 tests passed;
+- `pnpm package:desktop`: passed for darwin-arm64;
+- strict OpenSpec validation and `git diff --check`: passed.
+
+Agent Evaluation disposition is recorded in `evaluation.md`. The ordinary proposal case was updated
+to the current Host fingerprint. A real quick-create positive case is infrastructure-blocked because
+the external Evaluation workflow has no product-neutral Character Management transition or exact
+Character authoring target creation/binding operation. Key-free harness success is not real Agent
+behavior evidence.
+
+UI validation is advisory `blocked`. The visible development scenario could not acquire the checkout
+Vite bundle because an existing user-owned Desktop process holds it. A freshly built packaged fixture
+and a manual isolated packaged launch both remained before renderer/CDP readiness, so no trustworthy
+wide/narrow screenshot was produced or visually judged. Component and Desktop path tests remain
+functional evidence only, not visual acceptance. The result accessory success state also cannot yet
+be reached through the provider-free scenario.
+
+The full Desktop package test has three unrelated failures in
+`desktop-agent-resource-display-projector.test.ts`: the shared dirty worktree now projects
+`previewDescriptor` while those existing assertions still expect `renderUri`. They were not changed
+or treated as passing evidence.
+
+## Batch 8 correction: builtin identity, transactional handoff and real UI evidence
+
+Visible Computer Use exposed a contract mismatch hidden by the earlier fixture: Character Management
+encoded the logical builtin identity with `sourceId: "character-creator"`, while the authoritative
+Agent launch catalog uses `sourceId` for the current Skill package fingerprint. The ordinary
+`$skill-creator` path succeeded because it consumed the catalog entry directly; Character quick
+generation failed before target selection because it compared the fingerprint with a logical name.
+
+The canonical handoff contract now carries only the stable logical identity
+`{ name: "character-creator", source: { kind: "builtin" } }`. After the Draft is configured for
+authoring, Agent Webview resolves that logical identity against the authoritative catalog and locks
+the exact current `catalogEntryId`, fingerprint-backed source receipt and activation id. Same-named
+personal/project Skills remain ineligible. Catalog fingerprints no longer leak into the management
+intent, and the contract rejects a `sourceId` field as unsupported.
+
+Handoff consumption is now transactional. The intent is reported consumed only after authoring
+configuration succeeds and the exact builtin entry is present and executable. A pending intent is
+deduplicated across Renderer rerenders; stale async completion is ignored after Draft/intent change;
+configuration failure leaves the Shell handoff unconsumed and creates no target. Prompt and
+authorized references are applied only after the successful configuration boundary.
+
+User-visible Character Creator availability/executability diagnostics, the global Agent error title,
+and invalid Character Tool-result handoff diagnostics now use the existing English/Chinese locale
+catalogs. Skill prompt content remains one canonical portable `SKILL.md`; locale-specific product
+labels and diagnostics stay in presentation catalogs, while a Skill follows the user's requested
+language at execution time. Duplicated language-specific Skill packages were not introduced.
+
+Agent Evaluation change selection now recognizes canonical builtin content under
+`packages/skills/skills/<name>/`, current Pi Skill runtime files, the Character handoff contract and
+the Agent Webview handoff consumer. These paths select `skill.<name>`,
+`agent-runtime.skill-runtime` and `agent-runtime.launch-binding` instead of failing with
+`unmapped-coverage`.
+
+Focused verification after the correction:
+
+- `@neko/agent-webview` `ConversationController.test.tsx`: 63 tests passed; full package 102 files / 783 tests passed; build passed;
+- `@neko/agent-contracts` Character handoff tests: 5 passed; typecheck passed;
+- Desktop `DesktopAgentSurface.test.tsx` + `DesktopShell.test.tsx`: 53 passed; typecheck passed;
+- Agent Evaluation change selector: 7 tests passed;
+- `pnpm test:agent:eval`: 45 files / 309 tests passed; all-suite dry-run selected 26 suites / 76 cases;
+- `pnpm check:agent-boundaries`, `pnpm check:application-boundaries` and `pnpm check:openspec`: passed;
+- `git diff --check`: passed.
+
+Visible Electron Computer Use acceptance:
+
+- Character Management `快速生成` opened the canonical Agent Entry in 创作 mode with
+  `$character-creator` prefilled and the fresh Character destination chooser visible; the previous
+  English builtin-unavailable error did not recur.
+- After the standard `chara.character.fillDraft` approval, `UI Quick Cartographer`
+  (`character-project:2acebbd4-b02f-4bb7-a7ca-3536f0b3d10d`) was written and appeared in Character
+  Management as `草稿 · 0 个版本`.
+- The ordinary `$skill-creator` path created personal Skill `ui-test-i18n-character-summary`
+  (fingerprint prefix/suffix `7a6a47c7...5acd19`), and the Extensions catalog displayed it as
+  `个人`.
+
+Two adjacent findings remain outside this correction. Opening the fresh Character authoring target
+projects a Content Project panel diagnostic for a nonexistent `ProjectComposition`; the Character
+Tool write still succeeds, but the Workspace composition needs its owning follow-up. The Computer
+Use accessibility tree was authoritative and stable, while captured screenshots intermittently
+showed the prior GPU surface, so functional UI evidence is accepted and pixel-level visual review
+remains blocked rather than being reported as passed. `pnpm check:no-internal-versioning` is also
+blocked by existing dirty-worktree Character contract findings around `revision`, `version` and
+`compatibility`; none are introduced by the handoff, localization or Evaluation selector changes.

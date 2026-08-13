@@ -439,6 +439,10 @@ export const zhCN = {
   'agent.runtimeUnavailableDetail': '此面板所需的 Agent 运行时当前不可用。',
   'agent.connectionFailureDetail': 'Agent 面板连接失败，工作区的其他功能仍可继续使用。',
   'agent.retry': '重试',
+  'characterHandoff.viewCharacter': '查看角色',
+  'characterHandoff.openStudio': '打开 Studio',
+  'characterHandoff.invalidResult': '角色草稿结果缺少有效操作。',
+  'characterHandoff.studioUnavailable': '尚未解析精确工作区创作权限，当前无法打开 Studio。',
   'automation.targetSelection.eyebrow': '自动化授权',
   'automation.targetSelection.title': '选择精确目标',
   'automation.targetSelection.description':

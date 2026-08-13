@@ -14,11 +14,16 @@ import { Header } from './Header';
 import { OnboardingFlow } from './OnboardingFlow';
 import { useConfigState, useResourceState } from '../hooks';
 import { ConversationController } from './ConversationController';
-import type { AgentInteractionProjection } from '@neko/agent-contracts';
+import type {
+  AgentInteractionProjection,
+  CharacterCreationHandoffIntent,
+} from '@neko/agent-contracts';
 
 export interface AppShellProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
+  readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly presentation?: 'default' | 'desktop-dock';
   readonly agentPresentation?: AgentInteractionProjection;
   readonly conversationFeed?: {
@@ -32,6 +37,8 @@ export function AppShell({
   conversationFeed,
   initialConversation,
   initialInput,
+  characterCreationHandoff,
+  onCharacterCreationHandoffConsumed,
   presentation = 'default',
 }: AppShellProps) {
   const config = useConfigState();
@@ -90,6 +97,8 @@ export function AppShell({
         emptyStatePresentation={presentation === 'desktop-dock' ? 'desktop-dock' : 'default'}
         initialConversation={initialConversation}
         initialInput={initialInput}
+        characterCreationHandoff={characterCreationHandoff}
+        onCharacterCreationHandoffConsumed={onCharacterCreationHandoffConsumed}
         conversationFeed={conversationFeed}
         settings={settings}
         hasConfigSnapshot={hasConfigSnapshot}

@@ -61,7 +61,7 @@ const RULES = Object.freeze([
   regexRule(
     'portable-skill-content',
     (match) => `skill.${match[1]}`,
-    /^(?:\.codex|\.agents)\/skills\/([a-z0-9][a-z0-9._-]*)\//u,
+    /^(?:(?:\.codex|\.agents)\/skills|packages\/skills\/skills)\/([a-z0-9][a-z0-9._-]*)\//u,
   ),
   rule('prompt-composition', 'agent-runtime.prompt-composition', [
     'packages/agent/runtime/src/prompt/',
@@ -69,7 +69,8 @@ const RULES = Object.freeze([
   rule('skill-runtime', 'agent-runtime.skill-runtime', [
     'packages/agent/runtime/src/skill/',
     'packages/agent/runtime/src/pi/personal-skill-manager',
-    'packages/skills/src/builtins/',
+    'packages/agent/runtime/src/pi/skill-host',
+    'packages/agent/runtime/src/pi/conversation-runtime',
   ]),
   rule('screenplay-authoring', 'agent-runtime.screenplay-authoring', [
     'packages/agent/runtime/src/tools/core/file-access-policy',
@@ -92,6 +93,7 @@ const RULES = Object.freeze([
   ]),
   rule('launch-domain-binding', 'agent-runtime.launch-binding', [
     'packages/agent/contracts/src/agent-draft-submit',
+    'packages/agent/contracts/src/character-creation-handoff',
     'packages/agent/contracts/src/agent-interaction-binding',
     'packages/agent/contracts/src/agent-launch',
     'packages/agent/runtime/src/application/agent-domain-binding-service',
@@ -99,6 +101,7 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/application/agent-launch-submit-service',
     'apps/neko-desktop/src/main/desktop-agent-launch-runtime',
     'apps/neko-desktop/src/renderer/desktop-agent-launch-host-runtime-adapter',
+    'packages/agent/webview/src/components/ConversationController',
   ]),
   rule('session-workflows', 'agent-runtime.workflow-controller', [
     'packages/agent/runtime/src/session/',
@@ -167,7 +170,7 @@ export function isAgentEvaluationRelevantPath(rawPath) {
   return (
     path.startsWith('.codex/skills/') ||
     path.startsWith('.agents/skills/') ||
-    path.startsWith('packages/skills/src/builtins/') ||
+    path.startsWith('packages/skills/skills/') ||
     path.startsWith('packages/agent/runtime/src/') ||
     path.startsWith('packages/agent/contracts/src/') ||
     path.startsWith('packages/automation/') ||

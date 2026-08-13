@@ -92,6 +92,7 @@ import type { ProjectAuthoringPresentationSnapshotRef } from '@neko/project/cont
 import {
   createEmptyCharacterDefinition,
   type CharacterAuthoringSnapshot,
+  type CharacterProductHandoff,
 } from '@neko/chara/contracts';
 import type { WorldAuthoringSnapshot, WorldDefinition } from '@neko/world/contracts';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
@@ -106,9 +107,11 @@ import {
   DesktopApplicationNavigationButton,
 } from './DesktopApplicationSidebar';
 import {
+  createCharacterCreationHandoffIntent,
   createAgentDraftInteraction,
   createAgentSessionInteraction,
   type AgentInteractionProjection,
+  type CharacterCreationHandoffIntent,
 } from '@neko/agent-contracts';
 import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
 import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
@@ -228,6 +231,8 @@ interface ShellActions {
   ) => void;
   readonly onUpdateApplicationSidebar: (sidebar: DesktopApplicationSidebarProjection) => void;
   readonly onTransitionScene: (intent: DesktopSceneTransitionIntent) => void;
+  readonly onStartCharacterQuickGeneration: () => void;
+  readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
   readonly onChooseWorkspaceTarget: () => Promise<
     import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
   >;
@@ -257,6 +262,10 @@ export function DesktopApplication(): JSX.Element {
   const [startupMetadataDiagnostic, setStartupMetadataDiagnostic] =
     useState<RetainedMetadataDiagnostic>();
   const [dismissedPersistedDiagnosticKey, setDismissedPersistedDiagnosticKey] = useState<string>();
+  const [characterCreationHandoff, setCharacterCreationHandoff] = useState<{
+    readonly draftId: string;
+    readonly intent: CharacterCreationHandoffIntent;
+  }>();
   const lastSequence = useRef<number | null>(null);
   const textEditorCloseRequestOrdinal = useRef(0);
   const rendererSessionId = useRef<string>();
@@ -686,6 +695,75 @@ export function DesktopApplication(): JSX.Element {
         ),
       ),
     onTransitionScene: transitionScene,
+    onStartCharacterQuickGeneration: () => {
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      void window.openNekoDesktop.scenes
+        .transition(
+          projection.window.windowId,
+          { kind: 'open-agent-entry' },
+          activeWorkbench.scene.sceneId,
+        )
+        .then((result) => {
+          if (result.status !== 'transitioned') {
+            setDiagnostic(result.diagnostic.message);
+            return;
+          }
+          if (
+            result.scene.context.kind !== 'agent' ||
+            result.scene.context.scope.kind !== 'unbound'
+          ) {
+            throw new Error('Character quick generation requires an unbound Agent Draft.');
+          }
+          const draftId = result.scene.context.scope.draftId;
+          setCharacterCreationHandoff({
+            draftId,
+            intent: createCharacterCreationHandoffIntent({
+              intentId: `character-creation:${crypto.randomUUID()}`,
+            }),
+          });
+        })
+        .catch(async (error: unknown) => {
+          setDiagnostic(describeError(error));
+          await refresh();
+        })
+        .finally(finishPending);
+    },
+    onCharacterProductHandoff: (handoff) => {
+      if (handoff.kind !== 'open-character') {
+        throw new Error(`Character product handoff '${handoff.kind}' has no Desktop handler.`);
+      }
+      const finishPending = beginPending('scene');
+      setDiagnostic(undefined);
+      void window.openNekoDesktop.scenes
+        .transition(
+          projection.window.windowId,
+          { kind: 'open-creative-management', catalog: 'characters' },
+          activeWorkbench.scene.sceneId,
+        )
+        .then(async (result) => {
+          if (result.status !== 'transitioned') {
+            setDiagnostic(result.diagnostic.message);
+            return;
+          }
+          const detailResult = await window.openNekoDesktop.scenes.transition(
+            projection.window.windowId,
+            {
+              kind: 'select-character-detail',
+              selection: { kind: 'project', characterProjectId: handoff.characterProjectId },
+            },
+            result.scene.sceneId,
+          );
+          if (detailResult.status !== 'transitioned') {
+            setDiagnostic(detailResult.diagnostic.message);
+          }
+        })
+        .catch(async (error: unknown) => {
+          setDiagnostic(describeError(error));
+          await refresh();
+        })
+        .finally(finishPending);
+    },
     onChooseWorkspaceTarget: async () => {
       const finishPending = beginPending('target-selection');
       setDiagnostic(undefined);
@@ -1074,6 +1152,12 @@ export function DesktopApplication(): JSX.Element {
         ) : null}
         <DesktopSceneWorkbench
           actions={actions}
+          characterCreationHandoff={characterCreationHandoff}
+          onCharacterCreationHandoffConsumed={(intentId) => {
+            setCharacterCreationHandoff((current) =>
+              current?.intent.intentId === intentId ? undefined : current,
+            );
+          }}
           pending={pending}
           projection={projection}
           projectPortabilityPort={window.openNekoDesktop.projectPortability}
@@ -1101,6 +1185,8 @@ export function DesktopShellView({
     onCloseWorkbenchView: () => undefined,
     onUpdateApplicationSidebar: () => undefined,
     onTransitionScene: () => undefined,
+    onStartCharacterQuickGeneration: () => undefined,
+    onCharacterProductHandoff: () => undefined,
     onChooseWorkspaceTarget: async () => undefined,
     onSelectWorkspaceProjectTarget: async () => undefined,
     onLoadAuthoringTargets: async () => ({
@@ -1123,13 +1209,20 @@ export function DesktopShellView({
 
 function DesktopSceneWorkbench({
   actions,
+  characterCreationHandoff,
   interactive = true,
+  onCharacterCreationHandoffConsumed,
   pending,
   projection,
   projectPortabilityPort,
 }: {
   readonly actions: ShellActions;
+  readonly characterCreationHandoff?: {
+    readonly draftId: string;
+    readonly intent: CharacterCreationHandoffIntent;
+  };
   readonly interactive?: boolean;
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly pending: DesktopShellPendingProjection;
   readonly projection: DesktopShellProjection;
   readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
@@ -1306,6 +1399,9 @@ function DesktopSceneWorkbench({
         projection,
         workbenchInstanceId: activeWorkbench.workbenchInstanceId,
         interaction: scene.slots.interaction,
+        characterCreationHandoff,
+        onCharacterCreationHandoffConsumed,
+        onCharacterProductHandoff: actions.onCharacterProductHandoff,
         onChooseWorkspaceTarget: actions.onChooseWorkspaceTarget,
         onSelectWorkspaceProjectTarget: actions.onSelectWorkspaceProjectTarget,
         onLoadAuthoringTargets: actions.onLoadAuthoringTargets,
@@ -1773,6 +1869,7 @@ function DesktopWorkbenchRuntimePortals({
               selection: { kind: 'create' },
             })
           }
+          onQuickGenerate={actions.onStartCharacterQuickGeneration}
           onSelect={(characterProjectId) =>
             actions.onTransitionScene({
               kind: 'select-character-detail',
@@ -2425,11 +2522,17 @@ function createLaunchAgentPresentation(
     : createAgentDraftInteraction({ draftId: scope.draftId, binding });
 }
 
-function createDesktopAgentSurfaceProps(input: {
+export function createDesktopAgentSurfaceProps(input: {
   readonly projection: DesktopShellProjection;
   readonly workbenchInstanceId: string;
   readonly project?: DesktopProjectCatalogItem;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
+  readonly characterCreationHandoff?: {
+    readonly draftId: string;
+    readonly intent: CharacterCreationHandoffIntent;
+  };
+  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
+  readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
   readonly onChooseWorkspaceTarget?: () => Promise<
     import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
   >;
@@ -2480,6 +2583,7 @@ function createDesktopAgentSurfaceProps(input: {
       agentSurfaceId: interaction.agentSurfaceId,
       tab,
       agentPresentation,
+      onCharacterProductHandoff: input.onCharacterProductHandoff,
       composerWorkspace: { kind: 'workspace', label: project.displayName },
     };
   }
@@ -2499,6 +2603,14 @@ function createDesktopAgentSurfaceProps(input: {
     agentSurfaceId: interaction.agentSurfaceId,
     viewId: interaction.agentViewId,
     agentPresentation,
+    ...(agentPresentation.phase === 'draft' &&
+    input.characterCreationHandoff?.draftId === agentPresentation.draftId
+      ? {
+          characterCreationHandoff: input.characterCreationHandoff.intent,
+          onCharacterCreationHandoffConsumed: input.onCharacterCreationHandoffConsumed,
+        }
+      : {}),
+    onCharacterProductHandoff: input.onCharacterProductHandoff,
     ...(agentPresentation.phase === 'draft' && agentPresentation.binding.kind === 'unbound'
       ? {
           composerWorkspace: {

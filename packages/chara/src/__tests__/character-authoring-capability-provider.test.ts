@@ -19,6 +19,8 @@ describe('CharacterAuthoringCapabilityProvider', () => {
     const promptFragments = provider.getPromptFragments?.({ hostContext: null });
     expect(promptFragments?.[0]?.content).toContain('single mutation confirmation');
     expect(promptFragments?.[0]?.content).toContain('without adding a text-confirmation gate');
+    expect(promptFragments?.[0]?.content).toContain('no writable Character draft target');
+    expect(promptFragments?.[0]?.content).toContain('do not conflate this with CharacterVersion');
     const [tool] = provider.getTools({ hostContext: null } satisfies AgentCapabilityContext);
     expect(tool?.name).toBe(TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT);
     expect(tool?.requiresConfirmation).toBe(true);
@@ -45,6 +47,10 @@ describe('CharacterAuthoringCapabilityProvider', () => {
         reviewStatus: 'draft',
         sourceFacts: ['The reference says she repairs clocks.'],
         inferredSuggestions: ['A patient speaking rhythm would fit.'],
+        handoffs: [
+          { kind: 'open-character', characterProjectId: 'character-1' },
+          { kind: 'open-character-studio', characterProjectId: 'character-1' },
+        ],
       },
     });
     expect(fillDraft).toHaveBeenCalledWith(

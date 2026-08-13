@@ -472,6 +472,11 @@ export const en = {
   'agent.connectionFailureDetail':
     'The Agent panel could not connect. Other workspace tools remain available.',
   'agent.retry': 'Retry',
+  'characterHandoff.viewCharacter': 'View character',
+  'characterHandoff.openStudio': 'Open Studio',
+  'characterHandoff.invalidResult': 'The Character draft result is missing valid actions.',
+  'characterHandoff.studioUnavailable':
+    'Studio navigation is unavailable until the exact Workspace authoring authority is resolved.',
   'automation.targetSelection.eyebrow': 'Automation authorization',
   'automation.targetSelection.title': 'Choose an exact target',
   'automation.targetSelection.description':
