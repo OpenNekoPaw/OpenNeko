@@ -21,7 +21,6 @@ import {
   type CanvasAuthoringDiagnosticProjection,
   type CanvasAuthoringPromptFieldAlignmentProjection,
 } from '../../../presenters/tool-call-presenter';
-import { getLogger } from '../../../utils/logger';
 import { CopyIcon } from '@neko/ui/icons';
 import {
   FileIcon,
@@ -35,8 +34,6 @@ import { DocumentImageThumbnails } from './DocumentImageThumbnails';
 import { GenerationJobCard } from './GenerationJobCard';
 import { AgentPreviewCollection } from '../MediaPreview/AgentPreviewCollection';
 import { useToolCallAccessoryRenderer } from '../ToolCallAccessoryContext';
-
-const logger = getLogger('ToolCallDisplay');
 
 interface ToolCallDisplayProps {
   toolCall: ToolCall;
@@ -71,23 +68,6 @@ function ToolCallDisplayComponent({
   const handleCopyText = useCallback((text: string) => {
     void navigator.clipboard.writeText(text);
   }, []);
-
-  const handleConfirm = useCallback(
-    (approved: boolean) => {
-      logger.info('handleConfirm called:', {
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        approved,
-        conversationId,
-      });
-      if (!conversationId) {
-        logger.warn('Cannot confirm tool without conversationId');
-        return;
-      }
-      agentHostMessages.confirmTool(toolCall.id, approved, conversationId);
-    },
-    [agentHostMessages, toolCall.id, toolCall.name, conversationId],
-  );
 
   const projection = projectToolCallDisplayState(toolCall, progress);
   const {
@@ -139,78 +119,24 @@ function ToolCallDisplayComponent({
       mediaOutputCount > 0 ||
       (showAttachmentOutputs && attachmentOutputs.length > 0));
 
-  // Confirmation UI
+  // Approval actions live in the composer-adjacent surface; the transcript retains one fact row.
   if (needsConfirmation) {
-    logger.info('Rendering confirmation UI for:', {
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-    });
     return (
-      <div className="my-2">
-        <div className="agent-inline-card is-warning">
-          <div className="agent-inline-header flex items-center gap-2 px-3 py-2">
-            <WarningIcon className="h-4 w-4 shrink-0 text-[var(--agent-warning-fg)]" />
-            <span className="text-[12px] font-medium text-[var(--agent-fg)]">
-              {t('toolCalls.awaitingApproval')}
-            </span>
-          </div>
-          <div className="px-3 py-2 text-[var(--agent-fg)]">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="agent-badge font-mono text-[11px] text-[var(--agent-fg)]">
-                {toolCall.name}
-              </span>
-              {toolCall.confirmation?.action && (
-                <span className="text-[11px] text-[var(--agent-fg-secondary)]">
-                  {toolCall.confirmation.action}
-                </span>
-              )}
-            </div>
-            {toolCall.confirmation?.description && (
-              <p className="mb-2 text-[11px] text-[var(--agent-fg)]">
-                {toolCall.confirmation.description}
-              </p>
-            )}
-            {summary && (
-              <div className="mb-2 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
-                {summary}
-              </div>
-            )}
-            {hasExpandableContent && (
-              <div className="mb-2">
-                <button
-                  onClick={toggleExpand}
-                  className="flex items-center gap-1 text-[10px] text-[var(--agent-accent)] hover:underline"
-                >
-                  <ChevronIcon
-                    className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  />
-                  {t('toolCalls.args')}
-                </button>
-                {isExpanded && (
-                  <div className="mt-1 border-l border-[var(--agent-divider)] pl-2">
-                    <pre className="agent-code-block max-h-[100px] w-full max-w-full overflow-x-auto p-1.5 font-mono text-[10px]">
-                      {argsJson}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="flex items-center gap-2 border-t border-[var(--agent-divider)] pt-2">
-              <button
-                onClick={() => handleConfirm(true)}
-                className="neko-button px-3 py-1 text-[11px] leading-4"
-              >
-                {t('toolCalls.approve')}
-              </button>
-              <button
-                onClick={() => handleConfirm(false)}
-                className="neko-button neko-button-secondary px-3 py-1 text-[11px] leading-4"
-              >
-                {t('toolCalls.deny')}
-              </button>
-            </div>
-          </div>
-        </div>
+      <div
+        className="agent-tool-approval-fact"
+        data-agent-tool-call-id={toolCall.id}
+        data-tool-approval-fact="true"
+      >
+        <WarningIcon className="h-3 w-3 shrink-0" />
+        <span className="shrink-0 font-medium text-[var(--agent-fg)]">{toolCall.name}</span>
+        {summary ? (
+          <span className="truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
+            {summary}
+          </span>
+        ) : null}
+        <span className="ml-auto shrink-0 text-[10px] text-[var(--agent-warning-fg)]">
+          {t('toolCalls.awaitingApproval')}
+        </span>
       </div>
     );
   }

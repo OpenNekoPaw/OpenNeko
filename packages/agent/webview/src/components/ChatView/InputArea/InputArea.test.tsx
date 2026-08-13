@@ -445,6 +445,28 @@ describe('InputArea composer controls', () => {
     vi.clearAllMocks();
   });
 
+  it('places the approval surface inside the composer rail immediately above the input shell', () => {
+    const { container } = render(
+      <Harness>
+        <InputArea
+          approvalSurface={<div data-testid="approval-surface" />}
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
+      </Harness>,
+    );
+
+    const rail = container.querySelector('.agent-composer-rail');
+    const approvalSurface = screen.getByTestId('approval-surface');
+    const composerShell = container.querySelector('.agent-composer-shell');
+
+    expect(rail?.contains(approvalSurface)).toBe(true);
+    expect(rail?.contains(composerShell)).toBe(true);
+    expect(approvalSurface.nextElementSibling).toBe(composerShell);
+  });
+
   it('does not feed unchanged mention menu state back into a controlled render store', () => {
     const onComposerStateCommit = vi.fn();
 

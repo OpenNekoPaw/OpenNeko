@@ -42,6 +42,11 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 将无法按当前 contract 解析的单条 Window presentation 局部隔离为本次启动 diagnostic，并在
   canonical Shell commit 中只保存有效 Window；不得把失效 Window 原始记录重新写回，导致每次启动
   重复提示。Project、Conversation、文件和合法 sibling Window 保持不变。
+- 让 Agent composer 的提交契约显式返回是否已由 canonical conversation/queue/input path 受理；
+  conversation 切换、重复提交、缺失 owner 或输入解析失败时保留原草稿和附件，禁止把未发送输入清空
+  成成功状态。新会话 pending send 也只在真实提交被受理后消费。
+- 将待处理 Tool approval 从历史 Tool Call 的内联按钮提升为 composer 上方的 conversation-scoped
+  审批面板；历史记录继续显示等待状态和 Tool 事实，但不保留第二套可操作审批入口。
 
 ## Capabilities
 
@@ -69,3 +74,5 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - Desktop 启动通知生命周期、Workspace identity catalog inspection，以及不依赖 Workspace runtime
   的 Agent conversation 清理入口。
 - Desktop Shell Window presentation 的逐项隔离、canonical 持久化和应用重启验收。
+- Agent composer send-consumption contract、pending approval presenter、composer-adjacent approval surface
+  及其 Webview/Electron 验收。

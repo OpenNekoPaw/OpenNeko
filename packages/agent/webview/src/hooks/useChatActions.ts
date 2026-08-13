@@ -84,12 +84,12 @@ export interface UseChatActionsProps {
   clearInput: () => void;
   setAttachedFiles: (files: MessageAttachment[]) => void;
   setSelectedFileReferences?: (references: SelectedFileReference[]) => void;
-  ensureConversationForSend?: (input: PendingSendInput) => void;
+  ensureConversationForSend?: (input: PendingSendInput) => boolean;
   onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
 }
 
 export interface UseChatActionsReturn {
-  handleSend: (input?: PendingSendInput, identity?: PendingSendIdentity) => void;
+  handleSend: (input?: PendingSendInput, identity?: PendingSendIdentity) => boolean;
   triggerSend: (messageText: string) => void;
   handleCancelMessage: () => void;
   copyLastResponse: () => void;
@@ -128,15 +128,18 @@ export function useChatActions({
     const hash = content.trim().slice(0, 100);
     const now = Date.now();
     if (lastSentRef.current?.hash === hash && now - lastSentRef.current.time < 1000) return true;
-    lastSentRef.current = { hash, time: now };
     return false;
+  }, []);
+
+  const recordAcceptedSend = useCallback((content: string): void => {
+    lastSentRef.current = { hash: content.trim().slice(0, 100), time: Date.now() };
   }, []);
 
   // Send a user message directly to the Desktop host.
   // AgentRunner handles queueing if the agent is already running.
   const handleSend = useCallback(
     (input?: PendingSendInput, identity?: PendingSendIdentity) => {
-      if (isConversationSwitching) return;
+      if (isConversationSwitching) return false;
       const isQueueingSend = isThinking;
 
       const messageText = input?.messageText ?? inputValue;
@@ -154,12 +157,18 @@ export function useChatActions({
       const hasContextPayloads = (contextPayloads?.length ?? 0) > 0;
       const selectedFileReferenceCount = input?.fileReferences?.length ?? 0;
       const hasFileReferences = selectedFileReferenceCount > 0;
-      if (!trimmed && !hasAttachments && !hasContextPayloads && !hasFileReferences) return;
+      if (!trimmed && !hasAttachments && !hasContextPayloads && !hasFileReferences) return false;
       const effectiveSessionMode: SessionMode = inputSessionMode ?? sessionMode ?? 'agent';
       const conversationId = activeConversationId;
       if (!conversationId) {
         const pendingSessionMode = inputSessionMode ?? sessionMode ?? 'agent';
-        ensureConversationForSend?.({
+        if (!ensureConversationForSend) {
+          reportInputDiagnostic?.(
+            'Agent message cannot be sent before the exact Conversation creator is available.',
+          );
+          return false;
+        }
+        return ensureConversationForSend({
           messageText,
           displayMessageText,
           ...(inputSessionMode ? { sessionMode: inputSessionMode } : {}),
@@ -173,7 +182,6 @@ export function useChatActions({
             ? { understandingModels: input.understandingModels }
             : {}),
         });
-        return;
       }
 
       const parsedTrigger = parseAgentInputTrigger(trimmed);
@@ -196,15 +204,19 @@ export function useChatActions({
           setAttachedFiles([]);
           setSelectedFileReferences?.([]);
           agentHostMessages.invokeAgentInput(intent, conversationId);
+          return true;
         } catch (error) {
           reportInputDiagnostic?.(error instanceof Error ? error.message : String(error));
+          return false;
         }
-        return;
       }
 
       // Dedup guard: prevent accidental double-click
-      if (isDuplicate(`${trimmed}:${attachments?.length ?? 0}:${contextPayloads?.length ?? 0}`)) {
-        return;
+      if (
+        !identity &&
+        isDuplicate(`${trimmed}:${attachments?.length ?? 0}:${contextPayloads?.length ?? 0}`)
+      ) {
+        return false;
       }
 
       // Clear stale streaming state only for a new foreground turn.
@@ -266,6 +278,8 @@ export function useChatActions({
           ? { fileReferences: input.fileReferences }
           : {}),
       });
+      recordAcceptedSend(`${trimmed}:${attachments?.length ?? 0}:${contextPayloads?.length ?? 0}`);
+      return true;
     },
     [
       inputValue,
@@ -280,6 +294,7 @@ export function useChatActions({
       isConversationSwitching,
       availableModels,
       isDuplicate,
+      recordAcceptedSend,
       setMessages,
       setIsThinking,
       setStreamingMessageId,
@@ -289,6 +304,7 @@ export function useChatActions({
       setSelectedFileReferences,
       ensureConversationForSend,
       onUserMessageSent,
+      agentHostMessages,
     ],
   );
 
@@ -356,6 +372,7 @@ export function useChatActions({
       activeConversationIdRef,
       ensureConversationForSend,
       onUserMessageSent,
+      agentHostMessages,
     ],
   );
 
@@ -376,7 +393,13 @@ export function useChatActions({
       agentHostMessages.cancelMessage(conversationId);
       setIsThinking(false);
     }
-  }, [isThinking, isConversationSwitching, activeConversationIdRef, setIsThinking]);
+  }, [
+    isThinking,
+    isConversationSwitching,
+    activeConversationIdRef,
+    setIsThinking,
+    agentHostMessages,
+  ]);
 
   return { handleSend, triggerSend, handleCancelMessage, copyLastResponse };
 }

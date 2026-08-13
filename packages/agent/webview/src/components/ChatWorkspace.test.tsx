@@ -23,6 +23,10 @@ const hostMocks = vi.hoisted(() => ({
   clearActiveSkill: vi.fn(),
 }));
 
+const chatViewMocks = vi.hoisted(() => ({
+  onSendReceipt: vi.fn(),
+}));
+
 vi.mock('../host-runtime-context', () => ({
   useAgentHostMessages: () => hostMocks,
 }));
@@ -88,7 +92,7 @@ vi.mock('./ChatView', () => ({
     onInputChange: (value: string) => void;
     attachedFiles?: readonly unknown[];
     selectedFileReferences?: readonly unknown[];
-    onSend: (input?: { messageText?: string; displayMessageText?: string }) => void;
+    onSend: (input?: { messageText?: string; displayMessageText?: string }) => boolean;
     onClearActiveSkill?: (recordId?: string) => void;
     onCancelTask?: (taskId: string) => void;
     onRetryTask?: (taskId: string) => void;
@@ -128,12 +132,13 @@ vi.mock('./ChatView', () => ({
         type="button"
         data-testid="send"
         disabled={props.composerDisabled}
-        onClick={() =>
-          props.onSend({
+        onClick={() => {
+          const receipt = props.onSend({
             messageText: 'hello from tabless state',
             displayMessageText: 'hello from tabless state',
-          })
-        }
+          });
+          chatViewMocks.onSendReceipt(receipt);
+        }}
       >
         {props.activeConversationId ?? 'no-conversation'}
       </button>
@@ -328,6 +333,33 @@ describe('ChatWorkspace pending send', () => {
     );
 
     expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates the exact Conversation creator rejection receipt', () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
+    runtime.store.updateState({
+      modelConfigurationInitialized: true,
+      selectedModel: 'test-model',
+    });
+    const onSendWithoutConversation = vi.fn(() => false);
+
+    render(
+      <ChatWorkspace
+        {...createProps({
+          tabRenderStore: runtime.store,
+          isVisible: false,
+          onSendWithoutConversation,
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('send'));
+
+    expect(onSendWithoutConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ messageText: 'hello from tabless state' }),
+    );
+    expect(chatViewMocks.onSendReceipt).toHaveBeenCalledWith(false);
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it('projects hydrated Agent media defaults into the pending send turn policy', () => {

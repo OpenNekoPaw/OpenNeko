@@ -26,6 +26,8 @@ import { EmbodyCharacterHeader } from './EmbodyCharacterHeader';
 import { useTranslation } from '../../i18n/I18nContext';
 import { projectMessageIdentities } from './message-identity';
 import { SubAgentCard } from './SubAgentCard';
+import { PendingToolApprovalPanel } from './PendingToolApprovalPanel';
+import { projectPendingToolApprovals } from '../../presenters/pending-tool-approval-presenter';
 interface ChatViewProps {
   composerPresentation?: 'default' | 'compact';
   conversationFeed?: ReactNode;
@@ -67,7 +69,7 @@ interface ChatViewProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-  }) => void | false;
+  }) => boolean;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
@@ -156,6 +158,7 @@ export function ChatView({
     () => selectConversationAttentionWorkItems(messages, workItems ?? []),
     [messages, workItems],
   );
+  const pendingToolApprovals = useMemo(() => projectPendingToolApprovals(messages), [messages]);
   // P2: Dropped files state for DropZone integration
   const [droppedFiles, setDroppedFiles] = useState<MessageAttachment[]>([]);
 
@@ -228,6 +231,12 @@ export function ChatView({
         {/* Input Area */}
         <InputArea
           composerPresentation={composerPresentation}
+          approvalSurface={
+            <PendingToolApprovalPanel
+              approvals={pendingToolApprovals}
+              conversationId={activeConversationId}
+            />
+          }
           inputValue={inputValue}
           isThinking={isThinking}
           isRunActive={isRunActive}

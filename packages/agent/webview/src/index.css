@@ -3073,6 +3073,126 @@ body {
   background: var(--agent-composer-rail-bg);
 }
 
+.agent-pending-approval-panel {
+  width: 100%;
+  max-width: 820px;
+  flex-shrink: 0;
+  margin: 0 auto 8px;
+  overflow: hidden;
+  border: 1px solid var(--agent-border);
+  border-radius: 12px;
+  background: var(--agent-elevated);
+  color: var(--agent-fg);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--agent-fg) 10%, transparent);
+}
+
+.agent-pending-approval-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 0;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.agent-pending-approval-heading svg {
+  color: var(--agent-warning-fg);
+}
+
+.agent-pending-approval-list {
+  max-height: min(240px, 32vh);
+  overflow-y: auto;
+}
+
+.agent-pending-approval-item {
+  padding: 12px 14px 14px;
+}
+
+.agent-pending-approval-item + .agent-pending-approval-item {
+  border-top: 1px solid var(--agent-divider);
+}
+
+.agent-pending-approval-content {
+  min-width: 0;
+}
+
+.agent-pending-approval-tool {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+}
+
+.agent-pending-approval-tool > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-pending-approval-question {
+  margin: 10px 0 0;
+  color: var(--agent-fg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.agent-pending-approval-command {
+  display: block;
+  max-height: 64px;
+  margin-top: 9px;
+  padding: 7px 9px;
+  overflow: auto;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--agent-fg) 4%, transparent);
+  color: var(--agent-fg-secondary);
+  font-family: var(--neko-font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-pending-approval-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.agent-pending-approval-actions .neko-button {
+  min-width: 58px;
+  padding: 4px 12px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+@media (max-width: 560px) {
+  .agent-pending-approval-heading,
+  .agent-pending-approval-item {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}
+
+.agent-tool-approval-fact {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+  padding: 5px 8px;
+  border: 1px solid var(--agent-border);
+  border-radius: 6px;
+  background: var(--agent-surface);
+  color: var(--agent-warning-fg);
+}
+
 .agent-composer-toolbar {
   display: flex;
   align-items: center;

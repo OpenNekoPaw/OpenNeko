@@ -1317,6 +1317,7 @@ export function ConversationController({
       nextPendingSendRequestIdRef.current = id;
       setPendingSendRequest({ id, input });
       startNewForegroundConversation();
+      return true;
     },
     [startNewForegroundConversation],
   );
@@ -1413,7 +1414,7 @@ export function ConversationController({
           })
           .catch((error: unknown) => setGlobalError(describeError(error)))
           .finally(() => setIsForegroundConversationActivationPending(false));
-        return;
+        return true;
       }
 
       setInitialInputRequest(null);
@@ -1427,6 +1428,7 @@ export function ConversationController({
       });
       updateEntryInputValue('');
       setEntryContextReferences([]);
+      return true;
     },
     [
       agentPresentation,

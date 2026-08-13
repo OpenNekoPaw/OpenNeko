@@ -36,6 +36,148 @@ describe('useChatActions', () => {
     vi.clearAllMocks();
   });
 
+  it('returns an acceptance receipt and does not consume a send while the Conversation switches', () => {
+    const clearInput = vi.fn();
+    const setAttachedFiles = vi.fn();
+    const { result } = renderHook(() => {
+      const activeConversationIdRef = useRef<string | null>('conv-1');
+      return useChatActions({
+        inputValue: 'keep this draft',
+        isThinking: false,
+        selectedModel: 'model-a',
+        activeConversationId: 'conv-1',
+        activeConversationIdRef,
+        isConversationSwitching: true,
+        streamingMessageIdRef: { current: null },
+        messages: [],
+        setMessages: vi.fn(),
+        setIsThinking: vi.fn(),
+        setStreamingMessageId: vi.fn(),
+        setActiveTab: vi.fn(),
+        clearInput,
+        setAttachedFiles,
+      });
+    });
+
+    let accepted = true;
+    act(() => {
+      accepted = result.current.handleSend();
+    });
+
+    expect(accepted).toBe(false);
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(clearInput).not.toHaveBeenCalled();
+    expect(setAttachedFiles).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unowned draft and reports the missing exact Conversation creator', () => {
+    const reportInputDiagnostic = vi.fn();
+    const clearInput = vi.fn();
+    const { result } = renderHook(() => {
+      const activeConversationIdRef = useRef<string | null>(null);
+      return useChatActions({
+        inputValue: 'do not lose me',
+        isThinking: false,
+        reportInputDiagnostic,
+        selectedModel: 'model-a',
+        activeConversationId: null,
+        activeConversationIdRef,
+        streamingMessageIdRef: { current: null },
+        messages: [],
+        setMessages: vi.fn(),
+        setIsThinking: vi.fn(),
+        setStreamingMessageId: vi.fn(),
+        setActiveTab: vi.fn(),
+        clearInput,
+        setAttachedFiles: vi.fn(),
+      });
+    });
+
+    let accepted = true;
+    act(() => {
+      accepted = result.current.handleSend();
+    });
+
+    expect(accepted).toBe(false);
+    expect(reportInputDiagnostic).toHaveBeenCalledWith(
+      'Agent message cannot be sent before the exact Conversation creator is available.',
+    );
+    expect(clearInput).not.toHaveBeenCalled();
+  });
+
+  it('returns the exact Conversation creator receipt for a tabless first submit', () => {
+    const ensureConversationForSend = vi.fn(() => false);
+    const { result } = renderHook(() => {
+      const activeConversationIdRef = useRef<string | null>(null);
+      return useChatActions({
+        inputValue: 'first submit',
+        isThinking: false,
+        selectedModel: 'model-a',
+        activeConversationId: null,
+        activeConversationIdRef,
+        streamingMessageIdRef: { current: null },
+        messages: [],
+        setMessages: vi.fn(),
+        setIsThinking: vi.fn(),
+        setStreamingMessageId: vi.fn(),
+        setActiveTab: vi.fn(),
+        clearInput: vi.fn(),
+        setAttachedFiles: vi.fn(),
+        ensureConversationForSend,
+      });
+    });
+
+    let accepted = true;
+    act(() => {
+      accepted = result.current.handleSend();
+    });
+
+    expect(accepted).toBe(false);
+    expect(ensureConversationForSend).toHaveBeenCalledWith(
+      expect.objectContaining({ messageText: 'first submit' }),
+    );
+  });
+
+  it('returns true for an active-run send accepted by the Host queue and rejects a duplicate', () => {
+    const clearInput = vi.fn();
+    const { result } = renderHook(() => {
+      const activeConversationIdRef = useRef<string | null>('conv-queue');
+      return useChatActions({
+        inputValue: 'queue this message',
+        isThinking: true,
+        selectedModel: 'model-a',
+        activeConversationId: 'conv-queue',
+        activeConversationIdRef,
+        streamingMessageIdRef: { current: 'streaming-a' },
+        messages: [],
+        setMessages: vi.fn(),
+        setIsThinking: vi.fn(),
+        setStreamingMessageId: vi.fn(),
+        setActiveTab: vi.fn(),
+        clearInput,
+        setAttachedFiles: vi.fn(),
+      });
+    });
+
+    let firstAccepted = false;
+    let duplicateAccepted = true;
+    act(() => {
+      firstAccepted = result.current.handleSend();
+      duplicateAccepted = result.current.handleSend();
+    });
+
+    expect(firstAccepted).toBe(true);
+    expect(duplicateAccepted).toBe(false);
+    expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-queue',
+        message: 'queue this message',
+      }),
+    );
+    expect(clearInput).toHaveBeenCalledTimes(1);
+  });
+
   it('routes a direct command through the exact Session catalog identity', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();

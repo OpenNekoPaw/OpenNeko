@@ -76,6 +76,7 @@ import {
 interface InputAreaProps {
   presentation?: 'entry' | 'conversation';
   composerPresentation?: 'default' | 'compact';
+  approvalSurface?: ReactNode;
   inputValue: string;
   isThinking: boolean;
   /** Conversation-owned run state for queue/send/stop behavior. */
@@ -96,7 +97,7 @@ interface InputAreaProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-  }) => void | false;
+  }) => boolean;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
@@ -206,6 +207,7 @@ function resolveStateAction<T>(action: StateAction<T>, previous: T): T {
 export function InputArea({
   presentation = 'conversation',
   composerPresentation = 'default',
+  approvalSurface,
   inputValue,
   isThinking,
   isRunActive = isThinking,
@@ -794,10 +796,6 @@ export function InputArea({
     ) {
       return;
     }
-    // Add to history before sending
-    if (inputValue.trim()) {
-      addToHistory(inputValue);
-    }
     const files = attachedFiles.length > 0 ? attachedFiles : undefined;
     const contextPayloads = contextChips.length > 0 ? contextChips : undefined;
     const consumed = onSend({
@@ -810,6 +808,9 @@ export function InputArea({
       ...(sessionMode === 'agent' ? buildAgentModelSendConfig(selectedModel, availableModels) : {}),
     });
     if (consumed === false) return;
+    if (inputValue.trim()) {
+      addToHistory(inputValue);
+    }
     contextChips.forEach((c) => onRemoveContextChip(c.id));
     onInputChange('');
     updateAttachedFiles([]);
@@ -980,6 +981,8 @@ export function InputArea({
         {inputAreaProjection.showAmbientNodes && (
           <AmbientCanvasContextBar ambientNodes={ambientNodes} onSuggest={onInputChange} />
         )}
+
+        {approvalSurface}
 
         {/* ── Input container ── */}
         <div className="agent-composer-shell relative">

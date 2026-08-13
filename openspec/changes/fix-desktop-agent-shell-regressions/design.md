@@ -50,6 +50,32 @@ Agent Webview 同时渲染两份运行提示：MessageList 尾部的 thinking �
 
 ## Decisions
 
+### 0. Composer 只在 canonical input 被受理后消费草稿
+
+`useChatActions.handleSend()` 返回显式 boolean receipt。只有 exact Conversation 的普通消息已经提交给
+Host、运行中消息已经进入同一 Host queue、tabless 首发已经交给 pending-send owner，或 command/Skill
+已经通过 exact input catalog 投递时才返回 `true`。conversation switching、重复点击、空输入、缺失
+conversation creator、command/Skill 解析失败均返回 `false`；`InputArea` 据此保留文本、附件、引用与
+context，既有 diagnostic 继续 fail-visible。
+
+新 conversation 的 pending-send effect 使用同一 receipt，只有 `true` 才标记 request consumed。该
+receipt 是一次同步 Renderer-to-Host intent acceptance，不伪造 provider/turn 成功；后续 IPC/runtime
+拒绝仍按 conversation diagnostic 和 queue projection 处理。不增加 renderer-local retry、第二消息队列
+或失败后的替代发送路径。
+
+### 0a. Pending Tool approval 是 conversation projection，操作面板属于 composer rail
+
+`@neko/agent-webview` 从当前 conversation 的 canonical message/content-block projection 收集全部
+`pendingConfirmation` Tool Call，并保持 transcript 顺序。composer 上方渲染一个有界、可滚动的审批
+面板，每个请求继续通过既有 `confirmTool(conversationId, toolCallId, decision)` Host contract 提交。
+Tool Call 历史位置只展示 Tool identity、摘要和等待状态，不再渲染允许/拒绝按钮，从而保证一个业务
+意图只有一个可操作 UI 路径。
+
+审批面板不复制 approval state、不改变 Tool contract，也不把 conversation/task ownership 提升到
+Desktop Shell。conversation 切换或 projection 更新会自然替换面板；缺失 exact conversation identity
+时面板不得提供可执行按钮。多条并行 pending approval 全部保留，面板通过稳定最大高度滚动，不能只
+显示 latest/active fallback。
+
 ### 1. Pi authority 提供只读 catalog reader，Desktop AppHost 提供 workspace scope
 
 `packages/agent/runtime` 增加只读 catalog reader，只投影 `PiConversationCatalogRecord`，不创建 `PiConversationRuntime`、lease、session reader 或 model registry。Desktop 初始化从 Shell state 读取已登记 workspace identity 集合，并在第一个窗口 claim 前将该 scope 注入 Agent AppHost。

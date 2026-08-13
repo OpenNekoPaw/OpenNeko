@@ -5,6 +5,7 @@ export const toolCalls = {
   'toolCalls.completed': 'Completed',
   'toolCalls.failed': 'Failed',
   'toolCalls.awaitingApproval': 'Awaiting approval',
+  'toolCalls.pendingApprovals': 'Approvals ({count})',
   'toolCalls.approve': 'Approve',
   'toolCalls.deny': 'Deny',
   'toolCalls.tool': 'Tool',
