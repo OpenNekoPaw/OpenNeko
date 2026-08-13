@@ -156,6 +156,21 @@ Extensions 保留 Skills/Plugins 页签与文本搜索：
 - 排序使用稳定 Plugin display name/id，不把内容相关性或安装来源变成隐藏业务路由；
 - author metadata 原样显示，产品 shell/diagnostics 支持 `en` 与 `zh-cn`。
 
+详情页参考 VS Code Extension Details 的信息分层，但只消费 OpenNeko 已有真实 authority：
+
+- Skill 概览展示 author-owned name/description、来源、稳定 Skill 名称与所属 Plugin；
+- Plugin 概览展示 manifest display metadata、delivery source、publisher version/developer、
+  contribution summary 与实际 component readiness；
+- 默认概览不投影 Plugin 文件树、`plugin.json`、`mcp.json`、Skill prompt 正文、进程参数、
+  环境、凭据、SQLite 记录、物理路径、fingerprint/locator 或 raw diagnostic；
+- Personal Skill 的默认编辑器/文件夹操作由 Personal Skill manager 按当前 management id、
+  fingerprint 与 personal root 重新解析 exact `SKILL.md`，Desktop 只注入 `shell.openPath`/
+  `shell.showItemInFolder` concrete adapter；Renderer 不接收或回传 path；
+- Plugin Skill 只可跳转到 exact owning Plugin overview，单独编辑/移除不得绕过 Plugin lifecycle。
+
+这些 Host 操作不把 Skill 正文写入 catalog snapshot 或 SQLite，也不引入通用任意路径编辑器。
+外部编辑完成后仍由已有 Pi rescan 重新校验；失效内容不得回退到旧 Skill 或同名来源。
+
 ### 8. 可执行 Skill identity 只能来自 Pi receipt
 
 Management card、manifest display name、SQLite row 和 same-name search result 都不能直接成为 Agent invocation

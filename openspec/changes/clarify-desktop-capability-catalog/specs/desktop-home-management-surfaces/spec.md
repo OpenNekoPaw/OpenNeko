@@ -70,6 +70,31 @@ manageable extensions.
 - **AND** Home SHALL NOT expose Marketplace, available inventory, marketplace refresh, publisher catalog, status/category filters or sort selectors
 - **AND** Plugin records SHALL use stable display name and Plugin identity ordering
 
+#### Scenario: User reviews Skill and Plugin overview information
+
+- **WHEN** the user opens a Skill or Plugin detail
+- **THEN** Home SHALL present an overview hierarchy derived from author-owned metadata and current Host facts
+- **AND** a Skill overview SHALL show its stable Skill name, description, source and exact owning Plugin when applicable
+- **AND** a Plugin overview SHALL show delivery source, publisher-managed version, developer, contribution summary and actual component readiness
+- **AND** the overview SHALL NOT project a Plugin file tree, raw `plugin.json`, raw `mcp.json`, Skill prompt body, process configuration, SQLite record, physical path, fingerprint, locator or raw diagnostic
+- **AND** internal composite management identity SHALL NOT replace the user-facing Skill name
+
+#### Scenario: User opens or reveals a personal Skill package
+
+- **WHEN** the user invokes Open `SKILL.md` or Show in Folder for a current personal Skill management identity
+- **THEN** the Personal Skill manager SHALL re-resolve the exact current Skill, fingerprint and contained personal root
+- **AND** Desktop SHALL invoke only the injected system file-open or reveal adapter for the resolved `SKILL.md`
+- **AND** Renderer SHALL NOT send or receive a physical path
+- **AND** a stale, missing, changed, escaped or non-personal identity SHALL fail visibly without opening another file or directory
+- **AND** the operation SHALL NOT mutate Skill content, Plugin state or Agent runtime state
+
+#### Scenario: User reviews a Plugin-owned Skill
+
+- **WHEN** the selected Skill source is Plugin-owned
+- **THEN** Home SHALL offer navigation to the exact owning Plugin overview when that Plugin is present
+- **AND** Home SHALL NOT expose individual edit, reveal or remove actions for that Plugin Skill
+- **AND** no same-name or active/recent Plugin fallback SHALL satisfy the navigation
+
 #### Scenario: Desktop lists manageable Plugins
 
 - **WHEN** an exact bundled root or SQLite installation row resolves to a valid root `plugin.json`

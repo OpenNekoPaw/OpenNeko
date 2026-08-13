@@ -55,3 +55,11 @@
 - [ ] 8.3 Package and launch a visible real Electron Desktop with isolated fixture storage; verify standalone Skill use, local Plugin install/enable/disable/remove/reopen, invalid-record locality, Skill-only/MCP-only/mixed contribution readiness and both locales.
 - [ ] 8.4 Run provider-backed complete-session Plugin Skill and MCP cases through the public Agent input path; record infrastructure-blocked status when fixture installation or provider authority is genuinely unavailable.
 - [x] 8.5 Perform Neko quality review across responsibility, dependency, interface, extension and testing layers and record remaining risks for deferred Marketplace, App connector and OAuth ownership.
+
+## 9. VS Code-style Details and Personal Skill Host Actions
+
+- [x] 9.1 Define overview-only Skill/Plugin presentation and source-scoped Host action requirements without projecting package contents or physical paths.
+- [x] 9.2 Add exact typed Personal Skill open/reveal intents and manager-owned current identity/fingerprint/containment resolution with Desktop system adapters.
+- [x] 9.3 Update the Extensions detail UI to show Skill/Plugin overview information, navigate Plugin-owned Skills to their exact Plugin, and expose open/reveal only for personal Skills.
+- [x] 9.4 Add contract, manager, Desktop delegation, Renderer runtime, Webview interaction and bilingual copy coverage, including stale identity and no-path projection tests.
+- [ ] 9.5 Run focused deterministic validation, record the Agent Evaluation exclusion decision, and perform visible UI plus Neko quality review.

@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const EXTENSIONS_NAVIGATION =
@@ -18,13 +18,20 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
   owner: '@neko/agent-webview',
   async prepare({ fixtureHome }) {
     const workspacePath = join(fixtureHome, 'workspace');
+    const personalSkillRoot = join(fixtureHome, '.agents', 'skills', 'detail-test');
     await Promise.all([
       mkdir(workspacePath, { recursive: true }),
       mkdir(join(fixtureHome, '.neko'), { recursive: true }),
+      mkdir(personalSkillRoot, { recursive: true }),
     ]);
+    await writeFile(
+      join(personalSkillRoot, 'SKILL.md'),
+      '---\nname: detail-test\ndescription: Personal Skill detail fixture\n---\nUse the fixture method.\n',
+      'utf8',
+    );
     return { workspacePath };
   },
-  async run({ checkpoint, click, evaluate, screenshot, type, waitForSelector }) {
+  async run({ checkpoint, click, evaluate, screenshot, waitForSelector }) {
     await waitForSelector('[data-neko-controlled-workbench="true"]');
     const initialLocale = await evaluate('document.documentElement.dataset.nekoLocale');
     const initialViewport = await evaluate(
@@ -35,12 +42,18 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
     await selectDesktopLocale(evaluate, 'en');
     await click(EXTENSIONS_NAVIGATION);
     await waitForSelector(EXTENSION_ROOT);
+    const personalSkill = await inspectPersonalSkillOverview({
+      click,
+      evaluate,
+      waitForSelector,
+    });
+    checkpoint('personal-skill-overview-en', personalSkill);
+    const personalSkillScreenshot = await screenshot('personal-skill-overview-en');
     const english = await inspectIntroduction({
       click,
       evaluate,
       expected: ENGLISH_DESCRIPTION,
       query: 'approved domains',
-      type,
       waitForSelector,
     });
     checkpoint('extension-introduction-en', english);
@@ -75,7 +88,6 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
       evaluate,
       expected: CHINESE_DESCRIPTION,
       query: '已授权域名',
-      type,
       waitForSelector,
     });
     checkpoint('extension-introduction-zh-cn', chinese);
@@ -97,9 +109,11 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
       initialViewport,
       english,
       chinese,
+      personalSkill,
       browserControls,
       computerControls,
       screenshots: [
+        personalSkillScreenshot,
         englishScreenshot,
         browserControlsScreenshot,
         computerScreenshot,
@@ -108,6 +122,7 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
     };
   },
   assertObservation(_observation, evidence) {
+    assertPersonalSkillOverview(evidence.personalSkill);
     assertIntroduction(evidence.english, 'en', ENGLISH_DESCRIPTION);
     assertIntroduction(evidence.chinese, 'zh-cn', CHINESE_DESCRIPTION);
     assertAutomationControls(evidence.browserControls, 'browser-use.observe.local', false);
@@ -239,10 +254,10 @@ async function selectDesktopLocale(evaluate, locale) {
   );
 }
 
-async function inspectIntroduction({ click, evaluate, expected, query, type, waitForSelector }) {
+async function inspectIntroduction({ click, evaluate, expected, query, waitForSelector }) {
   await click('[data-extension-catalog-tab="extensions"]');
   await waitForSelector(EXTENSION_OPTION);
-  await type(SEARCH_INPUT, query);
+  await replaceSearch(evaluate, query);
   await waitForCondition(
     evaluate,
     `document.querySelectorAll(${JSON.stringify(EXTENSION_OPTION)}).length === 1`,
@@ -266,6 +281,7 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
   const detailEnablementCount = await evaluate(
     `document.querySelectorAll('.agent-extension-configuration-root [role="switch"]').length`,
   );
+  const overview = await readOverview(evaluate);
   const locale = await evaluate('document.documentElement.dataset.nekoLocale');
   const result = {
     locale,
@@ -275,6 +291,7 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
     localInstallCount: catalog.localInstallCount,
     detailDescription,
     detailEnablementCount,
+    overview,
     query,
   };
   assertIntroduction(result, locale, expected);
@@ -282,6 +299,7 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
 }
 
 function assertIntroduction(result, locale, expected) {
+  const expectedOverview = locale === 'zh-cn' ? '概览' : 'Overview';
   if (
     result.locale !== locale ||
     result.name !== 'Browser Use' ||
@@ -289,7 +307,10 @@ function assertIntroduction(result, locale, expected) {
     result.catalogEnablementCount !== 1 ||
     result.localInstallCount !== 1 ||
     result.detailDescription !== expected ||
-    result.detailEnablementCount !== 0
+    result.detailEnablementCount !== 0 ||
+    result.overview.label !== expectedOverview ||
+    !result.overview.factLabels.includes(locale === 'zh-cn' ? '来源' : 'Source') ||
+    result.overview.rawPackageContentVisible
   ) {
     throw new Error(
       `Extension introduction localization is inconsistent: ${JSON.stringify({
@@ -298,6 +319,61 @@ function assertIntroduction(result, locale, expected) {
         result,
       })}`,
     );
+  }
+}
+
+async function inspectPersonalSkillOverview({ click, evaluate, waitForSelector }) {
+  await click('[data-extension-catalog-tab="skills"]');
+  await waitForSelector(EXTENSION_OPTION);
+  await replaceSearch(evaluate, 'detail-test');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll(${JSON.stringify(EXTENSION_OPTION)}).length === 1`,
+    'Personal Skill search did not resolve the fixture.',
+  );
+  await click(EXTENSION_OPTION);
+  await waitForSelector('[data-workbench-main-panel="extension-detail"]');
+  const result = await evaluate(`(() => ({
+    ...${readOverviewExpression()},
+    actionLabels: Array.from(document.querySelectorAll('.extension-configuration-actions button')).map(
+      (item) => item.textContent?.trim() ?? '',
+    ),
+  }))()`);
+  assertPersonalSkillOverview(result);
+  return result;
+}
+
+async function readOverview(evaluate) {
+  return evaluate(`(() => ${readOverviewExpression()})()`);
+}
+
+function readOverviewExpression() {
+  return `({
+    label: document.querySelector('.agent-extension-configuration-root .section-label')?.textContent ?? '',
+    factLabels: Array.from(document.querySelectorAll('.extension-configuration-fact dt')).map(
+      (item) => item.textContent ?? '',
+    ),
+    rawPackageContentVisible: ['plugin.json', 'mcp.json', 'SKILL.md body'].some((value) =>
+      document.querySelector('.agent-extension-configuration-root')?.textContent?.includes(value),
+    ),
+  })`;
+}
+
+function assertPersonalSkillOverview(result) {
+  for (const expected of ['Open SKILL.md', 'Show in Folder', 'Remove']) {
+    if (!result.actionLabels.includes(expected)) {
+      throw new Error(
+        `Personal Skill overview is missing '${expected}': ${JSON.stringify(result)}`,
+      );
+    }
+  }
+  if (
+    result.label !== 'Overview' ||
+    !result.factLabels.includes('Source') ||
+    !result.factLabels.includes('Identifier') ||
+    result.rawPackageContentVisible
+  ) {
+    throw new Error(`Personal Skill overview is inconsistent: ${JSON.stringify(result)}`);
   }
 }
 

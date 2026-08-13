@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentExtensionCatalogItem } from '@neko/agent-contracts';
 import type {
@@ -22,6 +22,7 @@ vi.mock('@neko/ui/i18n/react', () => ({
 }));
 
 afterEach(() => {
+  cleanup();
   i18n.locale = 'en';
 });
 
@@ -145,8 +146,34 @@ describe('AgentExtensionManagementRoot', () => {
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.addSkill' }));
     await waitFor(() => expect(runtime.installPersonalSkill).toHaveBeenCalledOnce());
     fireEvent.click(within(audioCard).getByRole('button', { name: /Audio/u }));
+    fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.openSkillInEditor' }));
+    await waitFor(() => expect(runtime.openPersonalSkill).toHaveBeenCalledWith('skill:Audio'));
+    fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.showSkillInFolder' }));
+    await waitFor(() =>
+      expect(runtime.showPersonalSkillInFolder).toHaveBeenCalledWith('skill:Audio'),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.remove' }));
     await waitFor(() => expect(runtime.removePersonalSkill).toHaveBeenCalledWith('skill:Audio'));
+  });
+
+  it('shows overview metadata and routes a Plugin Skill to its owning Plugin', async () => {
+    const runtime = createRuntime({
+      skills: [skill('Shot list', 'plugin', 'plugin-tools')],
+      extensions: [extension('plugin-tools', 'Plugin Tools', true)],
+    });
+    render(
+      <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
+    );
+
+    const skillCard = await screen.findByRole('listitem', { name: 'Shot list' });
+    fireEvent.click(within(skillCard).getByRole('button', { name: /Shot list/u }));
+    expect(screen.getByText('home.capabilities.overview')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'home.capabilities.openSkillInEditor' }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.viewOwningPlugin' }));
+    expect(await screen.findByRole('listitem', { name: 'Plugin Tools' })).toBeTruthy();
+    expect(screen.getByText('home.capabilities.deliverySource.bundled')).toBeTruthy();
   });
 
   it('shows discovery diagnostics and mutation failures visibly', async () => {
@@ -180,6 +207,10 @@ function createRuntime(
   readonly enablePlugin: ReturnType<typeof vi.fn<(pluginId: string) => Promise<void>>>;
   readonly removePlugin: ReturnType<typeof vi.fn<(pluginId: string) => Promise<void>>>;
   readonly installPersonalSkill: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  readonly openPersonalSkill: ReturnType<typeof vi.fn<(managementId: string) => Promise<void>>>;
+  readonly showPersonalSkillInFolder: ReturnType<
+    typeof vi.fn<(managementId: string) => Promise<void>>
+  >;
   readonly removePersonalSkill: ReturnType<typeof vi.fn<(managementId: string) => Promise<void>>>;
 } {
   const identity = { windowId: 'window-1' };
@@ -200,19 +231,27 @@ function createRuntime(
     removePlugin: vi.fn(async () => undefined),
     rescanSources: vi.fn(async () => undefined),
     installPersonalSkill: vi.fn(async () => undefined),
+    openPersonalSkill: vi.fn(async () => undefined),
+    showPersonalSkillInFolder: vi.fn(async () => undefined),
     removePersonalSkill: vi.fn(async () => undefined),
     dispose: vi.fn(),
   };
 }
 
-function skill(name: string, source: 'personal' | 'plugin'): AgentManagedSkillItem {
+function skill(
+  name: string,
+  source: 'personal' | 'plugin',
+  sourceId = source,
+): AgentManagedSkillItem {
   return {
-    id: `${source}:${name}`,
+    id: `${source}:${sourceId}:${name}`,
     name,
     description: name,
     source,
-    sourceId: source,
+    sourceId,
     managementId: source === 'personal' ? `skill:${name}` : '',
+    canOpenInEditor: source === 'personal',
+    canShowInFolder: source === 'personal',
     canRemove: source === 'personal',
   };
 }

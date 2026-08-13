@@ -1842,7 +1842,7 @@ function DesktopWorkbenchRuntimePortals({
     ) : scene.context.kind === 'extensions' ? (
       extensionManagement ? (
         <DesktopExtensionManagementSurface
-          detailLabel={t('home.capabilities.configuration')}
+          detailLabel={t('home.capabilities.overview')}
           detailTarget={extensionDetailTarget}
           interactive={interactive}
           onDetailVisibilityChange={onExtensionDetailVisibilityChange}

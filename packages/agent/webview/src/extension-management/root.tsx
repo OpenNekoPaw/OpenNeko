@@ -1,4 +1,7 @@
 import {
+  ArrowRightIcon,
+  FileIcon,
+  FolderIcon,
   GridIcon,
   LayersIcon,
   PackageIcon,
@@ -149,10 +152,20 @@ export function AgentExtensionManagementRoot({
       : extensions.map((item) => ({ kind: 'extension' as const, item }));
   const selectedItemId = selectedItem?.id;
   const detail = selectedItem ? (
-    <AgentExtensionConfigurationRoot
+    <AgentExtensionOverviewRoot
       confirmAction={confirmAction}
       interactive={interactive}
+      onViewOwningPlugin={(pluginId) => {
+        setQuery('');
+        setSelectedExtensionId(pluginId);
+        setTab('extensions');
+      }}
       operationKey={operationKey}
+      owningExtension={
+        selectedSkill?.source === 'plugin'
+          ? projection?.extensions.find((item) => item.id === selectedSkill.sourceId)
+          : undefined
+      }
       runMutation={runMutation}
       runtime={runtime}
       selectedExtension={tab === 'extensions' ? selectedExtension : undefined}
@@ -358,10 +371,12 @@ export function AgentExtensionManagementRoot({
   );
 }
 
-function AgentExtensionConfigurationRoot({
+function AgentExtensionOverviewRoot({
   confirmAction,
   interactive,
+  onViewOwningPlugin,
   operationKey,
+  owningExtension,
   runMutation,
   runtime,
   selectedExtension,
@@ -370,7 +385,9 @@ function AgentExtensionConfigurationRoot({
 }: {
   readonly confirmAction: (message: string) => boolean | Promise<boolean>;
   readonly interactive: boolean;
+  readonly onViewOwningPlugin: (pluginId: string) => void;
   readonly operationKey: string | undefined;
+  readonly owningExtension: AgentExtensionCatalogItem | undefined;
   readonly runMutation: (key: string, operation: () => Promise<void>) => Promise<void>;
   readonly runtime: AgentExtensionManagementRuntime;
   readonly selectedExtension: AgentExtensionCatalogItem | undefined;
@@ -380,7 +397,7 @@ function AgentExtensionConfigurationRoot({
   const { locale, t } = useTranslation();
   const item = tab === 'skills' ? selectedSkill : selectedExtension;
   if (!item) {
-    throw new Error('Extension configuration requires an exact selected catalog item.');
+    throw new Error('Extension overview requires an exact selected catalog item.');
   }
 
   const name = selectedSkill?.name ?? selectedExtension?.displayName ?? item.id;
@@ -399,7 +416,7 @@ function AgentExtensionConfigurationRoot({
           )}
         </span>
         <div>
-          <p className="section-label">{t('home.capabilities.configuration')}</p>
+          <p className="section-label">{t('home.capabilities.overview')}</p>
           <h2>{name}</h2>
           <p>{description || item.id}</p>
         </div>
@@ -411,14 +428,25 @@ function AgentExtensionConfigurationRoot({
             {t(`home.capabilities.source.${selectedSkill.source}`)}
           </Definition>
           <Definition label={t('home.capabilities.detail.identifier')}>
-            {selectedSkill.id}
+            {selectedSkill.name}
           </Definition>
+          {selectedSkill.source === 'plugin' ? (
+            <Definition label={t('home.capabilities.detail.owningPlugin')}>
+              {owningExtension?.displayName ?? selectedSkill.sourceId}
+            </Definition>
+          ) : null}
         </div>
       ) : null}
 
       {selectedExtension ? (
         <>
           <div className="extension-configuration-facts">
+            <Definition label={t('home.capabilities.detail.source')}>
+              {t(`home.capabilities.deliverySource.${selectedExtension.deliverySource}`)}
+            </Definition>
+            <Definition label={t('home.capabilities.detail.identifier')}>
+              {selectedExtension.id}
+            </Definition>
             <Definition label={t('home.capabilities.detail.version')}>
               {selectedExtension.version}
             </Definition>
@@ -438,32 +466,76 @@ function AgentExtensionConfigurationRoot({
         </>
       ) : null}
 
-      {selectedSkill?.canRemove || selectedExtension?.canRemove ? (
+      {selectedSkill?.canOpenInEditor ||
+      selectedSkill?.canShowInFolder ||
+      (selectedSkill?.source === 'plugin' && owningExtension) ||
+      selectedSkill?.canRemove ||
+      selectedExtension?.canRemove ? (
         <div className="extension-configuration-actions">
-          <button
-            type="button"
-            disabled={mutationsDisabled}
-            onClick={() => {
-              const message = selectedSkill
-                ? t('home.capabilities.confirmRemoveSkill', { name })
-                : t('home.capabilities.confirmRemovePlugin', { name });
-              void Promise.resolve(confirmAction(message)).then((confirmed) => {
-                if (!confirmed) return;
-                void runMutation(`remove:${item.id}`, () => {
-                  if (selectedSkill) {
-                    return runtime.removePersonalSkill(selectedSkill.managementId);
-                  }
-                  if (!selectedExtension) {
-                    throw new Error('Extension management selection is invalid.');
-                  }
-                  return runtime.removePlugin(selectedExtension.id);
+          {selectedSkill?.canOpenInEditor ? (
+            <button
+              type="button"
+              disabled={mutationsDisabled}
+              onClick={() =>
+                void runMutation(`open:${selectedSkill.id}`, () =>
+                  runtime.openPersonalSkill(selectedSkill.managementId),
+                )
+              }
+            >
+              <FileIcon size={14} />
+              <span>{t('home.capabilities.openSkillInEditor')}</span>
+            </button>
+          ) : null}
+          {selectedSkill?.canShowInFolder ? (
+            <button
+              type="button"
+              disabled={mutationsDisabled}
+              onClick={() =>
+                void runMutation(`reveal:${selectedSkill.id}`, () =>
+                  runtime.showPersonalSkillInFolder(selectedSkill.managementId),
+                )
+              }
+            >
+              <FolderIcon size={14} />
+              <span>{t('home.capabilities.showSkillInFolder')}</span>
+            </button>
+          ) : null}
+          {selectedSkill?.source === 'plugin' && owningExtension ? (
+            <button
+              type="button"
+              disabled={mutationsDisabled}
+              onClick={() => onViewOwningPlugin(owningExtension.id)}
+            >
+              <ArrowRightIcon size={14} />
+              <span>{t('home.capabilities.viewOwningPlugin')}</span>
+            </button>
+          ) : null}
+          {selectedSkill?.canRemove || selectedExtension?.canRemove ? (
+            <button
+              type="button"
+              disabled={mutationsDisabled}
+              onClick={() => {
+                const message = selectedSkill
+                  ? t('home.capabilities.confirmRemoveSkill', { name })
+                  : t('home.capabilities.confirmRemovePlugin', { name });
+                void Promise.resolve(confirmAction(message)).then((confirmed) => {
+                  if (!confirmed) return;
+                  void runMutation(`remove:${item.id}`, () => {
+                    if (selectedSkill) {
+                      return runtime.removePersonalSkill(selectedSkill.managementId);
+                    }
+                    if (!selectedExtension) {
+                      throw new Error('Extension management selection is invalid.');
+                    }
+                    return runtime.removePlugin(selectedExtension.id);
+                  });
                 });
-              });
-            }}
-          >
-            <TrashIcon size={14} />
-            <span>{t('home.capabilities.remove')}</span>
-          </button>
+              }}
+            >
+              <TrashIcon size={14} />
+              <span>{t('home.capabilities.remove')}</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </section>

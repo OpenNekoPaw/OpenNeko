@@ -45,6 +45,18 @@ Plugin 使用通用根 manifest 结构的稳定 portable subset：`name`、publi
 `marketplace.json` 不参与发现。未来官方仓库必须通过独立 OpenSpec 增加 distribution adapter，
 下载后的 package 仍进入同一本地安装路径，禁止 runtime 双读。
 
+## 管理详情边界
+
+Skill 与 Plugin 详情采用扩展管理概览，而不是包内容浏览器：Skill 展示名称、描述、来源和所属
+Plugin；Plugin 展示发布 metadata、安装来源、贡献摘要与实际 readiness。Renderer 不接收 Skill
+正文、manifest/MCP 原文、进程参数、SQLite 记录、fingerprint、locator 或物理路径。
+
+个人 Skill 可以通过不透明 management identity 请求 Desktop 用系统默认应用打开精确
+`SKILL.md`，或在文件管理器中显示。Personal Skill manager 必须在每次操作前重新发现当前记录并
+校验 fingerprint、personal root containment、regular file 与 symlink 边界；Desktop Main 只提供
+系统 open/reveal adapter。Plugin-owned Skill 只导航到所属 Plugin 概览，不提供绕过 Plugin lifecycle
+的单独编辑、显示目录或移除操作。
+
 ## MCP 边界
 
 MCP 只用于需要外部进程或远程服务提供 Tool 的可选 adapter。内建领域能力由 owning package

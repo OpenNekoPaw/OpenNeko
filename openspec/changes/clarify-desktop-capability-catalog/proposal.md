@@ -18,6 +18,10 @@ package、用户状态和 MCP runtime 相互侵入。
   独立进入 owning runtime，并在最小 contribution scope fail-local。
 - Extensions Surface 只展示明确的 bundled plugin roots 与本地已安装 Plugin；用户可以从本地目录
   安装、启用、禁用、移除和重新扫描，不展示虚构的 available marketplace catalog。
+- Skill/Plugin 详情采用类 VS Code 的概览信息层级：展示作者 metadata、来源、组件贡献、
+  runtime readiness 与真实管理操作，不展示 Plugin 文件树、manifest/MCP 原文或物理路径。
+  Personal Skill 可通过 opaque management identity 打开 `SKILL.md` 的系统默认编辑器并在文件管理器中显示；
+  Plugin Skill 只导航至所属 Plugin，不暴露单独编辑或移除。
 - Plugin package bytes 保存在 OpenNeko install root；安装 lifecycle、启用状态和用户配置引用进入
   `~/.neko/neko.db#state`。旧 JSON grant 不导入、不兼容读取，也不作为 fallback。
 - 已验证 Plugin Skill 继续进入 Pi SkillHost；兼容 MCP contribution 继续复用唯一

@@ -68,6 +68,15 @@
 - Deterministic Agent/Desktop tests cover root manifest validation, SQLite reopen and corrupt-row locality, contained staging, exact mutation identity, system-trash delegation, old JSON grant exclusion, independent Skill/MCP readiness and unsupported App projection.
 - Provider-backed complete-session cases were not run: no fixture installation driver currently reaches the product-authorized local Plugin install boundary before the public Agent input path starts.
 
+## Skill/Plugin Overview and Host Action Decision (2026-08-14)
+
+- Decision: excluded from new provider-backed Agent behavior evaluation.
+- Reason: the overview projection, owning-Plugin navigation, and Personal Skill open/reveal intents do not change Skill prompt content, selection, activation, runtime provenance, Tool routing, or model-visible behavior.
+- Deterministic evidence must cover exact typed routes, current management identity/fingerprint and root containment checks, no physical path projection, Desktop adapter delegation, Personal-vs-Plugin action visibility, and bilingual copy.
+- Existing provider-backed Plugin Skill/MCP cases remain required for the broader runtime change and are neither replaced nor satisfied by these management UI checks.
+- Focused contract/manager/Webview/Renderer/preload tests passed 24/24; the focused Desktop AppHost delegation case and affected package typechecks also passed.
+- The visible `desktop-extension-localization` scenario now checks the Personal Skill overview/actions and Plugin overview boundary, but the development Desktop CDP target was not reachable before timeout in two attempts; no visual acceptance is claimed for this addition.
+
 ## Residual Risk
 
 - Root `plugin.json` intentionally uses a minimal portable subset; tracking future external Plugin specifications is deferred to a future install-boundary adapter.
