@@ -15,6 +15,8 @@ export interface AgentManagedSkillItem {
   readonly source: 'personal' | 'plugin';
   readonly sourceId: string;
   readonly managementId: string;
+  readonly canOpenInEditor: boolean;
+  readonly canShowInFolder: boolean;
   readonly canRemove: boolean;
 }
 
@@ -48,6 +50,8 @@ export interface AgentExtensionManagementRuntime {
   removePlugin(pluginId: string): Promise<void>;
   rescanSources(): Promise<void>;
   installPersonalSkill(): Promise<void>;
+  openPersonalSkill(managementId: string): Promise<void>;
+  showPersonalSkillInFolder(managementId: string): Promise<void>;
   removePersonalSkill(managementId: string): Promise<void>;
   dispose(): void;
 }
@@ -91,7 +95,17 @@ export function parseAgentExtensionManagementSessionIdentity(
 function parseManagedSkill(value: unknown): AgentManagedSkillItem {
   const record = requireExactRecord(
     value,
-    ['id', 'name', 'description', 'source', 'sourceId', 'managementId', 'canRemove'],
+    [
+      'id',
+      'name',
+      'description',
+      'source',
+      'sourceId',
+      'managementId',
+      'canOpenInEditor',
+      'canShowInFolder',
+      'canRemove',
+    ],
     'Agent Extension Management Skill item is invalid.',
   );
   const source = requireSkillSource(record['source']);
@@ -107,13 +121,26 @@ function parseManagedSkill(value: unknown): AgentManagedSkillItem {
     record['canRemove'],
     'Agent Extension Management Skill removal capability is invalid.',
   );
+  const canOpenInEditor = requireBoolean(
+    record['canOpenInEditor'],
+    'Agent Extension Management Skill editor capability is invalid.',
+  );
+  const canShowInFolder = requireBoolean(
+    record['canShowInFolder'],
+    'Agent Extension Management Skill folder capability is invalid.',
+  );
   if (source === 'plugin') {
     requirePluginId(sourceId);
   } else if (sourceId !== 'personal') {
     throw new Error('Agent Extension Management Skill source identity is inconsistent.');
   }
-  if (canRemove !== managementId.length > 0 || (source === 'plugin' && canRemove)) {
-    throw new Error('Agent Extension Management Skill removal capability is inconsistent.');
+  const isManagedPersonalSkill = source === 'personal' && managementId.length > 0;
+  if (
+    canRemove !== isManagedPersonalSkill ||
+    canOpenInEditor !== isManagedPersonalSkill ||
+    canShowInFolder !== isManagedPersonalSkill
+  ) {
+    throw new Error('Agent Extension Management Skill capabilities are inconsistent.');
   }
   if (canRemove) requireManagementId(managementId);
   const id = requireNonEmptyString(
@@ -136,6 +163,8 @@ function parseManagedSkill(value: unknown): AgentManagedSkillItem {
     source,
     sourceId,
     managementId,
+    canOpenInEditor,
+    canShowInFolder,
     canRemove,
   };
 }

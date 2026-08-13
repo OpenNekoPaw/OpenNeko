@@ -45,6 +45,15 @@ describe('DesktopExtensionManagementRuntime', () => {
         identity: { windowId: 'window-1' },
       }),
     );
+    const managementId = `skill:${'a'.repeat(64)}`;
+    await runtime.openPersonalSkill(managementId);
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({ route: 'skill.open', managementId }),
+    );
+    await runtime.showPersonalSkillInFolder(managementId);
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({ route: 'skill.reveal', managementId }),
+    );
     runtime.dispose();
     await expect(runtime.getSnapshot()).rejects.toThrow('disposed');
   });

@@ -3360,6 +3360,8 @@ describe('DesktopAppHost', () => {
         source: 'personal',
         sourceId: 'personal',
         managementId: `skill:${'a'.repeat(64)}`,
+        canOpenInEditor: true,
+        canShowInFolder: true,
         canRemove: true,
       },
       {
@@ -3369,6 +3371,8 @@ describe('DesktopAppHost', () => {
         source: 'plugin',
         sourceId: 'story-tools',
         managementId: '',
+        canOpenInEditor: false,
+        canShowInFolder: false,
         canRemove: false,
       },
     ]);
@@ -3687,6 +3691,43 @@ describe('DesktopAppHost', () => {
       }),
     );
     expect(fixture.extensionManager.rescanSources).toHaveBeenCalledOnce();
+  });
+
+  it('delegates personal Skill host actions through an opaque current management identity', async () => {
+    const fixture = await createShellAppHost();
+    const extensions = await openExtensionsScene(fixture);
+    const managementId = `skill:${'a'.repeat(64)}`;
+
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.open',
+        requestId: 'skill-open-1',
+        identity: extensions.identity,
+        managementId,
+      }),
+    );
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.reveal',
+        requestId: 'skill-reveal-1',
+        identity: extensions.identity,
+        managementId,
+      }),
+    );
+
+    expect(fixture.personalSkillManager.openInEditor).toHaveBeenCalledWith(
+      managementId,
+      expect.any(Array),
+    );
+    expect(fixture.personalSkillManager.showInFolder).toHaveBeenCalledWith(
+      managementId,
+      expect.any(Array),
+    );
+    expect(
+      JSON.stringify(vi.mocked(fixture.personalSkillManager.openInEditor).mock.calls),
+    ).not.toContain('/Users');
   });
 
   it('keeps the selected local Plugin path in Main and delegates only the authorized path', async () => {
@@ -4289,6 +4330,7 @@ async function createShellAppHost(options?: {
   const fixture = createShellFixture('app-1');
   const agent = createAgentComposition();
   const extensionManager = createExtensionManager();
+  const personalSkillManager = createPersonalSkillManager();
   const agentLaunch = options?.agentLaunch ?? createAgentLaunchRuntime();
   const conversationLifecycle = options?.conversationLifecycle ?? createConversationLifecycle();
   const agentDomainBindings = createAgentDomainBindingApplicationService({
@@ -4395,7 +4437,7 @@ async function createShellAppHost(options?: {
     textEditor: options?.textEditor,
     extensionManager,
     selectLocalPluginDirectory: options?.selectLocalPluginDirectory,
-    personalSkillManager: createPersonalSkillManager(),
+    personalSkillManager,
     automationLocalRuntimes: options?.automationLocalRuntimes ?? createAutomationLocalRuntimes(),
     automationPermissions: options?.automationPermissions ?? {
       list: async () => [],
@@ -4429,6 +4471,7 @@ async function createShellAppHost(options?: {
     appHost,
     agent,
     extensionManager,
+    personalSkillManager,
     registry: fixture.registry,
     windowId,
     sender: {
@@ -4731,6 +4774,8 @@ function createExtensionManager(): AgentExtensionManager & {
 function createPersonalSkillManager(): PersonalSkillManager {
   return {
     install: vi.fn(),
+    openInEditor: vi.fn(),
+    showInFolder: vi.fn(),
     remove: vi.fn(),
     projectManagement: vi.fn<PersonalSkillManager['projectManagement']>(async (records) =>
       records

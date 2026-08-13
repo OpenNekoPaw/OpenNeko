@@ -1,4 +1,13 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -18,6 +27,8 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: vi.fn(async () => source),
         trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
 
       await expect(manager.install('window-1')).resolves.toEqual({
@@ -56,6 +67,8 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: async () => source,
         trashItem,
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
       await manager.install('window-1');
       const snapshot = await discoverPersonalSkills(personalRoot);
@@ -83,6 +96,8 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: async () => source,
         trashItem,
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
       await manager.install('window-1');
       const snapshot = await discoverPersonalSkills(personalRoot);
@@ -100,6 +115,50 @@ describe('Personal Skill manager', () => {
     });
   });
 
+  it('opens and reveals only the current managed SKILL.md through host ports', async () => {
+    await withFixture(async ({ source, personalRoot }) => {
+      await writeSkill(source, 'story-planner');
+      const openFile = vi.fn();
+      const revealFile = vi.fn();
+      const manager = createPersonalSkillManager({
+        personalSkillRoot: personalRoot,
+        selectDirectory: async () => source,
+        trashItem: vi.fn(),
+        openFile,
+        revealFile,
+      });
+      await manager.install('window-1');
+      const snapshot = await discoverPersonalSkills(personalRoot);
+      const management = await manager.projectManagement(snapshot.records);
+      const managementId = management[0]!.managementId;
+      const skillFile = join(personalRoot, 'story-planner', 'SKILL.md');
+      const canonicalSkillFile = await realpath(skillFile);
+
+      await expect(manager.openInEditor(managementId, management)).resolves.toEqual({
+        name: 'story-planner',
+      });
+      await expect(manager.showInFolder(managementId, management)).resolves.toEqual({
+        name: 'story-planner',
+      });
+      expect(openFile).toHaveBeenCalledWith(canonicalSkillFile);
+      expect(revealFile).toHaveBeenCalledWith(canonicalSkillFile);
+
+      await writeFile(
+        skillFile,
+        `---\nname: story-planner\ndescription: Changed after projection\n---\nChanged body.\n`,
+        'utf8',
+      );
+      await expect(manager.openInEditor(managementId, management)).rejects.toThrow(
+        'stale or unknown',
+      );
+      await expect(manager.showInFolder(managementId, management)).rejects.toThrow(
+        'stale or unknown',
+      );
+      expect(openFile).toHaveBeenCalledTimes(1);
+      expect(revealFile).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('rejects packages containing symbolic links before Pi validation', async () => {
     await withFixture(async ({ root, source, personalRoot }) => {
       await writeSkill(source, 'unsafe');
@@ -109,6 +168,8 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: async () => source,
         trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
 
       await expect(manager.install('window-1')).rejects.toThrow('symbolic links');
@@ -128,6 +189,8 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: async () => source,
         trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
 
       await expect(manager.install('window-1')).rejects.toThrow('exactly one valid Skill package');
@@ -146,6 +209,8 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: async () => source,
         trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
 
       await expect(manager.install('window-1')).rejects.toThrow('size limit');

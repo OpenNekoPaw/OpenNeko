@@ -17,6 +17,14 @@ export interface PersonalSkillManager {
     managementId: string,
     records: readonly PersonalSkillManagementRecord[],
   ): Promise<{ readonly name: string }>;
+  openInEditor(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }>;
+  showInFolder(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }>;
   projectManagement(
     records: readonly SkillHostRecord[],
   ): Promise<readonly PersonalSkillManagementRecord[]>;
@@ -32,6 +40,8 @@ export function createPersonalSkillManager(options: {
   readonly personalSkillRoot: string;
   readonly selectDirectory: (windowId: string) => Promise<string | undefined>;
   readonly trashItem: (absolutePath: string) => Promise<void>;
+  readonly openFile: (absolutePath: string) => Promise<void>;
+  readonly revealFile: (absolutePath: string) => void | Promise<void>;
 }): PersonalSkillManager {
   return new DefaultPersonalSkillManager(options);
 }
@@ -44,6 +54,8 @@ class DefaultPersonalSkillManager implements PersonalSkillManager {
       readonly personalSkillRoot: string;
       readonly selectDirectory: (windowId: string) => Promise<string | undefined>;
       readonly trashItem: (absolutePath: string) => Promise<void>;
+      readonly openFile: (absolutePath: string) => Promise<void>;
+      readonly revealFile: (absolutePath: string) => void | Promise<void>;
     },
   ) {
     if (!isAbsolute(options.personalSkillRoot)) {
@@ -115,6 +127,37 @@ class DefaultPersonalSkillManager implements PersonalSkillManager {
     managementId: string,
     records: readonly PersonalSkillManagementRecord[],
   ): Promise<{ readonly name: string }> {
+    const resolved = await this.resolveCurrentManagedSkill(managementId, records);
+    await this.options.trashItem(resolved.skillRoot);
+    return { name: resolved.record.name };
+  }
+
+  async openInEditor(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }> {
+    const resolved = await this.resolveCurrentManagedSkill(managementId, records);
+    await this.options.openFile(resolved.skillFile);
+    return { name: resolved.record.name };
+  }
+
+  async showInFolder(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }> {
+    const resolved = await this.resolveCurrentManagedSkill(managementId, records);
+    await this.options.revealFile(resolved.skillFile);
+    return { name: resolved.record.name };
+  }
+
+  private async resolveCurrentManagedSkill(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{
+    readonly record: PersonalSkillManagementRecord;
+    readonly skillRoot: string;
+    readonly skillFile: string;
+  }> {
     requireManagementId(managementId);
     const candidates = records.filter((record) => record.managementId === managementId);
     if (candidates.length !== 1) {
@@ -122,8 +165,8 @@ class DefaultPersonalSkillManager implements PersonalSkillManager {
     }
     const record = candidates[0];
     if (!record) throw new Error('Personal Skill management identity is stale or unknown.');
-    const target = await this.resolveManagedDirectory(record.name);
-    if (!target) throw new Error('Personal Skill package is not safely removable.');
+    const skillRoot = await this.resolveManagedDirectory(record.name);
+    if (!skillRoot) throw new Error('Personal Skill package is unavailable.');
     const current = await createNodePiSkillHost({
       cwd: this.personalSkillRoot,
       policy: { isTrusted: () => true, isEnabled: () => true },
@@ -132,8 +175,19 @@ class DefaultPersonalSkillManager implements PersonalSkillManager {
     if (!currentRecord || currentRecord.fingerprint !== record.fingerprint) {
       throw new Error('Personal Skill management identity is stale or unknown.');
     }
-    await this.options.trashItem(target);
-    return { name: record.name };
+    const configuredSkillFile = join(skillRoot, 'SKILL.md');
+    const [skillFile, skillFileInfo] = await Promise.all([
+      realpath(configuredSkillFile),
+      lstat(configuredSkillFile),
+    ]);
+    if (
+      !skillFileInfo.isFile() ||
+      skillFileInfo.isSymbolicLink() ||
+      !isInside(skillRoot, skillFile)
+    ) {
+      throw new Error('Personal Skill file is unavailable.');
+    }
+    return { record, skillRoot, skillFile };
   }
 
   async projectManagement(

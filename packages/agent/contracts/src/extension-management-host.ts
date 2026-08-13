@@ -22,7 +22,7 @@ export type AgentExtensionManagementHostRequest =
       readonly route: 'plugin.install' | 'sources.rescan' | 'skill.install';
     })
   | (RequestBase & {
-      readonly route: 'skill.remove';
+      readonly route: 'skill.open' | 'skill.reveal' | 'skill.remove';
       readonly managementId: string;
     });
 
@@ -77,11 +77,13 @@ export function parseAgentExtensionManagementHostRequest(
         ...base,
         route: record['route'],
       };
+    case 'skill.open':
+    case 'skill.reveal':
     case 'skill.remove':
       requireExactKeys(record, [...BASE_KEYS, 'managementId']);
       return {
         ...base,
-        route: 'skill.remove',
+        route: record['route'],
         managementId: requireId(record['managementId'], 'Skill management'),
       };
     default:

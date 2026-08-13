@@ -911,6 +911,10 @@ async function startDesktop(): Promise<void> {
         }
       }
     });
+  const openHostPath = async (targetPath: string): Promise<void> => {
+    const error = await shell.openPath(targetPath);
+    if (error) throw new Error(error);
+  };
   const personalSkillManager = createPersonalSkillManager({
     personalSkillRoot: path.join(homedir, '.agents', 'skills'),
     selectDirectory: async (windowId) => {
@@ -924,11 +928,9 @@ async function startDesktop(): Promise<void> {
       return result.canceled ? undefined : result.filePaths[0];
     },
     trashItem: (absolutePath) => shell.trashItem(absolutePath),
+    openFile: openHostPath,
+    revealFile: (absolutePath) => shell.showItemInFolder(absolutePath),
   });
-  const openHostPath = async (targetPath: string): Promise<void> => {
-    const error = await shell.openPath(targetPath);
-    if (error) throw new Error(error);
-  };
   const previewRuntime = new DesktopPreviewRuntime({
     shell: shellService,
     resources: resourceRegistry,

@@ -1833,11 +1833,18 @@ export class DesktopAppHost {
         await this.options.personalSkillManager.install(window.windowId);
         break;
       }
+      case 'skill.open': {
+        const management = await this.readPersonalSkillManagement();
+        await this.options.personalSkillManager.openInEditor(request.managementId, management);
+        break;
+      }
+      case 'skill.reveal': {
+        const management = await this.readPersonalSkillManagement();
+        await this.options.personalSkillManager.showInFolder(request.managementId, management);
+        break;
+      }
       case 'skill.remove': {
-        const skills = await this.agent.readGlobalSkillCatalog();
-        const management = await this.options.personalSkillManager.projectManagement(
-          skills.records,
-        );
+        const management = await this.readPersonalSkillManagement();
         await this.options.personalSkillManager.remove(request.managementId, management);
         break;
       }
@@ -2026,6 +2033,11 @@ export class DesktopAppHost {
     return this.options.extensionManager.readCatalog();
   }
 
+  private async readPersonalSkillManagement() {
+    const skills = await this.agent.readGlobalSkillCatalog();
+    return this.options.personalSkillManager.projectManagement(skills.records);
+  }
+
   private async projectExtensionManagement(
     identity: AgentExtensionManagementSessionIdentity,
   ): Promise<AgentExtensionManagementProjection> {
@@ -2059,6 +2071,8 @@ export class DesktopAppHost {
             source,
             sourceId,
             managementId: managementId ?? '',
+            canOpenInEditor: managementId !== undefined,
+            canShowInFolder: managementId !== undefined,
             canRemove: managementId !== undefined,
           };
         });

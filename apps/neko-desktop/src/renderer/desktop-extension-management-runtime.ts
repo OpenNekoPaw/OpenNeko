@@ -56,6 +56,16 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     await this.execute({ route: 'skill.install' });
   }
 
+  async openPersonalSkill(managementId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'skill.open', managementId });
+  }
+
+  async showPersonalSkillInFolder(managementId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'skill.reveal', managementId });
+  }
+
   async removePersonalSkill(managementId: string): Promise<void> {
     this.requireActive();
     await this.execute({ route: 'skill.remove', managementId });

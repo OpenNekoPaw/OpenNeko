@@ -28,6 +28,8 @@ function createProjection() {
         source: 'personal',
         sourceId: 'personal',
         managementId: `skill:${'b'.repeat(64)}`,
+        canOpenInEditor: true,
+        canShowInFolder: true,
         canRemove: true,
       },
     ],
@@ -97,6 +99,22 @@ describe('Agent Extension Management Host contract', () => {
       route: 'plugin.remove',
       pluginId: 'computer-use',
     });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.open',
+        requestId: 'skill-open-1',
+        identity,
+        managementId: `skill:${'b'.repeat(64)}`,
+      }),
+    ).toMatchObject({ route: 'skill.open' });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.reveal',
+        requestId: 'skill-reveal-1',
+        identity,
+        managementId: `skill:${'b'.repeat(64)}`,
+      }),
+    ).toMatchObject({ route: 'skill.reveal' });
     expect(
       parseAgentExtensionManagementHostResult(
         {
@@ -291,7 +309,7 @@ describe('Agent Extension Management Host contract', () => {
         },
         request,
       ),
-    ).toThrow('removal capability is inconsistent');
+    ).toThrow('capabilities are inconsistent');
     expect(() =>
       parseAgentExtensionManagementHostResult(
         {

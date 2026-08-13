@@ -127,6 +127,34 @@ describe('Desktop Extension Management preload bridge', () => {
     await expect(bridge.extensionManagement.execute(request)).rejects.toThrow('identity is stale');
   });
 
+  it('routes an opaque personal Skill host action without a physical path', async () => {
+    const request = createAgentExtensionManagementHostRequest({
+      route: 'skill.open',
+      requestId: 'skill-open-1',
+      identity,
+      managementId: `skill:${'a'.repeat(64)}`,
+    });
+    electron.invoke.mockResolvedValue({
+      requestId: request.requestId,
+      route: request.route,
+      projection: {
+        identity,
+        skills: [],
+        skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+        extensions: [],
+        extensionDiscovery: { diagnostics: [] },
+      },
+    });
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(bridge.extensionManagement.execute(request)).resolves.toMatchObject({
+      route: 'skill.open',
+    });
+    expect(electron.invoke).toHaveBeenCalledWith(AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL, request);
+    expect(JSON.stringify(request)).not.toContain('/Users');
+  });
+
   it('routes only opaque local runtime authorization through its dedicated typed channel', async () => {
     const request = parseAutomationLocalRuntimeManagementHostRequest({
       route: 'asset.authorize',
