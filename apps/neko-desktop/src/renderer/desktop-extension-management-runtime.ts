@@ -26,6 +26,11 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     return this.execute({ route: 'snapshot.get' });
   }
 
+  async installLocalPlugin(): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'plugin.install' });
+  }
+
   async enablePlugin(pluginId: string): Promise<void> {
     this.requireActive();
     await this.execute({ route: 'plugin.enable', pluginId });

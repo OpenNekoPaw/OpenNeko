@@ -34,16 +34,13 @@ describe('AgentExtensionManagementRoot', () => {
     ).toEqual(['Audio', 'Video']);
     expect(
       searchAndOrderAgentExtensions(
-        [
-          extension('github@openneko', 'GitHub', false),
-          extension('computer@openneko', 'Computer', true),
-        ],
+        [extension('github', 'GitHub', false), extension('computer', 'Computer', true)],
         '',
       ).map((item) => item.id),
-    ).toEqual(['computer@openneko', 'github@openneko']);
+    ).toEqual(['computer', 'github']);
 
     const localized = {
-      ...extension('browser@openneko', 'Browser', true),
+      ...extension('browser', 'Browser', true),
       description: 'Browser automation',
       localization: { 'zh-cn': { description: '浏览器自动化' } },
     };
@@ -54,7 +51,7 @@ describe('AgentExtensionManagementRoot', () => {
   it('renders the active catalog, search, empty state, and exact detail selection', async () => {
     i18n.locale = 'zh-cn';
     const localized = {
-      ...extension('browser-use@openneko', 'Browser Use', true),
+      ...extension('browser-use', 'Browser Use', true),
       description: 'Browser automation',
       localization: { 'zh-cn': { description: '在已授权域名中自动化浏览器' } },
     };
@@ -87,22 +84,22 @@ describe('AgentExtensionManagementRoot', () => {
     expect(onDetailVisibilityChange).toHaveBeenLastCalledWith(false);
   });
 
-  it('manages only enablement, personal removal, and source rescanning', async () => {
+  it('manages local install, enablement, local removal, and source rescanning', async () => {
     const disabled = {
-      ...extension('browser-use@openneko', 'Browser Use', true),
+      ...extension('browser-use', 'Browser Use', true),
       enabled: false,
       canEnable: true,
       canDisable: false,
       agentStatus: 'disabled' as const,
     };
-    const enabled = extension('computer-use@openneko', 'Computer Use', true);
+    const enabled = extension('computer-use', 'Computer Use', true);
     const personal = {
-      ...extension('personal@openneko', 'Personal', true),
+      ...extension('personal', 'Personal', true),
       enabled: false,
       canEnable: true,
       canDisable: false,
       canRemove: true,
-      deliverySource: 'personal' as const,
+      deliverySource: 'local' as const,
       agentStatus: 'disabled' as const,
     };
     const runtime = createRuntime({ extensions: [disabled, enabled, personal] });
@@ -116,17 +113,17 @@ describe('AgentExtensionManagementRoot', () => {
     await waitFor(() => expect(runtime.rescanSources).toHaveBeenCalledOnce());
 
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.extensions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.addLocalPlugin' }));
+    await waitFor(() => expect(runtime.installLocalPlugin).toHaveBeenCalledOnce());
     const browserCard = await screen.findByRole('listitem', { name: 'Browser Use' });
     fireEvent.click(within(browserCard).getByRole('switch'));
-    await waitFor(() => expect(runtime.enablePlugin).toHaveBeenCalledWith('browser-use@openneko'));
+    await waitFor(() => expect(runtime.enablePlugin).toHaveBeenCalledWith('browser-use'));
     expect(confirmAction).toHaveBeenCalledOnce();
     expect(view.container.querySelector('.agent-extension-configuration-root')).toBeNull();
 
     const computerCard = screen.getByRole('listitem', { name: 'Computer Use' });
     fireEvent.click(within(computerCard).getByRole('switch'));
-    await waitFor(() =>
-      expect(runtime.disablePlugin).toHaveBeenCalledWith('computer-use@openneko'),
-    );
+    await waitFor(() => expect(runtime.disablePlugin).toHaveBeenCalledWith('computer-use'));
     expect(confirmAction).toHaveBeenCalledOnce();
 
     const personalCard = screen.getByRole('listitem', { name: 'Personal' });
@@ -135,7 +132,7 @@ describe('AgentExtensionManagementRoot', () => {
     expect(configuration).not.toBeNull();
     expect(within(configuration as HTMLElement).queryByRole('switch')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.remove' }));
-    await waitFor(() => expect(runtime.removePlugin).toHaveBeenCalledWith('personal@openneko'));
+    await waitFor(() => expect(runtime.removePlugin).toHaveBeenCalledWith('personal'));
   });
 
   it('installs and removes personal skills without adding a plugin installer', async () => {
@@ -168,7 +165,10 @@ describe('AgentExtensionManagementRoot', () => {
       'home.capabilities.discoveryIssues',
     );
     fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.refresh' }));
-    expect((await screen.findByRole('alert')).textContent).toContain('rescan failed');
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('home.capabilities.operationFailed'),
+    );
+    expect(screen.getByRole('alert').textContent).not.toContain('rescan failed');
   });
 });
 
@@ -176,6 +176,7 @@ function createRuntime(
   patch: Partial<AgentExtensionManagementProjection> = {},
 ): AgentExtensionManagementRuntime & {
   readonly rescanSources: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  readonly installLocalPlugin: ReturnType<typeof vi.fn<() => Promise<void>>>;
   readonly enablePlugin: ReturnType<typeof vi.fn<(pluginId: string) => Promise<void>>>;
   readonly removePlugin: ReturnType<typeof vi.fn<(pluginId: string) => Promise<void>>>;
   readonly installPersonalSkill: ReturnType<typeof vi.fn<() => Promise<void>>>;
@@ -193,6 +194,7 @@ function createRuntime(
   return {
     identity,
     getSnapshot: vi.fn(async () => projection),
+    installLocalPlugin: vi.fn(async () => undefined),
     enablePlugin: vi.fn(async () => undefined),
     disablePlugin: vi.fn(async () => undefined),
     removePlugin: vi.fn(async () => undefined),
@@ -224,8 +226,6 @@ function extension(id: string, displayName: string, enabled: boolean): AgentExte
     localization: {},
     version: '1.0.0',
     developer: 'OpenNeko',
-    marketplace: 'openneko',
-    category: 'Productivity',
     enabled,
     canEnable: !enabled,
     canDisable: enabled,
@@ -233,6 +233,11 @@ function extension(id: string, displayName: string, enabled: boolean): AgentExte
     deliverySource: 'bundled',
     agentStatus: enabled ? 'ready' : 'disabled',
     runtimeDiagnosticCode: '',
+    componentReadiness: {
+      skills: { status: 'absent', diagnosticCode: '' },
+      mcp: { status: 'absent', diagnosticCode: '' },
+      apps: { status: 'absent', diagnosticCode: '' },
+    },
     iconDataUrl: '',
     mcpServerIds: [],
     hasSkills: false,

@@ -63,7 +63,7 @@ export function DesktopExtensionManagementSurface({
                       data-extension-configuration-kind={tab}
                     >
                       {content}
-                      {tab === 'extensions' && selectedItemId === 'browser-use@openneko' ? (
+                      {tab === 'extensions' && selectedItemId === 'browser-use' ? (
                         <AutomationLocalRuntimeManagementRoot
                           confirmAction={(message) => window.confirm(message)}
                           interactive={interactive}
@@ -71,7 +71,7 @@ export function DesktopExtensionManagementSurface({
                           sourceId="browser-use.observe.local"
                         />
                       ) : null}
-                      {tab === 'extensions' && selectedItemId === 'computer-use@openneko' ? (
+                      {tab === 'extensions' && selectedItemId === 'computer-use' ? (
                         <>
                           <AutomationLocalRuntimeManagementRoot
                             confirmAction={(message) => window.confirm(message)}

@@ -61,7 +61,7 @@ describe('Desktop Automation plugin Tool adapter', () => {
     });
 
     const contribution = await adapter.build({
-      pluginId: 'computer-use@openneko',
+      pluginId: 'computer-use',
       pluginRoot: '/fixture/computer-use',
       mcpServerIds: ['computer-use'],
       appIds: [],
@@ -71,7 +71,7 @@ describe('Desktop Automation plugin Tool adapter', () => {
     expect(contribution?.tools.map((tool) => tool.name)).toEqual([
       'automation_cua-driver_verify_state',
     ]);
-    expect(contribution?.readiness).toEqual({ status: 'ready', diagnosticCode: '' });
+    expect(contribution?.readiness).toMatchObject({ status: 'ready', diagnosticCode: '' });
     expect(contribution?.sourceFingerprint).toBe(
       'computer-use.observe.local:local-runtime:cua-fixture',
     );
@@ -81,7 +81,7 @@ describe('Desktop Automation plugin Tool adapter', () => {
       storageRoot: '/tmp/openneko-automation-fixture/cua-driver',
       platform: 'darwin',
     });
-    expect(adapter.listOwnedSessions('computer-use@openneko')).toEqual([]);
+    expect(adapter.listOwnedSessions('computer-use')).toEqual([]);
 
     const toolResult = await contribution?.tools[0]?.execute(
       { arguments: { include_screenshot: true }, timeoutMs: 30_000, stepBudget: 1 },
@@ -184,7 +184,7 @@ describe('Desktop Automation plugin Tool adapter', () => {
     });
 
     const contribution = await adapter.build({
-      pluginId: 'browser-use@openneko',
+      pluginId: 'browser-use',
       pluginRoot: '/fixture/browser-use',
       mcpServerIds: ['browser-use'],
       appIds: [],

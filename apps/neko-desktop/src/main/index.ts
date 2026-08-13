@@ -127,7 +127,9 @@ import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
 import { closeDesktopWindows } from './window-lifecycle';
 import {
   DESKTOP_STATE_AUTHORITY_KEYS,
+  createSqlitePluginStateRepository,
   initializeAssetLibraryMembershipTables,
+  initializePluginStateTables,
   resolveManagedLogFile,
   resolveGlobalStorageLayout,
   SqliteJsonStateRepository,
@@ -248,7 +250,6 @@ import {
 import {
   createAgentExtensionManager,
   createAgentExtensionMutationOwnership,
-  createAgentExtensionSupport,
   createOpenNekoExtensionRepository,
 } from '@neko/agent-runtime/extensions';
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
@@ -380,6 +381,7 @@ async function startDesktop(): Promise<void> {
       (rejection): rejection is InvalidJsonStateRejection => rejection !== undefined,
     );
     await initializeAssetLibraryMembershipTables(localMetadataStore);
+    await initializePluginStateTables(localMetadataStore);
     await initializeAgentConversationLifecycleTables(localMetadataStore);
     await initializeCharacterRuntimePersistenceTables(localMetadataStore);
     await initializeWorldRuntimePersistenceTables(localMetadataStore);
@@ -815,16 +817,19 @@ async function startDesktop(): Promise<void> {
   const assistantAgentWorkspace = await agentComposition.attachWorkspace(assistantWorkspace);
   const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
-      marketplaceRoot: path.join(
-        app.isPackaged ? process.resourcesPath : app.getAppPath(),
-        ...(app.isPackaged ? [] : ['resources']),
-        'extension-marketplace',
+      bundledPluginRoots: ['browser-use', 'computer-use'].map((pluginId) =>
+        path.join(
+          app.isPackaged ? process.resourcesPath : app.getAppPath(),
+          ...(app.isPackaged ? [] : ['resources']),
+          'extensions',
+          'plugins',
+          pluginId,
+        ),
       ),
       installRoot: path.join(globalStorage.root, 'extensions', 'plugins'),
-      stateRoot: path.join(globalStorage.root, 'extensions', 'state'),
+      pluginStates: createSqlitePluginStateRepository(localMetadataStore),
       trashItem: (absolutePath) => shell.trashItem(absolutePath),
     }),
-    agentSupport: createAgentExtensionSupport(),
     mutationOwnership: createAgentExtensionMutationOwnership({
       listOwnedAgentTurns: (pluginId) => agentComposition.listActivePluginTurns(pluginId),
       listOwnedAutomationSessions: (pluginId) =>
@@ -2706,6 +2711,16 @@ async function startDesktop(): Promise<void> {
     cut: cutRuntime,
     settings: applicationSettings,
     extensionManager,
+    selectLocalPluginDirectory: async (windowId) => {
+      const result = await dialog.showOpenDialog(requireOwnerWindow(windowId), {
+        title: app.getLocale().toLocaleLowerCase().startsWith('zh')
+          ? '安装本地插件'
+          : 'Install Local Plugin',
+        buttonLabel: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '安装' : 'Install',
+        properties: ['openDirectory'],
+      });
+      return result.canceled ? undefined : result.filePaths[0];
+    },
     personalSkillManager,
     automationLocalRuntimes: automationLocalRuntimeHost.management,
     automationPermissions: automationHostPermission.management,

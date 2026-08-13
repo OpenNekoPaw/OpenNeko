@@ -47,7 +47,7 @@ vi.mock('@neko/agent-webview/extension-management/root', async () => {
             type="button"
             onClick={() => {
               setTab('extensions');
-              setSelectedItemId('computer-use@openneko');
+              setSelectedItemId('computer-use');
             }}
           >
             Show computer
@@ -56,7 +56,7 @@ vi.mock('@neko/agent-webview/extension-management/root', async () => {
             type="button"
             onClick={() => {
               setTab('extensions');
-              setSelectedItemId('browser-use@openneko');
+              setSelectedItemId('browser-use');
             }}
           >
             Show browser

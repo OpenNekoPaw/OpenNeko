@@ -354,6 +354,7 @@ export interface DesktopAppHostOptions {
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
   readonly extensionManager: AgentExtensionManager;
+  readonly selectLocalPluginDirectory?: (windowId: string) => Promise<string | undefined>;
   readonly personalSkillManager: PersonalSkillManager;
   readonly automationLocalRuntimes: AutomationLocalRuntimeManagementService;
   readonly automationPermissions: AutomationPermissionManagementService;
@@ -1797,6 +1798,17 @@ export class DesktopAppHost {
     switch (request.route) {
       case 'snapshot.get':
         break;
+      case 'plugin.install': {
+        if (!this.options.selectLocalPluginDirectory) {
+          throw new Error('Local Plugin installation is not composed for this Desktop host.');
+        }
+        const sourcePath = await this.options.selectLocalPluginDirectory(window.windowId);
+        if (sourcePath) {
+          const snapshot = await this.options.extensionManager.installLocalPlugin(sourcePath);
+          await this.activatePluginSnapshot(snapshot);
+        }
+        break;
+      }
       case 'plugin.enable': {
         const snapshot = await this.options.extensionManager.enablePlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);

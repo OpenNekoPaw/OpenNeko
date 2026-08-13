@@ -108,7 +108,7 @@ describe('Desktop Extension Management preload bridge', () => {
       route: 'plugin.enable',
       requestId: 'extensions-enable-1',
       identity,
-      pluginId: 'computer-use@openneko',
+      pluginId: 'computer-use',
     });
     electron.invoke.mockResolvedValue({
       requestId: 'stale-request',

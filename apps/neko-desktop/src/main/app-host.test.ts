@@ -3272,7 +3272,7 @@ describe('DesktopAppHost', () => {
         {
           name: 'shot-list',
           description: 'Build a shot list.',
-          source: { kind: 'plugin' as const, pluginId: 'story-tools@openneko' },
+          source: { kind: 'plugin' as const, pluginId: 'story-tools' },
           fingerprint: 'plugin-must-stay-in-main',
           locator: {
             kind: 'skill' as const,
@@ -3314,15 +3314,13 @@ describe('DesktopAppHost', () => {
     fixture.extensionManager.readCatalog.mockResolvedValue({
       records: [
         {
-          id: 'computer-use@openneko',
+          id: 'computer-use',
           name: 'computer-use',
           displayName: 'Computer Use',
           description: 'Control Mac apps.',
           localization: {},
           version: '1.0.2',
           developer: 'OpenAI',
-          marketplace: 'openneko',
-          category: 'Productivity',
           enabled: true,
           canEnable: false,
           canDisable: true,
@@ -3330,6 +3328,11 @@ describe('DesktopAppHost', () => {
           deliverySource: 'bundled',
           agentStatus: 'ready',
           runtimeDiagnosticCode: '',
+          componentReadiness: {
+            skills: { status: 'ready', diagnosticCode: '' },
+            mcp: { status: 'ready', diagnosticCode: '' },
+            apps: { status: 'absent', diagnosticCode: '' },
+          },
           iconDataUrl: '',
           mcpServerIds: ['computer-use'],
           hasSkills: true,
@@ -3360,11 +3363,11 @@ describe('DesktopAppHost', () => {
         canRemove: true,
       },
       {
-        id: 'plugin:story-tools@openneko:shot-list',
+        id: 'plugin:story-tools:shot-list',
         name: 'shot-list',
         description: 'Build a shot list.',
         source: 'plugin',
-        sourceId: 'story-tools@openneko',
+        sourceId: 'story-tools',
         managementId: '',
         canRemove: false,
       },
@@ -3375,7 +3378,7 @@ describe('DesktopAppHost', () => {
     });
     expect(result.projection.extensions).toEqual([
       expect.objectContaining({
-        id: 'computer-use@openneko',
+        id: 'computer-use',
         mcpServerIds: ['computer-use'],
         hasSkills: true,
       }),
@@ -3658,7 +3661,7 @@ describe('DesktopAppHost', () => {
     const fixture = await createShellAppHost();
     const extensions = await openExtensionsScene(fixture);
     vi.mocked(fixture.extensionManager.removePlugin).mockRejectedValue(
-      new Error("OpenNeko extension 'computer-use@openneko' runtime is owned."),
+      new Error("OpenNeko extension 'computer-use' runtime is owned."),
     );
 
     await expect(
@@ -3668,11 +3671,11 @@ describe('DesktopAppHost', () => {
           route: 'plugin.remove',
           requestId: 'plugin-remove-1',
           identity: extensions.identity,
-          pluginId: 'computer-use@openneko',
+          pluginId: 'computer-use',
         }),
       ),
     ).rejects.toThrow('runtime is owned');
-    expect(fixture.extensionManager.removePlugin).toHaveBeenCalledWith('computer-use@openneko');
+    expect(fixture.extensionManager.removePlugin).toHaveBeenCalledWith('computer-use');
     expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
 
     await fixture.appHost.executeExtensionManagement(
@@ -3684,6 +3687,26 @@ describe('DesktopAppHost', () => {
       }),
     );
     expect(fixture.extensionManager.rescanSources).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the selected local Plugin path in Main and delegates only the authorized path', async () => {
+    const selectLocalPluginDirectory = vi.fn(async () => '/Users/fixture/Downloads/local-plugin');
+    const fixture = await createShellAppHost({ selectLocalPluginDirectory });
+    const extensions = await openExtensionsScene(fixture);
+
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'plugin.install',
+        requestId: 'plugin-install-1',
+        identity: extensions.identity,
+      }),
+    );
+
+    expect(selectLocalPluginDirectory).toHaveBeenCalledWith(fixture.windowId);
+    expect(fixture.extensionManager.installLocalPlugin).toHaveBeenCalledWith(
+      '/Users/fixture/Downloads/local-plugin',
+    );
   });
 
   it('cleans up an Asset Center Preview after leaving its Scene without projecting into the new Scene', async () => {
@@ -4190,7 +4213,7 @@ function targetSelectionProjection() {
     authorizationId: 'authorization-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
       deliverySource: { kind: 'bundled-adapter' as const },
@@ -4220,7 +4243,7 @@ function sessionControlProjection() {
     sessionId: 'session-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
     },
@@ -4257,6 +4280,7 @@ async function createShellAppHost(options?: {
   readonly automationPermissions?: DesktopAppHostOptions['automationPermissions'];
   readonly automationTargetSelections?: DesktopAppHostOptions['automationTargetSelections'];
   readonly automationSessions?: DesktopAppHostOptions['automationSessions'];
+  readonly selectLocalPluginDirectory?: DesktopAppHostOptions['selectLocalPluginDirectory'];
   readonly runtimeEntry?: Parameters<
     typeof createAgentLaunchDraftSubmissionApplicationService
   >[0]['runtimeEntry'];
@@ -4370,6 +4394,7 @@ async function createShellAppHost(options?: {
     resourceBrowser: options?.resourceBrowser,
     textEditor: options?.textEditor,
     extensionManager,
+    selectLocalPluginDirectory: options?.selectLocalPluginDirectory,
     personalSkillManager: createPersonalSkillManager(),
     automationLocalRuntimes: options?.automationLocalRuntimes ?? createAutomationLocalRuntimes(),
     automationPermissions: options?.automationPermissions ?? {
@@ -4680,9 +4705,17 @@ async function openExtensionsScene(fixture: Awaited<ReturnType<typeof createShel
 
 function createExtensionManager(): AgentExtensionManager & {
   readonly readCatalog: ReturnType<typeof vi.fn<() => Promise<AgentExtensionCatalogSnapshot>>>;
+  readonly installLocalPlugin: ReturnType<
+    typeof vi.fn<(sourcePath: string) => Promise<AgentExtensionCatalogSnapshot>>
+  >;
 } {
   return {
     readCatalog: vi.fn<() => Promise<AgentExtensionCatalogSnapshot>>(async () => ({
+      records: [],
+      runtimeDescriptors: [],
+      diagnostics: [],
+    })),
+    installLocalPlugin: vi.fn(async () => ({
       records: [],
       runtimeDescriptors: [],
       diagnostics: [],

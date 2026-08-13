@@ -51,9 +51,9 @@ import {
 } from './desktop-cua-driver-mcp-client-factory';
 import type { DesktopAutomationLocalRuntimeHost } from './desktop-automation-local-runtime-host';
 
-const COMPUTER_USE_PLUGIN_ID = 'computer-use@openneko';
+const COMPUTER_USE_PLUGIN_ID = 'computer-use';
 const COMPUTER_USE_SOURCE_ID = 'computer-use.observe.local';
-const BROWSER_USE_PLUGIN_ID = 'browser-use@openneko';
+const BROWSER_USE_PLUGIN_ID = 'browser-use';
 const BROWSER_USE_SOURCE_ID = 'browser-use.observe.local';
 
 interface ActiveAdapterRuntime {
@@ -237,7 +237,15 @@ export function createDesktopAutomationPluginToolAdapter(options: {
       return Object.freeze({
         sourceFingerprint: `${sourceId}:${projection.runtimeId}`,
         tools,
-        readiness: Object.freeze({ status: 'ready' as const, diagnosticCode: '' }),
+        readiness: Object.freeze({
+          status: 'ready' as const,
+          diagnosticCode: '',
+          componentReadiness: Object.freeze({
+            skills: Object.freeze({ status: 'absent' as const, diagnosticCode: '' }),
+            mcp: Object.freeze({ status: 'ready' as const, diagnosticCode: '' }),
+            apps: Object.freeze({ status: 'absent' as const, diagnosticCode: '' }),
+          }),
+        }),
         dispose: active.dispose,
       } satisfies AgentPluginToolAdapterRuntime);
     },

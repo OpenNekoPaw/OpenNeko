@@ -3,7 +3,7 @@ import type { AutomationProviderIdentity, AutomationTarget } from '@neko/automat
 import { createDesktopAutomationHostPermission } from './desktop-automation-host-permission';
 
 const provider: AutomationProviderIdentity = {
-  extensionId: 'computer-use@openneko',
+  extensionId: 'computer-use',
   providerId: 'cua-driver',
   kind: 'computer',
   deliverySource: { kind: 'bundled-adapter' },

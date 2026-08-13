@@ -113,7 +113,7 @@ function projection() {
     sessionId: 'session-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
     },

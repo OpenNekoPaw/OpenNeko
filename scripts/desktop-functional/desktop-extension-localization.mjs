@@ -255,6 +255,7 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
       name: option?.querySelector('strong')?.textContent ?? '',
       description: option?.querySelector('.management-surface-copy small')?.textContent ?? '',
       enablementCount: card?.querySelectorAll('[role="switch"]').length ?? 0,
+      localInstallCount: document.querySelectorAll('[data-local-plugin-install="true"]').length,
     };
   })()`);
   await click(EXTENSION_OPTION);
@@ -271,6 +272,7 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
     name: catalog.name,
     catalogDescription: catalog.description,
     catalogEnablementCount: catalog.enablementCount,
+    localInstallCount: catalog.localInstallCount,
     detailDescription,
     detailEnablementCount,
     query,
@@ -285,6 +287,7 @@ function assertIntroduction(result, locale, expected) {
     result.name !== 'Browser Use' ||
     result.catalogDescription !== expected ||
     result.catalogEnablementCount !== 1 ||
+    result.localInstallCount !== 1 ||
     result.detailDescription !== expected ||
     result.detailEnablementCount !== 0
   ) {

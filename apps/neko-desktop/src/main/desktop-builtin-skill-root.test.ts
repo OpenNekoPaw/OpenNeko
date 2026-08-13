@@ -40,18 +40,15 @@ describe('Desktop builtin Skill root', () => {
       isPackaged: false,
       resourcesPath: '/ignored',
     });
-    const extensionMarketplaceRoot = resolve(
-      import.meta.dirname,
-      '../../resources/extension-marketplace',
-    );
+    const bundledExtensionRoot = resolve(import.meta.dirname, '../../resources/extensions');
 
     await expect(access(join(sourceRoot, 'storyboard', 'SKILL.md'))).resolves.toBeUndefined();
     await expect(
-      access(join(extensionMarketplaceRoot, 'marketplace.json')),
+      access(join(bundledExtensionRoot, 'plugins', 'browser-use', 'plugin.json')),
     ).resolves.toBeUndefined();
     expect(forgeConfig.packagerConfig?.extraResource).toEqual([
       sourceRoot,
-      extensionMarketplaceRoot,
+      bundledExtensionRoot,
     ]);
   });
 });

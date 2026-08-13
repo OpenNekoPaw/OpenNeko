@@ -58,14 +58,14 @@ export function AgentExtensionManagementRoot({
       (next) => {
         if (active) setProjection(next);
       },
-      (reason: unknown) => {
-        if (active) setError(describeError(reason));
+      () => {
+        if (active) setError(t('home.capabilities.operationFailed'));
       },
     );
     return () => {
       active = false;
     };
-  }, [interactive, refreshRequestId, runtime]);
+  }, [interactive, refreshRequestId, runtime, t]);
 
   useEffect(() => {
     const skills = projection?.skills ?? [];
@@ -110,13 +110,13 @@ export function AgentExtensionManagementRoot({
       try {
         await operation();
         setRefreshRequestId(crypto.randomUUID());
-      } catch (reason: unknown) {
-        setError(describeError(reason));
+      } catch {
+        setError(t('home.capabilities.operationFailed'));
       } finally {
         setOperationKey(undefined);
       }
     },
-    [operationKey],
+    [operationKey, t],
   );
   const requestExtensionEnablementChange = (
     extension: AgentExtensionCatalogItem,
@@ -189,7 +189,19 @@ export function AgentExtensionManagementRoot({
                 <PlusIcon size={14} />
                 <span>{t('home.capabilities.addSkill')}</span>
               </button>
-            ) : null}
+            ) : (
+              <button
+                type="button"
+                data-local-plugin-install="true"
+                disabled={!interactive || !projection || operationKey !== undefined}
+                onClick={() =>
+                  void runMutation('plugin-install', () => runtime.installLocalPlugin())
+                }
+              >
+                <PlusIcon size={14} />
+                <span>{t('home.capabilities.addLocalPlugin')}</span>
+              </button>
+            )}
           </div>
         </header>
         <div className="management-surface-toolbar">
@@ -411,7 +423,7 @@ function AgentExtensionConfigurationRoot({
               {selectedExtension.version}
             </Definition>
             <Definition label={t('home.capabilities.detail.developer')}>
-              {selectedExtension.developer || selectedExtension.marketplace}
+              {selectedExtension.developer || selectedExtension.id}
             </Definition>
             <Definition label={t('home.capabilities.detail.contributions')}>
               {describeExtensionContributions(selectedExtension, t)}
@@ -490,13 +502,7 @@ export function searchAndOrderAgentExtensions(
   const normalized = query.trim().toLocaleLowerCase();
   return [...extensions]
     .filter((item) =>
-      [
-        item.id,
-        item.displayName,
-        resolveAgentExtensionDescription(item, locale),
-        item.developer,
-        item.marketplace,
-      ]
+      [item.id, item.displayName, resolveAgentExtensionDescription(item, locale), item.developer]
         .join(' ')
         .toLocaleLowerCase()
         .includes(normalized),
@@ -513,22 +519,32 @@ export function resolveAgentExtensionDescription(
   return extension.localization[locale]?.description ?? extension.description;
 }
 
-function describeError(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
-}
-
 function describeExtensionContributions(
   extension: AgentExtensionCatalogItem,
   t: (key: string, values?: Record<string, string | number>) => string,
 ): string {
   const contributions = [
-    ...(extension.mcpServerIds.length === 0
+    ...(extension.componentReadiness.mcp.status === 'absent'
       ? []
-      : [t('home.capabilities.extensionMcp', { ids: extension.mcpServerIds.join(', ') })]),
-    ...(extension.hasSkills ? [t('home.capabilities.extensionSkills')] : []),
-    ...(extension.appIds.length === 0
+      : [
+          `${t('home.capabilities.extensionMcp', {
+            ids: extension.mcpServerIds.join(', ') || '—',
+          })} (${t(`home.capabilities.agentStatus.${extension.componentReadiness.mcp.status}`)})`,
+        ]),
+    ...(extension.componentReadiness.skills.status === 'absent'
       ? []
-      : [t('home.capabilities.extensionApps', { ids: extension.appIds.join(', ') })]),
+      : [
+          `${t('home.capabilities.extensionSkills')} (${t(
+            `home.capabilities.agentStatus.${extension.componentReadiness.skills.status}`,
+          )})`,
+        ]),
+    ...(extension.componentReadiness.apps.status === 'absent'
+      ? []
+      : [
+          `${t('home.capabilities.extensionApps', {
+            ids: extension.appIds.join(', ') || '—',
+          })} (${t(`home.capabilities.agentStatus.${extension.componentReadiness.apps.status}`)})`,
+        ]),
   ];
   return contributions.join(' · ') || t('home.capabilities.extensionNoContributions');
 }

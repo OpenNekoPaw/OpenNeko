@@ -23,11 +23,18 @@ describe('DesktopExtensionManagementRuntime', () => {
     await expect(runtime.getSnapshot()).resolves.toMatchObject({
       identity: { windowId: 'window-1' },
     });
-    await runtime.enablePlugin('computer-use@openneko');
+    await runtime.installLocalPlugin();
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        route: 'plugin.install',
+        identity: { windowId: 'window-1' },
+      }),
+    );
+    await runtime.enablePlugin('computer-use');
     expect(execute).toHaveBeenLastCalledWith(
       expect.objectContaining({
         route: 'plugin.enable',
-        pluginId: 'computer-use@openneko',
+        pluginId: 'computer-use',
         identity: { windowId: 'window-1' },
       }),
     );
