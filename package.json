@@ -45,7 +45,7 @@
     "check:content-access-boundaries": "node scripts/check-content-access-boundaries.mjs",
     "check:application-boundaries": "node scripts/check-application-boundaries.mjs --self-test && node scripts/check-application-boundaries.mjs",
     "check:product-brand": "node scripts/check-product-brand.mjs",
-    "check:agent-boundaries": "node scripts/check-neko-agent-boundaries.mjs",
+    "check:agent-boundaries": "node --test scripts/check-agent-extension-surface.test.mjs && node scripts/check-agent-extension-surface.mjs && node scripts/check-neko-agent-boundaries.mjs",
     "check:canvas-playback-boundary": "node scripts/check-canvas-playback-boundary.mjs",
     "check:engine-retirement-boundary": "node scripts/check-engine-retirement-boundary.mjs",
     "check:automation-runtime-inputs": "node scripts/automation-runtime-release-inputs.mjs",

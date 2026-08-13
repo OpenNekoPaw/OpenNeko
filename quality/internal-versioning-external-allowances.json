@@ -342,16 +342,6 @@
     },
     {
       "category": "internal-version-field",
-      "externalOwner": "OpenNeko extension package manifest",
-      "fieldScope": "Invalid installed extension diagnostic preserves the third-party package release",
-      "id": "d04d1f1f328d4a1426e9",
-      "isolationRule": "The value reports the exact installed extension artifact even when its identity is invalid; it cannot dispatch an internal contract, migration, component state, or alternate extension implementation.",
-      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
       "externalOwner": "Three.js Material API",
       "fieldScope": "MeshStandardMaterial update counter asserted after changing blending flags",
       "id": "05e578b11e2fc9bb8545",
@@ -1842,56 +1832,6 @@
     },
     {
       "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "Official-download marketplace package manifest fixture",
-      "id": "00adaec1494218543cc0",
-      "isolationRule": "The value is the user-visible Browser Use package release used to test one exact managed delivery source; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "GitHub-release marketplace package manifest rejection fixture",
-      "id": "4f6f56b709f81db288ed",
-      "isolationRule": "The value is the user-visible Browser Use package release used to prove a mismatched managed source is rejected; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "Installed Browser Use package manifest fixture",
-      "id": "8387a4f14a143f581834",
-      "isolationRule": "The value preserves the exact external Browser Use package release in an installed-artifact authority test and cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "Restart recovery fixture for the exact installed Browser Use package release",
-      "id": "b95bcbccc93bc5280d55",
-      "isolationRule": "The value preserves the external Browser Use package release while testing durable artifact and enable-grant recovery; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "OpenNeko extension package manifest",
-      "fieldScope": "Installed package integrity fixture for an external extension release",
-      "id": "83570ccbb6691d346ac2",
-      "isolationRule": "The value identifies the external extension package whose installed tree is checked after restart; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
       "externalOwner": "OpenNeko extension package manifest",
       "fieldScope": "Deterministic package-tree digest fixture for an external extension release",
       "id": "9869d6560ec303d70ee6",
@@ -2089,6 +2029,316 @@
       "normativeSource": "https://agentskills.io/specification",
       "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
       "token": "compatibility"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Browser Use release publisher",
+      "fieldScope": "Plugin manifest release occurrence: \"version\": \"0.13.7\",",
+      "id": "db443d6ee2934252d894",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
+      "path": "apps/neko-desktop/resources/extensions/plugins/browser-use/plugin.json",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cua release publisher",
+      "fieldScope": "Plugin manifest release occurrence: \"version\": \"0.19.2\",",
+      "id": "2e8c2d8217d6b628e5c7",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "apps/neko-desktop/resources/extensions/plugins/computer-use/plugin.json",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.2',",
+      "id": "6b793b2de8d1bf497f1b",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '2.3.4',",
+      "id": "5558e57201e688483094",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(root, { name: 'duplicate', version: '1.0.0' });",
+      "id": "6bb9d723f15d29e1ef3b",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(sibling, { name: 'sibling', version: '1.0.0' });",
+      "id": "b6a2ca9e76e9c3566e9d",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(sourceRoot, { name: 'duplicate', version: '2.0.0' });",
+      "id": "c88da1886869d1b0a9c8",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(root, { name: 'mixed', version: '1.0.0' });",
+      "id": "6dad5e2535f49e836035",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(root, { name: 'metadata-only', version: '1.0.0' });",
+      "id": "3a78b96b82bbabf263e8",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: JSON.stringify({ name: 'private-only', version: '1.0.0' }),",
+      "id": "d8e12f1bcd8f3ac8ac60",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(linked, { name: 'linked', version: '1.0.0' });",
+      "id": "6b53666848422a04184f",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(sourceRoot, { name: 'interrupted', version: '1.0.0' });",
+      "id": "2c13639566d07f0d72f4",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '0.1.0',",
+      "id": "bba394b247b6f8d45e99",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: return Object.freeze({ name: manifest.value['name'], version: manifest.value['version'] });",
+      "id": "d165dd6e39c0fcd439c7",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: return Object.freeze({ name: manifest.value['name'], version: manifest.value['version'] });",
+      "id": "71e18b26a8f44bbe9509",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: manifest.version,",
+      "id": "e1d3806b7f64403441dc",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: if (!isPluginId(value['name']) || !isNonEmptyString(value['version'])) return undefined;",
+      "id": "2569da8e8ac25d2ae1f5",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: value['version'],",
+      "id": "f5a93c747f57b5358687",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: value['version'],",
+      "id": "b0c404b0dd166794c78d",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: plugin.version,",
+      "id": "f8fb871787f180f475fe",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '',",
+      "id": "325e217a09203df06a3e",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.2',",
+      "id": "0e9b91eca3ee850a2bb5",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "b45745987016ad63231a",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "980bd08503dab36e2a01",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "5a46c3a6c5ffe6651236",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "fd112031c62e9bd41ca4",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "f5da2b57a91ca74b466d",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: readonly version: string;",
+      "id": "41e9b74f125ce951ffa6",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: ): Promise<{ readonly name: string; readonly version: string } | undefined> {",
+      "id": "ab0ceeed90f30c5e71b3",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: !isNonEmptyString(manifest.value['version'])",
+      "id": "df790a69d54316d417ba",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: readonly version: string;",
+      "id": "8e00678f9136176097b8",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
     }
   ]
 }

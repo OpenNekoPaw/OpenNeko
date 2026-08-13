@@ -1,0 +1,88 @@
+{
+  "portableSkill": {
+    "standard": "Agent Skills",
+    "classification": "portable-standard",
+    "definition": "SKILL.md",
+    "hostManifestRequired": false,
+    "mcpRequired": false,
+    "sourceKinds": ["builtin", "personal", "plugin", "project"],
+    "fixedRoots": ["packages/skills/skills", ".agents/skills", "~/.agents/skills"],
+    "evidence": [
+      "packages/skills/README.md",
+      "packages/agent/runtime/src/pi/skill-host.ts",
+      "packages/agent/runtime/src/workspace/agent-skill-layout.ts",
+      "packages/agent/runtime/src/pi/__tests__/builtin-skills.test.ts"
+    ]
+  },
+  "skillAuthoringMetadata": {
+    "allowedTools": {
+      "classification": "internal-experimental",
+      "acceptedByCreator": true,
+      "runtimeEnforced": false,
+      "supportClaim": "none"
+    },
+    "evidence": [
+      "packages/agent/contracts/src/portable-skill.ts",
+      "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
+      "packages/agent/runtime/src/pi/skill-host.ts"
+    ]
+  },
+  "compositionPackage": {
+    "classification": "portable-plugin-subset",
+    "manifest": "plugin.json",
+    "requiredOnlyFor": "shared-install-lifecycle",
+    "skillContributionOptional": true,
+    "mcpContributionOptional": true,
+    "appContributionStatus": "unsupported",
+    "evidence": [
+      "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
+    ]
+  },
+  "pluginState": {
+    "classification": "sqlite-local-application-state",
+    "packageBytesAuthority": false,
+    "requiredForPortableSkill": false,
+    "evidence": [
+      "packages/local-metadata/src/plugin-state.ts",
+      "packages/local-metadata/src/sqlite/plugin-state-schema.ts",
+      "packages/agent/runtime/src/extensions/extension-manager.ts"
+    ]
+  },
+  "extensionManagement": {
+    "classification": "management-only",
+    "runtimeContributionAuthority": false,
+    "evidence": [
+      "packages/agent/contracts/src/extension-management.ts",
+      "packages/agent/runtime/src/extensions/extension-manager.ts"
+    ]
+  },
+  "mcp": {
+    "standard": "Model Context Protocol",
+    "classification": "partial-optional-adapter",
+    "supportedCapability": "tools",
+    "supportedTransports": ["stdio", "streamable-http-https"],
+    "skillDiscoveryDependency": false,
+    "skillCreationDependency": false,
+    "hostCapabilityDependency": false,
+    "connectionFailureIsolation": "contribution",
+    "evidence": [
+      "packages/agent/runtime/src/mcp/mcp-client.ts",
+      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
+    ]
+  },
+  "hostCapability": {
+    "classification": "internal-executable-composition",
+    "mcpRequired": false,
+    "runtimeAuthority": "package-owned-capability-provider",
+    "evidence": [
+      "packages/agent/contracts/src/capability.ts",
+      "packages/agent/runtime/src/pi/capability-tool-bridge.ts"
+    ]
+  },
+  "standardsSupport": {
+    "agentSkills": "core-supported",
+    "agentPlugins": "not-conformant-host-extension-only",
+    "mcp": "partial-tools-client"
+  }
+}
