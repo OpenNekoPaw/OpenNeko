@@ -19,7 +19,7 @@ export type AgentExtensionManagementHostRequest =
       readonly pluginId: string;
     })
   | (RequestBase & {
-      readonly route: 'sources.rescan' | 'skill.install';
+      readonly route: 'plugin.install' | 'sources.rescan' | 'skill.install';
     })
   | (RequestBase & {
       readonly route: 'skill.remove';
@@ -69,6 +69,7 @@ export function parseAgentExtensionManagementHostRequest(
         route: record['route'],
         pluginId: requireId(record['pluginId'], 'plugin'),
       };
+    case 'plugin.install':
     case 'sources.rescan':
     case 'skill.install':
       requireExactKeys(record, BASE_KEYS);

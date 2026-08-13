@@ -1,6 +1,19 @@
 export type AgentExtensionStatus = 'disabled' | 'ready' | 'partial' | 'unsupported' | 'error';
 
-export type AgentExtensionDeliverySource = 'bundled' | 'personal';
+export type AgentExtensionDeliverySource = 'bundled' | 'local';
+
+export type AgentExtensionComponentStatus = 'absent' | AgentExtensionStatus;
+
+export interface AgentExtensionComponentReadiness {
+  readonly status: AgentExtensionComponentStatus;
+  readonly diagnosticCode: string;
+}
+
+export interface AgentExtensionComponentReadinessSet {
+  readonly skills: AgentExtensionComponentReadiness;
+  readonly mcp: AgentExtensionComponentReadiness;
+  readonly apps: AgentExtensionComponentReadiness;
+}
 
 export interface AgentExtensionCatalogLocalization {
   readonly description: string;
@@ -14,8 +27,6 @@ export interface AgentExtensionCatalogItem {
   readonly localization: Readonly<Record<string, AgentExtensionCatalogLocalization>>;
   readonly version: string;
   readonly developer: string;
-  readonly marketplace: string;
-  readonly category: string;
   readonly enabled: boolean;
   readonly canEnable: boolean;
   readonly canDisable: boolean;
@@ -23,6 +34,7 @@ export interface AgentExtensionCatalogItem {
   readonly deliverySource: AgentExtensionDeliverySource;
   readonly agentStatus: AgentExtensionStatus;
   readonly runtimeDiagnosticCode: string;
+  readonly componentReadiness: AgentExtensionComponentReadinessSet;
   readonly iconDataUrl: string;
   readonly mcpServerIds: readonly string[];
   readonly hasSkills: boolean;
@@ -53,6 +65,7 @@ export interface AgentExtensionRuntimeDescriptor {
 export interface AgentExtensionRuntimeReadiness {
   readonly status: AgentExtensionStatus;
   readonly diagnosticCode: string;
+  readonly componentReadiness: AgentExtensionComponentReadinessSet;
 }
 
 export interface AgentExtensionCatalogSnapshot {

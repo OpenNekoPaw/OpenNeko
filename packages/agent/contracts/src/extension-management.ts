@@ -42,6 +42,7 @@ export interface AgentExtensionManagementProjection {
 export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
+  installLocalPlugin(): Promise<void>;
   enablePlugin(pluginId: string): Promise<void>;
   disablePlugin(pluginId: string): Promise<void>;
   removePlugin(pluginId: string): Promise<void>;
@@ -182,8 +183,6 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'localization',
       'version',
       'developer',
-      'marketplace',
-      'category',
       'enabled',
       'canEnable',
       'canDisable',
@@ -191,6 +190,7 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       'deliverySource',
       'agentStatus',
       'runtimeDiagnosticCode',
+      'componentReadiness',
       'iconDataUrl',
       'mcpServerIds',
       'hasSkills',
@@ -198,19 +198,15 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     ],
     'Agent Extension Management extension item is invalid.',
   );
-  const name = requireIdentifier(
+  const name = requireCanonicalPluginId(
     record['name'],
     'Agent Extension Management extension name is invalid.',
-  );
-  const marketplace = requireIdentifier(
-    record['marketplace'],
-    'Agent Extension Management marketplace is invalid.',
   );
   const id = requireNonEmptyString(
     record['id'],
     'Agent Extension Management extension id is required.',
   );
-  if (id !== `${name}@${marketplace}`) {
+  if (id !== name) {
     throw new Error('Agent Extension Management extension identity is inconsistent.');
   }
   const enabled = requireBoolean(
@@ -231,17 +227,17 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
   );
   const deliverySource = requireOneOf(
     record['deliverySource'],
-    ['bundled', 'personal'] as const,
+    ['bundled', 'local'] as const,
     'Agent Extension Management delivery source is invalid.',
   );
+  const agentStatus = requireExtensionStatus(record['agentStatus']);
   if (
-    canEnable !== !enabled ||
+    canEnable !== (!enabled && agentStatus !== 'error') ||
     canDisable !== enabled ||
-    canRemove !== (!enabled && deliverySource === 'personal')
+    canRemove !== (!enabled && deliverySource === 'local')
   ) {
     throw new Error('Agent Extension Management extension flags are inconsistent.');
   }
-  const agentStatus = requireExtensionStatus(record['agentStatus']);
   if (!enabled && agentStatus !== 'disabled' && agentStatus !== 'error') {
     throw new Error('Agent Extension Management extension status is inconsistent.');
   }
@@ -265,11 +261,6 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
       record['developer'],
       'Agent Extension Management developer must be a string.',
     ),
-    marketplace,
-    category: requireString(
-      record['category'],
-      'Agent Extension Management category must be a string.',
-    ),
     enabled,
     canEnable,
     canDisable,
@@ -277,6 +268,7 @@ function parseExtension(value: unknown): AgentExtensionCatalogItem {
     deliverySource,
     agentStatus,
     runtimeDiagnosticCode: requireDiagnosticValue(record['runtimeDiagnosticCode']),
+    componentReadiness: parseComponentReadinessSet(record['componentReadiness']),
     iconDataUrl: requireIconDataUrl(record['iconDataUrl']),
     mcpServerIds: requireUniqueIdentifiers(
       record['mcpServerIds'],
@@ -317,6 +309,37 @@ function parseExtensionLocalization(value: unknown): AgentExtensionCatalogItem['
     ] as const;
   });
   return Object.fromEntries(entries);
+}
+
+function parseComponentReadinessSet(
+  value: unknown,
+): AgentExtensionCatalogItem['componentReadiness'] {
+  const record = requireExactRecord(
+    value,
+    ['skills', 'mcp', 'apps'],
+    'Agent Extension Management component readiness is invalid.',
+  );
+  return {
+    skills: parseComponentReadiness(record['skills']),
+    mcp: parseComponentReadiness(record['mcp']),
+    apps: parseComponentReadiness(record['apps']),
+  };
+}
+
+function parseComponentReadiness(
+  value: unknown,
+): AgentExtensionCatalogItem['componentReadiness']['skills'] {
+  const record = requireExactRecord(
+    value,
+    ['status', 'diagnosticCode'],
+    'Agent Extension Management component readiness is invalid.',
+  );
+  const status = record['status'];
+  if (status !== 'absent') requireExtensionStatus(status);
+  return {
+    status: status as AgentExtensionCatalogItem['componentReadiness']['skills']['status'],
+    diagnosticCode: requireDiagnosticValue(record['diagnosticCode']),
+  };
 }
 
 function isLocalizationLocale(value: string): boolean {
@@ -375,12 +398,14 @@ function requireExactRecord(
 
 function requirePluginId(value: unknown): string {
   const id = requireNonEmptyString(value, 'Agent Extension Management plugin id is required.');
-  const separator = id.lastIndexOf('@');
-  if (separator <= 0 || separator === id.length - 1) {
-    throw new Error('Agent Extension Management plugin id is invalid.');
+  return requireCanonicalPluginId(id, 'Agent Extension Management plugin id is invalid.');
+}
+
+function requireCanonicalPluginId(value: unknown, message: string): string {
+  const id = requireNonEmptyString(value, message);
+  if (!/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(id) || id.includes('..')) {
+    throw new Error(message);
   }
-  requireIdentifier(id.slice(0, separator), 'Agent Extension Management plugin id is invalid.');
-  requireIdentifier(id.slice(separator + 1), 'Agent Extension Management plugin id is invalid.');
   return id;
 }
 

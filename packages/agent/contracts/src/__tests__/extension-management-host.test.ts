@@ -37,7 +37,7 @@ function createProjection() {
     },
     extensions: [
       {
-        id: 'computer-use@openneko',
+        id: 'computer-use',
         name: 'computer-use',
         displayName: 'Computer Use',
         description: 'Control Mac apps.',
@@ -46,8 +46,6 @@ function createProjection() {
         },
         version: '1.0.2',
         developer: 'OpenAI',
-        marketplace: 'openneko',
-        category: 'Productivity',
         enabled: true,
         canEnable: false,
         canDisable: true,
@@ -55,6 +53,11 @@ function createProjection() {
         deliverySource: 'bundled',
         agentStatus: 'ready',
         runtimeDiagnosticCode: '',
+        componentReadiness: {
+          skills: { status: 'ready', diagnosticCode: '' },
+          mcp: { status: 'ready', diagnosticCode: '' },
+          apps: { status: 'absent', diagnosticCode: '' },
+        },
         iconDataUrl: '',
         mcpServerIds: ['computer-use'],
         hasSkills: true,
@@ -78,14 +81,21 @@ describe('Agent Extension Management Host contract', () => {
     ).toMatchObject({ route: 'sources.rescan' });
     expect(
       createAgentExtensionManagementHostRequest({
+        route: 'plugin.install',
+        requestId: 'extensions-install-1',
+        identity,
+      }),
+    ).toMatchObject({ route: 'plugin.install' });
+    expect(
+      createAgentExtensionManagementHostRequest({
         route: 'plugin.remove',
         requestId: 'extensions-remove-1',
         identity,
-        pluginId: 'computer-use@openneko',
+        pluginId: 'computer-use',
       }),
     ).toMatchObject({
       route: 'plugin.remove',
-      pluginId: 'computer-use@openneko',
+      pluginId: 'computer-use',
     });
     expect(
       parseAgentExtensionManagementHostResult(
@@ -141,7 +151,7 @@ describe('Agent Extension Management Host contract', () => {
                 enabled: false,
                 canEnable: true,
                 canDisable: false,
-                deliverySource: 'personal',
+                deliverySource: 'local',
                 canRemove: true,
                 agentStatus: 'disabled',
               },
@@ -154,7 +164,41 @@ describe('Agent Extension Management Host contract', () => {
       projection: {
         extensions: [
           expect.objectContaining({
-            deliverySource: 'personal',
+            deliverySource: 'local',
+            canRemove: true,
+          }),
+        ],
+      },
+    });
+    expect(
+      parseAgentExtensionManagementHostResult(
+        {
+          requestId: request.requestId,
+          route: request.route,
+          projection: {
+            ...createProjection(),
+            extensions: [
+              {
+                ...createProjection().extensions[0],
+                enabled: false,
+                canEnable: false,
+                canDisable: false,
+                deliverySource: 'local',
+                canRemove: true,
+                agentStatus: 'error',
+                runtimeDiagnosticCode: 'state-invalid',
+              },
+            ],
+          },
+        },
+        request,
+      ),
+    ).toMatchObject({
+      projection: {
+        extensions: [
+          expect.objectContaining({
+            agentStatus: 'error',
+            canEnable: false,
             canRemove: true,
           }),
         ],
@@ -191,6 +235,20 @@ describe('Agent Extension Management Host contract', () => {
           projection: {
             ...result.projection,
             extensions: [{ ...result.projection.extensions[0], command: ['install', '--force'] }],
+          },
+        },
+        request,
+      ),
+    ).toThrow('extension item is invalid');
+    expect(() =>
+      parseAgentExtensionManagementHostResult(
+        {
+          ...result,
+          projection: {
+            ...result.projection,
+            extensions: [
+              { ...result.projection.extensions[0], marketplace: 'foreign-marketplace' },
+            ],
           },
         },
         request,
