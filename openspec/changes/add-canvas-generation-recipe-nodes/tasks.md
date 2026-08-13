@@ -91,7 +91,8 @@
 - [x] 7.22 Add focused Canvas Webview regressions and visible browser-owned UI evidence proving resource-library actions remain absent while direct and overflow operations stay available in one flat More list.
 - [x] 7.23 Add focused Canvas Webview/Host regressions and visible UI evidence for duplicate-then-resolve ordering, context-menu de-duplication, absence of Finder/resource-management operations and Canvas-local Image preview close/selection/viewport behavior.
 - [ ] 7.24 Add focused Canvas Webview interaction and visible UI evidence for node quick preview, double-click Canvas full-screen preview and toolbar main-panel preview, including exact multi-Image navigation, Preview-owned zoom/reset/pan, overlay event isolation and unchanged canonical selected-output/Canvas viewport state.
-- [ ] 7.25 Isolate an invalid but non-runtime Media/File ContentLocator to its owning node during Canvas open, preserve the raw user fact without compatibility reads or automatic rewrite, keep valid siblings usable, reject unsafe locator values, and add Domain/Webview/Desktop regressions for the add-project path.
+- [x] 7.25 Isolate an invalid but non-runtime Media/File ContentLocator to its owning node during Canvas open, preserve the raw user fact without compatibility reads or automatic rewrite, keep valid siblings usable, reject unsafe locator values, and add Domain/Webview/Desktop regressions for the add-project path.
+- [x] 7.26 Stabilize Video preview effects by canonical ContentLocator identity and make shared Canvas transforms finish synchronously on mouse release, button-loss or window blur; add UI/Webview regressions and isolated Electron evidence for preview settlement, full-screen preview, node addition and drag release.
 
 ## 8. Canvas Interaction Simplification Follow-up
 

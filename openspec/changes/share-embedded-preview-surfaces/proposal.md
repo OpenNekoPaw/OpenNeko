@@ -1,36 +1,34 @@
 ## Why
 
-Agent、Canvas、Assets 与主 Preview 目前重复实现图片、视频和音频的只读展示、加载状态、错误处理与原生媒体元素生命周期，导致样式、播放策略、资源授权消费和全屏行为不一致。需要建立由 Preview package 拥有的可嵌入只读 Viewer，同时保留各领域独立的卡片、节点、时间线和 View 生命周期。
+Agent、Canvas 与 Assets 的内置预览仍存在 package-local 图片、音频和视频组件，主 Preview 又拥有另一套播放器。当前 `quick`、`embedded`、`main` presentation 参与 Viewer 选择，导致同一资源在不同入口使用不同元素生命周期、媒体准备、错误处理和适配规则。Canvas 普通节点还保留独立 media host/player 路径，因此会出现主 Preview 可播放 WebM、Canvas 却拒绝或卡在准备阶段的问题。
+
+产品只需要两套 UI：Agent/Canvas/Assets 共用的轻量预览 UI，以及主面板独立的完整预览 UI。两套 UI 必须组合同一个 Preview Viewer 与相同的 Host 资源处理能力；全屏只是调用方容器，不是第三种预览模式。
 
 ## What Changes
 
-- 在 `@neko/preview-webview` 建立明确分层的公共 Surface：轻量 `QuickPreviewSurface`、可嵌入沉浸式 `EmbeddedPreviewSurface` 与独立主面板 `PreviewRoot`，三者复用一个 package-owned Viewer registry。
-- 轻量和沉浸式 Surface 只消费 Host 授权的 `PreviewMediaDescriptor` 与 opaque resource URL；图片使用 `<img>`，普通视频/音频分别使用原生 `<video>` / `<audio>`，不得接收 raw path 或自行解析 Workspace authority。
-- Agent 保留消息卡片、Tool 状态、折叠和结果分组外壳，使用公共轻量 Viewer 渲染媒体内容；不再维护平行的图片、视频和音频成功渲染路径。
-- Canvas 保留节点、快捷操作、结果组、播放协调与全屏 Overlay ownership；普通节点播放继续遵守 Canvas 的原生元素契约，沉浸式只读预览复用公共嵌入式 Viewer，不再跳转主 Preview。
-- Assets/Resource Browser 的快速预览复用同一轻量 Viewer。
-- 主 Preview 继续拥有独立 View/session、完整 image/video/audio/text/document/model Viewer、持久 presentation snapshot 与复杂文档/3D 生命周期。
-- Cut 时间线监视器明确不接入单资源 Preview Surface；继续由 Cut 拥有双视频槽、Canvas 合成、PCM 主时钟与帧精确播放，仅复用 `@neko/media` 底层契约和 browser runtime。
-- 文本编辑只保留 Canvas 的轻量 Markdown 节点编辑与 Text Editor 的完整文档 authoring；主 Preview 仅提供完整文本/Markdown 的只读查看，Agent 的 Streamdown/Markdown 展示不成为编辑器。
-- 快捷操作由调用方外壳拥有；公共 Viewer 不解释裁剪、重绘、复制、加入参考、保存为素材或 Tool 状态。
+- `@neko/preview-webview` 只公开一个 `LightweightPreview` 轻量组件给 Agent、Canvas 和 Assets；删除 `QuickPreviewSurface`、`EmbeddedPreviewSurface` 及 `main | quick | embedded` Viewer 分发。
+- 主 Preview 保留独立 View/session、标题栏、完整控制 UI 和持久 snapshot，但通过同一个 Viewer kernel、图片元素、音频播放器和视频播放器渲染内容。
+- 图片、音频和视频统一使用同一 `PreviewMediaDescriptor`、授权资源 URL、加载/错误/释放规则以及原生 `<img>`、`<audio>`、`<video>` 终点。轻量与主面板差异仅由 UI 参数、外层 chrome 和 snapshot owner 表达。
+- Canvas 普通图片、音频和视频节点改用 `LightweightPreview`，删除 Canvas 自有 `InlineVideoPlayer`、`InlineAudioPlayer` 及其独立成功路径；Canvas 仍拥有节点、选择、工具栏和播放意图。
+- Canvas 全屏 Overlay 也组合同一 `LightweightPreview`；Overlay 只负责尺寸、背景、关闭、焦点和快捷键隔离。
+- Agent 与 Assets 保留卡片、集合和业务操作，媒体 body 统一使用 `LightweightPreview`；多图网格缩略图可由集合外壳裁切，但单资源预览不得复制 Viewer。
+- Desktop 对 Agent、Canvas、Assets 和主 Preview 使用相同的 exact-resource registration 与 `openneko://resource` Range 能力；调用方不得自行按扩展名建立另一套可播放格式判断。
+- Cut 时间线监视器继续是独立编辑执行端点，不属于单资源预览 UI。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `embedded-preview-surfaces`: 定义轻量、沉浸式与主 Preview 的职责、授权输入、原生媒体元素、文本展示/编辑边界、状态生命周期及各领域组合规则。
+- `embedded-preview-surfaces`: 定义一个共享轻量预览 UI、一个独立主面板 UI以及唯一 Viewer/资源处理链。
 
 ### Modified Capabilities
 
-- `desktop-media-consumer-projection`: 将 Agent、Canvas、Assets 的只读嵌入式媒体展示收敛到 Preview package-owned Surface，同时保持 Canvas 普通播放与 Cut 时间线监视器的专用 canonical 路径。
+- `desktop-media-consumer-projection`: 将 Agent、Canvas、Assets 与主 Preview 的单资源图片、音频和视频收敛到相同 descriptor、resource registration 和 Viewer 能力。
 
 ## Impact
 
-- `@neko/preview-domain`：扩展精确 owner identity 与授权 descriptor/session contract，以支持 Canvas 等嵌入式消费者；不引入通用 active owner 或内部 contract 版本字段。
-- `@neko/preview-webview`：拥有公共 Viewer registry、轻量/嵌入式 Surface、临时与持久 snapshot 策略，以及媒体加载和释放行为。
-- `@neko/agent-webview`：消息和 Tool 结果卡片保留业务外壳，删除平行媒体渲染实现并组合公共轻量 Surface。
-- `@neko/canvas-webview`：全屏 Overlay 组合公共嵌入式 Surface；Canvas 节点与 Playback Workspace 的专用播放协调仅在证明确有一致契约后局部复用，不通过本变更强行替换。
-- `@neko/assets-*`：Resource Browser 快速预览消费公共轻量 Surface。
-- `@neko/text-editor-*`、`@neko/markdown`、`@neko/ui/markdown`：维持完整 authoring、共享 Milkdown engine 与只读 Markdown renderer 的既有 owner，不把编辑能力移动到 Preview。
-- `@neko/cut-*`：生产监视器行为不变，并通过架构和测试明确排除通用单资源 Surface。
-- `apps/neko-desktop`：只负责 sender/window 绑定、ContentLocator 授权、短生命周期资源投影和 package public Root wiring，不拥有 Viewer 或媒体业务策略。
+- `@neko/preview-domain`：继续拥有唯一 `PreviewMediaDescriptor` 和授权会话契约。
+- `@neko/preview-webview`：拥有唯一 Viewer kernel、`LightweightPreview`、主面板组合和媒体元素生命周期。
+- `@neko/agent-webview`、`@neko/canvas-webview`、`@neko/assets-webview`：只保留调用方外壳并组合轻量组件。
+- `apps/neko-desktop`：只负责精确 ContentLocator 授权、资源注册、Range 响应和 lease 生命周期。
+- `@neko/cut-*`：时间线监视器不变。

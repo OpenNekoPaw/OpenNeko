@@ -80,6 +80,12 @@ Canvas SHALL render connections only as relation or order. Every node SHALL expo
 - **THEN** Canvas applies the canonical alignment tolerance and collision-aware placement without changing durable content
 - **AND** connection routing does not move nodes, overlap the attachment stack or become a second layout engine
 
+#### Scenario: A node drag ends outside the Canvas viewport
+
+- **WHEN** the user releases the primary button outside the Canvas viewport, the Desktop window loses focus, or the pointer returns with no pressed button
+- **THEN** Canvas ends the exact active transform once and commits its last observable position
+- **AND** the node, attachment stack, viewport and later pointer interactions do not remain in a dragging state
+
 ### Requirement: Canvas zoom preserves interaction scale and presentation ownership
 
 Nodes and connections SHALL remain in world space. Toolbar, composer, menus, popovers and full-screen preview controls SHALL remain in screen space with minimum pointer targets. Zoom-dependent detail suppression SHALL be reversible presentation state and SHALL NOT mutate durable node dimensions, selection, Recipe or output facts.
@@ -401,6 +407,12 @@ Canvas SHALL present selected referenced File/Media content, plus a Generation N
 - **WHEN** previewable content is shown in a node, the node is double-clicked, or the toolbar main-preview button is activated
 - **THEN** Canvas respectively presents node quick preview, Canvas full-screen preview, or the Preview-owned main panel
 - **AND** all three use the same authorized locator and Preview renderer contract without duplicating media decode, playback or zoom ownership
+
+#### Scenario: A Video node is reprojected without changing its source
+
+- **WHEN** Canvas rerenders or reprojects a Video node while its canonical ContentLocator is unchanged
+- **THEN** the node retains one media probe and preview lifecycle for that logical source until the locator changes or the node unmounts
+- **AND** it does not restart media probe, poster resolution or playback merely because the node or decoded locator has a new object identity
 
 #### Scenario: A node context menu opens
 
