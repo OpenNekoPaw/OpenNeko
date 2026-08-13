@@ -141,6 +141,14 @@ The Desktop Host SHALL open or focus `neko/boards/workspace.nkc` as the default 
 - **THEN** Desktop displays a fail-visible Canvas diagnostic for that View
 - **AND** it MUST NOT report an empty placeholder or simulated Canvas as success
 
+#### Scenario: Startup finds a cross-Workspace Scene and Project presentation
+
+- **WHEN** a stored Window selects one Project presentation but its persisted Workspace Scene belongs to another Workspace
+- **THEN** Desktop locally resets the mismatched Scene before projecting the startup Window
+- **AND** the selected Project Tab, its canonical Board and valid sibling Project presentations remain available
+- **AND** Desktop exposes one owner-qualified Workspace presentation-reset warning
+- **AND** the presentation mismatch does not fail application startup or weaken live Scene/Layout validation
+
 ### Requirement: Project Resource Browser is a Main View
 
 The Desktop Workbench SHALL open the project Resource Browser as an independent `resource-browser` Main View with stable project/workspace/View identity. The application sidebar SHALL only issue an open-or-focus intent and SHALL NOT mount the Resource Browser as a project dock.

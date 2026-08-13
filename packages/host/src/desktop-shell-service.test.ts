@@ -98,6 +98,101 @@ describe('DesktopShellService', () => {
     expect(second.registry.restore).not.toHaveBeenCalled();
   });
 
+  it('locally resets a cross-Workspace persisted Scene without losing Project presentations', async () => {
+    const repository = createMemoryFile();
+    const firstWorkspace: AssetWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/first',
+      displayName: 'First',
+      locator: { kind: 'variable', value: '${HOME}/workspace/first' },
+    };
+    const secondWorkspace: AssetWorkspaceResolution = {
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      workspacePath: '/workspace/second',
+      displayName: 'Second',
+      locator: { kind: 'variable', value: '${HOME}/workspace/second' },
+    };
+    const workspaces = new Map(
+      [firstWorkspace, secondWorkspace].map((workspace) => [workspace.workspacePath, workspace]),
+    );
+    const first = createFixture(repository);
+    first.registry.resolve.mockImplementation(async (workspacePath: string) => {
+      const workspace = workspaces.get(workspacePath);
+      if (!workspace) throw new Error(`Unknown fixture Workspace '${workspacePath}'.`);
+      return workspace;
+    });
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await first.service.getProjection(windowId);
+    const firstOpened = await openContent(
+      first,
+      windowId,
+      firstWorkspace.workspacePath,
+      initial.rendererSessionId,
+    );
+    const firstScene = activeScene(firstOpened.projection.window);
+    const secondOpened = await openContent(
+      first,
+      windowId,
+      secondWorkspace.workspacePath,
+      firstOpened.projection.rendererSessionId,
+    );
+    const secondComposition = activeInstance(secondOpened.projection.window);
+    const stored = await repository.read();
+    await repository.commit({
+      ...stored,
+      windows: stored.windows.map((window) =>
+        window.windowId === windowId
+          ? {
+              ...window,
+              workbench: createDesktopWindowComposition({
+                workbenchInstanceId: secondComposition.workbenchInstanceId,
+                layout: secondComposition.layout,
+                scene: firstScene,
+              }),
+            }
+          : window,
+      ),
+    });
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(repository);
+    await expect(restored.service.claimWindowId()).resolves.toBe(windowId);
+    restored.service.setRendererSessionId(windowId, 'renderer-session-restored');
+    const entry = await restored.service.getProjection(windowId);
+
+    expect(entry.window.activeTarget).toEqual({ kind: 'home' });
+    expect(entry.window.tabs).toHaveLength(2);
+    expect(entry.catalog.projects).toHaveLength(2);
+    expect(activeScene(entry.window).context).toMatchObject({
+      kind: 'agent',
+      scope: { kind: 'unbound' },
+    });
+    expect(entry.stateDiagnostics).toContainEqual({
+      code: 'desktop-presentation-reset',
+      severity: 'warning',
+      windowId,
+      owner: 'workspace',
+      resetSceneId: firstScene.sceneId,
+      message: expect.stringContaining('another Workspace'),
+    });
+    const canonicalState = await repository.read();
+    expect(canonicalState.projects).toHaveLength(2);
+    expect(canonicalState.windows[0]?.tabs).toHaveLength(2);
+    expect(
+      canonicalState.windows[0]?.tabs.find(
+        (tab) => tab.projectId === `content:${secondWorkspace.workspaceId}`,
+      )?.presentation?.main.views,
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'canvas',
+        workspaceId: secondWorkspace.workspaceId,
+        documentId: 'neko/boards/workspace.nkc',
+      }),
+    ]);
+  });
+
   it('opens and explicitly removes a Project retained by the stable Workspace authority', async () => {
     const retainedProject: DesktopProjectCatalogItem = {
       projectId: 'content:11111111-1111-4111-8111-111111111111',

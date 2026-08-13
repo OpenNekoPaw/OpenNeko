@@ -273,18 +273,17 @@ interface DesktopCutPresentationResetDiagnosticProjection {
   readonly message: string;
 }
 
-interface DesktopExperimentalSceneResetDiagnosticProjection {
+interface DesktopSceneResetDiagnosticProjection {
   readonly code: 'desktop-presentation-reset';
   readonly severity: 'warning';
   readonly windowId: string;
-  readonly owner: 'character' | 'world';
+  readonly owner: 'character' | 'world' | 'workspace';
   readonly resetSceneId: string;
   readonly message: string;
 }
 
 export type DesktopPresentationResetDiagnosticProjection =
-  | DesktopCutPresentationResetDiagnosticProjection
-  | DesktopExperimentalSceneResetDiagnosticProjection;
+  DesktopCutPresentationResetDiagnosticProjection | DesktopSceneResetDiagnosticProjection;
 
 export type DesktopShellStateDiagnosticProjection =
   | DesktopStoredWindowInvalidDiagnosticProjection
@@ -1008,7 +1007,11 @@ function parseDesktopShellStateDiagnosticProjection(
 ): DesktopShellStateDiagnosticProjection {
   const record = requireRecord(value, 'Desktop Shell state diagnostic must be an object.');
   if (record['code'] === 'desktop-presentation-reset') {
-    if (record['owner'] === 'character' || record['owner'] === 'world') {
+    if (
+      record['owner'] === 'character' ||
+      record['owner'] === 'world' ||
+      record['owner'] === 'workspace'
+    ) {
       requireExactKeys(
         record,
         ['code', 'severity', 'windowId', 'owner', 'resetSceneId', 'message'],

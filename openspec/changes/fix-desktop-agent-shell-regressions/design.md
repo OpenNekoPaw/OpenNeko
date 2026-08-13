@@ -122,6 +122,13 @@ Project attach/restoration 由 `DesktopShellService` 检查当前 project-owned 
 
 Project 已 attach 后，用户可以关闭最后一个 Main Tab；该当前会话状态由 renderer 显示为正常的空 Main surface，不附加 Canvas diagnostic，也不立即重建默认 Canvas。下一次 Project attach/restoration 仍按上述 Host 规则恢复 canonical Workspace Canvas。缺失 Canvas capability 或 Canvas 加载失败只针对实际 Canvas View 显示明确 diagnostic，不回退到伪 Canvas。
 
+应用启动恢复是 presentation reconciliation boundary。若持久 Scene 的 Workspace scope 与按当前
+`activeTarget` 恢复出的 Project-owned Main Views 不一致，说明 Window presentation 曾被非原子写入或
+来自已替换的旧 UI 状态。Host 只重置该 Scene 为 fresh Entry presentation，保留当前 Project 的合法
+Tab presentation、canonical Board 与其他 Project presentation，并投影 owner 为 `workspace` 的
+`desktop-presentation-reset` warning。实时 Workbench update 仍要求 Scene/Layout 精确匹配并 fail-visible；
+不得把启动恢复规则变成通用 fallback 或吞掉合法运行期 contract 错误。
+
 ### 6. Resource Browser 是 Workbench Main View
 
 项目 Resource Browser 复用现有 `DesktopResourceBrowserSurface` 和 Assets-owned Root，增加 `resource-browser` Main View kind 与稳定 project/workspace owner identity。一级导航的资源入口只构造/聚焦该 View，通过现有 workbench CAS 更新；Main group、Tab、close、focus、split 和恢复继续由通用 Workbench contract 拥有。

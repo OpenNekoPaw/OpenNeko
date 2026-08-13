@@ -56,6 +56,7 @@
 - [x] 4.11 Replace the duplicated fixed Agent error blocks with one package-owned portal diagnostic surface while preserving global/session state ownership and Workbench clipping.
 - [x] 4.12 Make the composer send contract receipt-based so rejected submissions preserve the owning draft resources.
 - [x] 4.13 Move canonical Tool approval actions into one bounded composer-adjacent panel without changing Host approval ownership.
+- [x] 4.15 Reconcile cross-Workspace persisted Scene/Main presentation mismatches at startup, retain exact Project presentations, emit a Workspace reset diagnostic, and cover reopen plus live-validation regressions.
 
 ## 5. Verification and documentation
 

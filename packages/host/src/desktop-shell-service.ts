@@ -302,14 +302,15 @@ export class DesktopShellService {
         experimentalSceneReset.window,
         this.createIdentity,
       );
-      const restorableScene = synchronizeWorkspaceSceneWithWorkbench(
+      const restoredSceneReconciliation = reconcileRestoredWorkspaceScene(
         activeDesktopWorkbench(experimentalSceneReset.window).scene,
         restorableWorkbench,
+        this.createIdentity,
       );
       const qualifiedWindow = captureActiveProjectPresentation(
         replaceActiveDesktopWorkbench(experimentalSceneReset.window, {
           layout: restorableWorkbench,
-          scene: restorableScene,
+          scene: restoredSceneReconciliation.scene,
         }),
       );
       if (cutDraftCleanup.removedViewIds.length > 0) {
@@ -330,6 +331,12 @@ export class DesktopShellService {
         this.isolatedWindowDiagnostics = [
           ...this.isolatedWindowDiagnostics,
           experimentalSceneReset.diagnostic,
+        ];
+      }
+      if (restoredSceneReconciliation.diagnostic) {
+        this.isolatedWindowDiagnostics = [
+          ...this.isolatedWindowDiagnostics,
+          restoredSceneReconciliation.diagnostic,
         ];
       }
       const entryScene = createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`);
@@ -2742,6 +2749,45 @@ function synchronizeWorkspaceSceneWithWorkbench(
       ...(cutPanel ? { cutPanel } : {}),
     },
   });
+}
+
+function reconcileRestoredWorkspaceScene(
+  scene: DesktopWorkbenchSceneProjection,
+  workbench: DesktopWorkbenchLayoutProjection,
+  createIdentity: () => string,
+): {
+  readonly scene: DesktopWorkbenchSceneProjection;
+  readonly diagnostic?: DesktopShellStateDiagnosticProjection;
+} {
+  if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+    return { scene: synchronizeWorkspaceSceneWithWorkbench(scene, workbench) };
+  }
+  const workspaceId = scene.context.scope.workspaceId;
+  const activeViews = workbench.main.groups.flatMap((group) => {
+    if (!group.activeViewId) return [];
+    const view = workbench.main.views.find((candidate) => candidate.viewId === group.activeViewId);
+    if (!view) {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        `Desktop Main Group '${group.groupId}' has no exact active View.`,
+      );
+    }
+    return [view];
+  });
+  if (activeViews.every((view) => view.workspaceId === workspaceId)) {
+    return { scene: synchronizeWorkspaceSceneWithWorkbench(scene, workbench) };
+  }
+  return {
+    scene: createDefaultDesktopAgentScene(scene.windowId, `draft:${createIdentity()}`),
+    diagnostic: {
+      code: 'desktop-presentation-reset',
+      severity: 'warning',
+      windowId: scene.windowId,
+      owner: 'workspace',
+      resetSceneId: scene.sceneId,
+      message: `Workspace Scene '${scene.sceneId}' belonged to Workspace '${workspaceId}' while the active Project presentation belonged to another Workspace. Only the stale Scene presentation was reset; Project records and presentations were preserved.`,
+    },
+  };
 }
 
 function sameWorkspaceMainSurface(
