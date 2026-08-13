@@ -3,7 +3,7 @@
  */
 
 import { parsePreviewMediaDescriptor, type PreviewMediaDescriptor } from '@neko/preview-domain';
-import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import type { RichContentProps, RichContentRendererEntry } from '../types';
 import { getLocale } from '../../../../i18n';
 
@@ -35,7 +35,7 @@ function isVideoRichData(data: unknown): data is VideoRichData {
 function VideoRendererComponent({ data, className }: RichContentProps<VideoRichData>) {
   return (
     <div className={className}>
-      <QuickPreviewSurface descriptor={data.descriptor} locale={getLocale()} />
+      <LightweightPreview descriptor={data.descriptor} locale={getLocale()} />
     </div>
   );
 }

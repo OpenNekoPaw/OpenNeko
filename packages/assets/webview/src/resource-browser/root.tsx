@@ -53,7 +53,7 @@ import {
   type ResourceBrowserRecoveryPlanResult,
 } from '@neko/assets-domain/resource-browser/contract';
 import { inspectResourceBrowserProjectStorageMutation } from '@neko/assets-domain/resource-browser';
-import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import { getResourceBrowserLabels } from './labels';
 import { useResourceBrowserPresentationSnapshotStore } from './presentation-snapshot-context';
 import type {
@@ -1206,9 +1206,10 @@ export function ResourceBrowserRoot({
                       className="neko-resource-browser__quick-preview"
                       data-preview-kind={quickPreview.result.descriptor.contentKind}
                     >
-                      <QuickPreviewSurface
+                      <LightweightPreview
                         descriptor={quickPreview.result.descriptor}
                         locale={locale}
+                        mediaPlayback="ambient"
                       />
                     </div>
                   ) : null}

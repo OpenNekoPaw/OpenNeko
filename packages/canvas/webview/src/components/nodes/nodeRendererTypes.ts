@@ -28,7 +28,7 @@ export interface NodeRendererCommonProps {
   isConnecting?: boolean;
   connectionTargetState?: ConnectionDragTargetState | null;
   onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
-  onEmbeddedPreview?: (nodeId: string, outputId?: string) => void;
+  onFullscreenPreview?: (nodeId: string, outputId?: string) => void;
   interactionRenderMode?: 'full' | 'shell';
 }
 

@@ -37,8 +37,8 @@ describe('Preview Root architecture boundary', () => {
   it('consumes only opaque authorized media URLs without renderer-owned file transport', async () => {
     const rootSource = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
     const source = await readFile(new URL('./viewer-kernel.tsx', import.meta.url), 'utf8');
-    const embeddedSource = await readFile(
-      new URL('./embedded-preview.tsx', import.meta.url),
+    const lightweightSource = await readFile(
+      new URL('./lightweight-preview.tsx', import.meta.url),
       'utf8',
     );
 
@@ -46,8 +46,8 @@ describe('Preview Root architecture boundary', () => {
     expect(rootSource).toContain('snapshotStore.read(descriptor.descriptorId)');
     expect(rootSource).toContain('onSnapshotChange: updateSnapshot');
     expect(rootSource.match(/<PreviewPresentation/gu)).toHaveLength(2);
-    expect(embeddedSource).toContain('parsePreviewMediaDescriptor(inputDescriptor)');
-    for (const candidate of [rootSource, source, embeddedSource]) {
+    expect(lightweightSource).toContain('parsePreviewMediaDescriptor(inputDescriptor)');
+    for (const candidate of [rootSource, source, lightweightSource]) {
       expect(candidate).not.toContain('neko-media:');
       expect(candidate).not.toContain('file:');
       expect(candidate).not.toMatch(/\b(?:https?|blob):\/\//u);
@@ -71,10 +71,10 @@ describe('Preview Root architecture boundary', () => {
     }
     expectProductionRootSource('root/index.tsx', rootSource);
     expectProductionRootSource('root/viewer-kernel.tsx', source);
-    expectProductionRootSource('root/embedded-preview.tsx', embeddedSource);
+    expectProductionRootSource('root/lightweight-preview.tsx', lightweightSource);
   });
 
-  it('exposes one canonical embedded entry without Cut or Desktop Viewer ownership', async () => {
+  it('exposes one canonical lightweight entry without Cut or Desktop Viewer ownership', async () => {
     const packageManifest = JSON.parse(
       await readFile(new URL('../../package.json', import.meta.url), 'utf8'),
     ) as { readonly exports?: Readonly<Record<string, string>> };
@@ -98,22 +98,20 @@ describe('Preview Root architecture boundary', () => {
       ),
     );
 
-    expect(packageManifest.exports?.['./embedded']).toBe('./src/root/embedded-preview.tsx');
-    expect(
-      Object.keys(packageManifest.exports ?? {}).filter((key) => key.includes('embedded')),
-    ).toEqual(['./embedded']);
+    expect(packageManifest.exports?.['./lightweight']).toBeUndefined();
+    expect(packageManifest.exports?.['./embedded']).toBeUndefined();
     expect(cutManifest).not.toContain('@neko/preview-webview');
-    expect(cutSources).not.toContain('@neko/preview-webview/embedded');
+    expect(cutSources).not.toContain('LightweightPreview');
     for (const source of desktopPreviewSources) {
-      expect(source).not.toContain('@neko/preview-webview/embedded');
+      expect(source).not.toContain('LightweightPreview');
       expect(source).not.toContain('renderPreviewViewer');
       expect(source).not.toMatch(/<(?:img|video|audio)\b/u);
     }
   });
 
-  it('poisons raw paths, alternate URLs, hidden roots and wildcard embedded renderers', async () => {
-    const embeddedSource = await readFile(
-      new URL('./embedded-preview.tsx', import.meta.url),
+  it('poisons raw paths, alternate URLs, hidden roots and wildcard lightweight renderers', async () => {
+    const lightweightSource = await readFile(
+      new URL('./lightweight-preview.tsx', import.meta.url),
       'utf8',
     );
     const kernelSource = await readFile(new URL('./viewer-kernel.tsx', import.meta.url), 'utf8');
@@ -152,20 +150,20 @@ describe('Preview Root architecture boundary', () => {
       'utf8',
     );
 
-    expect(embeddedSource).toContain('parsePreviewMediaDescriptor(inputDescriptor)');
-    expect(embeddedSource).not.toContain('PreviewRoot');
-    expect(embeddedSource).not.toMatch(/\b(?:path|absolutePath|workspacePath)\s*:/u);
-    expect(embeddedSource).not.toMatch(/\b(?:https?|file|blob):\/\//u);
+    expect(lightweightSource).toContain('parsePreviewMediaDescriptor(inputDescriptor)');
+    expect(lightweightSource).not.toContain('PreviewRoot');
+    expect(lightweightSource).not.toMatch(/\b(?:path|absolutePath|workspacePath)\s*:/u);
+    expect(lightweightSource).not.toMatch(/\b(?:https?|file|blob):\/\//u);
     expect(kernelSource).toContain("{ kind: 'image'");
     expect(kernelSource).toContain("{ kind: 'model'");
     expect(kernelSource).not.toMatch(/kind:\s*['"]\*['"]/u);
     for (const consumer of [agentConsumer, assetConsumer, canvasConsumer]) {
-      expect(consumer).toContain("from '@neko/preview-webview/embedded'");
+      expect(consumer).toContain("from '@neko/preview-webview/root'");
       expect(consumer).not.toContain("from '@neko/preview-webview/src/");
       expect(consumer).not.toContain('<PreviewRoot');
     }
     for (const consumer of [agentConsumer, ...agentRichMediaConsumers]) {
-      expect(consumer).toContain("from '@neko/preview-webview/embedded'");
+      expect(consumer).toContain("from '@neko/preview-webview/root'");
       expect(consumer).not.toMatch(/<(?:img|video|audio)\b/u);
       expect(consumer).not.toMatch(/\b(?:previewSrc|renderUri)\b/u);
     }

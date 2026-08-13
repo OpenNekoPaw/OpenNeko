@@ -25,6 +25,12 @@ import { renderPreviewViewer } from './viewer-kernel';
 import type { PreviewRuntimeBootstrap } from './runtime-bootstrap';
 import './style.css';
 
+export {
+  LightweightPreview,
+  type LightweightPreviewPlayback,
+  type LightweightPreviewProps,
+} from './lightweight-preview';
+
 export interface PreviewRootProps {
   readonly bootstrap: PreviewRuntimeBootstrap;
   readonly locale: SupportedLocale;
@@ -98,7 +104,7 @@ export function PreviewPresentation({
         <div className="neko-preview-root__viewer">
           {renderPreviewViewer({
             descriptor,
-            presentation: 'main',
+            controlDensity: 'full',
             locale,
             i18nService: surfaceI18n,
             ...(snapshotStore.read(descriptor.descriptorId)

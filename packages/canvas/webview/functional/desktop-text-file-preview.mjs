@@ -92,33 +92,34 @@ export const canvasTextFilePreviewScenario = Object.freeze({
     checkpoint('canvas-text-file-actions-desktop', desktopActions);
     checkpoint('canvas-text-file-preview-desktop', desktop);
     const desktopScreenshot = await screenshot('canvas-text-file-preview-desktop-selected');
-    const viewportBeforeEmbeddedPreview = await inspectCanvasViewport(evaluate);
+    const viewportBeforeFullscreenPreview = await inspectCanvasViewport(evaluate);
     await click(`${view} [data-selection-action="canvas:preview"]`);
     await waitForSelector(`${view} [data-canvas-image-preview="true"]`);
-    await waitForSelector(`${view} [data-preview-presentation="embedded"]`);
-    const embeddedPreview = await inspectEmbeddedTextPreview(evaluate);
+    await waitForSelector(`${view} [data-preview-ui="lightweight"]`);
+    const fullscreenPreview = await inspectFullscreenTextPreview(evaluate);
     if (
-      embeddedPreview.canvasInteractionSuspended !== true ||
-      embeddedPreview.modalScope !== 'modal' ||
-      embeddedPreview.readerBackground !== 'rgb(236, 239, 237)' ||
-      embeddedPreview.pageBackground !== 'rgb(255, 255, 255)' ||
-      embeddedPreview.userSelect !== 'text' ||
-      embeddedPreview.hasGalleryFooter ||
-      !embeddedPreview.text.includes('OpenNeko')
+      fullscreenPreview.canvasInteractionSuspended !== true ||
+      fullscreenPreview.modalScope !== 'modal' ||
+      fullscreenPreview.readerBackground !== 'rgb(236, 239, 237)' ||
+      fullscreenPreview.pageBackground !== 'rgb(255, 255, 255)' ||
+      fullscreenPreview.userSelect !== 'text' ||
+      fullscreenPreview.hasGalleryFooter ||
+      !fullscreenPreview.text.includes('OpenNeko')
     ) {
       throw new Error(
-        `Canvas embedded text Preview is invalid: ${JSON.stringify(embeddedPreview)}`,
+        `Canvas fullscreen text Preview is invalid: ${JSON.stringify(fullscreenPreview)}`,
       );
     }
-    checkpoint('canvas-text-file-embedded-preview', embeddedPreview);
-    const embeddedPreviewScreenshot = await screenshot('canvas-text-file-embedded-preview');
+    checkpoint('canvas-text-file-fullscreen-preview', fullscreenPreview);
+    const fullscreenPreviewScreenshot = await screenshot('canvas-text-file-fullscreen-preview');
     await pressKey('Escape');
     await evaluate('new Promise((resolve) => setTimeout(resolve, 150))');
-    const viewportAfterEmbeddedPreview = await inspectCanvasViewport(evaluate);
+    const viewportAfterFullscreenPreview = await inspectCanvasViewport(evaluate);
     if (
-      JSON.stringify(viewportAfterEmbeddedPreview) !== JSON.stringify(viewportBeforeEmbeddedPreview)
+      JSON.stringify(viewportAfterFullscreenPreview) !==
+      JSON.stringify(viewportBeforeFullscreenPreview)
     ) {
-      throw new Error('Canvas viewport changed while the embedded Preview owned input.');
+      throw new Error('Canvas viewport changed while the fullscreen Preview owned input.');
     }
     await click(`${view} [data-canvas-viewport-root="true"]`, 0, {
       xRatio: 0.96,
@@ -166,8 +167,8 @@ export const canvasTextFilePreviewScenario = Object.freeze({
       desktop,
       desktopActions,
       desktopScreenshot,
-      embeddedPreview,
-      embeddedPreviewScreenshot,
+      fullscreenPreview,
+      fullscreenPreviewScreenshot,
       narrow,
       narrowActions,
       narrowScreenshot,
@@ -364,17 +365,17 @@ function assertTextFileActions(evidence) {
   }
 }
 
-function inspectEmbeddedTextPreview(evaluate) {
+function inspectFullscreenTextPreview(evaluate) {
   return evaluate(`(() => {
     const overlay = document.querySelector('[data-canvas-image-preview="true"]');
     const viewport = document.querySelector('[data-canvas-viewport-root="true"]');
     if (!(overlay instanceof HTMLElement) || !(viewport instanceof HTMLElement)) {
-      throw new Error('Canvas embedded text Preview is unavailable.');
+      throw new Error('Canvas fullscreen text Preview is unavailable.');
     }
-    const reader = overlay.querySelector('[data-preview-text-reader="embedded"]');
+    const reader = overlay.querySelector('[data-preview-text-reader="full"]');
     const page = reader?.querySelector('.neko-preview-text-reader__page');
     if (!(reader instanceof HTMLElement) || !(page instanceof HTMLElement)) {
-      throw new Error('Canvas embedded text reader is unavailable.');
+      throw new Error('Canvas fullscreen text reader is unavailable.');
     }
     const readerStyle = getComputedStyle(reader);
     return {

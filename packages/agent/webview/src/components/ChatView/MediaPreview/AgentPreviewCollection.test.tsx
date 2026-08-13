@@ -12,7 +12,7 @@ describe('AgentPreviewCollection', () => {
     );
 
     expect(container.querySelector('[data-agent-preview-count="2"]')).not.toBeNull();
-    expect(container.querySelectorAll('[data-preview-presentation="quick"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-preview-ui="lightweight"]')).toHaveLength(2);
     expect(container.querySelectorAll('img')).toHaveLength(2);
   });
 

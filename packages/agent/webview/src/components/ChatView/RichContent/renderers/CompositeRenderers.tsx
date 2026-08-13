@@ -1,5 +1,5 @@
 import type { RichContentProps, RichContentRendererEntry } from '../types';
-import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import type {
   AssetGalleryRichData,
   ComparisonGridRichData,
@@ -810,7 +810,7 @@ function MediaPreview({
               : 'h-[220px] max-h-[220px] w-full overflow-hidden'
           }
         >
-          <QuickPreviewSurface descriptor={media.descriptor} locale={getLocale()} />
+          <LightweightPreview descriptor={media.descriptor} locale={getLocale()} />
         </div>
         {roleLabel && (
           <div className="mt-0.5 truncate text-[9px] leading-tight text-[var(--agent-fg-secondary)]">

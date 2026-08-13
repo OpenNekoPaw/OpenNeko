@@ -349,7 +349,11 @@
 }
 
 .neko-resource-browser__quick-preview[data-preview-kind='audio'] {
-  height: 64px;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  box-shadow: none;
+  opacity: 0;
 }
 
 .neko-resource-browser__items[data-view-mode='list'] .neko-resource-browser__item-row {

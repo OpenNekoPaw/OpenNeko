@@ -827,9 +827,6 @@ importers:
       '@neko/markdown':
         specifier: workspace:*
         version: link:../../markdown
-      '@neko/media':
-        specifier: workspace:*
-        version: link:../../media
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain

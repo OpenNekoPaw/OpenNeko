@@ -319,10 +319,7 @@ describe('Desktop architecture boundaries', () => {
       path.join(mainRoot, 'desktop-resource-registry.ts'),
       'utf8',
     );
-    const canvasMediaRuntime = readFileSync(
-      path.join(mainRoot, 'desktop-canvas-media-runtime.ts'),
-      'utf8',
-    );
+    const canvasRuntime = readFileSync(path.join(mainRoot, 'desktop-canvas-runtime.ts'), 'utf8');
     const canvasPreviewResolver = readFileSync(
       path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewResolver.ts'),
       'utf8',
@@ -338,10 +335,9 @@ describe('Desktop architecture boundaries', () => {
     expect(resourceRegistry).not.toContain('ResourceRef');
     expect(resourceRegistry).not.toMatch(/\b(?:MediaStream|RTCPeerConnection|getUserMedia)\b/u);
 
-    expect(canvasMediaRuntime).toContain(
-      'Desktop Canvas PCM is not available for ordinary node playback.',
-    );
-    expect(canvasMediaRuntime).not.toMatch(/\.(?:startPcm|prepareAudio)\s*\(/u);
+    expect(existsSync(path.join(mainRoot, 'desktop-canvas-media-runtime.ts'))).toBe(false);
+    expect(canvasRuntime).not.toMatch(/\.(?:startPcm|prepareAudio|prepareVideo)\s*\(/u);
+    expect(canvasRuntime).toContain("'viewer-source'");
     expect(canvasPreviewResolver).not.toContain('assetPath:');
     expect(canvasPreviewResolver).not.toContain('activeCanvas');
     expect(canvasPreviewResolver).not.toContain('recentCanvas');

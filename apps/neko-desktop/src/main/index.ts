@@ -227,7 +227,6 @@ import {
   DesktopCanvasRuntime,
   type DesktopCanvasPreviewResourceLease,
 } from './desktop-canvas-runtime';
-import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
 import { createCutCanvasHandoffPayload, parseCutCanvasHandoffPayload } from '@neko/cut-domain';
 import { openDesktopCanvasDocument } from './desktop-creative-document-runtime';
@@ -1163,9 +1162,6 @@ async function startDesktop(): Promise<void> {
       });
       return projectDesktopCanvasGenerationModels(config);
     },
-    media: new DesktopCanvasMediaRuntime({
-      resources: resourceRegistry,
-    }),
     requestSource: async ({ identity, sourceKind, sourceMode, workspace }) => {
       const owner = requireOwnerWindow(identity.windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
@@ -1419,7 +1415,7 @@ async function startDesktop(): Promise<void> {
       };
       const contentType = requireCanvasPreviewContentType(locator, mediaType);
       if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
-        if (purpose === 'embedded-source' && isCanvasEmbeddedTextContentType(contentType)) {
+        if (purpose === 'viewer-source' && isCanvasTextContentType(contentType)) {
           const contentRead = createNodeHostContentReadService({
             workspaceRoot: workspace.workspacePath,
             documentEntryReader: {
@@ -1443,7 +1439,7 @@ async function startDesktop(): Promise<void> {
           );
         }
         const absolutePath = await resolveWorkspaceContentLocator(workspace, locator);
-        if (purpose === 'embedded-source' || contentType.startsWith('image/')) {
+        if (purpose === 'viewer-source' || contentType.startsWith('image/')) {
           const metadata = await lstat(absolutePath);
           const lease = await resourceRegistry.registerFile(owner, {
             absolutePath,
@@ -1473,7 +1469,7 @@ async function startDesktop(): Promise<void> {
       });
       const loaded = await contentRead.read(locator, {
         maxBytes:
-          purpose === 'embedded-source' && isCanvasEmbeddedTextContentType(contentType)
+          purpose === 'viewer-source' && isCanvasTextContentType(contentType)
             ? CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES
             : 64 * 1024 * 1024,
       });
@@ -3555,7 +3551,7 @@ function requireCanvasPreviewContentType(
   }
 }
 
-function isCanvasEmbeddedTextContentType(contentType: string): boolean {
+function isCanvasTextContentType(contentType: string): boolean {
   return (
     contentType.startsWith('text/') ||
     contentType === 'application/json' ||

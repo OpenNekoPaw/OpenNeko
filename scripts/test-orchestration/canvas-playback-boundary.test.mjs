@@ -11,8 +11,8 @@ const files = {
     'const bridge = window.openNekoDesktop.canvas;\n',
   'packages/canvas/webview/src/components/playback/PlaybackWorkspace.tsx':
     'const playback = usePlaybackStore();\n',
-  'packages/canvas/domain/src/canvas-media-host-contract.ts':
-    'export type CanvasMediaHostRequest = {};\nexport function parseCanvasMediaHostRequest() {}\n',
+  'packages/canvas/webview/src/preview/PreviewRendererRegistry.tsx':
+    "const preview = <LightweightPreview />;\npostMessage({ type: 'preview:resolveResource' });\n",
   'apps/neko-desktop/src/shared/canvas-bridge-contract.ts': 'export const bridge = {};\n',
   'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts':
     'switch (message.type) { default: throw new Error("unsupported"); }\n',
@@ -58,6 +58,23 @@ test('rejects a Desktop-owned media contract and wildcard Webview delegation', a
         result.findings.some((finding) => /package-local Canvas media contract/u.test(finding)),
       );
       assert.ok(result.findings.some((finding) => /must not delegate unknown/u.test(finding)));
+    },
+  );
+});
+
+test('rejects a Canvas-local media player path', async () => {
+  await withFixture(
+    "const root = await import('@neko/canvas-webview/root');\ncreateElectronCanvasHostRuntime(identity);\n",
+    async (root) => {
+      await writeFixture(
+        root,
+        'packages/canvas/webview/src/preview/PreviewRendererRegistry.tsx',
+        "const preview = <InlineVideoPlayer />;\npostMessage({ type: 'media:prepare' });\n",
+      );
+      const result = await checkCanvasPlaybackBoundary(root);
+      assert.equal(result.status, 'failed');
+      assert.ok(result.findings.some((finding) => /shared Preview viewer/u.test(finding)));
+      assert.ok(result.findings.some((finding) => /parallel media player/u.test(finding)));
     },
   );
 });

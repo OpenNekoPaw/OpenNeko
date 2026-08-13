@@ -30,9 +30,9 @@ import {
 } from '../utils/renderRefreshTiering';
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
 import {
-  CanvasEmbeddedPreviewOverlay,
-  resolveCanvasEmbeddedPreviewRequest,
-  type CanvasEmbeddedPreviewRequest,
+  CanvasFullscreenPreviewOverlay,
+  resolveCanvasFullscreenPreviewRequest,
+  type CanvasFullscreenPreviewRequest,
 } from './selection/CanvasImagePreviewOverlay';
 import {
   resolveGenerationSelectionSafePan,
@@ -95,7 +95,7 @@ export interface InfiniteCanvasProps {
   /** Called when user opens an embedded canvas. */
   onCanvasEmbedOpen?: (canvasPath: string) => void;
   /** Reports whether the Canvas-owned modal preview currently owns input. */
-  onEmbeddedPreviewOpenChange?: (open: boolean) => void;
+  onFullscreenPreviewOpenChange?: (open: boolean) => void;
 }
 
 // =============================================================================
@@ -126,15 +126,15 @@ export function InfiniteCanvas({
   isSpacePanActive = false,
   onDocumentOpen,
   onCanvasEmbedOpen,
-  onEmbeddedPreviewOpenChange,
+  onFullscreenPreviewOpenChange,
   isGridVisible = true,
 }: InfiniteCanvasProps) {
   const [generationInputLayout, setGenerationInputLayout] = useState<{
     readonly nodeId: string;
     readonly height: number;
   }>();
-  const [embeddedPreviewRequest, setEmbeddedPreviewRequest] =
-    useState<CanvasEmbeddedPreviewRequest>();
+  const [fullscreenPreviewRequest, setFullscreenPreviewRequest] =
+    useState<CanvasFullscreenPreviewRequest>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
@@ -146,10 +146,10 @@ export function InfiniteCanvas({
   const renderPlan = useMemo(() => projectCanvasNodeRenderPlan(nodes), [nodes]);
 
   useEffect(() => {
-    onEmbeddedPreviewOpenChange?.(embeddedPreviewRequest !== undefined);
-  }, [embeddedPreviewRequest, onEmbeddedPreviewOpenChange]);
+    onFullscreenPreviewOpenChange?.(fullscreenPreviewRequest !== undefined);
+  }, [fullscreenPreviewRequest, onFullscreenPreviewOpenChange]);
 
-  useEffect(() => () => onEmbeddedPreviewOpenChange?.(false), [onEmbeddedPreviewOpenChange]);
+  useEffect(() => () => onFullscreenPreviewOpenChange?.(false), [onFullscreenPreviewOpenChange]);
 
   // Viewport transform hook
   const { state: viewportState, handlers: viewportHandlers } = useViewportTransform({
@@ -158,7 +158,7 @@ export function InfiniteCanvas({
     containerRef,
     isPanMode,
     isSpacePanActive,
-    disabled: embeddedPreviewRequest !== undefined,
+    disabled: fullscreenPreviewRequest !== undefined,
   });
 
   // Connection drag hook - enables drag-to-connect with mouse-follow preview
@@ -176,7 +176,7 @@ export function InfiniteCanvas({
       validateCanvasConnectionDraft(nodes, connections, connection),
     onConnectionCancel,
     onConnectionStateChange,
-    enabled: embeddedPreviewRequest === undefined,
+    enabled: fullscreenPreviewRequest === undefined,
   });
 
   // Marquee selection hook
@@ -190,7 +190,7 @@ export function InfiniteCanvas({
     nodes: [...renderPlan.nodes],
     onSelect: onMarqueeSelect,
     enabled:
-      embeddedPreviewRequest === undefined &&
+      fullscreenPreviewRequest === undefined &&
       !viewportState.isPanning &&
       !isDraggingConnection &&
       !isPanMode,
@@ -301,15 +301,15 @@ export function InfiniteCanvas({
         : nodes,
     [dragPreview, nodes],
   );
-  const openEmbeddedPreview = useCallback(
+  const openFullscreenPreview = useCallback(
     (nodeId: string, outputId?: string) => {
       const node = interactionNodes.find((candidate) => candidate.id === nodeId);
-      if (!node) throw new Error(`Canvas embedded preview node "${nodeId}" is not rendered.`);
-      const request = resolveCanvasEmbeddedPreviewRequest(node, outputId);
+      if (!node) throw new Error(`Canvas preview resource node "${nodeId}" is not rendered.`);
+      const request = resolveCanvasFullscreenPreviewRequest(node, outputId);
       if (!request) {
-        throw new Error(`Canvas node "${nodeId}" does not expose an embedded preview.`);
+        throw new Error(`Canvas node "${nodeId}" does not expose an preview resource.`);
       }
-      setEmbeddedPreviewRequest(request);
+      setFullscreenPreviewRequest(request);
     },
     [interactionNodes],
   );
@@ -421,7 +421,7 @@ export function InfiniteCanvas({
       ref={containerRef}
       data-canvas-viewport-root="true"
       data-canvas-zoom-detail={viewport.zoom < 0.55 ? 'distant' : 'readable'}
-      data-canvas-interaction-suspended={embeddedPreviewRequest ? 'true' : undefined}
+      data-canvas-interaction-suspended={fullscreenPreviewRequest ? 'true' : undefined}
       className="relative w-full h-full overflow-hidden select-none"
       style={{ cursor: getCursor() }}
       {...getKeyboardBoundaryMetadata({
@@ -431,7 +431,7 @@ export function InfiniteCanvas({
       })}
       tabIndex={-1}
       onMouseDown={(e) => {
-        if (embeddedPreviewRequest) return;
+        if (fullscreenPreviewRequest) return;
         if (
           e.target === e.currentTarget ||
           (e.target as HTMLElement).hasAttribute('data-canvas-viewport-layer') ||
@@ -444,20 +444,20 @@ export function InfiniteCanvas({
         handleCanvasClick(e);
       }}
       onMouseMove={(e) => {
-        if (embeddedPreviewRequest) return;
+        if (fullscreenPreviewRequest) return;
         viewportHandlers.onMouseMove(e);
         marqueeHandlers.onMouseMove(e);
       }}
       onMouseUp={(e) => {
-        if (embeddedPreviewRequest) return;
+        if (fullscreenPreviewRequest) return;
         viewportHandlers.onMouseUp();
         marqueeHandlers.onMouseUp(e);
       }}
       onMouseLeave={() => {
-        if (!embeddedPreviewRequest) viewportHandlers.onMouseLeave();
+        if (!fullscreenPreviewRequest) viewportHandlers.onMouseLeave();
       }}
       onContextMenu={(event) => {
-        if (!embeddedPreviewRequest) viewportHandlers.onContextMenu(event);
+        if (!fullscreenPreviewRequest) viewportHandlers.onContextMenu(event);
       }}
     >
       {isGridVisible && (
@@ -524,7 +524,7 @@ export function InfiniteCanvas({
             onResizeEnd: handleNodeResizeEnd,
             onRotateEnd: handleNodeRotateEnd,
             onUpdateData: onNodeUpdateData,
-            onEmbeddedPreview: openEmbeddedPreview,
+            onFullscreenPreview: openFullscreenPreview,
             onConnectionStart: startDragConnection,
             isConnecting: isDraggingConnection,
             connectionTargetState,
@@ -545,7 +545,7 @@ export function InfiniteCanvas({
         viewport={viewport}
         viewportSize={containerSize}
         hidden={
-          embeddedPreviewRequest !== undefined ||
+          fullscreenPreviewRequest !== undefined ||
           (transformingNodeIds.length > 0 && !dragPreview) ||
           isMarqueeSelecting
         }
@@ -557,7 +557,7 @@ export function InfiniteCanvas({
         viewport={viewport}
         viewportSize={containerSize}
         hidden={
-          embeddedPreviewRequest !== undefined ||
+          fullscreenPreviewRequest !== undefined ||
           (transformingNodeIds.length > 0 && !dragPreview) ||
           isMarqueeSelecting
         }
@@ -569,7 +569,7 @@ export function InfiniteCanvas({
         viewport={viewport}
         viewportSize={containerSize}
         hidden={
-          embeddedPreviewRequest !== undefined ||
+          fullscreenPreviewRequest !== undefined ||
           transformingNodeIds.length > 0 ||
           isMarqueeSelecting
         }
@@ -604,10 +604,10 @@ export function InfiniteCanvas({
           </span>
         )}
       </div>
-      {embeddedPreviewRequest ? (
-        <CanvasEmbeddedPreviewOverlay
-          request={embeddedPreviewRequest}
-          onClose={() => setEmbeddedPreviewRequest(undefined)}
+      {fullscreenPreviewRequest ? (
+        <CanvasFullscreenPreviewOverlay
+          request={fullscreenPreviewRequest}
+          onClose={() => setFullscreenPreviewRequest(undefined)}
         />
       ) : null}
     </div>

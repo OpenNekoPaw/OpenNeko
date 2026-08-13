@@ -59,9 +59,9 @@ describe('GenerationNode', () => {
   });
 
   it('opens the Canvas fullscreen preview when a generated Text node is double-clicked', async () => {
-    const onEmbeddedPreview = vi.fn();
+    const onFullscreenPreview = vi.fn();
     const node = nodeWithHistory();
-    render(node, createHost(), onEmbeddedPreview);
+    render(node, createHost(), onFullscreenPreview);
 
     await act(async () => {
       container
@@ -69,15 +69,15 @@ describe('GenerationNode', () => {
         ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
 
-    expect(onEmbeddedPreview).toHaveBeenCalledWith('generation-1', 'output-2');
+    expect(onFullscreenPreview).toHaveBeenCalledWith('generation-1', 'output-2');
   });
 
   it('presents one Job image batch side by side and selects a visible member without hiding siblings', async () => {
     const selectGenerationOutput = vi.fn(async () => snapshot());
-    const onEmbeddedPreview = vi.fn();
+    const onFullscreenPreview = vi.fn();
     const node = imageNodeWithBatch();
 
-    render(node, createHost(undefined, { selectGenerationOutput }), onEmbeddedPreview);
+    render(node, createHost(undefined, { selectGenerationOutput }), onFullscreenPreview);
 
     expect(container.querySelector('[data-generation-result-count="2"]')).not.toBeNull();
     expect(container.querySelector('[data-generation-layout="grid"]')).not.toBeNull();
@@ -102,7 +102,7 @@ describe('GenerationNode', () => {
     await act(async () => {
       choices[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
-    expect(onEmbeddedPreview).toHaveBeenCalledWith('generation-image', 'image-output-1');
+    expect(onFullscreenPreview).toHaveBeenCalledWith('generation-image', 'image-output-1');
   });
 
   it('keeps four outputs in one bounded two-column result grid', () => {
@@ -261,7 +261,7 @@ describe('GenerationNode', () => {
   function render(
     node: GenerationCanvasNode,
     host: CanvasWebviewHostPort,
-    onEmbeddedPreview?: (nodeId: string, outputId?: string) => void,
+    onFullscreenPreview?: (nodeId: string, outputId?: string) => void,
   ): void {
     act(() => {
       root.render(
@@ -271,7 +271,7 @@ describe('GenerationNode', () => {
             viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
             isSelected
             containerRef={{ current: container }}
-            onEmbeddedPreview={onEmbeddedPreview}
+            onFullscreenPreview={onFullscreenPreview}
           />
         </CanvasHostProvider>,
       );

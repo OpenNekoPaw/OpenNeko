@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createCanvasHostSessionId, parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import {
   isSameCanvasHostIdentity,
-  parseDesktopCanvasEmbeddedPreviewReleaseRequest,
-  parseDesktopCanvasEmbeddedPreviewRequest,
-  parseDesktopCanvasEmbeddedPreviewResult,
+  parseDesktopCanvasPreviewResourceReleaseRequest,
+  parseDesktopCanvasPreviewResourceRequest,
+  parseDesktopCanvasPreviewResourceResult,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
 } from './canvas-bridge-contract';
@@ -117,7 +117,7 @@ describe('Desktop Canvas bridge contract', () => {
     const result = {
       requestId: 'embedded-1',
       descriptor: {
-        descriptorId: 'canvas-embedded-session-1-output-1',
+        descriptorId: 'canvas-preview-session-1-output-1',
         sourceFingerprint: 'sha256-output-1',
         contentLocator: request.locator,
         url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -128,19 +128,19 @@ describe('Desktop Canvas bridge contract', () => {
       },
     };
 
-    expect(parseDesktopCanvasEmbeddedPreviewRequest(request)).toEqual(request);
-    expect(parseDesktopCanvasEmbeddedPreviewResult(result, 'embedded-1')).toEqual(result);
+    expect(parseDesktopCanvasPreviewResourceRequest(request)).toEqual(request);
+    expect(parseDesktopCanvasPreviewResourceResult(result, 'embedded-1')).toEqual(result);
     expect(
-      parseDesktopCanvasEmbeddedPreviewReleaseRequest({
+      parseDesktopCanvasPreviewResourceReleaseRequest({
         identity,
         descriptorId: result.descriptor.descriptorId,
       }),
     ).toEqual({ identity, descriptorId: result.descriptor.descriptorId });
     expect(() =>
-      parseDesktopCanvasEmbeddedPreviewRequest({ ...request, identity: undefined }),
+      parseDesktopCanvasPreviewResourceRequest({ ...request, identity: undefined }),
     ).toThrow();
     expect(() =>
-      parseDesktopCanvasEmbeddedPreviewResult(
+      parseDesktopCanvasPreviewResourceResult(
         {
           ...result,
           descriptor: { ...result.descriptor, url: 'file:///private/output-1.png' },

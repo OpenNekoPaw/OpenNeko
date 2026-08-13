@@ -146,7 +146,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
 
     expect(() =>
-      runtime.authorizeEmbeddedPreviewSource({
+      runtime.authorizePreviewSource({
         nodeId: 'generation-1',
         outputId: 'output-1',
         locator: firstLocator,
@@ -154,7 +154,7 @@ describe('CanvasHostRuntimeSession', () => {
       }),
     ).not.toThrow();
     expect(() =>
-      runtime.authorizeEmbeddedPreviewSource({
+      runtime.authorizePreviewSource({
         nodeId: 'generation-1',
         outputId: 'output-1',
         locator: { ...firstLocator, path: 'neko/generated/other.png' },
@@ -162,7 +162,7 @@ describe('CanvasHostRuntimeSession', () => {
       }),
     ).toThrow('output "output-1" is stale');
     expect(() =>
-      runtime.authorizeEmbeddedPreviewSource({
+      runtime.authorizePreviewSource({
         nodeId: 'generation-1',
         outputId: 'output-2',
         locator: secondLocator,

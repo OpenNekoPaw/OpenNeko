@@ -234,7 +234,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return this.enqueueOperation(() => this.readTextFilePreviewSerial(request));
   }
 
-  authorizeEmbeddedPreviewSource(input: {
+  authorizePreviewSource(input: {
     readonly nodeId: string;
     readonly outputId: string;
     readonly locator: ContentLocator;
@@ -242,27 +242,27 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   }): void {
     this.assertActive();
     const node = this.canvas.nodes.find((candidate) => candidate.id === input.nodeId);
-    if (!node) throw new Error(`Canvas embedded preview node "${input.nodeId}" is stale.`);
+    if (!node) throw new Error(`Canvas preview resource node "${input.nodeId}" is stale.`);
     if (node.type === 'generation') {
       const output = node.data.outputs.find((candidate) => candidate.outputId === input.outputId);
       if (!output || !contentLocatorsEqual(output.locator, input.locator)) {
-        throw new Error(`Canvas embedded preview output "${input.outputId}" is stale.`);
+        throw new Error(`Canvas preview resource output "${input.outputId}" is stale.`);
       }
       if (output.kind !== input.contentKind) {
-        throw new Error(`Canvas embedded preview output "${input.outputId}" kind is stale.`);
+        throw new Error(`Canvas preview resource output "${input.outputId}" kind is stale.`);
       }
       return;
     }
     const locator =
       node.type === 'media' || node.type === 'file' ? node.data.contentLocator : undefined;
     if (input.outputId !== node.id || !locator || !contentLocatorsEqual(locator, input.locator)) {
-      throw new Error(`Canvas embedded preview source "${input.outputId}" is stale.`);
+      throw new Error(`Canvas preview resource source "${input.outputId}" is stale.`);
     }
     if (node.type !== 'media' && node.type !== 'file') {
-      throw new Error(`Canvas embedded preview source "${input.outputId}" kind is unavailable.`);
+      throw new Error(`Canvas preview resource source "${input.outputId}" kind is unavailable.`);
     }
-    if (!isAuthorizedEmbeddedPreviewKind(node, input.contentKind)) {
-      throw new Error(`Canvas embedded preview source "${input.outputId}" kind is unavailable.`);
+    if (!isAuthorizedPreviewKind(node, input.contentKind)) {
+      throw new Error(`Canvas preview resource source "${input.outputId}" kind is unavailable.`);
     }
   }
 
@@ -921,7 +921,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   }
 }
 
-function isAuthorizedEmbeddedPreviewKind(
+function isAuthorizedPreviewKind(
   node: Extract<CanvasData['nodes'][number], { readonly type: 'media' | 'file' }>,
   contentKind: 'image' | 'video' | 'audio' | 'text' | 'document' | 'model',
 ): boolean {

@@ -113,8 +113,6 @@ import {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
   parseCanvasHostRuntimeIdentity,
-  parseCanvasMediaHostRequest,
-  parseCanvasMediaHostResponse,
   parseCanvasMaterialActionResolution,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
@@ -129,9 +127,9 @@ import {
   isSameCanvasHostIdentity,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
-  parseDesktopCanvasEmbeddedPreviewReleaseRequest,
-  parseDesktopCanvasEmbeddedPreviewRequest,
-  parseDesktopCanvasEmbeddedPreviewResult,
+  parseDesktopCanvasPreviewResourceReleaseRequest,
+  parseDesktopCanvasPreviewResourceRequest,
+  parseDesktopCanvasPreviewResourceResult,
   type OpenNekoDesktopCanvasBridge,
 } from '../shared/canvas-bridge-contract';
 import {
@@ -1558,39 +1556,27 @@ const bridge: OpenNekoDesktopBridge &
       );
       return parseDesktopCanvasPreviewVariantResult(response, request.requestId);
     },
-    async resolveEmbeddedPreview(value) {
-      const request = parseDesktopCanvasEmbeddedPreviewRequest(value);
+    async resolvePreviewResource(value) {
+      const request = parseDesktopCanvasPreviewResourceRequest(value);
       const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
       if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
-        throw new Error('Desktop Canvas embedded preview requires a current owner-bound snapshot.');
+        throw new Error('Desktop Canvas preview resource requires a current owner-bound snapshot.');
       }
       const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_CANVAS_CHANNELS.embeddedPreviewResolve,
+        DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
         request,
       );
-      return parseDesktopCanvasEmbeddedPreviewResult(response, request.requestId);
+      return parseDesktopCanvasPreviewResourceResult(response, request.requestId);
     },
-    async releaseEmbeddedPreview(value) {
-      const request = parseDesktopCanvasEmbeddedPreviewReleaseRequest(value);
+    async releasePreviewResource(value) {
+      const request = parseDesktopCanvasPreviewResourceReleaseRequest(value);
       const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
       if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
         throw new Error(
-          'Desktop Canvas embedded preview release requires a current owner-bound snapshot.',
+          'Desktop Canvas preview resource release requires a current owner-bound snapshot.',
         );
       }
-      await ipcRenderer.invoke(DESKTOP_CANVAS_CHANNELS.embeddedPreviewRelease, request);
-    },
-    async executeMediaRequest(value) {
-      const request = parseCanvasMediaHostRequest(value);
-      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
-      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
-        throw new Error('Desktop Canvas media request requires a current owner-bound snapshot.');
-      }
-      const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
-        request,
-      );
-      return parseCanvasMediaHostResponse(response, request.nodeId);
+      await ipcRenderer.invoke(DESKTOP_CANVAS_CHANNELS.previewResourceRelease, request);
     },
     subscribe(identity, listener) {
       const entry = { identity: parseCanvasHostRuntimeIdentity(identity), listener };

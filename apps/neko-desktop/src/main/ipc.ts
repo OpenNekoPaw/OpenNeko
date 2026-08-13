@@ -313,19 +313,14 @@ export function registerDesktopIpc(
       appHost.resolveCanvasPreviewVariant(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_CANVAS_CHANNELS.embeddedPreviewResolve,
+    DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.resolveCanvasEmbeddedPreview(requireSender(event), payload),
+      appHost.resolveCanvasPreviewResource(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_CANVAS_CHANNELS.embeddedPreviewRelease,
+    DESKTOP_CANVAS_CHANNELS.previewResourceRelease,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.releaseCanvasEmbeddedPreview(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeCanvasMediaRequest(requireSender(event), payload),
+      appHost.releaseCanvasPreviewResource(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_AGENT_CHANNELS.messageSend,
@@ -487,9 +482,8 @@ export function registerDesktopIpc(
       DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
       DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
-      DESKTOP_CANVAS_CHANNELS.embeddedPreviewResolve,
-      DESKTOP_CANVAS_CHANNELS.embeddedPreviewRelease,
-      DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
+      DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
+      DESKTOP_CANVAS_CHANNELS.previewResourceRelease,
       DESKTOP_CUT_CHANNELS.snapshotGet,
       DESKTOP_CUT_CHANNELS.requestExecute,
       DESKTOP_CUT_CHANNELS.draftCreate,

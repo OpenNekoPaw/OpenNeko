@@ -1,4 +1,4 @@
-import { contentLocatorKey, validateContentLocator, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content';
 import type {
   CanvasTextFilePreviewDiagnosticCode,
   CanvasTextFilePreviewKind,
@@ -23,6 +23,10 @@ import type {
 } from '../../preview/types';
 import { BaseNode } from './BaseNode';
 import type { NodeRendererCommonProps } from './nodeRendererTypes';
+import {
+  readCanonicalContentLocator,
+  readCanonicalContentLocatorKey,
+} from '../../utils/stableContentLocator';
 
 type CanonicalNodeProps<TNode> = NodeRendererCommonProps & {
   readonly node: TNode;
@@ -157,23 +161,18 @@ export function MarkdownNode({
 export function MediaNode({
   node,
   isSelected,
-  onEmbeddedPreview,
+  onFullscreenPreview,
   ...baseProps
 }: CanonicalNodeProps<MediaCanvasNode>) {
-  const host = useOptionalCanvasHost();
   const source = node.data.runtimeAssetPath || node.data.assetPath;
-  const contentLocator = readCanonicalContentLocator(node.data.contentLocator);
+  const contentLocatorIdentity = readCanonicalContentLocatorKey(node.data.contentLocator);
+  const contentLocator = useMemo(
+    () => readCanonicalContentLocator(node.data.contentLocator),
+    [contentLocatorIdentity],
+  );
   const mediaType = node.data.mediaType ?? 'image';
   const previewRole =
-    mediaType === 'image'
-      ? 'image'
-      : host?.supportsMessage('media:probe')
-        ? mediaType === 'audio'
-          ? 'audio-waveform'
-          : 'video-proxy'
-        : mediaType === 'video'
-          ? 'video-poster'
-          : 'unavailable';
+    mediaType === 'image' ? 'image' : mediaType === 'audio' ? 'audio-waveform' : 'video-proxy';
   const title =
     resolveCanvasNodeName([node.data.title, node.data.assetPath]) ||
     resolveMediaTypeLabel(mediaType);
@@ -207,6 +206,8 @@ export function MediaNode({
   const previewSource = useMemo<PreviewSourceDescriptor>(
     () => ({
       id: `canvas-node:${node.id}`,
+      nodeId: node.id,
+      outputId: node.id,
       role: previewRole,
       title: node.data.title,
       asset: {
@@ -229,7 +230,7 @@ export function MediaNode({
       presentation="foundational"
       opaqueSurface
       onActivate={
-        contentLocator && onEmbeddedPreview ? () => onEmbeddedPreview(node.id) : undefined
+        contentLocator && onFullscreenPreview ? () => onFullscreenPreview(node.id) : undefined
       }
       nodeLabel={{
         icon: (
@@ -389,7 +390,7 @@ export function FileNode({
   node,
   isSelected,
   onOpen,
-  onEmbeddedPreview,
+  onFullscreenPreview,
   ...baseProps
 }: CanonicalNodeProps<FileCanvasNode>) {
   const fileName = resolveCanvasFileName(node.data);
@@ -434,8 +435,8 @@ export function FileNode({
       presentation="foundational"
       opaqueSurface
       onActivate={
-        contentLocator && isEmbeddedPreviewFile(node.data) && onEmbeddedPreview
-          ? () => onEmbeddedPreview(node.id)
+        contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
+          ? () => onFullscreenPreview(node.id)
           : contentLocator && onOpen
             ? () => onOpen(contentLocator)
             : undefined
@@ -457,12 +458,12 @@ export function FileNode({
   );
 }
 
-function isEmbeddedPreviewMediaKind(value: unknown): value is 'image' | 'video' | 'audio' {
+function isFullscreenPreviewMediaKind(value: unknown): value is 'image' | 'video' | 'audio' {
   return value === 'image' || value === 'video' || value === 'audio';
 }
 
-function isEmbeddedPreviewFile(data: FileCanvasNode['data']): boolean {
-  if (isEmbeddedPreviewMediaKind(data.mediaKind)) return true;
+function isFullscreenPreviewFile(data: FileCanvasNode['data']): boolean {
+  if (isFullscreenPreviewMediaKind(data.mediaKind)) return true;
   return Boolean(
     resolveCanvasTextFilePreviewKind({
       path: data.path || data.title,
@@ -536,11 +537,6 @@ function CanvasFileNodeContent({
       ) : null}
     </div>
   );
-}
-
-function readCanonicalContentLocator(value: unknown): ContentLocator | undefined {
-  const validation = validateContentLocator(value);
-  return validation.ok ? validation.locator : undefined;
 }
 
 function CanvasFileIconState({ diagnostic }: { readonly diagnostic?: string }) {

@@ -561,6 +561,54 @@ export function validateCanvasMaterialNodePersistence(
   return diagnostics;
 }
 
+/**
+ * Identifies a locator-shaped user fact that is safe to retain only as an
+ * unavailable Canvas node. It is never authorized, resolved, or rewritten.
+ */
+export function isSafeUnavailableCanvasMaterialLocator(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value['kind'] === 'workspace-file') {
+    return isSafeUnavailableWorkspaceFileLocator(value);
+  }
+  if (
+    value['kind'] !== 'document-entry' ||
+    !hasOnlyKeys(value, ['kind', 'source', 'entryPath', 'fingerprint']) ||
+    !isRecord(value['source']) ||
+    !isSafeUnavailableWorkspaceFileLocator(value['source'])
+  ) {
+    return false;
+  }
+  return validateContentLocator({
+    ...value,
+    source: { ...value['source'], path: 'unavailable/source' },
+  }).ok;
+}
+
+function isSafeUnavailableWorkspaceFileLocator(value: Record<string, unknown>): boolean {
+  if (!hasOnlyKeys(value, ['kind', 'path', 'fingerprint'])) return false;
+  if (value['kind'] !== 'workspace-file' || !isNormalizedUnavailableProjectPath(value['path'])) {
+    return false;
+  }
+  return validateContentLocator({ ...value, path: 'unavailable/source' }).ok;
+}
+
+function isNormalizedUnavailableProjectPath(value: unknown): value is string {
+  if (typeof value !== 'string' || value.normalize('NFC') !== value) return false;
+  if (!value || value.includes('\0') || value.includes('${') || value.includes('\\')) return false;
+  if (value.startsWith('/') || /^[A-Za-z]:(?:\/|$)/.test(value)) return false;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value)) return false;
+  return value
+    .split('/')
+    .every(
+      (segment) =>
+        segment.length > 0 &&
+        segment !== '.' &&
+        segment !== '..' &&
+        !segment.startsWith('.') &&
+        !segment.includes(':'),
+    );
+}
+
 function isCanvasGenerationJobRef(value: unknown): value is CanvasGenerationJobRef {
   return (
     isRecord(value) &&

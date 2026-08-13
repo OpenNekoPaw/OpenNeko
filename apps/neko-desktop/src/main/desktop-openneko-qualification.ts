@@ -238,7 +238,7 @@ async function registerFixtures(
   const [video, audio, image, pdf, glb] = await Promise.all([
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.videoPath,
-      mediaType: 'video/mp4',
+      mediaType: 'video/webm',
     }),
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.audioPath,
@@ -353,7 +353,7 @@ function owner(windowId: string, sessionId: string): DesktopResourceOwner {
 }
 
 async function createFixtures(root: string) {
-  const videoPath = path.join(root, 'video.mp4');
+  const videoPath = path.join(root, 'video.webm');
   const audioPath = path.join(root, 'audio.wav');
   const imagePath = path.join(root, 'image.png');
   const pdfPath = path.join(root, 'document.pdf');
@@ -373,11 +373,11 @@ async function createFixtures(root: string) {
     '-t',
     '2',
     '-c:v',
-    'libx264',
-    '-pix_fmt',
-    'yuv420p',
-    '-movflags',
-    '+faststart',
+    'libvpx-vp9',
+    '-deadline',
+    'realtime',
+    '-cpu-used',
+    '8',
     '-an',
     '-y',
     videoPath,

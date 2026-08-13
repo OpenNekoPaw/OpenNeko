@@ -3,7 +3,7 @@
  */
 
 import { parsePreviewMediaDescriptor, type PreviewMediaDescriptor } from '@neko/preview-domain';
-import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import type { RichContentProps, RichContentRendererEntry } from '../types';
 import { getLocale } from '../../../../i18n';
 
@@ -35,7 +35,7 @@ function isImageRichData(data: unknown): data is ImageRichData {
 function ImageRendererComponent({ data, className }: RichContentProps<ImageRichData>) {
   return (
     <div className={className}>
-      <QuickPreviewSurface descriptor={data.descriptor} locale={getLocale()} />
+      <LightweightPreview descriptor={data.descriptor} locale={getLocale()} />
     </div>
   );
 }

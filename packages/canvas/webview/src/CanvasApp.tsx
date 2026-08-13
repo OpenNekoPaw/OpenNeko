@@ -101,7 +101,7 @@ export interface CanvasAppProps {
 
 export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const canOpenHostExport = hostPort.supportsMessage('canvasAction');
-  const canOpenHostPlayback = hostPort.supportsMessage('media:probe');
+  const canOpenHostPlayback = hostPort.supportsMessage('preview:resolveResource');
   const canOpenBoardRef = hostPort.supportsMessage('openCanvasBoardRef');
   const canvasStoreApi = useCanvasStoreApi();
   const playbackStoreApi = usePlaybackStoreApi();
@@ -112,7 +112,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Interaction tool: select/marquee by default, hand tool pans on drag.
   const [interactionTool, setInteractionTool] = useState<'select' | 'pan'>('select');
   const [isSpacePanActive, setIsSpacePanActive] = useState(false);
-  const [isEmbeddedPreviewOpen, setIsEmbeddedPreviewOpen] = useState(false);
+  const [isFullscreenPreviewOpen, setIsFullscreenPreviewOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const isHudVisible = true;
   const isGridVisible = true;
@@ -120,8 +120,8 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const zoomControlsRef = useRef<HTMLDivElement | null>(null);
   const [zoomControlsElement, setZoomControlsElement] = useState<HTMLDivElement | null>(null);
   const [miniMapWidth, setMiniMapWidth] = useState(200);
-  const handleEmbeddedPreviewOpenChange = useCallback((open: boolean) => {
-    setIsEmbeddedPreviewOpen(open);
+  const handleFullscreenPreviewOpenChange = useCallback((open: boolean) => {
+    setIsFullscreenPreviewOpen(open);
     if (open) setIsSpacePanActive(false);
   }, []);
 
@@ -687,9 +687,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       canDeleteSelection: selectedNodeIds.length > 0 || selectedConnectionIds.length > 0,
       hasNodes: nodes.length > 0,
       isKeyboardFocused,
-      isModalPreviewOpen: isEmbeddedPreviewOpen,
+      isModalPreviewOpen: isFullscreenPreviewOpen,
     }),
-    [isEmbeddedPreviewOpen, isKeyboardFocused, nodes, selectedConnectionIds, selectedNodeIds],
+    [isFullscreenPreviewOpen, isKeyboardFocused, nodes, selectedConnectionIds, selectedNodeIds],
   );
 
   useCanvasKeyboardController({
@@ -716,7 +716,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   });
 
   // Keep ref in sync with latest handler (for Host message dispatch)
-  keyboardActionRef.current = isEmbeddedPreviewOpen ? () => undefined : handleKeyboardAction;
+  keyboardActionRef.current = isFullscreenPreviewOpen ? () => undefined : handleKeyboardAction;
 
   useEffect(() => {
     if (!hostPort || !canvasData) {
@@ -1040,7 +1040,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   onMarqueeSelect={handleMarqueeSelect}
                   onDocumentOpen={handleDocumentOpen}
                   onCanvasEmbedOpen={handleCanvasEmbedOpen}
-                  onEmbeddedPreviewOpenChange={handleEmbeddedPreviewOpenChange}
+                  onFullscreenPreviewOpenChange={handleFullscreenPreviewOpenChange}
                   onConnectionUpdate={updateConnection}
                   isPanMode={isPanMode}
                   isSpacePanActive={isSpacePanActive}

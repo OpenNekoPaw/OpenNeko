@@ -13,32 +13,32 @@ import {
   parsePreviewMediaDescriptor,
   type PreviewMediaDescriptor,
 } from '@neko/preview-domain';
-import { EmbeddedPreviewSurface } from '@neko/preview-webview/embedded';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { getLocale, t } from '../../i18n';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
 import type { PreviewSourceDescriptor } from '../../preview/types';
 
-type CanvasEmbeddedPreviewKind = 'image' | 'video' | 'audio' | 'text';
-export type CanvasEmbeddedPreviewSource = PreviewSourceDescriptor & {
-  readonly previewKind: CanvasEmbeddedPreviewKind;
+type CanvasFullscreenPreviewKind = 'image' | 'video' | 'audio' | 'text';
+export type CanvasFullscreenPreviewSource = PreviewSourceDescriptor & {
+  readonly previewKind: CanvasFullscreenPreviewKind;
 };
-type CanvasEmbeddedPreviewItems = readonly [
-  CanvasEmbeddedPreviewSource,
-  ...CanvasEmbeddedPreviewSource[],
+type CanvasFullscreenPreviewItems = readonly [
+  CanvasFullscreenPreviewSource,
+  ...CanvasFullscreenPreviewSource[],
 ];
 
-export interface CanvasEmbeddedPreviewRequest {
+export interface CanvasFullscreenPreviewRequest {
   readonly nodeId: string;
-  readonly items: CanvasEmbeddedPreviewItems;
+  readonly items: CanvasFullscreenPreviewItems;
   readonly initialIndex: number;
 }
 
-export function resolveCanvasEmbeddedPreviewRequest(
+export function resolveCanvasFullscreenPreviewRequest(
   node: CanvasNode,
   preferredOutputId?: string,
-): CanvasEmbeddedPreviewRequest | undefined {
+): CanvasFullscreenPreviewRequest | undefined {
   if (node.type === 'generation') {
     const preferredOutput = preferredOutputId
       ? node.data.outputs.find((output) => output.outputId === preferredOutputId)
@@ -67,7 +67,7 @@ export function resolveCanvasEmbeddedPreviewRequest(
 
   if (
     node.type === 'media' &&
-    isEmbeddedPreviewKind(node.data.mediaType) &&
+    isFullscreenPreviewKind(node.data.mediaType) &&
     node.data.contentLocator
   ) {
     const validation = validateContentLocator(node.data.contentLocator);
@@ -100,7 +100,7 @@ export function resolveCanvasEmbeddedPreviewRequest(
     const validation = validateContentLocator(node.data.contentLocator);
     if (!validation.ok) return undefined;
     const fileName = node.data.path || node.data.title;
-    const previewKind = resolveFileEmbeddedPreviewKind(
+    const previewKind = resolveFileFullscreenPreviewKind(
       node.data.mediaKind,
       fileName,
       node.data.mediaType,
@@ -126,16 +126,16 @@ export function resolveCanvasEmbeddedPreviewRequest(
   return undefined;
 }
 
-export function CanvasEmbeddedPreviewOverlay({
+export function CanvasFullscreenPreviewOverlay({
   request,
   onClose,
 }: {
-  readonly request: CanvasEmbeddedPreviewRequest;
+  readonly request: CanvasFullscreenPreviewRequest;
   readonly onClose: () => void;
 }): ReactNode {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(request.initialIndex);
-  const activeSource = embeddedPreviewItemAt(request.items, activeIndex);
+  const activeSource = fullscreenPreviewItemAt(request.items, activeIndex);
   const hasPrevious = activeIndex > 0;
   const hasNext = activeIndex < request.items.length - 1;
 
@@ -197,7 +197,7 @@ export function CanvasEmbeddedPreviewOverlay({
       tabIndex={-1}
       {...getKeyboardBoundaryMetadata({
         scope: 'modal',
-        ownerId: 'canvas-embedded-preview',
+        ownerId: 'canvas-preview-resource',
         priority: 0,
         ownedKeys: ['Escape', 'ArrowLeft', 'ArrowRight'],
       })}
@@ -241,7 +241,7 @@ export function CanvasEmbeddedPreviewOverlay({
           event.stopPropagation();
         }}
       >
-        <CanvasEmbeddedPreviewBody request={request} source={activeSource} />
+        <CanvasFullscreenPreviewBody request={request} source={activeSource} />
         {request.items.length > 1 ? (
           <>
             <IconButton
@@ -294,7 +294,7 @@ export function CanvasEmbeddedPreviewOverlay({
 function generationPreviewSource(
   node: Extract<CanvasNode, { readonly type: 'generation' }>,
   output: CanvasGenerationOutputBinding,
-): CanvasEmbeddedPreviewSource {
+): CanvasFullscreenPreviewSource {
   const previewKind = output.kind === 'prompt' ? 'text' : output.kind;
   return {
     id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
@@ -307,14 +307,14 @@ function generationPreviewSource(
   };
 }
 
-let embeddedPreviewRequestSequence = 0;
+let fullscreenPreviewRequestSequence = 0;
 
-function CanvasEmbeddedPreviewBody({
+function CanvasFullscreenPreviewBody({
   request,
   source,
 }: {
-  readonly request: CanvasEmbeddedPreviewRequest;
-  readonly source: CanvasEmbeddedPreviewSource;
+  readonly request: CanvasFullscreenPreviewRequest;
+  readonly source: CanvasFullscreenPreviewSource;
 }): ReactNode {
   const host = useOptionalCanvasHost();
   const [descriptor, setDescriptor] = useState<PreviewMediaDescriptor>();
@@ -330,15 +330,15 @@ function CanvasEmbeddedPreviewBody({
       return;
     }
 
-    embeddedPreviewRequestSequence += 1;
-    const requestId = `canvas-embedded-preview-${embeddedPreviewRequestSequence.toString(36)}`;
+    fullscreenPreviewRequestSequence += 1;
+    const requestId = `canvas-preview-resource-${fullscreenPreviewRequestSequence.toString(36)}`;
     let resolvedDescriptorId: string | undefined;
     let disposed = false;
     let unsubscribe: () => void = () => undefined;
     unsubscribe = hostPort.subscribe((message) => {
       if (
         !isRecord(message) ||
-        message['type'] !== 'preview:embeddedResolved' ||
+        message['type'] !== 'preview:resourceResolved' ||
         message['requestId'] !== requestId
       ) {
         return;
@@ -353,7 +353,7 @@ function CanvasEmbeddedPreviewBody({
         resolvedDescriptorId = nextDescriptor.descriptorId;
         if (disposed) {
           hostPort.postMessage({
-            type: 'preview:releaseEmbedded',
+            type: 'preview:releaseResource',
             descriptorId: nextDescriptor.descriptorId,
           });
         } else {
@@ -367,7 +367,7 @@ function CanvasEmbeddedPreviewBody({
 
     const fileName = contentLocatorFileName(locator);
     hostPort.postMessage({
-      type: 'preview:resolveEmbedded',
+      type: 'preview:resolveResource',
       requestId,
       nodeId: request.nodeId,
       outputId: locator.kind === 'generated-output' ? locator.outputId : request.nodeId,
@@ -382,7 +382,7 @@ function CanvasEmbeddedPreviewBody({
       if (resolvedDescriptorId) {
         unsubscribe();
         hostPort.postMessage({
-          type: 'preview:releaseEmbedded',
+          type: 'preview:releaseResource',
           descriptorId: resolvedDescriptorId,
         });
       }
@@ -403,39 +403,39 @@ function CanvasEmbeddedPreviewBody({
       </div>
     );
   }
-  return <EmbeddedPreviewSurface descriptor={descriptor} locale={getLocale()} />;
+  return <LightweightPreview descriptor={descriptor} locale={getLocale()} controlDensity="full" />;
 }
 
-function embeddedPreviewItemAt(
-  items: CanvasEmbeddedPreviewItems,
+function fullscreenPreviewItemAt(
+  items: CanvasFullscreenPreviewItems,
   index: number,
-): CanvasEmbeddedPreviewSource {
+): CanvasFullscreenPreviewSource {
   const item = items[index];
-  if (!item) throw new Error(`Canvas embedded preview index ${index} is out of bounds.`);
+  if (!item) throw new Error(`Canvas preview resource index ${index} is out of bounds.`);
   return item;
 }
 
-function isEmbeddedPreviewKind(value: unknown): value is CanvasEmbeddedPreviewKind {
+function isFullscreenPreviewKind(value: unknown): value is CanvasFullscreenPreviewKind {
   return value === 'image' || value === 'video' || value === 'audio' || value === 'text';
 }
 
-function previewRole(kind: CanvasEmbeddedPreviewKind): PreviewSourceDescriptor['role'] {
+function previewRole(kind: CanvasFullscreenPreviewKind): PreviewSourceDescriptor['role'] {
   if (kind === 'image') return 'image';
   if (kind === 'video') return 'video-proxy';
   return kind === 'audio' ? 'audio-waveform' : 'text';
 }
 
-function defaultMediaType(kind: CanvasEmbeddedPreviewKind): string {
+function defaultMediaType(kind: CanvasFullscreenPreviewKind): string {
   if (kind === 'image') return 'image/png';
   if (kind === 'video') return 'video/mp4';
   return kind === 'audio' ? 'audio/mpeg' : 'text/plain';
 }
 
-function resolveFileEmbeddedPreviewKind(
+function resolveFileFullscreenPreviewKind(
   mediaKind: unknown,
   fileName: string,
   mediaType: string | undefined,
-): CanvasEmbeddedPreviewKind | undefined {
+): CanvasFullscreenPreviewKind | undefined {
   if (mediaKind === 'image' || mediaKind === 'video' || mediaKind === 'audio') return mediaKind;
   if (resolveCanvasTextFilePreviewKind({ path: fileName, ...(mediaType ? { mediaType } : {}) })) {
     return 'text';
@@ -451,7 +451,7 @@ function basename(value: string | undefined): string | undefined {
 }
 
 function contentLocatorFileName(
-  locator: NonNullable<CanvasEmbeddedPreviewSource['contentLocator']>,
+  locator: NonNullable<CanvasFullscreenPreviewSource['contentLocator']>,
 ): string {
   switch (locator.kind) {
     case 'workspace-file':

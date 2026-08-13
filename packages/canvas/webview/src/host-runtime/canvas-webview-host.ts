@@ -1,8 +1,6 @@
 import {
   createCanvasMaterialActionResolutionRequest,
   createCanvasHostIntentRequest,
-  isCanvasMediaHostRequestType,
-  parseCanvasMediaHostMessage,
   createCanvasTextFilePreviewRequest,
   parseCanvasTextFilePreviewResult,
   type CanvasHostAuthoringCapabilities,
@@ -302,21 +300,12 @@ export function createCanvasWebviewHost(
         }
         return;
       case 'preview:resolveVariant':
-      case 'preview:resolveEmbedded':
-      case 'preview:releaseEmbedded':
-      case 'media:probe':
-      case 'media:play':
-      case 'media:seek':
-      case 'media:pause':
-      case 'media:resume':
-      case 'media:stop':
-      case 'media:captureFrame':
+      case 'preview:resolveResource':
+      case 'preview:releaseResource':
         if (!delegate || !supportsMessage(value['type'])) {
           throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
         }
-        delegate.postMessage(
-          isCanvasMediaHostRequestType(value['type']) ? parseCanvasMediaHostMessage(value) : value,
-        );
+        delegate.postMessage(value);
         return;
       default:
         throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);

@@ -101,12 +101,11 @@ import type {
   CanvasHostRuntimeIdentity,
   CanvasHostSnapshot,
   CanvasMaterialActionResolution,
-  CanvasMediaHostResponse,
   CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
 import { parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import {
-  type DesktopCanvasEmbeddedPreviewResult,
+  type DesktopCanvasPreviewResourceResult,
   type DesktopCanvasPreviewVariantResult,
 } from '../shared/canvas-bridge-contract';
 import type { DesktopCanvasRuntime } from './desktop-canvas-runtime';
@@ -2755,31 +2754,22 @@ export class DesktopAppHost {
     return this.requireCanvas().resolvePreviewVariant(window.windowId, payload);
   }
 
-  async resolveCanvasEmbeddedPreview(
+  async resolveCanvasPreviewResource(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<DesktopCanvasEmbeddedPreviewResult> {
+  ): Promise<DesktopCanvasPreviewResourceResult> {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
-    return this.requireCanvas().resolveEmbeddedPreview(window.windowId, payload);
+    return this.requireCanvas().resolvePreviewResource(window.windowId, payload);
   }
 
-  async releaseCanvasEmbeddedPreview(
+  async releaseCanvasPreviewResource(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<void> {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
-    await this.requireCanvas().releaseEmbeddedPreview(window.windowId, payload);
-  }
-
-  async executeCanvasMediaRequest(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<CanvasMediaHostResponse | undefined> {
-    this.requireActive();
-    const window = this.windows.resolveSender(sender);
-    return this.requireCanvas().executeMediaRequest(window.windowId, payload);
+    await this.requireCanvas().releasePreviewResource(window.windowId, payload);
   }
 
   async getCutSnapshot(

@@ -18,7 +18,7 @@ type GenerationNodeProps = NodeRendererCommonProps & { readonly node: Generation
 export function GenerationNode({
   node,
   isSelected,
-  onEmbeddedPreview,
+  onFullscreenPreview,
   ...baseProps
 }: GenerationNodeProps) {
   const host = useOptionalCanvasHost();
@@ -55,8 +55,8 @@ export function GenerationNode({
       opaqueSurface
       className="canvas-generation-node-frame"
       onActivate={
-        selected && onEmbeddedPreview
-          ? () => onEmbeddedPreview(node.id, selected.outputId)
+        selected && onFullscreenPreview
+          ? () => onFullscreenPreview(node.id, selected.outputId)
           : undefined
       }
       nodeLabel={{
@@ -92,7 +92,7 @@ export function GenerationNode({
                 onSelect={(outputId) => {
                   void host?.selectGenerationOutput(node.id, outputId);
                 }}
-                onPreview={onEmbeddedPreview}
+                onPreview={onFullscreenPreview}
               />
             ) : (
               <div className="canvas-generation-node__single-preview">
@@ -272,6 +272,8 @@ function previewSourceFor(
   if (output.kind === 'prompt') return undefined;
   return {
     id: `canvas-generation:${nodeId}:${output.outputId}`,
+    nodeId,
+    outputId: output.outputId,
     role:
       output.kind === 'image'
         ? 'image'

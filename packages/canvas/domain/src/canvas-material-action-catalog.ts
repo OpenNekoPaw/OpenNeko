@@ -4,6 +4,7 @@ import {
   isCanvasEntityRepresentationEvidence,
   isCanvasGenerationEvidence,
   isCanvasMaterialActionDescriptor,
+  isSafeUnavailableCanvasMaterialLocator,
   type CanvasMaterialActionDescriptor,
   type CanvasEntityRepresentationEvidence,
   type CanvasGenerationEvidence,
@@ -71,6 +72,7 @@ export function resolveCanvasMaterialActionTargets(
     }
     const locatorResult = validateContentLocator(node.data.contentLocator);
     if (!locatorResult.ok) {
+      if (isSafeUnavailableCanvasMaterialLocator(node.data.contentLocator)) return [];
       throw new Error(
         `Canvas material node "${nodeId}" requires a valid canonical ContentLocator.`,
       );

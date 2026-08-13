@@ -5,15 +5,15 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  CanvasEmbeddedPreviewOverlay,
-  resolveCanvasEmbeddedPreviewRequest,
-  type CanvasEmbeddedPreviewRequest,
+  CanvasFullscreenPreviewOverlay,
+  resolveCanvasFullscreenPreviewRequest,
+  type CanvasFullscreenPreviewRequest,
 } from './CanvasImagePreviewOverlay';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-describe('CanvasEmbeddedPreviewOverlay', () => {
+describe('CanvasFullscreenPreviewOverlay', () => {
   it('resolves the selected generated Image and its exact Job siblings as one gallery', () => {
     const node: CanvasNode = {
       id: 'generation-image',
@@ -32,7 +32,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
       },
     };
 
-    expect(resolveCanvasEmbeddedPreviewRequest(node)).toEqual({
+    expect(resolveCanvasFullscreenPreviewRequest(node)).toEqual({
       nodeId: 'generation-image',
       initialIndex: 1,
       items: [
@@ -59,7 +59,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     const video = mediaNode('video-node', 'video', 'media/clip.mp4');
     const audio = mediaNode('audio-node', 'audio', 'media/voice.mp3');
 
-    expect(resolveCanvasEmbeddedPreviewRequest(video)).toEqual(
+    expect(resolveCanvasFullscreenPreviewRequest(video)).toEqual(
       expect.objectContaining({
         nodeId: 'video-node',
         items: [
@@ -71,7 +71,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
         ],
       }),
     );
-    expect(resolveCanvasEmbeddedPreviewRequest(audio)).toEqual(
+    expect(resolveCanvasFullscreenPreviewRequest(audio)).toEqual(
       expect.objectContaining({
         nodeId: 'audio-node',
         items: [
@@ -98,7 +98,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
       },
     } as unknown as CanvasNode;
 
-    expect(resolveCanvasEmbeddedPreviewRequest(node)).toBeUndefined();
+    expect(resolveCanvasFullscreenPreviewRequest(node)).toBeUndefined();
   });
 
   it('maps a generated Prompt output to the shared text preview renderer', () => {
@@ -128,7 +128,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
       },
     };
 
-    expect(resolveCanvasEmbeddedPreviewRequest(node)).toEqual(
+    expect(resolveCanvasFullscreenPreviewRequest(node)).toEqual(
       expect.objectContaining({
         nodeId: 'generation-prompt',
         items: [expect.objectContaining({ previewKind: 'text', role: 'text' })],
@@ -140,7 +140,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     const markdown = fileNode('notes', 'notes/scene.md', 'text/markdown');
     const epub = fileNode('book', 'books/story.epub', 'application/epub+zip');
 
-    expect(resolveCanvasEmbeddedPreviewRequest(markdown)).toEqual(
+    expect(resolveCanvasFullscreenPreviewRequest(markdown)).toEqual(
       expect.objectContaining({
         nodeId: 'notes',
         items: [
@@ -152,7 +152,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
         ],
       }),
     );
-    expect(resolveCanvasEmbeddedPreviewRequest(epub)).toBeUndefined();
+    expect(resolveCanvasFullscreenPreviewRequest(epub)).toBeUndefined();
   });
 
   it('switches between Job siblings in the shared embedded Viewer and releases each lease', async () => {
@@ -165,7 +165,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     await act(async () => {
       root.render(
         <CanvasHostProvider host={host.port}>
-          <CanvasEmbeddedPreviewOverlay request={galleryRequest()} onClose={onClose} />
+          <CanvasFullscreenPreviewOverlay request={galleryRequest()} onClose={onClose} />
         </CanvasHostProvider>,
       );
     });
@@ -174,7 +174,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     expect(dialog?.dataset.imagePreviewActiveIndex).toBe('0');
     expect(dialog?.dataset.imagePreviewCount).toBe('2');
     expect(dialog?.textContent).toContain('1 / 2');
-    expect(container.querySelector('[data-preview-presentation="embedded"]')).not.toBeNull();
+    expect(container.querySelector('[data-preview-ui="lightweight"]')).not.toBeNull();
     expect(container.querySelector('img')?.getAttribute('src')).toContain('/output-1');
 
     await act(async () => {
@@ -184,7 +184,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     expect(container.querySelector('[aria-pressed="true"]')?.textContent).toContain('2');
     expect(container.querySelector('img')?.getAttribute('src')).toContain('/output-2');
     expect(host.postMessage).toHaveBeenCalledWith({
-      type: 'preview:releaseEmbedded',
+      type: 'preview:releaseResource',
       descriptorId: 'descriptor-output-1',
     });
 
@@ -195,7 +195,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
 
     await act(async () => root.unmount());
     expect(host.postMessage).toHaveBeenCalledWith({
-      type: 'preview:releaseEmbedded',
+      type: 'preview:releaseResource',
       descriptorId: 'descriptor-output-2',
     });
     container.remove();
@@ -212,12 +212,12 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     await act(async () => {
       root.render(
         <CanvasHostProvider host={host.port}>
-          <CanvasEmbeddedPreviewOverlay request={galleryRequest()} onClose={() => undefined} />
+          <CanvasFullscreenPreviewOverlay request={galleryRequest()} onClose={() => undefined} />
         </CanvasHostProvider>,
       );
     });
 
-    const stage = container.querySelector<HTMLElement>('.neko-preview-viewer--embedded-image');
+    const stage = container.querySelector<HTMLElement>('.neko-preview-viewer--image');
     const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100 });
     await act(async () => stage?.dispatchEvent(wheel));
 
@@ -238,7 +238,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     await act(async () => {
       root.render(
         <CanvasHostProvider host={host.port}>
-          <CanvasEmbeddedPreviewOverlay request={galleryRequest()} onClose={() => undefined} />
+          <CanvasFullscreenPreviewOverlay request={galleryRequest()} onClose={() => undefined} />
         </CanvasHostProvider>,
       );
     });
@@ -246,7 +246,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     await act(async () => host.resolve());
 
     expect(host.postMessage).toHaveBeenCalledWith({
-      type: 'preview:releaseEmbedded',
+      type: 'preview:releaseResource',
       descriptorId: 'descriptor-output-1',
     });
     container.remove();
@@ -261,7 +261,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
     const host = createTextPreviewHost();
-    const request = resolveCanvasEmbeddedPreviewRequest(
+    const request = resolveCanvasFullscreenPreviewRequest(
       fileNode('notes', 'notes/scene.md', 'text/markdown'),
     );
     if (!request) throw new Error('Expected an embedded text preview request.');
@@ -269,14 +269,14 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     await act(async () => {
       root.render(
         <CanvasHostProvider host={host.port}>
-          <CanvasEmbeddedPreviewOverlay request={request} onClose={() => undefined} />
+          <CanvasFullscreenPreviewOverlay request={request} onClose={() => undefined} />
         </CanvasHostProvider>,
       );
     });
     await act(async () => Promise.resolve());
 
     expect(container.querySelector('[data-preview-kind="text"]')).toBeTruthy();
-    expect(container.querySelector('[data-preview-text-reader="embedded"]')).toBeTruthy();
+    expect(container.querySelector('[data-preview-text-reader="full"]')).toBeTruthy();
     expect(container.querySelector('.canvas-image-preview-overlay__footer')).toBeNull();
 
     await act(async () => root.unmount());
@@ -285,7 +285,7 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
   });
 });
 
-function galleryRequest(): CanvasEmbeddedPreviewRequest {
+function galleryRequest(): CanvasFullscreenPreviewRequest {
   return {
     nodeId: 'generation-image',
     initialIndex: 0,
@@ -363,7 +363,7 @@ function createPreviewHost(): {
 } {
   const listeners = new Set<(message: unknown) => void>();
   const postMessage = vi.fn((message: unknown) => {
-    if (!isRecord(message) || message['type'] !== 'preview:resolveEmbedded') return;
+    if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
     const outputId = String(message['outputId']);
     const descriptor = {
       descriptorId: `descriptor-${outputId}`,
@@ -377,7 +377,7 @@ function createPreviewHost(): {
     };
     for (const listener of listeners) {
       listener({
-        type: 'preview:embeddedResolved',
+        type: 'preview:resourceResolved',
         requestId: message['requestId'],
         descriptor,
       });
@@ -403,7 +403,7 @@ function createDeferredPreviewHost(): {
   const listeners = new Set<(message: unknown) => void>();
   let pendingRequest: Record<string, unknown> | undefined;
   const postMessage = vi.fn((message: unknown) => {
-    if (!isRecord(message) || message['type'] !== 'preview:resolveEmbedded') return;
+    if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
     pendingRequest = message;
   });
   const port = {
@@ -423,7 +423,7 @@ function createDeferredPreviewHost(): {
       const outputId = String(pendingRequest['outputId']);
       for (const listener of listeners) {
         listener({
-          type: 'preview:embeddedResolved',
+          type: 'preview:resourceResolved',
           requestId: pendingRequest['requestId'],
           descriptor: {
             descriptorId: `descriptor-${outputId}`,
@@ -447,10 +447,10 @@ function createTextPreviewHost(): {
 } {
   const listeners = new Set<(message: unknown) => void>();
   const postMessage = vi.fn((message: unknown) => {
-    if (!isRecord(message) || message['type'] !== 'preview:resolveEmbedded') return;
+    if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
     for (const listener of listeners) {
       listener({
-        type: 'preview:embeddedResolved',
+        type: 'preview:resourceResolved',
         requestId: message['requestId'],
         descriptor: {
           descriptorId: 'descriptor-notes',

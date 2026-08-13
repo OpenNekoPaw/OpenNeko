@@ -1,5 +1,5 @@
 import type { PreviewMediaDescriptor } from '@neko/preview-domain';
-import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import { memo } from 'react';
 import { getLocale } from '../../../i18n';
 
@@ -23,7 +23,7 @@ function AgentPreviewCollectionComponent({ descriptors, className }: AgentPrevie
           className={imageGrid ? 'min-w-0 overflow-hidden rounded' : 'min-w-0'}
           data-agent-preview-item={descriptor.contentKind}
         >
-          <QuickPreviewSurface descriptor={descriptor} locale={getLocale()} />
+          <LightweightPreview descriptor={descriptor} locale={getLocale()} />
         </div>
       ))}
     </div>

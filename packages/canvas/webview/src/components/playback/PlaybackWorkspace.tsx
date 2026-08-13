@@ -993,6 +993,9 @@ function createPreviewSourceForUnit(unit: CanvasPlaybackUnit): PreviewSourceDesc
   if (!contentLocator) return undefined;
   return {
     id: `playback:${unit.id}`,
+    nodeId: unit.sourceNodeId,
+    outputId:
+      contentLocator.kind === 'generated-output' ? contentLocator.outputId : unit.sourceNodeId,
     role,
     title: formatPlaybackDisplayLabel(unit.label ?? unit.id),
     ...(contentLocator ? { contentLocator } : {}),

@@ -52,6 +52,7 @@ const preview: MessageBundle = {
   'preview.audio.volumeLabel': '音量：{percent}%',
   'preview.audio.skipBack': '后退 10 秒',
   'preview.audio.skipForward': '前进 10 秒',
+  'preview.audio.seek': '音频进度',
   'preview.audio.speedLabel': '播放速度',
   'preview.audio.noLyrics': '暂无歌词',
   'preview.audio.viewCover': '封面',

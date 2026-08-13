@@ -656,6 +656,42 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
+  it('does not restart material action resolution for an equivalent selection projection', async () => {
+    const node = mediaNode('video-stable-selection', 'video', 'media/clip.mp4');
+    const resolveMaterialActions = vi
+      .fn<CanvasWebviewHostPort['resolveMaterialActions']>()
+      .mockResolvedValue([descriptor('preview:open', 'Preview', 'read')]);
+    const host = { ...createMaterialHost([]), resolveMaterialActions };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = (): void =>
+      root.render(
+        <CanvasHostProvider host={host}>
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+        </CanvasHostProvider>,
+      );
+
+    await act(async () => {
+      render();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      render();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(resolveMaterialActions).toHaveBeenCalledTimes(1);
+    expect(resolveMaterialActions).toHaveBeenCalledWith([node.id]);
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it('reports exact material action execution failures instead of dropping the toolbar', async () => {
     const node = mediaNode('video-error', 'video', 'media/clip.mp4');
     const executeMaterialAction = vi.fn(async () => {

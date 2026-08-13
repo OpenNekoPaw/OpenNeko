@@ -3,32 +3,27 @@ import type { SupportedLocale } from '@neko/ui/i18n';
 import { useCallback, useEffect, useMemo, type ReactElement } from 'react';
 import { createPreviewI18nService } from '../i18n';
 import { createPreviewViewerSnapshotStore, type PreviewViewerSnapshot } from './viewer-snapshot';
-import { renderPreviewViewer, type PreviewViewerPresentation } from './viewer-kernel';
+import { renderPreviewViewer } from './viewer-kernel';
+import type { PreviewViewerControlDensity, PreviewViewerPlayback } from './viewer-kernel';
 import './style.css';
 
-export interface PreviewEmbeddedSurfaceProps {
+export interface LightweightPreviewProps {
   readonly descriptor: PreviewMediaDescriptor;
   readonly locale: SupportedLocale;
+  readonly controlDensity?: PreviewViewerControlDensity;
+  readonly mediaPlayback?: 'interactive' | 'ambient';
+  readonly playback?: PreviewViewerPlayback;
 }
 
-export type QuickPreviewSurfaceProps = PreviewEmbeddedSurfaceProps;
-export type EmbeddedPreviewSurfaceProps = PreviewEmbeddedSurfaceProps;
+export type LightweightPreviewPlayback = PreviewViewerPlayback;
 
-export function QuickPreviewSurface(props: QuickPreviewSurfaceProps): ReactElement {
-  return <PreviewEmbeddedSurface {...props} presentation="quick" />;
-}
-
-export function EmbeddedPreviewSurface(props: EmbeddedPreviewSurfaceProps): ReactElement {
-  return <PreviewEmbeddedSurface {...props} presentation="embedded" />;
-}
-
-function PreviewEmbeddedSurface({
+export function LightweightPreview({
   descriptor: inputDescriptor,
   locale,
-  presentation,
-}: PreviewEmbeddedSurfaceProps & {
-  readonly presentation: Exclude<PreviewViewerPresentation, 'main'>;
-}): ReactElement {
+  controlDensity = 'compact',
+  mediaPlayback = 'interactive',
+  playback,
+}: LightweightPreviewProps): ReactElement {
   const descriptorResult = useMemo(() => {
     try {
       return { descriptor: parsePreviewMediaDescriptor(inputDescriptor) } as const;
@@ -37,41 +32,40 @@ function PreviewEmbeddedSurface({
     }
   }, [inputDescriptor]);
   const snapshotStore = useMemo(() => createPreviewViewerSnapshotStore(), []);
-  const surfaceI18n = useMemo(() => createPreviewI18nService(locale), [locale]);
+  const previewI18n = useMemo(() => createPreviewI18nService(locale), [locale]);
   useEffect(() => () => snapshotStore.clear(), [snapshotStore]);
   const updateSnapshot = useCallback(
     (update: Partial<PreviewViewerSnapshot>) =>
       snapshotStore.update(inputDescriptor.descriptorId, update),
     [inputDescriptor.descriptorId, snapshotStore],
   );
+
   if ('error' in descriptorResult) {
     return (
-      <div
-        className="neko-preview-surface__status is-error"
-        data-preview-presentation={presentation}
-        role="alert"
-      >
+      <div className="neko-preview-surface__status is-error" role="alert">
         {descriptorResult.error}
       </div>
     );
   }
+
   const descriptor = descriptorResult.descriptor;
+  const snapshot = snapshotStore.read(descriptor.descriptorId);
   return (
     <section
-      className={`neko-preview-surface neko-preview-surface--${presentation}`}
+      className="neko-preview-surface neko-preview-surface--lightweight"
       data-preview-kind={descriptor.contentKind}
-      data-preview-presentation={presentation}
-      data-preview-presentation-owner="preview-webview"
+      data-preview-ui="lightweight"
+      data-preview-owner="preview-webview"
       aria-label={descriptor.displayName}
     >
       {renderPreviewViewer({
         descriptor,
-        presentation,
+        controlDensity,
+        mediaPlayback,
         locale,
-        i18nService: surfaceI18n,
-        ...(snapshotStore.read(descriptor.descriptorId)
-          ? { snapshot: snapshotStore.read(descriptor.descriptorId) }
-          : {}),
+        i18nService: previewI18n,
+        ...(playback ? { playback } : {}),
+        ...(snapshot ? { snapshot } : {}),
         onSnapshotChange: updateSnapshot,
       })}
     </section>

@@ -10,8 +10,8 @@ import {
   type PreviewRuntimeIdentity,
 } from '@neko/preview-domain';
 import type { AuthorizedPreviewSessionRuntime } from '@neko/preview-domain/authorized-session';
-import { AuthorizedPreviewRoot, PreviewRoot } from './index';
-import { EmbeddedPreviewSurface, QuickPreviewSurface } from './embedded-preview';
+import { AuthorizedPreviewRoot, PreviewPresentation, PreviewRoot } from './index';
+import { LightweightPreview } from './lightweight-preview';
 import { getRegisteredPreviewContentKinds } from './viewer-kernel';
 import { PreviewViewerSnapshotProvider } from './viewer-snapshot-context';
 import { createPreviewViewerSnapshotStore } from './viewer-snapshot';
@@ -459,7 +459,7 @@ describe('PreviewRoot', () => {
     await act(async () => {
       root.render(
         withPreviewSnapshots(
-          <QuickPreviewSurface
+          <LightweightPreview
             locale="en"
             descriptor={{
               descriptorId: 'descriptor-image-hover',
@@ -480,10 +480,10 @@ describe('PreviewRoot', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
       'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
-    expect(container.querySelector('.neko-preview-surface--quick')).toBeTruthy();
+    expect(container.querySelector('.neko-preview-surface--lightweight')).toBeTruthy();
   });
 
-  it('keeps native compact video and audio paused by default and pauses them on unmount', async () => {
+  it('keeps compact video and audio paused by default and pauses them on unmount', async () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, 'play')
       .mockImplementation(async () => undefined);
@@ -494,7 +494,7 @@ describe('PreviewRoot', () => {
     await act(async () => {
       root.render(
         withPreviewSnapshots(
-          <QuickPreviewSurface
+          <LightweightPreview
             locale="en"
             descriptor={{
               descriptorId: 'descriptor-video-hover',
@@ -514,12 +514,13 @@ describe('PreviewRoot', () => {
     const video = container.querySelector('video');
     expect(video?.autoplay).toBe(false);
     expect(video?.preload).toBe('metadata');
+    expect(video?.controls).toBe(true);
     expect(play).not.toHaveBeenCalled();
 
     await act(async () => {
       root.render(
         withPreviewSnapshots(
-          <QuickPreviewSurface
+          <LightweightPreview
             locale="en"
             descriptor={{
               descriptorId: 'descriptor-audio-hover',
@@ -535,21 +536,390 @@ describe('PreviewRoot', () => {
         ),
       );
     });
-    expect(container.querySelector('audio')).toBeTruthy();
-    expect(container.querySelector('audio')?.autoplay).toBe(false);
+    const audio = container.querySelector('audio');
+    expect(audio).toBeTruthy();
+    expect(audio?.autoplay).toBe(false);
+    expect(audio?.controls).toBe(false);
+    expect(
+      container.querySelector('[data-testid="preview-lightweight-audio-waveform"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-testid="preview-lightweight-audio-toggle-playback"]'),
+    ).toBeTruthy();
     expect(play).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
     expect(pause).toHaveBeenCalled();
   });
 
-  it('keeps Embedded Preview state local and renders Canvas-style immersive image controls', async () => {
+  it('keeps native compact video usable when play is rejected without a media source error', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue(
+      new DOMException('User gesture required.', 'NotAllowedError'),
+    );
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <EmbeddedPreviewSurface
+        <LightweightPreview
+          locale="zh-cn"
+          descriptor={{
+            descriptorId: 'descriptor-video-play-rejected',
+            sourceFingerprint: 'fingerprint-video-play-rejected',
+            contentLocator: previewContentLocator,
+            url: 'openneko://resource/abababababababababababababababab',
+            contentKind: 'video',
+            mediaType: 'video/mp4',
+            displayName: 'play-rejected.mp4',
+            byteLength: 42,
+          }}
+          playback={{ requestId: 'play-rejected', state: 'playing' }}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('video')?.controls).toBe(true);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('uses ambient parameters for direct Resource Browser video playback', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(async () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          mediaPlayback="ambient"
+          descriptor={{
+            descriptorId: 'descriptor-video-ambient',
+            sourceFingerprint: 'fingerprint-video-ambient',
+            contentLocator: previewContentLocator,
+            url: 'openneko://resource/12121212121212121212121212121212',
+            contentKind: 'video',
+            mediaType: 'video/mp4',
+            displayName: 'ambient.mp4',
+            byteLength: 42,
+          }}
+        />,
+      );
+      await import('../video/VideoPlayer');
+    });
+
+    const video = container.querySelector('video');
+    expect(video?.autoplay).toBe(true);
+    expect(video?.muted).toBe(true);
+    expect(video?.loop).toBe(true);
+    expect(video?.controls).toBe(false);
+    expect(play).toHaveBeenCalledOnce();
+  });
+
+  it('plays Resource Browser audio without rendering a thumbnail or playback controls', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(async () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const onInteraction = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          mediaPlayback="ambient"
+          descriptor={{
+            descriptorId: 'descriptor-audio-ambient',
+            sourceFingerprint: 'fingerprint-audio-ambient',
+            contentLocator: previewContentLocator,
+            url: 'openneko://resource/23232323232323232323232323232323',
+            contentKind: 'audio',
+            mediaType: 'audio/aac',
+            displayName: 'ambient.aac',
+            byteLength: 42,
+          }}
+          playback={{ onInteraction }}
+        />,
+      );
+      await import('../audio/AudioPlayer');
+    });
+
+    const audio = container.querySelector('audio');
+    expect(audio?.autoplay).toBe(true);
+    expect(audio?.controls).toBe(false);
+    expect(
+      container.querySelector('[data-testid="preview-lightweight-audio-waveform"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="preview-lightweight-audio-toggle-playback"]'),
+    ).toBeNull();
+    expect(container.textContent).not.toContain('ambient.aac');
+    expect(play).toHaveBeenCalledOnce();
+    audio?.dispatchEvent(new Event('play', { bubbles: true }));
+    expect(onInteraction).not.toHaveBeenCalled();
+  });
+
+  it('does not project controlled Canvas playback events as manual interaction', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const onInteraction = vi.fn();
+    const descriptor = {
+      descriptorId: 'descriptor-canvas-hover-video',
+      sourceFingerprint: 'fingerprint-canvas-hover-video',
+      contentLocator: previewContentLocator,
+      url: 'openneko://resource/45454545454545454545454545454545',
+      contentKind: 'video' as const,
+      mediaType: 'video/mp4',
+      displayName: 'hover.mp4',
+      byteLength: 42,
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={descriptor}
+          playback={{ requestId: 'hover-enter', state: 'playing', onInteraction }}
+        />,
+      );
+      await import('../video/VideoPlayer');
+    });
+
+    const video = container.querySelector('video');
+    expect(video).not.toBeNull();
+    video?.dispatchEvent(new Event('play', { bubbles: true }));
+    expect(onInteraction).not.toHaveBeenCalled();
+
+    Object.defineProperty(video, 'paused', { configurable: true, value: false });
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={descriptor}
+          playback={{ requestId: 'hover-leave', state: 'stopped', onInteraction }}
+        />,
+      );
+    });
+    video?.dispatchEvent(new Event('pause', { bubbles: true }));
+    expect(onInteraction).not.toHaveBeenCalled();
+
+    video?.dispatchEvent(new Event('play', { bubbles: true }));
+    expect(onInteraction).toHaveBeenCalledWith('playing', 0);
+  });
+
+  it('keeps a newer Canvas hover-leave pause authoritative over a pending play', async () => {
+    let resolvePlay: (() => void) | undefined;
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePlay = resolve;
+        }),
+    );
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const onInteraction = vi.fn();
+    const descriptor = {
+      descriptorId: 'descriptor-canvas-hover-race',
+      sourceFingerprint: 'fingerprint-canvas-hover-race',
+      contentLocator: previewContentLocator,
+      url: 'openneko://resource/67676767676767676767676767676767',
+      contentKind: 'video' as const,
+      mediaType: 'video/mp4',
+      displayName: 'hover-race.mp4',
+      byteLength: 42,
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={descriptor}
+          playback={{ requestId: 'hover-enter-race', state: 'playing', onInteraction }}
+        />,
+      );
+      await import('../video/VideoPlayer');
+    });
+    expect(play).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={descriptor}
+          playback={{ requestId: 'hover-leave-race', state: 'stopped', onInteraction }}
+        />,
+      );
+    });
+    const video = container.querySelector('video');
+    Object.defineProperty(video, 'paused', { configurable: true, value: false });
+    video?.dispatchEvent(new Event('play', { bubbles: true }));
+    await act(async () => resolvePlay?.());
+    expect(pause).toHaveBeenCalled();
+    expect(onInteraction).not.toHaveBeenCalled();
+  });
+
+  it('does not pause shared video or audio when caller projection callbacks rerender', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async () => undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const videoDescriptor = {
+      descriptorId: 'descriptor-video-projection-rerender',
+      sourceFingerprint: 'fingerprint-video-projection-rerender',
+      contentLocator: previewContentLocator,
+      url: 'openneko://resource/34343434343434343434343434343434',
+      contentKind: 'video' as const,
+      mediaType: 'video/mp4',
+      displayName: 'stable.mp4',
+      byteLength: 42,
+    };
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={videoDescriptor}
+          playback={{ requestId: 'video-play', state: 'playing', onTimeUpdate: () => undefined }}
+        />,
+      );
+      await import('../video/VideoPlayer');
+    });
+    pause.mockClear();
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={videoDescriptor}
+          playback={{ requestId: 'video-play', state: 'playing', onTimeUpdate: () => undefined }}
+        />,
+      );
+    });
+    expect(pause).not.toHaveBeenCalled();
+
+    const audioDescriptor = {
+      ...videoDescriptor,
+      descriptorId: 'descriptor-audio-projection-rerender',
+      sourceFingerprint: 'fingerprint-audio-projection-rerender',
+      url: 'openneko://resource/56565656565656565656565656565656',
+      contentKind: 'audio' as const,
+      mediaType: 'audio/mpeg',
+      displayName: 'stable.mp3',
+    };
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={audioDescriptor}
+          playback={{ requestId: 'audio-play', state: 'playing', onTimeUpdate: () => undefined }}
+        />,
+      );
+      await import('../audio/AudioPlayer');
+    });
+    pause.mockClear();
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={audioDescriptor}
+          playback={{ requestId: 'audio-play', state: 'playing', onTimeUpdate: () => undefined }}
+        />,
+      );
+    });
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  it('uses the same media element implementation for Main and Lightweight Preview', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const descriptor = {
+      descriptorId: 'descriptor-shared-webm',
+      sourceFingerprint: 'fingerprint-shared-webm',
+      contentLocator: previewContentLocator,
+      url: 'openneko://resource/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+      contentKind: 'video' as const,
+      mediaType: 'video/webm',
+      displayName: 'shared.webm',
+      byteLength: 42,
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <>
+          <LightweightPreview locale="en" descriptor={descriptor} />
+          {withPreviewSnapshots(<PreviewPresentation locale="en" descriptor={descriptor} />)}
+        </>,
+      );
+      await import('../video/VideoPlayer');
+    });
+
+    const videos = [...container.querySelectorAll('video')];
+    expect(videos).toHaveLength(2);
+    expect(videos.map((video) => video.src)).toEqual([descriptor.url, descriptor.url]);
+    expect(videos.map((video) => video.className)).toEqual([
+      'max-w-full max-h-full object-contain',
+      'max-w-full max-h-full object-contain',
+    ]);
+    expect(videos[0]?.controls).toBe(true);
+    expect(videos[1]?.controls).toBe(false);
+  });
+
+  it('uses controlled playback parameters without changing the native media path', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(async () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={{
+            descriptorId: 'descriptor-controlled-video',
+            sourceFingerprint: 'fingerprint-controlled-video',
+            contentLocator: previewContentLocator,
+            url: 'openneko://resource/ffffffffffffffffffffffffffffffff',
+            contentKind: 'video',
+            mediaType: 'video/webm',
+            displayName: 'controlled.webm',
+            byteLength: 42,
+          }}
+          playback={{ requestId: 'play-1', state: 'playing', startTimeSeconds: 1.5 }}
+        />,
+      );
+      await import('../video/VideoPlayer');
+    });
+
+    expect(container.querySelector('video')?.currentTime).toBe(1.5);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Lightweight Preview state local without introducing a fullscreen viewer mode', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <LightweightPreview
           locale="zh-cn"
           descriptor={{
             descriptorId: 'descriptor-embedded-image',
@@ -564,37 +934,15 @@ describe('PreviewRoot', () => {
         />,
       );
     });
-    expect(container.querySelector('[data-preview-presentation="embedded"]')).toBeTruthy();
-    expect(container.querySelector('[aria-label="图片缩放"]')).toBeTruthy();
+    expect(container.querySelector('[data-preview-ui="lightweight"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="图片缩放"]')).toBeNull();
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
       'openneko://resource/dddddddddddddddddddddddddddddddd',
     );
-  });
-
-  it('isolates Embedded Preview zoom snapshots by descriptor while one Surface remains mounted', async () => {
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-    const renderDescriptor = async (descriptorId: string, token: string): Promise<void> => {
-      await act(async () => {
-        root.render(
-          <EmbeddedPreviewSurface
-            locale="en"
-            descriptor={embeddedImageDescriptor(descriptorId, token)}
-          />,
-        );
-      });
-    };
-    await renderDescriptor('embedded-a', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
-    const zoomIn = container.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]');
-    if (!zoomIn) throw new Error('Embedded zoom control is required.');
-    await act(async () => zoomIn.click());
-    expect(container.querySelector('output')?.textContent).toBe('120%');
-
-    await renderDescriptor('embedded-b', 'ffffffffffffffffffffffffffffffff');
-    expect(container.querySelector('output')?.textContent).toBe('100%');
-    await renderDescriptor('embedded-a', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
-    expect(container.querySelector('output')?.textContent).toBe('120%');
+    expect(rootStyles).toMatch(
+      /\.neko-preview-viewer--image\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/u,
+    );
+    expect(rootStyles).not.toMatch(/\.neko-preview-viewer--image[^}]*margin:/u);
   });
 
   it('keeps concurrent Surface locales isolated', async () => {
@@ -605,26 +953,26 @@ describe('PreviewRoot', () => {
     const chineseRoot = createRoot(chineseContainer);
     await act(async () => {
       englishRoot.render(
-        <EmbeddedPreviewSurface
+        <LightweightPreview
           locale="en"
-          descriptor={embeddedImageDescriptor(
+          descriptor={lightweightImageDescriptor(
             'embedded-locale-en',
             'gggggggggggggggggggggggggggggggg',
           )}
         />,
       );
       chineseRoot.render(
-        <EmbeddedPreviewSurface
+        <LightweightPreview
           locale="zh-cn"
-          descriptor={embeddedImageDescriptor(
+          descriptor={lightweightImageDescriptor(
             'embedded-locale-zh',
             'hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh',
           )}
         />,
       );
     });
-    expect(englishContainer.querySelector('[aria-label="Image zoom"]')).toBeTruthy();
-    expect(chineseContainer.querySelector('[aria-label="图片缩放"]')).toBeTruthy();
+    expect(englishContainer.querySelector('[aria-label="embedded-locale-en.png"]')).toBeTruthy();
+    expect(chineseContainer.querySelector('[aria-label="embedded-locale-zh.png"]')).toBeTruthy();
   });
 
   it('renders embedded text in a Preview-owned readable page with local error chrome', async () => {
@@ -634,18 +982,18 @@ describe('PreviewRoot', () => {
     document.body.append(container);
     const root = createRoot(container);
     const descriptor = {
-      ...embeddedImageDescriptor('embedded-text', 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk'),
+      ...lightweightImageDescriptor('lightweight-text', 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk'),
       contentKind: 'text' as const,
       mediaType: 'text/markdown',
       displayName: 'notes.md',
     };
 
     await act(async () => {
-      root.render(<EmbeddedPreviewSurface locale="en" descriptor={descriptor} />);
+      root.render(<LightweightPreview locale="en" descriptor={descriptor} />);
     });
     await act(async () => Promise.resolve());
 
-    expect(container.querySelector('[data-preview-text-reader="embedded"]')).toBeTruthy();
+    expect(container.querySelector('[data-preview-text-reader="compact"]')).toBeTruthy();
     expect(container.querySelector('.neko-preview-text-reader__page')).toBeTruthy();
     expect(container.querySelector('[data-markdown-document="ready"]')?.textContent).toContain(
       'Readable body',
@@ -657,7 +1005,7 @@ describe('PreviewRoot', () => {
     fetch.mockRejectedValueOnce(new Error('transport unavailable'));
     await act(async () => {
       root.render(
-        <EmbeddedPreviewSurface
+        <LightweightPreview
           locale="en"
           descriptor={{ ...descriptor, descriptorId: 'embedded-text-error' }}
         />,
@@ -669,18 +1017,18 @@ describe('PreviewRoot', () => {
     );
   });
 
-  it('rejects arbitrary transport URLs locally and does not fetch full text in Quick Preview', async () => {
-    const fetch = vi.fn();
+  it('rejects arbitrary transport URLs locally and uses the shared text Viewer', async () => {
+    const fetch = vi.fn(async () => new Response('shared text', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <QuickPreviewSurface
+        <LightweightPreview
           locale="en"
           descriptor={{
-            ...embeddedImageDescriptor('invalid-transport', 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii'),
+            ...lightweightImageDescriptor('invalid-transport', 'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii'),
             url: 'https://example.com/shot.png',
           }}
         />,
@@ -692,10 +1040,10 @@ describe('PreviewRoot', () => {
 
     await act(async () => {
       root.render(
-        <QuickPreviewSurface
+        <LightweightPreview
           locale="en"
           descriptor={{
-            ...embeddedImageDescriptor('quick-text', 'jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj'),
+            ...lightweightImageDescriptor('lightweight-text', 'jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj'),
             contentKind: 'text',
             mediaType: 'text/markdown',
             displayName: 'notes.md',
@@ -703,14 +1051,15 @@ describe('PreviewRoot', () => {
         />,
       );
     });
-    expect(fetch).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'does not read the complete file',
+    await act(async () => Promise.resolve());
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.neko-preview-text-reader')?.textContent).toContain(
+      'shared text',
     );
   });
 });
 
-function embeddedImageDescriptor(descriptorId: string, token: string) {
+function lightweightImageDescriptor(descriptorId: string, token: string) {
   return {
     descriptorId,
     sourceFingerprint: `fingerprint-${descriptorId}`,

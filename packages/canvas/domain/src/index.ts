@@ -6,7 +6,6 @@ export * from './canvas-node-sizing';
 export * from './canvas-drop';
 export * from './canvas-markdown-capabilities';
 export * from './canvas-text-file-preview';
-export * from './canvas-media-host-contract';
 export * from './canvas-projection';
 export * from './canvas-semantic-storyboard';
 export * from './types/index';

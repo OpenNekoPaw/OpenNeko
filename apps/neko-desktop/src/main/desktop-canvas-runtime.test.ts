@@ -291,7 +291,7 @@ describe('DesktopCanvasRuntime', () => {
         identity,
         selectedNodeIds: ['unavailable-cover'],
       }),
-    ).rejects.toThrow('requires a valid canonical ContentLocator');
+    ).resolves.toMatchObject({ descriptors: [] });
     expect(previewResource).not.toHaveBeenCalled();
 
     const saved = await runtime.executeIntent(
@@ -1649,7 +1649,7 @@ describe('DesktopCanvasRuntime', () => {
   });
 
   it('authorizes and releases embedded Preview leases for exact Canvas outputs fail-locally', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-embedded-preview-'));
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-preview-'));
     roots.push(workspacePath);
     const identity = createIdentity();
     const firstLocator = {
@@ -1703,6 +1703,21 @@ describe('DesktopCanvasRuntime', () => {
       }),
     );
     const releases = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+    let grantAvailable = true;
+    const resolveCanvasViewGrant = vi.fn(async (): Promise<DesktopCanvasViewGrant> => {
+      if (!grantAvailable) {
+        throw new Error('Desktop Canvas View identity is not granted by the active Workbench.');
+      }
+      return {
+        identity,
+        workspace: {
+          workspaceId: 'workspace-1',
+          workspacePath,
+          displayName: 'Fixture',
+          locator: { kind: 'relative', value: '.' },
+        },
+      };
+    });
     let registrationIndex = 0;
     const registerPreviewResource = vi.fn(
       async ({ locator }: { readonly locator: ContentLocator }) => {
@@ -1717,11 +1732,16 @@ describe('DesktopCanvasRuntime', () => {
         };
       },
     );
-    const runtime = createRuntime(workspacePath, identity, registerPreviewResource);
+    const runtime = createRuntime(
+      workspacePath,
+      identity,
+      registerPreviewResource,
+      resolveCanvasViewGrant,
+    );
     await runtime.getSnapshot('window-1', identity);
 
     await expect(
-      runtime.resolveEmbeddedPreview('window-1', {
+      runtime.resolvePreviewResource('window-1', {
         identity,
         requestId: 'embedded-invalid',
         nodeId: 'generation-1',
@@ -1734,7 +1754,7 @@ describe('DesktopCanvasRuntime', () => {
     ).rejects.toThrow('output "output-1" is stale');
     expect(registerPreviewResource).not.toHaveBeenCalled();
 
-    const first = await runtime.resolveEmbeddedPreview('window-1', {
+    const first = await runtime.resolvePreviewResource('window-1', {
       identity,
       requestId: 'embedded-1',
       nodeId: 'generation-1',
@@ -1750,15 +1770,15 @@ describe('DesktopCanvasRuntime', () => {
       url: expect.stringMatching(/^openneko:\/\/resource\//u),
     });
     expect(registerPreviewResource).toHaveBeenLastCalledWith(
-      expect.objectContaining({ purpose: 'embedded-source' }),
+      expect.objectContaining({ purpose: 'viewer-source' }),
     );
-    await runtime.releaseEmbeddedPreview('window-1', {
+    await runtime.releasePreviewResource('window-1', {
       identity,
       descriptorId: first.descriptor.descriptorId,
     });
     expect(releases[0]).toHaveBeenCalledOnce();
 
-    const staleMount = await runtime.resolveEmbeddedPreview('window-1', {
+    const staleMount = await runtime.resolvePreviewResource('window-1', {
       identity,
       requestId: 'embedded-remount-stale',
       nodeId: 'generation-1',
@@ -1768,7 +1788,7 @@ describe('DesktopCanvasRuntime', () => {
       mediaType: 'image/png',
       displayName: 'Output 1',
     });
-    const activeMount = await runtime.resolveEmbeddedPreview('window-1', {
+    const activeMount = await runtime.resolvePreviewResource('window-1', {
       identity,
       requestId: 'embedded-remount-active',
       nodeId: 'generation-1',
@@ -1779,22 +1799,57 @@ describe('DesktopCanvasRuntime', () => {
       displayName: 'Output 1',
     });
     expect(staleMount.descriptor.descriptorId).not.toBe(activeMount.descriptor.descriptorId);
-    await runtime.releaseEmbeddedPreview('window-1', {
+    await runtime.releasePreviewResource('window-1', {
       identity,
       descriptorId: staleMount.descriptor.descriptorId,
     });
     expect(releases[1]).toHaveBeenCalledOnce();
     expect(releases[2]).not.toHaveBeenCalled();
-    await runtime.releaseEmbeddedPreview('window-1', {
+    await runtime.releasePreviewResource('window-1', {
       identity,
       descriptorId: activeMount.descriptor.descriptorId,
     });
     expect(releases[2]).toHaveBeenCalledOnce();
 
+    const detachedMount = await runtime.resolvePreviewResource('window-1', {
+      identity,
+      requestId: 'embedded-2',
+      nodeId: 'generation-1',
+      outputId: 'output-2',
+      locator: secondLocator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      displayName: 'Output 2',
+    });
+    expect(detachedMount).toMatchObject({ descriptor: { contentLocator: secondLocator } });
+    expect(registerPreviewResource).toHaveBeenCalledTimes(4);
+
+    grantAvailable = false;
     await expect(
-      runtime.resolveEmbeddedPreview('window-1', {
+      runtime.releasePreviewResource('window-2', {
         identity,
-        requestId: 'embedded-2',
+        descriptorId: detachedMount.descriptor.descriptorId,
+      }),
+    ).rejects.toThrow('Window identity does not match the sender');
+    expect(releases[3]).not.toHaveBeenCalled();
+    await expect(
+      runtime.releasePreviewResource('window-1', {
+        identity,
+        descriptorId: detachedMount.descriptor.descriptorId,
+      }),
+    ).resolves.toBeUndefined();
+    expect(releases[3]).toHaveBeenCalledOnce();
+    await expect(
+      runtime.releasePreviewResource('window-1', {
+        identity,
+        descriptorId: detachedMount.descriptor.descriptorId,
+      }),
+    ).resolves.toBeUndefined();
+    expect(releases[3]).toHaveBeenCalledOnce();
+    await expect(
+      runtime.resolvePreviewResource('window-1', {
+        identity,
+        requestId: 'embedded-after-detach',
         nodeId: 'generation-1',
         outputId: 'output-2',
         locator: secondLocator,
@@ -1802,82 +1857,7 @@ describe('DesktopCanvasRuntime', () => {
         mediaType: 'image/png',
         displayName: 'Output 2',
       }),
-    ).resolves.toMatchObject({ descriptor: { contentLocator: secondLocator } });
-    expect(registerPreviewResource).toHaveBeenCalledTimes(4);
-  });
-
-  it('routes package media requests through the owner-bound Canvas session workspace', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-media-route-'));
-    roots.push(workspacePath);
-    await writeFixtureFile(workspacePath, 'media/test.aac', 'audio');
-    const identity = createIdentity();
-    const execute = vi.fn(async () => ({
-      type: 'media:probeResult' as const,
-      nodeId: 'audio-1',
-      mediaInfo: {
-        duration: 12,
-        width: 0,
-        height: 0,
-        fps: 0,
-        codec: 'aac',
-        format: 'aac',
-        hasAudio: true,
-      },
-    }));
-    const media = {
-      execute,
-      detachWindow: vi.fn(),
-      detachView: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    };
-    const runtime = new DesktopCanvasRuntime({
-      shell: {
-        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
-          identity,
-          workspace: {
-            workspaceId: 'workspace-1',
-            workspacePath,
-            displayName: 'Fixture',
-            locator: { kind: 'relative', value: '.' },
-          },
-        })),
-      },
-      host: createElectronNekoHostPorts({
-        homedir: workspacePath,
-        nekoHome: path.join(workspacePath, '.neko-home'),
-        workspaceRoot: workspacePath,
-        logger: new ConsoleLogger('DesktopCanvasMediaRouteTest'),
-      }),
-      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
-      media,
-    });
-
-    await runtime.getSnapshot('window-1', identity);
-    await expect(
-      runtime.executeMediaRequest('window-1', {
-        identity,
-        type: 'media:probe',
-        nodeId: 'audio-1',
-        locator: { kind: 'workspace-file', path: 'media/test.aac' },
-        mediaType: 'audio',
-      }),
-    ).resolves.toMatchObject({
-      type: 'media:probeResult',
-      nodeId: 'audio-1',
-      mediaInfo: { codec: 'aac' },
-    });
-    expect(execute).toHaveBeenCalledWith(
-      expect.objectContaining({ identity, nodeId: 'audio-1', type: 'media:probe' }),
-      expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
-    );
-
-    runtime.reconcileWindow('window-1', [createDefaultDesktopWorkbenchLayout('window-1')]);
-    expect(media.detachView).toHaveBeenCalledWith('window-1', identity.viewId);
-
-    runtime.detachWindow('window-1');
-    expect(media.detachWindow).toHaveBeenCalledWith('window-1');
-    await runtime.dispose();
-    expect(media.dispose).toHaveBeenCalledOnce();
+    ).rejects.toThrow('not granted by the active Workbench');
   });
 
   it('reconciles all retained Workbenches before disposing only an absent Canvas session', async () => {
@@ -1905,7 +1885,6 @@ describe('DesktopCanvasRuntime', () => {
         }),
       );
     }
-    const detachView = vi.fn();
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (_windowId, identity) => ({
@@ -1925,14 +1904,6 @@ describe('DesktopCanvasRuntime', () => {
         logger: new ConsoleLogger('DesktopCanvasMultiWorkbenchTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
-      media: {
-        execute: vi.fn(async () => {
-          throw new Error('Media execution is not expected.');
-        }),
-        detachWindow: vi.fn(),
-        detachView,
-        dispose: vi.fn(async () => undefined),
-      },
     });
     await runtime.getSnapshot('window-1', firstIdentity);
     await runtime.getSnapshot('window-1', secondIdentity);
@@ -1951,11 +1922,10 @@ describe('DesktopCanvasRuntime', () => {
     const secondLayout = layoutFor(secondIdentity);
 
     runtime.reconcileWindow('window-1', [firstLayout, secondLayout]);
-    expect(detachView).not.toHaveBeenCalled();
-
     runtime.reconcileWindow('window-1', [secondLayout]);
-    expect(detachView).toHaveBeenCalledOnce();
-    expect(detachView).toHaveBeenCalledWith('window-1', firstIdentity.viewId);
+    await expect(runtime.getSnapshot('window-1', secondIdentity)).resolves.toMatchObject({
+      identity: secondIdentity,
+    });
 
     await runtime.dispose();
   });
@@ -2657,7 +2627,7 @@ function createRuntime(
     readonly identity: CanvasHostRuntimeIdentity;
     readonly workspace: DesktopCanvasViewGrant['workspace'];
     readonly locator: import('@neko/content').ContentLocator;
-    readonly purpose: 'inline-variant' | 'embedded-source';
+    readonly purpose: 'inline-variant' | 'viewer-source';
     readonly mediaType?: string;
   }) => Promise<{
     readonly url: string;
@@ -2666,18 +2636,22 @@ function createRuntime(
     readonly mediaType: string;
     release(): void;
   }>,
+  resolveCanvasViewGrant: (
+    windowId: string,
+    identity: CanvasHostRuntimeIdentity,
+  ) => Promise<DesktopCanvasViewGrant> = async () => ({
+    identity,
+    workspace: {
+      workspaceId: 'workspace-1',
+      workspacePath,
+      displayName: 'Fixture',
+      locator: { kind: 'relative', value: '.' },
+    },
+  }),
 ): DesktopCanvasRuntime {
   return new DesktopCanvasRuntime({
     shell: {
-      resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
-        identity,
-        workspace: {
-          workspaceId: 'workspace-1',
-          workspacePath,
-          displayName: 'Fixture',
-          locator: { kind: 'relative', value: '.' },
-        },
-      })),
+      resolveCanvasViewGrant: vi.fn(resolveCanvasViewGrant),
     },
     host: createElectronNekoHostPorts({
       homedir: workspacePath,

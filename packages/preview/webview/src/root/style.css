@@ -233,10 +233,163 @@
   background: transparent;
 }
 
-.neko-preview-viewer--image,
-.neko-preview-viewer--embedded-image {
+.neko-preview-lightweight-audio {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--node-fg, var(--neko-fg, #1f2523));
+  background: var(--node-surface, transparent);
+}
+
+.neko-preview-lightweight-audio__element {
+  display: none;
+}
+
+.neko-preview-lightweight-audio__player {
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 2px 10px 8px;
+}
+
+.neko-preview-lightweight-audio__waveform {
+  position: relative;
+  min-height: 34px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: color-mix(
+    in srgb,
+    var(--node-fg, var(--neko-fg, #1f2523)) 5%,
+    var(--node-surface, transparent)
+  );
+}
+
+.neko-preview-lightweight-audio__bars {
+  position: absolute;
+  inset: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.neko-preview-lightweight-audio__bar {
+  width: 2px;
+  min-height: 3px;
+  flex: 1 1 0;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--node-fg-secondary, var(--neko-muted, #6e7773)) 54%,
+    transparent
+  );
+}
+
+.neko-preview-lightweight-audio__playhead {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  transform: translateX(-1px);
+  border-radius: 999px;
+  background: var(--node-selected, var(--neko-accent, #3b8c73));
+  pointer-events: none;
+}
+
+.neko-preview-lightweight-audio__seek {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.neko-preview-lightweight-audio__seek:disabled {
+  cursor: default;
+}
+
+.neko-preview-lightweight-audio__error {
+  position: absolute;
+  inset: auto 8px 6px;
+  overflow: hidden;
+  color: var(--neko-error-fg, #a23b35);
+  font-size: 11px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neko-preview-lightweight-audio__controls {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.neko-preview-lightweight-audio__time {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--node-fg-secondary, var(--neko-muted, #6e7773));
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neko-preview-lightweight-audio__button {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--node-fg, var(--neko-fg, #1f2523));
+  background: transparent;
+  cursor: pointer;
+}
+
+.neko-preview-lightweight-audio__button:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.neko-preview-lightweight-audio__button:focus-visible {
+  outline: 2px solid var(--node-selected, var(--neko-accent, #3b8c73));
+  outline-offset: 1px;
+}
+
+.neko-preview-lightweight-audio__button.is-primary {
+  grid-column: 2;
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  background: var(--node-selected, var(--neko-accent, #3b8c73));
+}
+
+.neko-preview-lightweight-audio__button.is-primary:hover {
+  background: color-mix(in srgb, var(--node-selected, var(--neko-accent, #3b8c73)) 86%, white 14%);
+}
+
+.neko-preview-lightweight-audio__button.is-volume {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.neko-preview-viewer--image {
   position: relative;
   display: grid;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   place-items: center;
@@ -245,8 +398,7 @@
   touch-action: none;
 }
 
-.neko-preview-viewer--image > img,
-.neko-preview-viewer--embedded-image > img {
+.neko-preview-viewer--image > img {
   display: block;
   max-width: 100%;
   max-height: 100%;
@@ -255,24 +407,8 @@
   user-select: none;
 }
 
-.neko-preview-viewer--embedded-image > img {
+.neko-preview-viewer--image > img {
   will-change: transform;
-}
-
-.neko-preview-viewer--native-media {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: var(--neko-preview-video-field, #101211);
-}
-
-.neko-preview-viewer--native-audio {
-  display: block;
-  box-sizing: border-box;
-  width: min(520px, calc(100% - 24px));
-  height: 48px;
-  margin: auto;
 }
 
 .neko-preview-viewer__status,

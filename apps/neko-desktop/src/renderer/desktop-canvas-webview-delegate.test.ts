@@ -58,60 +58,20 @@ describe('Desktop Canvas Webview delegate', () => {
     });
   });
 
-  it('routes the package-owned media preview protocol through the owner-bound Desktop bridge', async () => {
-    const executeMediaRequest = vi.fn(async () => ({
-      type: 'media:probeResult',
-      nodeId: 'audio-1',
-      mediaInfo: {
-        duration: 12,
-        width: 0,
-        height: 0,
-        fps: 0,
-        codec: 'aac',
-        format: 'aac',
-        hasAudio: true,
-      },
-    }));
-    vi.stubGlobal('openNekoDesktop', {
-      canvas: {
-        resolvePreviewVariant: vi.fn(),
-        executeMediaRequest,
-      },
-    });
+  it('does not expose the retired Canvas media preparation protocol', () => {
+    vi.stubGlobal('openNekoDesktop', { canvas: {} });
     const delegate = createDesktopCanvasWebviewDelegate(identity);
-    const message = vi.fn();
-    delegate.subscribe(message);
 
-    expect(delegate.supportsMessage('media:probe')).toBe(true);
-    expect(delegate.supportsMessage('media:play')).toBe(true);
-    expect(delegate.supportsMessage('media:captureFrame')).toBe(true);
-    expect(delegate.supportsMessage('media:stop')).toBe(true);
-
-    delegate.postMessage({
-      type: 'media:probe',
-      nodeId: 'audio-1',
-      locator: { kind: 'workspace-file', path: 'media/test.aac' },
-      mediaType: 'audio',
-    });
-
-    await vi.waitFor(() => expect(message).toHaveBeenCalled());
-    expect(executeMediaRequest).toHaveBeenCalledWith({
-      identity,
-      type: 'media:probe',
-      nodeId: 'audio-1',
-      locator: { kind: 'workspace-file', path: 'media/test.aac' },
-      mediaType: 'audio',
-    });
-    expect(message.mock.calls.at(-1)?.[0]).toMatchObject({
-      type: 'media:probeResult',
-      nodeId: 'audio-1',
-      mediaInfo: { codec: 'aac', hasAudio: true },
-    });
+    expect(delegate.supportsMessage('media:probe')).toBe(false);
+    expect(delegate.supportsMessage('media:play')).toBe(false);
+    expect(delegate.supportsMessage('media:captureFrame')).toBe(false);
+    expect(delegate.supportsMessage('media:stop')).toBe(false);
+    expect(() => delegate.postMessage({ type: 'media:probe' })).toThrow('unsupported message');
   });
 
   it('resolves and releases an embedded Preview descriptor through the exact Canvas owner', async () => {
     const descriptor = {
-      descriptorId: 'canvas-embedded-session-1-output-1',
+      descriptorId: 'canvas-preview-session-1-output-1',
       sourceFingerprint: 'sha256-output-1',
       contentLocator: {
         kind: 'generated-output' as const,
@@ -125,20 +85,20 @@ describe('Desktop Canvas Webview delegate', () => {
       displayName: 'Output 1',
       byteLength: 42,
     };
-    const resolveEmbeddedPreview = vi.fn(async (request) => ({
+    const resolvePreviewResource = vi.fn(async (request) => ({
       requestId: request.requestId,
       descriptor,
     }));
-    const releaseEmbeddedPreview = vi.fn(async () => undefined);
+    const releasePreviewResource = vi.fn(async () => undefined);
     vi.stubGlobal('openNekoDesktop', {
-      canvas: { resolveEmbeddedPreview, releaseEmbeddedPreview },
+      canvas: { resolvePreviewResource, releasePreviewResource },
     });
     const delegate = createDesktopCanvasWebviewDelegate(identity);
     const message = vi.fn();
     delegate.subscribe(message);
 
     delegate.postMessage({
-      type: 'preview:resolveEmbedded',
+      type: 'preview:resolveResource',
       requestId: 'embedded-1',
       nodeId: 'generation-1',
       outputId: 'output-1',
@@ -149,7 +109,7 @@ describe('Desktop Canvas Webview delegate', () => {
     });
 
     await vi.waitFor(() => expect(message).toHaveBeenCalled());
-    expect(resolveEmbeddedPreview).toHaveBeenCalledWith({
+    expect(resolvePreviewResource).toHaveBeenCalledWith({
       identity,
       requestId: 'embedded-1',
       nodeId: 'generation-1',
@@ -160,17 +120,17 @@ describe('Desktop Canvas Webview delegate', () => {
       displayName: 'Output 1',
     });
     expect(message).toHaveBeenCalledWith({
-      type: 'preview:embeddedResolved',
+      type: 'preview:resourceResolved',
       requestId: 'embedded-1',
       descriptor,
     });
 
     delegate.postMessage({
-      type: 'preview:releaseEmbedded',
+      type: 'preview:releaseResource',
       descriptorId: descriptor.descriptorId,
     });
     await vi.waitFor(() =>
-      expect(releaseEmbeddedPreview).toHaveBeenCalledWith({
+      expect(releasePreviewResource).toHaveBeenCalledWith({
         identity,
         descriptorId: descriptor.descriptorId,
       }),
@@ -189,17 +149,17 @@ describe('Desktop Canvas Webview delegate', () => {
       displayName: 'scene.md',
       byteLength: 42,
     };
-    const resolveEmbeddedPreview = vi.fn(async (request) => ({
+    const resolvePreviewResource = vi.fn(async (request) => ({
       requestId: request.requestId,
       descriptor,
     }));
     vi.stubGlobal('openNekoDesktop', {
-      canvas: { resolveEmbeddedPreview, releaseEmbeddedPreview: vi.fn() },
+      canvas: { resolvePreviewResource, releasePreviewResource: vi.fn() },
     });
     const delegate = createDesktopCanvasWebviewDelegate(identity);
 
     delegate.postMessage({
-      type: 'preview:resolveEmbedded',
+      type: 'preview:resolveResource',
       requestId: 'embedded-text-1',
       nodeId: 'notes',
       outputId: 'notes',
@@ -209,8 +169,8 @@ describe('Desktop Canvas Webview delegate', () => {
       displayName: 'scene.md',
     });
 
-    await vi.waitFor(() => expect(resolveEmbeddedPreview).toHaveBeenCalled());
-    expect(resolveEmbeddedPreview).toHaveBeenCalledWith({
+    await vi.waitFor(() => expect(resolvePreviewResource).toHaveBeenCalled());
+    expect(resolvePreviewResource).toHaveBeenCalledWith({
       identity,
       requestId: 'embedded-text-1',
       nodeId: 'notes',
@@ -229,14 +189,7 @@ describe('Desktop Canvas Webview delegate', () => {
     const delegate = createDesktopCanvasWebviewDelegate(identity);
 
     expect(() => delegate.postMessage({ type: 'desktop:unknown' })).toThrow('unsupported message');
-    expect(() =>
-      delegate.postMessage({
-        type: 'media:probe',
-        nodeId: 'video-1',
-        assetPath: 'media/cat.mp4',
-        mediaType: 'video',
-      }),
-    ).toThrow('portable workspace-file');
+    expect(() => delegate.postMessage({ type: 'media:probe' })).toThrow('unsupported message');
     expect(() =>
       delegate.postMessage({
         type: 'preview:resolveVariant',

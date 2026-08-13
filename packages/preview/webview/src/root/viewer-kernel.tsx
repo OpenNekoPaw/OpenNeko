@@ -53,15 +53,26 @@ const ModelViewer = lazy(async () => {
   return { default: module.ModelViewer };
 });
 
-export type PreviewViewerPresentation = 'main' | 'quick' | 'embedded';
+export type PreviewViewerControlDensity = 'compact' | 'full';
+
+export interface PreviewViewerPlayback {
+  readonly requestId?: string;
+  readonly state?: 'playing' | 'paused' | 'stopped';
+  readonly startTimeSeconds?: number;
+  readonly onTimeUpdate?: (currentTime: number, duration: number) => void;
+  readonly onEnded?: (currentTime: number, duration: number) => void;
+  readonly onInteraction?: (state: 'playing' | 'paused' | 'ended', currentTime: number) => void;
+}
 
 export interface PreviewViewerKernelProps {
   readonly descriptor: PreviewMediaDescriptor;
-  readonly presentation: PreviewViewerPresentation;
+  readonly controlDensity: PreviewViewerControlDensity;
+  readonly mediaPlayback?: 'interactive' | 'ambient';
   readonly locale: SupportedLocale;
   readonly i18nService: II18nService;
   readonly snapshot?: PreviewViewerSnapshot;
   readonly onSnapshotChange: (update: Partial<PreviewViewerSnapshot>) => void;
+  readonly playback?: PreviewViewerPlayback;
 }
 
 interface PreviewViewerRegistration {
@@ -91,36 +102,20 @@ export function renderPreviewViewer(props: PreviewViewerKernelProps): ReactEleme
 }
 
 function ImagePreview(props: PreviewViewerKernelProps): ReactElement {
-  if (props.presentation === 'embedded') {
-    return <EmbeddedImagePreview {...props} />;
-  }
-  return <BoundedImagePreview {...props} />;
+  return <SharedImagePreview {...props} />;
 }
 
-function BoundedImagePreview({ descriptor, locale }: PreviewViewerKernelProps): ReactElement {
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  return (
-    <div className="neko-preview-viewer neko-preview-viewer--image" data-viewer-state={state}>
-      <img
-        src={descriptor.url}
-        alt={descriptor.displayName}
-        onLoad={() => setState('ready')}
-        onError={() => setState('error')}
-      />
-      {state === 'loading' ? <ViewerLoading /> : null}
-      {state === 'error' ? <ViewerDiagnostic locale={locale} message="source" /> : null}
-    </div>
-  );
-}
-
-function EmbeddedImagePreview({
+function SharedImagePreview({
   descriptor,
   locale,
+  controlDensity,
   onSnapshotChange,
   snapshot,
 }: PreviewViewerKernelProps): ReactElement {
   const initial = snapshot?.image ?? { scale: 1, translateX: 0, translateY: 0 };
   const [view, setView] = useState(initial);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const interactive = controlDensity === 'full';
   const drag = useRef<
     | {
         readonly pointerId: number;
@@ -136,10 +131,12 @@ function EmbeddedImagePreview({
     setView((current) => ({ ...current, scale: clamp(scale, 0.25, 8) }));
   };
   const onWheel = (event: ReactWheelEvent<HTMLDivElement>): void => {
+    if (!interactive) return;
     event.preventDefault();
     setScale(view.scale * (event.deltaY < 0 ? 1.1 : 0.9));
   };
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (!interactive) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       pointerId: event.pointerId,
@@ -163,7 +160,8 @@ function EmbeddedImagePreview({
   };
   return (
     <div
-      className="neko-preview-viewer neko-preview-viewer--embedded-image"
+      className="neko-preview-viewer neko-preview-viewer--image"
+      data-viewer-state={state}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -171,54 +169,64 @@ function EmbeddedImagePreview({
       onPointerCancel={finishPointer}
     >
       <img
+        className="neko-preview-root__image"
         src={descriptor.url}
         alt={descriptor.displayName}
         draggable={false}
+        onLoad={() => setState('ready')}
+        onError={() => setState('error')}
         style={{
           transform: `translate3d(${view.translateX}px, ${view.translateY}px, 0) scale(${view.scale})`,
         }}
       />
-      <div
-        className="neko-preview-viewer__zoom"
-        aria-label={label(locale, '图片缩放', 'Image zoom')}
-      >
-        <button
-          type="button"
-          onClick={() => setScale(view.scale / 1.2)}
-          aria-label={label(locale, '缩小', 'Zoom out')}
+      {state === 'loading' ? <ViewerLoading /> : null}
+      {state === 'error' ? <ViewerDiagnostic locale={locale} message="source" /> : null}
+      {interactive ? (
+        <div
+          className="neko-preview-viewer__zoom"
+          aria-label={label(locale, '图片缩放', 'Image zoom')}
         >
-          −
-        </button>
-        <output>{Math.round(view.scale * 100)}%</output>
-        <button
-          type="button"
-          onClick={() => setScale(view.scale * 1.2)}
-          aria-label={label(locale, '放大', 'Zoom in')}
-        >
-          +
-        </button>
-        <button
-          type="button"
-          onClick={() => setView({ scale: 1, translateX: 0, translateY: 0 })}
-          aria-label={label(locale, '重置视图', 'Reset view')}
-        >
-          1:1
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setScale(view.scale / 1.2)}
+            aria-label={label(locale, '缩小', 'Zoom out')}
+          >
+            −
+          </button>
+          <output>{Math.round(view.scale * 100)}%</output>
+          <button
+            type="button"
+            onClick={() => setScale(view.scale * 1.2)}
+            aria-label={label(locale, '放大', 'Zoom in')}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => setView({ scale: 1, translateX: 0, translateY: 0 })}
+            aria-label={label(locale, '重置视图', 'Reset view')}
+          >
+            1:1
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function VideoPreview(props: PreviewViewerKernelProps): ReactElement {
-  if (props.presentation === 'quick') {
-    return <NativeMediaPreview descriptor={props.descriptor} kind="video" />;
-  }
+  const ambient = props.mediaPlayback === 'ambient';
   return (
     <ViewerModuleBoundary locale={props.locale}>
       <I18nProvider service={props.i18nService}>
         <VideoPlayer
           sourceUrl={props.descriptor.url}
           displayName={props.descriptor.displayName}
+          compact={props.controlDensity === 'compact'}
+          ambient={ambient}
+          autoPlay={ambient}
+          muted={ambient}
+          playback={ambient ? undefined : props.playback}
           initialSnapshot={props.snapshot?.media}
           onSnapshotChange={(media) => props.onSnapshotChange({ media })}
         />
@@ -228,15 +236,17 @@ function VideoPreview(props: PreviewViewerKernelProps): ReactElement {
 }
 
 function AudioPreview(props: PreviewViewerKernelProps): ReactElement {
-  if (props.presentation === 'quick') {
-    return <NativeMediaPreview descriptor={props.descriptor} kind="audio" />;
-  }
+  const ambient = props.mediaPlayback === 'ambient';
   return (
     <ViewerModuleBoundary locale={props.locale}>
       <I18nProvider service={props.i18nService}>
         <AudioPlayer
           sourceUrl={props.descriptor.url}
           displayName={props.descriptor.displayName}
+          compact={props.controlDensity === 'compact'}
+          ambient={ambient}
+          autoPlay={ambient}
+          playback={ambient ? undefined : props.playback}
           initialSnapshot={props.snapshot?.media}
           onSnapshotChange={(media) => props.onSnapshotChange({ media })}
         />
@@ -245,54 +255,14 @@ function AudioPreview(props: PreviewViewerKernelProps): ReactElement {
   );
 }
 
-function NativeMediaPreview({
-  descriptor,
-  kind,
-}: {
-  readonly descriptor: PreviewMediaDescriptor;
-  readonly kind: 'audio' | 'video';
-}): ReactElement {
-  const mediaRef = useRef<HTMLMediaElement>(null);
-  useEffect(() => {
-    const media = mediaRef.current;
-    return () => media?.pause();
-  }, []);
-  if (kind === 'video') {
-    return (
-      <video
-        ref={mediaRef as React.RefObject<HTMLVideoElement>}
-        className="neko-preview-viewer neko-preview-viewer--native-media"
-        src={descriptor.url}
-        aria-label={descriptor.displayName}
-        controls
-        playsInline
-        preload="metadata"
-      />
-    );
-  }
-  return (
-    <audio
-      ref={mediaRef as React.RefObject<HTMLAudioElement>}
-      className="neko-preview-viewer neko-preview-viewer--native-audio"
-      src={descriptor.url}
-      aria-label={descriptor.displayName}
-      controls
-      preload="metadata"
-    />
-  );
-}
-
 function TextPreview(props: PreviewViewerKernelProps): ReactElement {
-  if (props.presentation === 'quick') {
-    return <ViewerDiagnostic locale={props.locale} message="summary" />;
-  }
   return <ReadOnlyTextPreview {...props} />;
 }
 
 function ReadOnlyTextPreview({
   descriptor,
   locale,
-  presentation,
+  controlDensity,
 }: PreviewViewerKernelProps): ReactElement {
   const [state, setState] = useState<
     | { readonly kind: 'loading' }
@@ -328,7 +298,7 @@ function ReadOnlyTextPreview({
   return (
     <div
       className="neko-preview-text-reader"
-      data-preview-text-reader={presentation}
+      data-preview-text-reader={controlDensity}
       data-preview-text-state={state.kind}
     >
       <div className="neko-preview-text-reader__page">{body}</div>
@@ -337,7 +307,7 @@ function ReadOnlyTextPreview({
 }
 
 function DocumentPreview(props: PreviewViewerKernelProps): ReactElement {
-  if (props.presentation === 'quick') {
+  if (props.controlDensity === 'compact') {
     return <ViewerDiagnostic locale={props.locale} message="summary" />;
   }
   let viewer: ReactElement;
@@ -371,7 +341,7 @@ function DocumentPreview(props: PreviewViewerKernelProps): ReactElement {
 }
 
 function ModelPreview(props: PreviewViewerKernelProps): ReactElement {
-  if (props.presentation === 'quick') {
+  if (props.controlDensity === 'compact') {
     return <ViewerDiagnostic locale={props.locale} message="summary" />;
   }
   return <CompleteModelPreview {...props} />;

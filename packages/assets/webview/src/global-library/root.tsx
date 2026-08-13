@@ -16,7 +16,6 @@ import {
 import { ContextMenu, EmptyState, type ContextMenuItem } from '@neko/ui/primitives';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import React, {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -93,27 +92,12 @@ export function AssetManagementRoot({
   const marqueeGesture = useRef<MarqueeGesture>();
   const collectionRef = useRef<HTMLDivElement>(null);
   const focusCollectionAfterRead = useRef(false);
-  const hoverRequest = useRef<object>({});
-  const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
-  const [hoverPreview, setHoverPreview] = useState<{
-    readonly itemId: string;
-    readonly dataUrl: string;
-  }>();
   const items =
     projection?.catalog.status === 'ready'
       ? projection.catalog.entries.map((entry) => entry.item)
       : [];
   const selectedItems = items.filter((item) => selectedIds.has(item.id));
   const selectionCapabilities = getSelectionCapabilities(selectedItems);
-
-  const cancelHoverPreview = useCallback((): void => {
-    hoverRequest.current = {};
-    if (hoverTimer.current) {
-      clearTimeout(hoverTimer.current);
-      hoverTimer.current = undefined;
-    }
-    setHoverPreview(undefined);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -123,15 +107,13 @@ export function AssetManagementRoot({
     const unsubscribe = runtime.subscribe(setProjection);
     return () => {
       active = false;
-      cancelHoverPreview();
       unsubscribe();
     };
-  }, [cancelHoverPreview, runtime]);
+  }, [runtime]);
 
   useEffect(() => {
     if (!interactive || !projection || projection.catalog.status !== 'loading') return;
     let active = true;
-    cancelHoverPreview();
     const timeout = setTimeout(() => {
       void runtime.refresh().then(
         () => {
@@ -149,7 +131,7 @@ export function AssetManagementRoot({
       active = false;
       clearTimeout(timeout);
     };
-  }, [cancelHoverPreview, interactive, projection, runtime]);
+  }, [interactive, projection, runtime]);
 
   useEffect(() => {
     const reconciled = reconcileSelection(selectedIds, items);
@@ -174,7 +156,6 @@ export function AssetManagementRoot({
 
   const selectCatalog = (next: Catalog): void => {
     if (!projection) return;
-    cancelHoverPreview();
     updateFilter({
       ...projection.filter,
       catalog: next,
@@ -193,7 +174,6 @@ export function AssetManagementRoot({
     ) {
       return;
     }
-    cancelHoverPreview();
     updateFilter({
       ...projection.filter,
       query: '',
@@ -207,36 +187,12 @@ export function AssetManagementRoot({
     focusCollectionAfterRead.current = true;
   };
 
-  const beginHoverPreview = (item: GlobalLibraryItem): void => {
-    if (item.availability !== 'available' || !item.thumbnail) return;
-    cancelHoverPreview();
-    const request = hoverRequest.current;
-    hoverTimer.current = setTimeout(() => {
-      hoverTimer.current = undefined;
-      void runtime.resolveThumbnail(item, 'hover').then(
-        (result) => {
-          if (
-            request === hoverRequest.current &&
-            result.itemId === item.id &&
-            result.sourceFingerprint === item.thumbnail?.sourceFingerprint
-          ) {
-            setHoverPreview({ itemId: item.id, dataUrl: result.dataUrl });
-          }
-        },
-        () => {
-          // A thumbnail failure intentionally leaves the stable typed icon visible.
-        },
-      );
-    }, 180);
-  };
-
   const runMutation = async (operation: () => Promise<string | undefined>): Promise<void> => {
     setPendingMutation(true);
     setMutationError(undefined);
     setNotice(undefined);
     try {
       const nextNotice = await operation();
-      cancelHoverPreview();
       await runtime.refresh();
       setSelectedIds(new Set());
       setSelectionAnchorId(undefined);
@@ -599,7 +555,6 @@ export function AssetManagementRoot({
           ariaLabel={labels.breadcrumb}
           rootLabel={labels.root}
           onNavigate={(relativePath) => {
-            cancelHoverPreview();
             updateFilter({
               ...projection.filter,
               directory: relativePath === undefined ? undefined : { ...directory, relativePath },
@@ -651,12 +606,9 @@ export function AssetManagementRoot({
               selected={selectedIds.has(item.id)}
               selectionCapabilities={selectionCapabilities}
               viewMode={viewMode}
-              hoverPreview={hoverPreview?.itemId === item.id ? hoverPreview.dataUrl : undefined}
               onActivate={() => {
                 if (item.owner === 'media-library') activateDirectory(item);
               }}
-              onHoverStart={() => beginHoverPreview(item)}
-              onHoverEnd={cancelHoverPreview}
               onSelect={(event) => selectItem(item, event)}
               onContextMenu={() => selectItemForContextMenu(item)}
               onMoveSelected={moveSelected}
@@ -713,15 +665,12 @@ export function AssetManagementRoot({
 
 function GlobalLibraryEntry({
   controller,
-  hoverPreview,
   item,
   labels,
   locale,
   onActivate,
   onClearSelection,
   onContextMenu,
-  onHoverEnd,
-  onHoverStart,
   onMoveSelected,
   onRelinkLibrary,
   onRemoveSelected,
@@ -735,15 +684,12 @@ function GlobalLibraryEntry({
   viewMode,
 }: {
   readonly controller: Pick<AssetCenterManagementRuntime, 'resolveThumbnail'>;
-  readonly hoverPreview?: string;
   readonly item: GlobalLibraryItem;
   readonly labels: ReturnType<typeof getGlobalLibraryLabels>;
   readonly locale: SupportedLocale;
   readonly onActivate: () => void;
   readonly onClearSelection: () => void;
   readonly onContextMenu: () => void;
-  readonly onHoverEnd: () => void;
-  readonly onHoverStart: () => void;
   readonly onMoveSelected: () => void;
   readonly onRelinkLibrary: (item: GlobalMediaLibraryItem) => void;
   readonly onRemoveSelected: () => void;
@@ -821,12 +767,8 @@ function GlobalLibraryEntry({
       data-library-item-id={isActionableLibraryItem(item) ? item.id : undefined}
       data-selected={selected ? 'true' : 'false'}
       tabIndex={0}
-      onBlur={onHoverEnd}
       onDoubleClick={activate}
-      onFocus={onHoverStart}
       onKeyDown={keyDown}
-      onPointerEnter={onHoverStart}
-      onPointerLeave={onHoverEnd}
       onClick={(event) => onSelect(event)}
       onContextMenu={onContextMenu}
     >
@@ -866,11 +808,6 @@ function GlobalLibraryEntry({
             </button>
           </div>
         </details>
-      ) : null}
-      {hoverPreview ? (
-        <div className="global-library-browser__hover-preview" role="presentation">
-          <img src={hoverPreview} alt="" />
-        </div>
       ) : null}
     </article>
   );

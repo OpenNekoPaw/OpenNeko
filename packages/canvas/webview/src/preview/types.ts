@@ -8,6 +8,8 @@ import type {
 
 export interface PreviewSourceDescriptor {
   id: string;
+  nodeId?: string;
+  outputId?: string;
   contentLocator?: ContentLocator;
   asset?: AssetIdentityCapability;
   role: CanvasPreviewRole;

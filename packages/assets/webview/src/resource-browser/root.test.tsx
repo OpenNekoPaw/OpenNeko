@@ -581,6 +581,120 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.queryByLabelText('preview.png')).toBeNull();
   });
 
+  it('uses the shared ambient video parameters for Resource Browser hover playback', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(async () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const videoProjection: ResourceBrowserProjection = {
+      ...projection,
+      items: [
+        {
+          resourceId: 'content:clip',
+          source: 'media',
+          role: 'content',
+          depth: 0,
+          kind: 'video',
+          label: 'clip.mp4',
+          locator: { kind: 'workspace-file', path: 'assets/clip.mp4' },
+          capabilities: ['preview', 'reveal', 'add-to-canvas'],
+        },
+      ],
+    };
+    const runtime = createRuntime(videoProjection);
+    runtime.resolveQuickPreview.mockImplementation(async (request) => ({
+      requestId: request.requestId,
+      identity: request.identity,
+      resourceId: request.resourceId,
+      previewSessionId: `hover:${request.resourceId}`,
+      descriptor: {
+        descriptorId: `descriptor:${request.resourceId}`,
+        sourceFingerprint: 'fingerprint-video',
+        contentLocator: { kind: 'workspace-file' as const, path: 'assets/clip.mp4' },
+        url: 'openneko://resource/78787878787878787878787878787878',
+        contentKind: 'video' as const,
+        mediaType: 'video/mp4',
+        displayName: 'clip.mp4',
+        byteLength: 128,
+      },
+    }));
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    const row = (await screen.findByText('clip.mp4')).closest('.neko-resource-browser__item-row');
+    fireEvent.pointerEnter(row!);
+    const video = await waitFor(() => {
+      const element = document.querySelector('video');
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    expect(video.autoplay).toBe(true);
+    expect(video.muted).toBe(true);
+    expect(video.loop).toBe(true);
+    expect(video.controls).toBe(false);
+    expect(play).toHaveBeenCalled();
+  });
+
+  it('auto-plays Resource Browser audio without rendering a hover thumbnail or controls', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(async () => undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const audioProjection: ResourceBrowserProjection = {
+      ...projection,
+      items: [
+        {
+          resourceId: 'content:audio',
+          source: 'media',
+          role: 'content',
+          depth: 0,
+          kind: 'audio',
+          label: 'sound.aac',
+          locator: { kind: 'workspace-file', path: 'assets/sound.aac' },
+          capabilities: ['preview', 'reveal', 'add-to-canvas'],
+        },
+      ],
+    };
+    const runtime = createRuntime(audioProjection);
+    runtime.resolveQuickPreview.mockImplementation(async (request) => ({
+      requestId: request.requestId,
+      identity: request.identity,
+      resourceId: request.resourceId,
+      previewSessionId: `hover:${request.resourceId}`,
+      descriptor: {
+        descriptorId: `descriptor:${request.resourceId}`,
+        sourceFingerprint: 'fingerprint-audio',
+        contentLocator: { kind: 'workspace-file' as const, path: 'assets/sound.aac' },
+        url: 'openneko://resource/89898989898989898989898989898989',
+        contentKind: 'audio' as const,
+        mediaType: 'audio/aac',
+        displayName: 'sound.aac',
+        byteLength: 128,
+      },
+    }));
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    const row = (await screen.findByText('sound.aac')).closest('.neko-resource-browser__item-row');
+    fireEvent.pointerEnter(row!);
+    const audio = await waitFor(() => {
+      const element = document.querySelector('audio');
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    expect(audio.autoplay).toBe(true);
+    expect(document.querySelector('[data-testid="preview-lightweight-audio-waveform"]')).toBeNull();
+    expect(
+      document.querySelector('[data-testid="preview-lightweight-audio-toggle-playback"]'),
+    ).toBeNull();
+    expect(play).toHaveBeenCalled();
+
+    Object.defineProperty(audio, 'paused', { configurable: true, value: false });
+    fireEvent.pointerLeave(row!);
+    await waitFor(() => expect(pause).toHaveBeenCalled());
+    expect(runtime.releaseQuickPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ previewSessionId: 'hover:content:audio' }),
+    );
+  });
+
   it('releases the high-cost quick preview when its current Root is suspended', async () => {
     const runtime = createRuntime();
     const view = render(

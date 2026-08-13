@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionEffect,
@@ -146,10 +146,14 @@ export function SelectionContextToolbar({
     () => selectedNodes.map(materialActionIdentityKey).join('\u0000'),
     [selectedNodes],
   );
+  const selectedNodeIdsKey = JSON.stringify(selectedNodeIds);
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  selectedNodeIdsRef.current = selectedNodeIds;
   useEffect(() => {
     let current = true;
     setExecutionDiagnostic(undefined);
-    if (!host || selectedNodeIds.length === 0) {
+    const requestNodeIds = selectedNodeIdsRef.current;
+    if (!host || requestNodeIds.length === 0) {
       setMaterialActionState({ status: 'idle', descriptors: [] });
       return () => {
         current = false;
@@ -157,7 +161,7 @@ export function SelectionContextToolbar({
     }
     setMaterialActionState({ status: 'loading', descriptors: [] });
     void host
-      .resolveMaterialActions(selectedNodeIds)
+      .resolveMaterialActions(requestNodeIds)
       .then((descriptors) => {
         if (current) setMaterialActionState({ status: 'ready', descriptors });
       })
@@ -173,7 +177,7 @@ export function SelectionContextToolbar({
     return () => {
       current = false;
     };
-  }, [host, materialIdentityKey, selectedNodeIds]);
+  }, [host, materialIdentityKey, selectedNodeIdsKey]);
   const actions = useMemo(
     () =>
       resolveActions(

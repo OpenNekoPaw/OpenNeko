@@ -1,5 +1,16 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type SyntheticEvent,
+} from 'react';
 import { PcmAudioClient } from '@neko/media/browser';
+import { formatMediaTime } from '@neko/media';
+import { PauseIcon, PlayIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
 import { useHostMessage, useHostReady } from '../shared/useHostMessage';
 import { useTranslation } from '../i18n/I18nContext';
 import { CoverView } from './CoverView';
@@ -18,15 +29,24 @@ import type {
 } from '../shared/types';
 import { parseLrc, type LrcLine } from './lrc-parser';
 import type { PreviewMediaViewerSnapshot } from '../root/viewer-snapshot';
+import type { PreviewViewerPlayback } from '../root/viewer-kernel';
+import { useProgrammaticMediaPlayback } from '../shared/useProgrammaticMediaPlayback';
 import '../styles/player.css';
+
+const LIGHTWEIGHT_WAVEFORM_BAR_HEIGHTS = [
+  30, 48, 66, 42, 58, 74, 50, 36, 62, 82, 56, 40, 68, 52, 34, 78, 64, 46, 72, 54, 38, 60, 84, 52,
+  44, 70, 58, 36, 76, 62, 48, 80, 56, 42, 68, 50, 74, 46, 64, 34,
+] as const;
 
 export interface AudioPlayerProps {
   readonly sourceUrl?: string;
   readonly displayName?: string;
   readonly autoPlay?: boolean;
   readonly compact?: boolean;
+  readonly ambient?: boolean;
   readonly initialSnapshot?: PreviewMediaViewerSnapshot;
   readonly onSnapshotChange?: (snapshot: PreviewMediaViewerSnapshot) => void;
+  readonly playback?: PreviewViewerPlayback;
 }
 
 export function AudioPlayer({
@@ -34,8 +54,10 @@ export function AudioPlayer({
   displayName,
   autoPlay = false,
   compact = false,
+  ambient = false,
   initialSnapshot,
   onSnapshotChange,
+  playback,
 }: AudioPlayerProps = {}) {
   return sourceUrl ? (
     <SourceAudioPlayer
@@ -43,8 +65,10 @@ export function AudioPlayer({
       displayName={displayName ?? ''}
       autoPlay={autoPlay}
       compact={compact}
+      ambient={ambient}
       initialSnapshot={initialSnapshot}
       onSnapshotChange={onSnapshotChange}
+      playback={playback}
     />
   ) : (
     <EngineAudioPlayer />
@@ -56,10 +80,14 @@ function SourceAudioPlayer({
   displayName,
   autoPlay,
   compact,
+  ambient,
   initialSnapshot,
   onSnapshotChange,
-}: Required<Pick<AudioPlayerProps, 'sourceUrl' | 'displayName' | 'autoPlay' | 'compact'>> &
-  Pick<AudioPlayerProps, 'initialSnapshot' | 'onSnapshotChange'>) {
+  playback,
+}: Required<
+  Pick<AudioPlayerProps, 'sourceUrl' | 'displayName' | 'autoPlay' | 'compact' | 'ambient'>
+> &
+  Pick<AudioPlayerProps, 'initialSnapshot' | 'onSnapshotChange' | 'playback'>) {
   const { t } = useTranslation();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [duration, setDuration] = useState(0);
@@ -68,6 +96,10 @@ function SourceAudioPlayer({
   const [volume, setVolume] = useState(initialSnapshot?.volume ?? 1);
   const [speed, setSpeed] = useState(initialSnapshot?.playbackRate ?? 1);
   const [error, setError] = useState<string>();
+  const consumedRequestRef = useRef<string>();
+  const programmaticPlayback = useProgrammaticMediaPlayback();
+  const onSnapshotChangeRef = useRef(onSnapshotChange);
+  onSnapshotChangeRef.current = onSnapshotChange;
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -75,31 +107,48 @@ function SourceAudioPlayer({
       audio.playbackRate = initialSnapshot?.playbackRate ?? 1;
       audio.volume = initialSnapshot?.volume ?? 1;
     }
-    if (audio && autoPlay) {
-      setError(undefined);
-      void audio.play().catch(() => {
-        setIsPlaying(false);
-        setError(t('preview.audio.playbackFailed'));
-      });
-    }
     return () => {
       if (audio) {
-        onSnapshotChange?.({
+        onSnapshotChangeRef.current?.({
           currentTime: audio.currentTime,
           playbackRate: audio.playbackRate,
           volume: audio.volume,
         });
-        audio.pause();
+        programmaticPlayback.pause(audio);
       }
     };
-  }, [
-    autoPlay,
-    initialSnapshot?.playbackRate,
-    initialSnapshot?.volume,
-    onSnapshotChange,
-    sourceUrl,
-    t,
-  ]);
+  }, [programmaticPlayback, sourceUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !autoPlay) return;
+    setError(undefined);
+    programmaticPlayback.play(audio, () => {
+      setIsPlaying(false);
+      setError(audio.error ? t('preview.audio.playbackFailed') : undefined);
+    });
+  }, [autoPlay, programmaticPlayback, sourceUrl, t]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !playback?.requestId) return;
+    if (
+      consumedRequestRef.current !== playback.requestId &&
+      typeof playback.startTimeSeconds === 'number'
+    ) {
+      consumedRequestRef.current = playback.requestId;
+      audio.currentTime = Math.max(0, playback.startTimeSeconds);
+    }
+    if (playback.state === 'playing') {
+      setError(undefined);
+      programmaticPlayback.play(audio, () => {
+        setIsPlaying(false);
+        setError(audio.error ? t('preview.audio.playbackFailed') : undefined);
+      });
+    } else {
+      programmaticPlayback.pause(audio);
+    }
+  }, [playback?.requestId, playback?.startTimeSeconds, playback?.state, programmaticPlayback, t]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -108,7 +157,7 @@ function SourceAudioPlayer({
     if (audio.paused) {
       void audio.play().catch(() => {
         setIsPlaying(false);
-        setError(t('preview.audio.playbackFailed'));
+        setError(audio.error ? t('preview.audio.playbackFailed') : undefined);
       });
     } else {
       audio.pause();
@@ -135,14 +184,20 @@ function SourceAudioPlayer({
   return (
     <div
       className={
-        compact
-          ? 'neko-audio-bg flex items-center w-full h-full px-3 overflow-hidden'
-          : 'neko-audio-bg flex flex-col items-center w-full h-full px-8 pt-6 pb-5 overflow-hidden'
+        compact && !ambient
+          ? 'neko-preview-lightweight-audio'
+          : ambient
+            ? 'neko-preview-ambient-audio'
+            : 'neko-audio-bg flex flex-col items-center w-full h-full px-8 pt-6 pb-5 overflow-hidden'
       }
     >
       <audio
         ref={audioRef}
+        className={compact ? 'neko-preview-lightweight-audio__element' : undefined}
         src={sourceUrl}
+        aria-label={displayName}
+        autoPlay={autoPlay}
+        controls={false}
         preload="metadata"
         onLoadedMetadata={(event) => {
           setDuration(
@@ -160,33 +215,64 @@ function SourceAudioPlayer({
           const nextTime = event.currentTarget.currentTime;
           setCurrentTime(nextTime);
           onSnapshotChange?.({ currentTime: nextTime, playbackRate: speed, volume });
+          playback?.onTimeUpdate?.(nextTime, duration);
         }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => setIsPlaying(false)}
+        onPlay={(event) => {
+          setIsPlaying(true);
+          if (programmaticPlayback.consumeEvent('playing')) return;
+          if (ambient) return;
+          playback?.onInteraction?.('playing', event.currentTarget.currentTime);
+        }}
+        onPause={(event) => {
+          setIsPlaying(false);
+          if (programmaticPlayback.consumeEvent('paused')) return;
+          if (ambient) return;
+          playback?.onInteraction?.('paused', event.currentTarget.currentTime);
+        }}
+        onEnded={(event) => {
+          setIsPlaying(false);
+          if (!ambient) {
+            playback?.onInteraction?.('ended', event.currentTarget.currentTime);
+            playback?.onEnded?.(event.currentTarget.currentTime, duration);
+          }
+        }}
         onError={() => {
           setIsPlaying(false);
           setError(t('preview.audio.playbackFailed'));
         }}
       />
-      {!compact ? (
+      {compact && !ambient ? (
+        <LightweightAudioControls
+          currentTime={currentTime}
+          duration={duration}
+          isPlaying={isPlaying}
+          volume={volume}
+          error={error}
+          onTogglePlay={togglePlay}
+          onSeek={seek}
+          onScrub={setCurrentTime}
+          onToggleMute={() => changeVolume(volume > 0 ? 0 : 1)}
+        />
+      ) : !ambient ? (
         <div className="relative flex-1 flex items-center justify-center w-full min-h-[120px] py-2">
           <CoverView fileName={displayName} isPlaying={isPlaying} />
         </div>
       ) : null}
-      <div
-        className={
-          compact
-            ? 'min-w-0 flex-1'
-            : 'flex flex-col items-center gap-1 pt-3 pb-1 shrink-0 w-full max-w-[400px]'
-        }
-      >
-        <div className="font-semibold text-[17px] text-neko-preview-text-primary whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-center tracking-[-0.01em]">
-          {displayName}
+      {!compact && !ambient ? (
+        <div
+          className={
+            compact
+              ? 'min-w-0 flex-1'
+              : 'flex flex-col items-center gap-1 pt-3 pb-1 shrink-0 w-full max-w-[400px]'
+          }
+        >
+          <div className="font-semibold text-[17px] text-neko-preview-text-primary whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-center tracking-[-0.01em]">
+            {displayName}
+          </div>
+          {error ? <div className="text-xs text-red-400">{error}</div> : null}
         </div>
-        {error ? <div className="text-xs text-red-400">{error}</div> : null}
-      </div>
-      {!compact ? (
+      ) : null}
+      {!compact && !ambient ? (
         <div className="shrink-0 w-full">
           <AudioControls
             isPlaying={isPlaying}
@@ -202,6 +288,116 @@ function SourceAudioPlayer({
           />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+interface LightweightAudioControlsProps {
+  readonly currentTime: number;
+  readonly duration: number;
+  readonly isPlaying: boolean;
+  readonly volume: number;
+  readonly error?: string;
+  readonly onTogglePlay: () => void;
+  readonly onSeek: (time: number) => void;
+  readonly onScrub: (time: number) => void;
+  readonly onToggleMute: () => void;
+}
+
+function LightweightAudioControls({
+  currentTime,
+  duration,
+  isPlaying,
+  volume,
+  error,
+  onTogglePlay,
+  onSeek,
+  onScrub,
+  onToggleMute,
+}: LightweightAudioControlsProps) {
+  const { t } = useTranslation();
+  const boundedDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  const boundedTime = Math.max(0, Math.min(currentTime, boundedDuration));
+  const progress = boundedDuration > 0 ? boundedTime / boundedDuration : 0;
+  const commitRangeValue = (event: SyntheticEvent<HTMLInputElement>): void => {
+    onSeek(Number(event.currentTarget.value));
+  };
+  const handleRangeKeyUp = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      commitRangeValue(event);
+    }
+  };
+  const stopNodeDrag = (event: MouseEvent<HTMLElement>): void => event.stopPropagation();
+  const playbackLabel = isPlaying ? t('preview.audio.pauseButton') : t('preview.audio.playButton');
+  const muteLabel = volume > 0 ? t('preview.audio.mute') : t('preview.audio.unmute');
+
+  return (
+    <div className="neko-preview-lightweight-audio__player" onMouseDown={stopNodeDrag}>
+      <div
+        className="neko-preview-lightweight-audio__waveform"
+        data-testid="preview-lightweight-audio-waveform"
+      >
+        <div className="neko-preview-lightweight-audio__bars" aria-hidden="true">
+          {LIGHTWEIGHT_WAVEFORM_BAR_HEIGHTS.map((height, index) => (
+            <span
+              key={`${height}-${index}`}
+              className="neko-preview-lightweight-audio__bar"
+              style={{ height: `${height}%` }}
+            />
+          ))}
+        </div>
+        <span
+          className="neko-preview-lightweight-audio__playhead"
+          style={{ left: `${progress * 100}%` }}
+          aria-hidden="true"
+        />
+        <input
+          className="neko-preview-lightweight-audio__seek"
+          type="range"
+          min={0}
+          max={boundedDuration}
+          step={0.1}
+          value={boundedTime}
+          disabled={boundedDuration <= 0}
+          aria-label={t('preview.audio.seek')}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            onScrub(Number(event.currentTarget.value))
+          }
+          onPointerUp={commitRangeValue}
+          onKeyUp={handleRangeKeyUp}
+        />
+        {error ? (
+          <span className="neko-preview-lightweight-audio__error" role="alert">
+            {error}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="neko-preview-lightweight-audio__controls">
+        <span className="neko-preview-lightweight-audio__time">
+          {formatMediaTime(boundedTime)} /{' '}
+          {boundedDuration > 0 ? formatMediaTime(boundedDuration) : '--:--'}
+        </span>
+        <button
+          type="button"
+          data-testid="preview-lightweight-audio-toggle-playback"
+          className="neko-preview-lightweight-audio__button is-primary"
+          onClick={onTogglePlay}
+          aria-label={playbackLabel}
+          title={playbackLabel}
+        >
+          {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
+        </button>
+        <button
+          type="button"
+          className="neko-preview-lightweight-audio__button is-volume"
+          onClick={onToggleMute}
+          aria-label={muteLabel}
+          title={muteLabel}
+        >
+          {volume > 0 ? <VolumeIcon size={14} /> : <VolumeOffIcon size={14} />}
+        </button>
+      </div>
     </div>
   );
 }

@@ -37,9 +37,9 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain("t('node.contentLocatorMissing')");
     expect(source).toContain('!contentLocator ?');
     expect(source).toContain(
-      'contentLocator && onEmbeddedPreview ? () => onEmbeddedPreview(node.id) : undefined',
+      'contentLocator && onFullscreenPreview ? () => onFullscreenPreview(node.id) : undefined',
     );
-    expect(source).toContain('isEmbeddedPreviewFile(node.data)');
+    expect(source).toContain('isFullscreenPreviewFile(node.data)');
     expect(source).toContain('contentLocator && onOpen');
   });
 

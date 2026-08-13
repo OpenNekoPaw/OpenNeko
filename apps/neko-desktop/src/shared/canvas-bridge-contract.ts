@@ -7,8 +7,6 @@ import type {
   CanvasHostSnapshot,
   CanvasMaterialActionResolution,
   CanvasMaterialActionResolutionRequest,
-  CanvasMediaHostRequest,
-  CanvasMediaHostResponse,
   CanvasTextFilePreviewRequest,
   CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
@@ -25,9 +23,8 @@ export const DESKTOP_CANVAS_CHANNELS = {
   textFilePreviewRead: 'open-neko:canvas:text-file-preview-read',
   intentExecute: 'open-neko:canvas:intent-execute',
   previewVariantResolve: 'open-neko:canvas:preview-variant-resolve',
-  embeddedPreviewResolve: 'open-neko:canvas:embedded-preview-resolve',
-  embeddedPreviewRelease: 'open-neko:canvas:embedded-preview-release',
-  mediaRequestExecute: 'open-neko:canvas:media-request-execute',
+  previewResourceResolve: 'open-neko:canvas:preview-resource-resolve',
+  previewResourceRelease: 'open-neko:canvas:preview-resource-release',
   projectionEvent: 'open-neko:canvas:projection-event',
 } as const;
 
@@ -44,13 +41,10 @@ export interface OpenNekoDesktopCanvasBridge {
     resolvePreviewVariant(
       request: DesktopCanvasPreviewVariantRequest,
     ): Promise<DesktopCanvasPreviewVariantResult>;
-    resolveEmbeddedPreview(
-      request: DesktopCanvasEmbeddedPreviewRequest,
-    ): Promise<DesktopCanvasEmbeddedPreviewResult>;
-    releaseEmbeddedPreview(request: DesktopCanvasEmbeddedPreviewReleaseRequest): Promise<void>;
-    executeMediaRequest(
-      request: CanvasMediaHostRequest,
-    ): Promise<CanvasMediaHostResponse | undefined>;
+    resolvePreviewResource(
+      request: DesktopCanvasPreviewResourceRequest,
+    ): Promise<DesktopCanvasPreviewResourceResult>;
+    releasePreviewResource(request: DesktopCanvasPreviewResourceReleaseRequest): Promise<void>;
     subscribe(
       identity: CanvasHostRuntimeIdentity,
       listener: (event: CanvasHostProjectionEvent) => void,
@@ -72,7 +66,7 @@ export interface DesktopCanvasPreviewVariantResult {
   readonly url: string;
 }
 
-export interface DesktopCanvasEmbeddedPreviewRequest {
+export interface DesktopCanvasPreviewResourceRequest {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly requestId: string;
   readonly nodeId: string;
@@ -83,12 +77,12 @@ export interface DesktopCanvasEmbeddedPreviewRequest {
   readonly displayName: string;
 }
 
-export interface DesktopCanvasEmbeddedPreviewResult {
+export interface DesktopCanvasPreviewResourceResult {
   readonly requestId: string;
   readonly descriptor: PreviewMediaDescriptor;
 }
 
-export interface DesktopCanvasEmbeddedPreviewReleaseRequest {
+export interface DesktopCanvasPreviewResourceReleaseRequest {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly descriptorId: string;
 }
@@ -134,14 +128,14 @@ export function parseDesktopCanvasPreviewVariantResult(
   return { requestId, url: value['url'] };
 }
 
-export function parseDesktopCanvasEmbeddedPreviewRequest(
+export function parseDesktopCanvasPreviewResourceRequest(
   value: unknown,
-): DesktopCanvasEmbeddedPreviewRequest {
+): DesktopCanvasPreviewResourceRequest {
   if (!isRecord(value))
-    throw new Error('Desktop Canvas embedded preview request must be an object.');
+    throw new Error('Desktop Canvas preview resource request must be an object.');
   const locator = validateContentLocator(value['locator']);
   if (!locator.ok)
-    throw new Error('Desktop Canvas embedded preview requires a valid ContentLocator.');
+    throw new Error('Desktop Canvas preview resource requires a valid ContentLocator.');
   const contentKind = value['contentKind'];
   if (
     contentKind !== 'image' &&
@@ -151,38 +145,38 @@ export function parseDesktopCanvasEmbeddedPreviewRequest(
     contentKind !== 'model' &&
     contentKind !== 'text'
   ) {
-    throw new Error('Desktop Canvas embedded preview content kind is invalid.');
+    throw new Error('Desktop Canvas preview resource content kind is invalid.');
   }
   return {
     identity: parseCanvasHostRuntimeIdentity(value['identity']),
-    requestId: requireIdentity(value['requestId'], 'embedded preview request'),
-    nodeId: requireIdentity(value['nodeId'], 'embedded preview node'),
-    outputId: requireIdentity(value['outputId'], 'embedded preview output'),
+    requestId: requireIdentity(value['requestId'], 'preview resource request'),
+    nodeId: requireIdentity(value['nodeId'], 'preview resource node'),
+    outputId: requireIdentity(value['outputId'], 'preview resource output'),
     locator: locator.locator,
     contentKind,
-    mediaType: requireIdentity(value['mediaType'], 'embedded preview media type'),
-    displayName: requireIdentity(value['displayName'], 'embedded preview display name'),
+    mediaType: requireIdentity(value['mediaType'], 'preview resource media type'),
+    displayName: requireIdentity(value['displayName'], 'preview resource display name'),
   };
 }
 
-export function parseDesktopCanvasEmbeddedPreviewResult(
+export function parseDesktopCanvasPreviewResourceResult(
   value: unknown,
   requestId: string,
-): DesktopCanvasEmbeddedPreviewResult {
+): DesktopCanvasPreviewResourceResult {
   if (!isRecord(value) || value['requestId'] !== requestId) {
-    throw new Error('Desktop Canvas embedded preview result is invalid.');
+    throw new Error('Desktop Canvas preview resource result is invalid.');
   }
   return { requestId, descriptor: parsePreviewMediaDescriptor(value['descriptor']) };
 }
 
-export function parseDesktopCanvasEmbeddedPreviewReleaseRequest(
+export function parseDesktopCanvasPreviewResourceReleaseRequest(
   value: unknown,
-): DesktopCanvasEmbeddedPreviewReleaseRequest {
+): DesktopCanvasPreviewResourceReleaseRequest {
   if (!isRecord(value))
-    throw new Error('Desktop Canvas embedded preview release must be an object.');
+    throw new Error('Desktop Canvas preview resource release must be an object.');
   return {
     identity: parseCanvasHostRuntimeIdentity(value['identity']),
-    descriptorId: requireIdentity(value['descriptorId'], 'embedded preview descriptor'),
+    descriptorId: requireIdentity(value['descriptorId'], 'preview resource descriptor'),
   };
 }
 

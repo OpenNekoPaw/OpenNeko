@@ -53,6 +53,7 @@ const preview: MessageBundle = {
   'preview.audio.volumeLabel': 'Volume: {percent}%',
   'preview.audio.skipBack': 'Skip back 10s',
   'preview.audio.skipForward': 'Skip forward 10s',
+  'preview.audio.seek': 'Audio progress',
   'preview.audio.speedLabel': 'Playback speed',
   'preview.audio.noLyrics': 'No lyrics available',
   'preview.audio.viewCover': 'Cover',

@@ -6,13 +6,12 @@
 // =============================================================================
 
 import { CANVAS_CONNECTION_TYPES, CANVAS_NODE_TYPES } from '../types/canvas';
-import { validateCanvasMaterialNodePersistence } from '../types/canvas-material-contracts';
-import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
 import {
-  isContentLocator,
-  normalizeWorkspaceContentPath,
-  validateContentLocator,
-} from '@neko/content';
+  isSafeUnavailableCanvasMaterialLocator,
+  validateCanvasMaterialNodePersistence,
+} from '../types/canvas-material-contracts';
+import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
+import { isContentLocator, normalizeWorkspaceContentPath } from '@neko/content';
 import { validateNkcNodeDurableResourceIdentity } from '../utils/canvasDurableResourceIdentity';
 import { isJobRef } from '@neko/shared/job-lifecycle';
 
@@ -292,7 +291,8 @@ function validateNode(
       warnings.push({ ...validation, severity: 'warning' });
     } else if (
       diagnostic.code === 'canvas-material-content-locator-invalid' &&
-      isSafeUnavailableMaterialLocator(node['data'])
+      isRecord(node['data']) &&
+      isSafeUnavailableCanvasMaterialLocator(node['data']['contentLocator'])
     ) {
       warnings.push({ ...validation, severity: 'warning' });
     } else {
@@ -319,61 +319,6 @@ function isSafePathOnlyMaterialNode(nodeType: unknown, data: unknown): boolean {
     nodeType === 'media' ? data['assetPath'] : nodeType === 'file' ? data['path'] : undefined;
   if (typeof pathValue !== 'string') return false;
   return normalizeWorkspaceContentPath(pathValue) === pathValue;
-}
-
-function isSafeUnavailableMaterialLocator(data: unknown): boolean {
-  if (!isRecord(data)) return false;
-  const locator = data['contentLocator'];
-  if (!isRecord(locator)) return false;
-  if (locator['kind'] === 'workspace-file') {
-    return isSafeUnavailableWorkspaceFileLocator(locator);
-  }
-  if (
-    locator['kind'] !== 'document-entry' ||
-    !hasOnlyKeys(locator, ['kind', 'source', 'entryPath', 'fingerprint'])
-  ) {
-    return false;
-  }
-  if (!isRecord(locator['source']) || !isSafeUnavailableWorkspaceFileLocator(locator['source'])) {
-    return false;
-  }
-  return validateContentLocator({
-    ...locator,
-    source: {
-      ...locator['source'],
-      path: 'unavailable/source',
-    },
-  }).ok;
-}
-
-function isSafeUnavailableWorkspaceFileLocator(locator: Record<string, unknown>): boolean {
-  if (!hasOnlyKeys(locator, ['kind', 'path', 'fingerprint'])) return false;
-  const path = locator['path'];
-  if (locator['kind'] !== 'workspace-file' || !isNormalizedUnavailableProjectPath(path)) {
-    return false;
-  }
-  return validateContentLocator({ ...locator, path: 'unavailable/source' }).ok;
-}
-
-function isNormalizedUnavailableProjectPath(value: unknown): value is string {
-  if (typeof value !== 'string' || value.normalize('NFC') !== value) return false;
-  if (!value || value.includes('\0') || value.includes('${') || value.includes('\\')) return false;
-  if (value.startsWith('/') || /^[A-Za-z]:(?:\/|$)/.test(value)) return false;
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value)) return false;
-  return value
-    .split('/')
-    .every(
-      (segment) =>
-        segment.length > 0 &&
-        segment !== '.' &&
-        segment !== '..' &&
-        !segment.startsWith('.') &&
-        !segment.includes(':'),
-    );
-}
-
-function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
-  return Object.keys(value).every((key) => allowed.includes(key));
 }
 
 function validateJobNodeData(value: unknown, path: string, errors: ValidationError[]): void {

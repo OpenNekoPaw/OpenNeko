@@ -921,28 +921,21 @@ describe('createCanvasWebviewHost', () => {
       getState: () => undefined,
       setState: () => undefined,
       supportsMessage: (messageType) =>
-        messageType === 'canvasAction' || messageType === 'media:probe',
+        messageType === 'canvasAction' || messageType.startsWith('preview:'),
     });
 
     expect(host.supportsMessage('canvasAction')).toBe(true);
-    expect(host.supportsMessage('media:probe')).toBe(true);
+    expect(host.supportsMessage('preview:resolveResource')).toBe(true);
     expect(host.supportsMessage('sendToAgent')).toBe(false);
     host.postMessage({ type: 'canvasAction', action: 'selectNode' });
     host.postMessage({ type: 'canvasAction', action: 'openExport' });
-    host.postMessage({
-      type: 'media:probe',
-      nodeId: 'video-1',
-      locator: { kind: 'workspace-file', path: 'media/cat.mp4' },
-      mediaType: 'video',
-    });
+    host.postMessage({ type: 'preview:releaseResource', descriptorId: 'descriptor-video-1' });
 
     expect(postMessage).toHaveBeenCalledTimes(2);
     expect(postMessage).toHaveBeenCalledWith({ type: 'canvasAction', action: 'openExport' });
     expect(postMessage).toHaveBeenCalledWith({
-      type: 'media:probe',
-      nodeId: 'video-1',
-      locator: { kind: 'workspace-file', path: 'media/cat.mp4' },
-      mediaType: 'video',
+      type: 'preview:releaseResource',
+      descriptorId: 'descriptor-video-1',
     });
     expect(() => host.postMessage({ type: 'sendToAgent' })).toThrow(
       "does not implement message 'sendToAgent'",
