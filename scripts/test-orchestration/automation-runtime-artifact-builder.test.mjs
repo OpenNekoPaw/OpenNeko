@@ -59,14 +59,16 @@ describe('OpenNeko automation runtime artifact builder', () => {
       'app-driver',
     );
     assert.equal(
-      JSON.parse(entries.get('.openneko-plugin/plugin.json').content).mcpToolExposure,
+      JSON.parse(entries.get('plugin.json').content).extensions['io.openneko'].mcpToolExposure,
       'adapter-only',
     );
-    assert.deepEqual(JSON.parse(entries.get('.mcp.json').content).mcpServers['cua-driver'].args, [
+    assert.deepEqual(JSON.parse(entries.get('mcp.json').content).mcpServers['cua-driver'].args, [
       'mcp',
       '--direct',
     ]);
-    const provenance = JSON.parse(entries.get('.openneko-plugin/artifact-provenance.json').content);
+    const provenance = JSON.parse(
+      entries.get('metadata/io.openneko/artifact-provenance.json').content,
+    );
     assert.equal(provenance.sourceCommit, fixture.inputs.cuaDriver.sourceCommit);
     assert.equal(
       provenance.upstreamBuild.rustWorkspace.lockSha256,
@@ -81,7 +83,9 @@ describe('OpenNeko automation runtime artifact builder', () => {
       provenance.licenseInventory.sha256,
       digest(entries.get('THIRD_PARTY_LICENSES.spdx.json').content),
     );
-    const buildInputs = JSON.parse(entries.get('.openneko-plugin/build-inputs.json').content);
+    const buildInputs = JSON.parse(
+      entries.get('metadata/io.openneko/build-inputs.json').content,
+    );
     assert.equal(buildInputs.upstream.artifact.sha256, fixture.artifact.sha256);
     assert.equal(buildInputs.upstream.artifact.url, fixture.artifact.url);
     assert.equal(
@@ -215,17 +219,17 @@ describe('OpenNeko automation runtime artifact builder', () => {
 function createFixture(options = {}) {
   const root = mkdtempSync(join(tmpdir(), 'openneko-cua-builder-test-'));
   const pluginRoot = join(root, 'plugin');
-  mkdirSync(join(pluginRoot, '.openneko-plugin'), { recursive: true });
+  mkdirSync(pluginRoot, { recursive: true });
   writeFileSync(
-    join(pluginRoot, '.openneko-plugin', 'plugin.json'),
+    join(pluginRoot, 'plugin.json'),
     JSON.stringify({
       name: 'computer-use',
       version: '0.19.2',
-      mcpToolExposure: 'adapter-only',
+      extensions: { 'io.openneko': { mcpToolExposure: 'adapter-only' } },
     }),
   );
   writeFileSync(
-    join(pluginRoot, '.mcp.json'),
+    join(pluginRoot, 'mcp.json'),
     JSON.stringify({
       mcpServers: {
         'cua-driver': {

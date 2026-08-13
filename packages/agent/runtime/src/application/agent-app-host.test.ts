@@ -3196,7 +3196,7 @@ describe('AgentAppHost', () => {
       { mode: 0o755 },
     );
     await writeFile(
-      join(pluginRoot, '.mcp.json'),
+      join(pluginRoot, 'mcp.json'),
       JSON.stringify({
         mcpServers: {
           fixture: {
@@ -3213,9 +3213,9 @@ describe('AgentAppHost', () => {
         records: [],
         runtimeDescriptors: [
           {
-            pluginId: 'fixture@openneko',
+            pluginId: 'fixture',
             pluginRoot,
-            mcpDocumentPath: join(pluginRoot, '.mcp.json'),
+            mcpDocumentPath: join(pluginRoot, 'mcp.json'),
             mcpServerIds: ['fixture'],
             appIds: [],
           },
@@ -3252,7 +3252,7 @@ describe('AgentAppHost', () => {
       records: [],
       runtimeDescriptors: [
         {
-          pluginId: 'fixture@openneko',
+          pluginId: 'fixture',
           pluginRoot,
           skillRoot,
           mcpServerIds: [],
@@ -3262,22 +3262,16 @@ describe('AgentAppHost', () => {
       diagnostics: [],
     };
 
-    await expect(fixture.composition.reconcilePluginRuntime(installed)).resolves.toEqual(
-      new Map([
-        [
-          'fixture@openneko',
-          {
-            status: 'ready',
-            diagnosticCode: '',
-          },
-        ],
-      ]),
-    );
+    const readiness = await fixture.composition.reconcilePluginRuntime(installed);
+    expect(readiness.get('fixture')).toMatchObject({
+      status: 'ready',
+      diagnosticCode: '',
+    });
     expect(await fixture.composition.readGlobalSkillCatalog()).toMatchObject({
       records: [
         expect.objectContaining({
           name: 'plugin-fixture',
-          source: { kind: 'plugin', pluginId: 'fixture@openneko' },
+          source: { kind: 'plugin', pluginId: 'fixture' },
         }),
       ],
     });
@@ -3286,7 +3280,7 @@ describe('AgentAppHost', () => {
       records: expect.arrayContaining([
         expect.objectContaining({
           name: 'plugin-fixture',
-          source: { kind: 'plugin', pluginId: 'fixture@openneko' },
+          source: { kind: 'plugin', pluginId: 'fixture' },
         }),
       ]),
     });
@@ -3312,14 +3306,14 @@ describe('AgentAppHost', () => {
     await writePluginSkill(targetSkillRoot, 'target-skill');
     await writePluginSkill(siblingSkillRoot, 'sibling-skill');
     const targetDescriptor = {
-      pluginId: 'target@openneko',
+      pluginId: 'target',
       pluginRoot: targetRoot,
       skillRoot: targetSkillRoot,
       mcpServerIds: [],
       appIds: [],
     };
     const siblingDescriptor = {
-      pluginId: 'sibling@openneko',
+      pluginId: 'sibling',
       pluginRoot: siblingRoot,
       skillRoot: siblingSkillRoot,
       mcpServerIds: [],
@@ -3349,9 +3343,9 @@ describe('AgentAppHost', () => {
       locale: 'en',
     });
     await vi.waitFor(() =>
-      expect(fixture.composition.listActivePluginTurns('target@openneko')).toHaveLength(1),
+      expect(fixture.composition.listActivePluginTurns('target')).toHaveLength(1),
     );
-    expect(fixture.composition.listActivePluginTurns('sibling@openneko')).toEqual([]);
+    expect(fixture.composition.listActivePluginTurns('sibling')).toEqual([]);
 
     await expect(
       fixture.composition.reconcilePluginRuntime({
@@ -3366,7 +3360,7 @@ describe('AgentAppHost', () => {
         runtimeDescriptors: [siblingDescriptor],
         diagnostics: [],
       }),
-    ).rejects.toThrow("plugin 'target@openneko' runtime cannot change");
+    ).rejects.toThrow("plugin 'target' runtime cannot change");
 
     const message = assistant('plugin owner complete');
     stream.push({ type: 'start', partial: message });

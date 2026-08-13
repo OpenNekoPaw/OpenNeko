@@ -291,16 +291,16 @@ describe('AutomationApplicationService', () => {
     const fixture = await createFixture();
     await fixture.service.openSession(sessionRequest('session-owned'));
 
-    expect(fixture.service.listOwnedSessions('browser-use@openneko')).toEqual([
+    expect(fixture.service.listOwnedSessions('browser-use')).toEqual([
       expect.objectContaining({
         sessionId: 'session-owned',
         profileId: 'browser.default',
         status: 'active',
       }),
     ]);
-    expect(fixture.service.listOwnedSessions('computer-use@openneko')).toEqual([]);
+    expect(fixture.service.listOwnedSessions('computer-use')).toEqual([]);
     await fixture.service.stopSession('session-owned');
-    expect(fixture.service.listOwnedSessions('browser-use@openneko')).toEqual([]);
+    expect(fixture.service.listOwnedSessions('browser-use')).toEqual([]);
     expect(() => fixture.service.listOwnedSessions('../browser-use')).toThrow(
       'extension identity is invalid',
     );
@@ -320,7 +320,7 @@ describe('AutomationApplicationService', () => {
         sessionId: 'session-control',
         profileId: 'browser.default',
         provider: {
-          extensionId: 'browser-use@openneko',
+          extensionId: 'browser-use',
           providerId: 'browser-use',
           kind: 'browser',
         },
@@ -538,7 +538,7 @@ async function createFixture(
 const profile: AutomationProfile = {
   id: 'browser.default',
   provider: {
-    extensionId: 'browser-use@openneko',
+    extensionId: 'browser-use',
     providerId: 'browser-use',
     kind: 'browser',
     deliverySource: { kind: 'bundled-adapter' },

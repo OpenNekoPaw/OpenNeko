@@ -60,24 +60,24 @@ describe('PiSkillHost', () => {
     const snapshot = await new PiSkillHost(env, policy).discover([
       {
         path: join(root, 'plugin-b'),
-        source: { kind: 'plugin', pluginId: 'beta@market' },
+        source: { kind: 'plugin', pluginId: 'beta' },
       },
       {
         path: join(root, 'plugin-a'),
-        source: { kind: 'plugin', pluginId: 'alpha@market' },
+        source: { kind: 'plugin', pluginId: 'alpha' },
       },
     ]);
 
     expect(snapshot.records[0]).toMatchObject({
       name: 'shared',
-      source: { kind: 'plugin', pluginId: 'alpha@market' },
+      source: { kind: 'plugin', pluginId: 'alpha' },
     });
     expect(snapshot.warnings).toEqual([
       expect.objectContaining({
         selectedSource: 'plugin',
-        selectedPluginId: 'alpha@market',
+        selectedPluginId: 'alpha',
         shadowedSource: 'plugin',
-        shadowedPluginId: 'beta@market',
+        shadowedPluginId: 'beta',
       }),
     ]);
     await expect(
@@ -85,7 +85,7 @@ describe('PiSkillHost', () => {
     ).resolves.toMatchObject({
       receipt: {
         skillName: 'shared',
-        source: { kind: 'plugin', pluginId: 'alpha@market' },
+        source: { kind: 'plugin', pluginId: 'alpha' },
       },
     });
     expect(invokeSelected(snapshot, 'shared')).toContain('Plugin A body');

@@ -1,0 +1,17 @@
+{
+  "name": "browser-use",
+  "version": "0.13.7",
+  "description": "Browser observation for approved domains",
+  "author": { "name": "OpenNeko" },
+  "extensions": {
+    "io.openneko": {
+      "displayName": "Browser Use",
+      "localization": {
+        "zh-cn": {
+          "description": "在已授权域名中提供经过审核的浏览器观察能力"
+        }
+      },
+      "mcpToolExposure": "adapter-only"
+    }
+  }
+}

@@ -265,7 +265,7 @@ function requireText(value: unknown, label: string): string {
 function validateSource(source: CommandSource): void {
   if (
     source.kind === 'plugin' &&
-    !/^[A-Za-z0-9][A-Za-z0-9._:-]*@[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(source.pluginId)
+    !/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(source.pluginId)
   ) {
     throw new Error('Plugin id is invalid.');
   }

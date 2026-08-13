@@ -87,7 +87,7 @@ function projection() {
     authorizationId: 'authorization-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
       deliverySource: { kind: 'bundled-adapter' as const },

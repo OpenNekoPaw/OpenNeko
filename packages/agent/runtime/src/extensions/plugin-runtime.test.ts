@@ -12,7 +12,6 @@ import type {
 } from '@neko/agent-contracts';
 import {
   buildAgentPluginRuntime,
-  createAgentExtensionSupport,
   disposeAgentPluginRuntimeChanges,
   listChangedAgentPluginRuntimeIds,
   parsePluginMcpDocument,
@@ -27,7 +26,7 @@ describe('Desktop plugin runtime', () => {
       await mkdir(join(pluginRoot, 'bin'));
       await writeFile(join(pluginRoot, 'bin', 'launcher'), '#!/bin/sh\n', { mode: 0o755 });
       await writeFile(
-        join(pluginRoot, '.mcp.json'),
+        join(pluginRoot, 'mcp.json'),
         JSON.stringify({
           mcpServers: {
             fixture: {
@@ -70,7 +69,7 @@ describe('Desktop plugin runtime', () => {
   it('supports HTTPS bearer env and rejects OAuth as unsupported', async () => {
     await withPlugin(async (pluginRoot) => {
       await writeFile(
-        join(pluginRoot, '.mcp.json'),
+        join(pluginRoot, 'mcp.json'),
         JSON.stringify({
           mcpServers: {
             github: {
@@ -106,7 +105,7 @@ describe('Desktop plugin runtime', () => {
   it('rejects a stdio command that escapes the plugin package', async () => {
     await withPlugin(async (pluginRoot) => {
       await writeFile(
-        join(pluginRoot, '.mcp.json'),
+        join(pluginRoot, 'mcp.json'),
         JSON.stringify({
           mcpServers: {
             unsafe: { command: '../outside-launcher' },
@@ -124,57 +123,6 @@ describe('Desktop plugin runtime', () => {
     });
   });
 
-  it('admits available plugins only through Pi-valid Skill or supported MCP contributions', async () => {
-    await withPlugin(async (pluginRoot) => {
-      const skillRoot = join(pluginRoot, 'skills');
-      await mkdir(join(skillRoot, 'creative'), { recursive: true });
-      await writeFile(
-        join(skillRoot, 'creative', 'SKILL.md'),
-        '---\nname: creative\ndescription: Creative fixture\n---\nCreate fixture content.\n',
-        'utf8',
-      );
-      const launcher = join(pluginRoot, 'launcher');
-      await writeFile(launcher, '#!/bin/sh\n', { mode: 0o755 });
-      await writeFile(
-        join(pluginRoot, '.mcp.json'),
-        JSON.stringify({
-          mcpServers: {
-            supported: { command: './launcher' },
-            oauth: {
-              type: 'http',
-              url: 'https://example.test/mcp',
-              oauth_resource: 'https://example.test',
-            },
-          },
-        }),
-        'utf8',
-      );
-      const support = createAgentExtensionSupport({ processEnv: {} });
-
-      await expect(
-        support.isSupported({
-          pluginId: 'creative@market',
-          pluginRoot,
-          skillRoot,
-          mcpServerIds: [],
-          appIds: [],
-        }),
-      ).resolves.toBe(true);
-      await expect(support.isSupported(mcpDescriptor(pluginRoot, ['supported']))).resolves.toBe(
-        true,
-      );
-      await expect(support.isSupported(mcpDescriptor(pluginRoot, ['oauth']))).resolves.toBe(false);
-      await expect(
-        support.isSupported({
-          pluginId: 'app-only@market',
-          pluginRoot,
-          mcpServerIds: [],
-          appIds: ['connector'],
-        }),
-      ).resolves.toBe(false);
-    });
-  });
-
   it('projects a validated plugin Skill root into an Agent-ready generation', async () => {
     await withPlugin(async (pluginRoot) => {
       const skillRoot = join(pluginRoot, 'skills');
@@ -185,7 +133,7 @@ describe('Desktop plugin runtime', () => {
         'utf8',
       );
       const descriptor: AgentExtensionRuntimeDescriptor = {
-        pluginId: 'fixture@market',
+        pluginId: 'fixture',
         pluginRoot,
         skillRoot,
         mcpServerIds: [],
@@ -201,10 +149,10 @@ describe('Desktop plugin runtime', () => {
       expect(pluginRuntime.skillRoots).toEqual([
         {
           path: skillRoot,
-          source: { kind: 'plugin', pluginId: 'fixture@market' },
+          source: { kind: 'plugin', pluginId: 'fixture' },
         },
       ]);
-      expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
+      expect(pluginRuntime.readiness.get('fixture')).toMatchObject({
         status: 'ready',
         diagnosticCode: '',
       });
@@ -229,7 +177,7 @@ describe('Desktop plugin runtime', () => {
         { mode: 0o755 },
       );
       await writeFile(
-        join(pluginRoot, '.mcp.json'),
+        join(pluginRoot, 'mcp.json'),
         JSON.stringify({
           mcpServers: {
             fixture: {
@@ -259,7 +207,7 @@ describe('Desktop plugin runtime', () => {
         data: 'echo:hello',
         error: undefined,
       });
-      expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
+      expect(pluginRuntime.readiness.get('fixture')).toMatchObject({
         status: 'ready',
         diagnosticCode: '',
       });
@@ -282,7 +230,7 @@ describe('Desktop plugin runtime', () => {
         },
       );
       expect(adapterRuntime.tools).toEqual([]);
-      expect(adapterRuntime.readiness.get('fixture@market')).toEqual({
+      expect(adapterRuntime.readiness.get('fixture')).toMatchObject({
         status: 'unsupported',
         diagnosticCode: 'automation-adapter-unavailable',
       });
@@ -307,7 +255,7 @@ describe('Desktop plugin runtime', () => {
           { mode: 0o755 },
         );
         await writeFile(
-          join(adapterRoot, '.mcp.json'),
+          join(adapterRoot, 'mcp.json'),
           JSON.stringify({
             mcpServers: {
               automation: { command: './adapter-mcp.mjs' },
@@ -331,7 +279,7 @@ describe('Desktop plugin runtime', () => {
           { mode: 0o755 },
         );
         await writeFile(
-          join(genericRoot, '.mcp.json'),
+          join(genericRoot, 'mcp.json'),
           JSON.stringify({
             mcpServers: {
               generic: { command: './generic-mcp.mjs' },
@@ -345,10 +293,10 @@ describe('Desktop plugin runtime', () => {
             records: [],
             runtimeDescriptors: [
               {
-                ...mcpDescriptor(adapterRoot, ['automation'], 'automation@market'),
+                ...mcpDescriptor(adapterRoot, ['automation'], 'automation'),
                 mcpToolExposure: 'adapter-only',
               },
-              mcpDescriptor(genericRoot, ['generic'], 'generic@market'),
+              mcpDescriptor(genericRoot, ['generic'], 'generic'),
             ],
             diagnostics: [],
           },
@@ -367,11 +315,11 @@ describe('Desktop plugin runtime', () => {
           success: true,
           data: 'sibling-ready',
         });
-        expect(runtime.readiness.get('automation@market')).toEqual({
+        expect(runtime.readiness.get('automation')).toMatchObject({
           status: 'unsupported',
           diagnosticCode: 'automation-adapter-unavailable',
         });
-        expect(runtime.readiness.get('generic@market')).toEqual({
+        expect(runtime.readiness.get('generic')).toMatchObject({
           status: 'ready',
           diagnosticCode: '',
         });
@@ -383,7 +331,7 @@ describe('Desktop plugin runtime', () => {
   it('registers a product adapter Tool without exposing its raw MCP and replaces it by source identity', async () => {
     await withPlugin(async (pluginRoot) => {
       const descriptor = {
-        ...mcpDescriptor(pluginRoot, ['automation'], 'automation@market'),
+        ...mcpDescriptor(pluginRoot, ['automation'], 'automation'),
         mcpToolExposure: 'adapter-only' as const,
       };
       const snapshot: AgentExtensionCatalogSnapshot = {
@@ -407,7 +355,15 @@ describe('Desktop plugin runtime', () => {
                 execute: async () => ({ success: true, data: capturedRuntimeId }),
               },
             ],
-            readiness: { status: 'ready' as const, diagnosticCode: '' },
+            readiness: {
+              status: 'ready' as const,
+              diagnosticCode: '',
+              componentReadiness: {
+                skills: { status: 'absent' as const, diagnosticCode: '' },
+                mcp: { status: 'ready' as const, diagnosticCode: '' },
+                apps: { status: 'absent' as const, diagnosticCode: '' },
+              },
+            },
             async dispose() {
               disposed += 1;
             },
@@ -417,20 +373,20 @@ describe('Desktop plugin runtime', () => {
 
       const initial = await buildAgentPluginRuntime(snapshot, { toolAdapters });
       expect(initial.tools.map((tool) => tool.name)).toEqual(['computer_use__verify_state']);
-      expect(initial.readiness.get('automation@market')).toEqual({
+      expect(initial.readiness.get('automation')).toMatchObject({
         status: 'ready',
         diagnosticCode: '',
       });
 
       const retained = await reconcileAgentPluginRuntime(initial, snapshot, { toolAdapters });
-      expect(retained.contributions.get('automation@market')).toBe(
-        initial.contributions.get('automation@market'),
+      expect(retained.contributions.get('automation')).toBe(
+        initial.contributions.get('automation'),
       );
       expect(disposed).toBe(1);
 
       runtimeId = 'runtime-two';
       const replaced = await reconcileAgentPluginRuntime(retained, snapshot, { toolAdapters });
-      expect(listChangedAgentPluginRuntimeIds(retained, replaced)).toEqual(['automation@market']);
+      expect(listChangedAgentPluginRuntimeIds(retained, replaced)).toEqual(['automation']);
       await disposeAgentPluginRuntimeChanges(retained, replaced);
       await expect(replaced.tools[0]?.execute({})).resolves.toMatchObject({
         success: true,
@@ -453,7 +409,7 @@ describe('Desktop plugin runtime', () => {
             records: [],
             runtimeDescriptors: [
               mcpDescriptor(firstRoot, ['first'], 'first@market'),
-              mcpDescriptor(siblingRoot, ['sibling'], 'sibling@market'),
+              mcpDescriptor(siblingRoot, ['sibling'], 'sibling'),
             ],
             diagnostics: [],
           };
@@ -461,14 +417,14 @@ describe('Desktop plugin runtime', () => {
             processEnv: fixtureProcessEnv(),
           });
           const previousFirstTool = initial.contributions.get('first@market')?.tools[0];
-          const previousSibling = initial.contributions.get('sibling@market');
+          const previousSibling = initial.contributions.get('sibling');
           const next = await reconcileAgentPluginRuntime(
             initial,
             {
               records: [],
               runtimeDescriptors: [
                 mcpDescriptor(updatedRoot, ['first'], 'first@market'),
-                mcpDescriptor(siblingRoot, ['sibling'], 'sibling@market'),
+                mcpDescriptor(siblingRoot, ['sibling'], 'sibling'),
               ],
               diagnostics: [],
             },
@@ -476,7 +432,7 @@ describe('Desktop plugin runtime', () => {
           );
 
           expect(listChangedAgentPluginRuntimeIds(initial, next)).toEqual(['first@market']);
-          expect(next.contributions.get('sibling@market')).toBe(previousSibling);
+          expect(next.contributions.get('sibling')).toBe(previousSibling);
           await disposeAgentPluginRuntimeChanges(initial, next);
           await expect(previousFirstTool?.execute({})).resolves.toMatchObject({
             success: false,
@@ -506,7 +462,7 @@ describe('Desktop plugin runtime', () => {
         const initial = await buildAgentPluginRuntime(
           {
             records: [],
-            runtimeDescriptors: [mcpDescriptor(siblingRoot, ['shared'], 'sibling@market')],
+            runtimeDescriptors: [mcpDescriptor(siblingRoot, ['shared'], 'sibling')],
             diagnostics: [],
           },
           { processEnv: fixtureProcessEnv() },
@@ -518,14 +474,14 @@ describe('Desktop plugin runtime', () => {
             {
               records: [],
               runtimeDescriptors: [
-                mcpDescriptor(siblingRoot, ['shared'], 'sibling@market'),
+                mcpDescriptor(siblingRoot, ['shared'], 'sibling'),
                 mcpDescriptor(conflictRoot, ['shared'], 'candidate@market'),
               ],
               diagnostics: [],
             },
             { processEnv: fixtureProcessEnv() },
           ),
-        ).rejects.toThrow("conflict would replace authoritative contribution 'sibling@market'");
+        ).rejects.toThrow("conflict would replace authoritative contribution 'sibling'");
         await expect(initial.tools[0]?.execute({})).resolves.toMatchObject({
           success: true,
           data: 'authoritative',
@@ -598,7 +554,7 @@ async function writeEchoMcp(
     { mode: 0o755 },
   );
   await writeFile(
-    join(pluginRoot, '.mcp.json'),
+    join(pluginRoot, 'mcp.json'),
     JSON.stringify({
       mcpServers: {
         [serverId]: { command: `./${serverId}-mcp.mjs`, cwd: '.' },
@@ -619,12 +575,12 @@ function fixtureProcessEnv(): Readonly<NodeJS.ProcessEnv> {
 function mcpDescriptor(
   pluginRoot: string,
   mcpServerIds: readonly string[],
-  pluginId = 'fixture@market',
+  pluginId = 'fixture',
 ): AgentExtensionRuntimeDescriptor {
   return {
     pluginId,
     pluginRoot,
-    mcpDocumentPath: join(pluginRoot, '.mcp.json'),
+    mcpDocumentPath: join(pluginRoot, 'mcp.json'),
     mcpServerIds,
     appIds: [],
   };

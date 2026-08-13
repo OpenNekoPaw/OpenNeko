@@ -4,7 +4,7 @@ import type { AutomationMcpCallResult, AutomationMcpResultProjector } from './mc
 export const BROWSER_USE_OBSERVE_PROFILE: AutomationProfile = Object.freeze({
   id: 'browser-use.observe',
   provider: Object.freeze({
-    extensionId: 'browser-use@openneko',
+    extensionId: 'browser-use',
     providerId: 'browser-use',
     kind: 'browser',
     deliverySource: Object.freeze({ kind: 'bundled-adapter' as const }),

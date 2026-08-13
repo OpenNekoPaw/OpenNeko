@@ -4,11 +4,13 @@ import { isAbsolute, relative, resolve } from 'node:path';
 
 import { createAllMCPTools, MCPManager } from '@neko/agent-runtime';
 import { createNodePiSkillHost, type SkillSourceRoot } from '@neko/agent-runtime/pi';
-import type { MCPServerConfig } from '@neko/agent-contracts';
-import type { Tool } from '@neko/agent-contracts';
+import type {
+  AgentExtensionComponentReadinessSet,
+  MCPServerConfig,
+  Tool,
+} from '@neko/agent-contracts';
 
 import type {
-  AgentExtensionSupportPort,
   AgentExtensionCatalogSnapshot,
   AgentExtensionRuntimeDescriptor,
   AgentExtensionRuntimeReadiness,
@@ -22,23 +24,6 @@ export { createPluginRuntimeSourceFingerprint } from './plugin-runtime-source-fi
 
 const MAX_MCP_DOCUMENT_BYTES = 1_000_000;
 const DEFAULT_MCP_TIMEOUT_MS = 30_000;
-
-export function createAgentExtensionSupport(
-  options: {
-    readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
-  } = {},
-): AgentExtensionSupportPort {
-  const processEnv = options.processEnv ?? process.env;
-  return {
-    async isSupported(descriptor) {
-      if (descriptor.skillRoot && (await validatePluginSkillRoot(descriptor))) {
-        return true;
-      }
-      const mcp = await parsePluginMcpDocument(descriptor, processEnv);
-      return mcp.servers.length > 0;
-    },
-  };
-}
 
 export interface AgentPluginRuntime {
   readonly sourceFingerprint: string;
@@ -616,46 +601,88 @@ function projectReadiness(
     state.mcpServerIds.length > 0 && state.mcpServerIds.length === state.connectedServerIds.length;
   const anyReady = state.skillReady || state.connectedServerIds.length > 0;
   const adapterOnly = state.descriptor.mcpToolExposure === 'adapter-only';
+  const componentReadiness = projectComponentReadiness(state, adapterReadiness);
   if (state.failures.length > 0) {
     return {
       status: anyReady ? 'partial' : 'error',
       diagnosticCode: state.failures[0] ?? 'runtime-failed',
+      componentReadiness,
     };
   }
   if (state.unsupported.length > 0) {
     return {
       status: anyReady ? 'partial' : 'unsupported',
       diagnosticCode: state.unsupported[0] ?? 'runtime-unsupported',
+      componentReadiness,
     };
   }
   if (adapterReadiness) {
     if (adapterReadiness.status === 'ready') {
-      return { status: 'ready', diagnosticCode: '' };
+      return { status: 'ready', diagnosticCode: '', componentReadiness };
     }
     if (state.skillReady) {
       return {
         status: 'partial',
         diagnosticCode: adapterReadiness.diagnosticCode,
+        componentReadiness,
       };
     }
-    return adapterReadiness;
+    return { ...adapterReadiness, componentReadiness };
   }
   if (adapterOnly) {
     return {
       status: state.skillReady ? 'partial' : 'unsupported',
       diagnosticCode: 'automation-adapter-unavailable',
+      componentReadiness,
     };
   }
   if (state.skillReady || mcpReady) {
     return {
       status: 'ready',
       diagnosticCode: '',
+      componentReadiness,
     };
   }
   return {
     status: 'unsupported',
     diagnosticCode: 'no-agent-contribution',
+    componentReadiness,
   };
+}
+
+function projectComponentReadiness(
+  state: PluginContributionState,
+  adapterReadiness: AgentExtensionRuntimeReadiness | undefined,
+): AgentExtensionComponentReadinessSet {
+  const skills = state.descriptor.skillRoot
+    ? state.skillReady
+      ? { status: 'ready' as const, diagnosticCode: '' }
+      : { status: 'error' as const, diagnosticCode: 'skill-invalid' }
+    : { status: 'absent' as const, diagnosticCode: '' };
+  const mcpFailure = state.failures.find((code) => code.startsWith('mcp-'));
+  const mcpUnsupported = state.unsupported.find((code) => code !== 'app-unsupported');
+  const mcp =
+    state.descriptor.mcpServerIds.length === 0
+      ? { status: 'absent' as const, diagnosticCode: '' }
+      : state.descriptor.mcpToolExposure === 'adapter-only'
+        ? adapterReadiness
+          ? adapterReadiness.componentReadiness.mcp
+          : state.failures.includes('automation-adapter-failed')
+            ? { status: 'error' as const, diagnosticCode: 'automation-adapter-failed' }
+            : { status: 'unsupported' as const, diagnosticCode: 'automation-adapter-unavailable' }
+        : mcpFailure
+          ? { status: 'error' as const, diagnosticCode: mcpFailure }
+          : mcpUnsupported
+            ? { status: 'unsupported' as const, diagnosticCode: mcpUnsupported }
+            : state.connectedServerIds.length === state.mcpServerIds.length &&
+                state.mcpServerIds.length > 0
+              ? { status: 'ready' as const, diagnosticCode: '' }
+              : { status: 'error' as const, diagnosticCode: 'mcp-connect-failed' };
+  const apps =
+    state.descriptor.appIds.length === 0
+      ? { status: 'absent' as const, diagnosticCode: '' }
+      : { status: 'unsupported' as const, diagnosticCode: 'app-unsupported' };
+  return Object.freeze({ skills, mcp, apps });
 }
 
 function combineContributionSourceFingerprint(

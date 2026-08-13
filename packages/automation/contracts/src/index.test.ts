@@ -40,7 +40,7 @@ describe('Automation contracts', () => {
       parseAutomationProfile({
         id: 'browser.observe',
         provider: {
-          extensionId: 'browser-use@openneko',
+          extensionId: 'browser-use',
           providerId: 'browser-use',
           kind: 'browser',
           deliverySource: { kind: 'bundled-adapter' },
@@ -68,7 +68,7 @@ describe('Automation contracts', () => {
     const profile = {
       id: 'browser.observe.local',
       provider: {
-        extensionId: 'browser-use@openneko',
+        extensionId: 'browser-use',
         providerId: 'browser-use',
         kind: 'browser',
         deliverySource: {
@@ -106,7 +106,7 @@ describe('Automation contracts', () => {
     const base = {
       id: 'browser.observe',
       provider: {
-        extensionId: 'browser-use@openneko',
+        extensionId: 'browser-use',
         providerId: 'browser-use',
         kind: 'browser',
         deliverySource: { kind: 'bundled-adapter' },
@@ -191,10 +191,10 @@ function sessionRequest() {
     grant: {
       grantId: 'grant-1',
       sessionId: 'session-1',
-      extensionId: 'browser-use@openneko',
+      extensionId: 'browser-use',
       profileId: 'browser.observe',
       provider: {
-        extensionId: 'browser-use@openneko',
+        extensionId: 'browser-use',
         providerId: 'browser-use',
         kind: 'browser',
         deliverySource: { kind: 'bundled-adapter' },

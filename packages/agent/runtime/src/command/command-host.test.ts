@@ -113,15 +113,15 @@ describe('CommandHost', () => {
     const snapshot = await createNodeCommandHost(root).discover([
       {
         path: commandRoot,
-        source: { kind: 'plugin', pluginId: 'review-tools@openneko' },
+        source: { kind: 'plugin', pluginId: 'review-tools' },
       },
     ]);
     expect(snapshot.records[0]).toMatchObject({
-      source: { kind: 'plugin', pluginId: 'review-tools@openneko' },
+      source: { kind: 'plugin', pluginId: 'review-tools' },
     });
     await expect(
       createNodeCommandHost(root).discover([
-        { path: commandRoot, source: { kind: 'plugin', pluginId: 'missing-marketplace' } },
+        { path: commandRoot, source: { kind: 'plugin', pluginId: '../escape' } },
       ]),
     ).rejects.toThrow('Plugin id is invalid.');
   });

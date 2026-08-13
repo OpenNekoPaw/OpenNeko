@@ -4,7 +4,7 @@ import type { AutomationMcpArgumentProjector, AutomationMcpResultProjector } fro
 export const CUA_DRIVER_OBSERVE_PROFILE: AutomationProfile = Object.freeze({
   id: 'computer-use.observe.macos',
   provider: Object.freeze({
-    extensionId: 'computer-use@openneko',
+    extensionId: 'computer-use',
     providerId: 'cua-driver',
     kind: 'computer',
     deliverySource: Object.freeze({ kind: 'bundled-adapter' as const }),

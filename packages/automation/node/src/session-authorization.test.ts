@@ -26,7 +26,7 @@ describe('Automation session authorization', () => {
     expect(authorized.grant).toMatchObject({
       grantId: 'grant-1',
       sessionId: 'session-1',
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       profileId: CUA_DRIVER_OBSERVE_PROFILE.id,
       target,
       conversationId: 'conversation-1',
