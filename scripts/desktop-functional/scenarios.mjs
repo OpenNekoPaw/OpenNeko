@@ -2,7 +2,10 @@ import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/fu
 import { canvasTextFilePreviewScenario } from '../../packages/canvas/webview/functional/desktop-text-file-preview.mjs';
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
-import { workspaceFileCreationScenario } from '../../packages/assets/webview/functional/desktop-workspace-file-creation.mjs';
+import {
+  workspaceFileCreationScenario,
+  workspaceRetiredStorageIsolationScenario,
+} from '../../packages/assets/webview/functional/desktop-workspace-file-creation.mjs';
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopMarkdownMediaScenario } from '../../packages/text-editor/webview/functional/desktop-markdown-media.mjs';
 import { desktopTextEditorScenario } from '../../packages/text-editor/webview/functional/desktop-text-editor.mjs';
@@ -47,6 +50,7 @@ const scenarios = new Map(
     desktopWorkbenchScenesScenario,
     desktopWorkspaceResizeScenario,
     workspaceFileCreationScenario,
+    workspaceRetiredStorageIsolationScenario,
     projectContentScenario,
     assetLibraryRecordRemovalScenario,
     desktopMarkdownMediaScenario,

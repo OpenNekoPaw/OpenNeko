@@ -73,6 +73,7 @@ const EXCLUDED_DIRECTORIES = new Set([
   'node_modules',
   'out',
 ]);
+const EXCLUDED_WORKSPACE_LOCATOR_PATHS = new Set(['neko/assets']);
 
 export interface ResourceBrowserNodeSourceOptions {
   readonly projectId: string;
@@ -272,6 +273,7 @@ export function createResourceBrowserNodeReadSource(
           limit: Math.min(limit, FILE_SCAN_LIMIT),
           rootDepth: -1,
           excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+          excludedLocatorPaths: EXCLUDED_WORKSPACE_LOCATOR_PATHS,
           files: options.host.files,
           joinAbsolutePath: path.join,
           relativePath: path.relative,
@@ -401,6 +403,7 @@ export async function searchWorkspaceContentEntries(input: {
     limit: Math.min(input.limit, FILE_SCAN_LIMIT),
     rootDepth: -1,
     excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+    excludedLocatorPaths: EXCLUDED_WORKSPACE_LOCATOR_PATHS,
     files: input.files,
     joinAbsolutePath: path.join,
     relativePath: path.relative,
@@ -753,6 +756,7 @@ async function listWorkspaceProjection(
     limit: Math.min(limit, FILE_SCAN_LIMIT),
     rootDepth: -1,
     excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+    excludedLocatorPaths: EXCLUDED_WORKSPACE_LOCATOR_PATHS,
     files: options.host.files,
     joinAbsolutePath: path.join,
     relativePath: path.relative,

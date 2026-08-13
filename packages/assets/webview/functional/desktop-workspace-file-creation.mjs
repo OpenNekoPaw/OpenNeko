@@ -25,12 +25,53 @@ export const workspaceFileCreationScenario = Object.freeze({
   },
 });
 
+export const workspaceRetiredStorageIsolationScenario = Object.freeze({
+  id: 'workspace-retired-storage-isolation',
+  owner: '@neko/assets-webview',
+  prepare: prepareResourceBrowserFixture,
+  async run({ click, evaluate, screenshot, waitForSelector }) {
+    await openFixtureWorkspace(evaluate);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector('.neko-resource-browser__sources [role="tab"]');
+    await click('.neko-resource-browser__sources [role="tab"]', 0);
+    await waitForResourceBrowserIdle(evaluate);
+    await waitForResourceItem(evaluate, 'notes.txt');
+    await clickDirectoryDisclosure(evaluate, 'neko');
+    await waitForResourceItem(evaluate, 'project.json');
+    const retiredStorageIsolation = await evaluate(`(() => ({
+      unavailable: document.querySelector('.neko-resource-browser-status.is-error')?.textContent?.trim() ?? '',
+      visibleLabels: [...document.querySelectorAll('.neko-resource-browser__item strong')]
+        .map((item) => item.textContent?.trim() ?? '').filter(Boolean),
+    }))()`);
+    if (
+      retiredStorageIsolation.unavailable ||
+      retiredStorageIsolation.visibleLabels.includes('assets') ||
+      !retiredStorageIsolation.visibleLabels.includes('project.json')
+    ) {
+      throw new Error(
+        `Retired project storage was not isolated beside canonical facts: ${JSON.stringify(retiredStorageIsolation)}`,
+      );
+    }
+    const retiredStorageScreenshot = await screenshot('workspace-retired-storage-isolated');
+    return {
+      retiredStorageIsolation,
+      screenshots: [retiredStorageScreenshot],
+    };
+  },
+});
+
 async function prepareResourceBrowserFixture({ fixtureHome }) {
   const workspacePath = join(fixtureHome, 'workspace');
   await mkdir(workspacePath, { recursive: true });
+  await mkdir(join(workspacePath, 'neko', 'assets', 'Retired'), { recursive: true });
   await Promise.all([
     writeFile(join(workspacePath, 'notes.txt'), 'Local workspace file.\n', 'utf8'),
     writeFile(join(workspacePath, 'episode.fountain'), 'MIO\nHello.\n', 'utf8'),
+    writeFile(
+      join(workspacePath, 'neko', 'assets', 'Retired', 'legacy.txt'),
+      'Preserved retired linked-media bytes.\n',
+      'utf8',
+    ),
   ]);
   return { workspacePath };
 }
@@ -345,7 +386,7 @@ async function ensureDirectoryChildVisible(evaluate, directoryLabel, childLabel)
     await evaluate(`(() => [...document.querySelectorAll('.neko-resource-browser__item')]
     .some((item) => item.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(childLabel)}))()`);
   if (!visible) {
-    await activateResourceItem(evaluate, directoryLabel, true);
+    await clickDirectoryDisclosure(evaluate, directoryLabel);
     await waitForResourceItem(evaluate, childLabel);
   }
 }

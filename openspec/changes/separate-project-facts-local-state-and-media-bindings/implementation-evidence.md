@@ -195,3 +195,35 @@ Quality review and remaining risk:
 - Task 8.5 remains a release blocker: removable/NAS measurements, Windows local directory/junction/UNC,
   and measured large-package cancellation/cleanup were not available on this macOS host.
 - Task 8.6 remains open because it requires all preceding required validation tasks to be complete.
+
+## 2026-08-14 Resource Browser retired-path isolation regression
+
+- Reproduced the visible `openneko:resources:children` failure with a preserved
+  `neko/assets/...` directory beside canonical `neko/project.json`. The shared content-tree scanner
+  emitted the retired path as a `workspace-file` locator even though the canonical Content codec
+  rejects that path, causing preload projection validation to reject the complete children response.
+- The Workspace Node owner now injects the exact case-normalized retired root `neko/assets` into the
+  shared content-tree scanner's bounded exclusion set. That exact path is neither projected nor
+  traversed; valid siblings remain available and all unsupported bytes remain untouched. Other invalid
+  user paths are not silently discarded. No old locator reader, `neko/assets` resolver, migration, or
+  fallback path was restored.
+- Added a poison test whose retired directory throws if inspected. The test proves the directory is not
+  read while `neko/project.json` remains visible.
+- `pnpm --filter @neko/assets-domain test` passed 17 files / 129 tests, and
+  `pnpm --filter @neko/assets-node test` passed 17 files / 83 tests. Assets Domain and Assets Node
+  typechecks passed. Desktop Resource Browser source plus preload recovery tests passed 2 files / 18
+  tests. Focused ESLint, Prettier, and `git diff --check` passed.
+- The broader Desktop Resource Browser runtime test is currently affected by concurrent Canvas
+  workbench changes outside this fix: its right-Dock assertion expects `project-content` but receives
+  the newly active `canvas` view. This is recorded as an unrelated dirty-worktree failure and was not
+  changed by this fix.
+- UI validation uses the dedicated visible `workspace-retired-storage-isolation` Electron scenario:
+  expand `neko`, keep `project.json` visible, keep preserved `neko/assets/Retired` outside the
+  projection, and assert no Resource Browser error state. It passed through the production
+  Renderer/preload/Main/Assets path with no console error, warning, or exception at
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-13T22-50-57.632Z-workspace-retired-storage-isolation-development/report.json`.
+- The current 1996×1256 screenshot was opened and inspected directly. The Files source visibly shows
+  expanded `neko` with `project.json` beside valid root files; `assets` and the prior unavailable error
+  are absent, and the Resource dock has no clipping, overlap, or unreadable feedback. Advisory UI result
+  for this regression is `passed`. Task 8.4 remains open for its previously recorded portable-package
+  UI matrix, not for this defect.
