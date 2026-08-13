@@ -4,6 +4,7 @@ import { useTranslation } from '@neko/ui/i18n/react';
 import type {
   AgentInteractionProjection,
   AgentLaunchHostResult,
+  CharacterDialogueHandoffIntent,
   CharacterCreationHandoffIntent,
   DesktopAgentConnectionIdentity,
 } from '@neko/agent-contracts';
@@ -98,11 +99,11 @@ function CharacterProductHandoffAccessory({
       ) : null}
       {openStudio ? (
         <Button
-          disabled
+          disabled={!onHandoff}
           leadingIcon={<OpenIcon size={13} />}
           size="xs"
-          title={t('characterHandoff.studioUnavailable')}
           variant="secondary"
+          onClick={() => onHandoff?.(openStudio)}
         >
           {t('characterHandoff.openStudio')}
         </Button>
@@ -143,6 +144,8 @@ export type DesktopAgentSurfaceProps =
       readonly agentPresentation?: AgentInteractionProjection;
       readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
       readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
+      readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
+      readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
       readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly conversationFeed?: ReactNode;
@@ -155,6 +158,8 @@ export type DesktopAgentSurfaceProps =
       readonly viewId: string;
       readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
       readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
+      readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
+      readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
       readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly conversationFeed?: ReactNode;
@@ -390,6 +395,8 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
                 initialInput={state.initialInput}
                 characterCreationHandoff={props.characterCreationHandoff}
                 onCharacterCreationHandoffConsumed={props.onCharacterCreationHandoffConsumed}
+                characterDialogueHandoff={props.characterDialogueHandoff}
+                onCharacterDialogueHandoffConsumed={props.onCharacterDialogueHandoffConsumed}
                 locale={locale}
                 presentation="desktop-dock"
                 conversationFeed={

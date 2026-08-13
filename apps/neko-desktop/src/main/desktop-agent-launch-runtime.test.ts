@@ -52,6 +52,17 @@ describe('Desktop Agent launch native adapter', () => {
             mediaType: 'document',
           },
           {
+            id: 'file:reference-image',
+            label: 'reference.png',
+            contentLocator: {
+              kind: 'media-library',
+              libraryName: 'References',
+              relativePath: 'reference.png',
+            },
+            mediaType: 'image',
+            source: 'media-library',
+          },
+          {
             id: 'file:draft',
             label: 'draft.docx',
             contentLocator: { kind: 'workspace-file', path: 'docs/draft.docx' },
@@ -97,6 +108,18 @@ describe('Desktop Agent launch native adapter', () => {
         }),
       }),
       expect.objectContaining({
+        id: 'file:reference-image',
+        data: expect.objectContaining({
+          locator: {
+            kind: 'media-library',
+            libraryName: 'References',
+            relativePath: 'reference.png',
+          },
+          mediaType: 'image',
+          source: 'media-library',
+        }),
+      }),
+      expect.objectContaining({
         id: 'file:draft',
         data: expect.objectContaining({
           locator: { kind: 'workspace-file', path: 'docs/draft.docx' },
@@ -123,7 +146,12 @@ describe('Desktop Agent launch native adapter', () => {
     let identity = 0;
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+        readGlobalSkillCatalog: async () => ({
+          records: [],
+          diagnostics: [],
+          warnings: [],
+          commands: { records: [], diagnostics: [] },
+        }),
       },
       config: createConfig(),
       selectResource,
@@ -131,7 +159,12 @@ describe('Desktop Agent launch native adapter', () => {
       workspaceMentions: {
         search: async ({ filter }) => ({ filter, files: [], mentionExtras: [] }),
       },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+      readWorkspaceSkillCatalog: async () => ({
+        records: [],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      }),
       resolveWorkspaceReferenceContext: async () => {
         throw new Error('Workspace reference resolution is not expected by this test.');
       },
@@ -187,7 +220,12 @@ describe('Desktop Agent launch native adapter', () => {
     let identity = 0;
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+        readGlobalSkillCatalog: async () => ({
+          records: [],
+          diagnostics: [],
+          warnings: [],
+          commands: { records: [], diagnostics: [] },
+        }),
       },
       config: createConfig(),
       selectResource: async () => ({
@@ -198,7 +236,12 @@ describe('Desktop Agent launch native adapter', () => {
       workspaceMentions: {
         search: async ({ filter }) => ({ filter, files: [], mentionExtras: [] }),
       },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+      readWorkspaceSkillCatalog: async () => ({
+        records: [],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      }),
       resolveWorkspaceReferenceContext: async () => {
         throw new Error('Workspace reference resolution is not expected by this test.');
       },
@@ -259,7 +302,12 @@ describe('Desktop Agent launch native adapter', () => {
     let identity = 0;
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+        readGlobalSkillCatalog: async () => ({
+          records: [],
+          diagnostics: [],
+          warnings: [],
+          commands: { records: [], diagnostics: [] },
+        }),
       },
       config: createConfig(),
       selectResource: async () => ({ label: 'brief.txt', hostResource: '/private/brief.txt' }),
@@ -267,7 +315,12 @@ describe('Desktop Agent launch native adapter', () => {
       workspaceMentions: {
         search: async ({ filter }) => ({ filter, files: [], mentionExtras: [] }),
       },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+      readWorkspaceSkillCatalog: async () => ({
+        records: [],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      }),
       resolveWorkspaceReferenceContext: async () => {
         throw new Error('Workspace reference resolution is not expected by this test.');
       },
@@ -442,13 +495,23 @@ describe('Desktop Agent launch native adapter', () => {
     }));
     const runtime = createDesktopAgentLaunchRuntime({
       agent: {
-        readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+        readGlobalSkillCatalog: async () => ({
+          records: [],
+          diagnostics: [],
+          warnings: [],
+          commands: { records: [], diagnostics: [] },
+        }),
       },
       config: createConfig(),
       selectResource: async () => undefined,
       readTextResource: async () => '',
       workspaceMentions: { search },
-      readWorkspaceSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+      readWorkspaceSkillCatalog: async () => ({
+        records: [],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      }),
       resolveWorkspaceReferenceContext: async ({ reference }) => ({
         type: reference.kind === 'file' ? 'file' : 'entity',
         id:

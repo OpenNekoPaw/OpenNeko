@@ -5,7 +5,7 @@
 The product SHALL expose Media Library as the single direct user-visible entry for browsing, searching,
 opening, and diagnosing arbitrary accessible file resources. Ordinary workspace and linked files MUST NOT
 require Asset membership, an Asset ID, or a catalog record. The product MAY expose a separate Asset Library
-only for reusable packages explicitly imported, installed, or published through a manifest-backed Asset
+only for reusable packages explicitly imported or installed from local sources through a manifest-backed Asset
 lifecycle; Asset Library MUST NOT become a prerequisite, fallback resolver, or discovery catalog for
 ordinary files.
 
@@ -21,5 +21,5 @@ ordinary files.
 
 #### Scenario: Browse an explicitly managed Asset
 
-- **WHEN** the user opens Asset Library for a package explicitly imported, installed, or published as an Asset
+- **WHEN** the user opens Asset Library for a package explicitly imported or installed as an Asset
 - **THEN** the package is managed by its manifest identity without changing how ordinary files are resolved

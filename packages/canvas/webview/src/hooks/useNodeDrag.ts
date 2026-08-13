@@ -42,6 +42,8 @@ interface NodeDragCtx {
 }
 
 const SCROLLBAR_HIT_SIZE_PX = 18;
+const CANVAS_ALIGNMENT_GRID = 20;
+const CANVAS_ALIGNMENT_THRESHOLD_PX = 8;
 const DRAG_BLOCK_SELECTOR = [
   'button',
   'input',
@@ -116,6 +118,18 @@ export function getNodeDragStartDecision(event: MouseEvent): NodeDragStartDecisi
   return { canStart: true, stopPropagation: false };
 }
 
+export function alignCanvasPosition(
+  position: { readonly x: number; readonly y: number },
+  zoom: number,
+): { x: number; y: number } {
+  const threshold = CANVAS_ALIGNMENT_THRESHOLD_PX / zoom;
+  const align = (value: number): number => {
+    const candidate = Math.round(value / CANVAS_ALIGNMENT_GRID) * CANVAS_ALIGNMENT_GRID;
+    return Math.abs(candidate - value) <= threshold ? candidate : value;
+  };
+  return { x: align(position.x), y: align(position.y) };
+}
+
 // =============================================================================
 // Hook
 // =============================================================================
@@ -153,10 +167,13 @@ export function useNodeDrag({
       onDrag?.(nodeId, newPosition);
     },
     onEnd: (e, ctx) => {
-      const finalPosition = {
-        x: ctx.posX + (e.clientX - ctx.startX) / ctx.zoom,
-        y: ctx.posY + (e.clientY - ctx.startY) / ctx.zoom,
-      };
+      const finalPosition = alignCanvasPosition(
+        {
+          x: ctx.posX + (e.clientX - ctx.startX) / ctx.zoom,
+          y: ctx.posY + (e.clientY - ctx.startY) / ctx.zoom,
+        },
+        ctx.zoom,
+      );
       setPosition(finalPosition);
       onDragEnd?.(nodeId, finalPosition);
     },

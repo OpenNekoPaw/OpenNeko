@@ -7,88 +7,110 @@ import {
   projectLocalTargetKey,
   projectPublicationDependencyKey,
   type ProjectLocalTargetRef,
-} from '../contracts/project-composition';
+  type ProjectPublicationDependencyRef,
+} from '../contracts/project-target';
 import type { ProjectAuthoringNavigationItem } from '../contracts/project-authoring-navigation';
-import {
-  ProjectCompositionService,
-  type ProjectCompositionRepository,
-} from './project-composition-service';
 import {
   projectAuthoringNavigation,
   type ProjectTargetResolution,
 } from './project-target-projection';
+import type { ProjectContentReferenceReaderPort } from './project-dependency-projection';
+import { ProjectDependencyService } from './project-dependency-service';
 
 export class ProjectAuthoringNavigationService {
-  private readonly compositions: ProjectCompositionService;
-
   constructor(
     private readonly options: {
-      readonly composition: ProjectCompositionRepository;
       readonly characters: CharacterAuthoringCatalogPort;
       readonly worlds: WorldAuthoringCatalogPort;
+      readonly references: ProjectContentReferenceReaderPort;
     },
-  ) {
-    this.compositions = new ProjectCompositionService(options.composition);
-  }
+  ) {}
 
   async read(input: {
     readonly contentProjectId: string;
     readonly contentLabel: string;
     readonly signal?: AbortSignal;
   }): Promise<readonly ProjectAuthoringNavigationItem[]> {
-    const composition = await this.compositions.require(input.contentProjectId, input.signal);
-    const [characters, worlds] = await Promise.all([
-      this.options.characters.readAuthoringCatalog(input.signal),
-      this.options.worlds.readAuthoringCatalog(input.signal),
-    ]);
+    const { characters, worlds, dependencies } = await new ProjectDependencyService(
+      this.options,
+    ).readWithOwners(input.contentProjectId, input.signal);
     requireProjectScope(characters, input.contentProjectId, 'Character');
     requireProjectScope(worlds, input.contentProjectId, 'World');
+    const localTargets: ProjectLocalTargetRef[] = [
+      ...characters.projects.map((project) => ({
+        kind: 'character-project' as const,
+        characterProjectId: project.characterProjectId,
+      })),
+      ...worlds.projects.map((project) => ({
+        kind: 'world-project' as const,
+        worldProjectId: project.worldProjectId,
+      })),
+    ];
+    const dependencyRefs = dependencies.dependencies.map((item) => item.dependency);
     return projectAuthoringNavigation({
-      composition,
+      projectId: input.contentProjectId,
+      localTargets,
+      dependencies: dependencyRefs,
       content: {
         identity: `content-project:${input.contentProjectId}`,
         label: input.contentLabel,
       },
-      localTargetResolutions: composition.localTargets.map((target) =>
+      localTargetResolutions: localTargets.map((target) =>
         resolveLocalTarget(target, characters, worlds),
       ),
-      dependencyResolutions: composition.dependencies.map((dependency): ProjectTargetResolution => {
-        const identity = projectPublicationDependencyKey(dependency);
-        if (dependency.kind === 'character-version') {
-          const publication = characters.versions.find(
-            (item) => item.characterVersionId === dependency.characterVersionId,
-          );
-          return publication
-            ? {
-                identity,
-                label: publication.label,
-                sourceStudioTarget: {
-                  kind: 'character-studio',
-                  characterProjectId: publication.characterProjectId,
-                },
-              }
-            : {
-                identity,
-                diagnostic: `CharacterVersion '${dependency.characterVersionId}' is unavailable.`,
-              };
+      dependencyResolutions: dependencyRefs.map((dependency) =>
+        resolveDependency(dependency, characters, worlds),
+      ),
+    });
+  }
+}
+
+function resolveDependency(
+  dependency: ProjectPublicationDependencyRef,
+  characters: CharacterAuthoringCatalog,
+  worlds: WorldAuthoringCatalog,
+): ProjectTargetResolution {
+  const identity = projectPublicationDependencyKey(dependency);
+  if (dependency.kind === 'character-version') {
+    const publication = characters.versions.find(
+      (item) => item.characterVersionId === dependency.characterVersionId,
+    );
+    return publication
+      ? {
+          identity,
+          label: publication.label,
+          sourceStudioTarget: {
+            kind: 'character-studio',
+            characterProjectId: publication.characterProjectId,
+          },
         }
-        return {
+      : {
+          identity,
+          diagnostic: `CharacterVersion '${dependency.characterVersionId}' is unavailable.`,
+        };
+  }
+  if (dependency.kind === 'world-experience-version') {
+    const publication = worlds.versions.find(
+      (item) => item.worldVersionId === dependency.worldExperienceVersionId,
+    );
+    return publication
+      ? {
+          identity,
+          label: publication.label,
+          sourceStudioTarget: {
+            kind: 'world-studio',
+            worldProjectId: publication.worldProjectId,
+          },
+        }
+      : {
           identity,
           diagnostic: `WorldExperienceVersion '${dependency.worldExperienceVersionId}' is unavailable.`,
         };
-      }),
-      discoveredLocalTargets: [
-        ...characters.projects.map((project): ProjectLocalTargetRef => ({
-          kind: 'character-project',
-          characterProjectId: project.characterProjectId,
-        })),
-        ...worlds.projects.map((project): ProjectLocalTargetRef => ({
-          kind: 'world-project',
-          worldProjectId: project.worldProjectId,
-        })),
-      ],
-    });
   }
+  return {
+    identity,
+    diagnostic: `Dependency '${identity}' requires its exact owner availability reader.`,
+  };
 }
 
 function resolveLocalTarget(

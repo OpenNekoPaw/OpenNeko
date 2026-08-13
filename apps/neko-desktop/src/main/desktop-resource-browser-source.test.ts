@@ -19,7 +19,10 @@ import type {
   AssetLibraryMembershipRecord,
   AssetLibraryMembershipRepository,
 } from '@neko/assets-domain/global-library/membership';
-import { presentResourceBrowserContentItem } from '@neko/assets-domain/resource-browser/presenter';
+import {
+  presentResourceBrowserContentItem,
+  presentResourceBrowserMediaLibraryRootItem,
+} from '@neko/assets-domain/resource-browser/presenter';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import {
   createResourceBrowserNodeProjectionSource,
@@ -30,10 +33,12 @@ import {
 } from '@neko/assets-node';
 import {
   createGlobalMediaLibraryConnection,
+  createProjectMediaLibraryBindingFingerprint,
   listGlobalMediaLibraryConnections,
+  ProjectMediaLibraryBindingRepository,
   removeGlobalMediaLibraryConnection,
 } from '@neko/assets-node';
-import { WorkspaceMediaLibrarySyncService } from '@neko/assets-node';
+import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 
 const temporaryRoots: string[] = [];
 const identity: ResourceBrowserIdentity = {
@@ -59,7 +64,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(
       path.join(nekoDirectory, 'entities.json'),
       encodeProjectEntityDocument({
-        projectId: identity.workspaceId,
+        projectId: identity.projectId,
         entities: [
           {
             entityId: 'character-a',
@@ -69,8 +74,9 @@ describe('Desktop Resource Browser source', () => {
               {
                 bindingId: 'binding-footage',
                 target: {
-                  kind: 'workspace-file',
-                  path: 'neko/assets/Footage/shot.mov',
+                  kind: 'media-library',
+                  libraryName: 'Footage',
+                  relativePath: 'shot.mov',
                 },
                 role: 'portrait',
                 source: 'user',
@@ -97,21 +103,17 @@ describe('Desktop Resource Browser source', () => {
       locator: { kind: 'relative' as const, value: 'workspace' },
     };
     const source = createResourceBrowserNodeReadSource({
+      projectId: identity.projectId,
       globalAssetRoot: path.join(fixture.root, '.openneko', 'assets'),
+      globalMediaLibraryRoot: path.join(fixture.root, '.openneko', 'media-libraries'),
       workspace,
       host,
-      workspaceMediaLibrarySync: new WorkspaceMediaLibrarySyncService(
-        path.join(fixture.root, '.openneko', 'media-libraries'),
-      ),
-      readEntityCharacterResources: async () => [],
     });
 
     await expect(source.media.search({ identity, query: '', limit: 20 })).resolves.toEqual([
       expect.objectContaining({
         label: 'Footage',
         libraryName: 'Footage',
-        availability: 'unavailable',
-        capabilities: [],
         libraryStatus: expect.objectContaining({
           state: 'required-unlinked',
           referenceCount: 1,
@@ -161,32 +163,15 @@ describe('Desktop Resource Browser source', () => {
       displayName: 'Fixture',
       locator: { kind: 'relative' as const, value: 'workspace' },
     };
-    const workspaceMediaLibrarySync = new WorkspaceMediaLibrarySyncService(
-      path.join(fixture.root, '.openneko', 'media-libraries'),
-    );
     const source = createResourceBrowserNodeReadSource({
+      projectId: identity.projectId,
       globalAssetRoot: path.join(fixture.root, '.openneko', 'assets'),
+      globalMediaLibraryRoot: path.join(fixture.root, '.openneko', 'media-libraries'),
       workspace,
       host,
-      workspaceMediaLibrarySync,
-      readEntityCharacterResources: async () => [],
     });
 
-    await expect(source.media.search({ identity, query: '', limit: 20 })).resolves.toEqual([
-      expect.objectContaining({
-        label: 'Library',
-        availability: 'available',
-        libraryStatus: expect.objectContaining({
-          state: 'unreferenced-linked',
-        }),
-      }),
-    ]);
-    await expect(workspaceMediaLibrarySync.inspect(workspace)).resolves.toMatchObject({
-      coverage: 'incomplete',
-      portability: {
-        state: 'coverage-incomplete',
-      },
-    });
+    await expect(source.media.search({ identity, query: '', limit: 20 })).resolves.toEqual([]);
   });
 
   it('keeps Asset Library content independent from connected Media Library files', async () => {
@@ -326,7 +311,9 @@ describe('Desktop Resource Browser source', () => {
       logger: createLogger(),
     });
     const source = createResourceBrowserNodeReadSource({
+      projectId: identity.projectId,
       globalAssetRoot: path.join(fixture.root, '.openneko', 'assets'),
+      globalMediaLibraryRoot: path.join(fixture.root, '.openneko', 'media-libraries'),
       workspace: {
         workspaceId: identity.workspaceId,
         workspacePath: fixture.workspace,
@@ -334,7 +321,6 @@ describe('Desktop Resource Browser source', () => {
         locator: { kind: 'relative', value: 'workspace' },
       },
       host,
-      readEntityCharacterResources: async () => [],
     });
 
     await expect(source.files.list({ identity, query: 'brief', limit: 20 })).resolves.toEqual([
@@ -345,7 +331,7 @@ describe('Desktop Resource Browser source', () => {
     ]);
   });
 
-  it('projects Files, Media, Assets and Entities through their owning identities', async () => {
+  it('projects Files, Media and Assets through their owning identities', async () => {
     const fixture = await createFixture();
     const globalAssetRoot = path.join(fixture.root, '.openneko', 'assets');
     await mkdir(globalAssetRoot, { recursive: true });
@@ -355,37 +341,11 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(path.join(mediaRoot, 'voice.wav'), 'audio');
     await mkdir(path.join(fixture.workspace, 'neko', 'assets'), { recursive: true });
     await symlink(mediaRoot, path.join(fixture.workspace, 'neko', 'assets', 'Voice'));
-    await mkdir(path.join(fixture.workspace, 'characters'), { recursive: true });
-    await writeFile(path.join(fixture.workspace, 'characters', 'neko.png'), 'image');
+    await bindProjectMediaLibrary(fixture.workspace, mediaRoot, 'Voice');
     await mkdir(path.join(fixture.workspace, 'coverage'), { recursive: true });
     await writeFile(path.join(fixture.workspace, 'coverage', 'favicon.png'), 'report');
     await writeFile(path.join(fixture.workspace, 'index.ts'), 'export {};');
     await writeFile(path.join(fixture.workspace, 'workspace-only.mp4'), 'video');
-    await writeFile(
-      path.join(fixture.workspace, 'neko', 'entities.json'),
-      JSON.stringify({
-        projectId: 'workspace-1',
-        entities: [
-          {
-            entityId: 'character-neko',
-            kind: 'character',
-            names: { canonical: 'Neko', aliases: ['猫'] },
-            representations: [
-              {
-                bindingId: 'binding-neko',
-                target: { kind: 'workspace-file', path: 'characters/neko.png' },
-                role: 'portrait',
-                source: 'user',
-                acceptedAt: '2026-07-28T00:00:00.000Z',
-              },
-            ],
-            lifecycle: { state: 'active' },
-            createdAt: '2026-07-28T00:00:00.000Z',
-            updatedAt: '2026-07-28T00:00:00.000Z',
-          },
-        ],
-      }),
-    );
 
     const composition = createComposition(fixture.workspace);
     const media = await composition.source.media.search({
@@ -394,11 +354,6 @@ describe('Desktop Resource Browser source', () => {
       limit: 20,
     });
     const allMedia = await composition.source.media.search({
-      identity,
-      query: '',
-      limit: 20,
-    });
-    const entityProjection = await composition.source.entities.list({
       identity,
       query: '',
       limit: 20,
@@ -413,20 +368,13 @@ describe('Desktop Resource Browser source', () => {
       expect.arrayContaining([
         expect.objectContaining({
           locator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Voice/voice.wav',
+            kind: 'media-library',
+            libraryName: 'Voice',
+            relativePath: 'voice.wav',
           },
         }),
       ]),
     );
-    expect(entityProjection).toMatchObject({
-      projections: [
-        {
-          status: 'confirmed',
-          entity: { entityId: 'character-neko', kind: 'character' },
-        },
-      ],
-    });
     expect(assets).toEqual([
       expect.objectContaining({
         owner: 'global-asset-library',
@@ -437,22 +385,27 @@ describe('Desktop Resource Browser source', () => {
     ]);
     expect(
       allMedia.some(
-        (entry) => entry.locator.kind === 'workspace-file' && entry.locator.path === 'index.ts',
+        (entry) =>
+          entry.role !== 'library-root' &&
+          entry.locator.kind === 'workspace-file' &&
+          entry.locator.path === 'index.ts',
       ),
     ).toBe(false);
     expect(
       allMedia.some(
         (entry) =>
+          entry.role !== 'library-root' &&
           entry.locator.kind === 'workspace-file' && entry.locator.path === 'coverage/favicon.png',
       ),
     ).toBe(false);
     expect(
       allMedia.some(
         (entry) =>
+          entry.role !== 'library-root' &&
           entry.locator.kind === 'workspace-file' && entry.locator.path === 'workspace-only.mp4',
       ),
     ).toBe(false);
-    expect(JSON.stringify({ media, assets, entityProjection })).not.toContain(fixture.root);
+    expect(JSON.stringify({ media, assets })).not.toContain(fixture.root);
   });
 
   it('opens an in-app Preview, reveals an authorized item and rejects an unmanaged symlink escape', async () => {
@@ -536,6 +489,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(path.join(mediaRoot, 'story.otio'), '{"OTIO_SCHEMA":"Timeline.1"}');
     await mkdir(path.join(fixture.workspace, 'neko', 'assets'), { recursive: true });
     await symlink(mediaRoot, path.join(fixture.workspace, 'neko', 'assets', 'Editorial'));
+    await bindProjectMediaLibrary(fixture.workspace, mediaRoot, 'Editorial');
     const openCreativeDocument = vi.fn(async () => undefined);
     const composition = createComposition(fixture.workspace, { openCreativeDocument });
     const mediaRoots = await composition.source.media.search({
@@ -547,7 +501,10 @@ describe('Desktop Resource Browser source', () => {
     if (!editorialRoot) throw new Error('Missing Editorial library fixture.');
     const media = await composition.source.media.children({
       identity,
-      parent: presentResourceBrowserContentItem(editorialRoot, 'media'),
+      parent:
+        editorialRoot.role === 'library-root'
+          ? presentResourceBrowserMediaLibraryRootItem(editorialRoot)
+          : presentResourceBrowserContentItem(editorialRoot, 'media'),
       limit: 20,
     });
     const files = await composition.source.files.list({
@@ -557,8 +514,10 @@ describe('Desktop Resource Browser source', () => {
     });
     const cut = media.find(
       (entry) =>
-        entry.locator.kind === 'workspace-file' &&
-        entry.locator.path === 'neko/assets/Editorial/story.otio',
+        entry.role !== 'library-root' &&
+        entry.locator.kind === 'media-library' &&
+        entry.locator.libraryName === 'Editorial' &&
+        entry.locator.relativePath === 'story.otio',
     );
 
     expect(cut).toMatchObject({
@@ -579,7 +538,7 @@ describe('Desktop Resource Browser source', () => {
       identity,
       item: {
         resourceId: 'content:story',
-        source: 'media',
+        source: 'files',
         role: 'content',
         depth: 0,
         kind: 'file',
@@ -596,242 +555,18 @@ describe('Desktop Resource Browser source', () => {
     });
   });
 
-  it('retains deprecated Entities for management instead of applying the Agent active-only filter', async () => {
-    const fixture = await createFixture();
-    await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
-    await writeFile(
-      path.join(fixture.workspace, 'neko', 'entities.json'),
-      JSON.stringify({
-        projectId: 'workspace-1',
-        entities: [
-          {
-            entityId: 'confirmed',
-            kind: 'character',
-            names: { canonical: 'Confirmed', aliases: [] },
-            representations: [
-              {
-                bindingId: 'binding-confirmed',
-                target: { kind: 'workspace-file', path: 'confirmed.png' },
-                role: 'portrait',
-                source: 'user',
-                acceptedAt: '2026-07-29T00:00:00.000Z',
-              },
-            ],
-            lifecycle: { state: 'active' },
-            createdAt: '2026-07-29T00:00:00.000Z',
-            updatedAt: '2026-07-29T00:00:00.000Z',
-          },
-          {
-            entityId: 'deprecated',
-            kind: 'character',
-            names: { canonical: 'Deprecated', aliases: [] },
-            representations: [],
-            lifecycle: {
-              state: 'deprecated',
-              deprecatedAt: '2026-07-29T00:00:00.000Z',
-            },
-            createdAt: '2026-07-29T00:00:00.000Z',
-            updatedAt: '2026-07-29T00:00:00.000Z',
-          },
-        ],
-      }),
-    );
-
-    const result = await createComposition(fixture.workspace).source.entities.list({
-      identity,
-      query: '',
-      limit: 20,
-    });
-
-    expect(
-      result.projections.map((projection) => [
-        projection.status,
-        projection.status === 'candidate'
-          ? projection.candidate.candidateId
-          : projection.entity.entityId,
-      ]),
-    ).toEqual([
-      ['confirmed', 'confirmed'],
-      ['deprecated', 'deprecated'],
-    ]);
-  });
-
-  it('returns Entity-local diagnostics for unsupported metadata and a foreign Project identity', async () => {
-    const fixture = await createFixture();
-    await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
-    const entityPath = path.join(fixture.workspace, 'neko', 'entities.json');
-    const source = JSON.stringify({
-      projectId: 'workspace-other',
-      unsupportedField: 'preserved',
-      entities: [
-        {
-          entityId: 'foreign-character',
-          kind: 'character',
-          names: { canonical: 'Foreign', aliases: [] },
-          representations: [],
-          lifecycle: { state: 'active' },
-          createdAt: '2026-08-07T00:00:00.000Z',
-          updatedAt: '2026-08-07T00:00:00.000Z',
-        },
-      ],
-    });
-    await writeFile(entityPath, source);
-
-    await expect(
-      createComposition(fixture.workspace).source.entities.list({
-        identity,
-        query: '',
-        limit: 20,
-      }),
-    ).resolves.toEqual({
-      projections: [],
-      characterAssociations: [],
-      diagnostics: [
-        {
-          code: 'invalid-project-entity-document',
-          message: 'Project Entity document contains unsupported fields: unsupportedField.',
-        },
-        {
-          code: 'project-entity-owner-mismatch',
-          message:
-            "Project Entity document belongs to Project 'workspace-other', not current Project 'workspace-1'.",
-        },
-      ],
-      inspectorCapabilities: [],
-    });
-    await expect(readFile(entityPath, 'utf8')).resolves.toBe(source);
-  });
-
-  it('combines canonical Entities with candidate and binding-attention local metadata', async () => {
-    const fixture = await createFixture();
-    await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
-    await writeFile(
-      path.join(fixture.workspace, 'neko', 'entities.json'),
-      JSON.stringify({
-        projectId: 'workspace-1',
-        entities: [
-          {
-            entityId: 'character-rin',
-            kind: 'character',
-            names: { canonical: 'Rin', aliases: [] },
-            representations: [
-              {
-                bindingId: 'binding-rin',
-                target: { kind: 'workspace-file', path: 'characters/rin.png' },
-                role: 'portrait',
-                source: 'user',
-                acceptedAt: '2026-08-05T00:00:00.000Z',
-              },
-            ],
-            lifecycle: { state: 'active' },
-            createdAt: '2026-08-05T00:00:00.000Z',
-            updatedAt: '2026-08-05T00:00:00.000Z',
-          },
-        ],
-      }),
-    );
-    const list = vi.fn(async () => ({
-      records: [
-        {
-          projectionId: 'candidate:mio',
-          kind: 'entity-candidate' as const,
-          sourceId: 'document:story',
-          candidateId: 'candidate-mio',
-          freshness: 'fresh' as const,
-          value: {
-            candidateId: 'candidate-mio',
-            kind: 'character' as const,
-            proposedNames: { canonical: 'Mio', aliases: [] },
-            freshness: 'fresh' as const,
-            evidence: [
-              {
-                evidenceId: 'evidence:mio',
-                owner: 'document' as const,
-                sourceId: 'document:story',
-              },
-            ],
-          },
-          updatedAt: '2026-08-05T01:00:00.000Z',
-        },
-        {
-          projectionId: 'binding:rin',
-          kind: 'binding-availability' as const,
-          sourceId: 'workspace-file:characters/rin.png',
-          entityId: 'character-rin',
-          freshness: 'fresh' as const,
-          value: {
-            bindingId: 'binding-rin',
-            entityId: 'character-rin',
-            entityKind: 'character' as const,
-            representation: { kind: 'workspace-file' as const, path: 'characters/rin.png' },
-            role: 'portrait' as const,
-            owner: 'workspace-file' as const,
-            availability: 'needs-attention' as const,
-            attention: {
-              diagnostic: { code: 'content-missing' as const },
-              action: 'rebind' as const,
-            },
-            checkedAt: '2026-08-05T01:00:00.000Z',
-          },
-          updatedAt: '2026-08-05T01:00:00.000Z',
-        },
-      ],
-      diagnostics: [],
-    }));
-    const refreshEntityProjections = vi.fn(async () => undefined);
-
-    const result = await createComposition(fixture.workspace, {
-      entityProjections: { list },
-      refreshEntityProjections,
-    }).source.entities.list({ identity, query: '', limit: 20 });
-
-    expect(refreshEntityProjections).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 'workspace-1', workspacePath: fixture.workspace }),
-    );
-    expect(list).toHaveBeenCalledWith({
-      partition: {
-        scope: 'workspace',
-        workspaceId: 'workspace-1',
-        domain: 'project-entity-projection',
-      },
-      kinds: ['entity-candidate', 'binding-availability'],
-    });
-    expect(result).toMatchObject({
-      projections: [
-        {
-          projectionId: 'entity:character-rin',
-          status: 'needs-attention',
-          entity: { entityId: 'character-rin' },
-          bindingAvailability: [
-            {
-              bindingId: 'binding-rin',
-              availability: 'needs-attention',
-              attention: { action: 'rebind' },
-            },
-          ],
-        },
-        {
-          projectionId: 'candidate:candidate-mio',
-          status: 'candidate',
-          candidate: { candidateId: 'candidate-mio' },
-        },
-      ],
-    });
-  });
-
   it('adds a selected directory through links without copying the library', async () => {
     const fixture = await createFixture();
     const selected = path.join(fixture.root, 'Media Source');
     await mkdir(selected);
     await writeFile(path.join(selected, 'unreferenced.mov'), 'external-only');
+    await writeMediaRequirement(fixture.workspace, 'Media Source', 'unreferenced.mov');
     const composition = createComposition(fixture.workspace, {
       selectSource: async () => selected,
     });
 
     await expect(composition.interactions.addDirectoryLibrary({ identity })).resolves.toBe('added');
 
-    const link = await lstat(path.join(fixture.workspace, 'neko', 'assets', 'Media Source'));
-    expect(link.isSymbolicLink()).toBe(true);
     expect(
       (
         await lstat(
@@ -850,9 +585,12 @@ describe('Desktop Resource Browser source', () => {
         availability: 'available',
       }),
     ]);
-    expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'Media Source'))).toBe(
-      await realpath(selected),
-    );
+    await expect(
+      new ProjectMediaLibraryBindingRepository(
+        fixture.workspace,
+        identity.projectId,
+      ).read('Media Source'),
+    ).resolves.toMatchObject({ status: 'available' });
     await expect(readFile(path.join(selected, 'unreferenced.mov'), 'utf8')).resolves.toBe(
       'external-only',
     );
@@ -863,6 +601,8 @@ describe('Desktop Resource Browser source', () => {
     const selected = path.join(fixture.root, 'Global Footage');
     const globalMediaLibraryRoot = path.join(fixture.root, '.openneko', 'media-libraries');
     await mkdir(selected);
+    await writeMediaRequirement(fixture.workspace, 'Global Footage', 'shot.mov');
+    await writeFile(path.join(selected, 'shot.mov'), 'shot');
     const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: globalMediaLibraryRoot,
       sourceDirectory: selected,
@@ -877,36 +617,50 @@ describe('Desktop Resource Browser source', () => {
       windowId: identity.windowId,
       libraries: [{ libraryId, name: 'Global Footage', locationKind: 'nas' }],
     });
-    expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'Global Footage'))).toBe(
-      await realpath(selected),
-    );
+    await expect(
+      new ProjectMediaLibraryBindingRepository(
+        fixture.workspace,
+        identity.projectId,
+      ).read('Global Footage'),
+    ).resolves.toMatchObject({
+      status: 'available',
+      binding: { connectionId: libraryId },
+    });
   });
 
-  it('rolls back a newly created global library when the workspace link fails', async () => {
+  it('keeps cancelled directory selection free of local and global mutation', async () => {
     const fixture = await createFixture();
-    const selected = path.join(fixture.root, 'Conflict');
-    await mkdir(selected);
-    await mkdir(path.join(fixture.workspace, 'neko', 'assets', 'Conflict'), { recursive: true });
     const globalMediaLibraryRoot = path.join(fixture.root, '.openneko', 'media-libraries');
     const composition = createComposition(fixture.workspace, {
-      selectSource: async () => selected,
+      selectSource: async () => undefined,
     });
 
-    await expect(composition.interactions.addDirectoryLibrary({ identity })).rejects.toThrow();
+    await expect(composition.interactions.addDirectoryLibrary({ identity })).resolves.toBe(
+      'cancelled',
+    );
     await expect(listGlobalMediaLibraryConnections(globalMediaLibraryRoot)).resolves.toEqual([]);
+    await expect(
+      lstat(path.join(fixture.workspace, '.neko', 'media-libraries')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('relinks and removes only the selected managed media library root', async () => {
     const fixture = await createFixture();
     const first = path.join(fixture.root, 'original', 'First');
-    const second = path.join(fixture.root, 'replacement', 'First');
+    const second = path.join(fixture.root, 'replacement', 'Second');
     await mkdir(first, { recursive: true });
     await mkdir(second, { recursive: true });
-    await writeFile(path.join(first, 'first-only.mov'), 'first');
-    await writeFile(path.join(second, 'second-only.mov'), 'second');
+    await writeFile(path.join(first, 'shared.mov'), 'first');
+    await writeFile(path.join(second, 'shared.mov'), 'second');
+    await writeMediaRequirement(fixture.workspace, 'First', 'shared.mov');
     await createComposition(fixture.workspace, {
       selectSource: async () => first,
     }).interactions.addDirectoryLibrary({ identity });
+    const { libraryId: secondConnectionId } = await createGlobalMediaLibraryConnection({
+      mediaLibraryRoot: path.join(fixture.root, '.openneko', 'media-libraries'),
+      sourceDirectory: second,
+      locationKind: 'local',
+    });
     const libraryItem = {
       resourceId: 'content:library',
       source: 'media' as const,
@@ -915,37 +669,35 @@ describe('Desktop Resource Browser source', () => {
       libraryName: 'First',
       kind: 'directory' as const,
       label: 'First',
-      locator: { kind: 'workspace-file' as const, path: 'neko/assets/First' },
-      capabilities: ['reveal'] as const,
+      libraryStatus: {
+        libraryName: 'First',
+        state: 'available' as const,
+        referenceCount: 0,
+        missingCount: 0,
+        operationFingerprint: 'sha256:first',
+      },
+      capabilities: [] as const,
     };
     const composition = createComposition(fixture.workspace, {
-      selectSource: async () => second,
+      selectGlobalLibrary: async () => secondConnectionId,
     });
 
     await expect(
       composition.interactions.relinkSource({ identity, item: libraryItem }),
     ).resolves.toBe('relinked');
-    expect(await realpath(path.join(fixture.workspace, 'neko', 'assets', 'First'))).toBe(
-      await realpath(second),
-    );
-    expect(
-      await realpath(path.join(fixture.root, '.openneko', 'media-libraries', 'local', 'First')),
-    ).toBe(await realpath(second));
-    expect(
-      (await lstat(path.join(fixture.workspace, 'neko', 'assets', 'First'))).isSymbolicLink(),
-    ).toBe(true);
-    expect(
-      (
-        await lstat(path.join(fixture.root, '.openneko', 'media-libraries', 'local', 'First'))
-      ).isSymbolicLink(),
-    ).toBe(true);
+    await expect(
+      new ProjectMediaLibraryBindingRepository(fixture.workspace, identity.projectId).read('First'),
+    ).resolves.toMatchObject({
+      status: 'available',
+      binding: { connectionId: secondConnectionId },
+    });
 
     await composition.interactions.removeSource({ identity, item: libraryItem });
     await expect(
-      lstat(path.join(fixture.workspace, 'neko', 'assets', 'First')),
+      lstat(path.join(fixture.workspace, '.neko', 'media-libraries', 'First.json')),
     ).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(readFile(path.join(first, 'first-only.mov'), 'utf8')).resolves.toBe('first');
-    await expect(readFile(path.join(second, 'second-only.mov'), 'utf8')).resolves.toBe('second');
+    await expect(readFile(path.join(first, 'shared.mov'), 'utf8')).resolves.toBe('first');
+    await expect(readFile(path.join(second, 'shared.mov'), 'utf8')).resolves.toBe('second');
   });
 
   it('projects the Desktop preview and Canvas file kinds shown by the Resource Browser', async () => {
@@ -955,6 +707,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(path.join(mediaRoot, 'test.glb'), 'glb');
     await mkdir(path.join(fixture.workspace, 'neko', 'assets'), { recursive: true });
     await symlink(mediaRoot, path.join(fixture.workspace, 'neko', 'assets', 'Models'));
+    await bindProjectMediaLibrary(fixture.workspace, mediaRoot, 'Models');
     await writeFile(path.join(fixture.workspace, 'test_model.html'), '<main>model</main>');
     await writeFile(path.join(fixture.workspace, 'candidates.json'), '{"items":[]}');
     await writeFile(path.join(fixture.workspace, 'test.glb'), 'glb');
@@ -970,7 +723,10 @@ describe('Desktop Resource Browser source', () => {
     if (!modelsRoot) throw new Error('Missing Models library fixture.');
     const media = await composition.source.media.children({
       identity,
-      parent: presentResourceBrowserContentItem(modelsRoot, 'media'),
+      parent:
+        modelsRoot.role === 'library-root'
+          ? presentResourceBrowserMediaLibraryRootItem(modelsRoot)
+          : presentResourceBrowserContentItem(modelsRoot, 'media'),
       limit: 20,
     });
     const files = await composition.source.files.list({
@@ -984,8 +740,9 @@ describe('Desktop Resource Browser source', () => {
         expect.objectContaining({
           label: 'test.glb',
           locator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Models/test.glb',
+            kind: 'media-library',
+            libraryName: 'Models',
+            relativePath: 'test.glb',
           },
           capabilities: expect.arrayContaining(['preview']),
           metadata: expect.objectContaining({ mediaType: 'model' }),
@@ -1057,12 +814,6 @@ function createComposition(
       typeof createResourceBrowserNodeProjectionSource
     >[0]['selectGlobalLibrary'];
     readonly createThumbnail?: (absolutePath: string) => Promise<string>;
-    readonly entityProjections?: Parameters<
-      typeof createResourceBrowserNodeProjectionSource
-    >[0]['entityProjections'];
-    readonly refreshEntityProjections?: Parameters<
-      typeof createResourceBrowserNodeProjectionSource
-    >[0]['refreshEntityProjections'];
   } = {},
 ) {
   const host = createElectronNekoHostPorts({
@@ -1073,6 +824,7 @@ function createComposition(
     revealPath: effects.revealPath,
   });
   return createResourceBrowserNodeProjectionSource({
+    projectId: 'project-1',
     globalAssetRoot: path.join(path.dirname(workspacePath), '.openneko', 'assets'),
     assetLibraryMemberships: createMemoryAssetMembershipRepository(),
     globalMediaLibraryRoot: path.join(path.dirname(workspacePath), '.openneko', 'media-libraries'),
@@ -1082,9 +834,6 @@ function createComposition(
       displayName: 'Fixture',
       locator: { kind: 'relative', value: 'workspace' },
     },
-    entityProjections: effects.entityProjections,
-    refreshEntityProjections: effects.refreshEntityProjections,
-    readEntityCharacterResources: async () => [],
     host,
     openPreview: effects.openPreview ?? (async () => undefined),
     openCreativeDocument: effects.openCreativeDocument ?? (async () => undefined),
@@ -1096,10 +845,70 @@ function createComposition(
     createThumbnail: effects.createThumbnail ?? (async () => 'data:image/png;base64,aW1hZ2U='),
     addToCanvas: async () => undefined,
     addToCut: async () => undefined,
-    manageEntity: async () => {
-      throw new Error('Entity management is not expected by this source test.');
-    },
   });
+}
+
+async function writeMediaRequirement(
+  workspacePath: string,
+  libraryName: string,
+  relativePath: string,
+): Promise<void> {
+  const nekoDirectory = path.join(workspacePath, 'neko');
+  await mkdir(nekoDirectory, { recursive: true });
+  await writeFile(
+    path.join(nekoDirectory, 'entities.json'),
+    encodeProjectEntityDocument({
+      projectId: identity.projectId,
+      entities: [
+        {
+          entityId: `entity-${libraryName.toLocaleLowerCase().replaceAll(' ', '-')}`,
+          kind: 'character',
+          names: { canonical: libraryName, aliases: [] },
+          representations: [
+            {
+              bindingId: `binding-${libraryName.toLocaleLowerCase().replaceAll(' ', '-')}`,
+              target: { kind: 'media-library', libraryName, relativePath },
+              role: 'portrait',
+              source: 'user',
+              acceptedAt: '2026-08-01T00:00:00.000Z',
+            },
+          ],
+          lifecycle: { state: 'active' },
+          createdAt: '2026-08-01T00:00:00.000Z',
+          updatedAt: '2026-08-01T00:00:00.000Z',
+        },
+      ],
+    }),
+  );
+}
+
+async function bindProjectMediaLibrary(
+  workspacePath: string,
+  sourceDirectory: string,
+  libraryName = path.basename(sourceDirectory),
+): Promise<void> {
+  const { libraryId } = await createGlobalMediaLibraryConnection({
+    mediaLibraryRoot: path.join(path.dirname(workspacePath), '.openneko', 'media-libraries'),
+    sourceDirectory,
+    locationKind: 'local',
+  });
+  const repository = new ProjectMediaLibraryBindingRepository(workspacePath, identity.projectId);
+  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
+    projectId: identity.projectId,
+    libraryName,
+    connectionId: libraryId,
+  });
+  await repository.applyRecovery(
+    confirmProjectMediaLibraryRecovery({
+      projectId: identity.projectId,
+      libraryName,
+      connectionId: libraryId,
+      requirementFingerprint: 'sha256:test-requirement-1234',
+      validatedRelativePaths: [],
+      expectedBindingFingerprint: null,
+      replacementBindingFingerprint,
+    }),
+  );
 }
 
 function createMemoryAssetMembershipRepository(): AssetLibraryMembershipRepository {

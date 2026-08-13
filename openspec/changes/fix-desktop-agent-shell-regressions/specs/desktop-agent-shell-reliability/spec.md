@@ -141,6 +141,20 @@ The Desktop Host SHALL open or focus `neko/boards/workspace.nkc` as the default 
 - **THEN** Desktop displays a fail-visible Canvas diagnostic for that View
 - **AND** it MUST NOT report an empty placeholder or simulated Canvas as success
 
+#### Scenario: A special authoring target opens in a Project Workspace
+
+- **WHEN** the user opens an exact CharacterProject or WorldProject authoring target from a Content Project Workspace
+- **THEN** the canonical Workspace Canvas remains in the primary Main group
+- **AND** the special authoring target opens or focuses in Secondary Main without replacing the Canvas
+- **AND** closing the special target collapses Secondary Main and reveals the unchanged Canvas
+
+#### Scenario: A standalone special authoring target opens
+
+- **WHEN** the user opens an exact CharacterProject or WorldProject through its explicitly authorized standalone library Workspace
+- **THEN** primary Main remains the normal explicit empty surface
+- **AND** the special authoring target opens in Secondary Main
+- **AND** closing it returns to the empty Main state without retaining a hidden authoring Root
+
 #### Scenario: Startup finds a cross-Workspace Scene and Project presentation
 
 - **WHEN** a stored Window selects one Project presentation but its persisted Workspace Scene belongs to another Workspace

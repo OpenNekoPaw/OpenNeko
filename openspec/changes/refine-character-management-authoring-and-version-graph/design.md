@@ -64,10 +64,14 @@ Host-authorized directory Workspace
 ```text
 CharacterCatalogSurface             management Main
 CharacterManagementDetailSurface    read-only Secondary Main
-CharacterAuthoringSurface            Workspace authoring Main
+CharacterAuthoringSurface            Workspace authoring Secondary Main target
 ```
 
-Management detail 只读 owner projection，允许 lifecycle/navigation commands，不持有 draft form state。只有 Workspace Authoring 内挂载的 Chara surface 才能执行 CharacterProject、Storyline、representation、voice、testing 和 usable-version commands。离开管理页或切换 authoring target 时对应 Root 卸载，durable facts 与 protected runtime 不受影响。
+Management detail 只读 owner projection，允许 lifecycle/navigation commands，不持有 draft form state。它默认只回答“这是谁、是否有可用版本、下一步是开始对话还是编辑”，并把创建方式收敛为一个入口、把导出等次要操作收进更多菜单。完整 lineage、Storyline、reference inventory、内部 identity 和破坏性管理只在 Workspace Authoring 的高级区域按需展示。只有 Workspace Authoring 内挂载的 Chara surface 才能执行 CharacterProject、Storyline、representation、voice、testing 和 usable-version commands。离开管理页或切换 authoring target 时对应 Root 卸载，durable facts 与 protected runtime 不受影响。
+
+Workspace 的 primary Main 始终保持 canonical Board 或显式空状态。Character/World 只作为带精确 target identity 的 Secondary Main authoring surface 出现；关闭后恢复原 primary Main，不把特殊创作目标提升为 Workspace 默认页面或新的 Workspace 类型。
+
+Character catalog 固定使用与其他管理入口一致的响应式对象卡片，不提供表达同一信息的列表/网格双模式。卡片用于选择 Character 对象；详情内部使用连续分区和分隔线，不再用多层圆角卡片表达同一对象的内部结构。
 
 未采用“同一个 CharacterPanel 用 authoringOnly/creating flag 切换”，因为同一个 mutable component 已经让管理 slot 成为第二个编辑器，并让新建、详情、发布和 Storyline state 共享不正确的生命周期。
 
@@ -201,7 +205,7 @@ Desktop 保留的逻辑仅包括 Electron sender/window identity、directory gra
 ## Risks / Trade-offs
 
 - [Lineage 与 immutable publication 分文件写入可能部分提交] → publication 保留为可用 unlinked node，返回 exact partial diagnostic 和 retry-link；不删除用户版本或伪造关系。
-- [版本图增加普通用户认知负担] → 管理页只显示 bounded summary，完整图和 compare 放入 Studio；普通 quick-create 仍保持单草稿/单定稿动作。
+- [版本图增加普通用户认知负担] → 管理页默认只显示可用版本数量和是否可开始对话，完整图、compare、Storyline 与 reference inventory 放入 Workspace Authoring 的高级区域；普通 quick-create 仍保持单草稿/单定稿动作。
 - [可选 draft basis 被误当兼容字段] → 文档与 poison tests 固定其永久领域语义：缺省永远是 unbased，不参与 shape dispatch。
 - [从历史版本继续会覆盖当前草稿] → 必须先显式 save/finalize/discard，禁止隐藏第二草稿。
 - [跨 owner reference inventory 不完整] → destructive action fail-closed 于当前 version，reader failure 不影响非破坏性使用和 sibling records。

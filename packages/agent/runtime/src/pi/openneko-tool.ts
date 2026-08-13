@@ -5,7 +5,11 @@ import {
   AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
 } from '@neko/agent-contracts';
 import { getMimeType } from '@neko/media';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  serializeContentReferenceTarget,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content';
 import {
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
@@ -515,8 +519,10 @@ function contentLocatorPortablePath(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return `${locator.libraryName}/${locator.relativePath}`;
     case 'document-entry':
-      return `${locator.source.path}#${locator.entryPath}`;
+      return `${serializeContentReferenceTarget(locator.source)}#${locator.entryPath}`;
     case 'package-resource':
       return `${locator.packageId}/${locator.resourcePath}`;
   }

@@ -315,7 +315,6 @@ function projection() {
         kind: 'directory' as const,
         label: 'Footage',
         libraryName: 'Footage',
-        locator: { kind: 'workspace-file' as const, path: 'neko/assets/Footage' },
         capabilities: [],
         libraryStatus: {
           libraryName: 'Footage',

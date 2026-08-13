@@ -64,6 +64,7 @@ describe('Node Text Editor Markdown media service', () => {
     const resolveWorkspace = vi.fn(async () => workspace(workspacePath));
     const isolated = new NodeTextEditorMarkdownMediaService({
       resolveWorkspace,
+      globalMediaLibraryRoot: '/private/global-media-libraries',
       resources,
       createLeaseId: () => 'lease-1',
     });
@@ -165,6 +166,7 @@ describe('Node Text Editor Markdown media service', () => {
     const secondLease = lease(`openneko://resource/${'d'.repeat(32)}`);
     const service = new NodeTextEditorMarkdownMediaService({
       resolveWorkspace: async () => workspace(workspacePath),
+      globalMediaLibraryRoot: '/private/global-media-libraries',
       resources: {
         registerFile: vi.fn().mockResolvedValueOnce(firstLease).mockResolvedValueOnce(secondLease),
       },
@@ -233,6 +235,7 @@ function createService(
 ): NodeTextEditorMarkdownMediaService {
   return new NodeTextEditorMarkdownMediaService({
     resolveWorkspace: async () => workspace(workspacePath),
+    globalMediaLibraryRoot: '/private/global-media-libraries',
     resources,
     createLeaseId: () => 'lease-1',
   });

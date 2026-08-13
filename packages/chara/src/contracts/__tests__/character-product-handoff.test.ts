@@ -6,9 +6,18 @@ import {
 
 describe('Character product handoffs', () => {
   it('provides Character and Studio targets without inventing a CharacterVersion', () => {
-    expect(createCharacterProductHandoffs({ characterProjectId: 'character-project-1' })).toEqual([
+    expect(
+      createCharacterProductHandoffs({
+        characterProjectId: 'character-project-1',
+        authoringAuthority: { kind: 'standalone-library', library: 'character' },
+      }),
+    ).toEqual([
       { kind: 'open-character', characterProjectId: 'character-project-1' },
-      { kind: 'open-character-studio', characterProjectId: 'character-project-1' },
+      {
+        kind: 'open-character-studio',
+        characterProjectId: 'character-project-1',
+        authority: { kind: 'standalone-library', library: 'character' },
+      },
     ]);
   });
 
@@ -16,6 +25,7 @@ describe('Character product handoffs', () => {
     expect(
       createCharacterProductHandoffs({
         characterProjectId: 'character-project-1',
+        authoringAuthority: { kind: 'content-project', contentProjectId: 'content-project-1' },
         characterVersionId: 'character-version-1',
       }),
     ).toContainEqual({
@@ -27,6 +37,7 @@ describe('Character product handoffs', () => {
       expect(() =>
         createCharacterProductHandoffs({
           characterProjectId: 'character-project-1',
+          authoringAuthority: { kind: 'content-project', contentProjectId: 'content-project-1' },
           characterVersionId,
         }),
       ).toThrow('exact CharacterVersion identity');
@@ -48,5 +59,18 @@ describe('Character product handoffs', () => {
         character: { displayName: 'copied' },
       }),
     ).toThrow();
+    expect(() =>
+      parseCharacterProductHandoff({
+        kind: 'open-character-studio',
+        characterProjectId: 'character-project-1',
+      }),
+    ).toThrow();
+    expect(() =>
+      parseCharacterProductHandoff({
+        kind: 'open-character-studio',
+        characterProjectId: 'character-project-1',
+        authority: { kind: 'standalone-library', library: 'world' },
+      }),
+    ).toThrow('standalone Character library');
   });
 });

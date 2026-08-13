@@ -99,6 +99,17 @@ describe('Desktop Character Foundation preload bridge', () => {
                 characterVersionId: 'character-version-a',
                 displayName: 'A',
                 versionLabel: 'Published A',
+                lineage: {
+                  coverage: 'complete',
+                  state: 'declared-root',
+                  isHead: true,
+                  path: [
+                    {
+                      characterVersionId: 'character-version-a',
+                      label: 'Published A',
+                    },
+                  ],
+                },
                 storylines: [],
               },
             ],

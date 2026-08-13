@@ -7,13 +7,15 @@ OpenNeko SHALL treat Character Management as a catalog/lifecycle destination, qu
 #### Scenario: User selects a Character in management
 
 - **WHEN** the user selects one exact CharacterProject in the Character catalog
-- **THEN** Secondary Main shows its identity, placement, draft state, local usable versions, lineage summary, Storyline and reference status plus explicit actions
+- **THEN** Secondary Main shows its identity, placement, draft state, local usable-version count and the primary Start Conversation/Edit actions
+- **AND** creation methods are grouped under one Create Character entry while export and other secondary operations remain subordinate
+- **AND** complete lineage, Storyline and reference inventory stay available in Workspace Character Authoring instead of appearing in the default management detail
 - **AND** it does not mount the complete Character Studio editor or mutate Character facts
 
 #### Scenario: User continues authoring
 
 - **WHEN** the user invokes “Open Studio” for an exact CharacterProject
-- **THEN** Desktop leaves the management detail composition, opens the exact directory-authorized Workspace authoring target and composes the Chara-owned Character surface in Main
+- **THEN** Desktop leaves the management detail composition, preserves the Workspace Board/empty primary Main, opens the exact directory-authorized Workspace authoring target and composes the Chara-owned Character surface in Secondary Main
 - **AND** the management Root is not retained as a hidden authoring owner
 
 ### Requirement: Quick Character creation reuses the canonical Character Creator

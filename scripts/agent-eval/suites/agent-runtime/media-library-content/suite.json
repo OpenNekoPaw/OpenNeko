@@ -27,9 +27,13 @@
       "id": "media-library-workspace",
       "root": "shared-fixtures/media-library-workspace",
       "source": "repository",
-      "digest": "sha256:475e0a3d8d9a6f481f4b2148ef9681cd4175a4046e8fbd170c8166010e883c93",
+      "digest": "sha256:34c0794d752a5f1efb505e10cf89ba2e9e51a55d90a4e4051bff69dbd4066bad",
       "mutable": true,
-      "links": [{ "path": "neko/assets/Reference", "target": "media-source" }]
+      "mediaLibrary": {
+        "libraryName": "workspace",
+        "source": "media-source",
+        "contentLabel": "library-image.svg"
+      }
     }
   ],
   "cases": [
@@ -37,6 +41,12 @@
       "id": "linked-media-search-read",
       "file": "cases/linked-media-search-read.json",
       "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "retired-workspace-prefix-rejected",
+      "file": "cases/retired-workspace-prefix-rejected.json",
+      "group": "boundary",
       "visibility": "public"
     }
   ],

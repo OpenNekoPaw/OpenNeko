@@ -1,4 +1,4 @@
-import { contentLocatorKey, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, validateContentLocator, type ContentLocator } from '@neko/content';
 import type {
   CanvasTextFilePreviewDiagnosticCode,
   CanvasTextFilePreviewKind,
@@ -162,7 +162,7 @@ export function MediaNode({
 }: CanonicalNodeProps<MediaCanvasNode>) {
   const host = useOptionalCanvasHost();
   const source = node.data.runtimeAssetPath || node.data.assetPath;
-  const contentLocator = node.data.contentLocator;
+  const contentLocator = readCanonicalContentLocator(node.data.contentLocator);
   const mediaType = node.data.mediaType ?? 'image';
   const previewRole =
     mediaType === 'image'
@@ -393,7 +393,7 @@ export function FileNode({
   ...baseProps
 }: CanonicalNodeProps<FileCanvasNode>) {
   const fileName = resolveCanvasFileName(node.data);
-  const contentLocator = node.data.contentLocator;
+  const contentLocator = readCanonicalContentLocator(node.data.contentLocator);
   const contentLocatorIdentity = contentLocator ? contentLocatorKey(contentLocator) : undefined;
   const contentLocatorRef = useRef(contentLocator);
   contentLocatorRef.current = contentLocator;
@@ -536,6 +536,11 @@ function CanvasFileNodeContent({
       ) : null}
     </div>
   );
+}
+
+function readCanonicalContentLocator(value: unknown): ContentLocator | undefined {
+  const validation = validateContentLocator(value);
+  return validation.ok ? validation.locator : undefined;
 }
 
 function CanvasFileIconState({ diagnostic }: { readonly diagnostic?: string }) {

@@ -26,6 +26,7 @@ describe('Agent Entry intent contract', () => {
         kind: 'authoring' as const,
         workspaceId: 'character-library',
         workspaceGrantId: 'grant-character-library',
+        authority: { kind: 'standalone-library' as const, library: 'character' as const },
         target: { kind: 'character-project' as const, characterProjectId: 'character-project-1' },
       },
     },
@@ -35,6 +36,7 @@ describe('Agent Entry intent contract', () => {
         kind: 'authoring' as const,
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
+        authority: { kind: 'content-project' as const, contentProjectId: 'content-project-1' },
         target: { kind: 'character-project' as const, characterProjectId: 'character-project-1' },
       },
     },
@@ -119,6 +121,7 @@ describe('Agent Entry intent contract', () => {
           kind: 'authoring',
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
+          authority: { kind: 'standalone-library', library: 'character' },
           target: { kind: 'character-project', characterProjectId: 'character-project-1' },
         },
       }),
@@ -158,6 +161,18 @@ describe('Agent Entry intent contract', () => {
       },
     };
     expect(() => parseAgentEntryTargetReceipt(receipt)).toThrow('unique CharacterVersions');
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        ...receipt,
+        binding: {
+          ...receipt.binding,
+          participants: [
+            { characterProjectId: 'character-1', characterVersionId: 'version-1' },
+            { characterProjectId: 'character-1', characterVersionId: 'version-2' },
+          ],
+        },
+      }),
+    ).toThrow('at most one version of each Character');
     expect(() => parseAgentEntryTargetReceipt({ ...receipt, schemaVersion: 1 })).toThrow(
       'unsupported field',
     );
@@ -253,6 +268,12 @@ describe('Agent Entry intent contract', () => {
           characterVersionId: 'character-version-1',
           displayName: 'Lin',
           versionLabel: 'Published Lin',
+          lineage: {
+            coverage: 'complete',
+            state: 'declared-root',
+            isHead: true,
+            path: [{ characterVersionId: 'character-version-1', label: 'Published Lin' }],
+          },
           storylines: [{ storylineVersionId: 'storyline-version-1', label: 'Archive arc' }],
         },
       ]),
@@ -262,6 +283,12 @@ describe('Agent Entry intent contract', () => {
         characterVersionId: 'character-version-1',
         displayName: 'Lin',
         versionLabel: 'Published Lin',
+        lineage: {
+          coverage: 'complete',
+          state: 'declared-root',
+          isHead: true,
+          path: [{ characterVersionId: 'character-version-1', label: 'Published Lin' }],
+        },
         storylines: [{ storylineVersionId: 'storyline-version-1', label: 'Archive arc' }],
       },
     ]);
@@ -272,6 +299,12 @@ describe('Agent Entry intent contract', () => {
           characterVersionId: 'character-version-1',
           displayName: 'Lin',
           versionLabel: 'Published Lin',
+          lineage: {
+            coverage: 'complete',
+            state: 'declared-root',
+            isHead: true,
+            path: [{ characterVersionId: 'character-version-1', label: 'Published Lin' }],
+          },
           storylines: [],
           definition: { secret: true },
         },

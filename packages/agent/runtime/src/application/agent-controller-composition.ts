@@ -79,7 +79,6 @@ import {
 import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/ai-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import type { WorkspaceFileContentLocator } from '@neko/content';
 import {
   AgentQueuedTurnCancellationError,
   type AgentTurnResult,
@@ -94,9 +93,11 @@ import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
 import {
   createAgentStateRuntime,
   createDesktopAgentFactsProjector,
+  createDesktopAgentFactsStore,
   createAgentResourceDisplayProjector,
   type AgentStateRuntime,
   type DesktopAgentFactsProjector,
+  type DesktopAgentFactsStore,
   type AgentResourceDisplayRegistrationPort,
   type AgentResourceDisplayProjector,
 } from '@neko/agent-runtime/runtime';
@@ -284,9 +285,10 @@ export interface CreateAgentControllerCompositionOptions {
   }) => ConfigManager;
   readonly contentInteraction: AgentContentInteractionPort;
   readonly searchLinkedMediaLibraryFiles?: (
+    projectId: string,
     workspace: AssetWorkspaceResolution,
     input: AgentLinkedMediaLibraryFileSearchInput,
-  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+  ) => Promise<readonly import('@neko/content').MediaLibraryContentLocator[]>;
   readonly configInteraction: AgentConfigInteractionPort;
   readonly conversationReferences?: AgentConversationReferenceResolutionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
@@ -310,6 +312,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
 
   private readonly confirmations = new Map<string, PiToolConfirmationRegistry>();
   private readonly agentStates = new Map<string, AgentStateRuntime>();
+  private readonly initialTurnFacts = new Map<string, DesktopAgentFactsStore>();
   private readonly pendingDisposals = new Set<Promise<unknown>>();
 
   constructor(private readonly options: CreateAgentControllerCompositionOptions) {}
@@ -389,7 +392,16 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           .then(() => undefined),
       );
     });
-    const facts = createDesktopAgentFactsProjector({ connection: input.identity });
+    const initialFactsKey =
+      input.initialConversationId === undefined
+        ? undefined
+        : ownerKey(input.workspace.workspaceId, input.initialConversationId);
+    const initialFactsStore =
+      initialFactsKey === undefined ? undefined : this.getInitialTurnFactsStore(initialFactsKey);
+    const facts = createDesktopAgentFactsProjector({
+      connection: input.identity,
+      ...(initialFactsStore === undefined ? {} : { store: initialFactsStore }),
+    });
     const resourceDisplay = createAgentResourceDisplayProjector({
       identity: input.identity,
       workspace: input.workspace.workspace,
@@ -460,6 +472,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       return disposal;
     };
     const searchLinkedMediaLibraryFiles = this.options.searchLinkedMediaLibraryFiles;
+    const projectId = 'projectId' in input.identity ? input.identity.projectId : undefined;
     const effects: AgentControllerEffects = {
       conversation: this.createConversationEffects(
         input.workspace,
@@ -507,10 +520,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         workspace: input.workspace.workspace,
         host: this.options.host,
         interaction: this.options.contentInteraction,
-        ...(searchLinkedMediaLibraryFiles
+        ...(searchLinkedMediaLibraryFiles && projectId
           ? {
               searchLinkedMediaLibraryFiles: (searchInput) =>
-                searchLinkedMediaLibraryFiles(input.workspace.workspace, searchInput),
+                searchLinkedMediaLibraryFiles(projectId, input.workspace.workspace, searchInput),
             }
           : {}),
         reportMentionContributorError: this.options.reportError,
@@ -574,6 +587,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly purposeModels?: AgentFlatPurposeModelRefs;
     readonly capabilityConstraint: AgentTurnCapabilityConstraint;
   }): Promise<AgentProviderExecutionResult> => {
+    const factsKey = ownerKey(input.workspace.workspaceId, input.conversationId);
+    const factsStore = this.getInitialTurnFactsStore(factsKey);
     const facts = createDesktopAgentFactsProjector({
       connection: {
         applicationInstanceId: 'agent-conversation-authority',
@@ -585,62 +600,59 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         viewId: `conversation:${input.conversationId}`,
         connectionId: `initial-turn:${input.turnId}`,
       },
+      store: factsStore,
     });
     try {
-      try {
-        const result = await this.executeTurn({
-          workspace: input.workspace,
-          config: this.getConfig(input.workspace),
-          request: {
-            source: 'user-message',
-            conversationId: input.conversationId,
-            messageText: input.messageText,
-            sessionMode: 'agent',
-            locale: input.locale,
-            turnId: input.turnId,
-            ...(input.purposeModels === undefined ? {} : { purposeModels: input.purposeModels }),
-            ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
-          },
-          context: {
-            identity: {
-              hostKind: 'electron',
-              applicationId: 'agent-conversation-authority',
-              windowId: `conversation:${input.conversationId}`,
-              viewId: `conversation:${input.conversationId}`,
-              workspaceId: input.workspace.workspaceId,
-              connectionId: `initial-turn:${input.turnId}`,
-            },
-            post: () => undefined,
-          },
-          facts,
-          configuration: input.configuration,
-          conversationContext: input.context,
-          entryTargetReceipt: input.entryTargetReceipt ?? null,
-          ...(input.presentationText === undefined
-            ? {}
-            : { presentationText: input.presentationText }),
-          ...(input.skillName ? { skillName: input.skillName } : {}),
-          ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
-          ...(input.additionalInstructions
-            ? { additionalInstructions: input.additionalInstructions }
-            : {}),
-          capabilityConstraint: input.capabilityConstraint,
-        });
-        if (!result) {
-          throw new Error(`Agent initial Turn '${input.turnId}' was cancelled.`);
-        }
-        return projectAgentProviderExecutionResult(result);
-      } catch (error) {
-        await input.workspace.checkpointFailedInitialTurn({
+      const result = await this.executeTurn({
+        workspace: input.workspace,
+        config: this.getConfig(input.workspace),
+        request: {
+          source: 'user-message',
           conversationId: input.conversationId,
+          messageText: input.messageText,
+          sessionMode: 'agent',
+          locale: input.locale,
           turnId: input.turnId,
-          messageText: input.presentationText ?? input.messageText,
-          contextPayloads: input.contextPayloads,
-        });
-        throw error;
+          ...(input.purposeModels === undefined ? {} : { purposeModels: input.purposeModels }),
+          ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
+        },
+        context: {
+          identity: {
+            hostKind: 'electron',
+            applicationId: 'agent-conversation-authority',
+            windowId: `conversation:${input.conversationId}`,
+            viewId: `conversation:${input.conversationId}`,
+            workspaceId: input.workspace.workspaceId,
+            connectionId: `initial-turn:${input.turnId}`,
+          },
+          post: () => undefined,
+        },
+        facts,
+        configuration: input.configuration,
+        conversationContext: input.context,
+        entryTargetReceipt: input.entryTargetReceipt ?? null,
+        ...(input.presentationText === undefined
+          ? {}
+          : { presentationText: input.presentationText }),
+        ...(input.skillName ? { skillName: input.skillName } : {}),
+        ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
+        ...(input.additionalInstructions
+          ? { additionalInstructions: input.additionalInstructions }
+          : {}),
+        capabilityConstraint: input.capabilityConstraint,
+      });
+      if (!result) {
+        throw new Error(`Agent initial Turn '${input.turnId}' was cancelled.`);
       }
-    } finally {
-      facts.dispose();
+      return projectAgentProviderExecutionResult(result);
+    } catch (error) {
+      await input.workspace.checkpointFailedInitialTurn({
+        conversationId: input.conversationId,
+        turnId: input.turnId,
+        messageText: input.presentationText ?? input.messageText,
+        contextPayloads: input.contextPayloads,
+      });
+      throw error;
     }
   };
 
@@ -762,6 +774,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       throw new AggregateError(errors, 'Failed to dispose Agent controller effects.');
     }
     this.agentStates.clear();
+    this.initialTurnFacts.clear();
+  }
+
+  private getInitialTurnFactsStore(key: string): DesktopAgentFactsStore {
+    const existing = this.initialTurnFacts.get(key);
+    if (existing) return existing;
+    const store = createDesktopAgentFactsStore();
+    this.initialTurnFacts.set(key, store);
+    return store;
   }
 
   private createConversationEffects(

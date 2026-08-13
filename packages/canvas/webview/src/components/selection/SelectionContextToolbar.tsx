@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   CanvasMaterialActionDescriptor,
   CanvasMaterialActionEffect,
+  CanvasMaterialMediaKind,
   CanvasNode,
   CanvasViewport,
 } from '@neko/canvas-domain';
@@ -41,7 +42,6 @@ import {
   EyeIcon,
   EyeOffIcon,
   EditIcon,
-  FullscreenIcon,
   GridIcon,
   LayersIcon,
   LoadingIcon,
@@ -66,13 +66,31 @@ import { useOptionalCanvasHost } from '../../host-runtime';
 import { t } from '../../i18n';
 import { getNodeLabel } from '../nodes/nodeTypeDescriptor';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
-import {
-  resolveCanvasEmbeddedPreviewRequest,
-  type CanvasEmbeddedPreviewRequest,
-} from './CanvasImagePreviewOverlay';
 import { resolveSelectionToolbarTop } from './selectionAttachmentGeometry';
 
 const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
+
+const STABLE_MATERIAL_ACTION_IDS: Readonly<Record<CanvasMaterialMediaKind, readonly string[]>> = {
+  document: [CANVAS_EDIT_TEXT_ACTION_ID, CANVAS_PREVIEW_ACTION_ID],
+  image: [
+    CANVAS_IMAGE_CROP_ACTION_ID,
+    CANVAS_IMAGE_UPSCALE_ACTION_ID,
+    CANVAS_IMAGE_REDRAW_ACTION_ID,
+    CANVAS_PREVIEW_ACTION_ID,
+  ],
+  video: [
+    CANVAS_ADD_TO_CUT_ACTION_ID,
+    CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID,
+    CANVAS_PREVIEW_ACTION_ID,
+  ],
+  audio: [
+    CANVAS_ADD_TO_CUT_ACTION_ID,
+    CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID,
+    CANVAS_PREVIEW_ACTION_ID,
+  ],
+  model: [CANVAS_PREVIEW_ACTION_ID],
+  other: [CANVAS_PREVIEW_ACTION_ID],
+};
 
 interface SelectionContextToolbarProps {
   readonly nodes: readonly CanvasNode[];
@@ -80,14 +98,14 @@ interface SelectionContextToolbarProps {
   readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
   readonly hidden?: boolean;
-  readonly onCanvasEmbeddedPreview?: (request: CanvasEmbeddedPreviewRequest) => void;
 }
 
 interface ToolbarAction {
   readonly key: string;
   readonly label: string;
   readonly icon: ReactNode;
-  readonly run: () => void;
+  readonly run?: () => void;
+  readonly disabledReason?: string;
   readonly danger?: boolean;
   readonly placement: 'visible' | 'overflow';
   readonly priority: number;
@@ -109,7 +127,6 @@ export function SelectionContextToolbar({
   viewport,
   viewportSize,
   hidden = false,
-  onCanvasEmbeddedPreview,
 }: SelectionContextToolbarProps): ReactNode {
   const host = useOptionalCanvasHost();
   const canvasStore = useCanvasStoreApi();
@@ -167,7 +184,6 @@ export function SelectionContextToolbar({
         clipboardStore,
         historyStore,
         setExecutionDiagnostic,
-        onCanvasEmbeddedPreview,
       ),
     [
       canvasStore,
@@ -175,7 +191,6 @@ export function SelectionContextToolbar({
       historyStore,
       host,
       materialActionState.descriptors,
-      onCanvasEmbeddedPreview,
       selectedNodes,
     ],
   );
@@ -221,6 +236,9 @@ export function SelectionContextToolbar({
               variant="ghost"
               leadingIcon={action.icon}
               className="selection-context-toolbar__text-action"
+              disabled={Boolean(action.disabledReason)}
+              title={action.disabledReason}
+              data-disabled-reason={action.disabledReason}
               onClick={action.run}
             >
               {action.label}
@@ -233,6 +251,9 @@ export function SelectionContextToolbar({
               variant="ghost"
               label={action.label}
               icon={action.icon}
+              disabled={Boolean(action.disabledReason)}
+              title={action.disabledReason}
+              data-disabled-reason={action.disabledReason}
               onClick={action.run}
             />
           )}
@@ -268,8 +289,11 @@ export function SelectionContextToolbar({
                 leadingIcon={action.icon}
                 className="justify-start"
                 role="menuitem"
+                disabled={Boolean(action.disabledReason)}
+                title={action.disabledReason}
+                data-disabled-reason={action.disabledReason}
                 onClick={() => {
-                  action.run();
+                  action.run?.();
                   setOverflowOpen(false);
                 }}
               >
@@ -322,12 +346,17 @@ function resolveActions(
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
-  onCanvasEmbeddedPreview?: (request: CanvasEmbeddedPreviewRequest) => void,
 ): ToolbarAction[] {
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
     return [
-      ...resolveOwnerActions(ownerDescriptors, selectedIds, host, reportExecutionDiagnostic),
+      ...resolveOwnerActions(
+        selectedNodes,
+        ownerDescriptors,
+        selectedIds,
+        host,
+        reportExecutionDiagnostic,
+      ),
       {
         key: 'group-selection',
         label: t('menu.group'),
@@ -344,24 +373,12 @@ function resolveActions(
   const node = selectedNodes[0];
   if (!node) return [];
   const actions: ToolbarAction[] = resolveOwnerActions(
+    selectedNodes,
     ownerDescriptors,
     selectedIds,
     host,
     reportExecutionDiagnostic,
   );
-  const embeddedPreviewRequest = resolveCanvasEmbeddedPreviewRequest(node);
-  if (embeddedPreviewRequest && onCanvasEmbeddedPreview) {
-    actions.push({
-      key: 'canvas:preview',
-      label: t('action.openCanvasPreview'),
-      icon: <FullscreenIcon size={14} />,
-      placement: 'visible',
-      priority: 100,
-      display: 'icon',
-      section: 'utility',
-      run: () => onCanvasEmbeddedPreview(embeddedPreviewRequest),
-    });
-  }
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
     const path = node.data.canvasPath;
     actions.push({
@@ -409,35 +426,81 @@ function resolveActions(
 }
 
 function resolveOwnerActions(
+  selectedNodes: readonly CanvasNode[],
   descriptors: readonly CanvasMaterialActionDescriptor[],
   selectedNodeIds: readonly string[],
   host: ReturnType<typeof useOptionalCanvasHost>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
 ): ToolbarAction[] {
-  if (!host) return [];
-  return descriptors
-    .filter((descriptor) => !isResourceManagementAction(descriptor.id))
-    .map((descriptor) => {
-      const presentation = materialActionPresentation(descriptor.id);
+  const availableDescriptors = descriptors.filter(
+    (descriptor) => !isResourceManagementAction(descriptor.id),
+  );
+  const descriptorById = new Map(
+    availableDescriptors.map((descriptor) => [descriptor.id, descriptor] as const),
+  );
+  const stableIds = stableMaterialActionIds(selectedNodes);
+  const unavailableReason = t('selection.capabilityUnavailable');
+  const stableActions = stableIds.map((actionId) => {
+    const descriptor = descriptorById.get(actionId);
+    if (!descriptor || !host) {
+      const presentation = materialActionPresentation(actionId);
       return {
-        key: descriptor.id,
-        label: descriptor.label,
-        icon: materialActionIcon(descriptor),
+        key: actionId,
+        label: materialActionFallbackLabel(actionId),
+        icon: materialActionIcon(actionId, 'read'),
         ...presentation,
-        run: () => {
-          reportExecutionDiagnostic(undefined);
-          void host
-            .executeMaterialAction(
-              descriptor.id,
-              selectedNodeIds,
-              descriptor.executionPayload ?? {},
-            )
-            .catch((error: unknown) => {
-              reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
-            });
-        },
-      };
-    });
+        disabledReason: unavailableReason,
+      } satisfies ToolbarAction;
+    }
+    descriptorById.delete(actionId);
+    return createOwnerAction(descriptor, selectedNodeIds, host, reportExecutionDiagnostic);
+  });
+  if (!host) return stableActions;
+  const overflowActions = availableDescriptors
+    .filter((descriptor) => descriptorById.has(descriptor.id))
+    .map((descriptor) =>
+      createOwnerAction(descriptor, selectedNodeIds, host, reportExecutionDiagnostic),
+    );
+  return [...stableActions, ...overflowActions];
+}
+
+function createOwnerAction(
+  descriptor: CanvasMaterialActionDescriptor,
+  selectedNodeIds: readonly string[],
+  host: NonNullable<ReturnType<typeof useOptionalCanvasHost>>,
+  reportExecutionDiagnostic: (message: string | undefined) => void,
+): ToolbarAction {
+  const presentation = materialActionPresentation(descriptor.id);
+  return {
+    key: descriptor.id,
+    label: descriptor.label,
+    icon: materialActionIcon(descriptor.id, descriptor.effect),
+    ...presentation,
+    run: () => {
+      reportExecutionDiagnostic(undefined);
+      void host
+        .executeMaterialAction(descriptor.id, selectedNodeIds, descriptor.executionPayload ?? {})
+        .catch((error: unknown) => {
+          reportExecutionDiagnostic(error instanceof Error ? error.message : String(error));
+        });
+    },
+  };
+}
+
+function stableMaterialActionIds(selectedNodes: readonly CanvasNode[]): readonly string[] {
+  if (selectedNodes.length !== 1) return [];
+  const kind = materialKindForNode(selectedNodes[0]!);
+  return kind ? STABLE_MATERIAL_ACTION_IDS[kind] : [];
+}
+
+function materialKindForNode(node: CanvasNode): CanvasMaterialMediaKind | undefined {
+  if (node.type === 'generation') {
+    return node.data.recipe.kind === 'prompt' ? 'document' : node.data.recipe.kind;
+  }
+  if (node.type === 'media') return node.data.mediaType;
+  if (node.type === 'file') return node.data.mediaKind ?? 'document';
+  if (node.type === 'markdown') return 'document';
+  return undefined;
 }
 
 function isResourceManagementAction(actionId: string): boolean {
@@ -448,14 +511,11 @@ function isResourceManagementAction(actionId: string): boolean {
   );
 }
 
-function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNode {
-  if (
-    descriptor.id === CANVAS_ADD_TO_CUT_ACTION_ID ||
-    descriptor.id === CANVAS_OPEN_IN_CUT_ACTION_ID
-  ) {
+function materialActionIcon(actionId: string, effect: CanvasMaterialActionEffect): ReactNode {
+  if (actionId === CANVAS_ADD_TO_CUT_ACTION_ID || actionId === CANVAS_OPEN_IN_CUT_ACTION_ID) {
     return <ScissorsIcon size={14} />;
   }
-  switch (descriptor.id) {
+  switch (actionId) {
     case CANVAS_PREVIEW_ACTION_ID:
       return <OpenIcon size={14} />;
     case CANVAS_EDIT_TEXT_ACTION_ID:
@@ -499,7 +559,23 @@ function materialActionIcon(descriptor: CanvasMaterialActionDescriptor): ReactNo
     handoff: <OpenIcon size={14} />,
     generate: <RefreshIcon size={14} />,
   };
-  return icons[descriptor.effect];
+  return icons[effect];
+}
+
+function materialActionFallbackLabel(actionId: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    [CANVAS_PREVIEW_ACTION_ID]: t('action.openPreview'),
+    [CANVAS_EDIT_TEXT_ACTION_ID]: t('action.editText'),
+    [CANVAS_ADD_TO_CUT_ACTION_ID]: t('action.addToCut'),
+    [CANVAS_AUDIO_VOICE_DENOISE_ACTION_ID]: t('action.voiceDenoise'),
+    [CANVAS_VIDEO_SEPARATE_AUDIO_ACTION_ID]: t('action.separateAudio'),
+    [CANVAS_IMAGE_CROP_ACTION_ID]: t('action.crop'),
+    [CANVAS_IMAGE_UPSCALE_ACTION_ID]: t('action.upscale'),
+    [CANVAS_IMAGE_REDRAW_ACTION_ID]: t('action.redraw'),
+  };
+  const label = labels[actionId];
+  if (!label) throw new Error(`Canvas stable action "${actionId}" has no label.`);
+  return label;
 }
 
 function materialActionPresentation(

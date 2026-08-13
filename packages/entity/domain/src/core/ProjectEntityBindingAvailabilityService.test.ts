@@ -11,6 +11,7 @@ describe('ProjectEntityBindingAvailabilityService', () => {
     const calls: string[] = [];
     const service = new ProjectEntityBindingAvailabilityService({
       workspaceFile: port('workspace-file', calls, ready),
+      mediaLibrary: port('media-library', calls, ready),
       documentEntry: port('document-entry', calls, unavailable('content-changed')),
       generatedOutput: port('generated-output', calls, unavailable('content-unauthorized')),
       packageResource: port('package-resource', calls, unavailable('content-missing')),
@@ -56,6 +57,7 @@ describe('ProjectEntityBindingAvailabilityService', () => {
       workspaceFile: {
         stat: async () => ready({ kind: 'workspace-file', path: 'other.png' }),
       },
+      mediaLibrary: unusedPort(),
       documentEntry: unusedPort(),
       generatedOutput: unusedPort(),
       packageResource: unusedPort(),
@@ -73,6 +75,7 @@ describe('ProjectEntityBindingAvailabilityService', () => {
   it('propagates cancellation as an operation diagnostic instead of needs-attention', async () => {
     const service = new ProjectEntityBindingAvailabilityService({
       workspaceFile: port('workspace-file', [], unavailable('content-cancelled')),
+      mediaLibrary: unusedPort(),
       documentEntry: unusedPort(),
       generatedOutput: unusedPort(),
       packageResource: unusedPort(),

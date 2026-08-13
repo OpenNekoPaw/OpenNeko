@@ -21,8 +21,10 @@ import type { ProjectFilesWebviewMessage } from '@neko/agent-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
   validateContentLocator,
+  contentLocatorKey,
   type ContentLocator,
   type DocumentLocator,
+  type MediaLibraryContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
@@ -92,7 +94,7 @@ export interface CreateAgentContentEffectsOptions {
   readonly interaction: AgentContentInteractionPort;
   readonly searchLinkedMediaLibraryFiles?: (
     input: AgentLinkedMediaLibraryFileSearchInput,
-  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+  ) => Promise<readonly MediaLibraryContentLocator[]>;
   readonly reportMentionContributorError?: (error: Error) => void;
 }
 
@@ -109,7 +111,7 @@ export async function searchAgentWorkspaceMentions(input: {
   readonly purpose: 'entry' | 'mention' | 'roleplay';
   readonly searchLinkedMediaLibraryFiles?: (
     input: AgentLinkedMediaLibraryFileSearchInput,
-  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+  ) => Promise<readonly MediaLibraryContentLocator[]>;
   readonly reportMentionContributorError?: (error: Error) => void;
 }): Promise<
   ProjectFilesWebviewMessage &
@@ -272,7 +274,7 @@ async function searchWorkspaceMentionFiles(
 ): Promise<readonly AgentProjectFileCandidate[]> {
   const workspaceFiles = await searchGrantedWorkspace(input.workspace, input.host, plan);
   if (!input.searchLinkedMediaLibraryFiles) return workspaceFiles;
-  let linkedMediaLocators: readonly WorkspaceFileContentLocator[];
+  let linkedMediaLocators: readonly MediaLibraryContentLocator[];
   try {
     linkedMediaLocators = await input.searchLinkedMediaLibraryFiles({
       query: extractSearchFilter(plan.includePattern),
@@ -284,16 +286,22 @@ async function searchWorkspaceMentionFiles(
     return workspaceFiles;
   }
   const candidates = new Map<string, AgentProjectFileCandidate>();
-  for (const candidate of workspaceFiles) candidates.set(candidate.relativePath, candidate);
+  for (const candidate of workspaceFiles) {
+    candidates.set(
+      contentLocatorKey({ kind: 'workspace-file', path: candidate.relativePath }),
+      candidate,
+    );
+  }
   for (const locator of linkedMediaLocators) {
     const validation = validateContentLocator(locator);
-    if (!validation.ok || validation.locator.kind !== 'workspace-file') {
+    if (!validation.ok || validation.locator.kind !== 'media-library') {
       throw new Error('Agent linked Media Library contributor returned an invalid locator.');
     }
-    candidates.set(validation.locator.path, {
-      relativePath: validation.locator.path,
+    candidates.set(contentLocatorKey(validation.locator), {
+      relativePath: `${validation.locator.libraryName}/${validation.locator.relativePath}`,
+      contentLocator: validation.locator,
       source: 'media-library',
-      ...workspaceFilePresentation(validation.locator.path),
+      ...workspaceFilePresentation(validation.locator.relativePath),
     });
   }
   return [...candidates.values()]
@@ -527,8 +535,17 @@ function workspaceRelativePath(locatorValue: ContentLocator): string {
   switch (locator.kind) {
     case 'workspace-file':
       return locator.path;
+    case 'media-library':
+      throw new AgentContentEffectError(
+        'desktop-agent-content-kind-unsupported',
+        `Desktop Media Library '${locator.libraryName}/${locator.relativePath}' requires its exact Assets resolver.`,
+      );
     case 'document-entry':
-      return locator.source.path;
+      if (locator.source.kind === 'workspace-file') return locator.source.path;
+      throw new AgentContentEffectError(
+        'desktop-agent-content-kind-unsupported',
+        `Desktop Media Library '${locator.source.libraryName}/${locator.source.relativePath}' requires its exact Assets resolver.`,
+      );
     case 'generated-output':
       return locator.path;
     case 'package-resource':

@@ -16,14 +16,15 @@ import {
 } from '@neko/canvas-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
 import {
-  createWorkspaceLinkedMediaLibrary,
-  listWorkspaceLinkedMediaLibraries,
+  createProjectMediaLibraryBindingFingerprint,
+  ProjectMediaLibraryBindingRepository,
 } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { CanvasMaterialAuthoringService } from '@neko/canvas-node';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 
 const roots: string[] = [];
 
@@ -41,11 +42,8 @@ describe('CanvasMaterialAuthoringService', () => {
     const linkedRoot = await mkdtemp(path.join(tmpdir(), 'openneko-linked-library-'));
     roots.push(linkedRoot);
     await writeFixtureFile(linkedRoot, 'shots/clip.mp4', 'clip');
-    await createWorkspaceLinkedMediaLibrary({
-      workspaceRoot: fixture.workspace.workspacePath,
-      name: 'Editorial',
-      targetDirectory: linkedRoot,
-    });
+    await writeFixtureFile(linkedRoot, 'books/story.epub', 'book');
+    await bindProjectMediaLibrary(fixture, linkedRoot, 'Editorial');
     const authorizePackageResource = vi.fn(async () => undefined);
     const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
@@ -74,8 +72,9 @@ describe('CanvasMaterialAuthoringService', () => {
       request: directRequest(
         fixture.identity,
         {
-          kind: 'workspace-file',
-          path: 'neko/assets/Editorial/shots/clip.mp4',
+          kind: 'media-library',
+          libraryName: 'Editorial',
+          relativePath: 'shots/clip.mp4',
         },
         'video',
       ),
@@ -101,6 +100,24 @@ describe('CanvasMaterialAuthoringService', () => {
       request: directRequest(
         fixture.identity,
         {
+          kind: 'document-entry',
+          source: {
+            kind: 'media-library',
+            libraryName: 'Editorial',
+            relativePath: 'books/story.epub',
+          },
+          entryPath: 'chapters/two.xhtml',
+        },
+        'document',
+      ),
+    });
+    canvas = await service.author({
+      canvas,
+      identity: fixture.identity,
+      workspace: fixture.workspace,
+      request: directRequest(
+        fixture.identity,
+        {
           kind: 'package-resource',
           packageId: 'character-pack',
           revision: '1',
@@ -113,13 +130,23 @@ describe('CanvasMaterialAuthoringService', () => {
     expect(canvas.nodes.map(contentLocatorOf)).toEqual([
       { kind: 'workspace-file', path: 'media/cat.png' },
       {
-        kind: 'workspace-file',
-        path: 'neko/assets/Editorial/shots/clip.mp4',
+        kind: 'media-library',
+        libraryName: 'Editorial',
+        relativePath: 'shots/clip.mp4',
       },
       {
         kind: 'document-entry',
         source: { kind: 'workspace-file', path: 'documents/story.epub' },
         entryPath: 'chapters/one.xhtml',
+      },
+      {
+        kind: 'document-entry',
+        source: {
+          kind: 'media-library',
+          libraryName: 'Editorial',
+          relativePath: 'books/story.epub',
+        },
+        entryPath: 'chapters/two.xhtml',
       },
       {
         kind: 'package-resource',
@@ -200,7 +227,7 @@ describe('CanvasMaterialAuthoringService', () => {
     service.dispose();
   });
 
-  it('links or copies a global Media Library only through the explicit request', async () => {
+  it('rejects Canvas-owned binding and copies global Media Library content only when explicit', async () => {
     const fixture = await createFixture();
     const externalLibrary = await mkdtemp(path.join(tmpdir(), 'openneko-global-library-target-'));
     roots.push(externalLibrary);
@@ -216,27 +243,21 @@ describe('CanvasMaterialAuthoringService', () => {
     });
 
     const initial = emptyCanvas();
-    const linked = await service.author({
-      canvas: initial,
-      identity: fixture.identity,
-      workspace: fixture.workspace,
-      request: {
-        kind: 'global-library-link',
-        identity: materialIdentity(fixture.identity),
-        globalLibraryId: libraryId,
-      },
-    });
-    expect(linked).toBe(initial);
-    expect(await listWorkspaceLinkedMediaLibraries(fixture.workspace.workspacePath)).toEqual([
-      expect.objectContaining({
-        name: path.basename(externalLibrary),
-        workspacePath: `neko/assets/${path.basename(externalLibrary)}`,
-        availability: 'available',
+    await expect(
+      service.author({
+        canvas: initial,
+        identity: fixture.identity,
+        workspace: fixture.workspace,
+        request: {
+          kind: 'global-library-link',
+          identity: materialIdentity(fixture.identity),
+          globalLibraryId: libraryId,
+        },
       }),
-    ]);
+    ).rejects.toThrow('project Media owner');
 
     const copied = await service.author({
-      canvas: linked,
+      canvas: initial,
       identity: fixture.identity,
       workspace: fixture.workspace,
       request: {
@@ -495,6 +516,37 @@ async function createFixture() {
       logger: new ConsoleLogger('CanvasMaterialAuthoringTest'),
     }),
   };
+}
+
+async function bindProjectMediaLibrary(
+  fixture: Awaited<ReturnType<typeof createFixture>>,
+  sourceDirectory: string,
+  libraryName: string,
+): Promise<void> {
+  const { libraryId } = await createGlobalMediaLibraryConnection({
+    mediaLibraryRoot: fixture.globalMediaLibraryRoot,
+    sourceDirectory,
+    locationKind: 'local',
+  });
+  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
+    projectId: fixture.identity.projectId,
+    libraryName,
+    connectionId: libraryId,
+  });
+  await new ProjectMediaLibraryBindingRepository(
+    fixture.workspace.workspacePath,
+    fixture.identity.projectId,
+  ).applyRecovery(
+    confirmProjectMediaLibraryRecovery({
+      projectId: fixture.identity.projectId,
+      libraryName,
+      connectionId: libraryId,
+      requirementFingerprint: 'sha256:test-requirement-1234',
+      validatedRelativePaths: [],
+      expectedBindingFingerprint: null,
+      replacementBindingFingerprint,
+    }),
+  );
 }
 
 function emptyCanvas(): CanvasData {

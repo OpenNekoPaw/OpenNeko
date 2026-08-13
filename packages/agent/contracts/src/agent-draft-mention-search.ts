@@ -57,8 +57,12 @@ function parseFile(value: unknown): AgentDraftMentionFile {
     'referenceReceipt',
   ]);
   const locatorResult = validateContentLocator(record['locator']);
-  if (!locatorResult.ok || locatorResult.locator.kind !== 'workspace-file') {
-    throw new Error('Agent Draft mention file requires a Workspace-relative locator.');
+  if (
+    !locatorResult.ok ||
+    (locatorResult.locator.kind !== 'workspace-file' &&
+      locatorResult.locator.kind !== 'media-library')
+  ) {
+    throw new Error('Agent Draft mention file requires a project-content locator.');
   }
   if (record['type'] !== 'file' && record['type'] !== 'folder') {
     throw new Error('Agent Draft mention file type is invalid.');

@@ -21,8 +21,9 @@ const generatedLocator: GeneratedOutputContentLocator = {
   path: 'neko/generated/image/shot-1.png',
 };
 const sourceLocator = {
-  kind: 'workspace-file' as const,
-  path: 'neko/assets/references/source-image.png',
+  kind: 'media-library' as const,
+  libraryName: 'References',
+  relativePath: 'source-image.png',
   fingerprint: { strategy: 'sha256' as const, value: 'sha256:source-image' },
 };
 

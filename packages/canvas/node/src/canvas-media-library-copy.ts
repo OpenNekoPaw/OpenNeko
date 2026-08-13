@@ -1,36 +1,61 @@
 import {
-  createNodeHostContentReadService,
-  NodeAuthorizedWorkspaceWriter,
-} from '@neko/content/node';
-import { listWorkspaceLinkedMediaLibraries } from '@neko/assets-node';
-import {
   type ContentIoDiagnostic,
   type ContentLocator,
   type ContentReadService,
-  type WorkspaceFileContentLocator,
+  type MediaLibraryContentLocator,
 } from '@neko/content';
 import {
   isCanvasMediaLibraryCopyRequest,
   type CanvasMediaLibraryCopyRequest,
 } from '@neko/canvas-domain';
 import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import {
-  MediaLibraryCopyService,
-  type MediaLibraryCopyResult,
-} from '@neko/assets-domain/media-library-copy';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
   copyDesktopGlobalMediaLibraryContent,
+  createProjectContentReadService,
   listGlobalMediaLibraryConnections,
+  ProjectMediaLibraryBindingRepository,
+  resolveGlobalMediaLibraryTarget,
   type GlobalMediaLibraryCopyResult,
 } from '@neko/assets-node';
+
+export async function listAvailableProjectMediaLibraryDestinations(input: {
+  readonly projectId: string;
+  readonly workspace: AssetWorkspaceResolution;
+  readonly globalMediaLibraryRoot: string;
+}): Promise<readonly { readonly libraryName: string; readonly targetRoot: string }[]> {
+  const bindingResult = await new ProjectMediaLibraryBindingRepository(
+    input.workspace.workspacePath,
+    input.projectId,
+  ).list();
+  return (
+    await Promise.all(
+      bindingResult.bindings.map(async (binding) => {
+        try {
+          return {
+            libraryName: binding.libraryName,
+            targetRoot: await resolveGlobalMediaLibraryTarget({
+              mediaLibraryRoot: input.globalMediaLibraryRoot,
+              libraryId: binding.connectionId,
+            }),
+          };
+        } catch {
+          return undefined;
+        }
+      }),
+    )
+  ).filter(
+    (destination): destination is { readonly libraryName: string; readonly targetRoot: string } =>
+      destination !== undefined,
+  );
+}
 
 export type CanvasMediaLibraryCopyResult =
   | {
       readonly status: 'copied';
       readonly destinationKind: 'project-media-library';
       readonly source: ContentLocator;
-      readonly destination: WorkspaceFileContentLocator;
+      readonly destination: MediaLibraryContentLocator;
       readonly byteLength: number;
     }
   | {
@@ -51,20 +76,34 @@ export class CanvasMediaLibraryCopyService {
   constructor(
     private readonly options: {
       readonly globalMediaLibraryRoot: string;
-      readonly createReader?: (workspaceRoot: string) => ContentReadService;
+      readonly createReader?: (input: {
+        readonly projectId: string;
+        readonly workspaceRoot: string;
+        readonly globalMediaLibraryRoot: string;
+      }) => ContentReadService;
     },
   ) {}
 
-  async resolveAvailability(workspace: AssetWorkspaceResolution): Promise<{
+  async resolveAvailability(
+    projectId: string,
+    workspace: AssetWorkspaceResolution,
+  ): Promise<{
     readonly projectLinked: boolean;
     readonly global: boolean;
   }> {
-    const [projectLibraries, globalLibraries] = await Promise.all([
-      listWorkspaceLinkedMediaLibraries(workspace.workspacePath),
+    const [projectBindings, globalLibraries] = await Promise.all([
+      new ProjectMediaLibraryBindingRepository(workspace.workspacePath, projectId).list(),
       listGlobalMediaLibraryConnections(this.options.globalMediaLibraryRoot),
     ]);
+    const availableConnectionIds = new Set(
+      globalLibraries
+        .filter((library) => library.availability === 'available')
+        .map((library) => library.libraryId),
+    );
     return {
-      projectLinked: projectLibraries.some((library) => library.availability === 'available'),
+      projectLinked: projectBindings.bindings.some((binding) =>
+        availableConnectionIds.has(binding.connectionId),
+      ),
       global: globalLibraries.some((library) => library.availability === 'available'),
     };
   }
@@ -82,24 +121,34 @@ export class CanvasMediaLibraryCopyService {
     }
     assertRequestIdentity(input.runtimeIdentity, input.request);
     const reader =
-      this.options.createReader?.(input.workspace.workspacePath) ??
-      createNodeHostContentReadService({ workspaceRoot: input.workspace.workspacePath });
+      this.options.createReader?.({
+        projectId: input.runtimeIdentity.projectId,
+        workspaceRoot: input.workspace.workspacePath,
+        globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+      }) ??
+      createProjectContentReadService({
+        projectId: input.runtimeIdentity.projectId,
+        workspaceRoot: input.workspace.workspacePath,
+        globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+      });
     if (input.request.kind === 'copy-to-project-media-library') {
+      const binding = await new ProjectMediaLibraryBindingRepository(
+        input.workspace.workspacePath,
+        input.runtimeIdentity.projectId,
+      ).read(input.request.libraryName);
+      if (binding.status !== 'available') {
+        return unavailable(input.request.source, 'content-unauthorized');
+      }
       return mapProjectResult(
-        await new MediaLibraryCopyService(
-          {
-            list: () => listWorkspaceLinkedMediaLibraries(input.workspace.workspacePath),
-          },
-          reader,
-          new NodeAuthorizedWorkspaceWriter({
-            workspaceRoot: input.workspace.workspacePath,
-          }),
-        ).copy({
+        input.request.libraryName,
+        await copyDesktopGlobalMediaLibraryContent({
+          mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+          globalLibraryId: binding.binding.connectionId,
           source: input.request.source,
-          libraryName: input.request.libraryName,
           destinationDirectory: projectDestinationDirectory(input.request),
           fileName: input.request.fileName,
           conflict: input.request.conflictPolicy,
+          reader,
         }),
       );
     }
@@ -146,11 +195,13 @@ function assertRequestIdentity(
 function projectDestinationDirectory(
   request: Extract<CanvasMediaLibraryCopyRequest, { kind: 'copy-to-project-media-library' }>,
 ): string {
-  const root = `neko/assets/${request.libraryName}`;
-  return request.destinationDirectory ? `${root}/${request.destinationDirectory}` : root;
+  return request.destinationDirectory;
 }
 
-function mapProjectResult(result: MediaLibraryCopyResult): CanvasMediaLibraryCopyResult {
+function mapProjectResult(
+  libraryName: string,
+  result: GlobalMediaLibraryCopyResult,
+): CanvasMediaLibraryCopyResult {
   if (result.status === 'unavailable') {
     return {
       status: 'unavailable',
@@ -162,9 +213,20 @@ function mapProjectResult(result: MediaLibraryCopyResult): CanvasMediaLibraryCop
     status: 'copied',
     destinationKind: 'project-media-library',
     source: result.source,
-    destination: result.destination,
+    destination: {
+      kind: 'media-library',
+      libraryName,
+      relativePath: result.entryId,
+    },
     byteLength: result.byteLength,
   };
+}
+
+function unavailable(
+  source: ContentLocator,
+  code: ContentIoDiagnostic['code'],
+): CanvasMediaLibraryCopyResult {
+  return { status: 'unavailable', source, diagnostic: { code } };
 }
 
 function mapGlobalResult(result: GlobalMediaLibraryCopyResult): CanvasMediaLibraryCopyResult {

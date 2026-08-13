@@ -2,11 +2,15 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CanvasMediaLibraryCopyService } from './canvas-media-library-copy';
-import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
+import {
+  createGlobalMediaLibraryConnection,
+  createProjectMediaLibraryBindingFingerprint,
+  ProjectMediaLibraryBindingRepository,
+} from '@neko/assets-node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 
 const roots: string[] = [];
 
@@ -18,11 +22,7 @@ describe('CanvasMediaLibraryCopyService', () => {
   it('copies through the selected project-linked Media Library and preserves the source', async () => {
     const fixture = await createFixture();
     const target = await createRoot('project-media-library');
-    await createWorkspaceLinkedMediaLibrary({
-      workspaceRoot: fixture.workspace.workspacePath,
-      name: 'Editorial',
-      targetDirectory: target,
-    });
+    await bindProjectMediaLibrary(fixture, target, 'Editorial');
     await mkdir(path.join(target, 'Sequences'));
     await writeWorkspaceFile(fixture.workspace.workspacePath, 'source/shot.mp4', 'source-bytes');
 
@@ -45,8 +45,9 @@ describe('CanvasMediaLibraryCopyService', () => {
       destinationKind: 'project-media-library',
       source: { kind: 'workspace-file', path: 'source/shot.mp4' },
       destination: {
-        kind: 'workspace-file',
-        path: 'neko/assets/Editorial/Sequences/shot.mp4',
+        kind: 'media-library',
+        libraryName: 'Editorial',
+        relativePath: 'Sequences/shot.mp4',
       },
       byteLength: 12,
     });
@@ -172,6 +173,37 @@ async function createRoot(name: string): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), `openneko-${name}-`));
   roots.push(root);
   return root;
+}
+
+async function bindProjectMediaLibrary(
+  fixture: Awaited<ReturnType<typeof createFixture>>,
+  sourceDirectory: string,
+  libraryName: string,
+): Promise<void> {
+  const { libraryId } = await createGlobalMediaLibraryConnection({
+    mediaLibraryRoot: fixture.globalMediaLibraryRoot,
+    sourceDirectory,
+    locationKind: 'local',
+  });
+  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
+    projectId: fixture.identity.projectId,
+    libraryName,
+    connectionId: libraryId,
+  });
+  await new ProjectMediaLibraryBindingRepository(
+    fixture.workspace.workspacePath,
+    fixture.identity.projectId,
+  ).applyRecovery(
+    confirmProjectMediaLibraryRecovery({
+      projectId: fixture.identity.projectId,
+      libraryName,
+      connectionId: libraryId,
+      requirementFingerprint: 'sha256:test-requirement-1234',
+      validatedRelativePaths: [],
+      expectedBindingFingerprint: null,
+      replacementBindingFingerprint,
+    }),
+  );
 }
 
 async function writeWorkspaceFile(

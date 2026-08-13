@@ -428,6 +428,7 @@ describe('Agent launch application service', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
+      authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
       target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
     };
 
@@ -444,6 +445,7 @@ describe('Agent launch application service', () => {
 
     const replacementBinding = {
       ...binding,
+      authority: { kind: 'content-project' as const, contentProjectId: 'content-2' },
       target: { kind: 'content-project' as const, contentProjectId: 'content-2' },
     };
     await service.configureEntryTarget(catalog.connection, 'authoring', replacementBinding);
@@ -540,6 +542,7 @@ describe('Agent launch application service', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
+      authority: { kind: 'standalone-library' as const, library: 'character' as const },
       target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
     };
     const intent = await service.configureEntryTarget(attached.connection, 'assistant', binding);

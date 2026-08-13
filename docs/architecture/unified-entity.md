@@ -53,7 +53,7 @@ Entity contract 不提供任意 facts bag。Character/World 定义、provider/mo
 | `EntityRepresentationBinding`                    | Entity 与 durable resource ref 的确认关系 | 项目 canonical Entity document |
 | `VisualIdentityDraft` / requirement              | 可审阅建议或创作需求                      | owning authoring workflow      |
 | occurrence / relationship / availability / usage | 可重建 read model                         | Search / local metadata        |
-| Entity/Character association                     | 项目语义身份与角色的精确组合              | Project composition owner      |
+| Entity/Character association                     | 项目语义身份与角色的精确组合              | Project per-record fact owner  |
 
 SQLite 不保存 Entity authoritative payload。现有记录中超出最小 contract 的字段在切换严格 reader 前必须
 先资格化；无法支持的记录原样保留并在对应项目显示 diagnostic，不通过普通启动迁移或丢弃。

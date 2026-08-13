@@ -54,6 +54,11 @@ export function GenerationNode({
       presentation="foundational"
       opaqueSurface
       className="canvas-generation-node-frame"
+      onActivate={
+        selected && onEmbeddedPreview
+          ? () => onEmbeddedPreview(node.id, selected.outputId)
+          : undefined
+      }
       nodeLabel={{
         icon: (
           <span
@@ -90,21 +95,7 @@ export function GenerationNode({
                 onPreview={onEmbeddedPreview}
               />
             ) : (
-              <div
-                className="canvas-generation-node__single-preview"
-                onDoubleClick={(event) => {
-                  if (
-                    !selected ||
-                    !isPreviewableGenerationKind(selected.kind) ||
-                    !onEmbeddedPreview
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onEmbeddedPreview(node.id, selected.outputId);
-                }}
-              >
+              <div className="canvas-generation-node__single-preview">
                 <PreviewSurface
                   source={previewSource}
                   surfaceKind="inline"
@@ -138,12 +129,6 @@ export function GenerationNode({
       </div>
     </BaseNode>
   );
-}
-
-function isPreviewableGenerationKind(
-  kind: CanvasGenerationOutputBinding['kind'],
-): kind is 'image' | 'video' | 'audio' {
-  return kind === 'image' || kind === 'video' || kind === 'audio';
 }
 
 function ImageResultGrid({

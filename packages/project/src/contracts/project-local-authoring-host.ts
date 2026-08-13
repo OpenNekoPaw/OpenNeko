@@ -11,7 +11,7 @@ import {
   parseProjectLocalTargetRef,
   projectLocalTargetKey,
   type ProjectLocalTargetRef,
-} from './project-composition';
+} from './project-target';
 import type {
   ProjectLocalAuthoringOutcome,
   ProjectLocalCharacterCreationReceipt,
@@ -317,16 +317,11 @@ function parsePartialCharacterCreationReceipt(
   }
   const allSteps: readonly ProjectLocalCharacterCreationStep[] = [
     'character-project',
-    'project-membership',
     'project-entity',
     'entity-character-association',
   ];
   const nextStep = record['nextStep'];
-  if (
-    nextStep !== 'project-membership' &&
-    nextStep !== 'project-entity' &&
-    nextStep !== 'entity-character-association'
-  ) {
+  if (nextStep !== 'project-entity' && nextStep !== 'entity-character-association') {
     throw new Error('Project-local Character receipt has an invalid next step.');
   }
   if (!Array.isArray(record['completedSteps'])) {
@@ -360,7 +355,6 @@ function parsePartialCharacterCreationReceipt(
 function isCharacterCreationStep(value: unknown): value is ProjectLocalCharacterCreationStep {
   return (
     value === 'character-project' ||
-    value === 'project-membership' ||
     value === 'project-entity' ||
     value === 'entity-character-association'
   );

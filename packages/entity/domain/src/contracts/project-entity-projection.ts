@@ -17,6 +17,7 @@ import {
 
 export const PROJECT_ENTITY_BINDING_RESOURCE_OWNERS = [
   'workspace-file',
+  'media-library',
   'document',
   'generated-output',
   'asset',

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, realpath, rm } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   app,
@@ -74,6 +74,7 @@ import {
   createSkillCreationCapabilityProvider,
   createPersistentAgentConversationLifecycleRepository,
   createPersistentAgentConversationContextAuthority,
+  AgentConversationCharacterVersionReferenceReader,
   initializeAgentConversationLifecycleTables,
   projectAgentDraftInputText,
   type AgentDomainConversationService,
@@ -94,8 +95,7 @@ import {
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
   NodeProjectEntityAuthoringService,
-  NodeProjectEntityInspectorRuntime,
-  NodeProjectEntityProjectionRuntime,
+  readProjectEntityManagementResources,
 } from '@neko/entity-node';
 import {
   resolveDesktopAgentAutomationLaunch,
@@ -138,6 +138,7 @@ import {
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import {
   createCharacterAuthoringFileRepository,
+  createCharacterPortableArchivePort,
   createPersistentCharacterRuntimeRepositories,
   initializeCharacterRuntimePersistenceTables,
 } from '@neko/chara-node';
@@ -166,8 +167,13 @@ import {
   CharacterCompanionContinuityService,
   CharacterFoundationCommandService,
   CharacterFoundationService,
+  CharacterManagementService,
+  CharacterVersionReferenceInventoryService,
+  CharacterVersionDeletionService,
+  CharaOwnedCharacterVersionReferenceReader,
   CharacterInteractionService,
   CharacterPresentationService,
+  CharacterPortablePackageService,
   CharacterRoomConversationService,
   CharacterRoomInteractionService,
   CharacterRoomService,
@@ -178,18 +184,21 @@ import {
 } from '@neko/chara/application';
 import {
   ProjectAuthoringNavigationService,
-  ProjectCompositionService,
+  ProjectCharacterVersionReferenceReader,
+  ProjectContentService,
+  ProjectDependencyService,
   ProjectLocalAuthoringService,
   ProjectLocalCharacterCreationError,
 } from '@neko/project/application';
-import { createProjectCompositionFileRepository } from '@neko/project-node';
-import { createDesktopProjectEntityCharacterResourceReader } from './desktop-project-entity-character-resource-reader';
+import { ProjectEntityCharacterAssociationRepository } from '@neko/project-node';
 import { createDesktopCharacterCreationSourceAuthority } from './desktop-character-creation-source-authority';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
   AssetCenterNodeRuntime,
   ResourceBrowserNodeRuntime,
-  searchWorkspaceLinkedMediaLibraryContentLocators,
+  createProjectContentReadService,
+  readProjectContentReferences,
+  searchProjectMediaLibraryContentLocators,
   type ResourceBrowserNodeRuntimeOptions,
 } from '@neko/assets-node';
 import {
@@ -198,7 +207,10 @@ import {
 } from './desktop-resource-registry';
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
-import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
+import {
+  CanvasGenerationNodeRuntime,
+  listAvailableProjectMediaLibraryDestinations,
+} from '@neko/canvas-node';
 import { CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES } from '@neko/canvas-domain';
 import { GenerationApplicationRuntime } from '@neko/generation/job';
 import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
@@ -216,11 +228,8 @@ import {
   type DesktopCanvasPreviewResourceLease,
 } from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
-import {
-  createDesktopCutCanvasHandoffPayload,
-  DesktopCutRuntime,
-  parseDesktopCutCanvasHandoffPayload,
-} from './desktop-cut-runtime';
+import { DesktopCutRuntime } from './desktop-cut-runtime';
+import { createCutCanvasHandoffPayload, parseCutCanvasHandoffPayload } from '@neko/cut-domain';
 import { openDesktopCanvasDocument } from './desktop-creative-document-runtime';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
 import {
@@ -242,7 +251,6 @@ import {
   modelSupportsPurpose,
 } from '@neko/host/settings';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
-import { listWorkspaceLinkedMediaLibraries } from '@neko/assets-node';
 import {
   listGlobalMediaLibraryConnections,
   resolveGlobalMediaLibraryTarget,
@@ -408,11 +416,9 @@ async function startDesktop(): Promise<void> {
     metadataStore: localMetadataStore,
     authoring: characterAuthoringRepository,
   });
-  const characterFoundation = new CharacterFoundationService({
-    characterCatalog: createCharacterDurableCatalogPort({
-      authoring: characterAuthoringRepository,
-      runtime: characterRuntimeRepositories.catalog,
-    }),
+  const characterDurableCatalog = createCharacterDurableCatalogPort({
+    authoring: characterAuthoringRepository,
+    runtime: characterRuntimeRepositories.catalog,
   });
   const worldAuthoringRepository = createWorldAuthoringFileRepository({
     workspaceRoot: worldLibraryRoot,
@@ -484,11 +490,6 @@ async function startDesktop(): Promise<void> {
   if (!metadataRepositories) {
     throw new Error('Desktop runtime requires the local metadata repositories.');
   }
-  const entityProjectionRuntime = new NodeProjectEntityProjectionRuntime({
-    homedir,
-    metadataStore: localMetadataStore,
-    projections: metadataRepositories.projectEntityProjections,
-  });
   const workspaceGrantAuthority = new DesktopWorkspaceGrantAuthority({
     resolver: workspaceRegistry,
   });
@@ -617,6 +618,87 @@ async function startDesktop(): Promise<void> {
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
     userDataRoot: globalStorage.root,
   });
+  const agentCharacterVersionReferences = new AgentConversationCharacterVersionReferenceReader(
+    agentCatalogReader,
+  );
+  const projectCharacterVersionReferences = new ProjectCharacterVersionReferenceReader({
+    readDependencySnapshots: async (signal) => {
+      const projects = await workspaceRegistry.listProjects([assistantSpaceId]);
+      return await Promise.all(
+        projects.map(async (project) => {
+          signal?.throwIfAborted();
+          if (project.unavailable) {
+            throw new Error(
+              `Content Project '${project.projectId}' is unavailable: ${project.unavailable.message}`,
+            );
+          }
+          const workspace = await shellService.resolveAgentWorkspace(project.workspaceId);
+          requireContentProjectIdentity(workspace.workspaceId, project.projectId);
+          const characters = createCharacterAuthoringFileRepository({
+            workspaceRoot: workspace.workspacePath,
+            scope: { kind: 'content-project', contentProjectId: project.projectId },
+          });
+          const worlds = createWorldAuthoringFileRepository({
+            workspaceRoot: workspace.workspacePath,
+            scope: { kind: 'content-project', contentProjectId: project.projectId },
+          });
+          return await new ProjectDependencyService({
+            characters,
+            worlds,
+            references: {
+              readReferences: async (projectId) => {
+                const snapshot = await readProjectContentReferences({
+                  workspacePath: workspace.workspacePath,
+                  projectId,
+                });
+                return {
+                  owners: snapshot.owners,
+                  coveredOwnerKinds: (['canvas', 'cut', 'entity-representation'] as const).filter(
+                    (kind) => !snapshot.requirements.missingOwnerKinds.includes(kind),
+                  ),
+                  diagnostics: snapshot.diagnostics.map((diagnostic) => ({
+                    ownerKind: diagnostic.ownerKind,
+                    ownerId: diagnostic.ownerId,
+                    message: `Project document '${diagnostic.ownerId}' is invalid.`,
+                  })),
+                };
+              },
+            },
+          }).read(project.projectId, signal);
+        }),
+      );
+    },
+  });
+  const agentCharacterVersionReferenceReader = {
+    ownerKind: 'agent' as const,
+    readReferences: async (characterVersionIds: readonly string[], signal?: AbortSignal) =>
+      (await agentCharacterVersionReferences.readReferences(characterVersionIds, signal)).map(
+        (reference) => ({
+          ownerKind: 'agent' as const,
+          referenceKind: 'conversation' as const,
+          referenceId: reference.conversationId,
+          characterVersionId: reference.characterVersionId,
+        }),
+      ),
+  };
+  const characterVersionReferences = new CharacterVersionReferenceInventoryService({
+    chara: new CharaOwnedCharacterVersionReferenceReader({
+      catalog: characterDurableCatalog,
+      lineage: characterAuthoringRepository,
+    }),
+    agent: agentCharacterVersionReferenceReader,
+    project: projectCharacterVersionReferences,
+  });
+  const characterFoundation = new CharacterFoundationService({
+    characterCatalog: characterDurableCatalog,
+    lineage: characterAuthoringRepository,
+    management: new CharacterManagementService({
+      catalog: characterDurableCatalog,
+      lineage: characterAuthoringRepository,
+      references: characterVersionReferences,
+      placement: { kind: 'standalone-library' },
+    }),
+  });
   const agentAuthoringMutationAuthority = createAgentAuthoringMutationAuthority({
     content: {
       validate: async (binding, signal) => {
@@ -624,11 +706,10 @@ async function startDesktop(): Promise<void> {
           binding.workspaceGrantId,
           binding.workspaceId,
         );
-        await new ProjectCompositionService(
-          createProjectCompositionFileRepository({
-            workspaceRoot: resolution.workspace.workspacePath,
-          }),
-        ).require(binding.target.contentProjectId, signal);
+        requireContentProjectIdentity(
+          resolution.workspace.workspaceId,
+          binding.target.contentProjectId,
+        );
       },
     },
     character: {
@@ -644,16 +725,10 @@ async function startDesktop(): Promise<void> {
           }).requireProject(binding.target.characterProjectId, signal);
           return;
         }
-        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
-        const compositions = new ProjectCompositionService(compositionRepository);
-        const composition = await compositionRepository.read(signal);
-        if (!composition) {
-          throw new Error('Agent Character authoring target has no exact Project composition.');
-        }
-        await compositions.requireLocalTarget(composition.contentProjectId, binding.target, signal);
+        const contentProjectId = contentProjectIdForWorkspace(resolution.workspace.workspaceId);
         const repository = createCharacterAuthoringFileRepository({
           workspaceRoot,
-          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+          scope: { kind: 'content-project', contentProjectId },
         });
         await new CharacterAuthoringService({ repository }).requireProject(
           binding.target.characterProjectId,
@@ -675,19 +750,10 @@ async function startDesktop(): Promise<void> {
           );
           return;
         }
-        const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
-        const composition = await compositionRepository.read(signal);
-        if (!composition) {
-          throw new Error('Agent World authoring target has no exact Project composition.');
-        }
-        await new ProjectCompositionService(compositionRepository).requireLocalTarget(
-          composition.contentProjectId,
-          binding.target,
-          signal,
-        );
+        const contentProjectId = contentProjectIdForWorkspace(resolution.workspace.workspaceId);
         const repository = createWorldAuthoringFileRepository({
           workspaceRoot,
-          scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+          scope: { kind: 'content-project', contentProjectId },
         });
         await new WorldAuthoringService({ repository }).requireProject(
           binding.target.worldProjectId,
@@ -713,6 +779,19 @@ async function startDesktop(): Promise<void> {
     catalogReader: agentCatalogReader,
     resolveGenerationJobs: (binding) => generationRuntime.getJobs(binding),
     assistantSpaceIds: [assistantSpaceId],
+    resolveContentReadService: (workspace) => {
+      if (workspace.workspaceId === assistantSpaceId) return undefined;
+      const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
+      return createProjectContentReadService({
+        projectId: contentProjectIdForWorkspace(workspace.workspaceId),
+        workspaceRoot: workspace.workspacePath,
+        globalMediaLibraryRoot: globalStorage.mediaLibraries,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            documentLowLevelAccess.readEntry(sourcePath, entryPath),
+        },
+      });
+    },
     creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     authoringMutationAuthority: agentAuthoringMutationAuthority,
     resolveWorkspaceCapabilityProviders: (workspace) => {
@@ -754,19 +833,10 @@ async function startDesktop(): Promise<void> {
               signal,
             );
           }
-          const compositionRepository = createProjectCompositionFileRepository({ workspaceRoot });
-          const composition = await compositionRepository.read(signal);
-          if (!composition) {
-            throw new Error('Character creation target has no exact Project composition.');
-          }
-          await new ProjectCompositionService(compositionRepository).requireLocalTarget(
-            composition.contentProjectId,
-            binding.target,
-            signal,
-          );
+          const contentProjectId = contentProjectIdForWorkspace(resolution.workspace.workspaceId);
           const repository = createCharacterAuthoringFileRepository({
             workspaceRoot,
-            scope: { kind: 'content-project', contentProjectId: composition.contentProjectId },
+            scope: { kind: 'content-project', contentProjectId },
           });
           return new CharacterAuthoringService({ repository }).fillFreshDraft(
             {
@@ -939,9 +1009,11 @@ async function startDesktop(): Promise<void> {
     shell: shellService,
     referenceCatalog: createNodeTextEditorMarkdownReferenceCatalog({
       files: host.files,
+      globalMediaLibraryRoot: globalStorage.mediaLibraries,
       resolveWorkspace: (workspaceId) => shellService.resolveAgentWorkspace(workspaceId),
     }),
     media: new NodeTextEditorMarkdownMediaService({
+      globalMediaLibraryRoot: globalStorage.mediaLibraries,
       resolveWorkspace: (workspaceId) => shellService.resolveAgentWorkspace(workspaceId),
       resources: resourceRegistry,
     }),
@@ -949,6 +1021,7 @@ async function startDesktop(): Promise<void> {
   const cutRuntime = new DesktopCutRuntime({
     shell: shellService,
     host,
+    globalMediaLibraryRoot: globalStorage.mediaLibraries,
     resources: resourceRegistry,
     draftLabel: app.getLocale().toLocaleLowerCase().startsWith('zh')
       ? '未命名剪辑'
@@ -1138,9 +1211,16 @@ async function startDesktop(): Promise<void> {
       };
     },
     requestProjectMediaLibraryCopy: async ({ identity, workspace, suggestedFileName }) => {
-      const libraries = (await listWorkspaceLinkedMediaLibraries(workspace.workspacePath)).filter(
-        (library) => library.availability === 'available',
-      );
+      const libraries = (
+        await listAvailableProjectMediaLibraryDestinations({
+          projectId: identity.projectId,
+          workspace,
+          globalMediaLibraryRoot: globalStorage.mediaLibraries,
+        })
+      ).map((destination) => ({
+        name: destination.libraryName,
+        targetRoot: destination.targetRoot,
+      }));
       const library = await selectCanvasMediaLibrary({
         owner: requireOwnerWindow(identity.windowId),
         title: canvasUsesChineseLabels ? '选择项目媒体库' : 'Select project Media Library',
@@ -1149,9 +1229,7 @@ async function startDesktop(): Promise<void> {
       if (!library) return undefined;
       const selected = libraries.find((candidate) => candidate.name === library);
       if (!selected) throw new Error('Selected project Media Library is no longer available.');
-      const targetRoot = await realpath(
-        path.join(workspace.workspacePath, ...selected.workspacePath.split('/')),
-      );
+      const targetRoot = await realpath(selected.targetRoot);
       const destination = await selectCanvasMediaLibraryDestination({
         owner: requireOwnerWindow(identity.windowId),
         title: canvasUsesChineseLabels ? '复制到项目媒体库' : 'Copy to project Media Library',
@@ -1198,8 +1276,10 @@ async function startDesktop(): Promise<void> {
       if (absolutePath) {
         source = { absolutePath };
       } else {
-        const contentRead = createNodeHostContentReadService({
+        const contentRead = createProjectContentReadService({
+          projectId: identity.projectId,
           workspaceRoot: workspace.workspacePath,
+          globalMediaLibraryRoot: globalStorage.mediaLibraries,
           documentEntryReader: {
             readEntry: (sourcePath, entryPath) =>
               canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
@@ -1297,7 +1377,7 @@ async function startDesktop(): Promise<void> {
       });
     },
     resolveAddToCut: async ({ identity }) =>
-      createDesktopCutCanvasHandoffPayload(await cutRuntime.resolveCanvasHandoffTarget(identity)),
+      createCutCanvasHandoffPayload(await cutRuntime.resolveCanvasHandoffTarget(identity)),
     addToCut: async ({ identity, target, executionPayload }) => {
       const label =
         target.locator.kind === 'workspace-file' || target.locator.kind === 'generated-output'
@@ -1308,7 +1388,7 @@ async function startDesktop(): Promise<void> {
         nodeId: target.nodeId,
         label,
         locator: target.locator,
-        target: parseDesktopCutCanvasHandoffPayload(executionPayload),
+        target: parseCutCanvasHandoffPayload(executionPayload),
       });
     },
     separateAudioInCut: async ({ identity, target, executionPayload }) => {
@@ -1321,7 +1401,7 @@ async function startDesktop(): Promise<void> {
         nodeId: target.nodeId,
         label,
         locator: target.locator,
-        target: parseDesktopCutCanvasHandoffPayload(executionPayload),
+        target: parseCutCanvasHandoffPayload(executionPayload),
       });
     },
     registerPreviewResource: async ({
@@ -1382,8 +1462,10 @@ async function startDesktop(): Promise<void> {
         });
         return registerCanvasPreviewBytes(resourceRegistry, owner, thumbnail, 'image/png');
       }
-      const contentRead = createNodeHostContentReadService({
+      const contentRead = createProjectContentReadService({
+        projectId: identity.projectId,
         workspaceRoot: workspace.workspacePath,
+        globalMediaLibraryRoot: globalStorage.mediaLibraries,
         documentEntryReader: {
           readEntry: (sourcePath, entryPath) =>
             canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
@@ -1413,20 +1495,11 @@ async function startDesktop(): Promise<void> {
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
     assetLibraryMemberships: metadataRepositories.assetLibraryMemberships,
     localMetadataRepositories: metadataRepositories,
-    refreshEntityProjections: (workspace) => entityProjectionRuntime.refresh(workspace),
-    readEntityCharacterResources: createDesktopProjectEntityCharacterResourceReader(),
     shell: shellService,
     host,
     canvas: canvasRuntime,
     cut: {
       addResource: (input) => cutRuntime.addResource(input).then(() => undefined),
-    },
-    entity: {
-      executeIntent: ({ intent, workspace }) =>
-        new NodeProjectEntityInspectorRuntime({
-          workspace,
-          projections: workspaceRegistry.metadataRepositories?.projectEntityProjections,
-        }).execute(intent),
     },
     openPreview: (input) => previewRuntime.open(input).then(() => undefined),
     openTextEditor: (input) => textEditorRuntime.open(input).then(() => undefined),
@@ -1469,7 +1542,7 @@ async function startDesktop(): Promise<void> {
       });
     },
     selectGlobalMediaLibrarySource: async (windowId) => {
-      if (functionalWorkspace) return functionalWorkspace;
+      if (functionalWorkspace) return path.join(homedir, 'global-media', 'workspace');
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
       const result = await dialog.showOpenDialog(owner, {
@@ -1705,9 +1778,11 @@ async function startDesktop(): Promise<void> {
         shell.showItemInFolder(path.join(workspace.workspace.workspacePath, contentLocator.path));
       },
     },
-    searchLinkedMediaLibraryFiles: (workspace, input) =>
-      searchWorkspaceLinkedMediaLibraryContentLocators({
+    searchLinkedMediaLibraryFiles: (projectId, workspace, input) =>
+      searchProjectMediaLibraryContentLocators({
+        projectId,
         workspace,
+        globalMediaLibraryRoot: globalStorage.mediaLibraries,
         files: host.files,
         query: input.query,
         limit: input.limit,
@@ -1857,9 +1932,21 @@ async function startDesktop(): Promise<void> {
     readContentProjects: async (windowId) =>
       (await shellService.getProjection(windowId)).catalog.projects,
     requireProjectLocalTarget: async ({ workspace, contentProjectId, target }) => {
-      await new ProjectCompositionService(
-        createProjectCompositionFileRepository({ workspaceRoot: workspace.workspacePath }),
-      ).requireLocalTarget(contentProjectId, target);
+      requireContentProjectIdentity(workspace.workspaceId, contentProjectId);
+      if (target.kind === 'character-project') {
+        const project = await createCharacterAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        }).readProject(target.characterProjectId);
+        if (!project)
+          throw new Error(`CharacterProject '${target.characterProjectId}' is unavailable.`);
+        return;
+      }
+      const project = await createWorldAuthoringFileRepository({
+        workspaceRoot: workspace.workspacePath,
+        scope: { kind: 'content-project', contentProjectId },
+      }).readProject(target.worldProjectId);
+      if (!project) throw new Error(`WorldProject '${target.worldProjectId}' is unavailable.`);
     },
     validateCharacterProject: async ({ workspace, contentProjectId, characterProjectId }) => {
       if (!contentProjectId) {
@@ -1905,14 +1992,24 @@ async function startDesktop(): Promise<void> {
           binding.workspaceGrantId,
           binding.workspaceId,
         );
+        const project = (await workspaceRegistry.listProjects()).find(
+          (candidate) => candidate.workspaceId === binding.workspaceId,
+        );
+        if (!project || project.unavailable) {
+          throw new Error(
+            `Agent Workspace '${binding.workspaceId}' has no available Project authority.`,
+          );
+        }
         const projection = await searchAgentWorkspaceMentions({
           workspace: resolution.workspace,
           host,
           filter,
           purpose: 'entry',
           searchLinkedMediaLibraryFiles: (input) =>
-            searchWorkspaceLinkedMediaLibraryContentLocators({
+            searchProjectMediaLibraryContentLocators({
+              projectId: project.projectId,
               workspace: resolution.workspace,
+              globalMediaLibraryRoot: globalStorage.mediaLibraries,
               files: host.files,
               query: input.query,
               limit: input.limit,
@@ -2484,26 +2581,50 @@ async function startDesktop(): Promise<void> {
       },
     },
   });
+  const resolveCharacterRepository = (input: {
+    readonly workspace: AssetWorkspaceResolution;
+    readonly authority: import('@neko/chara/contracts').CharacterAuthoringAuthority;
+  }) => {
+    if (input.authority.kind === 'content-project') {
+      requireContentProjectIdentity(input.workspace.workspaceId, input.authority.contentProjectId);
+    }
+    return createCharacterAuthoringFileRepository({
+      workspaceRoot: input.workspace.workspacePath,
+      scope: input.authority,
+    });
+  };
   const resolveCharacterAuthoring = async (input: {
     readonly workspace: AssetWorkspaceResolution;
-    readonly contentProjectId: string;
+    readonly authority: import('@neko/chara/contracts').CharacterAuthoringAuthority;
     readonly characterProjectId: string;
   }) => {
-    const compositions = new ProjectCompositionService(
-      createProjectCompositionFileRepository({ workspaceRoot: input.workspace.workspacePath }),
-    );
-    await compositions.requireLocalTarget(input.contentProjectId, {
-      kind: 'character-project',
-      characterProjectId: input.characterProjectId,
-    });
-    const repository = createCharacterAuthoringFileRepository({
-      workspaceRoot: input.workspace.workspacePath,
-      scope: { kind: 'content-project', contentProjectId: input.contentProjectId },
+    const repository = resolveCharacterRepository(input);
+    const storylines = new CharacterStorylineService(repository);
+    const references = new CharacterVersionReferenceInventoryService({
+      chara: new CharaOwnedCharacterVersionReferenceReader({
+        catalog: createCharacterDurableCatalogPort({
+          authoring: repository,
+          runtime: characterRuntimeRepositories.catalog,
+        }),
+        lineage: repository,
+        storylines,
+      }),
+      agent: agentCharacterVersionReferenceReader,
+      project: projectCharacterVersionReferences,
     });
     return new CharacterAuthoringHostService({
-      contentProjectId: input.contentProjectId,
+      scope: input.authority,
+      characterProjectId: input.characterProjectId,
       catalog: repository,
       authoring: new CharacterAuthoringService({ repository, lineage: repository }),
+      storylines,
+      lineage: repository,
+      references,
+      deletion: new CharacterVersionDeletionService({
+        repository,
+        lineage: repository,
+        references,
+      }),
     });
   };
   const resolveWorldAuthoring = async (input: {
@@ -2511,13 +2632,7 @@ async function startDesktop(): Promise<void> {
     readonly contentProjectId: string;
     readonly worldProjectId: string;
   }) => {
-    const compositions = new ProjectCompositionService(
-      createProjectCompositionFileRepository({ workspaceRoot: input.workspace.workspacePath }),
-    );
-    await compositions.requireLocalTarget(input.contentProjectId, {
-      kind: 'world-project',
-      worldProjectId: input.worldProjectId,
-    });
+    requireContentProjectIdentity(input.workspace.workspaceId, input.contentProjectId);
     const repository = createWorldAuthoringFileRepository({
       workspaceRoot: input.workspace.workspacePath,
       scope: { kind: 'content-project', contentProjectId: input.contentProjectId },
@@ -2542,8 +2657,9 @@ async function startDesktop(): Promise<void> {
       scope: { kind: 'content-project', contentProjectId: input.contentProjectId },
     });
     return new ProjectLocalAuthoringService({
-      compositions: new ProjectCompositionService(
-        createProjectCompositionFileRepository({ workspaceRoot: input.workspace.workspacePath }),
+      associations: new ProjectEntityCharacterAssociationRepository(
+        input.workspace.workspacePath,
+        input.contentProjectId,
       ),
       characters: {
         createProject: (create, signal) =>
@@ -2551,9 +2667,6 @@ async function startDesktop(): Promise<void> {
             authority: characterCreationSourceAuthority,
             projects: new CharacterAuthoringService({ repository: characters }),
           }).createProject(create, signal),
-        deleteUnlinkedProject: async () => {
-          throw new Error('Character deletion requires an explicit owner command.');
-        },
       },
       entities: new NodeProjectEntityAuthoringService({
         workspace: {
@@ -2564,9 +2677,6 @@ async function startDesktop(): Promise<void> {
       worlds: {
         createProject: (create, signal) =>
           new WorldAuthoringService({ repository: worlds }).createProject(create, signal),
-        deleteUnlinkedProject: async () => {
-          throw new Error('World deletion requires an explicit owner command.');
-        },
       },
       now: () => new Date().toISOString(),
     });
@@ -2589,26 +2699,8 @@ async function startDesktop(): Promise<void> {
     shell: shellService,
     projectManagement,
     projectAuthoring: {
-      ensureComposition: async ({ workspace, contentProjectId }) => {
-        const compositions = new ProjectCompositionService(
-          createProjectCompositionFileRepository({ workspaceRoot: workspace.workspacePath }),
-        );
-        try {
-          await compositions.require(contentProjectId);
-        } catch (error) {
-          if (
-            typeof error === 'object' &&
-            error !== null &&
-            'code' in error &&
-            error.code === 'project-composition-not-found'
-          ) {
-            await compositions.create(contentProjectId);
-            return;
-          }
-          throw error;
-        }
-      },
       getNavigation: async ({ workspace, contentProjectId, contentLabel }) => {
+        requireContentProjectIdentity(workspace.workspaceId, contentProjectId);
         const characters = createCharacterAuthoringFileRepository({
           workspaceRoot: workspace.workspacePath,
           scope: { kind: 'content-project', contentProjectId },
@@ -2618,12 +2710,67 @@ async function startDesktop(): Promise<void> {
           scope: { kind: 'content-project', contentProjectId },
         });
         return new ProjectAuthoringNavigationService({
-          composition: createProjectCompositionFileRepository({
-            workspaceRoot: workspace.workspacePath,
-          }),
           characters,
           worlds,
+          references: {
+            readReferences: async (projectId) => {
+              const snapshot = await readProjectContentReferences({
+                workspacePath: workspace.workspacePath,
+                projectId,
+              });
+              return {
+                owners: snapshot.owners,
+                coveredOwnerKinds: (['canvas', 'cut', 'entity-representation'] as const).filter(
+                  (kind) => !snapshot.requirements.missingOwnerKinds.includes(kind),
+                ),
+                diagnostics: snapshot.diagnostics.map((diagnostic) => ({
+                  ownerKind: diagnostic.ownerKind,
+                  ownerId: diagnostic.ownerId,
+                  message: `Project document '${diagnostic.ownerId}' is invalid.`,
+                })),
+              };
+            },
+          },
         }).read({ contentProjectId, contentLabel });
+      },
+      getContent: async ({ workspace, workspaceId, contentProjectId }) => {
+        requireContentProjectIdentity(workspace.workspaceId, contentProjectId);
+        const characters = createCharacterAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        });
+        const worlds = createWorldAuthoringFileRepository({
+          workspaceRoot: workspace.workspacePath,
+          scope: { kind: 'content-project', contentProjectId },
+        });
+        return new ProjectContentService({
+          associations: new ProjectEntityCharacterAssociationRepository(
+            workspace.workspacePath,
+            contentProjectId,
+          ),
+          characters,
+          worlds,
+          entities: {
+            readProjectContentEntities: async (signal) => ({
+              contentProjectId,
+              ...(await readProjectEntityManagementResources({
+                workspace: {
+                  workspaceId,
+                  workspacePath: workspace.workspacePath,
+                },
+                derivedProjection: {
+                  repository: metadataRepositories.projectEntityProjections,
+                  partition: {
+                    scope: 'workspace',
+                    workspaceId,
+                    domain: 'project-entity-projection',
+                  },
+                },
+                ...(signal ? { signal } : {}),
+              })),
+            }),
+          },
+        }).read(contentProjectId);
       },
       createLocalTarget: async ({ workspace, workspaceId, contentProjectId, create }) => {
         const service = createProjectLocalAuthoring({ workspace, workspaceId, contentProjectId });
@@ -2677,6 +2824,40 @@ async function startDesktop(): Promise<void> {
         (await resolveCharacterAuthoring(input)).getSnapshot(input.characterProjectId),
       executeCharacter: async (input) =>
         (await resolveCharacterAuthoring(input)).execute(input.command),
+      getCharacterPortableExportScope: async (input) =>
+        new CharacterPortablePackageService(
+          resolveCharacterRepository(input),
+          createCharacterPortableArchivePort(),
+        ).getExportScope(input.characterProjectId),
+      exportCharacterPackage: async (input) =>
+        (
+          await new CharacterPortablePackageService(
+            resolveCharacterRepository(input),
+            createCharacterPortableArchivePort(),
+          ).exportPackage({
+            characterProjectId: input.characterProjectId,
+            ...input.selection,
+            maxEmbeddedAssetBytes: 256 * 1024 * 1024,
+          })
+        ).archiveBytes,
+      previewCharacterPackage: async (input) =>
+        new CharacterPortablePackageService(
+          resolveCharacterRepository(input),
+          createCharacterPortableArchivePort(),
+        ).previewImport({
+          archiveBytes: input.archiveBytes,
+          destination: input.authority,
+        }),
+      commitCharacterPackage: async (input) =>
+        (
+          await new CharacterPortablePackageService(
+            resolveCharacterRepository(input),
+            createCharacterPortableArchivePort(),
+          ).commitImport({
+            archiveBytes: input.archiveBytes,
+            destination: input.authority,
+          })
+        ).characterProjectId,
       getWorldSnapshot: async (input) =>
         (await resolveWorldAuthoring(input)).getSnapshot(input.worldProjectId),
       executeWorld: async (input) => (await resolveWorldAuthoring(input)).execute(input.command),
@@ -2755,6 +2936,37 @@ async function startDesktop(): Promise<void> {
     });
   }
   const disposeIpc = registerDesktopIpc(appHost, {
+    saveCharacterPackage: async (event, produce) => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      if (!owner) throw new Error('Character package export requires a registered BrowserWindow.');
+      const selection = await dialog.showSaveDialog(owner, {
+        title: 'Export Character Package',
+        buttonLabel: 'Export',
+        defaultPath: 'character.neko-character',
+        filters: [{ name: 'OpenNeko Character', extensions: ['neko-character'] }],
+      });
+      if (selection.canceled || !selection.filePath) return false;
+      await writeFile(selection.filePath, await produce());
+      return true;
+    },
+    readCharacterPackage: async (event) => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      if (!owner) throw new Error('Character package import requires a registered BrowserWindow.');
+      const selection = await dialog.showOpenDialog(owner, {
+        title: 'Import Character Package',
+        buttonLabel: 'Preview Import',
+        properties: ['openFile'],
+        filters: [{ name: 'OpenNeko Character', extensions: ['neko-character'] }],
+      });
+      if (selection.canceled) return undefined;
+      const selectedPath = selection.filePaths[0];
+      if (!selectedPath) throw new Error('Character package picker returned no selected file.');
+      const metadata = await lstat(selectedPath);
+      if (!metadata.isFile() || metadata.size > 512 * 1024 * 1024) {
+        throw new Error('Character package source is not a bounded regular file.');
+      }
+      return readFile(selectedPath);
+    },
     selectWorkspaceGrant: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Desktop workspace picker requires a registered BrowserWindow.');
@@ -3063,7 +3275,6 @@ async function startDesktop(): Promise<void> {
     await appHost.dispose();
     await requireAutomationPluginToolAdapter().dispose();
     automationLocalRuntimeHost.dispose();
-    await entityProjectionRuntime.dispose();
     await localMetadataStore.dispose();
     resourceRegistry.dispose();
     disposeResourceAuthorization();
@@ -3297,9 +3508,11 @@ function requireCanvasPreviewContentType(
   const sourcePath =
     locator.kind === 'document-entry'
       ? locator.entryPath
-      : locator.kind === 'package-resource'
-        ? locator.resourcePath
-        : locator.path;
+      : locator.kind === 'media-library'
+        ? locator.relativePath
+        : locator.kind === 'package-resource'
+          ? locator.resourcePath
+          : locator.path;
   switch (path.posix.extname(sourcePath).toLocaleLowerCase()) {
     case '.png':
       return 'image/png';
@@ -3355,6 +3568,8 @@ function canvasContentDisplayName(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return path.posix.basename(locator.path);
+    case 'media-library':
+      return path.posix.basename(locator.relativePath);
     case 'document-entry':
       return path.posix.basename(locator.entryPath);
     case 'package-resource':
@@ -3459,4 +3674,18 @@ function parseCommandHandlerId(handlerId: string): string {
     throw new Error(`Agent Draft command has no registered launch handler '${handlerId}'.`);
   }
   return handlerId;
+}
+
+function contentProjectIdForWorkspace(workspaceId: string): string {
+  if (!workspaceId.trim()) throw new Error('Workspace identity is required.');
+  return `content:${workspaceId}`;
+}
+
+function requireContentProjectIdentity(workspaceId: string, contentProjectId: string): void {
+  const expected = contentProjectIdForWorkspace(workspaceId);
+  if (contentProjectId !== expected) {
+    throw new Error(
+      `Content Project '${contentProjectId}' does not match authorized Workspace '${workspaceId}'.`,
+    );
+  }
 }

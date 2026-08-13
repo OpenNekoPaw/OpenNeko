@@ -1,3 +1,9 @@
+> Supersession notice (2026-08-13): the target storage and locator decisions in sections 1–5 are
+> replaced by
+> [`separate-project-facts-local-state-and-media-bindings`](../separate-project-facts-local-state-and-media-bindings/).
+> This document remains implementation history for requirement derivation, explicit recovery and atomic
+> portable collection; it is not authority for new `neko/assets` links or linked-media workspace paths.
+
 ## Context
 
 OpenNeko currently represents a project-linked Media Library as a direct

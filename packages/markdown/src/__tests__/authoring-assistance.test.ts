@@ -222,7 +222,7 @@ describe('Markdown authoring assistance', () => {
 });
 
 describe('portable Markdown resource targets', () => {
-  it.each(['assets/cover.png', 'script/story.md#第二幕', 'neko/assets/library/clip.mp4'])(
+  it.each(['assets/cover.png', 'script/story.md#第二幕', 'media-library:library/clip.mp4'])(
     'accepts Workspace-relative target %s',
     (target) => expect(isPortableMarkdownResourceTarget(target)).toBe(true),
   );

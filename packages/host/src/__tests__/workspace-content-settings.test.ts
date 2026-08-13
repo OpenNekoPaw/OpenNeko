@@ -5,31 +5,13 @@ import {
 } from '../workspace-content-settings';
 
 describe('workspace content policy', () => {
-  it('projects linked libraries without authorizing or storing physical roots', () => {
+  it('authorizes only the workspace root without projecting Media Library bindings', () => {
     const policy = createHostContentPolicySnapshot({
       workspaceRoot: '/workspace/project',
-      mediaLibraries: [
-        {
-          name: 'Assets',
-          workspacePath: 'neko/assets/Assets',
-          availability: 'available',
-        },
-        {
-          name: 'Offline',
-          workspacePath: 'neko/assets/Offline',
-          availability: 'unavailable',
-          diagnostic: {
-            code: 'library-link-broken',
-            severity: 'error',
-            message: 'Media library link target is unavailable.',
-          },
-        },
-      ],
       pathVariables: new Map([['WORKSPACE', '/workspace/project']]),
     });
 
     expect(policy.pathVariables.has('ASSETS')).toBe(false);
-    expect(policy.mediaLibraries[0]?.workspacePath).toBe('neko/assets/Assets');
     expect(policy.authorizedReadRoots).toEqual(['/workspace/project']);
     expect(JSON.stringify(policy)).not.toContain('/media/');
   });

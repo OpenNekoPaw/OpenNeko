@@ -142,6 +142,10 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
               inferredSuggestions: proposal.inferredSuggestions,
               handoffs: createCharacterProductHandoffs({
                 characterProjectId: project.characterProjectId,
+                authoringAuthority:
+                  binding.authority.kind === 'content-project'
+                    ? binding.authority
+                    : requireStandaloneCharacterAuthority(binding.authority.library),
               }),
             },
           };
@@ -154,6 +158,16 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
       },
     };
   }
+}
+
+function requireStandaloneCharacterAuthority(library: 'character' | 'world'): {
+  readonly kind: 'standalone-library';
+  readonly library: 'character';
+} {
+  if (library !== 'character') {
+    throw new Error('Character creation cannot use the standalone World library.');
+  }
+  return { kind: 'standalone-library', library };
 }
 
 const STRING_LIST = { type: 'array' as const, items: { type: 'string' as const } };

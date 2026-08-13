@@ -35,6 +35,7 @@ describe('CharacterAuthoringCapabilityProvider', () => {
           kind: 'authoring',
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
+          authority: { kind: 'standalone-library', library: 'character' },
           target: { kind: 'character-project', characterProjectId: 'character-1' },
         },
       },
@@ -49,7 +50,11 @@ describe('CharacterAuthoringCapabilityProvider', () => {
         inferredSuggestions: ['A patient speaking rhythm would fit.'],
         handoffs: [
           { kind: 'open-character', characterProjectId: 'character-1' },
-          { kind: 'open-character-studio', characterProjectId: 'character-1' },
+          {
+            kind: 'open-character-studio',
+            characterProjectId: 'character-1',
+            authority: { kind: 'standalone-library', library: 'character' },
+          },
         ],
       },
     });
@@ -80,6 +85,39 @@ describe('CharacterAuthoringCapabilityProvider', () => {
       error: expect.stringContaining('missing its exact target binding'),
     });
     expect(fillDraft).not.toHaveBeenCalled();
+  });
+
+  it('keeps the fresh exact target observable when filling its draft fails', async () => {
+    const fillDraft = vi.fn(async () => {
+      throw new Error('Character draft write interrupted.');
+    });
+    const [tool] = createCharacterAuthoringCapabilityProvider(fillDraft).getTools({
+      hostContext: null,
+    });
+
+    await expect(
+      tool!.execute(proposalArgs(), {
+        metadata: {
+          [AGENT_AUTHORING_BINDING_METADATA_KEY]: {
+            kind: 'authoring',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'grant-1',
+            authority: { kind: 'standalone-library', library: 'character' },
+            target: { kind: 'character-project', characterProjectId: 'character-failed' },
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      success: false,
+      error: expect.stringContaining('Character draft write interrupted.'),
+    });
+    expect(fillDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        binding: expect.objectContaining({
+          target: { kind: 'character-project', characterProjectId: 'character-failed' },
+        }),
+      }),
+    );
   });
 });
 

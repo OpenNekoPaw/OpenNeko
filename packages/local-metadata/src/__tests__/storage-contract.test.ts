@@ -21,7 +21,7 @@ const WORKSPACE_ID = '9b2de3b5-5f50-4be4-9551-71fb5b512489';
 
 describe('storage classification', () => {
   it('classifies every canonical storage responsibility', () => {
-    expect(listNekoStorageClassifications()).toHaveLength(13);
+    expect(listNekoStorageClassifications()).toHaveLength(14);
     expect(getNekoStorageClassification('project-facts')).toMatchObject({
       scope: 'project-fact',
       tracking: 'git-trackable',
@@ -34,6 +34,14 @@ describe('storage classification', () => {
     expect(getNekoStorageClassification('rebuildable-metadata')).toMatchObject({
       metadataOwnership: 'cache',
       cleanup: 'rebuildable-only',
+    });
+    expect(getNekoStorageClassification('project-local-disposable')).toMatchObject({
+      scope: 'project-local',
+      storageClass: 'disposable-local-state',
+      owner: 'package-owner',
+      portability: 'machine-local',
+      sqliteRole: 'prohibited',
+      tracking: 'gitignored',
     });
     expect(getNekoStorageClassification('conversation-journals')).toMatchObject({
       storageClass: 'raw-journal',
@@ -149,6 +157,16 @@ describe('canonical storage layout', () => {
     expect(layout.global.database).toBe('/Users/feng/.neko/neko.db');
     expect(layout.global.assets).toBe('/Users/feng/.neko/assets');
     expect(layout.project.facts.identity).toBe('/workspace/demo/neko/project.json');
+    expect(layout.project.local).toEqual({
+      root: '/workspace/demo/.neko',
+      mediaLibraries: '/workspace/demo/.neko/media-libraries',
+      presentation: '/workspace/demo/.neko/presentation',
+      cache: '/workspace/demo/.neko/cache',
+    });
+    expect('database' in layout.project.facts).toBe(false);
+    expect('database' in layout.project.local).toBe(false);
+    expect('identity' in layout.project.local).toBe(false);
+    expect('settings' in layout.project.local).toBe(false);
     expect(layout.global.workspaceCaches).toBe('/Users/feng/.neko/workspace-cache');
     expect(resolveWorkspaceCachePartition('/Users/feng', WORKSPACE_ID)).toBe(
       `/Users/feng/.neko/workspace-cache/${WORKSPACE_ID}`,

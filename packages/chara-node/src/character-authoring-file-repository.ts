@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, realpath, rename, rm, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   parseCharacterAuthoringTestSnapshot,
+  parseCharacterLocalizedAssetBindingCatalog,
   parseCharacterProject,
   parseCharacterStoryline,
   parseCharacterStorylineDraft,
@@ -12,6 +13,7 @@ import {
   parseCharacterVersion,
   parseCharacterVersionLineage,
   type CharacterAuthoringTestSnapshot,
+  type CharacterLocalizedAssetBindingCatalog,
   type CharacterProject,
   type CharacterStoryline,
   type CharacterStorylineDraft,
@@ -22,6 +24,7 @@ import type {
   CharacterAuthoringCatalogPort,
   CharacterAuthoringCatalogScope,
   CharacterAuthoringRepository,
+  CharacterVersionDeletionRepository,
   CharacterDurableRecordDiagnostic,
   CharacterLocalizedAssetDescriptor,
   CharacterLocalizedAssetRepository,
@@ -39,6 +42,7 @@ export interface CharacterPublicationFilePort {
 export interface CharacterAuthoringFileRepository
   extends
     CharacterAuthoringRepository,
+    CharacterVersionDeletionRepository,
     CharacterVersionLineageRepository,
     CharacterStorylineRepository,
     CharacterLocalizedAssetRepository,
@@ -128,6 +132,8 @@ export function createCharacterAuthoringFileRepository(options: {
         signal,
       );
     },
+    deletePublication: (characterProjectId, characterVersionId, signal) =>
+      deletePublication(options.workspaceRoot, characterProjectId, characterVersionId, signal),
     async saveAuthoringTestSnapshot(snapshot, signal) {
       const canonical = parseCharacterAuthoringTestSnapshot(snapshot);
       const path = characterAuthoringTestPath(
@@ -198,6 +204,10 @@ export function createCharacterAuthoringFileRepository(options: {
       listStorylineVersions(options.workspaceRoot, characterStorylineId, signal),
     deleteStoryline: (characterStorylineId, signal) =>
       deleteStoryline(options.workspaceRoot, characterStorylineId, signal),
+    readLocalizedAssetBindingCatalog: (characterProjectId, signal) =>
+      readLocalizedAssetBindingCatalog(options.workspaceRoot, characterProjectId, signal),
+    saveLocalizedAssetBindingCatalog: (catalog, signal) =>
+      saveLocalizedAssetBindingCatalog(options.workspaceRoot, catalog, signal),
     listLocalizedAssets: (characterProjectId, signal) =>
       listLocalizedAssets(options.workspaceRoot, characterProjectId, signal),
     readLocalizedAsset: (characterProjectId, relativeAssetPath, maxBytes, signal) =>
@@ -242,6 +252,66 @@ export function characterAuthoringTestPath(
   return `neko/characters/${pathIdentity(characterProjectId)}/authoring-tests/${pathIdentity(authoringTestSnapshotId)}.json`;
 }
 
+async function deletePublication(
+  workspaceRoot: string,
+  characterProjectId: string,
+  characterVersionId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await requireProjectRecord(workspaceRoot, characterProjectId, signal);
+  const relativePath = characterVersionPath(characterProjectId, characterVersionId);
+  const publication = await readRecord(
+    workspaceRoot,
+    relativePath,
+    characterVersionId,
+    parseCharacterVersion,
+    signal,
+  );
+  if (publication === undefined) {
+    throw new CharacterAuthoringStorageError(
+      'character-record-read-failed',
+      'delete-publication',
+      characterVersionId,
+      `CharacterVersion '${characterVersionId}' is unavailable in exact CharacterProject '${characterProjectId}'.`,
+    );
+  }
+  if (publication.characterProjectId !== characterProjectId) {
+    throw new CharacterAuthoringStorageError(
+      'character-record-invalid',
+      'delete-publication',
+      characterVersionId,
+      `CharacterVersion '${characterVersionId}' does not belong to exact CharacterProject '${characterProjectId}'.`,
+    );
+  }
+  const target = await resolveWorkspacePath(
+    workspaceRoot,
+    relativePath,
+    'delete-publication',
+    characterVersionId,
+    false,
+  );
+  const entry = await lstat(target);
+  if (entry.isSymbolicLink() || !entry.isFile()) {
+    throw new CharacterAuthoringStorageError(
+      'character-workspace-path-escape',
+      'delete-publication',
+      characterVersionId,
+      `CharacterVersion '${characterVersionId}' must be a regular file below the authorized Workspace root.`,
+    );
+  }
+  signal?.throwIfAborted();
+  try {
+    await unlink(target);
+  } catch (cause) {
+    throw storageError(
+      'character-record-write-failed',
+      'delete-publication',
+      characterVersionId,
+      cause,
+    );
+  }
+}
+
 export function characterStorylinePath(
   characterProjectId: string,
   characterStorylineId: string,
@@ -269,6 +339,10 @@ export function characterLocalizedAssetPath(
   relativeAssetPath: string,
 ): string {
   return `neko/characters/${pathIdentity(characterProjectId)}/assets/${localizedAssetPath(relativeAssetPath)}`;
+}
+
+export function characterLocalizedAssetBindingCatalogPath(characterProjectId: string): string {
+  return `neko/characters/${pathIdentity(characterProjectId)}/localized-assets.json`;
 }
 
 async function createStoryline(
@@ -653,6 +727,140 @@ async function listLocalizedAssets(
     relativeAssetPath: file.relativePath,
     byteLength: file.byteLength,
   }));
+}
+
+async function readLocalizedAssetBindingCatalog(
+  workspaceRoot: string,
+  characterProjectId: string,
+  signal?: AbortSignal,
+): Promise<CharacterLocalizedAssetBindingCatalog | undefined> {
+  await requireProjectRecord(workspaceRoot, characterProjectId, signal);
+  const catalog = await readRecord(
+    workspaceRoot,
+    characterLocalizedAssetBindingCatalogPath(characterProjectId),
+    characterProjectId,
+    parseCharacterLocalizedAssetBindingCatalog,
+    signal,
+  );
+  if (catalog === undefined) return undefined;
+  if (catalog.characterProjectId !== characterProjectId) {
+    throw invalidRecord(
+      'read-localized-asset-bindings',
+      characterProjectId,
+      `Character localized asset binding catalog '${catalog.characterProjectId}' does not match its containing CharacterProject '${characterProjectId}'.`,
+    );
+  }
+  await validateLocalizedAssetBindingCatalog(workspaceRoot, catalog, signal);
+  return catalog;
+}
+
+async function saveLocalizedAssetBindingCatalog(
+  workspaceRoot: string,
+  value: CharacterLocalizedAssetBindingCatalog,
+  signal?: AbortSignal,
+): Promise<void> {
+  const catalog = parseCharacterLocalizedAssetBindingCatalog(value);
+  await validateLocalizedAssetBindingCatalog(workspaceRoot, catalog, signal);
+  const path = characterLocalizedAssetBindingCatalogPath(catalog.characterProjectId);
+  const existing = await readRecord(
+    workspaceRoot,
+    path,
+    catalog.characterProjectId,
+    parseCharacterLocalizedAssetBindingCatalog,
+    signal,
+  );
+  if (existing !== undefined) {
+    if (existing.characterProjectId !== catalog.characterProjectId) {
+      throw invalidRecord(
+        'save-localized-asset-bindings',
+        catalog.characterProjectId,
+        `Character localized asset binding catalog '${existing.characterProjectId}' does not match its containing CharacterProject '${catalog.characterProjectId}'.`,
+      );
+    }
+    for (const binding of existing.bindings) {
+      const replacement = catalog.bindings.find(
+        (candidate) => candidate.representationId === binding.representationId,
+      );
+      if (replacement === undefined || !isDeepStrictEqual(replacement, binding)) {
+        throw recordConflict(
+          'save-localized-asset-bindings',
+          binding.representationId,
+          `Localized Character asset binding '${binding.representationId}' cannot be removed or replaced implicitly.`,
+        );
+      }
+    }
+    if (isDeepStrictEqual(existing, catalog)) return;
+  }
+  await writeRecord(workspaceRoot, path, catalog.characterProjectId, catalog, signal);
+}
+
+async function validateLocalizedAssetBindingCatalog(
+  workspaceRoot: string,
+  catalog: CharacterLocalizedAssetBindingCatalog,
+  signal?: AbortSignal,
+): Promise<void> {
+  const project = await requireProjectRecord(workspaceRoot, catalog.characterProjectId, signal);
+  const references = new Map(
+    project.draft.representationRefs.map((reference) => [reference.representationId, reference]),
+  );
+  for (const file of await listJsonFiles(
+    workspaceRoot,
+    `neko/characters/${pathIdentity(catalog.characterProjectId)}/versions`,
+  )) {
+    const characterVersionId = file.slice(0, -5);
+    const version = await readRecord(
+      workspaceRoot,
+      characterVersionPath(catalog.characterProjectId, characterVersionId),
+      characterVersionId,
+      parseCharacterVersion,
+      signal,
+    );
+    if (version === undefined || version.characterProjectId !== catalog.characterProjectId) {
+      throw invalidRecord(
+        'validate-localized-asset-bindings',
+        characterVersionId,
+        `CharacterVersion '${characterVersionId}' is unavailable from its exact CharacterProject while validating localized assets.`,
+      );
+    }
+    for (const reference of version.definition.representationRefs) {
+      const existing = references.get(reference.representationId);
+      if (existing !== undefined && !isDeepStrictEqual(existing, reference)) {
+        throw recordConflict(
+          'validate-localized-asset-bindings',
+          reference.representationId,
+          `Character representation '${reference.representationId}' has conflicting facts across the exact CharacterProject.`,
+        );
+      }
+      references.set(reference.representationId, reference);
+    }
+  }
+  const files = await listLocalizedAssets(workspaceRoot, catalog.characterProjectId, signal);
+  for (const binding of catalog.bindings) {
+    const reference = references.get(binding.representationId);
+    if (
+      reference === undefined ||
+      reference.kind !== binding.kind ||
+      reference.resourceRef !== binding.resourceRef
+    ) {
+      throw recordConflict(
+        'validate-localized-asset-bindings',
+        binding.representationId,
+        `Localized Character asset binding '${binding.representationId}' does not match an exact Character representation.`,
+      );
+    }
+    for (const declared of binding.files) {
+      const actual = files.find(
+        (candidate) => candidate.relativeAssetPath === declared.relativeAssetPath,
+      );
+      if (actual === undefined || actual.byteLength !== declared.byteLength) {
+        throw recordConflict(
+          'validate-localized-asset-bindings',
+          binding.representationId,
+          `Localized Character asset binding '${binding.representationId}' has a missing or changed owned file '${declared.relativeAssetPath}'.`,
+        );
+      }
+    }
+  }
 }
 
 async function readLocalizedAsset(

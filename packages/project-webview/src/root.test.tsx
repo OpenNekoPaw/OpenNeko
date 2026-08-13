@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ProjectAuthoringTargetSwitchRoot,
   ProjectCatalogRoot,
+  ProjectContentRoot,
   filterAndSortProjectCatalog,
   type ProjectWritableNavigationItem,
 } from './root';
@@ -14,6 +15,155 @@ vi.mock('@neko/ui/i18n/react', () => ({
 }));
 
 afterEach(cleanup);
+
+describe('ProjectContentRoot', () => {
+  it('renders the four owner-qualified groups and keeps an associated Character out of elements', async () => {
+    const getContent = vi.fn(async () => ({
+      requestId: 'request-content',
+      workspaceId: 'workspace-1',
+      contentProjectId: 'project-1',
+      projection: {
+        contentProjectId: 'project-1',
+        characters: [
+          {
+            owner: 'character' as const,
+            characterProjectId: 'character-rin',
+            entityId: 'entity-rin',
+            label: 'Rin',
+            availability: 'available' as const,
+          },
+        ],
+        worlds: [
+          {
+            owner: 'world' as const,
+            worldProjectId: 'world-home',
+            label: 'Home',
+            availability: 'available' as const,
+          },
+        ],
+        elements: [
+          {
+            owner: 'project-entity' as const,
+            entityId: 'entity-station',
+            entityKind: 'scene' as const,
+            label: 'Station',
+            availability: 'available' as const,
+          },
+        ],
+        candidates: [
+          {
+            owner: 'entity-candidate' as const,
+            candidateId: 'candidate-shopkeeper',
+            entityKind: 'character' as const,
+            label: 'Shopkeeper',
+            freshness: 'fresh' as const,
+          },
+        ],
+        diagnostics: [],
+      },
+    }));
+    render(
+      <ProjectContentRoot
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          contentProjectId: 'project-1',
+        }}
+        host={{ getCatalog: vi.fn(), getNavigation: vi.fn(), getContent }}
+        windowId="window-1"
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('Rin')).toBeTruthy());
+    expect(screen.getByText('Home')).toBeTruthy();
+    expect(screen.getByText('Station')).toBeTruthy();
+    expect(screen.getByText('Shopkeeper')).toBeTruthy();
+    expect(document.querySelector('[data-owner-identity="character:character-rin"]')).toBeTruthy();
+    expect(document.querySelector('[data-owner-identity="project-entity:entity-rin"]')).toBeNull();
+    expect(document.querySelectorAll('[data-project-content-group]')).toHaveLength(4);
+  });
+
+  it('shows empty groups and isolates group diagnostics', () => {
+    render(
+      <ProjectContentRoot
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          contentProjectId: 'project-1',
+        }}
+        host={{ getCatalog: vi.fn(), getNavigation: vi.fn(), getContent: vi.fn() }}
+        initialProjection={{
+          contentProjectId: 'project-1',
+          characters: [],
+          worlds: [],
+          elements: [],
+          candidates: [],
+          diagnostics: [
+            {
+              owner: 'world',
+              group: 'worlds',
+              recordId: 'world-bad',
+              message: 'World record is invalid.',
+            },
+          ],
+        }}
+        windowId="window-1"
+      />,
+    );
+    expect(screen.getAllByText(/^projectContent\.empty\./u)).toHaveLength(4);
+    expect(screen.getByText('World record is invalid.')).toBeTruthy();
+  });
+
+  it('never renders an initial projection from another Content Project', async () => {
+    const getContent = vi.fn(async () => ({
+      requestId: 'request-target-content',
+      workspaceId: 'workspace-1',
+      contentProjectId: 'project-target',
+      projection: {
+        contentProjectId: 'project-target',
+        characters: [],
+        worlds: [],
+        elements: [],
+        candidates: [],
+        diagnostics: [],
+      },
+    }));
+    render(
+      <ProjectContentRoot
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          contentProjectId: 'project-target',
+        }}
+        host={{ getCatalog: vi.fn(), getNavigation: vi.fn(), getContent }}
+        initialProjection={{
+          contentProjectId: 'project-other',
+          characters: [
+            {
+              owner: 'character',
+              characterProjectId: 'character-other',
+              entityId: 'entity-other',
+              label: 'Other Project Character',
+              availability: 'available',
+            },
+          ],
+          worlds: [],
+          elements: [],
+          candidates: [],
+          diagnostics: [],
+        }}
+        windowId="window-1"
+      />,
+    );
+    expect(screen.queryByText('Other Project Character')).toBeNull();
+    await waitFor(() => expect(getContent).toHaveBeenCalledTimes(1));
+    expect(getContent).toHaveBeenCalledWith('window-1', {
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+      contentProjectId: 'project-target',
+    });
+    expect(screen.queryByText('Other Project Character')).toBeNull();
+  });
+});
 
 describe('ProjectCatalogRoot', () => {
   it('renders invalid records visibly and disables only their open action', () => {

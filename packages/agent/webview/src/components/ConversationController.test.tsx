@@ -165,14 +165,20 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.entryPanel.assistantTitle': 'Skills',
         'skillDescriptions.character-creator': 'Create a localized character draft.',
         'chat.entryPanel.authoringTitle': 'Projects, Characters, and Worlds',
-        'chat.entryPanel.characterTitle': 'Characters and rooms',
+        'chat.entryPanel.characterTitle': 'Choose Characters',
         'chat.entryContext.authoringTitle': 'Authoring target',
         'chat.entryContext.authoringDescription': 'Choose a target for this draft.',
-        'chat.entryContext.characterTitle': 'Characters and rooms',
+        'chat.entryContext.characterTitle': 'Choose Characters',
         'chat.entryContext.characterDescription': 'Choose published Characters.',
         'chat.entryContext.chooseAuthoringTarget': 'Choose authoring target',
         'chat.entryContext.chooseCharacters': 'Choose Characters',
         'chat.entryContext.characterSummary': 'Characters selected',
+        'chat.entryExperience.characterDialogue.modeLabel': 'Conversation mode',
+        'chat.entryExperience.characterDialogue.modeDaily': 'Daily',
+        'chat.entryExperience.characterDialogue.modeDailyDescription': 'Use daily memory.',
+        'chat.entryExperience.characterDialogue.modeNarrative': 'Narrative',
+        'chat.entryExperience.characterDialogue.modeNarrativeDescription':
+          'Use authored narrative context.',
         'chat.entryContext.close': 'Close target selector',
         'chat.entryAuthoring.nameLabel': 'Draft name',
         'chat.entryAuthoring.namePlaceholder': 'Name this Character draft',
@@ -503,6 +509,11 @@ vi.mock('./ChatView/InputArea', async () => {
         selection: import('./ChatView/InputArea/types').SelectedCharacterLaunch,
       ) => void;
       onRemoveCharacterLaunch?: (characterVersionId: string) => void;
+      entryCharacterConversationMode?: import('./ChatView/InputArea/types').CharacterConversationMode;
+      onEntryCharacterConversationModeChange?: (
+        mode: import('./ChatView/InputArea/types').CharacterConversationMode,
+      ) => void;
+      entryCharacterConversationModeDisabled?: boolean;
     }) => {
       const {
         isBusy,
@@ -617,6 +628,16 @@ vi.mock('./ChatView/InputArea', async () => {
           <span data-testid="entry-character-launches">
             {props.selectedCharacterLaunches?.map((selection) => selection.label).join('|') ?? ''}
           </span>
+          {props.entryCharacterConversationMode ? (
+            <button
+              type="button"
+              disabled={props.entryCharacterConversationModeDisabled}
+              onClick={() => props.onEntryCharacterConversationModeChange?.('narrative')}
+            >
+              Conversation mode:{' '}
+              {props.entryCharacterConversationMode === 'companion' ? 'Daily' : 'Narrative'}
+            </button>
+          ) : null}
           {props.selectedCharacterLaunches?.map((selection) => (
             <button
               key={selection.characterVersionId}
@@ -777,6 +798,7 @@ describe('ConversationController entry state', () => {
         workspaceGrantId: 'grant-1',
       },
       target: { kind: 'content-project' as const, contentProjectId: 'project-1' },
+      authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
     };
     const onChooseDirectory = vi.fn(async () => authoringTarget);
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
@@ -816,6 +838,7 @@ describe('ConversationController entry state', () => {
       kind: 'authoring',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
+      authority: { kind: 'content-project', contentProjectId: 'project-1' },
       target: { kind: 'content-project', contentProjectId: 'project-1' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Clear workspace target' }));
@@ -847,7 +870,7 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
   });
 
-  it('binds an exact published CharacterVersion before submitting Character Dialogue', async () => {
+  it('binds explicit mode and derives Dialogue or Room from the selected Character count', async () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-character-launch', { kind: 'unbound' });
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
@@ -858,6 +881,12 @@ describe('ConversationController entry state', () => {
         characterVersionId: 'character-version-a',
         displayName: 'A',
         versionLabel: 'Published A',
+        lineage: {
+          coverage: 'complete',
+          state: 'declared-root',
+          isHead: true,
+          path: [{ characterVersionId: 'character-version-a', label: 'Published A' }],
+        },
         storylines: [],
       },
       {
@@ -865,6 +894,12 @@ describe('ConversationController entry state', () => {
         characterVersionId: 'character-version-b',
         displayName: 'B',
         versionLabel: 'Published B',
+        lineage: {
+          coverage: 'complete',
+          state: 'declared-root',
+          isHead: true,
+          path: [{ characterVersionId: 'character-version-b', label: 'Published B' }],
+        },
         storylines: [],
       },
     ]);
@@ -887,19 +922,26 @@ describe('ConversationController entry state', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'Character Dialogue' }));
+    await waitFor(() => {
+      const quickToggle = screen
+        .getAllByRole('button', { name: 'Choose Characters' })
+        .find((element) => element.classList.contains('agent-entry-quick-toggle'));
+      expect(quickToggle?.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Conversation mode: Daily' }));
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Characters and rooms' }).getAttribute('aria-expanded'),
-      ).toBe('true'),
+      expect(screen.getByRole('button', { name: 'Conversation mode: Narrative' })).toBeTruthy(),
     );
-    const character = await waitFor(() => screen.getByText('Published A').closest('button'));
-    expect(character).not.toBeNull();
-    if (!character) throw new Error('Character target button is unavailable.');
-    fireEvent.click(character);
+
+    const characterA = await waitFor(() => screen.getByText('Published A').closest('button'));
+    expect(characterA).not.toBeNull();
+    if (!characterA) throw new Error('Character target button is unavailable.');
+    fireEvent.click(characterA);
     await waitFor(() =>
       expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('character-dialogue', {
         kind: 'character-dialogue',
-        mode: 'companion',
+        mode: 'narrative',
         participants: [
           {
             characterProjectId: 'character-project-a',
@@ -908,8 +950,31 @@ describe('ConversationController entry state', () => {
         ],
       }),
     );
+
+    const characterB = screen.getByText('Published B').closest('button');
+    expect(characterB).not.toBeNull();
+    if (!characterB) throw new Error('Second Character target button is unavailable.');
+    fireEvent.click(characterB);
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('character-dialogue', {
+        kind: 'character-dialogue',
+        mode: 'narrative',
+        participants: [
+          {
+            characterProjectId: 'character-project-a',
+            characterVersionId: 'character-version-a',
+          },
+          {
+            characterProjectId: 'character-project-b',
+            characterVersionId: 'character-version-b',
+          },
+        ],
+      }),
+    );
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Speak together' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+    await waitFor(() => expect(sendButton).toHaveProperty('disabled', false));
+    fireEvent.click(sendButton);
 
     await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
     expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
@@ -917,11 +982,15 @@ describe('ConversationController entry state', () => {
         mode: 'character-dialogue',
         binding: {
           kind: 'character-dialogue',
-          mode: 'companion',
+          mode: 'narrative',
           participants: [
             {
               characterProjectId: 'character-project-a',
               characterVersionId: 'character-version-a',
+            },
+            {
+              characterProjectId: 'character-project-b',
+              characterVersionId: 'character-version-b',
             },
           ],
         },
@@ -974,6 +1043,7 @@ describe('ConversationController entry state', () => {
             workspaceGrantId: 'stale-grant',
           },
           target: { kind: 'content-project', contentProjectId: 'stale-project' },
+          authority: { kind: 'content-project', contentProjectId: 'stale-project' },
         },
         selectedModel: 'test-model',
         mediaModelSelection: {
@@ -1174,6 +1244,7 @@ describe('ConversationController entry state', () => {
         kind: 'authoring' as const,
         workspaceId: 'workspace-1',
         workspaceGrantId: 'workspace-grant-1',
+        authority: { kind: 'standalone-library' as const, library: 'character' as const },
         target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
       },
     };
@@ -1686,6 +1757,7 @@ describe('ConversationController entry state', () => {
         workspaceGrantId: 'character-library-grant',
       },
       target: { kind: 'character-project' as const, characterProjectId: 'character-project-lin' },
+      authority: { kind: 'standalone-library' as const, library: 'character' as const },
     };
     const onCreateAuthoringTarget = vi.fn(async () => ({ status: 'created' as const, target }));
     const onConsumed = vi.fn();
@@ -1764,7 +1836,10 @@ describe('ConversationController entry state', () => {
     );
 
     await waitFor(() =>
-      expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('authoring', undefined),
+      expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('assistant', undefined),
+    );
+    expect(screen.getByRole('tab', { name: 'Assistant' }).getAttribute('aria-selected')).toBe(
+      'true',
     );
     await waitFor(() =>
       expect(screen.getByPlaceholderText('Type anything...')).toHaveProperty(
@@ -1779,10 +1854,11 @@ describe('ConversationController entry state', () => {
     fireEvent.click(await screen.findByText('Character library / New'));
     await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledOnce());
     await waitFor(() =>
-      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('authoring', {
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('assistant', {
         kind: 'authoring',
         workspaceId: 'character-library-workspace',
         workspaceGrantId: 'character-library-grant',
+        authority: { kind: 'standalone-library', library: 'character' },
         target: {
           kind: 'character-project',
           characterProjectId: 'character-project-lin',
@@ -1871,7 +1947,55 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
   });
 
-  it('keeps a Character Management handoff pending when authoring mode configuration fails', async () => {
+  it('consumes an exact finalized CharacterVersion handoff into Character Dialogue Entry', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-finalized-character', {
+      kind: 'unbound',
+    });
+    const onConsumed = vi.fn();
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={launchCatalog.interaction}
+        characterDialogueHandoff={{
+          kind: 'character-dialogue',
+          intentId: 'character-dialogue:finalized-character',
+          label: 'Rin',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                characterProjectId: 'character-project:rin',
+                characterVersionId: 'character-version:rin-2',
+              },
+            ],
+          },
+        }}
+        onCharacterDialogueHandoffConsumed={onConsumed}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('character-dialogue', {
+        kind: 'character-dialogue',
+        mode: 'companion',
+        participants: [
+          {
+            characterProjectId: 'character-project:rin',
+            characterVersionId: 'character-version:rin-2',
+          },
+        ],
+      }),
+    );
+    expect(screen.getByTestId('entry-character-launches').textContent).toBe('Rin');
+    expect(onConsumed).toHaveBeenCalledWith('character-dialogue:finalized-character');
+  });
+
+  it('keeps a Character Management handoff pending when target preparation fails', async () => {
     vi.clearAllMocks();
     const launchCatalog = {
       ...createDraftLaunchCatalog('draft-character-config-failure', { kind: 'unbound' }),
@@ -1884,7 +2008,9 @@ describe('ConversationController entry state', () => {
     };
     const onConsumed = vi.fn();
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
-    hostMocks.configureEntryTarget.mockRejectedValueOnce(new Error('Authoring mode unavailable.'));
+    hostMocks.configureEntryTarget.mockRejectedValueOnce(
+      new Error('Target preparation unavailable.'),
+    );
 
     render(
       <ConversationController
@@ -1903,12 +2029,12 @@ describe('ConversationController entry state', () => {
       />,
     );
 
-    expect(await screen.findByText('Authoring mode unavailable.')).toBeTruthy();
+    expect(await screen.findByText('Target preparation unavailable.')).toBeTruthy();
     expect(onConsumed).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox')).toHaveProperty('value', '');
   });
 
-  it('projects committed authoring mode when the builtin Character Creator is unavailable', async () => {
+  it('keeps Assistant mode when the builtin Character Creator is unavailable', async () => {
     vi.clearAllMocks();
     const launchCatalog = {
       ...createDraftLaunchCatalog('draft-character-catalog-miss', { kind: 'unbound' }),
@@ -1949,7 +2075,7 @@ describe('ConversationController entry state', () => {
     );
 
     expect(await screen.findByText('The builtin Character Creator is unavailable.')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Authoring' }).getAttribute('aria-selected')).toBe(
+    expect(screen.getByRole('tab', { name: 'Assistant' }).getAttribute('aria-selected')).toBe(
       'true',
     );
     expect(onConsumed).not.toHaveBeenCalled();

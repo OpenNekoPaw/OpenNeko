@@ -256,11 +256,50 @@ describe('Desktop Workspace grant preload bridge', () => {
     );
   });
 
+  it('requests Project Content through the same exact Project authority', async () => {
+    electron.invoke.mockImplementation(
+      async (channel: string, request: Record<string, unknown>) => {
+        expect(channel).toBe(PROJECT_AUTHORING_HOST_CHANNEL);
+        expect(request).toMatchObject({
+          operation: 'content-get',
+          rendererSessionId: 'application-1:window-1:1',
+          windowId: 'window-1',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant:1',
+          contentProjectId: 'project-1',
+        });
+        expect(request).not.toHaveProperty('path');
+        return {
+          requestId: request['requestId'],
+          workspaceId: 'workspace-1',
+          contentProjectId: 'project-1',
+          projection: {
+            contentProjectId: 'project-1',
+            characters: [],
+            worlds: [],
+            elements: [],
+            candidates: [],
+            diagnostics: [],
+          },
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    await expect(
+      bridge.projectAuthoring.getContent('window-1', {
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant:1',
+        contentProjectId: 'project-1',
+      }),
+    ).resolves.toMatchObject({ projection: { contentProjectId: 'project-1' } });
+  });
+
   it('binds Character Studio reads and commands to the exact project-local target', async () => {
     const binding = {
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant:1',
-      contentProjectId: 'project-1',
+      authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
       characterProjectId: 'character-1',
     };
     electron.invoke.mockImplementation(
@@ -275,7 +314,17 @@ describe('Desktop Workspace grant preload bridge', () => {
         return {
           requestId: request['requestId'],
           ...binding,
-          snapshot: { project: characterProject(), versions: [], diagnostics: [] },
+          snapshot: {
+            project: characterProject(),
+            versions: [],
+            authoringTestSnapshots: [],
+            storylines: [],
+            storylineDrafts: [],
+            storylineVersions: [],
+            lineage: null,
+            referenceInventories: [],
+            diagnostics: [],
+          },
         };
       },
     );

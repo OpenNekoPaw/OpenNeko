@@ -20,3 +20,4 @@ Library，Creative Entity 通过稳定引用与其连接。Generation 的实现�
 
 - [`automation/README.md`](automation/README.md)：Browser/Computer automation 的 provider、session、target、授权与 evidence 边界；
 - [`chara/README.md`](chara/README.md)：Character 背景故事、原生背景设定、个人故事线、记忆、Dialogue/Room 与表现边界。
+- [`project/README.md`](project/README.md)：Project identity、独立 association facts、派生 Content/dependency projection，以及 sync/package 边界。

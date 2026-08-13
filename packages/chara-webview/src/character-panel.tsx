@@ -2,10 +2,9 @@ import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
   type CharacterBackgroundStory,
-  type CompanionMemoryProvenance,
+  type CharacterAuthoringCommand,
+  type CharacterAuthoringSnapshot,
   type CharacterDefinition,
-  type CharacterFoundationCommand,
-  type CharacterFoundationSnapshot,
   type CharacterProject,
   type CharacterOriginSetting,
   type CharacterRepresentationRef,
@@ -26,8 +25,9 @@ import {
   submitForm,
 } from './foundation-ui';
 import { formatCount, foundationLabel } from './labels';
+import { CharacterVersionWorkspace } from './character-version-workspace';
 
-type ExecuteCommand = (command: CharacterFoundationCommand) => Promise<CharacterFoundationSnapshot>;
+type ExecuteCommand = (command: CharacterAuthoringCommand) => Promise<CharacterAuthoringSnapshot>;
 
 interface CharacterDraftFields {
   readonly displayName: string;
@@ -93,51 +93,48 @@ const emptyStorylineFields: StorylineDraftFields = {
   constraints: '',
 };
 
-export function CharacterPanel({
-  authoringOnly = false,
-  creating,
+export function CharacterAuthoringEditor({
   execute,
   locale,
-  onCreated,
+  onFinalizeAndStartConversation,
   pendingOperation,
   selectedProjectId,
   snapshot,
 }: {
-  readonly authoringOnly?: boolean;
-  readonly creating: boolean;
   readonly execute: ExecuteCommand;
   readonly locale: SupportedLocale;
-  readonly onCreated: (characterProjectId: string) => void;
+  readonly onFinalizeAndStartConversation?: (input: {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+    readonly label: string;
+  }) => Promise<void>;
   readonly pendingOperation?: string;
   readonly selectedProjectId?: string;
-  readonly snapshot: CharacterFoundationSnapshot;
+  readonly snapshot: CharacterAuthoringSnapshot;
 }): JSX.Element {
   const [fields, setFields] = useState<CharacterDraftFields>(emptyFields);
   const [versionLabel, setVersionLabel] = useState('');
   const [storylineFields, setStorylineFields] =
     useState<StorylineDraftFields>(emptyStorylineFields);
   const [comparisonVersionIds, setComparisonVersionIds] = useState<readonly string[]>(['', '']);
-  const selectedProject = snapshot.character.projects.find(
-    (project) => project.characterProjectId === selectedProjectId,
-  );
+  const [confirmStorylineDelete, setConfirmStorylineDelete] = useState(false);
+  const selectedProject =
+    snapshot.project.characterProjectId === selectedProjectId ? snapshot.project : undefined;
   const versions = useMemo(
     () =>
-      snapshot.character.versions.filter(
+      snapshot.versions.filter(
         (version) => version.characterProjectId === selectedProject?.characterProjectId,
       ),
-    [selectedProject?.characterProjectId, snapshot.character.versions],
+    [selectedProject?.characterProjectId, snapshot.versions],
   );
   const versionIds = useMemo(
     () => new Set(versions.map((version) => version.characterVersionId)),
     [versions],
   );
-  const characterRuns = snapshot.character.characterRuns.filter((run) =>
-    versionIds.has(run.characterVersionId),
-  );
-  const storylines = snapshot.character.storylines.filter(
+  const storylines = snapshot.storylines.filter(
     (storyline) => storyline.characterProjectId === selectedProject?.characterProjectId,
   );
-  const storylineVersions = snapshot.character.storylineVersions.filter((storyline) =>
+  const storylineVersions = snapshot.storylineVersions.filter((storyline) =>
     versionIds.has(storyline.characterVersionId),
   );
   const selectedStorylineVersions = storylineVersions.filter(
@@ -146,23 +143,18 @@ export function CharacterPanel({
   const comparisonVersions = comparisonVersionIds.map((versionId) =>
     selectedStorylineVersions.find((version) => version.characterStorylineVersionId === versionId),
   );
-  const companionContinuities = snapshot.character.companionContinuities.filter(
-    (continuity) => continuity.characterProjectId === selectedProject?.characterProjectId,
-  );
-  const relationships = snapshot.character.relationships.filter(
-    (relationship) => relationship.characterProjectId === selectedProject?.characterProjectId,
+  const hasUnsavedDraft = useMemo(
+    () => selectedProject !== undefined && !sameFields(fields, projectFields(selectedProject)),
+    [fields, selectedProject],
   );
 
   useEffect(() => {
     setVersionLabel('');
     setStorylineFields(emptyStorylineFields);
     setComparisonVersionIds(['', '']);
-    if (creating) {
-      setFields(emptyFields);
-      return;
-    }
+    setConfirmStorylineDelete(false);
     if (selectedProject) setFields(projectFields(selectedProject));
-  }, [creating, selectedProject]);
+  }, [selectedProject]);
   const submitDraft = async () => {
     const definition = definitionFromFields(
       fields,
@@ -172,20 +164,6 @@ export function CharacterPanel({
       selectedProject?.draft.representationDefaults,
       selectedProject?.draft.voiceDefaults,
     );
-    if (creating) {
-      const characterProjectId = createDomainIdentity('character-project');
-      await execute({
-        operation: 'character-project-create',
-        input: {
-          characterProjectId,
-          displayName: fields.displayName,
-          draft: definition,
-          sources: { evidence: [], assetRepresentations: [] },
-        },
-      });
-      onCreated(characterProjectId);
-      return;
-    }
     if (!selectedProject) throw new Error('CharacterProject selection is required.');
     await execute({
       operation: 'character-project-update-draft',
@@ -199,7 +177,11 @@ export function CharacterPanel({
       input: { characterProjectId: selectedProject.characterProjectId, reviewStatus },
     });
   };
-  const publish = async () => {
+  const createUsableVersion = async (): Promise<{
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+    readonly label: string;
+  }> => {
     if (!selectedProject) throw new Error('CharacterProject selection is required.');
     const characterVersionId = createDomainIdentity('character-version');
     await execute({
@@ -211,6 +193,21 @@ export function CharacterPanel({
       },
     });
     setVersionLabel('');
+    return {
+      characterProjectId: selectedProject.characterProjectId,
+      characterVersionId,
+      label: selectedProject.displayName,
+    };
+  };
+  const publish = async () => {
+    await createUsableVersion();
+  };
+  const finalizeAndStartConversation = async () => {
+    if (!onFinalizeAndStartConversation) {
+      throw new Error('Finalize-and-start Conversation handoff is unavailable.');
+    }
+    const finalized = await createUsableVersion();
+    await onFinalizeAndStartConversation(finalized);
   };
   const publishStoryline = async () => {
     if (!storylineFields.characterVersionId) {
@@ -282,12 +279,13 @@ export function CharacterPanel({
     if (!characterStorylineId) {
       setStorylineFields(emptyStorylineFields);
       setComparisonVersionIds(['', '']);
+      setConfirmStorylineDelete(false);
       return;
     }
     const storyline = storylines.find(
       (candidate) => candidate.characterStorylineId === characterStorylineId,
     );
-    const draft = snapshot.character.storylineDrafts.find(
+    const draft = snapshot.storylineDrafts.find(
       (candidate) => candidate.characterStorylineId === characterStorylineId,
     );
     if (!storyline || !draft) {
@@ -295,6 +293,7 @@ export function CharacterPanel({
     }
     setStorylineFields(storylineFieldsFromDraft(storyline.displayName, draft));
     setComparisonVersionIds(['', '']);
+    setConfirmStorylineDelete(false);
   };
   const restoreStorylineVersion = async (version: CharacterStorylineVersion) => {
     await execute({
@@ -322,8 +321,19 @@ export function CharacterPanel({
     });
     setStorylineFields(emptyStorylineFields);
     setComparisonVersionIds(['', '']);
+    setConfirmStorylineDelete(false);
   };
-  if (!creating && !selectedProject) {
+  const captureAuthoringTest = async () => {
+    if (!selectedProject) throw new Error('CharacterProject selection is required.');
+    await execute({
+      operation: 'character-authoring-test-capture',
+      input: {
+        characterProjectId: selectedProject.characterProjectId,
+        authoringTestSnapshotId: createDomainIdentity('character-authoring-test'),
+      },
+    });
+  };
+  if (!selectedProject) {
     return (
       <div className="character-management__detail-empty" role="status">
         {foundationLabel(locale, '所选角色不可用。', 'The selected character is unavailable.')}
@@ -342,21 +352,11 @@ export function CharacterPanel({
       >
         <div className="character-foundation__form-heading">
           <div>
-            <span>
-              {creating
-                ? foundationLabel(locale, '新角色', 'New character')
-                : selectedProject?.characterProjectId}
-            </span>
-            <h3>
-              {creating
-                ? foundationLabel(locale, '定义角色', 'Define character')
-                : selectedProject?.displayName}
-            </h3>
+            <span>{selectedProject.characterProjectId}</span>
+            <h3>{selectedProject.displayName}</h3>
           </div>
           <FoundationSubmit pending={pendingOperation !== undefined}>
-            {creating
-              ? foundationLabel(locale, '创建项目', 'Create project')
-              : foundationLabel(locale, '保存草稿', 'Save draft')}
+            {foundationLabel(locale, '保存草稿', 'Save draft')}
           </FoundationSubmit>
         </div>
         <div className="character-foundation__form-sections">
@@ -373,7 +373,7 @@ export function CharacterPanel({
             <div className="character-foundation__form-grid character-foundation__form-grid--identity">
               <FoundationField label={foundationLabel(locale, '显示名称', 'Display name')}>
                 <input
-                  disabled={!creating}
+                  disabled
                   required
                   value={fields.displayName}
                   onChange={(event) => setFields({ ...fields, displayName: event.target.value })}
@@ -393,7 +393,6 @@ export function CharacterPanel({
           <details
             className="character-foundation__panel character-foundation__disclosure"
             data-character-studio-section="character-definition"
-            open={creating || undefined}
           >
             <summary>
               <FoundationSectionHeading
@@ -476,150 +475,148 @@ export function CharacterPanel({
             </div>
           </details>
 
-          {!creating ? (
-            <details
-              className="character-foundation__panel character-foundation__disclosure"
-              data-character-studio-section="presentation"
-            >
-              <summary>
-                <FoundationSectionHeading
-                  description={foundationLabel(
-                    locale,
-                    '连接全局资产、动态形象和默认语音。',
-                    'Connect Global Assets, an avatar, and default voice behavior.',
-                  )}
-                  eyebrow={foundationLabel(locale, '表现资源', 'Presentation')}
-                  title={foundationLabel(locale, '形象与语音', 'Avatar and voice')}
+          <details
+            className="character-foundation__panel character-foundation__disclosure"
+            data-character-studio-section="presentation"
+          >
+            <summary>
+              <FoundationSectionHeading
+                description={foundationLabel(
+                  locale,
+                  '连接全局资产、动态形象和默认语音。',
+                  'Connect Global Assets, an avatar, and default voice behavior.',
+                )}
+                eyebrow={foundationLabel(locale, '表现资源', 'Presentation')}
+                title={foundationLabel(locale, '形象与语音', 'Avatar and voice')}
+              />
+            </summary>
+            <div className="character-foundation__form-grid">
+              <FoundationField
+                hint={foundationLabel(
+                  locale,
+                  '使用全局资源库中的稳定 opaque identity，例如 global-asset-library:…',
+                  'Use a stable opaque identity from Global Assets, such as global-asset-library:…',
+                )}
+                label={foundationLabel(locale, '默认肖像资源', 'Default portrait resource')}
+              >
+                <input
+                  data-character-studio-section="portrait-resource"
+                  placeholder="global-asset-library:…"
+                  value={fields.portraitResourceRef}
+                  onChange={(event) =>
+                    setFields({ ...fields, portraitResourceRef: event.target.value })
+                  }
                 />
-              </summary>
-              <div className="character-foundation__form-grid">
-                <FoundationField
-                  hint={foundationLabel(
-                    locale,
-                    '使用全局资源库中的稳定 opaque identity，例如 global-asset-library:…',
-                    'Use a stable opaque identity from Global Assets, such as global-asset-library:…',
-                  )}
-                  label={foundationLabel(locale, '默认肖像资源', 'Default portrait resource')}
+              </FoundationField>
+              <FoundationField
+                label={foundationLabel(locale, '默认动态形象格式', 'Default Avatar format')}
+              >
+                <select
+                  data-character-studio-section="avatar-kind"
+                  value={fields.avatarKind}
+                  onChange={(event) =>
+                    setFields({
+                      ...fields,
+                      avatarKind: event.target.value as CharacterDraftFields['avatarKind'],
+                    })
+                  }
                 >
+                  <option value="vrm">VRM</option>
+                  <option value="live2d">Live2D</option>
+                  <option value="mmd">MMD</option>
+                  <option value="pngtuber">PNGTuber</option>
+                </select>
+              </FoundationField>
+              <FoundationField
+                hint={foundationLabel(
+                  locale,
+                  '当前 Desktop 提供 VRM renderer；其他格式会在 Avatar Surface 局部显示不可用。',
+                  'Desktop currently provides the VRM renderer; other formats fail locally in the Avatar Surface.',
+                )}
+                label={foundationLabel(locale, '默认动态形象资源', 'Default Avatar resource')}
+              >
+                <input
+                  data-character-studio-section="avatar-resource"
+                  placeholder="global-asset-library:…"
+                  value={fields.avatarResourceRef}
+                  onChange={(event) =>
+                    setFields({ ...fields, avatarResourceRef: event.target.value })
+                  }
+                />
+              </FoundationField>
+              <FoundationField
+                hint={foundationLabel(
+                  locale,
+                  '使用稳定 provider identity，例如 provider:local-tts',
+                  'Use a stable provider identity, such as provider:local-tts',
+                )}
+                label={foundationLabel(locale, '语音提供方', 'Voice provider')}
+              >
+                <input
+                  data-character-studio-section="voice-provider"
+                  placeholder="provider:…"
+                  required={fields.voiceResourceRef.trim().length > 0}
+                  value={fields.voiceProviderRef}
+                  onChange={(event) =>
+                    setFields({ ...fields, voiceProviderRef: event.target.value })
+                  }
+                />
+              </FoundationField>
+              <FoundationField
+                label={foundationLabel(locale, '默认语音资源', 'Default voice resource')}
+              >
+                <input
+                  data-character-studio-section="voice-resource"
+                  placeholder="global-asset-library:…"
+                  required={fields.voiceProviderRef.trim().length > 0}
+                  value={fields.voiceResourceRef}
+                  onChange={(event) =>
+                    setFields({ ...fields, voiceResourceRef: event.target.value })
+                  }
+                />
+              </FoundationField>
+              <div className="character-foundation__voice-controls">
+                <FoundationField label={foundationLabel(locale, '语速', 'Voice speed')}>
                   <input
-                    data-character-studio-section="portrait-resource"
-                    placeholder="global-asset-library:…"
-                    value={fields.portraitResourceRef}
+                    data-character-studio-section="voice-speed"
+                    max="4"
+                    min="0.25"
+                    step="0.05"
+                    type="number"
+                    value={fields.voiceSpeed}
                     onChange={(event) =>
-                      setFields({ ...fields, portraitResourceRef: event.target.value })
+                      setFields({ ...fields, voiceSpeed: Number(event.target.value) })
                     }
                   />
                 </FoundationField>
-                <FoundationField
-                  label={foundationLabel(locale, '默认动态形象格式', 'Default Avatar format')}
-                >
-                  <select
-                    data-character-studio-section="avatar-kind"
-                    value={fields.avatarKind}
-                    onChange={(event) =>
-                      setFields({
-                        ...fields,
-                        avatarKind: event.target.value as CharacterDraftFields['avatarKind'],
-                      })
-                    }
-                  >
-                    <option value="vrm">VRM</option>
-                    <option value="live2d">Live2D</option>
-                    <option value="mmd">MMD</option>
-                    <option value="pngtuber">PNGTuber</option>
-                  </select>
-                </FoundationField>
-                <FoundationField
-                  hint={foundationLabel(
-                    locale,
-                    '当前 Desktop 提供 VRM renderer；其他格式会在 Avatar Surface 局部显示不可用。',
-                    'Desktop currently provides the VRM renderer; other formats fail locally in the Avatar Surface.',
-                  )}
-                  label={foundationLabel(locale, '默认动态形象资源', 'Default Avatar resource')}
-                >
+                <label className="character-foundation__toggle">
                   <input
-                    data-character-studio-section="avatar-resource"
-                    placeholder="global-asset-library:…"
-                    value={fields.avatarResourceRef}
+                    checked={fields.voiceAutoRead}
+                    data-character-studio-section="voice-auto-read"
+                    type="checkbox"
                     onChange={(event) =>
-                      setFields({ ...fields, avatarResourceRef: event.target.value })
+                      setFields({ ...fields, voiceAutoRead: event.target.checked })
                     }
                   />
-                </FoundationField>
-                <FoundationField
-                  hint={foundationLabel(
-                    locale,
-                    '使用稳定 provider identity，例如 provider:local-tts',
-                    'Use a stable provider identity, such as provider:local-tts',
-                  )}
-                  label={foundationLabel(locale, '语音提供方', 'Voice provider')}
-                >
-                  <input
-                    data-character-studio-section="voice-provider"
-                    placeholder="provider:…"
-                    required={fields.voiceResourceRef.trim().length > 0}
-                    value={fields.voiceProviderRef}
-                    onChange={(event) =>
-                      setFields({ ...fields, voiceProviderRef: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <FoundationField
-                  label={foundationLabel(locale, '默认语音资源', 'Default voice resource')}
-                >
-                  <input
-                    data-character-studio-section="voice-resource"
-                    placeholder="global-asset-library:…"
-                    required={fields.voiceProviderRef.trim().length > 0}
-                    value={fields.voiceResourceRef}
-                    onChange={(event) =>
-                      setFields({ ...fields, voiceResourceRef: event.target.value })
-                    }
-                  />
-                </FoundationField>
-                <div className="character-foundation__voice-controls">
-                  <FoundationField label={foundationLabel(locale, '语速', 'Voice speed')}>
-                    <input
-                      data-character-studio-section="voice-speed"
-                      max="4"
-                      min="0.25"
-                      step="0.05"
-                      type="number"
-                      value={fields.voiceSpeed}
-                      onChange={(event) =>
-                        setFields({ ...fields, voiceSpeed: Number(event.target.value) })
-                      }
-                    />
-                  </FoundationField>
-                  <label className="character-foundation__toggle">
-                    <input
-                      checked={fields.voiceAutoRead}
-                      data-character-studio-section="voice-auto-read"
-                      type="checkbox"
-                      onChange={(event) =>
-                        setFields({ ...fields, voiceAutoRead: event.target.checked })
-                      }
-                    />
-                    <span>{foundationLabel(locale, '自动朗读', 'Auto read')}</span>
-                  </label>
-                </div>
+                  <span>{foundationLabel(locale, '自动朗读', 'Auto read')}</span>
+                </label>
               </div>
-            </details>
-          ) : null}
+            </div>
+          </details>
         </div>
       </form>
-      {!creating && selectedProject ? (
+      {selectedProject ? (
         <>
           <section className="character-foundation__publication">
             <div className="character-foundation__publication-heading">
               <FoundationSectionHeading
                 description={foundationLabel(
                   locale,
-                  '审阅当前草稿并发布不可变的角色版本。',
-                  'Review the current draft and publish an immutable character version.',
+                  '审阅当前草稿并创建不可变的本地可用版本。',
+                  'Review the current draft and create an immutable local usable version.',
                 )}
-                eyebrow={foundationLabel(locale, '版本管理', 'Publication')}
-                title={foundationLabel(locale, '审阅与发布', 'Review and publish')}
+                eyebrow={foundationLabel(locale, '版本管理', 'Versions')}
+                title={foundationLabel(locale, '定稿与版本', 'Finalize and versions')}
               />
             </div>
             <div>
@@ -628,7 +625,10 @@ export function CharacterPanel({
                 label={foundationLabel(locale, '角色审阅状态', 'Character review status')}
                 options={[
                   { value: 'draft', label: foundationLabel(locale, '草稿', 'Draft') },
-                  { value: 'ready', label: foundationLabel(locale, '可发布', 'Ready') },
+                  {
+                    value: 'ready',
+                    label: foundationLabel(locale, '可以定稿', 'Ready to finalize'),
+                  },
                   { value: 'blocked', label: foundationLabel(locale, '阻塞', 'Blocked') },
                 ]}
                 value={selectedProject.reviewStatus}
@@ -647,565 +647,351 @@ export function CharacterPanel({
                 disabled={selectedProject.reviewStatus !== 'ready'}
                 pending={pendingOperation !== undefined}
               >
-                {foundationLabel(locale, '发布版本', 'Publish version')}
+                {foundationLabel(locale, '创建可用版本', 'Create usable version')}
               </FoundationSubmit>
+              {onFinalizeAndStartConversation ? (
+                <button
+                  className="character-foundation__secondary-command"
+                  disabled={
+                    selectedProject.reviewStatus !== 'ready' || pendingOperation !== undefined
+                  }
+                  type="button"
+                  onClick={() => void finalizeAndStartConversation().catch(() => undefined)}
+                >
+                  {foundationLabel(locale, '定稿并开始对话', 'Finalize and start Conversation')}
+                </button>
+              ) : null}
             </form>
-            <div className="character-foundation__version-list">
-              <strong>
-                {formatCount(locale, versions.length, '个已发布版本', 'published version')}
-              </strong>
-              {versions.map((version) => (
-                <div key={version.characterVersionId}>
-                  <span>{version.label}</span>
-                  <code>{version.characterVersionId}</code>
-                </div>
-              ))}
-            </div>
+            <CharacterVersionWorkspace
+              execute={execute}
+              hasUnsavedDraft={hasUnsavedDraft}
+              locale={locale}
+              pendingOperation={pendingOperation}
+              project={selectedProject}
+              snapshot={snapshot}
+              versions={versions}
+            />
           </section>
-          {!authoringOnly ? (
-            <>
-              <details
-                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-                data-character-studio-section="storyline-authoring"
+          <details
+            className="character-foundation__studio-authoring character-foundation__studio-disclosure"
+            data-character-studio-section="storyline-authoring"
+          >
+            <summary>
+              <div className="character-foundation__studio-heading">
+                <div>
+                  <span>{foundationLabel(locale, '个人故事线', 'Character storylines')}</span>
+                  <h4>
+                    {foundationLabel(locale, '创建角色故事线版本', 'Create a storyline version')}
+                  </h4>
+                </div>
+                <strong>{storylineVersions.length}</strong>
+              </div>
+            </summary>
+            {versions.length === 0 ? (
+              <p>
+                {foundationLabel(
+                  locale,
+                  '先创建一个角色可用版本，再为该版本创建故事线。',
+                  'Create a usable character version before creating a storyline for it.',
+                )}
+              </p>
+            ) : (
+              <form
+                className="character-foundation__form-grid"
+                onSubmit={(event) => submitForm(event, publishStoryline)}
               >
-                <summary>
-                  <div className="character-foundation__studio-heading">
-                    <div>
-                      <span>{foundationLabel(locale, '个人故事线', 'Character storylines')}</span>
-                      <h4>
-                        {foundationLabel(locale, '发布角色故事线', 'Publish a character storyline')}
-                      </h4>
-                    </div>
-                    <strong>{storylineVersions.length}</strong>
-                  </div>
-                </summary>
-                {versions.length === 0 ? (
-                  <p>
-                    {foundationLabel(
-                      locale,
-                      '先发布一个角色版本，再为该版本创建故事线。',
-                      'Publish a character version before creating a storyline for it.',
-                    )}
-                  </p>
-                ) : (
-                  <form
-                    className="character-foundation__form-grid"
-                    onSubmit={(event) => submitForm(event, publishStoryline)}
+                <FoundationField label={foundationLabel(locale, '故事线', 'Character storyline')}>
+                  <select
+                    value={storylineFields.characterStorylineId}
+                    onChange={(event) => selectStoryline(event.target.value)}
                   >
-                    <FoundationField
-                      label={foundationLabel(locale, '故事线', 'Character storyline')}
-                    >
-                      <select
-                        value={storylineFields.characterStorylineId}
-                        onChange={(event) => selectStoryline(event.target.value)}
+                    <option value="">
+                      {foundationLabel(locale, '创建新故事线', 'Create a new storyline')}
+                    </option>
+                    {storylines.map((storyline) => (
+                      <option
+                        key={storyline.characterStorylineId}
+                        value={storyline.characterStorylineId}
                       >
-                        <option value="">
-                          {foundationLabel(locale, '创建新故事线', 'Create a new storyline')}
-                        </option>
-                        {storylines.map((storyline) => (
-                          <option
-                            key={storyline.characterStorylineId}
-                            value={storyline.characterStorylineId}
-                          >
-                            {storyline.displayName}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '角色版本', 'Character version')}
-                    >
-                      <select
-                        required
-                        value={storylineFields.characterVersionId}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            characterVersionId: event.target.value,
-                          })
-                        }
+                        {storyline.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '角色版本', 'Character version')}>
+                  <select
+                    required
+                    value={storylineFields.characterVersionId}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        characterVersionId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">
+                      {foundationLabel(locale, '选择版本', 'Select a version')}
+                    </option>
+                    {versions.map((publication) => (
+                      <option
+                        key={publication.characterVersionId}
+                        value={publication.characterVersionId}
                       >
-                        <option value="">
-                          {foundationLabel(locale, '选择版本', 'Select a version')}
-                        </option>
-                        {versions.map((publication) => (
-                          <option
-                            key={publication.characterVersionId}
-                            value={publication.characterVersionId}
-                          >
-                            {publication.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '故事线名称', 'Storyline label')}
-                    >
-                      <input
-                        required
-                        value={storylineFields.label}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, label: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '前提', 'Premise')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.premise}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, premise: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '角色状态', 'Character state')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.characterState}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            characterState: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '关系状态', 'Relationship state')}
-                    >
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.relationshipState}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            relationshipState: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '叙事记忆', 'Narrative memories')}
-                    >
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.narrativeMemories}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            narrativeMemories: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '节点标题', 'Node title')}>
-                      <input
-                        required
-                        value={storylineFields.nodeTitle}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, nodeTitle: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '当前情境', 'Current situation')}
-                    >
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.situation}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            situation: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      hint={foundationLabel(locale, '每行一条约束', 'One constraint per line')}
-                      label={foundationLabel(locale, '故事线约束', 'Storyline constraints')}
-                    >
-                      <textarea
-                        rows={3}
-                        value={storylineFields.constraints}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            constraints: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationSubmit pending={pendingOperation !== undefined}>
-                      {foundationLabel(locale, '发布故事线', 'Publish storyline')}
-                    </FoundationSubmit>
-                    {storylineFields.characterStorylineId ? (
+                        {publication.label}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '故事线名称', 'Storyline label')}>
+                  <input
+                    required
+                    value={storylineFields.label}
+                    onChange={(event) =>
+                      setStorylineFields({ ...storylineFields, label: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '前提', 'Premise')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.premise}
+                    onChange={(event) =>
+                      setStorylineFields({ ...storylineFields, premise: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '角色状态', 'Character state')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.characterState}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        characterState: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '关系状态', 'Relationship state')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.relationshipState}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        relationshipState: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '叙事记忆', 'Narrative memories')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.narrativeMemories}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        narrativeMemories: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '节点标题', 'Node title')}>
+                  <input
+                    required
+                    value={storylineFields.nodeTitle}
+                    onChange={(event) =>
+                      setStorylineFields({ ...storylineFields, nodeTitle: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '当前情境', 'Current situation')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.situation}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        situation: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField
+                  hint={foundationLabel(locale, '每行一条约束', 'One constraint per line')}
+                  label={foundationLabel(locale, '故事线约束', 'Storyline constraints')}
+                >
+                  <textarea
+                    rows={3}
+                    value={storylineFields.constraints}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        constraints: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationSubmit pending={pendingOperation !== undefined}>
+                  {foundationLabel(locale, '发布故事线', 'Publish storyline')}
+                </FoundationSubmit>
+                {storylineFields.characterStorylineId ? (
+                  confirmStorylineDelete ? (
+                    <span className="character-foundation__review-actions">
                       <button
                         disabled={pendingOperation !== undefined}
                         type="button"
                         onClick={() => void deleteStoryline().catch(() => undefined)}
                       >
-                        {foundationLabel(locale, '删除所选故事线', 'Delete selected storyline')}
+                        {foundationLabel(locale, '确认删除故事线', 'Confirm storyline deletion')}
                       </button>
-                    ) : null}
-                  </form>
-                )}
-                <div className="character-foundation__review-list">
-                  {storylineVersions.map((storyline) => (
-                    <div
-                      className="character-foundation__storyline-record"
-                      key={storyline.characterStorylineVersionId}
+                      <button type="button" onClick={() => setConfirmStorylineDelete(false)}>
+                        {foundationLabel(locale, '取消', 'Cancel')}
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      disabled={pendingOperation !== undefined}
+                      type="button"
+                      onClick={() => setConfirmStorylineDelete(true)}
                     >
-                      <strong>{storyline.label}</strong>
-                      <span>{storyline.premise}</span>
-                      <code>{storyline.characterStorylineVersionId}</code>
-                      <button
-                        disabled={pendingOperation !== undefined}
-                        type="button"
-                        onClick={() =>
-                          void restoreStorylineVersion(storyline).catch(() => undefined)
-                        }
-                      >
-                        {foundationLabel(locale, '恢复为草稿', 'Restore as draft')}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                {selectedStorylineVersions.length >= 2 ? (
-                  <section
-                    aria-label={foundationLabel(
-                      locale,
-                      '故事线版本比较',
-                      'Compare storyline publications',
-                    )}
+                      {foundationLabel(locale, '删除所选故事线', 'Delete selected storyline')}
+                    </button>
+                  )
+                ) : null}
+              </form>
+            )}
+            <div className="character-foundation__review-list">
+              {storylineVersions.map((storyline) => (
+                <div
+                  className="character-foundation__storyline-record"
+                  key={storyline.characterStorylineVersionId}
+                >
+                  <strong>{storyline.label}</strong>
+                  <span>{storyline.premise}</span>
+                  <code>{storyline.characterStorylineVersionId}</code>
+                  <button
+                    disabled={pendingOperation !== undefined}
+                    type="button"
+                    onClick={() => void restoreStorylineVersion(storyline).catch(() => undefined)}
                   >
-                    <FoundationField
-                      label={foundationLabel(locale, '左侧版本', 'Left publication')}
-                    >
-                      <select
-                        value={comparisonVersionIds[0]}
-                        onChange={(event) =>
-                          setComparisonVersionIds([
-                            event.target.value,
-                            comparisonVersionIds[1] ?? '',
-                          ])
-                        }
-                      >
-                        <option value="">
-                          {foundationLabel(locale, '选择版本', 'Select publication')}
-                        </option>
-                        {selectedStorylineVersions.map((version) => (
-                          <option
-                            key={version.characterStorylineVersionId}
-                            value={version.characterStorylineVersionId}
-                          >
-                            {version.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '右侧版本', 'Right publication')}
-                    >
-                      <select
-                        value={comparisonVersionIds[1]}
-                        onChange={(event) =>
-                          setComparisonVersionIds([
-                            comparisonVersionIds[0] ?? '',
-                            event.target.value,
-                          ])
-                        }
-                      >
-                        <option value="">
-                          {foundationLabel(locale, '选择版本', 'Select publication')}
-                        </option>
-                        {selectedStorylineVersions.map((version) => (
-                          <option
-                            key={version.characterStorylineVersionId}
-                            value={version.characterStorylineVersionId}
-                          >
-                            {version.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <div className="character-foundation__review-list">
-                      {comparisonVersions.map((version, index) =>
-                        version ? (
-                          <div key={`${index}:${version.characterStorylineVersionId}`}>
-                            <strong>{version.label}</strong>
-                            <span>{version.premise}</span>
-                            <span>
-                              {formatCount(
-                                locale,
-                                version.nodes.length,
-                                '个节点',
-                                'storyline node',
-                              )}
-                            </span>
-                            {version.nodes.map((node) => (
-                              <span key={node.storylineNodeId}>{node.title}</span>
-                            ))}
-                          </div>
-                        ) : null,
-                      )}
-                    </div>
-                  </section>
-                ) : null}
-              </details>
-              <details
-                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-                data-character-studio-section="memory-review"
-              >
-                <summary>
-                  <div className="character-foundation__studio-heading">
-                    <div>
-                      <span>{foundationLabel(locale, '角色主观记忆', 'Character memory')}</span>
-                      <h4>
-                        {foundationLabel(
-                          locale,
-                          '候选与已接受记忆',
-                          'Candidates and accepted memories',
-                        )}
-                      </h4>
-                    </div>
-                    <strong>{companionContinuities.length}</strong>
-                  </div>
-                </summary>
-                <div className="character-foundation__review-list">
-                  {companionContinuities.map((continuity) => (
-                    <div key={continuity.companionContinuityId}>
-                      <code>{continuity.companionContinuityId}</code>
-                      <span>{`${continuity.entries.filter((entry) => entry.status === 'active').length} active · ${continuity.candidates.filter((candidate) => candidate.status === 'pending').length} pending`}</span>
-                    </div>
-                  ))}
-                  {companionContinuities.length === 0 ? (
-                    <div>
-                      <span>
-                        {foundationLabel(
-                          locale,
-                          '角色进入日常对话后，会按用户与角色创建长期连续性记录。',
-                          'Companion dialogue creates long-term continuity for this user and character.',
-                        )}
-                      </span>
-                    </div>
-                  ) : null}
+                    {foundationLabel(locale, '恢复为草稿', 'Restore as draft')}
+                  </button>
                 </div>
-                <div className="character-foundation__review-list">
-                  {companionContinuities.flatMap((continuity) => [
-                    ...continuity.candidates.map((candidate) => (
-                      <div key={candidate.companionMemoryCandidateId}>
-                        <strong>{candidate.content}</strong>
-                        <span>{candidate.status}</span>
-                        <code>{formatMemoryProvenance(candidate.provenance)}</code>
-                        {candidate.status === 'pending' ? (
-                          <span className="character-foundation__review-actions">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'companion-memory-candidate-accept',
-                                  input: {
-                                    companionContinuityId: continuity.companionContinuityId,
-                                    companionMemoryCandidateId:
-                                      candidate.companionMemoryCandidateId,
-                                    companionMemoryEntryId:
-                                      createDomainIdentity('companion-memory-entry'),
-                                    expectedContinuityRevision: continuity.continuityRevision,
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '接受', 'Accept')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'companion-memory-candidate-reject',
-                                  input: {
-                                    companionContinuityId: continuity.companionContinuityId,
-                                    companionMemoryCandidateId:
-                                      candidate.companionMemoryCandidateId,
-                                    expectedContinuityRevision: continuity.continuityRevision,
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '拒绝', 'Reject')}
-                            </button>
-                          </span>
-                        ) : null}
-                      </div>
-                    )),
-                    ...continuity.entries.map((entry) => (
-                      <div key={entry.companionMemoryEntryId}>
-                        <strong>{entry.content}</strong>
-                        <span>{entry.status}</span>
-                        <code>{formatMemoryProvenance(entry.provenance)}</code>
-                        {entry.status === 'active' ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void execute({
-                                operation: 'companion-memory-entry-delete',
-                                input: {
-                                  companionContinuityId: continuity.companionContinuityId,
-                                  companionMemoryEntryId: entry.companionMemoryEntryId,
-                                  expectedContinuityRevision: continuity.continuityRevision,
-                                },
-                              }).catch(() => undefined)
-                            }
-                          >
-                            {foundationLabel(locale, '删除', 'Delete')}
-                          </button>
-                        ) : null}
-                      </div>
-                    )),
-                  ])}
-                </div>
-              </details>
-              <details
-                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-                data-character-studio-section="relationship-memory-review"
-              >
-                <summary>
-                  <div className="character-foundation__studio-heading">
-                    <div>
-                      <span>{foundationLabel(locale, '关系记忆', 'Relationship memory')}</span>
-                      <h4>
-                        {foundationLabel(
-                          locale,
-                          '独立审阅关系记忆',
-                          'Review relationship memory independently',
-                        )}
-                      </h4>
-                    </div>
-                    <strong>{relationships.length}</strong>
-                  </div>
-                </summary>
-                {relationships.length === 0 ? (
-                  <p>
-                    {foundationLabel(
-                      locale,
-                      '角色进入 Companion 对话后会创建可独立审阅的关系记录。',
-                      'Companion dialogue creates relationship records that can be reviewed independently.',
-                    )}
-                  </p>
-                ) : null}
-                <div className="character-foundation__review-list">
-                  {relationships.flatMap((relationship) => [
-                    ...relationship.candidates.map((candidate) => (
-                      <div key={`${relationship.relationshipId}:${candidate.candidateId}`}>
-                        <strong>{candidate.content}</strong>
-                        <span>{candidate.status}</span>
-                        {candidate.status === 'pending' ? (
-                          <span className="character-foundation__review-actions">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'relationship-memory-candidate-accept',
-                                  input: {
-                                    relationshipId: relationship.relationshipId,
-                                    candidateId: candidate.candidateId,
-                                    memoryId: createDomainIdentity('relationship-memory'),
-                                    expectedRelationshipRevision: relationship.relationshipRevision,
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '接受', 'Accept')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'relationship-memory-candidate-reject',
-                                  input: {
-                                    relationshipId: relationship.relationshipId,
-                                    candidateId: candidate.candidateId,
-                                    expectedRelationshipRevision: relationship.relationshipRevision,
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '拒绝', 'Reject')}
-                            </button>
-                          </span>
-                        ) : null}
-                      </div>
-                    )),
-                    ...relationship.memories.map((memory) => (
-                      <div key={`${relationship.relationshipId}:${memory.memoryId}`}>
-                        <strong>{memory.content}</strong>
-                        <code>{formatMemoryProvenance(memory.provenance)}</code>
-                        {memory.status === 'active' ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void execute({
-                                operation: 'relationship-memory-delete',
-                                input: {
-                                  relationshipId: relationship.relationshipId,
-                                  memoryId: memory.memoryId,
-                                  expectedRelationshipRevision: relationship.relationshipRevision,
-                                },
-                              }).catch(() => undefined)
-                            }
-                          >
-                            {foundationLabel(locale, '删除', 'Delete')}
-                          </button>
-                        ) : null}
-                      </div>
-                    )),
-                  ])}
-                </div>
-              </details>
+              ))}
+            </div>
+            {selectedStorylineVersions.length >= 2 ? (
               <section
-                className="character-foundation__studio-inventory"
-                data-character-studio-section="runtime-inventory"
+                aria-label={foundationLabel(
+                  locale,
+                  '故事线版本比较',
+                  'Compare storyline publications',
+                )}
               >
-                <h4>
-                  {foundationLabel(locale, '角色能力与历史', 'Character capabilities and history')}
-                </h4>
-                <div className="character-foundation__studio-grid">
-                  <StudioSummary
-                    label={foundationLabel(locale, '个人故事线', 'Character storylines')}
-                    value={`${storylines.length} / ${storylineVersions.length}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '角色主观记忆', 'Character memory')}
-                    value={`${companionContinuities.length}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '关系记忆', 'Relationship memory')}
-                    value={`${relationships.reduce((count, item) => count + item.memories.length, 0)}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '表现资源', 'Presentation resources')}
-                    value={`${selectedProject.draft.representationRefs.length}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '语音默认值', 'Voice defaults')}
-                    value={
-                      selectedProject.draft.voiceDefaults?.voiceRepresentationId ??
-                      foundationLabel(locale, '未配置', 'Not configured')
+                <FoundationField label={foundationLabel(locale, '左侧版本', 'Left publication')}>
+                  <select
+                    value={comparisonVersionIds[0]}
+                    onChange={(event) =>
+                      setComparisonVersionIds([event.target.value, comparisonVersionIds[1] ?? ''])
                     }
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '运行历史', 'Runtime history')}
-                    value={`${characterRuns.length}`}
-                  />
+                  >
+                    <option value="">
+                      {foundationLabel(locale, '选择版本', 'Select publication')}
+                    </option>
+                    {selectedStorylineVersions.map((version) => (
+                      <option
+                        key={version.characterStorylineVersionId}
+                        value={version.characterStorylineVersionId}
+                      >
+                        {version.label}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '右侧版本', 'Right publication')}>
+                  <select
+                    value={comparisonVersionIds[1]}
+                    onChange={(event) =>
+                      setComparisonVersionIds([comparisonVersionIds[0] ?? '', event.target.value])
+                    }
+                  >
+                    <option value="">
+                      {foundationLabel(locale, '选择版本', 'Select publication')}
+                    </option>
+                    {selectedStorylineVersions.map((version) => (
+                      <option
+                        key={version.characterStorylineVersionId}
+                        value={version.characterStorylineVersionId}
+                      >
+                        {version.label}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <div className="character-foundation__review-list">
+                  {comparisonVersions.map((version, index) =>
+                    version ? (
+                      <div key={`${index}:${version.characterStorylineVersionId}`}>
+                        <strong>{version.label}</strong>
+                        <span>{version.premise}</span>
+                        <span>
+                          {formatCount(locale, version.nodes.length, '个节点', 'storyline node')}
+                        </span>
+                        {version.nodes.map((node) => (
+                          <span key={node.storylineNodeId}>{node.title}</span>
+                        ))}
+                      </div>
+                    ) : null,
+                  )}
                 </div>
               </section>
-            </>
-          ) : null}
+            ) : null}
+          </details>
+          <section
+            className="character-foundation__studio-authoring"
+            data-character-studio-section="authoring-tests"
+          >
+            <div className="character-foundation__studio-heading">
+              <div>
+                <span>{foundationLabel(locale, '创作测试', 'Authoring tests')}</span>
+                <h4>
+                  {foundationLabel(
+                    locale,
+                    '保存当前草稿测试快照',
+                    'Capture the current draft for testing',
+                  )}
+                </h4>
+              </div>
+              <strong>{snapshot.authoringTestSnapshots.length}</strong>
+            </div>
+            <p>
+              {foundationLabel(
+                locale,
+                '测试快照不会成为可用版本，也不能用于开始对话。',
+                'Test snapshots are not usable versions and cannot start an interaction.',
+              )}
+            </p>
+            <button
+              disabled={pendingOperation !== undefined}
+              type="button"
+              onClick={() => void captureAuthoringTest().catch(() => undefined)}
+            >
+              {foundationLabel(locale, '保存测试快照', 'Capture test snapshot')}
+            </button>
+            <div className="character-foundation__review-list">
+              {snapshot.authoringTestSnapshots.map((testSnapshot) => (
+                <div key={testSnapshot.authoringTestSnapshotId}>
+                  <strong>{testSnapshot.definition.summary}</strong>
+                  <code>{testSnapshot.authoringTestSnapshotId}</code>
+                </div>
+              ))}
+            </div>
+          </section>
         </>
       ) : null}
     </div>
@@ -1248,6 +1034,10 @@ function projectFields(project: CharacterProject): CharacterDraftFields {
     voiceSpeed: project.draft.voiceDefaults?.speed ?? 1,
     voiceAutoRead: project.draft.voiceDefaults?.autoRead ?? false,
   };
+}
+
+function sameFields(left: CharacterDraftFields, right: CharacterDraftFields): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function storylineFieldsFromDraft(
@@ -1403,21 +1193,6 @@ function selectedRepresentation(
   return representationId === undefined
     ? undefined
     : refs.find((ref) => ref.representationId === representationId);
-}
-
-function formatMemoryProvenance(provenance: CompanionMemoryProvenance): string {
-  return provenance.kind === 'conversation-turn'
-    ? `${provenance.conversationId} / ${provenance.turnId}`
-    : `${provenance.roomRunId} / ${provenance.roomEventId}`;
-}
-
-function StudioSummary({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="character-foundation__studio-summary">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
 }
 
 function FoundationSectionHeading({

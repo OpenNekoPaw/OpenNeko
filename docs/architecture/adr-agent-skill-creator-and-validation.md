@@ -28,11 +28,11 @@ content，也不把 metadata/tool hints 解释为权限授予。领域 Tool、op
 
 ## 三个独立层级
 
-| 层级           | 必要文件                              | 职责                                     | 不负责                                                  |
-| -------------- | ------------------------------------- | ---------------------------------------- | ------------------------------------------------------- |
-| Portable Skill | `SKILL.md`                            | 可移植方法与相对资源                     | 安装、进程、MCP、权限、Host UI                          |
-| 本地 Plugin    | 根目录 `plugin.json`                  | 共同安装、启用和删除可选 Skill/MCP/App 贡献 | 定义 Skill 内容或把 MCP 变成必选依赖                 |
-| 用户状态       | `~/.neko/neko.db`                     | Plugin 安装 lifecycle 与启用选择           | package bytes、凭据、runtime health 或 Skill content |
+| 层级           | 必要文件             | 职责                                        | 不负责                                               |
+| -------------- | -------------------- | ------------------------------------------- | ---------------------------------------------------- |
+| Portable Skill | `SKILL.md`           | 可移植方法与相对资源                        | 安装、进程、MCP、权限、Host UI                       |
+| 本地 Plugin    | 根目录 `plugin.json` | 共同安装、启用和删除可选 Skill/MCP/App 贡献 | 定义 Skill 内容或把 MCP 变成必选依赖                 |
+| 用户状态       | `~/.neko/neko.db`    | Plugin 安装 lifecycle 与启用选择            | package bytes、凭据、runtime health 或 Skill content |
 
 只有一个 portable Skill 时，不应创建组合包。只有多个贡献确实需要共享安装生命周期时，才使用
 plugin manifest。P0 不提供 Marketplace；bundled Plugin 来自 Desktop 明确注入的 package root，本地

@@ -48,6 +48,10 @@ import {
   type CreateCharacterRoomRunInput,
   type RoomRun,
 } from './room';
+import {
+  parseCharacterManagementDetailProjection,
+  type CharacterManagementDetailProjection,
+} from './character-management';
 export const CHARACTER_FOUNDATION_HOST_CHANNEL = 'neko:character:foundation' as const;
 
 export type CharacterFoundationHostRequest =
@@ -279,6 +283,7 @@ export interface CharacterFoundationSnapshot {
     readonly companionContinuities: readonly CharacterCompanionContinuity[];
     readonly presentationConfigurations: readonly CharacterRunPresentationConfiguration[];
   };
+  readonly managementDetails?: readonly CharacterManagementDetailProjection[];
   readonly diagnostics: readonly CharacterFoundationDiagnostic[];
 }
 
@@ -507,7 +512,12 @@ export function parseCharacterConversationLaunchCatalogHostResult(
 }
 
 export function parseCharacterFoundationSnapshot(value: unknown): CharacterFoundationSnapshot {
-  const record = exactRecord(value, ['character', 'diagnostics'], 'Character Foundation snapshot');
+  const record = recordWithOptionalKeys(
+    value,
+    ['character', 'diagnostics'],
+    ['managementDetails'],
+    'Character Foundation snapshot',
+  );
   const character = exactRecord(
     record['character'],
     [
@@ -526,6 +536,14 @@ export function parseCharacterFoundationSnapshot(value: unknown): CharacterFound
     ],
     'Character catalog',
   );
+  const managementDetails =
+    record['managementDetails'] === undefined
+      ? undefined
+      : parseArray(
+          record['managementDetails'],
+          parseCharacterManagementDetailProjection,
+          'Character management details',
+        );
   return Object.freeze({
     character: Object.freeze({
       projects: parseArray(character['projects'], parseCharacterProject, 'Character projects'),
@@ -565,6 +583,7 @@ export function parseCharacterFoundationSnapshot(value: unknown): CharacterFound
         'Character presentation configurations',
       ),
     }),
+    ...(managementDetails === undefined ? {} : { managementDetails }),
     diagnostics: parseArray(record['diagnostics'], parseDiagnostic, 'Foundation diagnostics'),
   });
 }
@@ -603,6 +622,24 @@ function exactRecord(
   const record = value as Readonly<Record<string, unknown>>;
   const actual = Object.keys(record);
   if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) {
+    throw new Error(`${label} contains unsupported fields.`);
+  }
+  return record;
+}
+
+function recordWithOptionalKeys(
+  value: unknown,
+  requiredKeys: readonly string[],
+  optionalKeys: readonly string[],
+  label: string,
+): Readonly<Record<string, unknown>> {
+  const record = recordValue(value, label);
+  const actual = Object.keys(record);
+  const supported = new Set([...requiredKeys, ...optionalKeys]);
+  if (
+    requiredKeys.some((key) => !Object.hasOwn(record, key)) ||
+    actual.some((key) => !supported.has(key))
+  ) {
     throw new Error(`${label} contains unsupported fields.`);
   }
   return record;

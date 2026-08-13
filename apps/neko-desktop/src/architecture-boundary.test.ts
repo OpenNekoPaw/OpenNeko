@@ -160,7 +160,7 @@ describe('Desktop architecture boundaries', () => {
     expect(shell).toContain('renderTarget={(item) =>');
     expect(shell).toContain('return renderWorkbenchMainView({');
     expect(shell).toContain('<DesktopTextEditorSurface');
-    expect(shell).toContain('<CharacterAuthoringStudioRoot');
+    expect(shell).toContain('<CharacterAuthoringSurface');
     expect(shell).toContain('<WorldAuthoringStudioRoot');
     expect(shell.match(/<ControlledWorkbenchShell/gu)).toHaveLength(1);
   });
@@ -215,7 +215,10 @@ describe('Desktop architecture boundaries', () => {
       path.join(assetsNodeRoot, 'resource-browser-node-source.ts'),
       'utf8',
     );
-    const sync = readFileSync(path.join(assetsNodeRoot, 'workspace-media-library-sync.ts'), 'utf8');
+    const binding = readFileSync(
+      path.join(assetsNodeRoot, 'project-media-library-binding-service.ts'),
+      'utf8',
+    );
     const locator = readFileSync(
       path.join(repositoryRoot, 'packages/assets/node/src/workspace-content-locator.ts'),
       'utf8',
@@ -227,14 +230,19 @@ describe('Desktop architecture boundaries', () => {
 
     expect(runtime).toContain('assertResourceBrowserIdentity');
     expect(runtime).toContain('resolveAgentWorkspace');
-    expect(source).toContain('listWorkspaceLinkedMediaLibraries');
     expect(locator).toContain('realpath');
     expect(source).toContain('resolveWorkspaceContentLocator');
-    expect(source).toContain('WorkspaceMediaLibrarySyncService');
+    expect(source).toContain('ProjectMediaLibraryAvailabilityService');
+    expect(source).toContain('ProjectMediaLibraryBindingService');
+    expect(source).not.toContain('WorkspaceMediaLibrarySyncService');
     expect(source).not.toContain('createWorkspaceLinkedMediaLibrary');
-    expect(sync).toContain('createWorkspaceLinkedMediaLibrary');
-    expect(sync).toContain('planRecovery');
-    expect(sync).toContain('applyRecovery');
+    expect(binding).toContain('async plan(');
+    expect(binding).toContain('async apply(');
+    expect(binding).not.toContain("'neko/assets/");
+    expect(existsSync(path.join(assetsNodeRoot, 'workspace-media-library-sync.ts'))).toBe(false);
+    expect(existsSync(path.join(assetsNodeRoot, 'workspace-linked-media-libraries.ts'))).toBe(
+      false,
+    );
     expect(bridgeContract).not.toContain('absolutePath');
     expect(bridgeContract).not.toContain('selectedDirectory');
   });

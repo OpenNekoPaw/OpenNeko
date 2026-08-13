@@ -238,6 +238,7 @@ describe('Tab render realm state', () => {
           workspaceGrantId: 'grant-1',
         },
         target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+        authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
       },
     };
 

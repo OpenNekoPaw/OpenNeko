@@ -215,7 +215,6 @@ async function createFixture(): Promise<{
     globalAssetRoot: assetRoot,
     globalMediaLibraryRoot: mediaLibraryRoot,
     assetLibraryMemberships: memberships.repository,
-    readEntityCharacterResources: async () => [],
     shell: {
       getProjection: async () => ({}) as ResourceBrowserShellProjection,
       resolveProjectWorkspace: async () => {
@@ -250,11 +249,6 @@ async function createFixture(): Promise<{
       },
     },
     cut: { addResource: async () => undefined },
-    entity: {
-      executeIntent: async () => {
-        throw new Error('Entity intent is not expected.');
-      },
-    },
   } satisfies ResourceBrowserNodeRuntimeOptions);
   return {
     root,

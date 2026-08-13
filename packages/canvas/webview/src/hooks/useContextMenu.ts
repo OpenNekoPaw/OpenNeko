@@ -39,8 +39,6 @@ export interface UseContextMenuOptions {
   handleUngroup: () => void;
   undo: () => void;
   redo: () => void;
-  onSendToAgent?: (intent?: string) => void;
-  onSetPlaybackEntry?: (nodeId: string) => void;
 }
 
 export interface UseContextMenuReturn {
@@ -71,8 +69,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     handleUngroup,
     undo,
     redo,
-    onSendToAgent,
-    onSetPlaybackEntry,
   } = options;
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -96,6 +92,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         canvasStore.getState().selectNode(contextNodeId);
       }
       const showNodeMenu = clickedOnNode;
+      const contextNode = nodes.find((node) => node.id === contextNodeId);
 
       const menuCtx = {
         canvasPosition: canvasPos,
@@ -112,8 +109,8 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         onPasteInPlace: handlePasteInPlace,
         onGroup: handleGroup,
         onUngroup: handleUngroup,
-        onSetPlaybackEntry,
         contextNodeId,
+        isNodeLocked: contextNode?.locked === true,
         canGroup: effectiveSelectedNodeIds.length >= 2,
         canUngroup:
           effectiveSelectedNodeIds.length === 1 &&
@@ -123,7 +120,20 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         canPaste: clipboardStore.getState().canPaste(),
         canUndo: historyStore.getState().canUndo(),
         canRedo: historyStore.getState().canRedo(),
-        onSendToAgent,
+        onBringToFront: () => {
+          if (!contextNodeId) return;
+          const maxZ = Math.max(...nodes.map((node) => node.zIndex), 0);
+          canvasStore.getState().reorderNode(contextNodeId, maxZ + 1);
+        },
+        onSendToBack: () => {
+          if (!contextNodeId) return;
+          const minZ = Math.min(...nodes.map((node) => node.zIndex), 0);
+          canvasStore.getState().reorderNode(contextNodeId, minZ - 1);
+        },
+        onToggleLock: () => {
+          if (!contextNode) return;
+          canvasStore.getState().updateNode(contextNode.id, { locked: !contextNode.locked });
+        },
       };
 
       const items = showNodeMenu ? buildNodeMenuItems(menuCtx) : buildCanvasMenuItems(menuCtx);
@@ -146,8 +156,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       handleUngroup,
       undo,
       redo,
-      onSendToAgent,
-      onSetPlaybackEntry,
     ],
   );
 

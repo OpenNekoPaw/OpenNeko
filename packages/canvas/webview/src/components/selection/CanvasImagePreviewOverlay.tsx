@@ -4,6 +4,7 @@ import {
   type CanvasGenerationOutputBinding,
   type CanvasNode,
 } from '@neko/canvas-domain';
+import { validateContentLocator } from '@neko/content';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@neko/ui/icons';
 import { IconButton } from '@neko/ui/primitives';
@@ -43,7 +44,7 @@ export function resolveCanvasEmbeddedPreviewRequest(
       ? node.data.outputs.find((output) => output.outputId === preferredOutputId)
       : undefined;
     const activeOutput = preferredOutput ?? selectedCanvasGenerationOutput(node.data);
-    if (!activeOutput || !isEmbeddedPreviewKind(activeOutput.kind)) return undefined;
+    if (!activeOutput) return undefined;
     const outputs = node.data.outputs.filter(
       (output) =>
         output.kind === activeOutput.kind && output.jobRef.jobId === activeOutput.jobRef.jobId,
@@ -69,6 +70,8 @@ export function resolveCanvasEmbeddedPreviewRequest(
     isEmbeddedPreviewKind(node.data.mediaType) &&
     node.data.contentLocator
   ) {
+    const validation = validateContentLocator(node.data.contentLocator);
+    if (!validation.ok) return undefined;
     const previewKind = node.data.mediaType;
     return {
       nodeId: node.id,
@@ -85,7 +88,7 @@ export function resolveCanvasEmbeddedPreviewRequest(
               ? { path: node.data.runtimeAssetPath || node.data.assetPath }
               : {}),
           },
-          contentLocator: node.data.contentLocator,
+          contentLocator: validation.locator,
           metadata: {},
         },
       ],
@@ -94,6 +97,8 @@ export function resolveCanvasEmbeddedPreviewRequest(
   }
 
   if (node.type === 'file' && node.data.contentLocator) {
+    const validation = validateContentLocator(node.data.contentLocator);
+    if (!validation.ok) return undefined;
     const fileName = node.data.path || node.data.title;
     const previewKind = resolveFileEmbeddedPreviewKind(
       node.data.mediaKind,
@@ -110,7 +115,7 @@ export function resolveCanvasEmbeddedPreviewRequest(
           previewKind,
           title: basename(node.data.title) || basename(node.data.path) || t(`node.${previewKind}`),
           asset: { kind: 'asset-identity', mediaType: previewKind },
-          contentLocator: node.data.contentLocator,
+          contentLocator: validation.locator,
           metadata: {},
         },
       ],
@@ -290,17 +295,13 @@ function generationPreviewSource(
   node: Extract<CanvasNode, { readonly type: 'generation' }>,
   output: CanvasGenerationOutputBinding,
 ): CanvasEmbeddedPreviewSource {
-  if (!isEmbeddedPreviewKind(output.kind)) {
-    throw new Error(
-      `Canvas embedded preview cannot render ${output.kind} output "${output.outputId}".`,
-    );
-  }
+  const previewKind = output.kind === 'prompt' ? 'text' : output.kind;
   return {
     id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
-    role: previewRole(output.kind),
-    previewKind: output.kind,
+    role: previewRole(previewKind),
+    previewKind,
     title: node.data.recipe.prompt || t(`node.${output.kind}`),
-    asset: { kind: 'asset-identity', mediaType: output.kind },
+    asset: { kind: 'asset-identity', mediaType: previewKind },
     contentLocator: output.locator,
     metadata: {},
   };
@@ -456,6 +457,8 @@ function contentLocatorFileName(
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return locator.relativePath;
     case 'document-entry':
       return locator.entryPath;
     case 'package-resource':

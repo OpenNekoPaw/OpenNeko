@@ -11,11 +11,29 @@ export interface CharacterConversationLaunchStorylineOption {
   readonly label: string;
 }
 
+export interface CharacterConversationLaunchLineageSegment {
+  readonly characterVersionId: string;
+  readonly label: string;
+}
+
+export type CharacterConversationLaunchLineage =
+  | {
+      readonly coverage: 'complete';
+      readonly state: 'declared-root' | 'linked' | 'unlinked';
+      readonly isHead: boolean;
+      readonly path: readonly CharacterConversationLaunchLineageSegment[];
+    }
+  | {
+      readonly coverage: 'unavailable';
+      readonly message: string;
+    };
+
 export interface CharacterConversationLaunchTarget {
   readonly characterProjectId: string;
   readonly characterVersionId: string;
   readonly displayName: string;
   readonly versionLabel: string;
+  readonly lineage: CharacterConversationLaunchLineage;
   readonly storylines: readonly CharacterConversationLaunchStorylineOption[];
 }
 
@@ -114,7 +132,14 @@ export function parseCharacterConversationLaunchCatalog(
 function parseCharacterConversationLaunchTarget(value: unknown): CharacterConversationLaunchTarget {
   const record = requireExactRecord(
     value,
-    ['characterProjectId', 'characterVersionId', 'displayName', 'versionLabel', 'storylines'],
+    [
+      'characterProjectId',
+      'characterVersionId',
+      'displayName',
+      'versionLabel',
+      'lineage',
+      'storylines',
+    ],
     'Character conversation launch target',
   );
   return {
@@ -134,6 +159,7 @@ function parseCharacterConversationLaunchTarget(value: unknown): CharacterConver
       record['versionLabel'],
       'Character conversation launch version label',
     ),
+    lineage: parseCharacterConversationLaunchLineage(record['lineage']),
     storylines: requireUniqueIdentities(
       requireArray(
         record['storylines'],
@@ -160,6 +186,68 @@ function parseCharacterConversationLaunchTarget(value: unknown): CharacterConver
       'Character conversation launch storylines',
     ),
   };
+}
+
+function parseCharacterConversationLaunchLineage(
+  value: unknown,
+): CharacterConversationLaunchLineage {
+  const record = requireExactRecord(
+    value,
+    value !== null && typeof value === 'object' && Reflect.get(value, 'coverage') === 'complete'
+      ? ['coverage', 'state', 'isHead', 'path']
+      : ['coverage', 'message'],
+    'Character conversation launch lineage',
+  );
+  if (record['coverage'] === 'unavailable') {
+    return {
+      coverage: 'unavailable',
+      message: requireIdentity(record['message'], 'Character launch lineage diagnostic'),
+    };
+  }
+  if (record['coverage'] !== 'complete') {
+    throw new Error(`Unknown Character launch lineage coverage '${String(record['coverage'])}'.`);
+  }
+  const state = requireOneOf(
+    record['state'],
+    ['declared-root', 'linked', 'unlinked'] as const,
+    'Character launch lineage state',
+  );
+  const path = requireUniqueIdentities(
+    requireArray(
+      record['path'],
+      (item) => {
+        const segment = requireExactRecord(
+          item,
+          ['characterVersionId', 'label'],
+          'Character launch lineage path segment',
+        );
+        return {
+          characterVersionId: requireIdentity(
+            segment['characterVersionId'],
+            'Character launch lineage path CharacterVersion',
+          ),
+          label: requireIdentity(segment['label'], 'Character launch lineage path label'),
+        };
+      },
+      'Character launch lineage path',
+    ),
+    (segment) => segment.characterVersionId,
+    'Character launch lineage path',
+  );
+  if (path.length === 0) {
+    throw new Error('Character launch lineage path must contain the selected CharacterVersion.');
+  }
+  return {
+    coverage: 'complete',
+    state,
+    isHead: requireBooleanValue(record['isHead'], 'Character launch lineage head state'),
+    path,
+  };
+}
+
+function requireBooleanValue(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${label} must be boolean.`);
+  return value;
 }
 
 export type CharacterConversationLaunchResult =

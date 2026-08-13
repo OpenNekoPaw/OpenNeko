@@ -54,10 +54,21 @@ export function createDesktopAgentEntryTargetService<TWorkspace>(options: {
     if (resolution.workspaceId !== binding.workspaceId) {
       throw new Error('Agent authoring grant resolves to another Workspace.');
     }
-    const projects = await options.readContentProjects(connection.windowId);
-    const project = projects.find(
-      (candidate) => candidate.workspaceId === binding.workspaceId && !candidate.unavailable,
-    );
+    const authority = binding.authority;
+    const project =
+      authority.kind === 'content-project'
+        ? (await options.readContentProjects(connection.windowId)).find(
+            (candidate) =>
+              candidate.projectId === authority.contentProjectId &&
+              candidate.workspaceId === binding.workspaceId &&
+              !candidate.unavailable,
+          )
+        : undefined;
+    if (authority.kind === 'content-project' && !project) {
+      throw new Error(
+        `Content Project '${authority.contentProjectId}' is not registered for the exact Workspace.`,
+      );
+    }
     return { workspace: resolution.workspace, project };
   };
 

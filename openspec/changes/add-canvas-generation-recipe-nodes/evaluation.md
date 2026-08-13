@@ -1,5 +1,29 @@
 # Evaluation: Canvas Generation Recipe Nodes
 
+## 2026-08-13 Canvas Interaction Simplification Follow-up
+
+### Scope And Ownership
+
+- `@neko/generation` now owns the single canonical Recipe union, typed defaults, exact validator, purpose mapping and GenerationJob request projection. Canvas owns only the node wrapper, graph references, run/output binding and selected output.
+- Canvas selected-node operations now use fixed type templates. Runtime capability loss disables the same declared slot in place and dispatches nothing; resource-library/Finder operations and Delete presentation remain outside the toolbar. The node context menu is limited to group/ungroup, layer order and lock state.
+- Connections use one neutral relation grammar, with a direction marker only for sequence order. Nodes expose one visible input and one visible output while preserving the typed endpoint contract internally. Drag completion uses screen-space-tolerant alignment and new Generation nodes reuse collision-free placement.
+- Node cards remain world-space; toolbar, handles and other interaction targets retain screen-space usability. Distant zoom suppresses nonessential labels/status without changing durable size or selection. Node surfaces and the selected toolbar use opaque neutral surfaces without a transparency acceptance requirement.
+- Preview ownership is explicit: inline content is the quick preview; node double-click opens the Canvas full-screen overlay; toolbar `preview:open` delegates to Main Preview. All three reuse the authorized locator and Preview renderer path, and Canvas does not add a duplicate full-screen toolbar action.
+
+### Deterministic Evidence
+
+- Focused Canvas Webview regressions passed: 6 files / 55 tests. Coverage includes stable enable/disable ordering, disabled no-dispatch behavior, resource/Delete absence, simplified context menu, one input/output handle, neutral relation versus sequence marker, screen-space alignment, generated Text double-click and shared overlay resolution/input isolation.
+- `@neko/generation` typecheck and full tests passed: 30 files / 186 tests. `@neko/canvas-node` typecheck and full tests passed: 4 files / 22 tests. Canvas Webview TypeScript build passed. The updated Canvas layout test passed: 29/29.
+- Canvas Webview full tests reached 408/410. The follow-up-owned layout failure was corrected and passed; the remaining failure is the concurrent File fixture omitting the newly required canonical `ContentLocator`, outside this follow-up. Canvas Domain typecheck passed and its full test run reached 279/287; all eight failures are the concurrent workspace-relative `ContentLocator` validation change, not Recipe or interaction behavior.
+- `pnpm test:agent:eval` passed as key-free harness evidence: 45 files / 309 tests and 26 suites / 76 dry-run cases. This non-Agent UI/Recipe follow-up does not change Agent prompts, Skills, tool routing or Conversation/Turn behavior. No paid provider run was attempted without explicit provider/model and cost authorization.
+- Strict OpenSpec, OpenSpec catalog, package/product-status, application, Agent and Webview boundaries plus `git diff --check` passed. The repository-wide internal-versioning audit remains blocked by concurrent unrelated Character and Project work; no follow-up-owned file is named by those diagnostics.
+
+### Visible UI Validation
+
+- The authoritative visible command was attempted twice: reports `2026-08-13T12-55-36.449Z` and `2026-08-13T12-57-52.721Z` under `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/`.
+- Both runs reached the real Electron Renderer but failed before Canvas mounted. Main reported `project-composition-not-found` for the exact fixture Workspace, and the scenario timed out waiting for the two package-owned Canvas views. The only captured screenshot is the unified entry page and was inspected directly; it contains no Canvas surface, so no graphical Canvas pass is claimed.
+- Result: implementation items `8.1` through `8.6` are complete with deterministic coverage. Visible evidence items `7.17` and `7.24` remain open until the fixture can create/read its exact Content Project composition and the scenario reaches Canvas.
+
 ## Agent Evaluation
 
 ### Scope

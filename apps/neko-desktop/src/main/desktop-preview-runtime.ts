@@ -23,6 +23,7 @@ import type {
   ResourceBrowserItem,
   ResourceBrowserQuickPreviewDescriptor,
 } from '@neko/assets-domain/resource-browser/contract';
+import type { ContentLocator } from '@neko/content';
 import {
   closeMainView,
   findMainGroupForView,
@@ -572,30 +573,13 @@ export class DesktopPreviewRuntime {
 }
 
 function resolvePreviewContentLocator(item: ResourceBrowserItem): ResourceBrowserContentLocator {
-  if (item.source === 'files' || item.source === 'media') {
+  if ((item.source === 'files' || item.source === 'media') && item.role !== 'library-root') {
     return item.locator;
-  }
-  if (
-    item.source === 'entities' &&
-    item.entityStatus !== 'candidate' &&
-    item.representationLocator
-  ) {
-    return item.representationLocator;
   }
   throw new Error(`Desktop Preview item '${item.resourceId}' has no content locator.`);
 }
 
-type ResourceBrowserContentLocator =
-  | Extract<ResourceBrowserItem, { readonly source: 'files' | 'media' }>['locator']
-  | NonNullable<
-      Extract<
-        ResourceBrowserItem,
-        {
-          readonly source: 'entities';
-          readonly entityStatus: 'confirmed' | 'needs-attention' | 'deprecated';
-        }
-      >['representationLocator']
-    >;
+type ResourceBrowserContentLocator = ContentLocator;
 
 interface PublishedPreviewResource {
   readonly url: string;

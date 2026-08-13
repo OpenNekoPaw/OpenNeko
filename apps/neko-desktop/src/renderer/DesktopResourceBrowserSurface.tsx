@@ -207,31 +207,5 @@ function characterCreationSourceFromResource(input: {
       },
     };
   }
-  if (input.item.source === 'entities') {
-    if (
-      input.item.entityStatus !== 'confirmed' ||
-      !('entityRef' in input.item) ||
-      ('characterAssociation' in input.item && input.item.characterAssociation !== undefined)
-    ) {
-      throw new Error('Character creation requires an unassociated confirmed Project Entity.');
-    }
-    return {
-      sources: {
-        evidence: [
-          {
-            kind: 'project-entity',
-            evidenceId: `evidence:${input.createId()}`,
-            sourceWorkspaceId: input.binding.workspaceId,
-            sourceWorkspaceGrantId: input.binding.workspaceGrantId,
-            contentProjectId: input.binding.contentProjectId,
-            entityId: input.item.entityRef.entityId,
-            observedAt: input.observedAt,
-          },
-        ],
-        assetRepresentations: [],
-      },
-      entity: { kind: 'existing', entityId: input.item.entityRef.entityId },
-    };
-  }
-  throw new Error('Character creation requires exact Content or confirmed Entity context.');
+  throw new Error('Character creation requires exact Content context.');
 }

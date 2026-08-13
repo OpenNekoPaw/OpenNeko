@@ -168,6 +168,36 @@ describe('neko-chara architecture boundaries', () => {
     expect(applicationEntry).toContain("export * from './character-storyline-service';");
   });
 
+  it('keeps CharacterVersion, Storyline and Conversation branch graphs as separate projections', () => {
+    const repositoryRoot = resolve(packageRoot, '../..');
+    const versionGraph = readFileSync(
+      resolve(packageRoot, 'src/application/character-version-graph-service.ts'),
+      'utf8',
+    );
+    const storyline = readFileSync(
+      resolve(packageRoot, 'src/application/character-storyline-service.ts'),
+      'utf8',
+    );
+    const versionWorkspace = readFileSync(
+      resolve(repositoryRoot, 'packages/chara-webview/src/character-version-workspace.tsx'),
+      'utf8',
+    );
+    const conversationBranches = readFileSync(
+      resolve(repositoryRoot, 'packages/agent/runtime/src/pi/node-conversation-authority.ts'),
+      'utf8',
+    );
+
+    expect(versionGraph).not.toMatch(/CharacterStoryline|ConversationBranch|ConversationTimeline/u);
+    expect(storyline).not.toMatch(/CharacterVersionGraph|ConversationBranch|ConversationTimeline/u);
+    expect(versionWorkspace).not.toMatch(
+      /CharacterStoryline|ConversationBranch|ConversationTimeline/u,
+    );
+    expect(conversationBranches).not.toMatch(/CharacterVersionGraph|CharacterStoryline/u);
+    expect(`${versionGraph}\n${storyline}\n${conversationBranches}`).not.toMatch(
+      /Unified(?:Character)?(?:Graph|Timeline)|CrossGraphMutation/u,
+    );
+  });
+
   it('keeps Desktop Character composition on delegated projections and exact providers', () => {
     const repositoryRoot = resolve(packageRoot, '../..');
     const desktopShell = readFileSync(
@@ -193,6 +223,36 @@ describe('neko-chara architecture boundaries', () => {
     );
     expect(`${desktopShell}\n${agentConversationAdapter}`).not.toMatch(
       /forbiddenStoryFacts|authorOnlyNotes|projectCompanionContinuity|compatibilityDiagnostics/u,
+    );
+  });
+
+  it('keeps quick creation on one Composer and one Character capability provider path', () => {
+    const repositoryRoot = resolve(packageRoot, '../..');
+    const productionFiles = listTypeScriptFiles(repositoryRoot).filter(
+      (file) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'),
+    );
+    const composerOwners = productionFiles
+      .filter((file) => readFileSync(file, 'utf8').includes('<ComposerWorkspaceProvider'))
+      .map((file) => relative(repositoryRoot, file));
+    const characterProviderOwners = productionFiles
+      .filter((file) =>
+        readFileSync(file, 'utf8').includes('createCharacterAuthoringCapabilityProvider'),
+      )
+      .map((file) => relative(repositoryRoot, file));
+    const agentWebviewSources = listTypeScriptFiles(
+      resolve(repositoryRoot, 'packages/agent/webview/src'),
+    )
+      .filter((file) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(composerOwners).toEqual(['packages/agent/webview/src/root.tsx']);
+    expect(characterProviderOwners).toEqual([
+      'apps/neko-desktop/src/main/index.ts',
+      'packages/chara/src/application/character-authoring-capability-provider.ts',
+    ]);
+    expect(agentWebviewSources).not.toMatch(
+      /@neko\/chara\/application|CharacterAuthoringCapabilityProvider/u,
     );
   });
 });

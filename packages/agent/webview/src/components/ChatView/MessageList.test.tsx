@@ -22,6 +22,7 @@ const getOffsetForIndexMock =
 const revealDocumentLocatorMock = vi.fn();
 const sendToPluginMock = vi.fn();
 const clipboardWriteTextMock = vi.fn<(value: string) => Promise<void>>();
+const useVirtualizerMock = vi.fn();
 let virtualItems: Array<{ index: number; key: string; start: number }> = [];
 
 const testIdentities: MessageIdentityMap = {
@@ -34,12 +35,15 @@ function MessageList(props: Omit<ComponentProps<typeof MessageListComponent>, 'i
 }
 
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: () => ({
-    getVirtualItems: () => virtualItems,
-    getTotalSize: getTotalSizeMock,
-    getOffsetForIndex: getOffsetForIndexMock,
-    measureElement: vi.fn(),
-  }),
+  useVirtualizer: (options: unknown) => {
+    useVirtualizerMock(options);
+    return {
+      getVirtualItems: () => virtualItems,
+      getTotalSize: getTotalSizeMock,
+      getOffsetForIndex: getOffsetForIndexMock,
+      measureElement: vi.fn(),
+    };
+  },
 }));
 
 vi.mock('../../host-runtime-context', () => ({
@@ -63,6 +67,7 @@ describe('MessageList auto-scroll lifecycle', () => {
     revealDocumentLocatorMock.mockReset();
     sendToPluginMock.mockReset();
     clipboardWriteTextMock.mockReset();
+    useVirtualizerMock.mockClear();
     clipboardWriteTextMock.mockResolvedValue();
     getTotalSizeMock.mockReturnValue(120);
     getOffsetForIndexMock.mockImplementation((index, alignment) => [index * 100, alignment]);
@@ -89,6 +94,23 @@ describe('MessageList auto-scroll lifecycle', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('lets React schedule virtual measurements outside the current lifecycle', () => {
+    renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createMessage('message-1')]}
+          isThinking={false}
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(useVirtualizerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ useFlushSync: false }),
+    );
   });
 
   it('cancels pending auto-scroll frames when the list unmounts', () => {

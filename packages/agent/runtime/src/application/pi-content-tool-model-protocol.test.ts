@@ -264,7 +264,7 @@ describe('Pi content Tool model protocol', () => {
     );
     const projected = JSON.parse(text) as { items: readonly { image_ref: string }[] };
 
-    expect(text).not.toContain('neko/assets/Reference/library-image.png');
+    expect(text).not.toContain('Reference/library-image.png');
     expect(text).not.toContain('/Users/example/private-workspace');
     expect(projected.items[0]?.image_ref).toMatch(/^image_[a-z0-9]+$/u);
     expect(
@@ -277,8 +277,9 @@ describe('Pi content Tool model protocol', () => {
       images: [
         {
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Reference/library-image.png',
+            kind: 'media-library',
+            libraryName: 'Reference',
+            relativePath: 'library-image.png',
           },
         },
       ],
@@ -549,11 +550,14 @@ function searchResult() {
           kind: 'media',
           label: 'library-image.png',
           freshness: 'fresh',
-          filePath: 'neko/assets/Reference/library-image.png',
           source: {
             partition: 'media-library',
-            sourceKind: 'workspace-file',
-            projectRelativePath: 'neko/assets/Reference/library-image.png',
+            sourceKind: 'media-library',
+            contentLocator: {
+              kind: 'media-library',
+              libraryName: 'Reference',
+              relativePath: 'library-image.png',
+            },
           },
         },
       ],

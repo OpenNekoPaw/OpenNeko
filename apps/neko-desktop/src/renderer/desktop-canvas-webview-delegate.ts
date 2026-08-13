@@ -1,20 +1,10 @@
-import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import {
-  isContentLocator,
-  type ContentLocator,
-  type WorkspaceFileContentLocator,
-} from '@neko/content';
-import type { DesktopCanvasMediaRequest } from '../shared/canvas-bridge-contract';
-
-const DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES = new Set([
-  'media:probe',
-  'media:play',
-  'media:seek',
-  'media:pause',
-  'media:resume',
-  'media:stop',
-  'media:captureFrame',
-]);
+  isCanvasMediaHostRequestType,
+  createCanvasMediaHostRequest,
+  type CanvasHostRuntimeIdentity,
+  type CanvasMediaHostRequest,
+} from '@neko/canvas-domain';
+import { isContentLocator, type ContentLocator } from '@neko/content';
 
 interface DesktopCanvasWebviewDelegate {
   postMessage(message: unknown): void;
@@ -37,9 +27,9 @@ export function createDesktopCanvasWebviewDelegate(
       messageType === 'preview:resolveVariant' ||
       messageType === 'preview:resolveEmbedded' ||
       messageType === 'preview:releaseEmbedded' ||
-      DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES.has(messageType),
+      isCanvasMediaHostRequestType(messageType),
     postMessage(message) {
-      if (isRecord(message) && DESKTOP_CANVAS_MEDIA_MESSAGE_TYPES.has(String(message['type']))) {
+      if (isRecord(message) && isCanvasMediaHostRequestType(message['type'])) {
         const request = parseMediaMessage(identity, message);
         void window.openNekoDesktop.canvas.executeMediaRequest(request).then(
           (result) => {
@@ -53,20 +43,20 @@ export function createDesktopCanvasWebviewDelegate(
       }
       if (isRecord(message) && message['type'] === 'preview:resolveEmbedded') {
         const request = parseEmbeddedPreviewMessage(message);
-        void window.openNekoDesktop.canvas
-          .resolveEmbeddedPreview({ identity, ...request })
-          .then(
-            (result) => emit({
+        void window.openNekoDesktop.canvas.resolveEmbeddedPreview({ identity, ...request }).then(
+          (result) =>
+            emit({
               type: 'preview:embeddedResolved',
               requestId: result.requestId,
               descriptor: result.descriptor,
             }),
-            (error: unknown) => emit({
+          (error: unknown) =>
+            emit({
               type: 'preview:embeddedResolved',
               requestId: request.requestId,
               error: describeError(error),
             }),
-          );
+        );
         return;
       }
       if (isRecord(message) && message['type'] === 'preview:releaseEmbedded') {
@@ -141,84 +131,12 @@ function parseEmbeddedPreviewMessage(message: Record<string, unknown>) {
 function parseMediaMessage(
   identity: CanvasHostRuntimeIdentity,
   message: Record<string, unknown>,
-): DesktopCanvasMediaRequest {
-  const type = message['type'];
-  const nodeId = message['nodeId'];
-  if (typeof nodeId !== 'string' || nodeId.length === 0) {
-    throw new Error('Desktop Canvas media node identity is invalid.');
-  }
-  if (type === 'media:pause' || type === 'media:resume' || type === 'media:stop') {
-    return { identity, nodeId, type };
-  }
-  if (type === 'media:seek') {
-    return {
-      identity,
-      nodeId,
-      type,
-      time: requireNonNegativeNumber(message['time'], 'seek time'),
-    };
-  }
-  const contentLocator = readCanvasContentLocator(message);
-  if (!contentLocator) {
-    throw new Error('Desktop Canvas media source is invalid.');
-  }
-  const locator = contentLocator;
-  if (type === 'media:captureFrame') {
-    return {
-      identity,
-      nodeId,
-      type,
-      locator,
-      time: requireNonNegativeNumber(message['time'], 'capture time'),
-    };
-  }
-  const mediaType = message['mediaType'];
-  if (mediaType !== 'video' && mediaType !== 'audio') {
-    throw new Error('Desktop Canvas media type is invalid.');
-  }
-  if (type === 'media:probe') {
-    return { identity, nodeId, type, locator, mediaType };
-  }
-  if (type === 'media:play') {
-    if (!isRecord(message['mediaInfo'])) {
-      throw new Error('Desktop Canvas playback mediaInfo is invalid.');
-    }
-    return {
-      identity,
-      nodeId,
-      type,
-      locator,
-      mediaType,
-      mediaInfo: {
-        duration: requireNonNegativeNumber(message['mediaInfo']['duration'], 'media duration'),
-        width: requireNonNegativeNumber(message['mediaInfo']['width'], 'media width'),
-        height: requireNonNegativeNumber(message['mediaInfo']['height'], 'media height'),
-        fps: requireNonNegativeNumber(message['mediaInfo']['fps'], 'media fps'),
-        codec: requireString(message['mediaInfo']['codec'], 'media codec'),
-        format: requireString(message['mediaInfo']['format'], 'media format'),
-        hasAudio: requireBoolean(message['mediaInfo']['hasAudio'], 'media audio flag'),
-        ...(typeof message['mediaInfo']['bitrate'] === 'number'
-          ? { bitrate: message['mediaInfo']['bitrate'] }
-          : {}),
-        ...(typeof message['mediaInfo']['audioCodec'] === 'string'
-          ? { audioCodec: message['mediaInfo']['audioCodec'] }
-          : {}),
-        ...(typeof message['mediaInfo']['audioSampleRate'] === 'number'
-          ? { audioSampleRate: message['mediaInfo']['audioSampleRate'] }
-          : {}),
-        ...(typeof message['mediaInfo']['audioChannels'] === 'number'
-          ? { audioChannels: message['mediaInfo']['audioChannels'] }
-          : {}),
-      },
-      startTime: requireNonNegativeNumber(message['startTime'], 'playback start'),
-      speed: requirePositiveNumber(message['speed'], 'playback speed'),
-    };
-  }
-  throw new Error('Desktop Canvas delegate received an unsupported media message.');
+): CanvasMediaHostRequest {
+  return createCanvasMediaHostRequest(identity, message);
 }
 
 function createMediaErrorResponse(
-  request: DesktopCanvasMediaRequest,
+  request: CanvasMediaHostRequest,
   error: unknown,
 ): Record<string, unknown> {
   const responseType =
@@ -273,15 +191,6 @@ function parsePreviewVariantMessage(message: unknown): {
   };
 }
 
-function readCanvasContentLocator(
-  message: Record<string, unknown>,
-): WorkspaceFileContentLocator | undefined {
-  return isContentLocator(message['contentLocator']) &&
-    message['contentLocator'].kind === 'workspace-file'
-    ? message['contentLocator']
-    : undefined;
-}
-
 function readPreviewContentLocator(message: Record<string, unknown>): ContentLocator | undefined {
   return isContentLocator(message['contentLocator']) ? message['contentLocator'] : undefined;
 }
@@ -292,25 +201,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function requireString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Desktop Canvas ${label} is invalid.`);
-  }
-  return value;
-}
-
-function requireBoolean(value: unknown, label: string): boolean {
-  if (typeof value !== 'boolean') throw new Error(`Desktop Canvas ${label} is invalid.`);
-  return value;
-}
-
-function requireNonNegativeNumber(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    throw new Error(`Desktop Canvas ${label} is invalid.`);
-  }
-  return value;
-}
-
-function requirePositiveNumber(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     throw new Error(`Desktop Canvas ${label} is invalid.`);
   }
   return value;

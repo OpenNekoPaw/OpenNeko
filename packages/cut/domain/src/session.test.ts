@@ -55,7 +55,7 @@ describe('Cut Core commands', () => {
       type: 'link-media',
       clipId: 'video-1',
       name: 'Shot',
-      targetUrl: '../../neko/assets/shot.mp4',
+      targetUrl: 'media-library:Footage/shot.mp4',
       durationFrames: 90,
       rate: 30,
       trackId: 'video-1',
@@ -84,7 +84,7 @@ describe('Cut Core commands', () => {
       },
     });
     expect(linkedAudio).toMatchObject({
-      media_reference: { target_url: '../../neko/assets/shot.mp4' },
+      media_reference: { target_url: 'media-library:Footage/shot.mp4' },
       metadata: {
         openneko: {
           cut: { clipId: 'audio-1' },
@@ -109,7 +109,7 @@ describe('Cut Core commands', () => {
       type: 'link-media',
       clipId: 'video-1',
       name: 'Shot',
-      targetUrl: '../../neko/assets/shot.mp4',
+      targetUrl: 'media-library:Footage/shot.mp4',
       durationFrames: 90,
       availableDurationFrames: 120,
       rate: 30,

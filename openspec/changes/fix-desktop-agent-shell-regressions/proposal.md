@@ -11,6 +11,7 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 让 Agent 全局错误与当前会话错误通过 package-owned portal 提示层绘制，不再被 Workbench Dock/Main 的裁剪边界截断；隐藏 Tab 不得把诊断投影到窗口层。
 - 保证创建、恢复和发送会话时，tabless pending send、Tab state、optimistic user message 与 authoritative Timeline projection 按显式 conversation identity 进入同一可见 runtime；pending send 只能在 owning conversation 已持久接收消息后消费。
 - Project 首次打开或恢复到没有 Main View 时，由 Host workbench owner 打开 canonical Workspace Canvas `neko/boards/workspace.nkc`；当前会话中用户关闭最后一个 Main Tab 后则显示不含失败 diagnostic 的显式空状态。
+- Character/World 只作为精确创作目标进入 Secondary Main，不得替换工作区默认的 Board 或空状态；关闭特殊目标后必须恢复原 Primary Main，独立角色库也不得继承先前 Project authority 或资源栏。
 - Desktop 启动恢复若发现持久 Workspace Scene 与当前 Project presentation 属于不同 Workspace，只局部重置失配 Scene 并保留精确 Project Tab/Board，同时投影可观测 warning；不得让非 authoritative presentation 阻止应用启动。
 - 将项目 Resource Browser 作为独立 Workbench Main View 打开、聚焦、关闭和恢复；一级导航只发出 open/focus intent，不再把 Resource Browser 作为 project dock owner。
 - 修复共享 resize primitive 在 React StrictMode effect 重放后误判为已卸载的问题，保证侧边栏、Dock、Main split 与 Timeline 的拖拽提示状态在指针会话结束后清除。

@@ -22,6 +22,8 @@ import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-gr
 import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_AUTHORING_HOST_CHANNEL,
+  CHARACTER_PORTABLE_HOST_CHANNELS,
+  parseCharacterPortableHostRequest,
   CHARACTER_AVATAR_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
 } from '@neko/chara/contracts';
@@ -39,6 +41,11 @@ export function registerDesktopIpc(
     readonly selectWorkspaceGrant: (
       event: IpcMainInvokeEvent,
     ) => Promise<{ readonly label: string; readonly hostResource: string } | undefined>;
+    readonly saveCharacterPackage: (
+      event: IpcMainInvokeEvent,
+      produce: () => Promise<Uint8Array>,
+    ) => Promise<boolean>;
+    readonly readCharacterPackage: (event: IpcMainInvokeEvent) => Promise<Uint8Array | undefined>;
   },
 ): () => void {
   ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -46,6 +53,51 @@ export function registerDesktopIpc(
   );
   ipcMain.handle(CHARACTER_AUTHORING_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeCharacterAuthoringRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.exportScope,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.getCharacterPortableExportScope(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.exportPackage,
+    async (event: IpcMainInvokeEvent, payload: unknown) => {
+      const request = parseCharacterPortableHostRequest(payload);
+      if (request.operation !== 'export') {
+        throw new Error('Character portable export channel requires an export request.');
+      }
+      let result: Awaited<ReturnType<typeof appHost.createCharacterPortableExport>> | undefined;
+      const saved = await options.saveCharacterPackage(event, async () => {
+        result = await appHost.createCharacterPortableExport(requireSender(event), request);
+        return result.archiveBytes;
+      });
+      return saved
+        ? requireCharacterPortableExportResult(result).result
+        : { requestId: request.requestId, status: 'cancelled' as const };
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.previewImport,
+    async (event: IpcMainInvokeEvent, payload: unknown) => {
+      const request = parseCharacterPortableHostRequest(payload);
+      if (request.operation !== 'import-preview') {
+        throw new Error('Character portable import preview channel requires a preview request.');
+      }
+      const archiveBytes = await options.readCharacterPackage(event);
+      return archiveBytes
+        ? appHost.previewCharacterPortableImport(requireSender(event), request, archiveBytes)
+        : { requestId: request.requestId, status: 'cancelled' as const };
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.commitImport,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.commitCharacterPortableImport(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.cancelImport,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.cancelCharacterPortableImport(requireSender(event), payload),
   );
   ipcMain.handle(WORLD_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeWorldFoundationRequest(requireSender(event), payload),
@@ -396,6 +448,7 @@ export function registerDesktopIpc(
     for (const channel of [
       CHARACTER_FOUNDATION_HOST_CHANNEL,
       CHARACTER_AUTHORING_HOST_CHANNEL,
+      ...Object.values(CHARACTER_PORTABLE_HOST_CHANNELS),
       WORLD_FOUNDATION_HOST_CHANNEL,
       WORLD_AUTHORING_HOST_CHANNEL,
       PROJECT_AUTHORING_HOST_CHANNEL,
@@ -477,4 +530,11 @@ function requireSender(event: IpcMainInvokeEvent): {
     webContentsId: event.sender.id,
     frameUrl,
   };
+}
+
+function requireCharacterPortableExportResult<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error('Character portable destination completed without export bytes.');
+  }
+  return value;
 }

@@ -1,11 +1,23 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { AgentAuthoringTargetRef, AgentBoundDomainBinding } from '@neko/agent-contracts';
+import type {
+  AgentAuthoringAuthority,
+  AgentAuthoringTargetRef,
+  AgentBoundDomainBinding,
+} from '@neko/agent-contracts';
 
-export interface AgentComposerWorkspaceTarget {
-  readonly label: string;
-  readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
-  readonly target?: AgentAuthoringTargetRef;
-}
+export type AgentComposerWorkspaceTarget =
+  | {
+      readonly label: string;
+      readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+      readonly target?: undefined;
+      readonly authority?: undefined;
+    }
+  | {
+      readonly label: string;
+      readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+      readonly target: AgentAuthoringTargetRef;
+      readonly authority: AgentAuthoringAuthority;
+    };
 
 export interface AgentComposerProjectOption {
   readonly projectId: string;

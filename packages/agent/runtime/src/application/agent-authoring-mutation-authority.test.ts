@@ -139,6 +139,13 @@ function authoringReceipt(target: AgentAuthoringTargetRef): AgentEntryTargetRece
       kind: 'authoring',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
+      authority:
+        target.kind === 'content-project'
+          ? { kind: 'content-project', contentProjectId: target.contentProjectId }
+          : {
+              kind: 'standalone-library',
+              library: target.kind === 'character-project' ? 'character' : 'world',
+            },
       target,
     },
   };

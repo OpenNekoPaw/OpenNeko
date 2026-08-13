@@ -10,6 +10,9 @@ const files = {
   surface: 'apps/neko-desktop/src/renderer/DesktopCanvasSurface.tsx',
   hostRuntime: 'apps/neko-desktop/src/renderer/desktop-canvas-host-runtime.ts',
   workspace: 'packages/canvas/webview/src/components/playback/PlaybackWorkspace.tsx',
+  mediaContract: 'packages/canvas/domain/src/canvas-media-host-contract.ts',
+  desktopBridge: 'apps/neko-desktop/src/shared/canvas-bridge-contract.ts',
+  webviewHost: 'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts',
 };
 
 export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
@@ -33,6 +36,35 @@ export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
     'createElectronCanvasHostRuntime(identity)',
     'Desktop Canvas must inject an instance-scoped host runtime.',
   );
+  requireAnchor(
+    findings,
+    'mediaContract',
+    sources.mediaContract,
+    'export type CanvasMediaHostRequest',
+    'Canvas domain must own the canonical media Host request contract.',
+  );
+  requireAnchor(
+    findings,
+    'mediaContract',
+    sources.mediaContract,
+    'parseCanvasMediaHostRequest',
+    'Canvas domain must own the canonical media Host request codec.',
+  );
+
+  if (
+    /DesktopCanvasMedia(?:Request|Response|Info)|parseDesktopCanvasMedia(?:Request|Response)/u.test(
+      sources.desktopBridge,
+    )
+  ) {
+    findings.push(
+      `${files.desktopBridge}: Desktop must not retain a package-local Canvas media contract or codec.`,
+    );
+  }
+  if (/default:\s*[\s\S]*delegate\.postMessage\(value\)/u.test(sources.webviewHost)) {
+    findings.push(
+      `${files.webviewHost}: Canvas Webview Host must not delegate unknown message kinds.`,
+    );
+  }
   requireAnchor(
     findings,
     'hostRuntime',

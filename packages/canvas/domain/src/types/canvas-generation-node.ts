@@ -1,69 +1,33 @@
 import { validateContentLocator, type GeneratedOutputContentLocator } from '@neko/content';
+import {
+  GENERATION_RECIPE_KINDS,
+  GENERATION_RECIPE_PURPOSES,
+  createGenerationRecipe,
+  isGenerationRecipe,
+  isGenerationRecipeKind,
+  purposeForGenerationRecipe,
+  purposeForGenerationRecipeKind,
+  type AudioGenerationRecipe,
+  type GenerationRecipe,
+  type GenerationRecipeKind,
+  type GenerationRecipeModelBinding,
+  type GenerationRecipePurpose,
+  type ImageGenerationRecipe,
+  type PromptGenerationRecipe,
+  type VideoGenerationRecipe,
+} from '@neko/generation';
 import { isJobRef, type JobRef } from '@neko/shared/job-lifecycle';
 
-export const CANVAS_GENERATION_KINDS = ['prompt', 'image', 'audio', 'video'] as const;
-
-export type CanvasGenerationKind = (typeof CANVAS_GENERATION_KINDS)[number];
-
-export const CANVAS_GENERATION_PURPOSES = [
-  'canvas.prompt',
-  'image.generate',
-  'audio.generate',
-  'audio.music.generate',
-  'video.generate',
-] as const;
-export type CanvasGenerationPurpose = (typeof CANVAS_GENERATION_PURPOSES)[number];
-
-export interface CanvasGenerationModelBinding {
-  readonly purpose: CanvasGenerationPurpose;
-  readonly providerId: string;
-  readonly modelId: string;
-}
-
-interface CanvasGenerationRecipeBase<TKind extends CanvasGenerationKind> {
-  readonly kind: TKind;
-  readonly prompt: string;
-  readonly model?: CanvasGenerationModelBinding;
-}
-
-export interface CanvasPromptGenerationRecipe extends CanvasGenerationRecipeBase<'prompt'> {
-  readonly temperature?: number;
-  readonly maxOutputTokens?: number;
-}
-
-export interface CanvasImageGenerationRecipe extends CanvasGenerationRecipeBase<'image'> {
-  readonly negativePrompt?: string;
-  readonly width?: number;
-  readonly height?: number;
-  readonly aspectRatio?: string;
-  readonly count?: number;
-  readonly quality?: 'standard' | 'hd';
-  readonly style?: string;
-}
-
-export interface CanvasAudioGenerationRecipe extends CanvasGenerationRecipeBase<'audio'> {
-  readonly negativePrompt?: string;
-  readonly duration?: number;
-  readonly isMusic?: boolean;
-  readonly genre?: string;
-  readonly format?: 'mp3' | 'wav' | 'flac';
-}
-
-export interface CanvasVideoGenerationRecipe extends CanvasGenerationRecipeBase<'video'> {
-  readonly negativePrompt?: string;
-  readonly duration?: number;
-  readonly resolution?: string;
-  readonly fps?: number;
-  readonly aspectRatio?: string;
-  readonly motionStrength?: number;
-  readonly cameraMovement?: string;
-}
-
-export type CanvasGenerationRecipe =
-  | CanvasPromptGenerationRecipe
-  | CanvasImageGenerationRecipe
-  | CanvasAudioGenerationRecipe
-  | CanvasVideoGenerationRecipe;
+export const CANVAS_GENERATION_KINDS = GENERATION_RECIPE_KINDS;
+export type CanvasGenerationKind = GenerationRecipeKind;
+export const CANVAS_GENERATION_PURPOSES = GENERATION_RECIPE_PURPOSES;
+export type CanvasGenerationPurpose = GenerationRecipePurpose;
+export type CanvasGenerationModelBinding = GenerationRecipeModelBinding;
+export type CanvasPromptGenerationRecipe = PromptGenerationRecipe;
+export type CanvasImageGenerationRecipe = ImageGenerationRecipe;
+export type CanvasAudioGenerationRecipe = AudioGenerationRecipe;
+export type CanvasVideoGenerationRecipe = VideoGenerationRecipe;
+export type CanvasGenerationRecipe = GenerationRecipe;
 
 export interface CanvasGenerationRunBinding {
   readonly submissionId: string;
@@ -103,141 +67,31 @@ export type CanvasGenerationAuthoringResult =
   | { readonly status: 'rejected'; readonly diagnostic: CanvasGenerationDiagnostic };
 
 export function isCanvasGenerationKind(value: unknown): value is CanvasGenerationKind {
-  return (
-    typeof value === 'string' && (CANVAS_GENERATION_KINDS as readonly string[]).includes(value)
-  );
+  return isGenerationRecipeKind(value);
 }
 
 export function purposeForCanvasGenerationKind(
   kind: CanvasGenerationKind,
 ): CanvasGenerationPurpose {
-  switch (kind) {
-    case 'prompt':
-      return 'canvas.prompt';
-    case 'image':
-      return 'image.generate';
-    case 'audio':
-      return 'audio.generate';
-    case 'video':
-      return 'video.generate';
-  }
+  return purposeForGenerationRecipeKind(kind);
 }
 
 export function purposeForCanvasGenerationRecipe(
   recipe: Pick<CanvasGenerationRecipe, 'kind'> &
     Partial<Pick<CanvasAudioGenerationRecipe, 'isMusic'>>,
 ): CanvasGenerationPurpose {
-  return recipe.kind === 'audio' && recipe.isMusic
-    ? 'audio.music.generate'
-    : purposeForCanvasGenerationKind(recipe.kind);
+  return purposeForGenerationRecipe(recipe);
 }
 
 export function createCanvasGenerationNodeData(
   kind: CanvasGenerationKind,
   model?: CanvasGenerationModelBinding,
 ): CanvasGenerationNodeData {
-  if (model && model.purpose !== purposeForCanvasGenerationKind(kind)) {
-    throw new Error('Canvas Generation default model purpose does not match the node kind.');
-  }
-  const recipe: CanvasGenerationRecipe = (() => {
-    switch (kind) {
-      case 'prompt':
-        return {
-          kind,
-          prompt: '',
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-          ...(model ? { model } : {}),
-        };
-      case 'image':
-        return {
-          kind,
-          prompt: '',
-          aspectRatio: '1:1',
-          width: 1024,
-          height: 1024,
-          count: 1,
-          quality: 'standard',
-          ...(model ? { model } : {}),
-        };
-      case 'audio':
-        return {
-          kind,
-          prompt: '',
-          duration: 10,
-          isMusic: false,
-          format: 'mp3',
-          ...(model ? { model } : {}),
-        };
-      case 'video':
-        return {
-          kind,
-          prompt: '',
-          aspectRatio: '16:9',
-          resolution: '720p',
-          duration: 5,
-          fps: 24,
-          ...(model ? { model } : {}),
-        };
-    }
-  })();
-  return { recipe, outputs: [] };
+  return { recipe: createGenerationRecipe(kind, model), outputs: [] };
 }
 
 export function isCanvasGenerationRecipe(value: unknown): value is CanvasGenerationRecipe {
-  if (!isRecord(value) || !isCanvasGenerationKind(value['kind'])) return false;
-  if (typeof value['prompt'] !== 'string') return false;
-  if (!hasOnlyKeys(value, recipeKeys(value['kind']))) return false;
-  const model = value['model'];
-  if (
-    model !== undefined &&
-    !isCanvasGenerationModelBinding(model, {
-      kind: value['kind'],
-      ...(typeof value['isMusic'] === 'boolean' ? { isMusic: value['isMusic'] } : {}),
-    })
-  ) {
-    return false;
-  }
-  switch (value['kind']) {
-    case 'prompt':
-      return (
-        isOptionalRange(value['temperature'], 0, 2) &&
-        isOptionalPositiveInteger(value['maxOutputTokens'])
-      );
-    case 'image':
-      return (
-        isOptionalString(value['negativePrompt']) &&
-        isOptionalPositiveInteger(value['width']) &&
-        isOptionalPositiveInteger(value['height']) &&
-        isOptionalNonEmptyString(value['aspectRatio']) &&
-        isOptionalPositiveInteger(value['count']) &&
-        (value['quality'] === undefined ||
-          value['quality'] === 'standard' ||
-          value['quality'] === 'hd') &&
-        isOptionalNonEmptyString(value['style'])
-      );
-    case 'audio':
-      return (
-        isOptionalString(value['negativePrompt']) &&
-        isOptionalPositiveNumber(value['duration']) &&
-        (value['isMusic'] === undefined || typeof value['isMusic'] === 'boolean') &&
-        isOptionalNonEmptyString(value['genre']) &&
-        (value['format'] === undefined ||
-          value['format'] === 'mp3' ||
-          value['format'] === 'wav' ||
-          value['format'] === 'flac')
-      );
-    case 'video':
-      return (
-        isOptionalString(value['negativePrompt']) &&
-        isOptionalPositiveNumber(value['duration']) &&
-        isOptionalNonEmptyString(value['resolution']) &&
-        isOptionalPositiveNumber(value['fps']) &&
-        isOptionalNonEmptyString(value['aspectRatio']) &&
-        isOptionalRange(value['motionStrength'], 0, 1) &&
-        isOptionalNonEmptyString(value['cameraMovement'])
-      );
-  }
+  return isGenerationRecipe(value);
 }
 
 export function isCanvasGenerationNodeData(value: unknown): value is CanvasGenerationNodeData {
@@ -431,20 +285,6 @@ export function selectedCanvasGenerationOutput(
   return data.outputs.find((output) => output.outputId === data.selectedOutputId);
 }
 
-function isCanvasGenerationModelBinding(
-  value: unknown,
-  recipe: Pick<CanvasGenerationRecipe, 'kind'> &
-    Partial<Pick<CanvasAudioGenerationRecipe, 'isMusic'>>,
-): value is CanvasGenerationModelBinding {
-  return (
-    isRecord(value) &&
-    hasOnlyKeys(value, MODEL_BINDING_KEYS) &&
-    value['purpose'] === purposeForCanvasGenerationRecipe(recipe) &&
-    isNonEmptyString(value['providerId']) &&
-    isNonEmptyString(value['modelId'])
-  );
-}
-
 function isCanvasGenerationRunBinding(value: unknown): value is CanvasGenerationRunBinding {
   return (
     isRecord(value) &&
@@ -481,19 +321,6 @@ function isGenerationJobRef(value: unknown): value is JobRef<'generation'> {
   return isJobRef(value) && value.kind === 'generation';
 }
 
-function recipeKeys(kind: CanvasGenerationKind): ReadonlySet<string> {
-  switch (kind) {
-    case 'prompt':
-      return PROMPT_RECIPE_KEYS;
-    case 'image':
-      return IMAGE_RECIPE_KEYS;
-    case 'audio':
-      return AUDIO_RECIPE_KEYS;
-    case 'video':
-      return VIDEO_RECIPE_KEYS;
-  }
-}
-
 function assertGenerationData(value: CanvasGenerationNodeData): void {
   if (!isCanvasGenerationNodeData(value)) {
     throw new Error('Canvas Generation node data is invalid.');
@@ -520,30 +347,6 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function isOptionalString(value: unknown): boolean {
-  return value === undefined || typeof value === 'string';
-}
-
-function isOptionalNonEmptyString(value: unknown): boolean {
-  return value === undefined || isNonEmptyString(value);
-}
-
-function isOptionalPositiveNumber(value: unknown): boolean {
-  return value === undefined || (typeof value === 'number' && Number.isFinite(value) && value > 0);
-}
-
-function isOptionalPositiveInteger(value: unknown): boolean {
-  return value === undefined || (Number.isSafeInteger(value) && Number(value) > 0);
-}
-
-function isOptionalRange(value: unknown, minimum: number, maximum: number): boolean {
-  return (
-    value === undefined ||
-    (typeof value === 'number' && Number.isFinite(value) && value >= minimum && value <= maximum)
-  );
-}
-
-const MODEL_BINDING_KEYS = new Set(['purpose', 'providerId', 'modelId']);
 const RUN_BINDING_KEYS = new Set(['submissionId', 'recipeInputFingerprint', 'jobRef']);
 const OUTPUT_BINDING_KEYS = new Set([
   'outputId',
@@ -559,34 +362,4 @@ const GENERATION_NODE_DATA_KEYS = new Set([
   'outputs',
   'selectedOutputId',
   'authoredText',
-]);
-const BASE_RECIPE_KEYS = ['kind', 'prompt', 'model'] as const;
-const PROMPT_RECIPE_KEYS = new Set([...BASE_RECIPE_KEYS, 'temperature', 'maxOutputTokens']);
-const IMAGE_RECIPE_KEYS = new Set([
-  ...BASE_RECIPE_KEYS,
-  'negativePrompt',
-  'width',
-  'height',
-  'aspectRatio',
-  'count',
-  'quality',
-  'style',
-]);
-const AUDIO_RECIPE_KEYS = new Set([
-  ...BASE_RECIPE_KEYS,
-  'negativePrompt',
-  'duration',
-  'isMusic',
-  'genre',
-  'format',
-]);
-const VIDEO_RECIPE_KEYS = new Set([
-  ...BASE_RECIPE_KEYS,
-  'negativePrompt',
-  'duration',
-  'resolution',
-  'fps',
-  'aspectRatio',
-  'motionStrength',
-  'cameraMovement',
 ]);

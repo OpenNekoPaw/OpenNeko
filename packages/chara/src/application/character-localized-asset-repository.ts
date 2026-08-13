@@ -1,3 +1,5 @@
+import type { CharacterLocalizedAssetBindingCatalog } from '@neko/chara/contracts';
+
 export interface CharacterLocalizedAssetDescriptor {
   readonly characterProjectId: string;
   readonly relativeAssetPath: string;
@@ -5,6 +7,14 @@ export interface CharacterLocalizedAssetDescriptor {
 }
 
 export interface CharacterLocalizedAssetRepository {
+  readLocalizedAssetBindingCatalog(
+    characterProjectId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterLocalizedAssetBindingCatalog | undefined>;
+  saveLocalizedAssetBindingCatalog(
+    catalog: CharacterLocalizedAssetBindingCatalog,
+    signal?: AbortSignal,
+  ): Promise<void>;
   listLocalizedAssets(
     characterProjectId: string,
     signal?: AbortSignal,

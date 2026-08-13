@@ -22,3 +22,35 @@ the tool does not impose a fixed `0600` mode.
 The Character authoring transfer implementation and its focused test also live in this isolated
 directory. They are intentionally not exported from `@neko/chara-node` or reachable from Desktop;
 an explicit maintenance invocation must provide the exact source store and destination repository.
+
+To inspect an exact retired Project layout without changing bytes:
+
+```bash
+pnpm exec tsx tools/offline-repair/retired-project-layout.ts \
+  --target /absolute/path/to/workspace \
+  --global-media-root /absolute/path/to/home/.neko/media-libraries
+```
+
+The inspection recognizes only the retired `neko/project-composition.json` shape, direct
+`neko/assets/<library>` links, and linked-media `workspace-file` locators in Canvas, Cut, and Project
+Entity owners. It reports a fingerprint, exact global connection matches, and any incomplete or
+unassignable facts. It does not write or silently infer a connection. Explicit retired dependency rows
+are rejected because they cannot be reassigned to an authoritative consumer without inventing facts.
+
+After reviewing a `ready: true` inspection, run the same exact target with its fingerprint and Project
+confirmation token:
+
+```bash
+pnpm exec tsx tools/offline-repair/retired-project-layout.ts \
+  --target /absolute/path/to/workspace \
+  --global-media-root /absolute/path/to/home/.neko/media-libraries \
+  --fingerprint sha256:... \
+  --confirm convert-retired-project:content:<workspace-uuid>
+```
+
+Desktop must be closed. The converter prepares and validates a sibling staging tree, rereads the source
+fingerprint, renames the original Workspace to a timestamped immutable backup, and publishes the staged
+Workspace by rename. It converts exact Entity/Character association facts, Media Library locators, and
+target-free project-local bindings; removes the retired composition and `neko/assets` paths only from
+the converted tree; and never reads a backup as product authority. On validation or publication failure,
+the source remains at its original path and partial staging is removed.

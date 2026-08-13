@@ -1,8 +1,6 @@
 import type { CharacterCreationSourceAuthority } from '@neko/chara/application';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import { NodeProjectEntityAuthoringService } from '@neko/entity-node';
-import { ProjectCompositionService } from '@neko/project/application';
-import { createProjectCompositionFileRepository } from '@neko/project-node';
 
 export interface DesktopCharacterCreationWorkspaceResolution {
   readonly workspace: {
@@ -46,11 +44,12 @@ export function createDesktopCharacterCreationSourceAuthority(input: {
           source.sourceWorkspaceGrantId,
           source.sourceWorkspaceId,
         );
-        await new ProjectCompositionService(
-          createProjectCompositionFileRepository({
-            workspaceRoot: resolution.workspace.workspacePath,
-          }),
-        ).require(source.contentProjectId, signal);
+        const contentProjectId = `content:${resolution.workspace.workspaceId}`;
+        if (source.contentProjectId !== contentProjectId) {
+          throw new Error(
+            `Content Project '${source.contentProjectId}' does not match the authorized Workspace.`,
+          );
+        }
         await new NodeProjectEntityAuthoringService({
           workspace: {
             workspaceId: source.sourceWorkspaceId,

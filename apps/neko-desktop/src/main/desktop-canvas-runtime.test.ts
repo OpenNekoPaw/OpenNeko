@@ -11,7 +11,11 @@ import {
   type CanvasHostSnapshot,
 } from '@neko/canvas-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
-import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
+import {
+  createProjectMediaLibraryBindingFingerprint,
+  ProjectMediaLibraryBindingRepository,
+} from '@neko/assets-node';
+import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
@@ -204,6 +208,107 @@ describe('DesktopCanvasRuntime', () => {
     };
     expect(persisted.nodes).toHaveLength(2);
     expect(persisted.nodes.every((node) => node.data['contentLocator'] === undefined)).toBe(true);
+    await runtime.dispose();
+  });
+
+  it('opens a project Canvas with one safe invalid locator isolated to its node', async () => {
+    const workspacePath = await mkdtemp(
+      path.join(tmpdir(), 'openneko-canvas-invalid-material-isolation-'),
+    );
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const documentPath = path.join(workspacePath, identity.documentId);
+    await mkdir(path.dirname(documentPath), { recursive: true });
+    const unavailableLocator = {
+      kind: 'document-entry',
+      source: {
+        kind: 'workspace-file',
+        path: 'neko/assets/Books/story.epub',
+      },
+      entryPath: 'image/cover.jpg',
+    } as const;
+    await writeFile(
+      documentPath,
+      JSON.stringify({
+        name: 'Imported project Canvas',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [
+          {
+            id: 'unavailable-cover',
+            type: 'media',
+            position: { x: 40, y: 60 },
+            size: { width: 300, height: 180 },
+            zIndex: 1,
+            data: {
+              assetPath: 'Books/story.epub/image/cover.jpg',
+              mediaType: 'image',
+              contentLocator: unavailableLocator,
+            },
+          },
+          {
+            id: 'editable-sibling',
+            type: 'markdown',
+            position: { x: 400, y: 60 },
+            size: { width: 260, height: 180 },
+            zIndex: 2,
+            data: { content: 'Sibling remains editable' },
+          },
+        ],
+        connections: [],
+      }),
+    );
+    const previewResource = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasInvalidMaterialIsolationTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      previewResource,
+    });
+
+    const snapshot = await runtime.getSnapshot('window-1', identity);
+    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual([
+      'unavailable-cover',
+      'editable-sibling',
+    ]);
+    await expect(
+      runtime.resolveMaterialActions('window-1', {
+        requestId: 'resolve-unavailable-cover',
+        identity,
+        selectedNodeIds: ['unavailable-cover'],
+      }),
+    ).rejects.toThrow('requires a valid canonical ContentLocator');
+    expect(previewResource).not.toHaveBeenCalled();
+
+    const saved = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'save-invalid-material-isolation',
+        commandId: 'save-invalid-material-isolation',
+        identity,
+        intent: { type: 'save' },
+      }),
+    );
+    expect(saved.status).toBe('accepted');
+    const persisted = JSON.parse(await readFile(documentPath, 'utf8')) as {
+      readonly nodes: readonly { readonly data: Readonly<Record<string, unknown>> }[];
+    };
+    expect(persisted.nodes[0]?.data['contentLocator']).toEqual(unavailableLocator);
+    expect(persisted.nodes[1]?.data['content']).toBe('Sibling remains editable');
     await runtime.dispose();
   });
 
@@ -450,12 +555,15 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath, linkedLibraryPath);
     await writeFixtureFile(workspacePath, 'media/cat.png', 'image');
     await mkdir(path.join(linkedLibraryPath, 'Characters'), { recursive: true });
-    await createWorkspaceLinkedMediaLibrary({
-      workspaceRoot: workspacePath,
-      name: 'Project Media',
-      targetDirectory: linkedLibraryPath,
-    });
     const identity = createIdentity();
+    const globalMediaLibraryRoot = path.join(workspacePath, '.global-media-libraries');
+    await bindProjectMediaLibrary(
+      workspacePath,
+      globalMediaLibraryRoot,
+      linkedLibraryPath,
+      'Project Media',
+      identity.projectId,
+    );
     const requestProjectMediaLibraryCopy = vi.fn(async () => ({
       libraryName: 'Project Media',
       destinationDirectory: 'Characters',
@@ -480,7 +588,7 @@ describe('DesktopCanvasRuntime', () => {
         workspaceRoot: workspacePath,
         logger: new ConsoleLogger('DesktopCanvasMediaLibraryActionTest'),
       }),
-      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      globalMediaLibraryRoot,
       requestProjectMediaLibraryCopy,
     });
     await runtime.getSnapshot('window-1', identity);
@@ -2064,12 +2172,14 @@ describe('DesktopCanvasRuntime', () => {
       writeFixtureFile(globalLibraryPath, 'stills/global-frame.png', 'global-image'),
       writeFixtureFile(externalSourcePath, 'outside.png', 'external-image'),
     ]);
-    await createWorkspaceLinkedMediaLibrary({
-      workspaceRoot: workspacePath,
-      name: 'linked-media',
-      targetDirectory: linkedLibraryPath,
-    });
     const globalMediaLibraryRoot = path.join(workspacePath, '.global-media-libraries');
+    await bindProjectMediaLibrary(
+      workspacePath,
+      globalMediaLibraryRoot,
+      linkedLibraryPath,
+      'linked-media',
+      'project-1',
+    );
     const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: globalMediaLibraryRoot,
       sourceDirectory: globalLibraryPath,
@@ -2128,18 +2238,11 @@ describe('DesktopCanvasRuntime', () => {
         kind: 'direct-reference',
         identity: materialIdentity(identity),
         locator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/linked-media/clips/linked.mp4',
+          kind: 'media-library',
+          libraryName: 'linked-media',
+          relativePath: 'clips/linked.mp4',
         },
         mediaKind: 'video',
-      },
-    });
-    snapshot = await executeAcceptedIntent(runtime, identity, snapshot, 'global-link', {
-      type: 'author-material',
-      request: {
-        kind: 'global-library-link',
-        identity: materialIdentity(identity),
-        globalLibraryId: libraryId,
       },
     });
     snapshot = await executeAcceptedIntent(runtime, identity, snapshot, 'global-copy', {
@@ -2184,8 +2287,9 @@ describe('DesktopCanvasRuntime', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/linked-media/clips/linked.mp4',
+              kind: 'media-library',
+              libraryName: 'linked-media',
+              relativePath: 'clips/linked.mp4',
             },
           }),
         }),
@@ -2660,6 +2764,36 @@ async function executeAcceptedIntent(
   );
   if (result.status !== 'accepted') throw new Error(result.diagnostic.message);
   return result.snapshot;
+}
+
+async function bindProjectMediaLibrary(
+  workspacePath: string,
+  globalMediaLibraryRoot: string,
+  sourceDirectory: string,
+  libraryName: string,
+  projectId: string,
+): Promise<void> {
+  const { libraryId } = await createGlobalMediaLibraryConnection({
+    mediaLibraryRoot: globalMediaLibraryRoot,
+    sourceDirectory,
+    locationKind: 'local',
+  });
+  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
+    projectId,
+    libraryName,
+    connectionId: libraryId,
+  });
+  await new ProjectMediaLibraryBindingRepository(workspacePath, projectId).applyRecovery(
+    confirmProjectMediaLibraryRecovery({
+      projectId,
+      libraryName,
+      connectionId: libraryId,
+      requirementFingerprint: 'sha256:test-requirement-1234',
+      validatedRelativePaths: [],
+      expectedBindingFingerprint: null,
+      replacementBindingFingerprint,
+    }),
+  );
 }
 
 async function writeFixtureFile(

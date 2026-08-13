@@ -71,7 +71,7 @@ export const chat = {
   'chat.entryQuickActions.label': 'Quick start',
   'chat.entryPanel.assistantTitle': 'Skills',
   'chat.entryPanel.authoringTitle': 'Projects, Characters, and Worlds',
-  'chat.entryPanel.characterTitle': 'Characters and rooms',
+  'chat.entryPanel.characterTitle': 'Choose Characters',
   'chat.entryAction.label': 'Entry actions',
   'chat.entryAction.openDirectory': 'Open directory',
   'chat.entryAction.openDirectoryDescription': 'Authorize a local directory',
@@ -81,9 +81,6 @@ export const chat = {
   'chat.entryAction.chooseCharacterDescription': 'Use a Character Project',
   'chat.entryAction.chooseWorld': 'Choose World',
   'chat.entryAction.chooseWorldDescription': 'Use a World Project',
-  'chat.entryAction.singleCharacterDescription': 'Start a single-Character Dialogue',
-  'chat.entryAction.createRoom': 'Create Room',
-  'chat.entryAction.createRoomDescription': 'Choose multiple published Characters',
   'chat.entryAction.projectCharacters': 'View project Characters',
   'chat.entryAction.projectWorlds': 'View project Worlds',
   'chat.entryExperience.mode.assistant': 'Assistant',
@@ -103,17 +100,26 @@ export const chat = {
   'chat.entryExperience.characterDialogue.loading': 'Loading published Characters…',
   'chat.entryExperience.characterDialogue.empty':
     'There are no published CharacterVersions available for dialogue yet.',
+  'chat.entryExperience.characterDialogue.selectExactVersion': 'Choose an exact usable version',
+  'chat.entryExperience.characterDialogue.versionLabel': 'Usable version',
+  'chat.entryExperience.characterDialogue.versionForCharacter': 'Usable version for {character}',
+  'chat.entryExperience.characterDialogue.versionCount': '{count} usable versions',
+  'chat.entryExperience.characterDialogue.head': 'Branch head',
+  'chat.entryExperience.characterDialogue.unlinked': 'Unlinked',
+  'chat.entryExperience.characterDialogue.lineageUnavailable': 'Lineage unavailable',
   'chat.entryExperience.characterDialogue.storylineLabel': 'Storyline',
   'chat.entryExperience.characterDialogue.storylineNone': 'No storyline',
   'chat.entryExperience.characterDialogue.modeLabel': 'Conversation mode',
   'chat.entryExperience.characterDialogue.modeDaily': 'Daily',
+  'chat.entryExperience.characterDialogue.modeDailyDescription':
+    'Use daily relationship and long-term memory with authorized capabilities.',
   'chat.entryExperience.characterDialogue.modeNarrative': 'Narrative',
-  'chat.entryExperience.characterDialogue.modeNarrativeUnavailable':
-    'Narrative configuration is not connected to this Character entry yet. The selected mode is never downgraded to Daily.',
+  'chat.entryExperience.characterDialogue.modeNarrativeDescription':
+    'Use Character and optional Storyline context without Skills or Tools.',
   'chat.entryContext.authoringTitle': 'Authoring target',
   'chat.entryContext.authoringDescription':
     'Choose a Workspace and exact authoring object for this draft.',
-  'chat.entryContext.characterTitle': 'Characters and rooms',
+  'chat.entryContext.characterTitle': 'Choose Characters',
   'chat.entryContext.characterDescription':
     'Choose published Characters; one starts a Dialogue and multiple create a Room.',
   'chat.entryContext.chooseAuthoringTarget': 'Choose authoring target',

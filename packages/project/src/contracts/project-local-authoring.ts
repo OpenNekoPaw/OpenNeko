@@ -1,4 +1,4 @@
-import type { ProjectLocalTargetRef } from './project-composition';
+import type { ProjectLocalTargetRef } from './project-target';
 
 export interface ProjectWorkspaceAuthority {
   readonly contentProjectId: string;
@@ -17,7 +17,7 @@ export type ProjectLocalCharacterEntitySelection =
     };
 
 export type ProjectLocalCharacterCreationStep =
-  'character-project' | 'project-membership' | 'project-entity' | 'entity-character-association';
+  'character-project' | 'project-entity' | 'entity-character-association';
 
 export interface ProjectLocalCharacterCreationReceipt {
   readonly authority: ProjectWorkspaceAuthority;

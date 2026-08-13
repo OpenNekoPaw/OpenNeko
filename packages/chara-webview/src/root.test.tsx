@@ -3,6 +3,7 @@ import {
   createEmptyCharacterOriginSetting,
   type CharacterFoundationCommand,
   type CharacterFoundationSnapshot,
+  type CharacterAuthoringCommand,
   type CharacterAuthoringSnapshot,
   type OpenNekoDesktopCharacterBridge,
   type OpenNekoDesktopCharacterRoomWorkbenchBridge,
@@ -13,15 +14,18 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CharacterCatalogSurface,
-  CharacterAuthoringStudioRoot,
+  CharacterAuthoringSurface,
   CharacterCompanionContinuitySurface,
   CharacterDetailSurface,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface,
   type CharacterDetailSelection,
+  type CharacterManagementDetailActions,
   useCharacterManagementRuntime,
   useCharacterRoomWorkbenchRuntime,
 } from './root';
+import { CharacterAuthoringEditor } from './character-panel';
+import { CharacterVersionWorkspace } from './character-version-workspace';
 
 function emptySnapshot(): CharacterFoundationSnapshot {
   return {
@@ -56,11 +60,8 @@ describe('Character Management surfaces', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-neko-empty-state="fill"] svg')).not.toBeNull();
     });
-    const viewSwitcher = container.querySelector('.character-management__view-switcher');
-    expect(viewSwitcher?.querySelectorAll('button')).toHaveLength(2);
-    expect(viewSwitcher?.querySelector('button:first-child')?.getAttribute('aria-label')).toBe(
-      'List view',
-    );
+    expect(container.querySelector('.character-management__view-switcher')).toBeNull();
+    expect(screen.getByText('Create character')).toBeTruthy();
     expect(screen.queryByRole('navigation', { name: 'Character workspace views' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Dialogues' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rooms' })).toBeNull();
@@ -72,7 +73,8 @@ describe('Character Management surfaces', () => {
     const { container } = render(<Harness host={createHost(execute)} />);
 
     await screen.findByRole('heading', { name: 'Characters' });
-    fireEvent.click(screen.getByRole('button', { name: 'Quick generate' }));
+    fireEvent.click(screen.getByText('Create character'));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate with AI' }));
 
     expect(container.querySelector('output')?.getAttribute('data-quick-generation-count')).toBe(
       '1',
@@ -86,16 +88,29 @@ describe('Character Management surfaces', () => {
     const snapshot: CharacterAuthoringSnapshot = {
       project,
       versions: foundation.character.versions,
+      authoringTestSnapshots: [],
+      storylines: foundation.character.storylines,
+      storylineDrafts: foundation.character.storylineDrafts,
+      storylineVersions: foundation.character.storylineVersions,
+      lineage: null,
+      referenceInventories: foundation.character.versions.map((version) => ({
+        characterVersionId: version.characterVersionId,
+        coverage: 'complete' as const,
+        references: [],
+        diagnostics: [],
+      })),
       diagnostics: [],
     };
     const getSnapshot = vi.fn(async () => snapshot);
-    const execute = vi.fn(async () => snapshot);
+    const execute = vi.fn(
+      async (_windowId: string, _binding: unknown, _command: CharacterAuthoringCommand) => snapshot,
+    );
     const { container, unmount } = render(
-      <CharacterAuthoringStudioRoot
+      <CharacterAuthoringSurface
         binding={{
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
-          contentProjectId: 'content-project-1',
+          authority: { kind: 'content-project', contentProjectId: 'content-project-1' },
           characterProjectId: project.characterProjectId,
         }}
         host={{ getSnapshot, execute }}
@@ -112,7 +127,11 @@ describe('Character Management surfaces', () => {
     ).toBeNull();
     expect(
       container.querySelector('[data-character-studio-section="storyline-authoring"]'),
-    ).toBeNull();
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-character-studio-section="authoring-tests"]'),
+    ).toBeTruthy();
+    expect(container.querySelector('[data-character-studio-section="memory-review"]')).toBeNull();
     fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'Updated summary' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(execute).toHaveBeenCalledOnce());
@@ -122,7 +141,153 @@ describe('Character Management surfaces', () => {
       expect.objectContaining({ operation: 'character-project-update-draft' }),
     );
     unmount();
-    expect(container.querySelector('[data-character-authoring-studio="true"]')).toBeNull();
+    expect(container.querySelector('[data-character-authoring-surface="true"]')).toBeNull();
+  });
+
+  it('keeps a finalized usable version when the exact Conversation launch fails', async () => {
+    const foundation = projectSnapshot();
+    const baseProject = foundation.character.projects[0];
+    if (!baseProject) throw new Error('Finalize fixture requires a CharacterProject.');
+    const project = { ...baseProject, reviewStatus: 'ready' as const };
+    const snapshot: CharacterAuthoringSnapshot = {
+      project,
+      versions: [],
+      authoringTestSnapshots: [],
+      storylines: [],
+      storylineDrafts: [],
+      storylineVersions: [],
+      lineage: null,
+      referenceInventories: [],
+      diagnostics: [],
+    };
+    const execute = vi.fn(
+      async (_windowId: string, _binding: unknown, _command: CharacterAuthoringCommand) => snapshot,
+    );
+    const onFinalizeAndStartConversation = vi.fn(async () => {
+      throw new Error('Agent Entry is unavailable.');
+    });
+    render(
+      <CharacterAuthoringSurface
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'content-project', contentProjectId: 'content-project-1' },
+          characterProjectId: project.characterProjectId,
+        }}
+        host={{ getSnapshot: vi.fn(async () => snapshot), execute }}
+        initialSnapshot={snapshot}
+        locale="en"
+        onFinalizeAndStartConversation={onFinalizeAndStartConversation}
+        windowId="window-1"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Version label'), { target: { value: 'Ready Rin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Finalize and start Conversation' }));
+
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    const command = execute.mock.calls[0]?.[2];
+    expect(command).toMatchObject({
+      operation: 'character-version-publish',
+      input: {
+        characterProjectId: project.characterProjectId,
+        label: 'Ready Rin',
+      },
+    });
+    const characterVersionId =
+      command?.operation === 'character-version-publish'
+        ? command.input.characterVersionId
+        : undefined;
+    expect(characterVersionId).toMatch(/^character-version:/u);
+    await waitFor(() =>
+      expect(onFinalizeAndStartConversation).toHaveBeenCalledWith({
+        characterProjectId: project.characterProjectId,
+        characterVersionId,
+        label: 'Lin',
+      }),
+    );
+    expect(await screen.findByText('Agent Entry is unavailable.')).toBeTruthy();
+    expect(screen.getByLabelText('Version label')).toHaveProperty('value', '');
+  });
+
+  it('shows the read-only version graph, exact comparison and reference-based delete state', () => {
+    const snapshot = versionWorkspaceSnapshot();
+    const execute = vi.fn(async () => snapshot);
+    const { container } = render(
+      <CharacterVersionWorkspace
+        execute={execute}
+        hasUnsavedDraft={false}
+        locale="en"
+        project={snapshot.project}
+        snapshot={snapshot}
+        versions={snapshot.versions}
+      />,
+    );
+
+    expect(
+      screen.getByText('Inspect branches, compare immutable content, and review exact references.'),
+    ).toBeTruthy();
+    expect(screen.getByText(/Draft basis/u)).toBeTruthy();
+    expect(screen.getByText('Source not declared')).toBeTruthy();
+    expect(screen.getByText('conversation:lin')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete version' })).toHaveProperty('disabled', true);
+    expect(screen.getByText('1 exact reference(s) block deletion.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Compare with another version'), {
+      target: { value: 'character-version:branch' },
+    });
+    expect(screen.getAllByText('Changed').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByRole('button', { name: 'List' }).getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-character-version-workspace="true"]')).not.toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('requires explicit draft replacement and exact confirmation before continuing or deleting', async () => {
+    const snapshot = versionWorkspaceSnapshot();
+    const execute = vi.fn(async () => snapshot);
+    render(
+      <CharacterVersionWorkspace
+        execute={execute}
+        hasUnsavedDraft
+        locale="en"
+        project={snapshot.project}
+        snapshot={snapshot}
+        versions={snapshot.versions}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue from this version' }));
+    expect(screen.getByText('The current unsaved draft will be replaced.')).toBeTruthy();
+    expect(execute).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft and continue' }));
+    await waitFor(() =>
+      expect(execute).toHaveBeenCalledWith({
+        operation: 'character-version-continue',
+        input: {
+          characterProjectId: 'character-project:lin',
+          characterVersionId: 'character-version:root',
+          replaceWorkingDraft: true,
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Branch version/u }));
+    expect(screen.getByRole('button', { name: 'Delete version' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete version' }));
+    expect(screen.getByText('Delete this unreferenced version?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    await waitFor(() =>
+      expect(execute).toHaveBeenLastCalledWith({
+        operation: 'character-version-delete',
+        input: {
+          characterProjectId: 'character-project:lin',
+          characterVersionId: 'character-version:branch',
+        },
+      }),
+    );
   });
 
   it('filters the catalog and opens the exact project detail', async () => {
@@ -136,109 +301,156 @@ describe('Character Management surfaces', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
 
     expect(await screen.findByRole('heading', { name: 'Lin' })).toBeTruthy();
-    expect(screen.getByLabelText('Display name')).toHaveProperty('disabled', true);
-    expect(
-      container.querySelector<HTMLDetailsElement>(
-        '[data-character-studio-section="character-definition"]',
-      )?.open,
-    ).toBe(false);
-    expect(
-      container.querySelector<HTMLDetailsElement>('[data-character-studio-section="presentation"]')
-        ?.open,
-    ).toBe(false);
-    expect(
-      container.querySelector<HTMLDetailsElement>(
-        '[data-character-studio-section="storyline-authoring"]',
-      )?.open,
-    ).toBe(false);
-    expect(screen.getByLabelText('Background story')).toBeTruthy();
-    expect(screen.getByLabelText('Origin setting')).toBeTruthy();
-    expect(
-      container.querySelector('[data-character-studio-section="portrait-resource"]'),
-    ).toBeTruthy();
-    expect(
-      container.querySelector('[data-character-studio-section="avatar-resource"]'),
-    ).toBeTruthy();
-    expect(screen.getByText('Character capabilities and history')).toBeTruthy();
-    expect(screen.getAllByText('Character storylines').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Character memory').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Relationship memory').length).toBeGreaterThan(0);
-    expect(screen.getByText('Presentation resources')).toBeTruthy();
-    expect(screen.getAllByText('Voice defaults').length).toBeGreaterThan(0);
-    expect(screen.getByText('Runtime history')).toBeTruthy();
-    expect(screen.getByLabelText(/^Voice provider/u)).toBeTruthy();
-    expect(screen.getByLabelText('Default voice resource')).toBeTruthy();
-    expect(screen.getByText('Publish a character storyline')).toBeTruthy();
-    expect(screen.getByText('Candidates and accepted memories')).toBeTruthy();
-    expect(screen.getByText('Review relationship memory independently')).toBeTruthy();
+    expect(screen.getByText('Placement unavailable')).toBeTruthy();
+    expect(screen.getByText('Draft and versions')).toBeTruthy();
+    expect(screen.queryByText('Usable version overview')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Exact version references' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Edit character/u })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    const detail = container.querySelector('[data-character-management-detail-surface="true"]');
+    expect(detail?.querySelector('form')).toBeNull();
+    expect(detail?.querySelector('input')).toBeNull();
+    expect(detail?.querySelector('textarea')).toBeNull();
+    expect(detail?.querySelector('[data-character-detail-editor="true"]')).toBeNull();
+    expect(detail?.querySelector('[data-character-studio-section]')).toBeNull();
   });
 
-  it('submits Character creation through the injected typed Host port', async () => {
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
-      '00000000-0000-4000-8000-000000000001',
-    );
-    const execute = vi.fn(
-      async (command: CharacterFoundationCommand): Promise<CharacterFoundationSnapshot> => {
-        const snapshot = emptySnapshot();
-        if (command.operation !== 'character-project-create') return snapshot;
-        return {
-          ...snapshot,
-          character: {
-            ...snapshot.character,
-            projects: [
+  it('keeps project placement concise, launches an exact version, and hides advanced inventory', async () => {
+    const base = projectSnapshot();
+    const project = base.character.projects[0]!;
+    const version = {
+      characterVersionId: 'character-version:lin-root',
+      characterProjectId: project.characterProjectId,
+      label: 'Root',
+      definition: project.draft,
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-09T01:00:00.000Z',
+    };
+    const snapshot: CharacterFoundationSnapshot = {
+      ...base,
+      character: { ...base.character, versions: [version] },
+      managementDetails: [
+        {
+          characterProjectId: project.characterProjectId,
+          placement: { kind: 'content-project', contentProjectId: 'content-project:story' },
+          storylineCount: 2,
+          lineage: {
+            status: 'available',
+            rootCount: 1,
+            headCount: 1,
+            unlinkedCount: 0,
+            nodes: [
               {
-                characterProjectId: command.input.characterProjectId,
-                displayName: command.input.displayName,
-                draft: command.input.draft,
-                evidence: [],
-                candidates: [],
-                reviewStatus: 'draft',
-                createdAt: '2026-08-09T00:00:00.000Z',
-                updatedAt: '2026-08-09T00:00:00.000Z',
+                characterVersionId: version.characterVersionId,
+                label: version.label,
+                state: 'declared-root',
+                isHead: true,
+                isDraftBasis: false,
               },
             ],
+            hiddenNodeCount: 0,
           },
-        };
-      },
-    );
-    const { container } = render(<Harness host={createHost(execute)} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'New character' }));
-    await screen.findByRole('heading', { name: 'Define character' });
-
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Lin' } });
-    fireEvent.change(screen.getByLabelText('Summary'), {
-      target: { value: 'An archivist who guards the sealed tower.' },
-    });
-    expect(container.querySelector('[data-character-studio-section="presentation"]')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
-
-    await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
-    expect(execute).toHaveBeenCalledWith({
-      operation: 'character-project-create',
-      input: {
-        characterProjectId: 'character-project:00000000-0000-4000-8000-000000000001',
-        displayName: 'Lin',
-        draft: {
-          summary: 'An archivist who guards the sealed tower.',
-          backgroundStory: createEmptyCharacterBackgroundStory(),
-          originSetting: createEmptyCharacterOriginSetting(),
-          canon: [],
-          knowledgeBoundary: [],
-          behaviorPolicy: [],
-          expressionPolicy: [],
-          representationRefs: [],
+          referenceInventories: [
+            {
+              characterVersionId: version.characterVersionId,
+              coverage: 'complete',
+              references: [
+                {
+                  ownerKind: 'agent',
+                  referenceKind: 'conversation',
+                  referenceId: 'conversation:lin',
+                  characterVersionId: version.characterVersionId,
+                },
+                {
+                  ownerKind: 'project',
+                  referenceKind: 'project-dependency',
+                  referenceId: 'content-project:story:canvas:board-a',
+                  characterVersionId: version.characterVersionId,
+                },
+              ],
+              diagnostics: [],
+            },
+          ],
         },
-        sources: { evidence: [], assetRepresentations: [] },
-      },
+      ],
+    };
+    const onStartInteraction = vi.fn();
+    render(
+      <Harness detailActions={{ onStartInteraction }} host={createHost(undefined, snapshot)} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+
+    expect(screen.getByText('Project character')).toBeTruthy();
+    expect(screen.getByText('This character is ready for a conversation.')).toBeTruthy();
+    expect(screen.queryByText('content-project:story')).toBeNull();
+    expect(screen.queryByText('1 roots · 1 heads · 0 unlinked versions')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Exact version references' })).toBeNull();
+    expect(screen.queryByText('conversation:lin')).toBeNull();
+    expect(screen.queryByText('content-project:story:canvas:board-a')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Start conversation' }));
+    expect(onStartInteraction).toHaveBeenCalledWith(
+      project.characterProjectId,
+      version.characterVersionId,
+    );
+  });
+
+  it('groups creation methods in one menu without mounting an inline Character editor', async () => {
+    const execute = vi.fn();
+    const onImport = vi.fn();
+    const onManualCreate = vi.fn();
+    const { container } = render(
+      <Harness host={createHost(execute)} onImport={onImport} onManualCreate={onManualCreate} />,
+    );
+    fireEvent.click(await screen.findByText('Create character'));
+    expect(screen.getByRole('button', { name: 'Generate with AI' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create manually' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Import package' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create manually' }));
+    expect(onManualCreate).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-character-creation-entry="true"]')).toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit usable version when more than one can start a conversation', async () => {
+    const base = projectSnapshot();
+    const project = base.character.projects[0]!;
+    const versions = ['root', 'branch'].map((suffix) => ({
+      characterVersionId: `character-version:lin-${suffix}`,
+      characterProjectId: project.characterProjectId,
+      label: suffix === 'root' ? 'Root' : 'Branch',
+      definition: project.draft,
+      acceptedEvidenceIds: [],
+      publishedAt: `2026-08-0${suffix === 'root' ? '9' : '8'}T01:00:00.000Z`,
+    }));
+    const snapshot: CharacterFoundationSnapshot = {
+      ...base,
+      character: { ...base.character, versions },
+    };
+    const onStartInteraction = vi.fn();
+    render(
+      <Harness detailActions={{ onStartInteraction }} host={createHost(undefined, snapshot)} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+
+    const startButton = screen.getByRole('button', { name: 'Start conversation' });
+    expect(startButton).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Conversation version'), {
+      target: { value: versions[1]!.characterVersionId },
     });
-    expect(await screen.findByRole('heading', { name: 'Lin' })).toBeTruthy();
+    expect(startButton).toHaveProperty('disabled', false);
+    fireEvent.click(startButton);
+    expect(onStartInteraction).toHaveBeenCalledWith(
+      project.characterProjectId,
+      versions[1]!.characterVersionId,
+    );
   });
 
   it('saves editable Voice defaults through the Character draft authority', async () => {
     const snapshot = projectSnapshot();
     const execute = vi.fn(async () => snapshot);
-    render(<Harness host={createHost(execute, snapshot)} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+    render(<EditorHarness execute={execute} snapshot={snapshot} />);
 
     fireEvent.change(screen.getByLabelText(/^Voice provider/u), {
       target: { value: 'provider:local-tts' },
@@ -298,9 +510,8 @@ describe('Character Management surfaces', () => {
       },
     };
     const execute = vi.fn(async () => snapshot);
-    render(<Harness host={createHost(execute, snapshot)} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
-    fireEvent.click(screen.getByText('Publish a character storyline'));
+    render(<EditorHarness execute={execute} snapshot={snapshot} />);
+    fireEvent.click(screen.getByText('Create a storyline version'));
 
     fireEvent.change(screen.getByLabelText('Character version'), {
       target: { value: 'character-version:lin' },
@@ -464,9 +675,8 @@ describe('Character Management surfaces', () => {
       },
     };
     const execute = vi.fn(async () => snapshot);
-    render(<Harness host={createHost(execute, snapshot)} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
-    fireEvent.click(screen.getByText('Publish a character storyline'));
+    render(<EditorHarness execute={execute} snapshot={snapshot} />);
+    fireEvent.click(screen.getByText('Create a storyline version'));
     fireEvent.change(screen.getByLabelText('Character storyline'), {
       target: { value: 'character-storyline:trust' },
     });
@@ -495,6 +705,10 @@ describe('Character Management surfaces', () => {
     expect(screen.getByLabelText('Node title')).toHaveProperty('value', 'Opening');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete selected storyline' }));
+    expect(execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'character-storyline-delete' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm storyline deletion' }));
     await waitFor(() =>
       expect(execute).toHaveBeenCalledWith({
         operation: 'character-storyline-delete',
@@ -503,91 +717,29 @@ describe('Character Management surfaces', () => {
     );
   });
 
-  it('accepts a Companion continuity candidate with the exact CAS revision', async () => {
+  it('captures an authoring-test snapshot without creating a usable version', async () => {
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
       '00000000-0000-4000-8000-000000000003',
     );
-    const base = projectSnapshot();
-    const project = base.character.projects[0];
-    if (!project) throw new Error('Memory UI fixture requires a CharacterProject.');
-    const snapshot: CharacterFoundationSnapshot = {
-      ...base,
-      character: {
-        ...base.character,
-        versions: [
-          {
-            characterVersionId: 'character-version:lin',
-            characterProjectId: project.characterProjectId,
-            label: 'Published Lin',
-            definition: project.draft,
-            acceptedEvidenceIds: [],
-            publishedAt: '2026-08-09T00:00:00.000Z',
-          },
-        ],
-        characterRuns: [
-          {
-            characterRunId: 'character-run:lin',
-            characterVersionId: 'character-version:lin',
-            participantId: 'participant:lin',
-            controller: { kind: 'agent', primaryAgentSessionId: 'conversation:character:lin' },
-            runtimeBinding: {
-              kind: 'companion',
-              companionContinuityId: 'companion-continuity:lin',
-              relationshipId: 'relationship:lin',
-            },
-            createdAt: '2026-08-09T00:00:00.000Z',
-          },
-        ],
-        companionContinuities: [
-          {
-            companionContinuityId: 'companion-continuity:lin',
-            userId: 'user:local',
-            characterProjectId: project.characterProjectId,
-            continuityRevision: 4,
-            candidates: [
-              {
-                companionMemoryCandidateId: 'companion-memory-candidate:rain',
-                companionContinuityId: 'companion-continuity:lin',
-                sourceCharacterVersionId: 'character-version:lin',
-                provenance: {
-                  kind: 'room-event',
-                  roomRunId: 'room-run:rain',
-                  roomEventId: 'room-event:rain',
-                },
-                content: 'The user waited in the rain.',
-                compatibility: {
-                  requiredCanonFacts: [],
-                  prohibitedKnowledgeBoundaries: [],
-                  requiredBehaviorPolicies: [],
-                },
-                sensitivityTraits: [],
-                retentionTraits: ['long-term'],
-                expectedContinuityRevision: 4,
-                status: 'pending',
-                createdAt: '2026-08-09T01:00:00.000Z',
-              },
-            ],
-            entries: [],
-            createdAt: '2026-08-09T00:00:00.000Z',
-            updatedAt: '2026-08-09T01:00:00.000Z',
-          },
-        ],
-      },
-    };
+    const snapshot = projectAuthoringSnapshot(projectSnapshot());
     const execute = vi.fn(async () => snapshot);
-    render(<Harness host={createHost(execute, snapshot)} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
-    fireEvent.click(screen.getByText('Candidates and accepted memories'));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    render(
+      <CharacterAuthoringEditor
+        execute={execute}
+        locale="en"
+        selectedProjectId={snapshot.project.characterProjectId}
+        snapshot={snapshot}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Capture test snapshot' }));
 
     await waitFor(() => expect(execute).toHaveBeenCalledOnce());
     expect(execute).toHaveBeenCalledWith({
-      operation: 'companion-memory-candidate-accept',
+      operation: 'character-authoring-test-capture',
       input: {
-        companionContinuityId: 'companion-continuity:lin',
-        companionMemoryCandidateId: 'companion-memory-candidate:rain',
-        companionMemoryEntryId: 'companion-memory-entry:00000000-0000-4000-8000-000000000003',
-        expectedContinuityRevision: 4,
+        characterProjectId: snapshot.project.characterProjectId,
+        authoringTestSnapshotId: 'character-authoring-test:00000000-0000-4000-8000-000000000003',
       },
     });
   });
@@ -613,23 +765,6 @@ describe('Character Management surfaces', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('heading', { name: 'Characters' })).toBeTruthy();
     expect(getSnapshot).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps a command failure visible without replacing the create detail', async () => {
-    const execute = vi.fn<OpenNekoDesktopCharacterBridge['characterFoundation']['execute']>();
-    execute.mockRejectedValue(new Error('Character project write rejected'));
-    render(<Harness host={createHost(execute)} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'New character' }));
-    await screen.findByRole('heading', { name: 'Define character' });
-
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Lin' } });
-    fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'Summary' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
-
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Character project write rejected',
-    );
-    expect(screen.getByRole('heading', { name: 'Define character' })).toBeTruthy();
   });
 });
 
@@ -789,9 +924,15 @@ describe('Character Room Workbench surfaces', () => {
 });
 
 function Harness({
+  detailActions,
   host,
+  onImport,
+  onManualCreate,
 }: {
+  readonly detailActions?: CharacterManagementDetailActions;
   readonly host: OpenNekoDesktopCharacterBridge['characterFoundation'];
+  readonly onImport?: () => void;
+  readonly onManualCreate?: () => void;
 }): JSX.Element {
   const runtime = useCharacterManagementRuntime({ active: true, host });
   const [selection, setSelection] = useState<CharacterDetailSelection>();
@@ -800,7 +941,8 @@ function Harness({
     <>
       <CharacterCatalogSurface
         locale="en"
-        onCreate={() => setSelection({ kind: 'create' })}
+        onImport={onImport}
+        onManualCreate={onManualCreate ?? (() => undefined)}
         onQuickGenerate={() => setQuickGenerationCount((count) => count + 1)}
         onSelect={(characterProjectId) => setSelection({ kind: 'project', characterProjectId })}
         runtime={runtime}
@@ -808,13 +950,77 @@ function Harness({
       />
       <output data-quick-generation-count={quickGenerationCount} />
       <CharacterDetailSurface
+        actions={{
+          ...detailActions,
+          onQuickGenerate: () => setQuickGenerationCount((count) => count + 1),
+        }}
         locale="en"
-        onCreated={(characterProjectId) => setSelection({ kind: 'project', characterProjectId })}
         runtime={runtime}
         selection={selection}
       />
     </>
   );
+}
+
+function EditorHarness({
+  execute,
+  snapshot,
+}: {
+  readonly execute: (command: CharacterFoundationCommand) => Promise<CharacterFoundationSnapshot>;
+  readonly snapshot: CharacterFoundationSnapshot;
+}): JSX.Element {
+  const project = snapshot.character.projects[0];
+  if (!project) throw new Error('Character editor fixture requires a CharacterProject.');
+  return (
+    <CharacterAuthoringEditor
+      execute={async (command: CharacterAuthoringCommand) => {
+        if (
+          command.operation === 'character-authoring-test-capture' ||
+          command.operation === 'character-version-continue' ||
+          command.operation === 'character-version-delete'
+        ) {
+          throw new Error(
+            'The Foundation editor fixture does not execute authoring-only commands.',
+          );
+        }
+        return projectAuthoringSnapshot(await execute(command));
+      }}
+      locale="en"
+      selectedProjectId={project.characterProjectId}
+      snapshot={projectAuthoringSnapshot(snapshot)}
+    />
+  );
+}
+
+function projectAuthoringSnapshot(
+  snapshot: CharacterFoundationSnapshot,
+): CharacterAuthoringSnapshot {
+  const project = snapshot.character.projects[0];
+  if (!project) throw new Error('Character editor fixture requires a CharacterProject.');
+  return {
+    project,
+    versions: snapshot.character.versions.filter(
+      (version) => version.characterProjectId === project.characterProjectId,
+    ),
+    authoringTestSnapshots: [],
+    storylines: snapshot.character.storylines.filter(
+      (storyline) => storyline.characterProjectId === project.characterProjectId,
+    ),
+    storylineDrafts: snapshot.character.storylineDrafts,
+    storylineVersions: snapshot.character.storylineVersions,
+    lineage: null,
+    referenceInventories: snapshot.character.versions
+      .filter((version) => version.characterProjectId === project.characterProjectId)
+      .map((version) => ({
+        characterVersionId: version.characterVersionId,
+        coverage: 'complete',
+        references: [],
+        diagnostics: [],
+      })),
+    diagnostics: snapshot.diagnostics.filter(
+      (diagnostic) => diagnostic.owner === 'character',
+    ) as CharacterAuthoringSnapshot['diagnostics'],
+  };
 }
 
 function RoomWorkbenchHarness({
@@ -891,6 +1097,74 @@ function projectSnapshot(): CharacterFoundationSnapshot {
         },
       ],
     },
+  };
+}
+
+function versionWorkspaceSnapshot(): CharacterAuthoringSnapshot {
+  const foundation = projectSnapshot();
+  const baseProject = foundation.character.projects[0];
+  if (!baseProject) throw new Error('Version workspace fixture requires a CharacterProject.');
+  const project = { ...baseProject, draftBasisCharacterVersionId: 'character-version:root' };
+  const versions = [
+    {
+      characterVersionId: 'character-version:root',
+      characterProjectId: project.characterProjectId,
+      label: 'Root version',
+      definition: project.draft,
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-09T00:00:00.000Z',
+    },
+    {
+      characterVersionId: 'character-version:branch',
+      characterProjectId: project.characterProjectId,
+      label: 'Branch version',
+      definition: { ...project.draft, canon: ['A newly accepted fact.'] },
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-10T00:00:00.000Z',
+    },
+    {
+      characterVersionId: 'character-version:unlinked',
+      characterProjectId: project.characterProjectId,
+      label: 'Imported version',
+      definition: project.draft,
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-11T00:00:00.000Z',
+    },
+  ];
+  return {
+    project,
+    versions,
+    authoringTestSnapshots: [],
+    storylines: [],
+    storylineDrafts: [],
+    storylineVersions: [],
+    lineage: {
+      characterProjectId: project.characterProjectId,
+      relations: [
+        { characterVersionId: 'character-version:root', parentCharacterVersionIds: [] },
+        {
+          characterVersionId: 'character-version:branch',
+          parentCharacterVersionIds: ['character-version:root'],
+        },
+      ],
+    },
+    referenceInventories: versions.map((version) => ({
+      characterVersionId: version.characterVersionId,
+      coverage: 'complete' as const,
+      references:
+        version.characterVersionId === 'character-version:root'
+          ? [
+              {
+                ownerKind: 'agent' as const,
+                referenceKind: 'conversation' as const,
+                referenceId: 'conversation:lin',
+                characterVersionId: version.characterVersionId,
+              },
+            ]
+          : [],
+      diagnostics: [],
+    })),
+    diagnostics: [],
   };
 }
 

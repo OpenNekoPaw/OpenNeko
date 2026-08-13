@@ -82,6 +82,6 @@ function media(id: string, x: number, y: number): CanvasNode {
     position: { x, y },
     size: { width: 100, height: 80 },
     zIndex: 10,
-    data: { assetPath: 'neko/assets/files/image/test.png', mediaType: 'image' },
+    data: { assetPath: 'Media/files/image/test.png', mediaType: 'image' },
   };
 }

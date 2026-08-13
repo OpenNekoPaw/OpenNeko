@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
 import type { AgentCharacterDialogueTargetOption } from '@neko/agent-contracts';
-import { SegmentedControl } from '@neko/ui';
-import { UserIcon, UsersIcon } from '@neko/ui/icons';
+import { UserIcon } from '@neko/ui/icons';
 import { useTranslation } from '../../i18n/I18nContext';
 import type { SelectedCharacterLaunch } from './InputArea/types';
 import { EntryResourceCard } from './EntryResourceCard';
@@ -22,21 +20,7 @@ export function CharacterDialogueTargetSelector({
   onChange,
 }: CharacterDialogueTargetSelectorProps): JSX.Element {
   const { t } = useTranslation();
-  const [selectionKind, setSelectionKind] = useState<'character' | 'room'>(() =>
-    selected.length > 1 ? 'room' : 'character',
-  );
-  const [roomParticipants, setRoomParticipants] = useState<readonly SelectedCharacterLaunch[]>(
-    () => (selected.length > 1 ? selected : []),
-  );
-  useEffect(() => {
-    if (selected.length > 1) {
-      setRoomParticipants(selected);
-    } else if (selectionKind === 'character') {
-      setRoomParticipants([]);
-    }
-  }, [selected, selectionKind]);
-  const activeSelection = selectionKind === 'room' ? roomParticipants : selected;
-  const selectedIds = new Set(activeSelection.map((item) => item.characterVersionId));
+  const targetsByProject = groupTargetsByProject(targets);
 
   return (
     <section
@@ -44,70 +28,6 @@ export function CharacterDialogueTargetSelector({
       aria-label={t('chat.entryExperience.characterDialogue.selectorLabel')}
       data-character-dialogue-target-selector="true"
     >
-      <div className="agent-entry-character-mode-section">
-        <span className="agent-entry-character-mode-label">
-          {t('chat.entryExperience.characterDialogue.modeLabel')}
-        </span>
-        <SegmentedControl
-          appearance="neutral"
-          className="agent-entry-character-mode-switch"
-          label={t('chat.entryExperience.characterDialogue.modeLabel')}
-          maxWidth="none"
-          value="daily"
-          options={[
-            {
-              value: 'daily',
-              label: t('chat.entryExperience.characterDialogue.modeDaily'),
-              disabled: pending,
-            },
-            {
-              value: 'narrative',
-              label: t('chat.entryExperience.characterDialogue.modeNarrative'),
-              description: t('chat.entryExperience.characterDialogue.modeNarrativeUnavailable'),
-              disabled: true,
-            },
-          ]}
-          onValueChange={(value) => {
-            if (value !== 'daily') {
-              throw new Error('Narrative configuration is not connected to this Character entry.');
-            }
-          }}
-        />
-        <small className="agent-entry-character-mode-diagnostic">
-          {t('chat.entryExperience.characterDialogue.modeNarrativeUnavailable')}
-        </small>
-      </div>
-
-      <div className="agent-entry-resource-grid" aria-label={t('chat.entryAction.label')}>
-        <EntryResourceCard
-          actionId="choose-character"
-          label={t('chat.entryAction.chooseCharacter')}
-          description={t('chat.entryAction.singleCharacterDescription')}
-          media={<UserIcon size={18} />}
-          selected={selectionKind === 'character'}
-          disabled={pending}
-          onSelect={() => {
-            setSelectionKind('character');
-            setRoomParticipants([]);
-            if (selected.length > 1) onChange([]);
-          }}
-        />
-        <EntryResourceCard
-          actionId="create-room"
-          label={t('chat.entryAction.createRoom')}
-          description={t('chat.entryAction.createRoomDescription')}
-          media={<UsersIcon size={18} />}
-          selected={selectionKind === 'room'}
-          disabled={pending}
-          onSelect={() => {
-            setSelectionKind('room');
-            const nextParticipants = [...selected];
-            setRoomParticipants(nextParticipants);
-            if (selected.length < 2) onChange([]);
-          }}
-        />
-      </div>
-
       {loading ? (
         <div className="agent-entry-context-status" role="status">
           {t('chat.entryExperience.characterDialogue.loading')}
@@ -118,56 +38,145 @@ export function CharacterDialogueTargetSelector({
         </div>
       ) : (
         <div className="agent-entry-resource-grid agent-entry-character-target-grid" role="group">
-          {targets.map((target) => {
-            const active = selectedIds.has(target.characterVersionId);
+          {targetsByProject.map(({ characterProjectId, displayName, versions }) => {
+            const selectedTarget = selected.find(
+              (item) => item.characterProjectId === characterProjectId,
+            );
+            const active = selectedTarget !== undefined;
+            const exactVersion = selectedTarget
+              ? versions.find(
+                  (target) => target.characterVersionId === selectedTarget.characterVersionId,
+                )
+              : versions.length === 1
+                ? versions[0]
+                : undefined;
             return (
-              <EntryResourceCard
-                key={target.characterVersionId}
-                resourceKind="character"
-                label={target.displayName}
-                description={target.versionLabel}
-                media={<UserIcon size={18} />}
-                selected={active}
-                disabled={pending}
-                onSelect={() => {
-                  if (selectionKind === 'character') {
-                    onChange(
-                      active
-                        ? []
-                        : [
-                            {
-                              characterProjectId: target.characterProjectId,
-                              characterVersionId: target.characterVersionId,
-                              label: target.displayName,
-                            },
-                          ],
-                    );
-                    return;
+              <div className="agent-entry-character-card" key={characterProjectId}>
+                <EntryResourceCard
+                  resourceKind="character"
+                  label={displayName}
+                  description={
+                    exactVersion?.versionLabel ??
+                    t('chat.entryExperience.characterDialogue.selectExactVersion')
                   }
-                  if (active) {
-                    const next = roomParticipants.filter(
-                      (item) => item.characterVersionId !== target.characterVersionId,
-                    );
-                    setRoomParticipants(next);
-                    onChange(next.length > 1 ? next : []);
-                    return;
+                  metadata={
+                    exactVersion
+                      ? presentLineage(exactVersion, t)
+                      : t('chat.entryExperience.characterDialogue.versionCount', {
+                          count: versions.length,
+                        })
                   }
-                  const next = [
-                    ...roomParticipants,
-                    {
-                      characterProjectId: target.characterProjectId,
-                      characterVersionId: target.characterVersionId,
-                      label: target.displayName,
-                    },
-                  ];
-                  setRoomParticipants(next);
-                  onChange(next.length > 1 ? next : []);
-                }}
-              />
+                  media={<UserIcon size={18} />}
+                  selected={active}
+                  disabled={pending}
+                  onSelect={() => {
+                    if (active) {
+                      onChange(
+                        selected.filter((item) => item.characterProjectId !== characterProjectId),
+                      );
+                      return;
+                    }
+                    if (versions.length !== 1 || !versions[0]) return;
+                    onChange([...selected, selectionFromTarget(versions[0])]);
+                  }}
+                />
+                {versions.length > 1 ? (
+                  <label className="agent-entry-character-version-picker">
+                    <span>{t('chat.entryExperience.characterDialogue.versionLabel')}</span>
+                    <select
+                      aria-label={t('chat.entryExperience.characterDialogue.versionForCharacter', {
+                        character: displayName,
+                      })}
+                      disabled={pending}
+                      value={selectedTarget?.characterVersionId ?? ''}
+                      onChange={(event) => {
+                        const remaining = selected.filter(
+                          (item) => item.characterProjectId !== characterProjectId,
+                        );
+                        if (!event.target.value) {
+                          onChange(remaining);
+                          return;
+                        }
+                        const target = versions.find(
+                          (candidate) => candidate.characterVersionId === event.target.value,
+                        );
+                        if (!target) {
+                          throw new Error(
+                            `CharacterVersion '${event.target.value}' is unavailable for exact Character '${characterProjectId}'.`,
+                          );
+                        }
+                        onChange([...remaining, selectionFromTarget(target)]);
+                      }}
+                    >
+                      <option value="">
+                        {t('chat.entryExperience.characterDialogue.selectExactVersion')}
+                      </option>
+                      {versions.map((target) => (
+                        <option key={target.characterVersionId} value={target.characterVersionId}>
+                          {`${target.versionLabel} — ${presentLineage(target, t)}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
             );
           })}
         </div>
       )}
     </section>
   );
+}
+
+type Translation = (key: string, params?: Record<string, string | number>) => string;
+
+function groupTargetsByProject(targets: readonly AgentCharacterDialogueTargetOption[]) {
+  const groups = new Map<
+    string,
+    {
+      readonly characterProjectId: string;
+      readonly displayName: string;
+      readonly versions: AgentCharacterDialogueTargetOption[];
+    }
+  >();
+  for (const target of targets) {
+    const current = groups.get(target.characterProjectId);
+    if (current) {
+      if (current.displayName !== target.displayName) {
+        throw new Error(
+          `Character '${target.characterProjectId}' has inconsistent launch display names.`,
+        );
+      }
+      current.versions.push(target);
+      continue;
+    }
+    groups.set(target.characterProjectId, {
+      characterProjectId: target.characterProjectId,
+      displayName: target.displayName,
+      versions: [target],
+    });
+  }
+  return [...groups.values()];
+}
+
+function selectionFromTarget(target: AgentCharacterDialogueTargetOption): SelectedCharacterLaunch {
+  return {
+    characterProjectId: target.characterProjectId,
+    characterVersionId: target.characterVersionId,
+    label: target.displayName,
+  };
+}
+
+function presentLineage(target: AgentCharacterDialogueTargetOption, t: Translation): string {
+  if (target.lineage.coverage === 'unavailable') {
+    return t('chat.entryExperience.characterDialogue.lineageUnavailable');
+  }
+  const path = target.lineage.path.map((segment) => segment.label).join(' / ');
+  const states = [
+    target.lineage.state === 'unlinked'
+      ? t('chat.entryExperience.characterDialogue.unlinked')
+      : undefined,
+    target.lineage.isHead ? t('chat.entryExperience.characterDialogue.head') : undefined,
+  ].filter((value): value is string => value !== undefined);
+  return states.length > 0 ? `${states.join(' · ')} · ${path}` : path;
 }

@@ -2,15 +2,15 @@ import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { HtmlAudioDescriptor, HtmlVideoDescriptor, MediaProbe } from '@neko/media';
 import { NodeMediaRuntime, type NodeMediaPublisher } from '@neko/media/node';
-import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
+import type {
+  CanvasHostRuntimeIdentity,
+  CanvasMediaHostInfo,
+  CanvasMediaHostRequest,
+  CanvasMediaHostResponse,
+} from '@neko/canvas-domain';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
-import type {
-  DesktopCanvasMediaInfo,
-  DesktopCanvasMediaRequest,
-  DesktopCanvasMediaResponse,
-} from '../shared/canvas-bridge-contract';
 
 interface DesktopCanvasMediaHandle {
   readonly identity: CanvasHostRuntimeIdentity;
@@ -19,7 +19,7 @@ interface DesktopCanvasMediaHandle {
     readonly path: string;
   };
   readonly sourcePath: string;
-  readonly mediaInfo: DesktopCanvasMediaInfo;
+  readonly mediaInfo: CanvasMediaHostInfo;
   readonly mediaType: 'video' | 'audio';
   readonly speed: number;
   readonly videoSessionId?: string;
@@ -66,9 +66,9 @@ export class DesktopCanvasMediaRuntime {
   }
 
   async execute(
-    request: DesktopCanvasMediaRequest,
+    request: CanvasMediaHostRequest,
     workspace: AssetWorkspaceResolution,
-  ): Promise<DesktopCanvasMediaResponse | undefined> {
+  ): Promise<CanvasMediaHostResponse | undefined> {
     this.requireActive();
     const key = streamKey(request.identity, request.nodeId);
     switch (request.type) {
@@ -110,9 +110,9 @@ export class DesktopCanvasMediaRuntime {
   }
 
   private async probe(
-    request: Extract<DesktopCanvasMediaRequest, { readonly type: 'media:probe' }>,
+    request: Extract<CanvasMediaHostRequest, { readonly type: 'media:probe' }>,
     workspace: AssetWorkspaceResolution,
-  ): Promise<DesktopCanvasMediaResponse> {
+  ): Promise<CanvasMediaHostResponse> {
     try {
       const sourcePath = await resolveWorkspaceContentLocator(workspace, request.locator);
       return {
@@ -130,10 +130,10 @@ export class DesktopCanvasMediaRuntime {
   }
 
   private async play(
-    request: Extract<DesktopCanvasMediaRequest, { readonly type: 'media:play' }>,
+    request: Extract<CanvasMediaHostRequest, { readonly type: 'media:play' }>,
     workspace: AssetWorkspaceResolution,
     key: string,
-  ): Promise<DesktopCanvasMediaResponse> {
+  ): Promise<CanvasMediaHostResponse> {
     try {
       const sourcePath = await resolveWorkspaceContentLocator(workspace, request.locator);
       await this.stopKey(key);
@@ -159,9 +159,9 @@ export class DesktopCanvasMediaRuntime {
   }
 
   private async seek(
-    request: Extract<DesktopCanvasMediaRequest, { readonly type: 'media:seek' }>,
+    request: Extract<CanvasMediaHostRequest, { readonly type: 'media:seek' }>,
     key: string,
-  ): Promise<DesktopCanvasMediaResponse | undefined> {
+  ): Promise<CanvasMediaHostResponse | undefined> {
     const current = this.streams.get(key);
     if (!current) return undefined;
     try {
@@ -188,9 +188,9 @@ export class DesktopCanvasMediaRuntime {
   }
 
   private async captureFrame(
-    request: Extract<DesktopCanvasMediaRequest, { readonly type: 'media:captureFrame' }>,
+    request: Extract<CanvasMediaHostRequest, { readonly type: 'media:captureFrame' }>,
     workspace: AssetWorkspaceResolution,
-  ): Promise<DesktopCanvasMediaResponse> {
+  ): Promise<CanvasMediaHostResponse> {
     try {
       const sourcePath = await resolveWorkspaceContentLocator(workspace, request.locator);
       return {
@@ -216,7 +216,7 @@ export class DesktopCanvasMediaRuntime {
     contentLocator: { readonly kind: 'workspace-file'; readonly path: string },
     nodeId: string,
     sourcePath: string,
-    mediaInfo: DesktopCanvasMediaInfo,
+    mediaInfo: CanvasMediaHostInfo,
     mediaType: 'video' | 'audio',
     startTime: number,
     speed: number,
@@ -341,7 +341,7 @@ function streamReadyResponse(
   nodeId: string,
   handle: DesktopCanvasMediaHandle,
   startTime: number,
-): DesktopCanvasMediaResponse {
+): CanvasMediaHostResponse {
   return {
     type: 'media:streamReady',
     nodeId,
@@ -375,7 +375,7 @@ function audioMimeType(sourcePath: string): string {
   }
 }
 
-function projectMediaInfo(probe: MediaProbe): DesktopCanvasMediaInfo {
+function projectMediaInfo(probe: MediaProbe): CanvasMediaHostInfo {
   const video = probe.video;
   const audio = probe.audioStreams[0];
   return {

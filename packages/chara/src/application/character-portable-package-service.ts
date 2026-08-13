@@ -2,6 +2,7 @@ import {
   parseCharacterAuthoringTestSnapshot,
   parseCharacterPortablePackageManifest,
   parseCharacterPortablePackagePreview,
+  parseCharacterPortableExportScope,
   parseCharacterProject,
   parseCharacterStoryline,
   parseCharacterStorylineDraft,
@@ -9,10 +10,14 @@ import {
   parseCharacterVersion,
   parseCharacterVersionLineage,
   type CharacterAuthoringTestSnapshot,
+  type CharacterLocalizedAssetBinding,
+  type CharacterLocalizedAssetBindingCatalog,
   type CharacterPortableDestination,
   type CharacterPortableExternalDependency,
+  type CharacterPortableEmbeddedAssetEntry,
   type CharacterPortablePackageManifest,
   type CharacterPortablePackagePreview,
+  type CharacterPortableExportScope,
   type CharacterPortableRecordKind,
   type CharacterProject,
   type CharacterRepresentationKind,
@@ -42,7 +47,9 @@ export interface CharacterPortableRecordSource {
 export interface CharacterPortableAssetSource {
   readonly representationId: string;
   readonly kind: CharacterRepresentationKind;
+  readonly resourceRef: string;
   readonly archivePath: string;
+  readonly entry: boolean;
   readonly mediaType: string;
   readonly bytes: Uint8Array;
 }
@@ -77,18 +84,11 @@ export interface CharacterPortableWorkspaceRepository
     CharacterLocalizedAssetRepository,
     CharacterAuthoringCatalogPort {}
 
-export interface CharacterPortableEmbeddedAssetSelection {
-  readonly representationId: string;
-  readonly kind: CharacterRepresentationKind;
-  readonly relativeAssetPath: string;
-  readonly mediaType: string;
-}
-
 export interface ExportCharacterPortablePackageInput {
   readonly characterProjectId: string;
   readonly characterStorylineIds: readonly string[];
   readonly authoringTestSnapshotIds: readonly string[];
-  readonly embeddedAssets: readonly CharacterPortableEmbeddedAssetSelection[];
+  readonly embeddedRepresentationIds: readonly string[];
   readonly maxEmbeddedAssetBytes: number;
 }
 
@@ -132,6 +132,66 @@ export class CharacterPortablePackageService {
     private readonly repository: CharacterPortableWorkspaceRepository,
     private readonly archive: CharacterPortableArchivePort,
   ) {}
+
+  async getExportScope(
+    characterProjectId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterPortableExportScope> {
+    signal?.throwIfAborted();
+    const catalog = await this.repository.readAuthoringCatalog(signal);
+    const project = catalog.projects.find(
+      (candidate) => candidate.characterProjectId === characterProjectId,
+    );
+    if (!project) {
+      throw portableError(
+        'character-package-source-unavailable',
+        `CharacterProject '${characterProjectId}' is unavailable in the exact source Workspace.`,
+      );
+    }
+    const versions = catalog.versions.filter(
+      (version) => version.characterProjectId === characterProjectId,
+    );
+    const [lineage, storylines, localizedAssets] = await Promise.all([
+      this.repository.readLineage(characterProjectId, signal),
+      this.repository.listStorylines(characterProjectId, signal),
+      this.repository.readLocalizedAssetBindingCatalog(characterProjectId, signal),
+    ]);
+    const graph = projectCharacterVersionGraph({
+      project,
+      versions,
+      ...(lineage ? { lineage } : {}),
+    });
+    const bindingByRepresentation = new Map(
+      (localizedAssets?.bindings ?? []).map((binding) => [binding.representationId, binding]),
+    );
+    return parseCharacterPortableExportScope({
+      characterProjectId,
+      displayName: project.displayName,
+      characterVersionIds: versions.map((version) => version.characterVersionId),
+      branchHeadCharacterVersionIds: graph.headCharacterVersionIds,
+      unlinkedCharacterVersionIds: graph.unlinkedCharacterVersionIds,
+      characterStorylines: storylines.map((storyline) => ({
+        characterStorylineId: storyline.characterStorylineId,
+        displayName: storyline.displayName,
+      })),
+      authoringTestSnapshotIds: catalog.authoringTestSnapshots
+        .filter((snapshot) => snapshot.characterProjectId === characterProjectId)
+        .map((snapshot) => snapshot.authoringTestSnapshotId),
+      representations: [...collectRepresentations(project, versions).values()].map(
+        (representation) => {
+          const binding = bindingByRepresentation.get(representation.representationId);
+          return {
+            representationId: representation.representationId,
+            kind: representation.kind,
+            canEmbed: binding !== undefined,
+            ownedFileCount: binding?.files.length ?? 0,
+            ownedByteLength:
+              binding?.files.reduce((total, file) => total + file.byteLength, 0) ?? 0,
+          };
+        },
+      ),
+    });
+  }
 
   async exportPackage(
     input: ExportCharacterPortablePackageInput,
@@ -190,9 +250,14 @@ export class CharacterPortablePackageService {
       records,
     );
     const knownRepresentations = collectRepresentations(project, versions);
+    const localizedAssetBindings = await this.repository.readLocalizedAssetBindingCatalog(
+      project.characterProjectId,
+      signal,
+    );
     const embeddedAssets = await this.collectEmbeddedAssets(
-      input.embeddedAssets,
+      unique(input.embeddedRepresentationIds, 'embedded representation selection'),
       knownRepresentations,
+      localizedAssetBindings,
       input.maxEmbeddedAssetBytes,
       project.characterProjectId,
       signal,
@@ -278,6 +343,21 @@ export class CharacterPortablePackageService {
         );
         installed.push(`localized-asset:${asset.relativeAssetPath}`);
       }
+      if (decoded.localizedAssetBindings.bindings.length > 0) {
+        const existingBindings = await this.repository.readLocalizedAssetBindingCatalog(
+          decoded.project.characterProjectId,
+          signal,
+        );
+        await this.repository.saveLocalizedAssetBindingCatalog(
+          mergeLocalizedAssetBindings(decoded.localizedAssetBindings, existingBindings),
+          signal,
+        );
+        installed.push(
+          ...decoded.localizedAssetBindings.bindings.map(
+            (binding) => `localized-asset-binding:${binding.representationId}`,
+          ),
+        );
+      }
     } catch (cause) {
       throw new CharacterPortableImportWriteError(decoded.project.characterProjectId, installed, {
         cause,
@@ -335,7 +415,7 @@ export class CharacterPortablePackageService {
   }
 
   private async collectEmbeddedAssets(
-    selections: readonly CharacterPortableEmbeddedAssetSelection[],
+    selectedRepresentationIds: readonly string[],
     knownRepresentations: ReadonlyMap<
       string,
       {
@@ -344,48 +424,59 @@ export class CharacterPortablePackageService {
         readonly resourceRef: string;
       }
     >,
+    bindingCatalog: CharacterLocalizedAssetBindingCatalog | undefined,
     maxBytes: number,
     characterProjectId: string,
     signal?: AbortSignal,
   ): Promise<readonly CharacterPortableAssetSource[]> {
-    const selectedPaths = unique(
-      selections.map((selection) => selection.relativeAssetPath),
-      'localized asset selection',
-    );
-    if (selectedPaths.length !== selections.length) {
-      throw portableError(
-        'character-package-selection-invalid',
-        'Localized asset selection contains duplicate paths.',
-      );
-    }
     const assets: CharacterPortableAssetSource[] = [];
-    for (const selection of selections) {
-      const representation = knownRepresentations.get(selection.representationId);
-      if (!representation || representation.kind !== selection.kind) {
+    let totalBytes = 0;
+    for (const representationId of selectedRepresentationIds) {
+      const representation = knownRepresentations.get(representationId);
+      const binding = bindingCatalog?.bindings.find(
+        (candidate) => candidate.representationId === representationId,
+      );
+      if (
+        !representation ||
+        !binding ||
+        binding.kind !== representation.kind ||
+        binding.resourceRef !== representation.resourceRef
+      ) {
         throw portableError(
           'character-package-selection-invalid',
-          `Embedded asset selection '${selection.representationId}' does not match an exact Character representation.`,
+          `Embedded asset selection '${representationId}' has no complete exact localized binding.`,
         );
       }
-      const bytes = await this.repository.readLocalizedAsset(
-        characterProjectId,
-        selection.relativeAssetPath,
-        maxBytes,
-        signal,
-      );
-      if (!bytes) {
-        throw portableError(
-          'character-package-source-unavailable',
-          `Localized Character asset '${selection.relativeAssetPath}' is unavailable.`,
+      for (const file of binding.files) {
+        const bytes = await this.repository.readLocalizedAsset(
+          characterProjectId,
+          file.relativeAssetPath,
+          Math.max(1, Math.min(maxBytes, file.byteLength)),
+          signal,
         );
+        if (!bytes || bytes.byteLength !== file.byteLength) {
+          throw portableError(
+            'character-package-source-unavailable',
+            `Localized Character asset '${file.relativeAssetPath}' is unavailable or changed.`,
+          );
+        }
+        totalBytes += bytes.byteLength;
+        if (totalBytes > maxBytes) {
+          throw portableError(
+            'character-package-selection-invalid',
+            `Embedded Character assets exceed the ${String(maxBytes)} byte selection limit.`,
+          );
+        }
+        assets.push({
+          representationId: representation.representationId,
+          kind: representation.kind,
+          resourceRef: representation.resourceRef,
+          archivePath: `assets/${file.relativeAssetPath}`,
+          entry: file.relativeAssetPath === binding.entryRelativeAssetPath,
+          mediaType: file.mediaType,
+          bytes,
+        });
       }
-      assets.push({
-        representationId: selection.representationId,
-        kind: selection.kind,
-        archivePath: `assets/${selection.relativeAssetPath}`,
-        mediaType: selection.mediaType,
-        bytes,
-      });
     }
     return assets;
   }
@@ -493,6 +584,23 @@ export class CharacterPortablePackageService {
         conflicts,
       );
     }
+    const existingBindings = existingProject
+      ? await this.repository.readLocalizedAssetBindingCatalog(
+          decoded.project.characterProjectId,
+          signal,
+        )
+      : undefined;
+    for (const binding of decoded.localizedAssetBindings.bindings) {
+      conflictIfDifferent(
+        existingBindings?.bindings.find(
+          (candidate) => candidate.representationId === binding.representationId,
+        ),
+        binding,
+        'localized-asset',
+        binding.representationId,
+        conflicts,
+      );
+    }
     const graph = projectCharacterVersionGraph({
       project: decoded.project,
       versions: decoded.versions,
@@ -527,6 +635,7 @@ interface DecodedCharacterPackage {
     readonly relativeAssetPath: string;
     readonly bytes: Uint8Array;
   }[];
+  readonly localizedAssetBindings: CharacterLocalizedAssetBindingCatalog;
 }
 
 function decodePackage(content: CharacterPortableArchiveContent): DecodedCharacterPackage {
@@ -578,7 +687,10 @@ function decodePackage(content: CharacterPortableArchiveContent): DecodedCharact
     storylineDrafts,
     storylineVersions,
     authoringTests,
+    embeddedAssets: manifest.embeddedAssets,
+    externalDependencies: manifest.externalDependencies,
   });
+  const localizedAssetBindings = decodeLocalizedAssetBindings(manifest);
   return {
     content,
     project,
@@ -592,6 +704,10 @@ function decodePackage(content: CharacterPortableArchiveContent): DecodedCharact
       relativeAssetPath: entry.archivePath.slice('assets/'.length),
       bytes: requireBytes(content, entry.archivePath),
     })),
+    localizedAssetBindings: {
+      characterProjectId: project.characterProjectId,
+      bindings: localizedAssetBindings,
+    },
   };
 }
 
@@ -603,6 +719,8 @@ function validateDecodedOwnership(input: {
   readonly storylineDrafts: readonly CharacterStorylineDraft[];
   readonly storylineVersions: readonly CharacterStorylineVersion[];
   readonly authoringTests: readonly CharacterAuthoringTestSnapshot[];
+  readonly embeddedAssets: readonly CharacterPortableEmbeddedAssetEntry[];
+  readonly externalDependencies: readonly CharacterPortableExternalDependency[];
 }): void {
   const projectId = input.project.characterProjectId;
   const versionIds = new Set(input.versions.map((version) => version.characterVersionId));
@@ -654,6 +772,100 @@ function validateDecodedOwnership(input: {
   if (input.authoringTests.some((snapshot) => snapshot.characterProjectId !== projectId)) {
     throw portableError('character-package-selection-invalid', 'Authoring test owner mismatch.');
   }
+  const representations = collectRepresentations(input.project, input.versions);
+  const inventoriedRepresentationIds = new Set([
+    ...input.embeddedAssets.map((asset) => asset.representationId),
+    ...input.externalDependencies.map((dependency) => dependency.representationId),
+  ]);
+  if (
+    inventoriedRepresentationIds.size !== representations.size ||
+    [...representations.keys()].some(
+      (representationId) => !inventoriedRepresentationIds.has(representationId),
+    )
+  ) {
+    throw portableError(
+      'character-package-selection-invalid',
+      'Character package representation inventory must cover every exact Character representation.',
+    );
+  }
+  for (const entry of [...input.embeddedAssets, ...input.externalDependencies]) {
+    const representation = representations.get(entry.representationId);
+    if (
+      representation === undefined ||
+      representation.kind !== entry.kind ||
+      representation.resourceRef !== entry.resourceRef
+    ) {
+      throw portableError(
+        'character-package-selection-invalid',
+        `Character package representation '${entry.representationId}' does not match the exact Character facts.`,
+      );
+    }
+  }
+}
+
+function decodeLocalizedAssetBindings(
+  manifest: CharacterPortablePackageManifest,
+): readonly CharacterLocalizedAssetBinding[] {
+  const byRepresentation = new Map<string, CharacterPortableEmbeddedAssetEntry[]>();
+  for (const asset of manifest.embeddedAssets) {
+    const entries = byRepresentation.get(asset.representationId) ?? [];
+    entries.push(asset);
+    byRepresentation.set(asset.representationId, entries);
+  }
+  return [...byRepresentation.values()]
+    .map((entries): CharacterLocalizedAssetBinding => {
+      const first = entries[0];
+      const entry = entries.find((asset) => asset.entry);
+      if (first === undefined || entry === undefined) {
+        throw portableError(
+          'character-package-selection-invalid',
+          'Character package embedded asset binding has no exact entry file.',
+        );
+      }
+      return {
+        representationId: first.representationId,
+        kind: first.kind,
+        resourceRef: first.resourceRef,
+        entryRelativeAssetPath: entry.archivePath.slice('assets/'.length),
+        files: entries.map((asset) => ({
+          relativeAssetPath: asset.archivePath.slice('assets/'.length),
+          mediaType: asset.mediaType,
+          byteLength: asset.byteLength,
+        })),
+      };
+    })
+    .sort((left, right) => left.representationId.localeCompare(right.representationId));
+}
+
+function mergeLocalizedAssetBindings(
+  imported: CharacterLocalizedAssetBindingCatalog,
+  existing: CharacterLocalizedAssetBindingCatalog | undefined,
+): CharacterLocalizedAssetBindingCatalog {
+  if (existing !== undefined && existing.characterProjectId !== imported.characterProjectId) {
+    throw portableError(
+      'character-package-destination-mismatch',
+      `Localized Character asset bindings belong to another CharacterProject '${existing.characterProjectId}'.`,
+    );
+  }
+  const bindings = new Map(
+    (existing?.bindings ?? []).map((binding) => [binding.representationId, binding]),
+  );
+  for (const binding of imported.bindings) {
+    const current = bindings.get(binding.representationId);
+    if (current !== undefined && !same(current, binding)) {
+      throw portableError(
+        'character-package-identity-conflict',
+        `Localized Character asset binding '${binding.representationId}' already exists with different facts.`,
+      );
+    }
+    bindings.set(binding.representationId, binding);
+  }
+  return {
+    characterProjectId: imported.characterProjectId,
+    bindings: [...bindings.values()].sort((left, right) =>
+      left.representationId.localeCompare(right.representationId),
+    ),
+  };
 }
 
 function collectAuthoringTests(
@@ -783,13 +995,14 @@ function requireStorylineDraft(
   const drafts = decoded.storylineDrafts.filter(
     (draft) => draft.characterStorylineId === storylineId,
   );
-  if (drafts.length !== 1) {
+  const draft = drafts[0];
+  if (draft === undefined || drafts.length !== 1) {
     throw portableError(
       'character-package-selection-invalid',
       `CharacterStoryline '${storylineId}' must have exactly one draft in the package.`,
     );
   }
-  return drafts[0]!;
+  return draft;
 }
 
 function assertDestination(

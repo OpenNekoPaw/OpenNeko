@@ -223,6 +223,7 @@ const FIXTURE_SCHEMA = s.object(
   },
   {
     links: s.array(s.object({ path: PATH, target: PATH }), { minLength: 1, maxLength: 100 }),
+    mediaLibrary: s.object({ libraryName: ID, source: PATH, contentLabel: SHORT_TEXT }),
   },
 );
 

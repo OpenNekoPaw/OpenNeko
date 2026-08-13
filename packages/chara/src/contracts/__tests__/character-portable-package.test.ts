@@ -153,11 +153,13 @@ function record(
   return { kind, recordId, archivePath, byteLength: 12, integrityDigest: digest };
 }
 
-function asset(archivePath: string, mediaType: string) {
+function asset(archivePath: string, mediaType: string, entry = archivePath.endsWith('.json')) {
   return {
     representationId: 'live2d-main',
     kind: 'live2d' as const,
+    resourceRef: 'asset:live2d-a',
     archivePath,
+    entry,
     mediaType,
     byteLength: 12,
     integrityDigest: digest,

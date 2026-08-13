@@ -73,6 +73,10 @@ export interface DesktopCharacterPresentationSurfaceRef {
   readonly surfaceId: string;
 }
 
+export type DesktopAuthoringAuthority =
+  | { readonly kind: 'standalone-library'; readonly library: 'character' | 'world' }
+  | { readonly kind: 'content-project'; readonly contentProjectId: string };
+
 export type DesktopWorkbenchMainSurfaceRef =
   | {
       readonly kind: 'assistant-preview';
@@ -90,7 +94,7 @@ export type DesktopWorkbenchMainSurfaceRef =
   | {
       readonly kind: 'character-authoring';
       readonly workspaceId: string;
-      readonly projectId: string;
+      readonly authority: DesktopAuthoringAuthority;
       readonly viewId: string;
       readonly viewInstanceId: string;
       readonly characterProjectId: string;
@@ -98,7 +102,7 @@ export type DesktopWorkbenchMainSurfaceRef =
   | {
       readonly kind: 'world-authoring';
       readonly workspaceId: string;
-      readonly projectId: string;
+      readonly authority: DesktopAuthoringAuthority;
       readonly viewId: string;
       readonly viewInstanceId: string;
       readonly worldProjectId: string;
@@ -183,6 +187,14 @@ export type DesktopSceneTransitionIntent =
   | { readonly kind: 'new-agent-conversation' }
   | { readonly kind: 'open-workspace'; readonly workspaceGrantId: string }
   | { readonly kind: 'open-project-workspace'; readonly projectId: string }
+  | {
+      readonly kind: 'open-character-authoring';
+      readonly workspaceGrantId: string;
+      readonly authority:
+        | { readonly kind: 'standalone-library'; readonly library: 'character' }
+        | { readonly kind: 'content-project'; readonly contentProjectId: string };
+      readonly characterProjectId: string;
+    }
   | { readonly kind: 'open-asset-center' }
   | {
       readonly kind: 'open-creative-management';
@@ -218,7 +230,11 @@ export interface DesktopSceneUnavailableDiagnostic {
       | 'agent-conversation-authority'
       | 'character-product'
       | 'world-product';
-    readonly intentKind: 'open-workspace' | 'open-project-workspace' | 'restore-conversation';
+    readonly intentKind:
+      | 'open-workspace'
+      | 'open-project-workspace'
+      | 'open-character-authoring'
+      | 'restore-conversation';
     readonly conversationOwnerKind?: AgentConversationOwnerRef['kind'] | 'world';
   };
 }
@@ -229,7 +245,7 @@ export interface DesktopSceneTransitionRejectedDiagnostic {
   readonly message: string;
   readonly metadata: {
     readonly owner: 'agent-conversation-authority';
-    readonly intentKind: 'open-workspace' | 'open-project-workspace';
+    readonly intentKind: 'open-workspace' | 'open-project-workspace' | 'open-character-authoring';
     readonly conversationId: string;
   };
 }
@@ -307,6 +323,7 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
     if (
       intentKind !== 'open-workspace' &&
       intentKind !== 'open-project-workspace' &&
+      intentKind !== 'open-character-authoring' &&
       intentKind !== 'restore-conversation'
     ) {
       throw invalid(`Unknown Desktop Scene unavailable intent '${String(intentKind)}'.`);
@@ -368,7 +385,8 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
     if (
       metadata['owner'] !== 'agent-conversation-authority' ||
       (metadata['intentKind'] !== 'open-workspace' &&
-        metadata['intentKind'] !== 'open-project-workspace')
+        metadata['intentKind'] !== 'open-project-workspace' &&
+        metadata['intentKind'] !== 'open-character-authoring')
     ) {
       throw invalid('Desktop Scene rejected metadata has an invalid owner or intent.');
     }
@@ -760,13 +778,13 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
   if (kind === 'character-authoring') {
     requireExactKeys(
       record,
-      ['kind', 'workspaceId', 'projectId', 'viewId', 'viewInstanceId', 'characterProjectId'],
+      ['kind', 'workspaceId', 'authority', 'viewId', 'viewInstanceId', 'characterProjectId'],
       'Character authoring Surface ref',
     );
     return {
       kind,
       workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-      projectId: requireIdentity(record['projectId'], 'Content Project'),
+      authority: parseAuthoringAuthority(record['authority'], 'character'),
       viewId: requireIdentity(record['viewId'], 'Workspace View'),
       viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
       characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
@@ -775,13 +793,13 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
   if (kind === 'world-authoring') {
     requireExactKeys(
       record,
-      ['kind', 'workspaceId', 'projectId', 'viewId', 'viewInstanceId', 'worldProjectId'],
+      ['kind', 'workspaceId', 'authority', 'viewId', 'viewInstanceId', 'worldProjectId'],
       'World authoring Surface ref',
     );
     return {
       kind,
       workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-      projectId: requireIdentity(record['projectId'], 'Content Project'),
+      authority: parseAuthoringAuthority(record['authority'], 'world'),
       viewId: requireIdentity(record['viewId'], 'Workspace View'),
       viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
       worldProjectId: requireIdentity(record['worldProjectId'], 'WorldProject'),
@@ -856,6 +874,28 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
     };
   }
   throw unsupported(`Unknown Main Surface kind '${String(kind)}'.`);
+}
+
+function parseAuthoringAuthority(
+  value: unknown,
+  expectedLibrary: 'character' | 'world',
+): DesktopAuthoringAuthority {
+  const record = requireRecord(value, 'Desktop authoring authority must be an object.');
+  if (record['kind'] === 'standalone-library') {
+    requireExactKeys(record, ['kind', 'library'], 'Standalone authoring authority');
+    if (record['library'] !== expectedLibrary) {
+      throw invalid(`Standalone ${expectedLibrary} authoring authority has another library.`);
+    }
+    return { kind: 'standalone-library', library: expectedLibrary };
+  }
+  if (record['kind'] === 'content-project') {
+    requireExactKeys(record, ['kind', 'contentProjectId'], 'Project authoring authority');
+    return {
+      kind: 'content-project',
+      contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+    };
+  }
+  throw invalid(`Unknown Desktop authoring authority '${String(record['kind'])}'.`);
 }
 
 function parseCharacterPresentationSurfaceKind(
@@ -1011,6 +1051,23 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
     return {
       kind,
       projectId: requireIdentity(record['projectId'], 'Desktop Project'),
+    };
+  }
+  if (kind === 'open-character-authoring') {
+    requireExactKeys(
+      record,
+      ['kind', 'workspaceGrantId', 'authority', 'characterProjectId'],
+      'Open Character authoring intent',
+    );
+    const authority = parseAuthoringAuthority(record['authority'], 'character');
+    return {
+      kind,
+      workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace Grant'),
+      authority:
+        authority.kind === 'content-project'
+          ? authority
+          : { kind: 'standalone-library', library: 'character' },
+      characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
     };
   }
   if (kind === 'open-settings') {

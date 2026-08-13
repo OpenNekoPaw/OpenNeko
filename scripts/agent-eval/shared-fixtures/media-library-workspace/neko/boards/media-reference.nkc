@@ -1,0 +1,35 @@
+{
+  "name": "Media Reference",
+  "viewport": {
+    "pan": {
+      "x": 0,
+      "y": 0
+    },
+    "zoom": 1
+  },
+  "nodes": [
+    {
+      "id": "media-reference-1",
+      "type": "media",
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "size": {
+        "width": 320,
+        "height": 180
+      },
+      "zIndex": 1,
+      "data": {
+        "assetPath": "workspace/library-image.svg",
+        "contentLocator": {
+          "kind": "media-library",
+          "libraryName": "workspace",
+          "relativePath": "library-image.svg"
+        },
+        "mediaType": "image"
+      }
+    }
+  ],
+  "connections": []
+}

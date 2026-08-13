@@ -58,6 +58,20 @@ describe('GenerationNode', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
+  it('opens the Canvas fullscreen preview when a generated Text node is double-clicked', async () => {
+    const onEmbeddedPreview = vi.fn();
+    const node = nodeWithHistory();
+    render(node, createHost(), onEmbeddedPreview);
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[data-node-id="generation-1"]')
+        ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+
+    expect(onEmbeddedPreview).toHaveBeenCalledWith('generation-1', 'output-2');
+  });
+
   it('presents one Job image batch side by side and selects a visible member without hiding siblings', async () => {
     const selectGenerationOutput = vi.fn(async () => snapshot());
     const onEmbeddedPreview = vi.fn();
@@ -231,6 +245,18 @@ describe('GenerationNode', () => {
       expect(container.textContent).not.toContain('generation');
     },
   );
+
+  it('presents one input and one output handle without media-specific port fan-out', () => {
+    render(imageNodeWithBatch(), createHost());
+
+    const handles = container.querySelectorAll('[data-canvas-port-direction]');
+    expect(handles).toHaveLength(2);
+    expect(
+      Array.from(handles).map((handle) => handle.getAttribute('data-canvas-port-direction')),
+    ).toEqual(['input', 'output']);
+    expect(container.innerHTML).not.toContain('#f59e0b');
+    expect(container.innerHTML).not.toContain('#8b5cf6');
+  });
 
   function render(
     node: GenerationCanvasNode,

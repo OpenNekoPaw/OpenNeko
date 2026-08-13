@@ -38,7 +38,30 @@ export const domainManagementWorkbenchScenario = Object.freeze({
     const characterScreenshot = await screenshot('character-management-direct');
     checkpoint('character-management-direct', await inspectManagement(evaluate));
 
+    const quickGeneration = await inspectCharacterQuickGeneration(evaluate);
+    checkpoint('character-quick-generation-entry', quickGeneration);
+    await click(`${MAIN_SLOT} .character-management__creation-menu > summary`);
+    await click(`${MAIN_SLOT} .character-management__creation-menu > div button`, 0);
+    await waitForSelector(
+      '[data-primary-surface="agent"] .agent-entry-authoring-creation #agent-entry-authoring-name',
+    );
+    const quickCreateWide = await inspectCharacterQuickCreate(evaluate);
+    const quickCreateScreenshot = await screenshot('character-quick-create-destination');
+    checkpoint('character-quick-create-destination', quickCreateWide);
+    await resizeWindow(evaluate, 760, 640);
+    const quickCreateNarrow = await inspectCharacterQuickCreate(evaluate);
+    const quickCreateNarrowScreenshot = await screenshot(
+      'character-quick-create-destination-narrow',
+    );
+    checkpoint('character-quick-create-destination-narrow', quickCreateNarrow);
+    await click('[data-primary-surface="agent"] .agent-entry-authoring-creation-header button');
+    await waitForSelector('[data-primary-surface="agent"] .agent-composer-textarea');
+    const cancelled = await inspectCharacterQuickCreateCancellation(evaluate);
+    checkpoint('character-quick-create-cancelled', cancelled);
+    await resizeWindow(evaluate, 1440, 960);
+
     await clickNavigation(evaluate, click, 'Worlds', '世界');
+
     await waitForSelector(`${MAIN_SLOT} [data-world-management-catalog="true"]`);
     await assertNoManagementModeSwitch(evaluate, 'World');
     await assertSidebarSections(evaluate);
@@ -93,6 +116,8 @@ export const domainManagementWorkbenchScenario = Object.freeze({
       screenshots: [
         projectScreenshot,
         characterScreenshot,
+        quickCreateScreenshot,
+        quickCreateNarrowScreenshot,
         worldEmptyScreenshot,
         worldCreateScreenshot,
         worldDetailScreenshot,
@@ -101,6 +126,83 @@ export const domainManagementWorkbenchScenario = Object.freeze({
     };
   },
 });
+
+async function inspectCharacterQuickGeneration(evaluate) {
+  const state = await evaluate(`(() => ({
+    creationMenus: document.querySelectorAll(
+      '${MAIN_SLOT} .character-management__creation-menu > summary'
+    ).length,
+    separateQuickButtons: [...document.querySelectorAll(
+      '${MAIN_SLOT} .character-management__header-actions > button'
+    )].filter((button) => ['Quick generate', '快速生成'].includes(button.textContent?.trim() ?? '')).length,
+    agentComposers: document.querySelectorAll('[data-primary-surface="agent"] .agent-composer-textarea').length,
+    characterCatalogs: document.querySelectorAll('${MAIN_SLOT} [data-character-management-catalog="true"]').length,
+  }))()`);
+  if (
+    state.creationMenus !== 1 ||
+    state.separateQuickButtons !== 0 ||
+    state.agentComposers !== 0 ||
+    state.characterCatalogs !== 1
+  ) {
+    throw new Error(`Character quick generation entry is invalid: ${JSON.stringify(state)}`);
+  }
+  return state;
+}
+
+async function inspectCharacterQuickCreate(evaluate) {
+  const state = await evaluate(`(() => {
+    const composer = document.querySelector('[data-primary-surface="agent"] .agent-composer-textarea');
+    const selector = document.querySelector('[data-primary-surface="agent"] .agent-entry-authoring-creation');
+    const rect = selector?.getBoundingClientRect();
+    return {
+      composerValue: composer?.value,
+      authoringSelected: document.querySelector(
+        '[data-primary-surface="agent"] [data-segmented-value="authoring"]'
+      )?.getAttribute('aria-selected'),
+      characterDestinations: selector?.querySelectorAll('.agent-entry-resource-card').length ?? 0,
+      draftNameInputs: selector?.querySelectorAll('#agent-entry-authoring-name').length ?? 0,
+      cancelButtons: [...(selector?.querySelectorAll('button') ?? [])].filter(
+        (button) => ['Cancel', '取消'].includes(button.textContent?.trim() ?? '')
+      ).length,
+      visibleWidth: rect?.width ?? 0,
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  })()`);
+  if (
+    state.composerValue !== '$character-creator ' ||
+    state.authoringSelected !== 'true' ||
+    state.characterDestinations < 1 ||
+    state.draftNameInputs !== 1 ||
+    state.cancelButtons !== 1 ||
+    state.visibleWidth <= 0 ||
+    state.overflow
+  ) {
+    throw new Error(`Character quick-create destination is invalid: ${JSON.stringify(state)}`);
+  }
+  return state;
+}
+
+async function inspectCharacterQuickCreateCancellation(evaluate) {
+  const state = await evaluate(`(() => ({
+    assistantSelected: document.querySelector(
+      '[data-primary-surface="agent"] [data-segmented-value="assistant"]'
+    )?.getAttribute('aria-selected'),
+    creationSelectors: document.querySelectorAll(
+      '[data-primary-surface="agent"] .agent-entry-authoring-creation'
+    ).length,
+    draftNameInputs: document.querySelectorAll(
+      '[data-primary-surface="agent"] #agent-entry-authoring-name'
+    ).length,
+  }))()`);
+  if (
+    state.assistantSelected !== 'true' ||
+    state.creationSelectors !== 0 ||
+    state.draftNameInputs !== 0
+  ) {
+    throw new Error(`Character quick-create cancellation is invalid: ${JSON.stringify(state)}`);
+  }
+  return state;
+}
 
 async function clickNavigation(evaluate, click, english, chinese) {
   const index = await evaluate(`(() => [...document.querySelectorAll(${JSON.stringify(

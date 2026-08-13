@@ -70,6 +70,53 @@ describe('Desktop Workbench contract', () => {
     expect(focused.main.views).toHaveLength(2);
   });
 
+  it('side-opens from an empty primary Main and relocates an existing primary target', () => {
+    const standalone = openOrFocusMainView(
+      createDefaultDesktopWorkbenchLayout('window-1'),
+      {
+        viewId: 'character-view-1',
+        viewInstanceId: 'character-view-instance-1',
+        workspaceId: 'character-library',
+        kind: 'character-authoring',
+        ownerId: 'character-project-1',
+        displayLabel: 'Lead',
+        characterProjectId: 'character-project-1',
+      },
+      { groupId: 'main:primary', splitAxis: 'columns' },
+    );
+    expect(standalone.main.groups).toEqual([
+      { groupId: 'main:primary', viewIds: [] },
+      {
+        groupId: 'main:secondary',
+        viewIds: ['character-view-1'],
+        activeViewId: 'character-view-1',
+      },
+    ]);
+
+    const primaryCharacter = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-2'), {
+      viewId: 'character-view-2',
+      viewInstanceId: 'character-view-instance-2',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'character-authoring',
+      ownerId: 'character-project-2',
+      displayLabel: 'Rival',
+      characterProjectId: 'character-project-2',
+    });
+    const relocated = openOrFocusMainView(primaryCharacter, primaryCharacter.main.views[0]!, {
+      groupId: 'main:primary',
+      splitAxis: 'columns',
+    });
+    expect(relocated.main.groups).toEqual([
+      { groupId: 'main:primary', viewIds: [] },
+      {
+        groupId: 'main:secondary',
+        viewIds: ['character-view-2'],
+        activeViewId: 'character-view-2',
+      },
+    ]);
+  });
+
   it('focuses one exact Text Editor View per Workspace document', () => {
     const initial = createDefaultDesktopWorkbenchLayout('window-1');
     const first = openOrFocusMainView(initial, textEditorViewRef('editor-1', 'session-1'));

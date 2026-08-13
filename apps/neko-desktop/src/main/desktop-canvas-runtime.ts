@@ -4,6 +4,7 @@ import {
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
   parseCanvasMaterialActionResolutionRequest,
+  parseCanvasMediaHostRequest,
   parseCanvasHostIntentRequest,
   parseCanvasTextFilePreviewRequest,
   type CanvasHostIntentRequest,
@@ -13,6 +14,8 @@ import {
   type CanvasHostSnapshot,
   type CanvasMaterialActionResolution,
   type CanvasMaterialActionTarget,
+  type CanvasMediaHostRequest,
+  type CanvasMediaHostResponse,
   type CanvasTextFilePreviewResult,
   type CanvasGenerationApplicationPort,
   type CanvasGenerationModelOption,
@@ -38,14 +41,14 @@ import {
   CanvasTextFilePreviewService,
   type CanvasExternalSource,
 } from '@neko/canvas-node';
-import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import {
-  parseDesktopCanvasMediaRequest,
+  resolveProjectMediaLibraryContentPath,
+  resolveWorkspaceContentLocator,
+} from '@neko/assets-node';
+import {
   parseDesktopCanvasEmbeddedPreviewReleaseRequest,
   parseDesktopCanvasEmbeddedPreviewRequest,
   parseDesktopCanvasPreviewVariantRequest,
-  type DesktopCanvasMediaRequest,
-  type DesktopCanvasMediaResponse,
   type DesktopCanvasEmbeddedPreviewRequest,
   type DesktopCanvasEmbeddedPreviewResult,
   type DesktopCanvasEmbeddedPreviewReleaseRequest,
@@ -88,9 +91,9 @@ interface DesktopCanvasPreviewLeaseEntry {
 
 export interface DesktopCanvasMediaPort {
   execute(
-    request: DesktopCanvasMediaRequest,
+    request: CanvasMediaHostRequest,
     workspace: DesktopCanvasViewGrant['workspace'],
-  ): Promise<DesktopCanvasMediaResponse | undefined>;
+  ): Promise<CanvasMediaHostResponse | undefined>;
   detachWindow(windowId: string): void;
   detachView(windowId: string, viewId: string): void;
   dispose(): Promise<void>;
@@ -365,9 +368,9 @@ export class DesktopCanvasRuntime {
 
   async executeMediaRequest(
     windowId: string,
-    value: DesktopCanvasMediaRequest | unknown,
-  ): Promise<DesktopCanvasMediaResponse | undefined> {
-    const request = parseDesktopCanvasMediaRequest(value);
+    value: CanvasMediaHostRequest | unknown,
+  ): Promise<CanvasMediaHostResponse | undefined> {
+    const request = parseCanvasMediaHostRequest(value);
     const entry = await this.requireSession(windowId, request.identity);
     const media = this.options.media;
     if (!media) throw new Error('Canvas media capability is unavailable.');
@@ -532,8 +535,16 @@ export class DesktopCanvasRuntime {
             identity: requestIdentity,
             workspace: grant.workspace,
             locator,
-            ...(locator.kind === 'workspace-file' || locator.kind === 'generated-output'
-              ? { absolutePath: await resolveWorkspaceContentLocator(grant.workspace, locator) }
+            ...(locator.kind === 'workspace-file' ||
+            locator.kind === 'generated-output' ||
+            locator.kind === 'media-library'
+              ? {
+                  absolutePath: await this.resolveContentPath(
+                    requestIdentity.projectId,
+                    grant.workspace,
+                    locator,
+                  ),
+                }
               : {}),
           });
         }
@@ -542,7 +553,11 @@ export class DesktopCanvasRuntime {
       requestIdentity: CanvasHostRuntimeIdentity,
       locator: ContentLocator,
     ) => {
-      const absolutePath = await resolveWorkspaceContentLocator(grant.workspace, locator);
+      const absolutePath = await this.resolveContentPath(
+        requestIdentity.projectId,
+        grant.workspace,
+        locator,
+      );
       const revealPath = this.options.host.external?.revealPath;
       if (!revealPath) {
         throw new Error('Canvas reveal capability is unavailable.');
@@ -561,7 +576,8 @@ export class DesktopCanvasRuntime {
         ? {
             resolveReveal: async ({ target }: { readonly target: CanvasMaterialActionTarget }) =>
               target.locator.kind === 'workspace-file' ||
-              target.locator.kind === 'generated-output',
+              target.locator.kind === 'generated-output' ||
+              target.locator.kind === 'media-library',
             reveal: ({ identity: requestIdentity, target }) =>
               revealEffect(requestIdentity, target.locator),
           }
@@ -596,7 +612,11 @@ export class DesktopCanvasRuntime {
               resolveCut({
                 identity: requestIdentity,
                 target,
-                absolutePath: await resolveWorkspaceContentLocator(grant.workspace, target.locator),
+                absolutePath: await this.resolveContentPath(
+                  requestIdentity.projectId,
+                  grant.workspace,
+                  target.locator,
+                ),
               }),
             openInCut: async ({
               identity: requestIdentity,
@@ -608,7 +628,11 @@ export class DesktopCanvasRuntime {
               openInCut({
                 identity: requestIdentity,
                 target,
-                absolutePath: await resolveWorkspaceContentLocator(grant.workspace, target.locator),
+                absolutePath: await this.resolveContentPath(
+                  requestIdentity.projectId,
+                  grant.workspace,
+                  target.locator,
+                ),
               }),
           }
         : {}),
@@ -653,7 +677,10 @@ export class DesktopCanvasRuntime {
       ...(requestProjectMediaLibraryCopy || requestGlobalMediaLibraryCopy
         ? {
             resolveMediaLibraryCopy: async () => {
-              const availability = await this.mediaLibraryCopy.resolveAvailability(grant.workspace);
+              const availability = await this.mediaLibraryCopy.resolveAvailability(
+                identity.projectId,
+                grant.workspace,
+              );
               return {
                 projectLinked:
                   requestProjectMediaLibraryCopy !== undefined && availability.projectLinked,
@@ -849,6 +876,27 @@ export class DesktopCanvasRuntime {
     return entry;
   }
 
+  private async resolveContentPath(
+    projectId: string,
+    workspace: DesktopCanvasViewGrant['workspace'],
+    locator: ContentLocator,
+  ): Promise<string> {
+    if (locator.kind === 'media-library') {
+      return resolveProjectMediaLibraryContentPath(
+        {
+          projectId,
+          workspaceRoot: workspace.workspacePath,
+          globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+        },
+        locator,
+      );
+    }
+    if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
+      return resolveWorkspaceContentLocator(workspace, locator);
+    }
+    throw new Error('Canvas material has no directly resolvable Host file path.');
+  }
+
   private enqueueWorkspaceBoardOperation<TResult>(
     workspaceId: string,
     operation: () => Promise<TResult>,
@@ -887,7 +935,14 @@ export class DesktopCanvasRuntime {
     }
     const loaded = loadNkc(await this.options.host.files.readText(documentPath));
     if (!loaded.validation.valid) {
-      throw new Error('Canvas document is invalid.');
+      const diagnostics = loaded.validation.errors
+        .slice(0, 3)
+        .map((diagnostic) => `${diagnostic.field}: ${diagnostic.message}`)
+        .join('; ');
+      const remaining = Math.max(0, loaded.validation.errors.length - 3);
+      throw new Error(
+        `Canvas document is invalid: ${diagnostics}${remaining > 0 ? `; ${remaining} more issue(s)` : ''}.`,
+      );
     }
     return loaded.data;
   }
@@ -970,6 +1025,8 @@ function materialFileName(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return portableBaseName(locator.path);
+    case 'media-library':
+      return portableBaseName(locator.relativePath);
     case 'document-entry':
       return portableBaseName(locator.entryPath);
     case 'package-resource':

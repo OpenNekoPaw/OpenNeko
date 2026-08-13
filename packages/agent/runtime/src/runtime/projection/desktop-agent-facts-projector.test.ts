@@ -6,7 +6,10 @@ import {
   assertCompleteDesktopAgentNeutralFacts,
   type DesktopAgentFactsTurnResult,
 } from './desktop-agent-facts';
-import { createDesktopAgentFactsProjector } from './desktop-agent-facts-projector';
+import {
+  createDesktopAgentFactsProjector,
+  createDesktopAgentFactsStore,
+} from './desktop-agent-facts-projector';
 
 const identity: PiToolRunIdentity = {
   workspaceId: 'workspace-1',
@@ -43,6 +46,14 @@ describe('Desktop Agent authoritative facts projector', () => {
     );
     events.emit(
       event({
+        type: 'skill.activated',
+        skillName: 'character-creator',
+        source: 'builtin',
+        fingerprint: 'sha256:character-creator-fixture',
+      }),
+    );
+    events.emit(
+      event({
         type: 'usage',
         provider: 'provider-1',
         model: 'model-1',
@@ -70,6 +81,16 @@ describe('Desktop Agent authoritative facts projector', () => {
 
     expect(projector.readFacts(identity)).toMatchObject({
       receipts: {
+        skills: {
+          items: [
+            {
+              name: 'character-creator',
+              source: 'builtin',
+              fingerprint: 'sha256:character-creator-fixture',
+              status: 'injected',
+            },
+          ],
+        },
         tools: { items: [{ name: 'ReadImage', callId: 'read-image-1', status: 'success' }] },
         permissions: { items: [{ toolCallId: 'read-image-1', decision: 'approved' }] },
       },
@@ -106,6 +127,30 @@ describe('Desktop Agent authoritative facts projector', () => {
 
     projector.completeTurn({ conversation: conversationEvidence(), turn: turnResult() });
     expect(projector.readLatestIdentity(identity.conversationId)).toEqual(identity);
+  });
+
+  it('hands initial Turn facts to the exact Session connection without copying facts', () => {
+    const store = createDesktopAgentFactsStore();
+    const writer = createDesktopAgentFactsProjector({
+      connection: connection('initial-turn'),
+      store,
+    });
+    writer.beginTurn({ identity, systemPrompt: 'prompt' });
+    writer.completeTurn({ conversation: conversationEvidence(), turn: turnResult() });
+
+    const reader = createDesktopAgentFactsProjector({
+      connection: connection('session-connection'),
+      store,
+    });
+    expect(reader.readLatestIdentity(identity.conversationId)).toEqual(identity);
+    expect(reader.readFacts(identity)).toMatchObject({
+      identity: { connection: { connectionId: 'session-connection' } },
+      disposal: { status: 'pending' },
+    });
+
+    reader.dispose();
+    expect(reader.readFacts(identity)).toMatchObject({ disposal: { status: 'disposed' } });
+    expect(writer.readFacts(identity)).toMatchObject({ disposal: { status: 'pending' } });
   });
 
   it('records a blocked Workspace Board delivery without changing the terminal Turn state', () => {
@@ -167,18 +212,22 @@ describe('Desktop Agent authoritative facts projector', () => {
 
 function createProjector(factLimit?: number) {
   return createDesktopAgentFactsProjector({
-    connection: {
-      applicationInstanceId: 'application-1',
-      windowId: 'window-1',
-      workbenchInstanceId: 'workbench-1',
-      agentSurfaceId: 'agent-surface-1',
-      projectId: 'project-1',
-      workspaceId: 'workspace-1',
-      viewId: 'view-1',
-      connectionId: 'connection-1',
-    },
+    connection: connection('connection-1'),
     ...(factLimit === undefined ? {} : { factLimit }),
   });
+}
+
+function connection(connectionId: string) {
+  return {
+    applicationInstanceId: 'application-1',
+    windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    viewId: 'view-1',
+    connectionId,
+  };
 }
 
 function event(

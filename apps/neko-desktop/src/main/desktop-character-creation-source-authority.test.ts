@@ -1,9 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { NodeProjectEntityAuthoringService } from '@neko/entity-node';
-import { ProjectCompositionService } from '@neko/project/application';
-import { createProjectCompositionFileRepository } from '@neko/project-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopCharacterCreationSourceAuthority } from './desktop-character-creation-source-authority';
 
@@ -18,9 +16,9 @@ describe('Desktop Character creation source authority', () => {
     const workspacePath = await workspaceFixture();
     await mkdir(path.join(workspacePath, 'evidence'), { recursive: true });
     await writeFile(path.join(workspacePath, 'evidence', 'lin.md'), '# Lin\n');
-    await new ProjectCompositionService(
-      createProjectCompositionFileRepository({ workspaceRoot: workspacePath }),
-    ).create('content-project:story');
+    await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
+    const retiredCompositionPath = path.join(workspacePath, 'neko', 'project-composition.json');
+    await writeFile(retiredCompositionPath, '{invalid-retired-bytes', 'utf8');
     await new NodeProjectEntityAuthoringService({
       workspace: { workspaceId: 'workspace:story', workspacePath },
     }).createCharacterEntity({
@@ -52,20 +50,18 @@ describe('Desktop Character creation source authority', () => {
       authority.projectEntities.requireConfirmedCharacter({
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        contentProjectId: 'content-project:story',
+        contentProjectId: 'content:workspace:story',
         entityId: 'entity:lin',
       }),
     ).resolves.toBeUndefined();
     expect(resolveAuthorizedWorkspace).toHaveBeenNthCalledWith(1, 'grant:story', 'workspace:story');
     expect(resolveAuthorizedWorkspace).toHaveBeenNthCalledWith(2, 'grant:story', 'workspace:story');
     expect(assets.requireRepresentation).not.toHaveBeenCalled();
+    await expect(readFile(retiredCompositionPath, 'utf8')).resolves.toBe('{invalid-retired-bytes');
   });
 
   it('fails locally for missing Content, missing Entity and unavailable Asset resolver', async () => {
     const workspacePath = await workspaceFixture();
-    await new ProjectCompositionService(
-      createProjectCompositionFileRepository({ workspaceRoot: workspacePath }),
-    ).create('content-project:story');
     await new NodeProjectEntityAuthoringService({
       workspace: { workspaceId: 'workspace:story', workspacePath },
     }).createCharacterEntity({
@@ -102,7 +98,7 @@ describe('Desktop Character creation source authority', () => {
       authority.projectEntities.requireConfirmedCharacter({
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        contentProjectId: 'content-project:story',
+        contentProjectId: 'content:workspace:story',
         entityId: 'entity:missing',
       }),
     ).rejects.toThrow("Project Entity 'entity:missing' does not exist");
@@ -119,6 +115,9 @@ describe('Desktop Character creation source authority', () => {
         representationKind: 'live2d',
       }),
     ).rejects.toThrow('manifest-backed Asset representation resolver is unavailable');
+    await expect(
+      stat(path.join(workspacePath, 'neko', 'project-composition.json')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

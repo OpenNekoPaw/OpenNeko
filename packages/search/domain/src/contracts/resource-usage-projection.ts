@@ -5,6 +5,9 @@ export const RESOURCE_USAGE_TARGET_OWNER_IDS = [
   'project-entity',
   'character-project',
   'character-version',
+  'world-project',
+  'world-version',
+  'package-resource',
 ] as const;
 
 export const RESOURCE_USAGE_CONSUMER_OWNER_IDS = [

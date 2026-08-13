@@ -175,6 +175,7 @@ describe('Desktop Agent launch preload bridge', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
+      authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
       target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
     };
     const intent = {
@@ -192,12 +193,12 @@ describe('Desktop Agent launch preload bridge', () => {
         _channel: string,
         request: { readonly requestId: string; readonly operation: string },
       ) => {
-      expect(request).toMatchObject({
-        operation: 'configure-entry-target',
-        connection: catalog.connection,
-        mode: 'authoring',
-        binding,
-      });
+        expect(request).toMatchObject({
+          operation: 'configure-entry-target',
+          connection: catalog.connection,
+          mode: 'authoring',
+          binding,
+        });
         return {
           requestId: request.requestId,
           status: 'entry-configured',

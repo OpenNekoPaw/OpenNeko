@@ -25,6 +25,7 @@ import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-wor
 import type {
   OpenNekoDesktopCharacterBridge,
   OpenNekoDesktopCharacterAuthoringBridge,
+  OpenNekoDesktopCharacterPortableBridge,
   OpenNekoDesktopCharacterAvatarBridge,
   OpenNekoDesktopCharacterRoomWorkbenchBridge,
 } from '@neko/chara/contracts';
@@ -59,6 +60,7 @@ declare global {
       OpenNekoDesktopProjectLocalAuthoringBridge &
       OpenNekoDesktopCharacterBridge &
       OpenNekoDesktopCharacterAuthoringBridge &
+      OpenNekoDesktopCharacterPortableBridge &
       OpenNekoDesktopWorldBridge &
       OpenNekoDesktopWorldAuthoringBridge &
       OpenNekoDesktopCharacterAvatarBridge &

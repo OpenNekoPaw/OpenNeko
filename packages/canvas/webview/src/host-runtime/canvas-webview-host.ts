@@ -1,6 +1,8 @@
 import {
   createCanvasMaterialActionResolutionRequest,
   createCanvasHostIntentRequest,
+  isCanvasMediaHostRequestType,
+  parseCanvasMediaHostMessage,
   createCanvasTextFilePreviewRequest,
   parseCanvasTextFilePreviewResult,
   type CanvasHostAuthoringCapabilities,
@@ -299,11 +301,24 @@ export function createCanvasWebviewHost(
           delegate.postMessage(value);
         }
         return;
-      default:
-        if (delegate && supportsMessage(value['type'])) {
-          delegate.postMessage(value);
-          return;
+      case 'preview:resolveVariant':
+      case 'preview:resolveEmbedded':
+      case 'preview:releaseEmbedded':
+      case 'media:probe':
+      case 'media:play':
+      case 'media:seek':
+      case 'media:pause':
+      case 'media:resume':
+      case 'media:stop':
+      case 'media:captureFrame':
+        if (!delegate || !supportsMessage(value['type'])) {
+          throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
         }
+        delegate.postMessage(
+          isCanvasMediaHostRequestType(value['type']) ? parseCanvasMediaHostMessage(value) : value,
+        );
+        return;
+      default:
         throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
     }
   };
@@ -340,7 +355,7 @@ export function createCanvasWebviewHost(
   };
 
   const supportsMessage = (messageType: string): boolean =>
-    delegate !== undefined && (delegate.supportsMessage?.(messageType) ?? true);
+    delegate !== undefined && (delegate.supportsMessage?.(messageType) ?? false);
 
   const rememberLocalCommand = (commandId: string): void => {
     localCommandIds.add(commandId);

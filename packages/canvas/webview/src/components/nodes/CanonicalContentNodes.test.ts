@@ -47,7 +47,7 @@ describe('canonical content node runtime boundaries', () => {
     expect(
       resolveCanvasFileName({
         path: '',
-        title: 'neko/assets/Assets/epub/animation/Blame/volume-01.epub',
+        title: 'Assets/epub/animation/Blame/volume-01.epub',
       }),
     ).toBe('volume-01.epub');
     expect(
@@ -67,10 +67,8 @@ describe('canonical content node runtime boundaries', () => {
   });
 
   it('normalizes path-shaped media names and does not append media titles below previews', () => {
-    expect(resolveCanvasNodeName(['neko/assets/video/scene-01.mp4'])).toBe('scene-01.mp4');
-    expect(resolveCanvasNodeName(['page_001.jpg', 'neko/assets/fallback.jpg'])).toBe(
-      'page_001.jpg',
-    );
+    expect(resolveCanvasNodeName(['Media/video/scene-01.mp4'])).toBe('scene-01.mp4');
+    expect(resolveCanvasNodeName(['page_001.jpg', 'Media/fallback.jpg'])).toBe('page_001.jpg');
     expect(resolveCanvasNodeName(['', undefined])).toBe('');
     expect(source).not.toContain('truncate border-t px-2 py-1.5 text-xs');
   });

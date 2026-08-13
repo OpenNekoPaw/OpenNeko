@@ -62,6 +62,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
           characterVersionId: target.characterVersionId,
           displayName: target.displayName,
           versionLabel: target.versionLabel,
+          lineage: target.lineage,
           storylines: target.storylines.map((storyline) => ({
             storylineVersionId: storyline.characterStorylineVersionId,
             label: storyline.label,

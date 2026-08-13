@@ -30,18 +30,34 @@ describe('Character portable package service', () => {
     });
     await seedCharacter(source);
     const archive = createCharacterPortableArchivePort();
-    const exported = await new CharacterPortablePackageService(source, archive).exportPackage({
+    const service = new CharacterPortablePackageService(source, archive);
+    await expect(service.getExportScope('character-project-a')).resolves.toMatchObject({
       characterProjectId: 'character-project-a',
-      characterStorylineIds: ['storyline-a'],
-      authoringTestSnapshotIds: [],
-      embeddedAssets: [
+      branchHeadCharacterVersionIds: ['character-version-left', 'character-version-right'],
+      unlinkedCharacterVersionIds: [],
+      characterStorylines: [{ characterStorylineId: 'storyline-a', displayName: 'Opening' }],
+      representations: expect.arrayContaining([
         {
           representationId: 'live2d-main',
           kind: 'live2d',
-          relativeAssetPath: 'live2d/model.model3.json',
-          mediaType: 'application/json',
+          canEmbed: true,
+          ownedFileCount: 2,
+          ownedByteLength: 19,
         },
-      ],
+        {
+          representationId: 'voice-main',
+          kind: 'voice',
+          canEmbed: false,
+          ownedFileCount: 0,
+          ownedByteLength: 0,
+        },
+      ]),
+    });
+    const exported = await service.exportPackage({
+      characterProjectId: 'character-project-a',
+      characterStorylineIds: ['storyline-a'],
+      authoringTestSnapshotIds: [],
+      embeddedRepresentationIds: ['live2d-main'],
       maxEmbeddedAssetBytes: 1024,
     });
     expect(exported.manifest.externalDependencies).toEqual([
@@ -55,6 +71,10 @@ describe('Character portable package service', () => {
         kind: 'vrm',
         resourceRef: 'asset:vrm-source',
       },
+    ]);
+    expect(exported.manifest.embeddedAssets).toMatchObject([
+      { archivePath: 'assets/live2d/model.model3.json', entry: true },
+      { archivePath: 'assets/live2d/texture_00.png', entry: false },
     ]);
 
     const destination = createCharacterAuthoringFileRepository({
@@ -94,6 +114,23 @@ describe('Character portable package service', () => {
     await expect(
       destination.readLocalizedAsset('character-project-a', 'live2d/model.model3.json', 1024),
     ).resolves.toEqual(new TextEncoder().encode('{"model":true}\n'));
+    await expect(
+      destination.readLocalizedAsset('character-project-a', 'live2d/texture_00.png', 1024),
+    ).resolves.toEqual(new Uint8Array([1, 2, 3, 4]));
+    await expect(
+      destination.readLocalizedAssetBindingCatalog('character-project-a'),
+    ).resolves.toMatchObject({
+      bindings: [
+        {
+          representationId: 'live2d-main',
+          entryRelativeAssetPath: 'live2d/model.model3.json',
+          files: [
+            { relativeAssetPath: 'live2d/model.model3.json' },
+            { relativeAssetPath: 'live2d/texture_00.png' },
+          ],
+        },
+      ],
+    });
   });
 
   it('reports exact mutable identity conflicts and does not overwrite the destination', async () => {
@@ -107,7 +144,7 @@ describe('Character portable package service', () => {
       characterProjectId: 'character-project-a',
       characterStorylineIds: [],
       authoringTestSnapshotIds: [],
-      embeddedAssets: [],
+      embeddedRepresentationIds: [],
       maxEmbeddedAssetBytes: 1024,
     });
     const destination = createCharacterAuthoringFileRepository({
@@ -156,7 +193,7 @@ describe('Character portable package service', () => {
       characterProjectId: 'character-project-a',
       characterStorylineIds: [],
       authoringTestSnapshotIds: [],
-      embeddedAssets: [],
+      embeddedRepresentationIds: [],
       maxEmbeddedAssetBytes: 1024,
     });
     const destination = createCharacterAuthoringFileRepository({
@@ -194,14 +231,7 @@ describe('Character portable package service', () => {
       characterProjectId: 'character-project-a',
       characterStorylineIds: ['storyline-a'],
       authoringTestSnapshotIds: [],
-      embeddedAssets: [
-        {
-          representationId: 'live2d-main',
-          kind: 'live2d',
-          relativeAssetPath: 'live2d/model.model3.json',
-          mediaType: 'application/json',
-        },
-      ],
+      embeddedRepresentationIds: ['live2d-main'],
       maxEmbeddedAssetBytes: 1024,
     });
     const destination = createCharacterAuthoringFileRepository({
@@ -211,8 +241,8 @@ describe('Character portable package service', () => {
     const interrupted = new CharacterPortablePackageService(
       {
         ...destination,
-        storeLocalizedAsset: async () => {
-          throw new Error('simulated asset write interruption');
+        saveLocalizedAssetBindingCatalog: async () => {
+          throw new Error('simulated binding write interruption');
         },
       },
       archive,
@@ -230,8 +260,17 @@ describe('Character portable package service', () => {
     });
     await expect(destination.readProject('character-project-a')).resolves.toBeDefined();
     await expect(
+      destination.readLocalizedAsset('character-project-a', 'live2d/model.model3.json', 1024),
+    ).resolves.toBeDefined();
+    await expect(
+      destination.readLocalizedAssetBindingCatalog('character-project-a'),
+    ).resolves.toBeUndefined();
+    await expect(
       new CharacterPortablePackageService(destination, archive).commitImport(input),
     ).resolves.toEqual({ characterProjectId: 'character-project-a' });
+    await expect(
+      destination.readLocalizedAssetBindingCatalog('character-project-a'),
+    ).resolves.toBeDefined();
   });
 
   it('rejects a destination that does not match the authorized repository scope', async () => {
@@ -245,7 +284,7 @@ describe('Character portable package service', () => {
       characterProjectId: 'character-project-a',
       characterStorylineIds: [],
       authoringTestSnapshotIds: [],
-      embeddedAssets: [],
+      embeddedRepresentationIds: [],
       maxEmbeddedAssetBytes: 1024,
     });
 
@@ -255,6 +294,27 @@ describe('Character portable package service', () => {
         destination: { kind: 'content-project', contentProjectId: 'content-project-a' },
       }),
     ).rejects.toMatchObject({ code: 'character-package-destination-mismatch' });
+  });
+
+  it('rejects embedding a representation that has no complete exact localized binding', async () => {
+    const source = createCharacterAuthoringFileRepository({
+      workspaceRoot: await workspace(),
+      scope: { kind: 'standalone-library' },
+    });
+    await seedCharacter(source);
+
+    await expect(
+      new CharacterPortablePackageService(
+        source,
+        createCharacterPortableArchivePort(),
+      ).exportPackage({
+        characterProjectId: 'character-project-a',
+        characterStorylineIds: [],
+        authoringTestSnapshotIds: [],
+        embeddedRepresentationIds: ['vrm-main'],
+        maxEmbeddedAssetBytes: 1024,
+      }),
+    ).rejects.toMatchObject({ code: 'character-package-selection-invalid' });
   });
 
   it('rejects one invalid archive while preserving a valid destination sibling', async () => {
@@ -354,6 +414,34 @@ async function seedCharacter(
     'live2d/model.model3.json',
     new TextEncoder().encode('{"model":true}\n'),
   );
+  await repository.storeLocalizedAsset(
+    'character-project-a',
+    'live2d/texture_00.png',
+    new Uint8Array([1, 2, 3, 4]),
+  );
+  await repository.saveLocalizedAssetBindingCatalog({
+    characterProjectId: 'character-project-a',
+    bindings: [
+      {
+        representationId: 'live2d-main',
+        kind: 'live2d',
+        resourceRef: 'asset:live2d-source',
+        entryRelativeAssetPath: 'live2d/model.model3.json',
+        files: [
+          {
+            relativeAssetPath: 'live2d/model.model3.json',
+            mediaType: 'application/json',
+            byteLength: new TextEncoder().encode('{"model":true}\n').byteLength,
+          },
+          {
+            relativeAssetPath: 'live2d/texture_00.png',
+            mediaType: 'image/png',
+            byteLength: 4,
+          },
+        ],
+      },
+    ],
+  });
 }
 
 async function workspace(): Promise<string> {

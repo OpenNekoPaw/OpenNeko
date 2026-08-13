@@ -3,8 +3,10 @@
 // =============================================================================
 
 import {
+  isContentLocator,
   isContentSourceRef,
   isHostProjectedRuntimeValue,
+  type ContentLocator,
   type ContentSourceRef,
 } from '@neko/content';
 import { isContentRepresentationLocator, type ContentRepresentationLocator } from '@neko/content';
@@ -134,6 +136,7 @@ export type ProjectSemanticIndexingTrigger =
 
 export interface ProjectSearchSourceRef {
   readonly partition: ProjectSearchPartitionKind;
+  readonly contentLocator?: ContentLocator;
   readonly sourceId?: string;
   readonly sourceKind?: string;
   readonly refId?: string;
@@ -792,6 +795,8 @@ export function isProjectSearchItem(value: unknown): value is ProjectSearchItem 
     isProjectSearchItemKind(value['kind']) &&
     typeof value['label'] === 'string' &&
     isProjectSearchPartitionKind(value['source']['partition']) &&
+    (value['source']['contentLocator'] === undefined ||
+      isContentLocator(value['source']['contentLocator'])) &&
     typeof value['projectRoot'] === 'string' &&
     typeof value['searchText'] === 'string' &&
     isProjectIndexFreshness(value['freshness']) &&

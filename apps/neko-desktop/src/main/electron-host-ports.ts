@@ -71,7 +71,6 @@ export function createElectronNekoHostPorts(
       getSnapshot: () => ({
         ...(workspaceRoot ? { workspaceRoot } : {}),
         pathVariables: new Map(pathVariables),
-        mediaLibraries: [],
         authorizedReadRoots: workspaceRoot ? [workspaceRoot] : [],
       }),
     },

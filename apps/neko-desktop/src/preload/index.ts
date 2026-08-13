@@ -112,6 +112,9 @@ import {
 import {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
+  parseCanvasHostRuntimeIdentity,
+  parseCanvasMediaHostRequest,
+  parseCanvasMediaHostResponse,
   parseCanvasMaterialActionResolution,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
@@ -124,9 +127,6 @@ import {
 import {
   DESKTOP_CANVAS_CHANNELS,
   isSameCanvasHostIdentity,
-  parseDesktopCanvasHostIdentity,
-  parseDesktopCanvasMediaRequest,
-  parseDesktopCanvasMediaResponse,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
   parseDesktopCanvasEmbeddedPreviewReleaseRequest,
@@ -210,10 +210,12 @@ import {
   PROJECT_AUTHORING_HOST_CHANNEL,
   PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
   createProjectAuthoringCatalogHostRequest,
+  createProjectContentHostRequest,
   createProjectLocalAuthoringHostRequest,
   createProjectLocalAuthoringRetryHostRequest,
   createProjectAuthoringNavigationHostRequest,
   parseProjectAuthoringCatalogHostResult,
+  parseProjectContentHostResult,
   parseProjectLocalAuthoringHostResult,
   parseProjectAuthoringNavigationHostResult,
   type OpenNekoDesktopProjectAuthoringBridge,
@@ -255,23 +257,27 @@ import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_AUTHORING_HOST_CHANNEL,
   CHARACTER_AVATAR_HOST_CHANNEL,
+  CHARACTER_PORTABLE_HOST_CHANNELS,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
   createCharacterFoundationCommandHostRequest,
   createCharacterFoundationHostRequest,
   createCharacterAuthoringCommandRequest,
   createCharacterAuthoringSnapshotRequest,
+  createCharacterPortableHostRequest,
   createCharacterAvatarOpenRequest,
   createCharacterAvatarReleaseRequest,
   createCharacterRoomWorkbenchSnapshotRequest,
   parseCharacterFoundationHostResult,
   parseCharacterConversationLaunchCatalogHostResult,
   parseCharacterAuthoringHostResult,
+  parseCharacterPortableHostResult,
   parseCharacterAvatarHostResult,
   parseCharacterRoomWorkbenchProjectionEvent,
   parseCharacterRoomWorkbenchSnapshotResult,
   type CharacterRoomWorkbenchProjectionEvent,
   type OpenNekoDesktopCharacterBridge,
   type OpenNekoDesktopCharacterAuthoringBridge,
+  type OpenNekoDesktopCharacterPortableBridge,
   type OpenNekoDesktopCharacterAvatarBridge,
   type OpenNekoDesktopCharacterRoomWorkbenchBridge,
 } from '@neko/chara/contracts';
@@ -364,6 +370,7 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopProjectLocalAuthoringBridge &
   OpenNekoDesktopCharacterBridge &
   OpenNekoDesktopCharacterAuthoringBridge &
+  OpenNekoDesktopCharacterPortableBridge &
   OpenNekoDesktopCharacterAvatarBridge &
   OpenNekoDesktopCharacterRoomWorkbenchBridge &
   OpenNekoDesktopWorldBridge &
@@ -463,6 +470,92 @@ const bridge: OpenNekoDesktopBridge &
       });
       const response: unknown = await ipcRenderer.invoke(CHARACTER_AUTHORING_HOST_CHANNEL, request);
       return parseCharacterAuthoringHostResult(response, request.requestId, binding).snapshot;
+    },
+  },
+  characterPortable: {
+    async getExportScope(windowId, binding, characterProjectId) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-export-scope'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        binding,
+        { kind: 'export-scope', characterProjectId },
+      );
+      return parseCharacterPortableHostResult(
+        await ipcRenderer.invoke(CHARACTER_PORTABLE_HOST_CHANNELS.exportScope, request),
+        request.requestId,
+      );
+    },
+    async exportPackage(windowId, binding, characterProjectId, selection) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-export'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        binding,
+        { kind: 'export', characterProjectId, selection },
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_PORTABLE_HOST_CHANNELS.exportPackage,
+        request,
+      );
+      return parseCharacterPortableHostResult(response, request.requestId);
+    },
+    async previewImport(windowId, binding) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-import-preview'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        binding,
+        { kind: 'import-preview' },
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_PORTABLE_HOST_CHANNELS.previewImport,
+        request,
+      );
+      return parseCharacterPortableHostResult(response, request.requestId);
+    },
+    async commitImport(windowId, binding, importReceiptId) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-import-commit'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        binding,
+        { kind: 'import-commit', importReceiptId },
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_PORTABLE_HOST_CHANNELS.commitImport,
+        request,
+      );
+      return parseCharacterPortableHostResult(response, request.requestId);
+    },
+    async cancelImport(windowId, binding, importReceiptId) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-import-cancel'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        binding,
+        { kind: 'import-cancel', importReceiptId },
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_PORTABLE_HOST_CHANNELS.cancelImport,
+        request,
+      );
+      return parseCharacterPortableHostResult(response, request.requestId);
     },
   },
   characterAvatar: {
@@ -727,6 +820,24 @@ const bridge: OpenNekoDesktopBridge &
       });
       const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
       return parseProjectAuthoringNavigationHostResult(response, request.requestId);
+    },
+    async getContent(windowId, binding) {
+      const context = requireShellMutationContext();
+      const request = createProjectContentHostRequest({
+        requestId: nextRequestId('project-content'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+      });
+      const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
+      const result = parseProjectContentHostResult(response, request.requestId);
+      if (
+        result.workspaceId !== binding.workspaceId ||
+        result.contentProjectId !== binding.contentProjectId
+      ) {
+        throw new Error('Desktop Project Content result identity does not match.');
+      }
+      return result;
     },
   },
   projectLocalAuthoring: {
@@ -1380,7 +1491,7 @@ const bridge: OpenNekoDesktopBridge &
   },
   canvas: {
     async getSnapshot(value) {
-      const identity = parseDesktopCanvasHostIdentity(value);
+      const identity = parseCanvasHostRuntimeIdentity(value);
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_CANVAS_CHANNELS.snapshotGet,
         identity,
@@ -1470,7 +1581,7 @@ const bridge: OpenNekoDesktopBridge &
       await ipcRenderer.invoke(DESKTOP_CANVAS_CHANNELS.embeddedPreviewRelease, request);
     },
     async executeMediaRequest(value) {
-      const request = parseDesktopCanvasMediaRequest(value);
+      const request = parseCanvasMediaHostRequest(value);
       const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
       if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
         throw new Error('Desktop Canvas media request requires a current owner-bound snapshot.');
@@ -1479,10 +1590,10 @@ const bridge: OpenNekoDesktopBridge &
         DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
         request,
       );
-      return parseDesktopCanvasMediaResponse(response, request.nodeId);
+      return parseCanvasMediaHostResponse(response, request.nodeId);
     },
     subscribe(identity, listener) {
-      const entry = { identity: parseDesktopCanvasHostIdentity(identity), listener };
+      const entry = { identity: parseCanvasHostRuntimeIdentity(identity), listener };
       canvasListeners.add(entry);
       return () => canvasListeners.delete(entry);
     },

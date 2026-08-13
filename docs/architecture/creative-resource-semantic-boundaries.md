@@ -1,16 +1,20 @@
 # 资源、实体、角色与世界边界
 
-更新日期：2026-08-12
+更新日期：2026-08-13
 
 本文定义文件、媒体库、素材、Project Entity、Character 与 World 的跨领域边界。实施入口是
 [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)；
+Project facts、项目 `.neko` 与 Media Library binding 的后续原子切换由
+[`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
+负责；
 在该 change 完成前，本文是目标约束，不表示所有路径已在产品中可用。当前实现差距见
 [`2026-08-12-resource-entity-character-world-gap.md`](../status/2026-08-12-resource-entity-character-world-gap.md)。
 
 ## 用户概念与内部 owner
 
-用户主要面对三个概念：**资源、角色、世界**。文件、媒体库连接、素材包与项目元素作为资源来源或
-筛选条件出现，不要求用户先理解六套平级管理对象。
+用户主要面对三个创作概念：**资源、角色、世界**。资源仅包含文件、媒体库和本地素材；项目内角色、
+世界、其他语义元素与待确认内容通过独立的“项目内容”展示。Entity 是 Project Content 背后的语义 owner，
+不是与角色、世界平级的普通用户入口。
 
 内部仍保留不同 owner，因为它们的身份、修改和删除语义不同：
 
@@ -18,7 +22,7 @@
 | -------------- | ---------------------------------- | --------------------------------- | ------------------------------------- |
 | File / Content | 定位和读取字节或文档 entry         | Content 与 Host 授权 adapter      | catalog、语义身份                     |
 | Media Library  | 连接外部目录并产生可重建投影       | Assets domain 的 Media connection | Asset、Entity                         |
-| Asset          | 显式导入、安装或发布的可复用包     | Asset Library                     | 普通文件、角色定义                    |
+| Asset          | 显式导入或安装的本地可复用包       | Asset Library                     | 普通文件、远程服务、角色定义          |
 | Project Entity | 项目内“这是谁/是什么”的语义锚点    | Entity domain                     | Character/World 基类、使用量 registry |
 | Character      | 角色创作、版本、故事线、记忆与互动 | Chara                             | Entity 的扩展字段                     |
 | World          | 世界创作、版本、运行、存档与分支   | World                             | 场景文件或 Entity 的扩展字段          |
@@ -39,7 +43,7 @@ workspace/document/generated/package content
                  +----> Character representation / voice reference
                  +----> World resource reference
 
-Project composition
+Project facts + rebuildable projections
   ProjectEntity ---- exact association ----> CharacterProject
        ^                                         |
        |                                         v
@@ -84,8 +88,9 @@ interface ProjectEntityCharacterAssociation {
 }
 ```
 
-该记录位于精确 `ContentProjectComposition` 内，由外层 `contentProjectId` 确定所属项目，不在每条关联中
-复制项目身份。
+该关联由 Project owner 以独立记录保存在 `neko/project-bindings/entity-character/`，所属项目由
+`neko/project.json` 和 repository scope 确定，不写入项目 `.neko`、CharacterProject、Entity projection
+或通用 composition root。
 
 首阶段约束：
 
@@ -120,9 +125,22 @@ seed、实时 repository 或内部文件格式。
 
 ## 资源展示与管理
 
-Resource Browser 提供一个 Resources 体验，并可按 Project Files、Shared Media、Installed Assets、
-Project Elements 等来源筛选。结果必须携带 owner、精确 identity、可用性和 owner 声明的操作；选择、
-搜索或预览不会转换身份。
+Resource Browser 提供一个 Resources 体验，并且只可按 Files、Media、Assets 三个来源筛选。结果必须
+携带 owner、精确 identity、可用性和 owner 声明的操作；选择、搜索或预览不会转换身份。
+
+Project Content 是 Project owner 计算的只读聚合，固定包含四个互斥分组：
+
+- 角色：来自精确 Entity-to-Character association，同时携带 CharacterProject 与 Entity identity；
+- 世界：仅来自项目内真实 WorldProject，不按 Entity kind 推断；
+- 其他元素：未被 Character association 消费的 confirmed ProjectEntity；
+- 待确认：Entity candidate projection，展示不会确认或创建任何领域记录。
+
+Project Content 不复制 Character、World 或 Entity payload，不提供通用 Entity mutation。单条 Character、
+World 或 Entity 记录失效只在对应条目或分组展示 diagnostic，不影响其他分组。
+
+`@neko/entity-webview` 当前登记为 `retained-kernel`：Entity domain 仍拥有语义 contract 与 Node
+application service，但普通 Desktop 产品不装配独立 Entity Inspector Root。只有后续独立 OpenSpec 定义
+Project Content 内明确、owner-qualified 的语义修复/管理操作及真实用户路径后，才能重新标记为产品可达。
 
 管理操作仍按 owner 分离：
 
@@ -130,7 +148,7 @@ Project Elements 等来源筛选。结果必须携带 owner、精确 identity、
 | ---------------------------------------------- | -------------- |
 | 打开、读取、授权写入文件                       | Content / Host |
 | add、relink、remove 媒体库连接                 | Media Library  |
-| import、install、uninstall 素材包              | Asset Library  |
+| import、install、update、uninstall 本地素材包  | Asset Library  |
 | confirm、rename、merge、deprecate、bind Entity | Entity         |
 | 创建、编辑、发布、导入导出 Character           | Chara          |
 | 创建、发布、运行、存档 World                   | World          |
@@ -167,8 +185,14 @@ World Story、Gameplay、Experience 与 Presentation 只有在真实 producer、
 
 ## 本地数据与错误处理
 
-- 项目事实和领域版本留在各自工作区目录；SQLite 只放用户级选择和可重建投影。
+- 项目事实和领域版本留在 `neko/` 及各自工作区 owner 目录；项目 `.neko` 只保存可删除、可初始化的
+  package-owned 本机 binding、presentation 与 cache，用户级 SQLite 保存跨工作区 catalog、task 与投影。
+- 项目同步与 package/export 不读取 `.neko`；项目 codec 拒绝 `.neko` locator、物理 Media target、
+  global connection identity、absolute/cache/runtime path。删除 `.neko` 不能改变 Entity/Character
+  association、Character/World version、Asset pin、文档或其他项目事实。
 - 文件、Asset 包、Character、World 和 Conversation/Save bytes 不迁入通用 metadata 数据库。
+- `neko/project-composition.json` 不再作为组合 authority：Project identity 与 association 是独立事实，
+  Character/World membership、dependency summary、usage 和 Project Content 从 owning records 重建。
 - 被收窄 contract 无法读取的旧 Entity/Entity Asset 数据必须原样保留，并在对应记录展示 diagnostic；
   不在普通启动中迁移、丢弃或伪造默认值。
 - 单条 Entity、binding、association 或 projection 失效只影响该项；其他项目、角色和世界保持可用。
@@ -179,11 +203,11 @@ World Story、Gameplay、Experience 与 Presentation 只有在真实 producer、
 | 页面                         | 职责                                                                   |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | Resources                    | 搜索、筛选、预览和调用资源 owner 操作                                  |
+| Project Content              | 只读聚合项目角色、世界、其他元素与待确认内容                           |
 | Character Management         | 角色目录、位置、版本状态、导入导出和进入 Studio/Interaction            |
 | Character Creator            | 从不同 seed 快速生成同一种 CharacterProject draft                      |
 | Character Studio             | 复用创作工作区编辑角色、素材、故事线、验证与版本图                     |
 | Character Interaction        | 对话/Room Workbench；Interaction、Main、Manager、Timeline 等可见 slots |
-| Entity Inspector             | 项目语义身份、aliases、bindings、候选证据与引用诊断                    |
 | World Library / Studio / Run | 世界目录、创作、版本、运行、存档与分支                                 |
 
 页面不是新的 durable Session owner。切换管理、创作或互动场景只改变 Window presentation；隐藏 Root

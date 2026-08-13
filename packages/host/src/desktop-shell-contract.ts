@@ -920,7 +920,9 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   }
   if (
     !catalogResult.diagnostic &&
-    workbench.layout.main.views.some((view) => !projectIds.has(view.projectId))
+    workbench.layout.main.views.some(
+      (view) => view.projectId !== undefined && !projectIds.has(view.projectId),
+    )
   ) {
     throw invalidPayload('Desktop Workbench View references an unknown Project.');
   }

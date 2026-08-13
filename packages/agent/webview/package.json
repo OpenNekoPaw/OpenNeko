@@ -18,7 +18,6 @@
     "@neko/canvas-domain": "workspace:*",
     "@neko/chara": "workspace:*",
     "@neko/content": "workspace:*",
-    "@neko/generation": "workspace:*",
     "@neko/markdown": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/preview-domain": "workspace:*",

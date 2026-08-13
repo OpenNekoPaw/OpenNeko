@@ -3,20 +3,27 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HostFileSystemPort } from '@neko/host/ports';
-import { searchWorkspaceLinkedMediaLibraryContentLocators } from './resource-browser-node-source';
+import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
+import { createGlobalMediaLibraryConnection } from './global-media-library-files';
+import {
+  createProjectMediaLibraryBindingFingerprint,
+  ProjectMediaLibraryBindingRepository,
+} from './project-media-library-binding-repository';
+import { searchProjectMediaLibraryContentLocators } from './resource-browser-node-source';
 
-describe('Workspace Media Library mention search', () => {
+describe('Project Media Library mention search', () => {
   const roots: string[] = [];
 
   afterEach(async () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  it('returns portable linked media locators without following nested links', async () => {
+  it('returns owner-qualified locators without following nested links or old workspace links', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-media-mention-'));
     roots.push(root);
     const workspacePath = path.join(root, 'workspace');
-    const libraryTarget = path.join(root, 'library');
+    const libraryTarget = path.join(root, 'Reference');
+    const globalMediaLibraryRoot = path.join(root, 'global-media-libraries');
     const outsideTarget = path.join(root, 'outside');
     await Promise.all([
       mkdir(path.join(workspacePath, 'neko', 'assets'), { recursive: true }),
@@ -30,21 +37,49 @@ describe('Workspace Media Library mention search', () => {
     ]);
     await symlink(outsideTarget, path.join(libraryTarget, 'outside'));
     await symlink(libraryTarget, path.join(workspacePath, 'neko', 'assets', 'Reference'));
+    const { libraryId } = await createGlobalMediaLibraryConnection({
+      mediaLibraryRoot: globalMediaLibraryRoot,
+      sourceDirectory: libraryTarget,
+      locationKind: 'local',
+    });
+    const projectId = 'project-1';
+    const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
+      projectId,
+      libraryName: 'Reference',
+      connectionId: libraryId,
+    });
+    await new ProjectMediaLibraryBindingRepository(workspacePath, projectId).applyRecovery(
+      confirmProjectMediaLibraryRecovery({
+        projectId,
+        libraryName: 'Reference',
+        connectionId: libraryId,
+        requirementFingerprint: 'sha256:test-requirement-1234',
+        validatedRelativePaths: [],
+        expectedBindingFingerprint: null,
+        replacementBindingFingerprint,
+      }),
+    );
 
-    const locators = await searchWorkspaceLinkedMediaLibraryContentLocators({
+    const locators = await searchProjectMediaLibraryContentLocators({
+      projectId,
       workspace: {
         workspaceId: 'workspace-1',
         workspacePath,
         displayName: 'Workspace',
         locator: { kind: 'relative', value: 'workspace' },
       },
+      globalMediaLibraryRoot,
       files: createNodeFilePort(),
       query: '',
       limit: 30,
     });
 
     expect(locators).toEqual([
-      { kind: 'workspace-file', path: 'neko/assets/Reference/shots/hero.png' },
+      {
+        kind: 'media-library',
+        libraryName: 'Reference',
+        relativePath: 'shots/hero.png',
+      },
     ]);
     expect(JSON.stringify(locators)).not.toContain(libraryTarget);
     expect(JSON.stringify(locators)).not.toContain('secret.png');

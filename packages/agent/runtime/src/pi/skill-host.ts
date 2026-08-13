@@ -219,6 +219,17 @@ export class PiSkillHostSnapshot {
   }
 
   invokeExact(skillName: string, activationId: string, additionalInstructions?: string): string {
+    return this.invokeExactWithReceipt(skillName, activationId, additionalInstructions).prompt;
+  }
+
+  invokeExactWithReceipt(
+    skillName: string,
+    activationId: string,
+    additionalInstructions?: string,
+  ): {
+    readonly prompt: string;
+    readonly receipt: Pick<SkillHostRecord, 'name' | 'source' | 'fingerprint'>;
+  } {
     const stored = this.byActivationId.get(activationId);
     if (stored === undefined || stored.record.name !== skillName) {
       throw new SkillHostError(
@@ -226,7 +237,14 @@ export class PiSkillHostSnapshot {
         `Skill activation ${activationId} for ${skillName} is not available in this turn snapshot.`,
       );
     }
-    return formatSkillInvocation(stored.skill, additionalInstructions);
+    return Object.freeze({
+      prompt: formatSkillInvocation(stored.skill, additionalInstructions),
+      receipt: Object.freeze({
+        name: stored.record.name,
+        source: stored.record.source,
+        fingerprint: stored.record.fingerprint,
+      }),
+    });
   }
 
   resource(skillName: string, activationId: string, relativePath: string): SkillResourceLocator {

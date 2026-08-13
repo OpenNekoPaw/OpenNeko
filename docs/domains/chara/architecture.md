@@ -58,6 +58,8 @@ CharacterConversationSelection
 
 UI selection、Timeline、context cache、transcript summary、模型输出和 active/recent identity 都不是领域事实 owner。
 
+管理页、Workspace Authoring 与 Interaction 必须是三种独立生命周期。管理页只投影目录与只读详情；Workspace 只挂载当前 exact Character authoring Surface；Conversation/Room runtime 可在 UI 卸载后继续，但不得保留 React tree、provider 或媒体资源。Scene 切换只提交允许恢复的 presentation snapshot，并从精确 Workspace grant、placement authority 和 CharacterProject identity 重建新 Root。
+
 ## 创建、管理与 Project Entity 关联
 
 手动输入、提示词、文件 evidence、普通 Asset representation 和 confirmed Entity context 都是同一个
@@ -69,7 +71,7 @@ repository；Studio 只是继续编辑 definition、representation、voice、sto
 Character Creator seed、实时 repository 或 Workspace。创建与导入都不得自动发布 CharacterVersion、
 启动 Dialogue/Room、选择 provider/model 或授予 Agent 能力。
 
-Standalone Character 不需要 Entity。项目内 Character 由 Project composition owner 在精确
+Standalone Character 不需要 Entity。项目内 Character 由 Project per-record association owner 在精确
 `contentProjectId` 下保存 `entityId + characterProjectId` 关联；CharacterProject 不保存项目
 `entityId`。一个项目本地
 Character 必须有一个精确 Character Entity association，但 Character Entity 可以没有 CharacterProject。

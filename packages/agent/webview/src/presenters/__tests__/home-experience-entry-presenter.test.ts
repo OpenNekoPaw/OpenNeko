@@ -34,6 +34,7 @@ describe('home experience entry presenter', () => {
         workspaceGrantId: 'grant-1',
       },
       target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+      authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
     };
 
     expect(
@@ -75,6 +76,7 @@ describe('home experience entry presenter', () => {
           kind: 'authoring',
           workspaceId: target.context.workspaceId,
           workspaceGrantId: target.context.workspaceGrantId,
+          authority: target.authority,
           target: target.target,
         }),
         draft: draft(target.context),
@@ -138,6 +140,7 @@ describe('home experience entry presenter', () => {
         draft: draft({ kind: 'unbound' }),
         characterTargetsAvailable: true,
         characterLaunches,
+        characterConversationMode: 'companion',
         workspaceChooserAvailable: true,
         bindingPending: false,
         configurationReady: true,
@@ -150,6 +153,50 @@ describe('home experience entry presenter', () => {
         draft: draft({ kind: 'unbound' }),
         characterTargetsAvailable: true,
         characterLaunches: [{ ...characterLaunches[0]!, characterVersionId: 'stale-version' }],
+        characterConversationMode: 'companion',
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBe('chat.entryExperience.validation.characterBindingMismatch');
+
+    const narrativeIntent: AgentEntryIntentProjection = {
+      ...intent,
+      targetReceipt: {
+        ...intent.targetReceipt!,
+        binding: {
+          kind: 'character-dialogue',
+          mode: 'narrative',
+          participants: [
+            {
+              characterProjectId: 'character-project-a',
+              characterVersionId: 'character-version-a',
+            },
+          ],
+        },
+      },
+    };
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'character-dialogue',
+        intent: narrativeIntent,
+        draft: draft({ kind: 'unbound' }),
+        characterTargetsAvailable: true,
+        characterLaunches,
+        characterConversationMode: 'narrative',
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBeUndefined();
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'character-dialogue',
+        intent: narrativeIntent,
+        draft: draft({ kind: 'unbound' }),
+        characterTargetsAvailable: true,
+        characterLaunches,
+        characterConversationMode: 'companion',
         workspaceChooserAvailable: true,
         bindingPending: false,
         configurationReady: true,

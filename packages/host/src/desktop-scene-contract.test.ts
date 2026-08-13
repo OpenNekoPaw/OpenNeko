@@ -73,7 +73,7 @@ describe('Desktop Scene contract', () => {
         main: {
           kind: 'character-authoring' as const,
           workspaceId: 'workspace-1',
-          projectId: 'project-1',
+          authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
           viewId: 'character-view-1',
           viewInstanceId: 'character-view-instance-1',
           characterProjectId: 'character-project-1',
@@ -107,7 +107,7 @@ describe('Desktop Scene contract', () => {
         main: {
           kind: 'world-authoring' as const,
           workspaceId: 'workspace-1',
-          projectId: 'project-1',
+          authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
           viewId: 'world-view-1',
           viewInstanceId: 'world-view-instance-1',
           worldProjectId: 'world-project-1',

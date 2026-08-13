@@ -16,20 +16,33 @@ export {
   readResourceBrowserContentChildren,
   searchResourceBrowserContentTree,
 } from './content-tree-source';
-export { presentResourceBrowserContentItem, presentResourceBrowserEntityItem } from './presenter';
+export {
+  presentResourceBrowserAssetItem,
+  presentResourceBrowserContentItem,
+  presentResourceBrowserMediaLibraryRootItem,
+} from './presenter';
+export {
+  assertResourceBrowserProjectStorageMutable,
+  inspectResourceBrowserProjectStorageMutation,
+} from './project-storage-mutation-policy';
+export type {
+  ResourceBrowserProjectStorageMutationDiagnostic,
+  ResourceBrowserProjectStorageOwner,
+} from './project-storage-mutation-policy';
 export type {
   ResourceBrowserCapability,
   ResourceBrowserChildrenRequest,
   ResourceBrowserContentItem,
   ResourceBrowserDiagnostic,
-  ResourceBrowserEntityItem,
-  ResourceBrowserEntityRef,
   ResourceBrowserSource,
   ResourceBrowserHostRuntime,
   ResourceBrowserIdentity,
   ResourceBrowserIntentRequest,
   ResourceBrowserItem,
   ResourceBrowserItemKind,
+  ResourceBrowserMediaLibraryRootItem,
+  ResourceBrowserMediaLibraryRecoveryPlan,
+  ResourceBrowserMediaLibraryStatus,
   ResourceBrowserProjection,
   ResourceBrowserProjectionEvent,
   ResourceBrowserRequest,
@@ -45,9 +58,10 @@ export type {
   ResourceBrowserContentTreePort,
 } from './content-tree-source';
 export type {
-  ResourceBrowserEntityReader,
   ResourceBrowserFilesReader,
   ResourceBrowserInteractionPort,
+  ResourceBrowserMediaEntry,
+  ResourceBrowserMediaLibraryRootEntry,
   ResourceBrowserMediaSearch,
   ResourceBrowserProjectionObserver,
   ResourceBrowserProjectionSource,

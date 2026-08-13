@@ -2,15 +2,17 @@
 
 状态：Accepted
 
-更新日期：2026-08-10
+更新日期：2026-08-13
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
 `define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`、
 `add-markdown-workspace-references-and-media-embeds`、
-`integrate-open-source-browser-and-computer-use`
+`integrate-open-source-browser-and-computer-use`、
+`separate-project-facts-local-state-and-media-bindings`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
-Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
+Node/FFmpeg 媒体运行时的边界。包名描述当前 Electron Desktop；明确标记由活跃 OpenSpec 跟踪的
+locator、Project facts 与项目 `.neko` 条目是 Accepted target，在原子切换完成前不得宣称旧路径已删除。
 Package 角色、独立拆包条件、领域家族命名、显式 exports 和产品状态语义见
 [`package-taxonomy.md`](package-taxonomy.md)。
 
@@ -81,30 +83,47 @@ runtime 入口。
 
 `packages/content` 拥有文档解析、locator/range、entry ref、图片元数据探测和格式识别等跨领域内容语义。
 
+> `MediaLibraryContentLocator` 是外部媒体的唯一产品 contract；
+> `workspace-file: neko/assets/...` 已退出产品读取、authoring 与 dispatch。
+
 - `@neko/content` 与 `@neko/content/core` 只暴露 renderer-safe contract 和纯语义；文档读取服务必须从
   `@neko/content/document` 显式导入，Node 文件/容器实现必须从 `@neko/content/node` 或
   `@neko/content/document/node` 显式导入。
 - 通过 runtime deps 注入文本、二进制和 container 读取能力。
+- `@neko/content` 的 closed locator union 分别表达普通 `workspace-file` 与
+  `media-library(libraryName, relativePath)`；Media Library locator 不得包含 `.neko`、`neko/assets`、
+  global connection identity、absolute/cache/runtime path，并只命中唯一 Media Library handler。
 - 不管理 cache root、Webview URI、runtime token、workspace 生命周期或 UI 状态。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
 - 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 分别返回语义 `DocumentLocator` 与内容 `ContentLocator`，不拥有 SQLite projection。
 
 ### `@neko/project`
 
-`@neko/project` 只拥有 Content Project composition：项目本地 Character/World target membership、精确外部 publication reference、ProjectEntity/CharacterProject association、组合校验与 target-tree projection。它不拥有 Content、Entity、Character 或 World payload，也不解释 Workspace raw path。
+> 以下 Project fact/repository 形态是当前 canonical 路径；`neko/project-composition.json` 已退出
+> 产品 runtime，只能由显式离线工具在精确备份后转换。
 
-- `@neko/project-node` 只在 Host 已授权的 Workspace root 内原子读写 `neko/project-composition.json`，不得扫描其他 Workspace、读取用户级 SQLite 或提供 fallback repository。
+`@neko/project` 拥有 Content Project identity、独立 ProjectEntity/CharacterProject association facts，
+以及从 Chara/World/consumer owner facts 生成的 target、dependency、usage、publication readiness 与
+Project Content projection。它不拥有第二份 Character/World membership、外部 dependency summary
+authority、Content、Entity、Character 或 World payload，也不解释 Workspace raw path。
+
+- `@neko/project-node` 只在 Host 已授权的 Workspace root 内原子读写 `neko/project.json` 与
+  `neko/project-bindings/entity-character/` 的精确 Project-owned facts；不得读取
+  `neko/project-composition.json`、扫描其他 Workspace、读取用户级 SQLite 或提供 fallback repository。
 - `@neko/project-webview` 拥有 Project catalog 和 composition browser presentation；Desktop 只组合其 public Root。
 - standalone Character/World library root 由 Host settings 授权，portable locator 分别为 `${NEKO_HOME}/libraries/characters` 与 `${NEKO_HOME}/libraries/worlds`；Renderer 和领域事实不得接收展开后的绝对路径。
-- Project-local Character/World facts 仍由 `@neko/chara` / `@neko/world` 及其 Node repositories 拥有，Project composition 只保存 exact identity。
-- standalone Character 不要求 Entity；项目本地 Character 由 Project composition 保存精确
+- Project-local Character/World facts及其 Project scope 由 `@neko/chara` / `@neko/world` 及其 Node
+  repositories 拥有；Project 通过固定 public owner port 派生 membership。
+- standalone Character 不要求 Entity；项目本地 Character 由 Project-owned association record 保存精确
   `contentProjectId` owner 下的 `entityId + characterProjectId` 关联。不得把 `entityId` 写入
   CharacterProject，或按名称、
   active/current Project 自动推断关联。
 
 ### `@neko/generation`
 
-`@neko/generation` 根入口只暴露 renderer-safe 请求、结果、Job contract 与领域 contract。
+`@neko/generation` 根入口只暴露 renderer-safe Recipe、请求、结果、Job contract 与领域 contract。Generation
+统一拥有 Prompt/Image/Audio/Video Recipe union、typed defaults、校验、purpose mapping 与 Job request
+投影；Canvas 可以持久化该 public Recipe 值，但不得定义平行 Recipe、默认目录、validator 或 request mapper。
 `GenerationJobCoordinator`、持久化 store 和 purpose port 只能从 `@neko/generation/job` 导入；媒体
 provider、下载、输出落盘与生命周期实现只能从 `@neko/generation/media` 导入。Webview 不得通过根入口
 间接加载 `node:crypto`、文件系统或 provider runtime。
@@ -195,7 +214,9 @@ context。
 
 文件发现边界：
 
-- Desktop Assets binding 从 `neko/assets/<libraryName>` direct links 派生授权 root，并负责 watcher、trust、Host path guard、目录读取、取消和生命周期；不存在 target settings registry。
+- Assets 从项目 `.neko/media-libraries/` 的严格、target-free binding 与用户全局
+  `~/.neko/media-libraries/` connection 解析授权 root；`@neko/assets-domain` 拥有 binding/recovery policy，
+  `@neko/assets-node` 拥有目录读取、containment、取消和生命周期，Desktop 只组合 native adapter。
 - 文件事件只触发 host-neutral coordinator；发现文件不得创建 Entity/binding、写 catalog 或分配文件 identity。
 - semantic/entity projection 使用 `LocalMetadataStore` 的用户级 SQLite binding；Webview 和功能包不接收数据库路径或 raw SQL。
 
@@ -295,18 +316,18 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 
 ## 保留领域包
 
-| 包                    | 主要职责                                                                                               | 关键边界                                                                                                                                                                                                                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/agent-*`       | Agent session、provider、Skill、capability 与 Chat UI                                                  | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                                                                                                                                                                                                |
-| `@neko/generation`    | 生成请求/结果契约、execution port 与 recoverable Job                                                   | 只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                                                                                                                                                                                                                      |
-| `@neko/chara`         | Character 创作语义、Dialogue/Embody、证据、剧情/日常运行编排与日常关系记忆                             | 当前仅保留未接入的 core/application kernel；具体 adapter 由 Desktop 注入；运行只消费唯一 AgentSession contract，不拥有第二套 Agent loop                                                                                                                                                                                |
-| `@neko/quality`       | canonical Quality Gate、evaluator port 与模型证据适配                                                  | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                                                                                                                                                                                                  |
-| `@neko/assets-*`      | Media Library 文件入口；显式 managed Asset manifest/lifecycle/cloud replication；Asset/Entity 资源投影 | 普通文件始终走 canonical locator/Host Content I/O，不因 discovery 入库；Asset package、revision/digest、dependency 与 sync 由 Assets package-owned public ports 管理，Desktop 只组合 Node/credential/IPC adapter；Project Entity 走 canonical Entity facade；目标迁移由 `establish-manifest-backed-asset-library` 跟踪 |
-| `@neko/text-editor-*` | Workspace 文本文档 session、Markdown authoring catalog、Node media resolution 与 Source/Rich/Split UI  | Domain 拥有精确 document/request/surface contract；Node 只通过注入 Workspace/Content port 解析候选和媒体；Webview 只消费 opaque URL；Desktop 仅做 sender/path 授权、IPC wiring 与 lease 投影                                                                                                                           |
-| `@neko/canvas-*`      | 六类通用节点、空间布局、连接、投影与 `.nkc` authoring                                                  | Webview 管交互；只持久化 Markdown/Media/Group/Job/File/CanvasEmbed 与三类连接；Job/Character/World runtime 外置；复用公共 UI                                                                                                                                                                                           |
-| `@neko/cut-*`         | Timeline、视频编辑、媒体控制与导出                                                                     | Webview 管时间线交互；Desktop Main 管 editor/export adapter；媒体走 `@neko/media` 窄端口                                                                                                                                                                                                                               |
-| `@neko/preview-*`     | 授权只读预览与临时 3D Reference staging                                                                | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                                                                                                                                                                                                            |
-| `apps/neko-desktop`   | Electron 产品组合根                                                                                    | 拥有 Main/preload/renderer 生命周期、typed IPC、安全策略、平台打包与产品验收；领域实现仍由 `@neko/*` 包拥有                                                                                                                                                                                                            |
+| 包                    | 主要职责                                                                                              | 关键边界                                                                                                                                                                                                                                                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@neko/agent-*`       | Agent session、provider、Skill、capability 与 Chat UI                                                 | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                                                                                                                                                                                                                |
+| `@neko/generation`    | canonical Recipe、生成请求/结果契约、execution port 与 recoverable Job                                | 统一拥有 Recipe/default/validation/request projection；只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host 或 UI                                                                                                                                                                               |
+| `@neko/chara`         | Character 创作语义、Dialogue/Embody、证据、剧情/日常运行编排与日常关系记忆                            | 当前仅保留未接入的 core/application kernel；具体 adapter 由 Desktop 注入；运行只消费唯一 AgentSession contract，不拥有第二套 Agent loop                                                                                                                                                                                                |
+| `@neko/quality`       | canonical Quality Gate、evaluator port 与模型证据适配                                                 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                                                                                                                                                                                                                  |
+| `@neko/assets-*`      | Media Library 文件入口；显式本地 managed Asset manifest/lifecycle；Asset/Entity 资源投影              | 普通文件始终走 canonical locator/Host Content I/O，不因 discovery 入库；Asset package、revision/digest、dependency 与本地安装由 Assets package-owned public ports 管理，Desktop 只组合 Node/IPC adapter；远程分发需独立 OpenSpec；Project Entity 走 canonical Entity facade；目标迁移由 `establish-manifest-backed-asset-library` 跟踪 |
+| `@neko/text-editor-*` | Workspace 文本文档 session、Markdown authoring catalog、Node media resolution 与 Source/Rich/Split UI | Domain 拥有精确 document/request/surface contract；Node 只通过注入 Workspace/Content port 解析候选和媒体；Webview 只消费 opaque URL；Desktop 仅做 sender/path 授权、IPC wiring 与 lease 投影                                                                                                                                           |
+| `@neko/canvas-*`      | 七类通用节点、空间布局、连接、投影与 `.nkc` authoring                                                 | Webview 管交互；持久化 Markdown/Media/Group/Job/File/CanvasEmbed/Generation wrapper 与三类连接；Generation wrapper 嵌入 `@neko/generation` Recipe 但只拥有图关系、run/output binding 与选择；Job/Character/World runtime 外置；复用公共 UI                                                                                             |
+| `@neko/cut-*`         | Timeline、视频编辑、媒体控制与导出                                                                    | Webview 管时间线交互；Desktop Main 管 editor/export adapter；媒体走 `@neko/media` 窄端口                                                                                                                                                                                                                                               |
+| `@neko/preview-*`     | 授权只读预览与临时 3D Reference staging                                                               | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                                                                                                                                                                                                                            |
+| `apps/neko-desktop`   | Electron 产品组合根                                                                                   | 拥有 Main/preload/renderer 生命周期、typed IPC、安全策略、平台打包与产品验收；领域实现仍由 `@neko/*` 包拥有                                                                                                                                                                                                                            |
 
 Tools media-diff 原型因没有 Desktop producer、产品入口或运行态验收已退役；未来若重新引入，必须通过独立 OpenSpec 同时建立 domain/node/Webview 与真实 Desktop composition。
 
@@ -429,8 +450,9 @@ UserCharacterRelationship、AgentSession transcript 与外部存档必须保持�
 Canvas 只拥有节点布局、连接和 durable projection，不拥有素材字节、媒体库 membership、
 Generation recipe、viewer/editor 或 provider execution。素材进入 Canvas 固定为四条路径：
 
-1. 工作区文件和已链接的项目 Media Library 文件直接保存原 `ContentLocator`，不复制字节；
-2. 全局 Media Library 文件先由 Media Library owner 显式关联整个库，或显式复制到项目可授权位置；
+1. 工作区文件保存 `WorkspaceFileContentLocator`，项目已绑定 Media Library 文件保存
+   `MediaLibraryContentLocator`，引用时不复制字节；
+2. 全局 Media Library 文件先由 Media Library owner 显式确认项目本机 binding，或显式复制到项目可授权位置；
 3. 任意工作区外文件由 Host 原子复制到 `neko/imports/<kind>/`，再用新的项目 locator 创建节点；
 4. AI 素材先进入 Generation-owned draft/Job，只有 owner 成功提交的
    `generated-output` locator 才投影为 Media/File 结果节点。

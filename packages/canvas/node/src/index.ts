@@ -5,6 +5,7 @@ export {
 } from './canvas-material-authoring';
 export {
   CanvasMediaLibraryCopyService,
+  listAvailableProjectMediaLibraryDestinations,
   type CanvasMediaLibraryCopyResult,
 } from './canvas-media-library-copy';
 export * from './canvas-generation-node-runtime';

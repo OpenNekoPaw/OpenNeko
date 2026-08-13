@@ -35,6 +35,12 @@ export interface DesktopAgentFactsProjector {
   failDisposal(): void;
 }
 
+export interface DesktopAgentFactsStore {
+  readonly owner: 'desktop-agent-facts';
+}
+
+const storeRecords = new WeakMap<DesktopAgentFactsStore, Map<string, TurnFactsRecord>>();
+
 interface TurnFactsRecord {
   readonly identity: PiToolRunIdentity;
   readonly systemPrompt: string;
@@ -46,15 +52,17 @@ interface TurnFactsRecord {
   usage: DesktopAgentNeutralFacts['usage'];
   conversation?: DesktopAgentConversationEvidence;
   turn?: DesktopAgentFactsTurnResult;
-  disposal: DesktopAgentNeutralFacts['disposal'];
 }
 
 export function createDesktopAgentFactsProjector(input: {
   readonly connection: DesktopAgentConnectionIdentity;
   readonly factLimit?: number;
+  readonly store?: DesktopAgentFactsStore;
 }): DesktopAgentFactsProjector {
-  const records = new Map<string, TurnFactsRecord>();
+  const records =
+    input.store === undefined ? new Map<string, TurnFactsRecord>() : requireStore(input.store);
   let disposed = false;
+  let disposal: DesktopAgentNeutralFacts['disposal'] = { status: 'pending' };
 
   return {
     beginTurn({ identity, systemPrompt }) {
@@ -73,7 +81,6 @@ export function createDesktopAgentFactsProjector(input: {
         resourceDisplayProjections: new Map(),
         diagnostics: [],
         usage: {},
-        disposal: { status: 'pending' },
       };
       records.set(key, record);
       return Object.freeze({
@@ -139,7 +146,7 @@ export function createDesktopAgentFactsProjector(input: {
         resourceDisplayProjections: [...record.resourceDisplayProjections.values()],
         usage: record.usage,
         diagnostics: record.diagnostics,
-        disposal: record.disposal,
+        disposal,
         ...(input.factLimit === undefined ? {} : { factLimit: input.factLimit }),
       });
     },
@@ -156,18 +163,28 @@ export function createDesktopAgentFactsProjector(input: {
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const record of records.values()) record.disposal = { status: 'disposed' };
+      disposal = { status: 'disposed' };
     },
     failDisposal() {
       disposed = true;
-      for (const record of records.values()) {
-        record.disposal = {
-          status: 'failed',
-          diagnostic: 'Desktop Agent connection resources failed to dispose.',
-        };
-      }
+      disposal = {
+        status: 'failed',
+        diagnostic: 'Desktop Agent connection resources failed to dispose.',
+      };
     },
   };
+}
+
+export function createDesktopAgentFactsStore(): DesktopAgentFactsStore {
+  const store: DesktopAgentFactsStore = Object.freeze({ owner: 'desktop-agent-facts' });
+  storeRecords.set(store, new Map());
+  return store;
+}
+
+function requireStore(store: DesktopAgentFactsStore): Map<string, TurnFactsRecord> {
+  const records = storeRecords.get(store);
+  if (!records) throw new Error('Desktop Agent facts store is not owned by this runtime.');
+  return records;
 }
 
 function projectEvent(record: TurnFactsRecord, event: PiProductAgentEvent): void {
@@ -202,6 +219,16 @@ function projectEvent(record: TurnFactsRecord, event: PiProductAgentEvent): void
         costUsd: (record.usage.costUsd ?? 0) + event.usage.cost.total,
       };
       return;
+    case 'skill.activated': {
+      const skill = {
+        name: event.skillName,
+        source: event.source,
+        fingerprint: normalizeSha256(event.fingerprint),
+        status: 'injected' as const,
+      };
+      record.skills.set(`${skill.source}:${skill.name}:${skill.fingerprint}`, skill);
+      return;
+    }
     case 'turn.cancelled':
       for (const [key, receipt] of record.tools) {
         if (receipt.status === 'pending')

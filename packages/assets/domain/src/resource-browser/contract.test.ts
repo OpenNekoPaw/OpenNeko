@@ -103,7 +103,7 @@ describe('Resource Browser contract', () => {
     });
   });
 
-  it('parses portable ContentLocator, Asset and Entity projections', () => {
+  it('parses portable ContentLocator and Asset projections', () => {
     const media = parseResourceBrowserProjection(
       projection('media', [
         {
@@ -138,111 +138,23 @@ describe('Resource Browser contract', () => {
         },
       ]),
     );
-    const entities = parseResourceBrowserProjection(
-      projection('entities', [
-        {
-          resourceId: 'entity-1',
-          source: 'entities',
-          role: 'entity',
-          depth: 0,
-          kind: 'character',
-          label: 'Neko',
-          entityRef: { entityId: 'character-1', entityKind: 'character' },
-          entityStatus: 'confirmed',
-          sourceOwners: ['project-entity'],
-          attentionBindingIds: [],
-          inspector: inspector({ status: 'confirmed', entityId: 'character-1' }),
-          characterAssociation: {
-            entityId: 'character-1',
-            characterProjectId: 'character-project-1',
-            displayName: 'Neko',
-            placement: 'project-local',
-            availability: 'available',
-            handoffs: [
-              { kind: 'open-character', characterProjectId: 'character-project-1' },
-              { kind: 'open-character-studio', characterProjectId: 'character-project-1' },
-            ],
-            publishedVersionCount: 1,
-            interactionStatus: 'select-version',
-          },
-          representationAvailability: 'active',
-          representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
-          representationBindingId: 'binding-neko-portrait',
-          representationRole: 'portrait',
-          capabilities: ['preview', 'add-to-canvas'],
-        },
-      ]),
-    );
-
     expect(media.items[0]?.capabilities).toContain('add-to-cut');
     expect(media.items[0]?.source).toBe('media');
     expect(assets.items[0]?.source).toBe('assets');
-    expect(entities.items[0]).toMatchObject({
-      source: 'entities',
-      characterAssociation: {
-        entityId: 'character-1',
-        characterProjectId: 'character-project-1',
-      },
-    });
   });
 
-  it('rejects a Character association copied onto another Entity or a candidate', () => {
-    const characterAssociation = {
-      entityId: 'character-other',
-      characterProjectId: 'character-project-1',
-      displayName: 'Neko',
-      placement: 'project-local',
-      availability: 'available',
-      handoffs: [
-        { kind: 'open-character', characterProjectId: 'character-project-1' },
-        { kind: 'open-character-studio', characterProjectId: 'character-project-1' },
-      ],
-      publishedVersionCount: 1,
-      interactionStatus: 'select-version',
-    };
+  it('rejects retired Entity source and intent contracts', () => {
+    expect(() => parseResourceBrowserProjection(projection('entities', []))).toThrow(
+      'source is invalid',
+    );
     expect(() =>
-      parseResourceBrowserProjection(
-        projection('entities', [
-          {
-            resourceId: 'entity-1',
-            source: 'entities',
-            role: 'entity',
-            depth: 0,
-            kind: 'character',
-            label: 'Neko',
-            entityRef: { entityId: 'character-1', entityKind: 'character' },
-            entityStatus: 'confirmed',
-            sourceOwners: ['project-entity'],
-            attentionBindingIds: [],
-            inspector: inspector({ status: 'confirmed', entityId: 'character-1' }),
-            representationAvailability: 'unbound',
-            characterAssociation,
-            capabilities: [],
-          },
-        ]),
-      ),
-    ).toThrow('association projection is invalid');
-    expect(() =>
-      parseResourceBrowserProjection(
-        projection('entities', [
-          {
-            resourceId: 'candidate-1',
-            source: 'entities',
-            role: 'entity',
-            depth: 0,
-            kind: 'character',
-            label: 'Neko',
-            candidateRef: { candidateId: 'candidate-1', entityKind: 'character' },
-            entityStatus: 'candidate',
-            sourceOwners: ['document'],
-            evidenceCount: 1,
-            inspector: inspector({ status: 'candidate', candidateId: 'candidate-1' }),
-            characterAssociation,
-            capabilities: [],
-          },
-        ]),
-      ),
-    ).toThrow('candidate contains confirmed Entity fields');
+      parseResourceBrowserIntentRequest({
+        requestId: 'retired-entity-route',
+        identity,
+        route: 'entity.manage',
+        resourceId: 'entity-nova',
+      }),
+    ).toThrow('route is invalid');
   });
 
   it('parses hierarchical File projections and library management', () => {
@@ -320,24 +232,6 @@ describe('Resource Browser contract', () => {
             label: 'secret',
             locator: { kind: 'workspace-file', path: '/Users/private/secret.txt' },
             capabilities: ['reveal'],
-          },
-        ]),
-      ),
-    ).toThrowError(ResourceBrowserContractError);
-    expect(() =>
-      parseResourceBrowserProjection(
-        projection('entities', [
-          {
-            resourceId: 'entity-1',
-            source: 'entities',
-            kind: 'character',
-            label: 'Neko',
-            entityRef: {
-              entityId: 'character-1',
-              entityKind: 'character',
-              projectRoot: '/Users/private/project',
-            },
-            capabilities: [],
           },
         ]),
       ),
@@ -445,7 +339,6 @@ describe('Resource Browser contract', () => {
         'creative-document.create',
         'creative-document.open',
         'cut.add',
-        'entity.manage',
         'preview',
         'projection.reconcile',
         'quick-preview.release',
@@ -538,59 +431,6 @@ describe('Resource Browser contract', () => {
     });
   });
 
-  it('parses candidates without promoting them to stable Entity identity', () => {
-    const result = parseResourceBrowserProjection(
-      projection('entities', [
-        {
-          resourceId: 'candidate-1',
-          source: 'entities',
-          role: 'entity',
-          depth: 0,
-          kind: 'character',
-          label: 'Nova',
-          candidateRef: { candidateId: 'candidate-nova', entityKind: 'character' },
-          entityStatus: 'candidate',
-          sourceOwners: ['document'],
-          evidenceCount: 1,
-          inspector: inspector({ status: 'candidate', candidateId: 'candidate-nova' }),
-          capabilities: [],
-        },
-      ]),
-    );
-    expect(result.items[0]).toMatchObject({
-      entityStatus: 'candidate',
-      candidateRef: { candidateId: 'candidate-nova' },
-    });
-    expect(result.items[0]).not.toHaveProperty('entityRef');
-  });
-
-  it('parses Entity management only through the canonical Resource Browser route', () => {
-    expect(
-      parseResourceBrowserIntentRequest({
-        requestId: 'entity-edit',
-        identity,
-        route: RESOURCE_BROWSER_ROUTES.manageEntity,
-        resourceId: 'entity-nova',
-        entityIntent: {
-          type: 'edit',
-          entityId: 'entity-nova',
-          changes: { names: { canonical: 'Rin Aoki', aliases: [] } },
-        },
-      }),
-    ).toMatchObject({
-      route: 'entity.manage',
-      entityIntent: { type: 'edit', entityId: 'entity-nova' },
-    });
-    expect(() =>
-      parseResourceBrowserIntentRequest({
-        requestId: 'entity-missing-intent',
-        identity,
-        route: RESOURCE_BROWSER_ROUTES.manageEntity,
-        resourceId: 'entity-nova',
-      }),
-    ).toThrowError(ResourceBrowserContractError);
-  });
-
   it('requires explicit Preview and Cut handoff targets', () => {
     expect(
       parseResourceBrowserIntentRequest({
@@ -638,29 +478,11 @@ describe('Resource Browser contract', () => {
   });
 });
 
-function projection(source: 'files' | 'media' | 'assets' | 'entities', items: readonly unknown[]) {
+function projection(source: string, items: readonly unknown[]) {
   return {
     identity,
     source,
     query: '',
     items,
-  };
-}
-
-function inspector(
-  identity:
-    | { readonly status: 'confirmed'; readonly entityId: string }
-    | { readonly status: 'candidate'; readonly candidateId: string },
-) {
-  return {
-    status: identity.status,
-    kind: 'character',
-    names: { canonical: 'Nova', aliases: [] },
-    ...('entityId' in identity
-      ? { entityId: identity.entityId }
-      : { candidateId: identity.candidateId, evidence: [] }),
-    bindings: [],
-    operations: identity.status === 'candidate' ? ['confirm'] : ['edit'],
-    blockers: [],
   };
 }

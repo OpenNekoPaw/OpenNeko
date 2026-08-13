@@ -16,12 +16,20 @@ describe('Workspace Media Library sync contracts', () => {
           ownerId: 'board-a',
           sourceFingerprint: 'sourceFingerprint-2',
           references: [
-            { kind: 'workspace-file', path: 'neko/assets/Footage/shots/a.mov' },
-            { kind: 'workspace-file', path: 'neko/assets/Footage/shots/a.mov' },
             {
-              kind: 'document-entry',
-              source: { kind: 'workspace-file', path: 'neko/assets/Documents/book.epub' },
-              entryPath: 'chapter.xhtml',
+              kind: 'media-library',
+              libraryName: 'Footage',
+              relativePath: 'shots/a.mov',
+            },
+            {
+              kind: 'media-library',
+              libraryName: 'Footage',
+              relativePath: 'shots/a.mov',
+            },
+            {
+              kind: 'media-library',
+              libraryName: 'Documents',
+              relativePath: 'book.epub',
             },
             { kind: 'workspace-file', path: 'media/project-owned.png' },
           ],
@@ -30,7 +38,13 @@ describe('Workspace Media Library sync contracts', () => {
           ownerKind: 'cut',
           ownerId: 'timeline-a',
           sourceFingerprint: 'sourceFingerprint-1',
-          references: [{ kind: 'workspace-file', path: 'neko/assets/Footage/audio/a.wav' }],
+          references: [
+            {
+              kind: 'media-library',
+              libraryName: 'Footage',
+              relativePath: 'audio/a.wav',
+            },
+          ],
         },
       ],
       coverage: {
@@ -72,12 +86,12 @@ describe('Workspace Media Library sync contracts', () => {
             ownerKind: 'canvas',
             ownerId: 'board-a',
             sourceFingerprint: 'sourceFingerprint-1',
-            references: [{ kind: 'workspace-file', path: 'neko/assets/Footage' }],
+            references: [{ kind: 'media-library', libraryName: 'Footage', relativePath: '' }],
           },
         ],
         coverage: { expectedOwnerKinds: ['canvas'], coveredOwnerKinds: ['canvas'] },
       }),
-    ).toThrow('without a descendant');
+    ).toThrow('invalid ContentLocator');
   });
 
   it.each([

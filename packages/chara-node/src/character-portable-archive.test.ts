@@ -132,6 +132,17 @@ describe('Character portable archive', () => {
     await expect(
       readCharacterPortableArchive(valid.archiveBytes, { maxEntryBytes: 8 }),
     ).rejects.toMatchObject({ code: 'character-package-limit-exceeded' });
+
+    await expect(
+      readCharacterPortableArchive(valid.archiveBytes, { maxEntries: 1 }),
+    ).rejects.toMatchObject({ code: 'character-package-limit-exceeded' });
+
+    await expect(
+      readCharacterPortableArchive(valid.archiveBytes, {
+        maxEntryBytes: 1024 * 1024,
+        maxExpandedBytes: projectBytesLength() + 1,
+      }),
+    ).rejects.toMatchObject({ code: 'character-package-limit-exceeded' });
   });
 
   it('rejects symbolic-link metadata', async () => {
@@ -169,11 +180,18 @@ function project() {
   };
 }
 
-function asset(archivePath: string, mediaType: string, bytes: Uint8Array) {
+function asset(
+  archivePath: string,
+  mediaType: string,
+  bytes: Uint8Array,
+  entry = archivePath.endsWith('.json'),
+) {
   return {
     representationId: 'live2d-main',
     kind: 'live2d' as const,
+    resourceRef: 'asset:live2d-source',
     archivePath,
+    entry,
     mediaType,
     bytes,
   };
@@ -196,6 +214,10 @@ function manifestForProject(override: { readonly integrityDigest?: string } = {}
     embeddedAssets: [],
     externalDependencies: [],
   };
+}
+
+function projectBytesLength(): number {
+  return jsonBytes(project()).byteLength;
 }
 
 async function rawArchive(entries: readonly (readonly [string, Uint8Array])[]) {

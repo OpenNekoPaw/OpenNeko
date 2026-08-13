@@ -1,4 +1,4 @@
-import type { ContentProjectId } from './project-composition';
+import type { ContentProjectId } from './project-target';
 
 export interface ProjectCatalogItem {
   readonly projectId: ContentProjectId;

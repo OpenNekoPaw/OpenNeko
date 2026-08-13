@@ -43,7 +43,9 @@ import {
   SessionMode,
   TabType,
   requireAgentDraftHostRuntimeAdapter,
+  parseCharacterDialogueHandoffIntent,
   parseCharacterCreationHandoffIntent,
+  type CharacterDialogueHandoffIntent,
   type CharacterCreationHandoffIntent,
 } from '@neko/agent-contracts';
 import type {
@@ -54,6 +56,7 @@ import type {
   PluginSlashCommandDef,
   GenCategory,
   GenerationParams,
+  CharacterConversationMode,
 } from './ChatView/InputArea/types';
 import { EmptyState } from './ChatView/EmptyState';
 import { HomeExperienceModeSelector } from './ChatView/HomeExperienceModeSelector';
@@ -160,6 +163,8 @@ export interface ConversationControllerProps {
   initialInput?: { readonly id: string; readonly value: string };
   characterCreationHandoff?: CharacterCreationHandoffIntent;
   onCharacterCreationHandoffConsumed?: (intentId: string) => void;
+  characterDialogueHandoff?: CharacterDialogueHandoffIntent;
+  onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   emptyStatePresentation?: 'default' | 'desktop-dock';
   agentPresentation?: AgentInteractionProjection;
   conversationFeed?: {
@@ -219,6 +224,8 @@ export function ConversationController({
   initialInput,
   characterCreationHandoff,
   onCharacterCreationHandoffConsumed,
+  characterDialogueHandoff,
+  onCharacterDialogueHandoffConsumed,
   settings,
   hasConfigSnapshot,
   setSettings,
@@ -301,6 +308,8 @@ export function ConversationController({
   const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<SelectedCharacterLaunch[]>(
     [],
   );
+  const [entryCharacterConversationMode, setEntryCharacterConversationMode] =
+    useState<CharacterConversationMode>('companion');
   const [entryCharacterTargets, setEntryCharacterTargets] = useState<
     readonly AgentCharacterDialogueTargetOption[]
   >([]);
@@ -332,6 +341,8 @@ export function ConversationController({
   const consumedCharacterCreationHandoffIdsRef = useRef(new Set<string>());
   const pendingCharacterCreationHandoffIdsRef = useRef(new Set<string>());
   const activeCharacterCreationHandoffIntentIdRef = useRef<string>();
+  const consumedCharacterDialogueHandoffIdsRef = useRef(new Set<string>());
+  const pendingCharacterDialogueHandoffIdsRef = useRef(new Set<string>());
 
   // ---- Per-conversation ref Maps ----
   const conversationTokenCountRef = useRef<Map<string, number>>(new Map());
@@ -370,8 +381,8 @@ export function ConversationController({
   const removeEntryContextReference = useCallback((id: string) => {
     setEntryContextReferences((current) => current.filter((reference) => reference.id !== id));
   }, []);
-  const configureEntryCharacterLaunches = useCallback(
-    (nextValue: readonly SelectedCharacterLaunch[]) => {
+  const configureEntryCharacterTarget = useCallback(
+    (mode: CharacterConversationMode, nextValue: readonly SelectedCharacterLaunch[]) => {
       if (isEntryBindingPending) return;
       const next: SelectedCharacterLaunch[] = [...nextValue];
       setIsEntryBindingPending(true);
@@ -382,7 +393,7 @@ export function ConversationController({
             ? undefined
             : {
                 kind: 'character-dialogue',
-                mode: 'companion',
+                mode,
                 participants: next.map((selection) => ({
                   characterProjectId: selection.characterProjectId,
                   characterVersionId: selection.characterVersionId,
@@ -393,12 +404,26 @@ export function ConversationController({
           setEntryIntent(intent);
           setEntryContextReferences([]);
           setEntryCharacterLaunches(next);
+          setEntryCharacterConversationMode(mode);
           setGlobalError(null);
         })
         .catch((error: unknown) => setGlobalError(describeError(error)))
         .finally(() => setIsEntryBindingPending(false));
     },
     [hostRuntimeAdapter, isEntryBindingPending],
+  );
+  const configureEntryCharacterLaunches = useCallback(
+    (nextValue: readonly SelectedCharacterLaunch[]) => {
+      configureEntryCharacterTarget(entryCharacterConversationMode, nextValue);
+    },
+    [configureEntryCharacterTarget, entryCharacterConversationMode],
+  );
+  const configureEntryCharacterConversationMode = useCallback(
+    (mode: CharacterConversationMode) => {
+      if (mode === entryCharacterConversationMode) return;
+      configureEntryCharacterTarget(mode, entryCharacterLaunches);
+    },
+    [configureEntryCharacterTarget, entryCharacterConversationMode, entryCharacterLaunches],
   );
   const configureEntryAuthoringTarget = useCallback(
     async (target: AgentComposerWorkspaceTarget | undefined) => {
@@ -418,6 +443,7 @@ export function ConversationController({
                 kind: 'authoring',
                 workspaceId: target.context.workspaceId,
                 workspaceGrantId: target.context.workspaceGrantId,
+                authority: target.authority,
                 target: target.target,
               }
             : undefined,
@@ -445,6 +471,14 @@ export function ConversationController({
       setGlobalError(describeError(error));
     }
   }, [configureEntryAuthoringTarget]);
+  const cancelCharacterCreation = useCallback(() => {
+    setCharacterCreationLock(undefined);
+    setEntryContextReferences([]);
+    updateEntryInputValue('');
+    void configureEntryAuthoringTarget(undefined).catch((error: unknown) => {
+      setGlobalError(describeError(error));
+    });
+  }, [configureEntryAuthoringTarget, updateEntryInputValue]);
   const handleEntryChooseDirectory = useCallback(async () => {
     if (composerWorkspace?.kind !== 'entry') {
       throw new Error('Agent Entry directory selection requires the Entry workspace provider.');
@@ -596,6 +630,7 @@ export function ConversationController({
         ? [...entryDraft.characterLaunches]
         : [],
     );
+    setEntryCharacterConversationMode(readEntryCharacterConversationMode(authoritativeEntryIntent));
     setEntryMediaModelSelection(
       entryDraft?.mediaModelSelection
         ? { ...entryDraft.mediaModelSelection }
@@ -645,7 +680,7 @@ export function ConversationController({
       activeCharacterCreationHandoffIntentIdRef.current = handoff.intentId;
       setIsEntryBindingPending(true);
       void draftAdapter
-        .configureEntryTarget('authoring', undefined)
+        .configureEntryTarget('assistant', undefined)
         .then((intent) => {
           if (
             activeDraftIdRef.current !== draftId ||
@@ -655,7 +690,7 @@ export function ConversationController({
           }
           setEntryIntent(intent);
           setEntryWorkspaceTarget(undefined);
-          setEntryMode('authoring');
+          setEntryMode('assistant');
           setEntryQuickDetailOpen(true);
           const launchCatalog = draftAdapter.readLaunchCatalog();
           const catalogEntry = launchCatalog.inputs.find(
@@ -716,6 +751,59 @@ export function ConversationController({
     hostRuntimeAdapter,
     onCharacterCreationHandoffConsumed,
     updateEntryInputValue,
+  ]);
+
+  useEffect(() => {
+    if (!characterDialogueHandoff || agentPresentation?.phase !== 'draft') return;
+    if (activeDraftIdRef.current !== agentPresentation.draftId) return;
+    let handoff: CharacterDialogueHandoffIntent;
+    try {
+      handoff = parseCharacterDialogueHandoffIntent(characterDialogueHandoff);
+      if (consumedCharacterDialogueHandoffIdsRef.current.has(handoff.intentId)) return;
+      if (pendingCharacterDialogueHandoffIdsRef.current.has(handoff.intentId)) return;
+      const participant = handoff.binding.participants[0];
+      if (!participant) throw new Error('Character Dialogue handoff participant is unavailable.');
+      const draftAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
+      const draftId = agentPresentation.draftId;
+      pendingCharacterDialogueHandoffIdsRef.current.add(handoff.intentId);
+      setIsEntryBindingPending(true);
+      void draftAdapter
+        .configureEntryTarget('character-dialogue', handoff.binding)
+        .then((intent) => {
+          if (activeDraftIdRef.current !== draftId) return;
+          setEntryIntent(intent);
+          setEntryMode('character-dialogue');
+          setEntryQuickDetailOpen(true);
+          setEntryWorkspaceTarget(undefined);
+          setCharacterCreationLock(undefined);
+          setEntryContextReferences([]);
+          setEntryCharacterConversationMode('companion');
+          setEntryCharacterLaunches([
+            {
+              characterProjectId: participant.characterProjectId,
+              characterVersionId: participant.characterVersionId,
+              label: handoff.label,
+            },
+          ]);
+          setGlobalError(null);
+          consumedCharacterDialogueHandoffIdsRef.current.add(handoff.intentId);
+          onCharacterDialogueHandoffConsumed?.(handoff.intentId);
+        })
+        .catch((error: unknown) => {
+          if (activeDraftIdRef.current === draftId) setGlobalError(describeError(error));
+        })
+        .finally(() => {
+          pendingCharacterDialogueHandoffIdsRef.current.delete(handoff.intentId);
+          if (activeDraftIdRef.current === draftId) setIsEntryBindingPending(false);
+        });
+    } catch (error) {
+      setGlobalError(describeError(error));
+    }
+  }, [
+    agentPresentation,
+    characterDialogueHandoff,
+    hostRuntimeAdapter,
+    onCharacterDialogueHandoffConsumed,
   ]);
 
   useEffect(() => {
@@ -874,6 +962,7 @@ export function ConversationController({
           characterTargetsAvailable:
             entryCharacterTargetsStatus === 'ready' && entryCharacterTargets.length > 0,
           characterLaunches: entryCharacterLaunches,
+          characterConversationMode: entryCharacterConversationMode,
           bindingPending: isEntryBindingPending || isForegroundConversationActivationPending,
           configurationReady:
             hasConfigSnapshot &&
@@ -1384,6 +1473,7 @@ export function ConversationController({
                 kind: 'authoring',
                 workspaceId: nextTarget.context.workspaceId,
                 workspaceGrantId: nextTarget.context.workspaceGrantId,
+                authority: nextTarget.authority,
                 target: nextTarget.target,
               }
             : undefined,
@@ -1397,6 +1487,7 @@ export function ConversationController({
           setEntrySessionMode('agent');
           setEntryContextReferences([]);
           setEntryCharacterLaunches([]);
+          setEntryCharacterConversationMode('companion');
           if (mode !== 'character-dialogue') {
             setEntryCharacterTargets([]);
             setEntryCharacterTargetsStatus('idle');
@@ -1468,6 +1559,7 @@ export function ConversationController({
             characterTargetsAvailable:
               entryCharacterTargetsStatus === 'ready' && entryCharacterTargets.length > 0,
             characterLaunches: entryCharacterLaunches,
+            characterConversationMode: entryCharacterConversationMode,
             bindingPending: isEntryBindingPending,
             configurationReady:
               hasConfigSnapshot &&
@@ -1577,6 +1669,7 @@ export function ConversationController({
       handleSendWithoutConversation,
       hasConfigSnapshot,
       entryCharacterLaunches,
+      entryCharacterConversationMode,
       entryCharacterTargets,
       entryCharacterTargetsStatus,
       hostRuntimeAdapter,
@@ -2025,6 +2118,15 @@ export function ConversationController({
                   selectedCharacterLaunches={
                     entryMode === 'character-dialogue' ? entryCharacterLaunches : []
                   }
+                  entryCharacterConversationMode={
+                    entryMode === 'character-dialogue' ? entryCharacterConversationMode : undefined
+                  }
+                  onEntryCharacterConversationModeChange={
+                    entryMode === 'character-dialogue'
+                      ? configureEntryCharacterConversationMode
+                      : undefined
+                  }
+                  entryCharacterConversationModeDisabled={isEntryBindingPending}
                   onRemoveCharacterLaunch={(characterVersionId) =>
                     configureEntryCharacterLaunches(
                       entryCharacterLaunches.filter(
@@ -2064,21 +2166,15 @@ export function ConversationController({
                   }}
                   onExpandedChange={handleEntryQuickDetailOpenChange}
                 >
-                  {entryMode === 'authoring' && composerWorkspace?.kind === 'entry' ? (
+                  {(entryMode === 'authoring' || characterCreationLock !== undefined) &&
+                  composerWorkspace?.kind === 'entry' ? (
                     <AuthoringTargetSelector
                       presentation={composerWorkspace}
                       selected={entryWorkspaceTarget}
                       pending={isEntryBindingPending}
                       onChange={configureEntryAuthoringTarget}
                       creationOnlyKind={characterCreationLock ? 'character-project' : undefined}
-                      onCancelCreation={
-                        characterCreationLock
-                          ? () => {
-                              setCharacterCreationLock(undefined);
-                              handleEntryModeChange('assistant');
-                            }
-                          : undefined
-                      }
+                      onCancelCreation={characterCreationLock ? cancelCharacterCreation : undefined}
                     />
                   ) : entryMode === 'character-dialogue' &&
                     entryCharacterTargetsStatus === 'ready' &&
@@ -2327,6 +2423,13 @@ function projectDraftReferenceReceipt(payload: AgentContextPayload): AgentInputR
     ownerId,
     ...(bindingReceiptId === undefined ? {} : { bindingReceiptId }),
   };
+}
+
+function readEntryCharacterConversationMode(
+  intent: AgentEntryIntentProjection,
+): CharacterConversationMode {
+  const binding = intent.targetReceipt?.binding;
+  return binding?.kind === 'character-dialogue' ? binding.mode : 'companion';
 }
 
 function readRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {

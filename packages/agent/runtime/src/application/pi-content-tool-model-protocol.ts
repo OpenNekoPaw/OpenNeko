@@ -578,13 +578,16 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
       const item = asRecord(value);
       const source = asRecord(item?.['source']);
       if (!item || !source) return [];
-      const path =
+      const workspacePath =
         source['sourceKind'] === 'workspace-file' &&
         typeof source['projectRelativePath'] === 'string'
           ? source['projectRelativePath']
           : undefined;
       const locator =
-        path === undefined ? undefined : optionalContentLocator({ kind: 'workspace-file', path });
+        optionalContentLocator(source['contentLocator']) ??
+        (workspacePath === undefined
+          ? undefined
+          : optionalContentLocator({ kind: 'workspace-file', path: workspacePath }));
       const reference =
         locator === undefined
           ? undefined
@@ -605,8 +608,8 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
               : {}),
           },
           ...(reference === undefined ? {} : { [reference.field]: reference.ref }),
-          ...(reference?.mediaType === 'text' && path !== undefined
-            ? { workspace_path: path }
+          ...(reference?.mediaType === 'text' && workspacePath !== undefined
+            ? { workspace_path: workspacePath }
             : {}),
         },
       ];
@@ -1121,6 +1124,8 @@ function contentLocatorLabel(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return portableBaseName(locator.path);
+    case 'media-library':
+      return portableBaseName(locator.relativePath);
     case 'document-entry':
       return portableBaseName(locator.entryPath);
     case 'package-resource':
@@ -1141,6 +1146,8 @@ function contentLocatorPortablePath(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return locator.relativePath;
     case 'document-entry':
       return locator.entryPath;
     case 'package-resource':

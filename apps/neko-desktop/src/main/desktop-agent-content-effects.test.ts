@@ -9,8 +9,14 @@ import {
 } from '@neko/agent-runtime/runtime/host-controller';
 import type { ILogger } from '@neko/shared/logger';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
-import { searchWorkspaceLinkedMediaLibraryContentLocators } from '@neko/assets-node';
+import {
+  createGlobalMediaLibraryConnection,
+  createProjectMediaLibraryBindingFingerprint,
+  ProjectMediaLibraryBindingRepository,
+  searchProjectMediaLibraryContentLocators,
+} from '@neko/assets-node';
 
 const temporaryDirectories: string[] = [];
 
@@ -160,6 +166,7 @@ describe('Desktop Agent content effects', () => {
       mediaRoot,
       path.join(fixture.workspace.workspacePath, 'neko', 'assets', 'Reference'),
     );
+    await bindMediaLibrary(fixture, mediaRoot, 'Reference');
 
     await fixture.effects.searchProjectFiles(
       { filter: 'hero', conversationId: 'conversation-1' },
@@ -170,7 +177,11 @@ describe('Desktop Agent content effects', () => {
       expect.objectContaining({
         files: [
           expect.objectContaining({
-            locator: { kind: 'workspace-file', path: 'neko/assets/Reference/shots/hero.png' },
+            locator: {
+              kind: 'media-library',
+              libraryName: 'Reference',
+              relativePath: 'shots/hero.png',
+            },
             source: 'media-library',
             mediaType: 'image',
           }),
@@ -364,6 +375,7 @@ async function createFixture(interactionOverrides: Partial<AgentContentInteracti
     displayName: 'Fixture',
     locator: { kind: 'variable', value: '${HOME}/fixture' },
   };
+  const globalMediaLibraryRoot = path.join(path.dirname(workspacePath), '.openneko', 'media-libraries');
   const openExternal = vi.fn(async () => undefined);
   const revealPath = vi.fn();
   const host = createElectronNekoHostPorts({
@@ -388,8 +400,10 @@ async function createFixture(interactionOverrides: Partial<AgentContentInteracti
       host,
       interaction,
       searchLinkedMediaLibraryFiles: (input) =>
-        searchWorkspaceLinkedMediaLibraryContentLocators({
+        searchProjectMediaLibraryContentLocators({
+          projectId: 'project-1',
           workspace,
+          globalMediaLibraryRoot,
           files: host.files,
           query: input.query,
           limit: input.limit,
@@ -400,7 +414,40 @@ async function createFixture(interactionOverrides: Partial<AgentContentInteracti
     openExternal,
     revealPath,
     workspace,
+    globalMediaLibraryRoot,
   };
+}
+
+async function bindMediaLibrary(
+  fixture: Awaited<ReturnType<typeof createFixture>>,
+  sourceDirectory: string,
+  libraryName: string,
+): Promise<void> {
+  const { libraryId } = await createGlobalMediaLibraryConnection({
+    mediaLibraryRoot: fixture.globalMediaLibraryRoot,
+    sourceDirectory,
+    locationKind: 'local',
+  });
+  const repository = new ProjectMediaLibraryBindingRepository(
+    fixture.workspace.workspacePath,
+    'project-1',
+  );
+  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
+    projectId: 'project-1',
+    libraryName,
+    connectionId: libraryId,
+  });
+  await repository.applyRecovery(
+    confirmProjectMediaLibraryRecovery({
+      projectId: 'project-1',
+      libraryName,
+      connectionId: libraryId,
+      requirementFingerprint: 'sha256:test-requirement-1234',
+      validatedRelativePaths: [],
+      expectedBindingFingerprint: null,
+      replacementBindingFingerprint,
+    }),
+  );
 }
 
 function createContext(workspaceId: string) {

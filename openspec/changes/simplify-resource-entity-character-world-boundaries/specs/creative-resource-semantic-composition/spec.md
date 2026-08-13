@@ -1,5 +1,27 @@
 ## ADDED Requirements
 
+### Requirement: Project Content preserves domain owners
+
+The Project owner SHALL provide a read-only Project Content projection with Characters, Worlds, Other
+Elements and Candidates groups. Character and World entries MUST retain their exact owning project
+identity; Entity records MUST NOT become their superclass or duplicate an associated Character entry.
+
+#### Scenario: Associated Character and Entity are composed once
+
+- **WHEN** an exact ProjectEntityCharacterAssociation connects a confirmed Entity and CharacterProject
+- **THEN** Project Content returns one Character entry carrying both exact identities
+- **AND** the same Entity is absent from Other Elements
+
+#### Scenario: Entity resembles a World
+
+- **WHEN** a confirmed Entity has a scene or location semantic kind but no WorldProject exists
+- **THEN** it remains an Other Element and no World entry is inferred
+
+#### Scenario: Candidate remains unconfirmed
+
+- **WHEN** Entity discovery produces a candidate
+- **THEN** Project Content shows it only in Candidates and does not create an Entity, Character or World fact
+
 ### Requirement: Creative concepts retain one exact owner
 
 The system SHALL model File content, Media Library connections and local managed Assets as foundational

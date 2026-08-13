@@ -1,30 +1,82 @@
 import {
+  parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
   parseCharacterVersion,
+  type CharacterAuthoringTestSnapshot,
   type CharacterProject,
   type CharacterVersion,
 } from './character';
 import {
+  parseCharacterStoryline,
+  parseCharacterStorylineDraft,
+  parseCharacterStorylineVersion,
+  type CharacterStoryline,
+  type CharacterStorylineDraft,
+  type CharacterStorylineVersion,
+} from './character-storyline';
+import {
   parseCharacterFoundationCommandHostRequest,
   type CharacterFoundationCommand,
 } from './character-foundation-host';
+import {
+  parseCharacterVersionLineage,
+  type CharacterVersionLineage,
+} from './character-version-lineage';
+import {
+  parseCharacterVersionReferenceInventory,
+  type CharacterVersionReferenceInventory,
+} from './character-version-reference';
 
 export const CHARACTER_AUTHORING_HOST_CHANNEL = 'neko:character:authoring' as const;
 
-export type CharacterAuthoringCommand = Extract<
+type CharacterAuthoringFoundationCommand = Extract<
   CharacterFoundationCommand,
   {
     readonly operation:
       | 'character-project-update-draft'
       | 'character-project-set-review'
-      | 'character-version-publish';
+      | 'character-version-publish'
+      | 'character-storyline-create'
+      | 'character-storyline-update-draft'
+      | 'character-storyline-restore-as-draft'
+      | 'character-storyline-delete'
+      | 'character-storyline-publish';
   }
 >;
+
+export type CharacterAuthoringCommand =
+  | CharacterAuthoringFoundationCommand
+  | {
+      readonly operation: 'character-version-continue';
+      readonly input: {
+        readonly characterProjectId: string;
+        readonly characterVersionId: string;
+        readonly replaceWorkingDraft: true;
+      };
+    }
+  | {
+      readonly operation: 'character-version-delete';
+      readonly input: {
+        readonly characterProjectId: string;
+        readonly characterVersionId: string;
+      };
+    }
+  | {
+      readonly operation: 'character-authoring-test-capture';
+      readonly input: {
+        readonly characterProjectId: string;
+        readonly authoringTestSnapshotId: string;
+      };
+    };
+
+export type CharacterAuthoringAuthority =
+  | { readonly kind: 'standalone-library' }
+  | { readonly kind: 'content-project'; readonly contentProjectId: string };
 
 export interface CharacterAuthoringBinding {
   readonly workspaceId: string;
   readonly workspaceGrantId: string;
-  readonly contentProjectId: string;
+  readonly authority: CharacterAuthoringAuthority;
   readonly characterProjectId: string;
 }
 
@@ -44,7 +96,14 @@ export type CharacterAuthoringHostRequest =
 
 export interface CharacterAuthoringDiagnostic {
   readonly owner: 'character';
-  readonly recordKind: 'character-project' | 'character-version' | 'authoring-test-snapshot';
+  readonly recordKind:
+    | 'character-project'
+    | 'character-version'
+    | 'authoring-test-snapshot'
+    | 'character-storyline'
+    | 'character-storyline-draft'
+    | 'character-storyline-version'
+    | 'character-version-lineage';
   readonly recordId: string;
   readonly message: string;
 }
@@ -52,6 +111,12 @@ export interface CharacterAuthoringDiagnostic {
 export interface CharacterAuthoringSnapshot {
   readonly project: CharacterProject;
   readonly versions: readonly CharacterVersion[];
+  readonly authoringTestSnapshots: readonly CharacterAuthoringTestSnapshot[];
+  readonly storylines: readonly CharacterStoryline[];
+  readonly storylineDrafts: readonly CharacterStorylineDraft[];
+  readonly storylineVersions: readonly CharacterStorylineVersion[];
+  readonly lineage: CharacterVersionLineage | null;
+  readonly referenceInventories: readonly CharacterVersionReferenceInventory[];
   readonly diagnostics: readonly CharacterAuthoringDiagnostic[];
 }
 
@@ -114,6 +179,72 @@ export function parseCharacterAuthoringHostRequest(value: unknown): CharacterAut
     return { ...base, operation };
   }
   requireExactKeys(record, [...BASE_KEYS, 'operation', 'input']);
+  if (operation === 'character-authoring-test-capture') {
+    const input = requireRecord(record['input'], 'Character authoring-test input');
+    requireExactKeys(input, ['characterProjectId', 'authoringTestSnapshotId']);
+    const command: CharacterAuthoringCommand = {
+      operation,
+      input: {
+        characterProjectId: requireIdentity(
+          input['characterProjectId'],
+          'Character authoring-test CharacterProject',
+        ),
+        authoringTestSnapshotId: requireIdentity(
+          input['authoringTestSnapshotId'],
+          'Character authoring-test snapshot',
+        ),
+      },
+    };
+    if (characterCommandProjectId(command) !== base.characterProjectId) {
+      throw new Error('Character authoring command targets another CharacterProject.');
+    }
+    return { ...base, ...command };
+  }
+  if (operation === 'character-version-continue' || operation === 'character-version-delete') {
+    const input = requireRecord(record['input'], 'Character version operation input');
+    requireExactKeys(
+      input,
+      operation === 'character-version-continue'
+        ? ['characterProjectId', 'characterVersionId', 'replaceWorkingDraft']
+        : ['characterProjectId', 'characterVersionId'],
+    );
+    const command: CharacterAuthoringCommand =
+      operation === 'character-version-continue'
+        ? {
+            operation,
+            input: {
+              characterProjectId: requireIdentity(
+                input['characterProjectId'],
+                'Character version operation CharacterProject',
+              ),
+              characterVersionId: requireIdentity(
+                input['characterVersionId'],
+                'Character version operation CharacterVersion',
+              ),
+              replaceWorkingDraft: requireLiteralTrue(
+                input['replaceWorkingDraft'],
+                'Character version continue working-draft replacement',
+              ),
+            },
+          }
+        : {
+            operation,
+            input: {
+              characterProjectId: requireIdentity(
+                input['characterProjectId'],
+                'Character version operation CharacterProject',
+              ),
+              characterVersionId: requireIdentity(
+                input['characterVersionId'],
+                'Character version operation CharacterVersion',
+              ),
+            },
+          };
+    if (characterCommandProjectId(command) !== base.characterProjectId) {
+      throw new Error('Character authoring command targets another CharacterProject.');
+    }
+    return { ...base, ...command };
+  }
   const parsed = parseCharacterFoundationCommandHostRequest({
     requestId: base.requestId,
     operation,
@@ -122,7 +253,8 @@ export function parseCharacterAuthoringHostRequest(value: unknown): CharacterAut
   if (!isCharacterAuthoringCommand(parsed)) {
     throw new Error(`Character authoring operation '${String(operation)}' is not permitted.`);
   }
-  if (characterCommandProjectId(parsed) !== base.characterProjectId) {
+  const commandProjectId = characterCommandProjectId(parsed);
+  if (commandProjectId !== undefined && commandProjectId !== base.characterProjectId) {
     throw new Error('Character authoring command targets another CharacterProject.');
   }
   switch (parsed.operation) {
@@ -131,6 +263,16 @@ export function parseCharacterAuthoringHostRequest(value: unknown): CharacterAut
     case 'character-project-set-review':
       return { ...base, operation: parsed.operation, input: parsed.input };
     case 'character-version-publish':
+      return { ...base, operation: parsed.operation, input: parsed.input };
+    case 'character-storyline-create':
+      return { ...base, operation: parsed.operation, input: parsed.input };
+    case 'character-storyline-update-draft':
+      return { ...base, operation: parsed.operation, input: parsed.input };
+    case 'character-storyline-restore-as-draft':
+      return { ...base, operation: parsed.operation, input: parsed.input };
+    case 'character-storyline-delete':
+      return { ...base, operation: parsed.operation, input: parsed.input };
+    case 'character-storyline-publish':
       return { ...base, operation: parsed.operation, input: parsed.input };
   }
 }
@@ -152,7 +294,17 @@ export function parseCharacterAuthoringHostResult(
 
 export function parseCharacterAuthoringSnapshot(value: unknown): CharacterAuthoringSnapshot {
   const record = requireRecord(value, 'Character authoring snapshot');
-  requireExactKeys(record, ['project', 'versions', 'diagnostics']);
+  requireExactKeys(record, [
+    'project',
+    'versions',
+    'authoringTestSnapshots',
+    'storylines',
+    'storylineDrafts',
+    'storylineVersions',
+    'lineage',
+    'referenceInventories',
+    'diagnostics',
+  ]);
   const project = parseCharacterProject(record['project']);
   const versions = parseArray(record['versions'], parseCharacterVersion, 'Character versions');
   if (versions.some((version) => version.characterProjectId !== project.characterProjectId)) {
@@ -160,20 +312,95 @@ export function parseCharacterAuthoringSnapshot(value: unknown): CharacterAuthor
       'Character authoring snapshot contains a version from another CharacterProject.',
     );
   }
+  const authoringTestSnapshots = parseArray(
+    record['authoringTestSnapshots'],
+    parseCharacterAuthoringTestSnapshot,
+    'Character authoring-test snapshots',
+  );
+  const storylines = parseArray(
+    record['storylines'],
+    parseCharacterStoryline,
+    'Character storylines',
+  );
+  const storylineDrafts = parseArray(
+    record['storylineDrafts'],
+    parseCharacterStorylineDraft,
+    'Character storyline drafts',
+  );
+  const storylineVersions = parseArray(
+    record['storylineVersions'],
+    parseCharacterStorylineVersion,
+    'Character storyline versions',
+  );
+  const lineage =
+    record['lineage'] === null ? null : parseCharacterVersionLineage(record['lineage']);
+  if (lineage !== null && lineage.characterProjectId !== project.characterProjectId) {
+    throw new Error('Character authoring snapshot contains lineage from another CharacterProject.');
+  }
+  const referenceInventories = parseArray(
+    record['referenceInventories'],
+    parseCharacterVersionReferenceInventory,
+    'Character version reference inventories',
+  );
+  if (
+    authoringTestSnapshots.some(
+      (snapshot) => snapshot.characterProjectId !== project.characterProjectId,
+    ) ||
+    storylines.some((storyline) => storyline.characterProjectId !== project.characterProjectId)
+  ) {
+    throw new Error(
+      'Character authoring snapshot contains a record from another CharacterProject.',
+    );
+  }
+  const storylineIds = new Set(storylines.map((storyline) => storyline.characterStorylineId));
+  const versionIds = new Set(versions.map((version) => version.characterVersionId));
+  if (
+    storylineDrafts.some((draft) => !storylineIds.has(draft.characterStorylineId)) ||
+    storylineVersions.some((version) => !storylineIds.has(version.characterStorylineId)) ||
+    storylineDrafts.some((draft) => !versionIds.has(draft.characterVersionId)) ||
+    storylineVersions.some((version) => !versionIds.has(version.characterVersionId))
+  ) {
+    throw new Error('Character authoring snapshot contains an unowned Storyline record.');
+  }
+  const inventoryVersionIds = new Set(
+    referenceInventories.map((inventory) => inventory.characterVersionId),
+  );
+  if (
+    inventoryVersionIds.size !== referenceInventories.length ||
+    inventoryVersionIds.size !== versionIds.size ||
+    [...inventoryVersionIds].some((characterVersionId) => !versionIds.has(characterVersionId))
+  ) {
+    throw new Error('Character authoring snapshot reference inventory is incomplete or unowned.');
+  }
   return {
     project,
     versions,
+    authoringTestSnapshots,
+    storylines,
+    storylineDrafts,
+    storylineVersions,
+    lineage,
+    referenceInventories,
     diagnostics: parseArray(record['diagnostics'], parseDiagnostic, 'Character diagnostics'),
   };
 }
 
-export function isCharacterAuthoringCommand(
-  command: CharacterFoundationCommand,
-): command is CharacterAuthoringCommand {
+export function isCharacterAuthoringCommand(command: {
+  readonly operation: string;
+  readonly input: unknown;
+}): command is CharacterAuthoringCommand {
   return (
     command.operation === 'character-project-update-draft' ||
     command.operation === 'character-project-set-review' ||
-    command.operation === 'character-version-publish'
+    command.operation === 'character-version-publish' ||
+    command.operation === 'character-storyline-create' ||
+    command.operation === 'character-storyline-update-draft' ||
+    command.operation === 'character-storyline-restore-as-draft' ||
+    command.operation === 'character-storyline-delete' ||
+    command.operation === 'character-storyline-publish' ||
+    command.operation === 'character-version-continue' ||
+    command.operation === 'character-version-delete' ||
+    command.operation === 'character-authoring-test-capture'
   );
 }
 
@@ -183,14 +410,14 @@ const BASE_KEYS = [
   'windowId',
   'workspaceId',
   'workspaceGrantId',
-  'contentProjectId',
+  'authority',
   'characterProjectId',
 ] as const;
 const RESULT_KEYS = [
   'requestId',
   'workspaceId',
   'workspaceGrantId',
-  'contentProjectId',
+  'authority',
   'characterProjectId',
 ] as const;
 
@@ -214,9 +441,28 @@ function parseBinding(record: Readonly<Record<string, unknown>>): CharacterAutho
   return {
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-    contentProjectId: requireIdentity(record['contentProjectId'], 'ContentProject'),
+    authority: parseAuthority(record['authority']),
     characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
   };
+}
+
+function parseAuthority(value: unknown): CharacterAuthoringAuthority {
+  const record = requireRecord(value, 'Character authoring authority');
+  if (record['kind'] === 'standalone-library') {
+    requireExactKeys(record, ['kind']);
+    return { kind: 'standalone-library' };
+  }
+  if (record['kind'] === 'content-project') {
+    requireExactKeys(record, ['kind', 'contentProjectId']);
+    return {
+      kind: 'content-project',
+      contentProjectId: requireIdentity(
+        record['contentProjectId'],
+        'Character authoring ContentProject',
+      ),
+    };
+  }
+  throw new Error(`Unknown Character authoring authority '${String(record['kind'])}'.`);
 }
 
 function parseDiagnostic(value: unknown): CharacterAuthoringDiagnostic {
@@ -227,7 +473,11 @@ function parseDiagnostic(value: unknown): CharacterAuthoringDiagnostic {
   if (
     recordKind !== 'character-project' &&
     recordKind !== 'character-version' &&
-    recordKind !== 'authoring-test-snapshot'
+    recordKind !== 'authoring-test-snapshot' &&
+    recordKind !== 'character-storyline' &&
+    recordKind !== 'character-storyline-draft' &&
+    recordKind !== 'character-storyline-version' &&
+    recordKind !== 'character-version-lineage'
   ) {
     throw new Error(`Unknown Character authoring diagnostic kind '${String(recordKind)}'.`);
   }
@@ -239,23 +489,34 @@ function parseDiagnostic(value: unknown): CharacterAuthoringDiagnostic {
   };
 }
 
-function characterCommandProjectId(command: CharacterAuthoringCommand): string {
-  return command.input.characterProjectId;
+function characterCommandProjectId(command: CharacterAuthoringCommand): string | undefined {
+  switch (command.operation) {
+    case 'character-storyline-update-draft':
+    case 'character-storyline-restore-as-draft':
+    case 'character-storyline-delete':
+    case 'character-storyline-publish':
+      return undefined;
+    default:
+      return command.input.characterProjectId;
+  }
 }
 
 function assertBinding(
   actual: CharacterAuthoringBinding,
   expected: CharacterAuthoringBinding,
 ): void {
-  for (const key of [
-    'workspaceId',
-    'workspaceGrantId',
-    'contentProjectId',
-    'characterProjectId',
-  ] as const) {
+  for (const key of ['workspaceId', 'workspaceGrantId', 'characterProjectId'] as const) {
     if (actual[key] !== expected[key]) {
       throw new Error(`Character authoring response ${key} mismatch.`);
     }
+  }
+  if (
+    actual.authority.kind !== expected.authority.kind ||
+    (actual.authority.kind === 'content-project' &&
+      (expected.authority.kind !== 'content-project' ||
+        actual.authority.contentProjectId !== expected.authority.contentProjectId))
+  ) {
+    throw new Error('Character authoring response authority mismatch.');
   }
 }
 
@@ -286,4 +547,9 @@ function requireIdentity(value: unknown, label: string): string {
     throw new Error(`${label} identity must be a non-empty string.`);
   }
   return value;
+}
+
+function requireLiteralTrue(value: unknown, label: string): true {
+  if (value !== true) throw new Error(`${label} must be explicitly true.`);
+  return true;
 }

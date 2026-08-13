@@ -13,6 +13,7 @@ import type {
   ContentLocator,
   DocumentEntryContentLocator,
   GeneratedOutputContentLocator,
+  MediaLibraryContentLocator,
   PackageResourceContentLocator,
 } from '../contracts';
 import { NodeWorkspaceContentReadHandler } from './workspace-content-read-handler';
@@ -21,9 +22,20 @@ export interface NodeDocumentEntryReader {
   readEntry(sourcePath: string, entryPath: string): Promise<Uint8Array>;
 }
 
+export interface NodeDocumentEntryMediaSourcePathResolver {
+  resolve(
+    locator: MediaLibraryContentLocator,
+  ): Promise<
+    | { readonly ok: true; readonly filePath: string }
+    | { readonly ok: false; readonly code: ContentIoDiagnosticCode }
+  >;
+}
+
 export interface CreateNodeHostContentReadServiceOptions {
   readonly workspaceRoot: string;
   readonly documentEntryReader?: NodeDocumentEntryReader;
+  readonly documentEntryMediaSourcePathResolver?: NodeDocumentEntryMediaSourcePathResolver;
+  readonly mediaLibraryHandler?: ContentReadHandler<MediaLibraryContentLocator>;
   readonly packageResourceHandler?: ContentReadHandler<PackageResourceContentLocator>;
   readonly defaultMaxBytes?: number;
 }
@@ -37,11 +49,14 @@ export function createNodeHostContentReadService(
   });
   return new ExplicitContentReadService({
     workspaceFile,
+    mediaLibrary: options.mediaLibraryHandler ?? new UnavailableContentReadHandler(),
     documentEntry: options.documentEntryReader
       ? new NodeDocumentEntryContentReadHandler(
           options.workspaceRoot,
           workspaceFile,
+          options.mediaLibraryHandler ?? new UnavailableContentReadHandler(),
           options.documentEntryReader,
+          options.documentEntryMediaSourcePathResolver,
         )
       : new UnavailableContentReadHandler(),
     generatedOutput: new NodeGeneratedOutputContentReadHandler(workspaceFile),
@@ -53,7 +68,9 @@ export class NodeDocumentEntryContentReadHandler implements ContentReadHandler<D
   constructor(
     private readonly workspaceRoot: string,
     private readonly workspaceFile: NodeWorkspaceContentReadHandler,
+    private readonly mediaLibrary: ContentReadHandler<MediaLibraryContentLocator>,
     private readonly entryReader: NodeDocumentEntryReader,
+    private readonly mediaSourcePathResolver?: NodeDocumentEntryMediaSourcePathResolver,
   ) {}
 
   async stat(
@@ -99,14 +116,26 @@ export class NodeDocumentEntryContentReadHandler implements ContentReadHandler<D
       }
     | Extract<ContentStat, { status: 'unavailable' }>
   > {
-    const source = await this.workspaceFile.stat(locator.source, {
+    const sourceOptions = {
       ...(locator.source.fingerprint ? { expectedFingerprint: locator.source.fingerprint } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
-    });
+    };
+    const source =
+      locator.source.kind === 'workspace-file'
+        ? await this.workspaceFile.stat(locator.source, sourceOptions)
+        : await this.mediaLibrary.stat(locator.source, sourceOptions);
     if (source.status === 'unavailable') return unavailable(locator, source.diagnostic.code);
     if (options.signal?.aborted) return unavailable(locator, 'content-cancelled');
 
-    const sourcePath = path.join(this.workspaceRoot, ...locator.source.path.split('/'));
+    let sourcePath: string;
+    if (locator.source.kind === 'workspace-file') {
+      sourcePath = path.join(this.workspaceRoot, ...locator.source.path.split('/'));
+    } else {
+      if (!this.mediaSourcePathResolver) return unavailable(locator, 'content-unsupported');
+      const resolved = await this.mediaSourcePathResolver.resolve(locator.source);
+      if (!resolved.ok) return unavailable(locator, resolved.code);
+      sourcePath = resolved.filePath;
+    }
     try {
       const bytes = await this.entryReader.readEntry(sourcePath, locator.entryPath);
       if (options.signal?.aborted) return unavailable(locator, 'content-cancelled');

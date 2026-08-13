@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createCanvasHostSessionId } from '@neko/canvas-domain';
+import { createCanvasHostSessionId, parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import {
   isSameCanvasHostIdentity,
   parseDesktopCanvasEmbeddedPreviewReleaseRequest,
   parseDesktopCanvasEmbeddedPreviewRequest,
   parseDesktopCanvasEmbeddedPreviewResult,
-  parseDesktopCanvasHostIdentity,
-  parseDesktopCanvasMediaRequest,
-  parseDesktopCanvasMediaResponse,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
 } from './canvas-bridge-contract';
@@ -25,7 +22,7 @@ const identity = {
 
 describe('Desktop Canvas bridge contract', () => {
   it('parses every explicit owner identity field', () => {
-    expect(parseDesktopCanvasHostIdentity(identity)).toEqual(identity);
+    expect(parseCanvasHostRuntimeIdentity(identity)).toEqual(identity);
     expect(createCanvasHostSessionId(identity.viewId, identity.viewInstanceId)).toBe(
       identity.sessionId,
     );
@@ -34,7 +31,7 @@ describe('Desktop Canvas bridge contract', () => {
 
   it('rejects missing and stale identity input instead of using active Canvas state', () => {
     expect(() =>
-      parseDesktopCanvasHostIdentity({
+      parseCanvasHostRuntimeIdentity({
         ...identity,
         documentId: '',
       }),
@@ -151,76 +148,5 @@ describe('Desktop Canvas bridge contract', () => {
         'embedded-1',
       ),
     ).toThrow();
-  });
-
-  it('parses owner-bound Canvas media requests and rejects escaping paths', () => {
-    const request = {
-      identity,
-      type: 'media:probe',
-      nodeId: 'audio-1',
-      locator: { kind: 'workspace-file', path: 'cases/test.aac' },
-      mediaType: 'audio',
-    };
-    expect(parseDesktopCanvasMediaRequest(request)).toEqual(request);
-    expect(() =>
-      parseDesktopCanvasMediaRequest({
-        ...request,
-        locator: { kind: 'workspace-file', path: '../test.aac' },
-      }),
-    ).toThrow('portable workspace-file');
-  });
-
-  it('parses package media responses without accepting mismatched node ownership', () => {
-    const response = {
-      type: 'media:probeResult',
-      nodeId: 'audio-1',
-      mediaInfo: {
-        duration: 12,
-        width: 0,
-        height: 0,
-        fps: 0,
-        codec: 'aac',
-        format: 'aac',
-        hasAudio: true,
-      },
-    };
-    expect(parseDesktopCanvasMediaResponse(response, 'audio-1')).toEqual(response);
-    expect(() => parseDesktopCanvasMediaResponse(response, 'audio-2')).toThrow(
-      'owner does not match',
-    );
-  });
-
-  it('retains locator-backed native media descriptors and rejects path-only success', () => {
-    const response = {
-      type: 'media:streamReady',
-      nodeId: 'audio-1',
-      mediaInfo: {
-        duration: 12,
-        width: 0,
-        height: 0,
-        fps: 0,
-        codec: 'aac',
-        format: 'aac',
-        hasAudio: true,
-      },
-      contentLocator: { kind: 'workspace-file', path: 'media/voice.aac' },
-      audio: {
-        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        mimeType: 'audio/aac',
-        durationSeconds: 12,
-      },
-    };
-
-    expect(parseDesktopCanvasMediaResponse(response, 'audio-1')).toEqual(response);
-    expect(() =>
-      parseDesktopCanvasMediaResponse(
-        {
-          ...response,
-          contentLocator: undefined,
-          assetPath: 'media/voice.aac',
-        },
-        'audio-1',
-      ),
-    ).toThrow('stream response is incomplete');
   });
 });

@@ -217,6 +217,23 @@ describe('CharacterConversationLaunchService', () => {
     expect(fixture.repository.characterRuns).toHaveLength(0);
   });
 
+  it('rejects two versions of the same Character before creating a Room owner', async () => {
+    const second = {
+      ...publication('second'),
+      characterProjectId: 'project-a',
+    };
+    const fixture = createFixture([publication('a'), second]);
+
+    await expect(
+      fixture.service.launch(
+        companionInput('request-same-character', ['version-a', 'version-second']),
+      ),
+    ).rejects.toMatchObject({ code: 'character-launch-selection-invalid' });
+    expect(fixture.repository.rooms).toHaveLength(0);
+    expect(fixture.repository.characterRuns).toHaveLength(0);
+    expect(fixture.createPrimarySession).not.toHaveBeenCalled();
+  });
+
   it('releases every new AgentSession on aggregate failure and reuses an exact committed launch', async () => {
     const fixture = createFixture([publication('a'), publication('b')]);
     fixture.repository.failCommit = true;

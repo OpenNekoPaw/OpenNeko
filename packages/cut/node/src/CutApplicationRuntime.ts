@@ -84,7 +84,10 @@ export interface CutApplicationRuntimeOptions {
     readonly workspacePath: string;
     readonly storage: CutDocumentStorage;
   }>;
-  readonly resolveResourcePath: (workspaceId: string, locator: ContentLocator) => Promise<string>;
+  readonly resolveResourcePath: (
+    identity: Pick<CutHostRuntimeIdentity, 'projectId' | 'workspaceId'>,
+    locator: ContentLocator,
+  ) => Promise<string>;
   readonly readText: (absolutePath: string) => Promise<string>;
   readonly createMediaPublisher?: (input: {
     readonly windowId: string;
@@ -149,6 +152,7 @@ export class CutApplicationRuntime {
     this.requireActive();
     if (
       (input.item.source !== 'files' && input.item.source !== 'media') ||
+      input.item.role === 'library-root' ||
       !input.item.capabilities.includes('add-to-cut')
     ) {
       throw new Error('Cut does not support this Resource Browser item.');
@@ -175,7 +179,7 @@ export class CutApplicationRuntime {
     if (completed) return completed.snapshot;
     const current = entry.session.view();
     const sourcePath = await this.options.resolveResourcePath(
-      input.resourceIdentity.workspaceId,
+      input.resourceIdentity,
       input.item.locator,
     );
     const importer = await CutWorkspaceMediaImporter.create(entry.workspacePath);
@@ -477,12 +481,7 @@ export class CutApplicationRuntime {
         const payload = requireMediaDropPayload(request.payload);
         const sourcePaths =
           payload.source.kind === 'content-locator'
-            ? [
-                await this.options.resolveResourcePath(
-                  entry.identity.workspaceId,
-                  payload.source.data.locator,
-                ),
-              ]
+            ? [await this.options.resolveResourcePath(entry.identity, payload.source.data.locator)]
             : payload.source.uris.map(requireLocalFileUri);
         await this.applyMediaPaths(entry, request.requestId, {
           ...payload,

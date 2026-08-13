@@ -2993,17 +2993,6 @@
       "userWorkflow": "Create, publish, browse, select, compare, retain, or launch an exact immutable Character release."
     },
     {
-      "businessRequirement": "The Character authoring and runtime path must preserve the exact immutable Character publication selected, compared, or launched by the user.",
-      "category": "internal-version-field",
-      "domainOwner": "@neko/chara",
-      "fieldScope": "Exact user-managed Character publication occurrence at packages/project/src/contracts/project-composition.ts:1",
-      "id": "1dc5b3937cf6fea36424",
-      "isolationRule": "The occurrence carries Character publication identity or immutable content only and cannot dispatch an internal schema, migration, cache generation, handler, provider, or alternate implementation; invalidity remains record- or request-local.",
-      "path": "packages/project/src/contracts/project-composition.ts",
-      "token": "CharacterVersion",
-      "userWorkflow": "Create, publish, browse, select, compare, retain, or launch an exact immutable Character release."
-    },
-    {
       "businessRequirement": "The World authoring and runtime path must preserve the exact immutable World publication selected, compared, or launched by the user.",
       "category": "internal-version-field",
       "domainOwner": "@neko/world",

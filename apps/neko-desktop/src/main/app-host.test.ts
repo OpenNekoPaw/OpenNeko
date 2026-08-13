@@ -81,6 +81,7 @@ import type { RoomRun, RoomView } from '@neko/chara/contracts';
 import {
   createCharacterAuthoringCommandRequest,
   createCharacterAuthoringSnapshotRequest,
+  createCharacterPortableHostRequest,
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
 } from '@neko/chara/contracts';
@@ -91,6 +92,7 @@ import {
 import {
   createProjectAuthoringCatalogHostRequest,
   createProjectAuthoringNavigationHostRequest,
+  createProjectContentHostRequest,
   createProjectLocalAuthoringHostRequest,
   createProjectLocalAuthoringRetryHostRequest,
 } from '@neko/project/contracts';
@@ -668,10 +670,6 @@ describe('DesktopAppHost', () => {
     expect(activeScene(afterCreate)).toEqual(initialScene);
     expect(afterCreate.window.tabs).toHaveLength(0);
     expect(afterCreate.catalog.projects).toHaveLength(1);
-    expect(fixture.appHost.projectAuthoring.ensureComposition).toHaveBeenCalledWith({
-      workspace: expect.objectContaining({ workspaceId: 'workspace-novel' }),
-      contentProjectId: 'content:workspace-novel',
-    });
 
     const library = await fixture.appHost.resolveWorkspaceTarget(
       fixture.sender,
@@ -850,6 +848,43 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('enters an authorized Workspace without consulting Project fact projections', async () => {
+    const fixture = await createShellAppHost();
+    const workspace = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(workspace);
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
+      fixture.sender,
+      createDesktopWorkspaceDirectoryTargetRequest({
+        requestId: 'composition-independent-workspace-grant',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      }),
+      async () => ({ label: workspace.displayName, hostResource: workspace.workspacePath }),
+    );
+    if (selected.status !== 'authorized') throw new Error('Expected Workspace authorization.');
+
+    await expect(
+      fixture.appHost.transitionScene(
+        fixture.sender,
+        createDesktopSceneTransitionRequest({
+          requestId: 'composition-independent-workspace-open',
+          rendererSessionId: fixture.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          sceneId: activeScene(fixture.projection).sceneId,
+          intent: { kind: 'open-workspace', workspaceGrantId: selected.grant.workspaceGrantId },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'agent',
+          scope: { kind: 'workspace', workspaceId: workspace.workspaceId },
+        },
+      },
+    });
+  });
+
   it('delegates Entry target configuration only for the sender-bound launch connection', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
@@ -869,6 +904,7 @@ describe('DesktopAppHost', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
+      authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
       target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
     };
     const intent = {
@@ -2581,6 +2617,67 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('delegates Project Content only after exact sender and Project authority validation', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'project-content-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const scene = activeScene(opened.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Project Content fixture requires an exact Workspace Scene.');
+    }
+    const request = createProjectContentHostRequest({
+      requestId: 'project-content-read',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding: {
+        workspaceId: resolution.workspaceId,
+        workspaceGrantId: scene.context.scope.workspaceGrantId,
+        contentProjectId: project.projectId,
+      },
+    });
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, request),
+    ).resolves.toMatchObject({
+      requestId: request.requestId,
+      contentProjectId: project.projectId,
+      projection: { contentProjectId: project.projectId },
+    });
+    expect(projectAuthoring.getContent).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      contentProjectId: project.projectId,
+    });
+
+    vi.mocked(projectAuthoring.getContent).mockClear();
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
+        ...request,
+        requestId: 'project-content-wrong-workspace',
+        workspaceId: 'workspace-other',
+      }),
+    ).rejects.toThrow('grant resolves to another Workspace');
+    expect(projectAuthoring.getContent).not.toHaveBeenCalled();
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
+        ...request,
+        requestId: 'project-content-after-failure',
+      }),
+    ).resolves.toMatchObject({ contentProjectId: project.projectId });
+    await fixture.appHost.dispose();
+  });
+
   it('aggregates every registered Project target and isolates one Project catalog failure', async () => {
     const projectAuthoring = createProjectAuthoring();
     const fixture = await createShellAppHost({ projectAuthoring });
@@ -2707,7 +2804,7 @@ describe('DesktopAppHost', () => {
     const characterBinding = {
       workspaceId: resolution.workspaceId,
       workspaceGrantId: scene.context.scope.workspaceGrantId,
-      contentProjectId: project.projectId,
+      authority: { kind: 'content-project' as const, contentProjectId: project.projectId },
       characterProjectId: 'character-1',
     };
     const worldBinding = {
@@ -2746,7 +2843,7 @@ describe('DesktopAppHost', () => {
     );
     expect(projectAuthoring.executeCharacter).toHaveBeenCalledWith({
       workspace: resolution,
-      contentProjectId: project.projectId,
+      authority: { kind: 'content-project', contentProjectId: project.projectId },
       characterProjectId: 'character-1',
       command: {
         operation: 'character-project-set-review',
@@ -2839,7 +2936,7 @@ describe('DesktopAppHost', () => {
         characterProjectId: 'character-created',
       },
       entityId: 'entity-created',
-      completedSteps: ['character-project', 'project-membership'] as const,
+      completedSteps: ['character-project'] as const,
       nextStep: 'project-entity' as const,
     };
     vi.mocked(projectAuthoring.createLocalTarget).mockResolvedValueOnce({
@@ -2905,6 +3002,362 @@ describe('DesktopAppHost', () => {
       receipt,
       entity: { kind: 'create', entityId: 'entity-created', name: 'Created Character' },
     });
+    await fixture.appHost.dispose();
+  });
+
+  it('binds project-local Character package preview and commit to one exact sender receipt', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    vi.mocked(projectAuthoring.previewCharacterPackage).mockResolvedValue({
+      destination: { kind: 'content-project', contentProjectId: 'pending' },
+      characterProjectId: 'character-imported',
+      displayName: 'Imported',
+      characterVersionIds: ['character-version-1'],
+      branchHeadCharacterVersionIds: ['character-version-1'],
+      unlinkedCharacterVersionIds: [],
+      characterStorylineIds: [],
+      embeddedAssets: [],
+      externalDependencies: [],
+      conflicts: [],
+      canCommit: true,
+    });
+    vi.mocked(projectAuthoring.commitCharacterPackage).mockResolvedValue('character-imported');
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'portable-project-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const scene = activeScene(opened.projection);
+    const project = opened.projection.catalog.projects[0]!;
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Portable project fixture requires an exact Workspace Scene.');
+    }
+    const binding = {
+      workspaceId: resolution.workspaceId,
+      workspaceGrantId: scene.context.scope.workspaceGrantId,
+      authority: { kind: 'content-project' as const, contentProjectId: project.projectId },
+    };
+    const previewRequest = createCharacterPortableHostRequest(
+      {
+        requestId: 'portable-preview',
+        rendererSessionId: opened.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      },
+      binding,
+      { kind: 'import-preview' },
+    );
+    const archiveBytes = new Uint8Array([1, 2, 3]);
+    const preview = await fixture.appHost.previewCharacterPortableImport(
+      fixture.sender,
+      previewRequest,
+      archiveBytes,
+    );
+    if (preview.status !== 'preview-ready') {
+      throw new Error('Portable project fixture requires a preview receipt.');
+    }
+    expect(projectAuthoring.previewCharacterPackage).toHaveBeenCalledWith({
+      workspace: resolution,
+      authority: binding.authority,
+      archiveBytes,
+    });
+
+    await expect(
+      fixture.appHost.commitCharacterPortableImport(
+        fixture.sender,
+        createCharacterPortableHostRequest(
+          {
+            requestId: 'portable-wrong-destination',
+            rendererSessionId: opened.projection.rendererSessionId,
+            windowId: fixture.windowId,
+          },
+          {
+            ...binding,
+            authority: { kind: 'content-project', contentProjectId: 'content-project-other' },
+          },
+          { kind: 'import-commit', importReceiptId: preview.importReceiptId },
+        ),
+      ),
+    ).rejects.toThrow('does not match its sender and exact destination');
+    expect(projectAuthoring.commitCharacterPackage).not.toHaveBeenCalled();
+    await expect(
+      fixture.appHost.commitCharacterPortableImport(fixture.sender, {
+        ...createCharacterPortableHostRequest(
+          {
+            requestId: 'portable-wrong-renderer',
+            rendererSessionId: 'renderer-session-other',
+            windowId: fixture.windowId,
+          },
+          binding,
+          { kind: 'import-commit', importReceiptId: preview.importReceiptId },
+        ),
+      }),
+    ).rejects.toThrow('does not match its sender and exact destination');
+
+    const commitRequest = createCharacterPortableHostRequest(
+      {
+        requestId: 'portable-commit',
+        rendererSessionId: opened.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      },
+      binding,
+      { kind: 'import-commit', importReceiptId: preview.importReceiptId },
+    );
+    await expect(
+      fixture.appHost.commitCharacterPortableImport(fixture.sender, commitRequest),
+    ).resolves.toEqual({
+      requestId: 'portable-commit',
+      status: 'installed',
+      characterProjectId: 'character-imported',
+    });
+    expect(projectAuthoring.commitCharacterPackage).toHaveBeenCalledWith({
+      workspace: resolution,
+      authority: binding.authority,
+      archiveBytes,
+    });
+    await expect(
+      fixture.appHost.commitCharacterPortableImport(fixture.sender, {
+        ...commitRequest,
+        requestId: 'portable-reused-receipt',
+      }),
+    ).rejects.toThrow('does not match its sender and exact destination');
+    const cancellationPreview = await fixture.appHost.previewCharacterPortableImport(
+      fixture.sender,
+      { ...previewRequest, requestId: 'portable-cancellation-preview' },
+      archiveBytes,
+    );
+    if (cancellationPreview.status !== 'preview-ready') {
+      throw new Error('Portable cancellation fixture requires a preview receipt.');
+    }
+    const cancelRequest = createCharacterPortableHostRequest(
+      {
+        requestId: 'portable-cancel',
+        rendererSessionId: opened.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      },
+      binding,
+      { kind: 'import-cancel', importReceiptId: cancellationPreview.importReceiptId },
+    );
+    await expect(
+      fixture.appHost.cancelCharacterPortableImport(fixture.sender, cancelRequest),
+    ).resolves.toEqual({ requestId: 'portable-cancel', status: 'cancelled' });
+    await expect(
+      fixture.appHost.commitCharacterPortableImport(fixture.sender, {
+        ...cancelRequest,
+        requestId: 'portable-commit-after-cancel',
+        operation: 'import-commit',
+      }),
+    ).rejects.toThrow('does not match its sender and exact destination');
+    vi.mocked(projectAuthoring.getCharacterSnapshot).mockResolvedValue(
+      characterAuthoringSnapshot(),
+    );
+    await expect(
+      fixture.appHost.executeCharacterAuthoringRequest(
+        fixture.sender,
+        createCharacterAuthoringSnapshotRequest({
+          requestId: 'portable-sibling-still-available',
+          rendererSessionId: opened.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: { ...binding, characterProjectId: 'character-1' },
+        }),
+      ),
+    ).resolves.toMatchObject({ snapshot: { project: { characterProjectId: 'character-1' } } });
+    await fixture.appHost.dispose();
+  });
+
+  it('delegates standalone Character authoring only for the configured library grant', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    vi.mocked(projectAuthoring.getCharacterSnapshot).mockResolvedValue(
+      characterAuthoringSnapshot(),
+    );
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const libraryWorkspace = {
+      workspaceId: 'library-characters',
+      workspacePath: '/libraries/characters',
+      displayName: 'Characters',
+      locator: { kind: 'variable' as const, value: '${HOME}/.neko/characters' },
+    };
+    fixture.registry.resolve.mockResolvedValue(libraryWorkspace);
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
+      fixture.sender,
+      createDesktopWorkspaceAuthoringLibraryTargetRequest({
+        requestId: 'character-library-select',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        library: 'character',
+      }),
+      async () => {
+        throw new Error('Configured Character library must not open a native picker.');
+      },
+    );
+    if (selected.status !== 'authorized') {
+      throw new Error('Standalone Character authoring requires an authorized library grant.');
+    }
+    const binding = {
+      workspaceId: selected.workspaceId,
+      workspaceGrantId: selected.grant.workspaceGrantId,
+      authority: { kind: 'standalone-library' as const },
+      characterProjectId: 'character-1',
+    };
+
+    await expect(
+      fixture.appHost.executeCharacterAuthoringRequest(
+        fixture.sender,
+        createCharacterAuthoringSnapshotRequest({
+          requestId: 'character-standalone-snapshot',
+          rendererSessionId: fixture.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding,
+        }),
+      ),
+    ).resolves.toMatchObject({
+      ...binding,
+      snapshot: { project: { characterProjectId: 'character-1' } },
+    });
+    expect(projectAuthoring.getCharacterSnapshot).toHaveBeenCalledWith({
+      workspace: libraryWorkspace,
+      authority: { kind: 'standalone-library' },
+      characterProjectId: 'character-1',
+    });
+    vi.mocked(projectAuthoring.getCharacterPortableExportScope).mockResolvedValue({
+      characterProjectId: 'character-1',
+      displayName: 'Lin',
+      characterVersionIds: [],
+      branchHeadCharacterVersionIds: [],
+      unlinkedCharacterVersionIds: [],
+      characterStorylines: [],
+      authoringTestSnapshotIds: [],
+      representations: [],
+    });
+    await expect(
+      fixture.appHost.getCharacterPortableExportScope(
+        fixture.sender,
+        createCharacterPortableHostRequest(
+          {
+            requestId: 'character-standalone-export-scope',
+            rendererSessionId: fixture.projection.rendererSessionId,
+            windowId: fixture.windowId,
+          },
+          {
+            workspaceId: binding.workspaceId,
+            workspaceGrantId: binding.workspaceGrantId,
+            authority: binding.authority,
+          },
+          { kind: 'export-scope', characterProjectId: binding.characterProjectId },
+        ),
+      ),
+    ).resolves.toMatchObject({
+      requestId: 'character-standalone-export-scope',
+      status: 'scope-ready',
+      scope: { characterProjectId: 'character-1' },
+    });
+    expect(projectAuthoring.getCharacterPortableExportScope).toHaveBeenCalledWith({
+      workspace: libraryWorkspace,
+      authority: { kind: 'standalone-library' },
+      characterProjectId: 'character-1',
+    });
+    vi.mocked(projectAuthoring.exportCharacterPackage).mockResolvedValue(new Uint8Array([9, 8, 7]));
+    await expect(
+      fixture.appHost.createCharacterPortableExport(
+        fixture.sender,
+        createCharacterPortableHostRequest(
+          {
+            requestId: 'character-standalone-export',
+            rendererSessionId: fixture.projection.rendererSessionId,
+            windowId: fixture.windowId,
+          },
+          {
+            workspaceId: binding.workspaceId,
+            workspaceGrantId: binding.workspaceGrantId,
+            authority: binding.authority,
+          },
+          {
+            kind: 'export',
+            characterProjectId: binding.characterProjectId,
+            selection: {
+              characterStorylineIds: [],
+              authoringTestSnapshotIds: [],
+              embeddedRepresentationIds: [],
+            },
+          },
+        ),
+      ),
+    ).resolves.toMatchObject({
+      result: { requestId: 'character-standalone-export', status: 'exported' },
+      archiveBytes: new Uint8Array([9, 8, 7]),
+    });
+    expect(projectAuthoring.exportCharacterPackage).toHaveBeenCalledWith({
+      workspace: libraryWorkspace,
+      authority: { kind: 'standalone-library' },
+      characterProjectId: 'character-1',
+      selection: {
+        characterStorylineIds: [],
+        authoringTestSnapshotIds: [],
+        embeddedRepresentationIds: [],
+      },
+    });
+
+    const beforeStudio = await fixture.appHost.shell.getProjection(fixture.windowId);
+    await expect(
+      fixture.appHost.transitionScene(
+        fixture.sender,
+        createDesktopSceneTransitionRequest({
+          requestId: 'character-standalone-open-studio',
+          rendererSessionId: beforeStudio.rendererSessionId,
+          windowId: fixture.windowId,
+          sceneId: activeScene(beforeStudio).sceneId,
+          intent: {
+            kind: 'open-character-authoring',
+            workspaceGrantId: selected.grant.workspaceGrantId,
+            authority: { kind: 'standalone-library', library: 'character' },
+            characterProjectId: 'character-1',
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'transitioned',
+      scene: {
+        slots: {
+          main: {
+            kind: 'character-authoring',
+            authority: { kind: 'standalone-library', library: 'character' },
+            characterProjectId: 'character-1',
+          },
+        },
+      },
+    });
+    expect(projectAuthoring.getCharacterSnapshot).toHaveBeenCalledTimes(2);
+    expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(libraryWorkspace);
+
+    fixture.registry.resolve.mockResolvedValue({
+      ...libraryWorkspace,
+      workspaceId: 'workspace-impostor',
+      workspacePath: '/projects/impostor',
+    });
+    const impostorGrant = fixture.appHost.workspaceGrants.authorize({
+      windowId: fixture.windowId,
+      label: 'Impostor',
+      hostResource: '/projects/impostor',
+    });
+    await expect(
+      fixture.appHost.executeCharacterAuthoringRequest(fixture.sender, {
+        ...createCharacterAuthoringSnapshotRequest({
+          requestId: 'character-standalone-impostor',
+          rendererSessionId: fixture.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: {
+            ...binding,
+            workspaceId: 'workspace-impostor',
+            workspaceGrantId: impostorGrant.workspaceGrantId,
+          },
+        }),
+      }),
+    ).rejects.toThrow('requires the configured Character library');
+    expect(projectAuthoring.getCharacterSnapshot).toHaveBeenCalledTimes(2);
     await fixture.appHost.dispose();
   });
 
@@ -4506,8 +4959,15 @@ function createCharacterFoundationService(): CharacterFoundationService {
 
 function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
   return {
-    ensureComposition: vi.fn(async () => undefined),
     getNavigation: vi.fn(async () => []),
+    getContent: vi.fn(async ({ contentProjectId }) => ({
+      contentProjectId,
+      characters: [],
+      worlds: [],
+      elements: [],
+      candidates: [],
+      diagnostics: [],
+    })),
     createLocalTarget: vi.fn(async ({ create }) =>
       create.kind === 'character-project'
         ? {
@@ -4531,6 +4991,16 @@ function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
     }),
     executeCharacter: vi.fn(async () => {
       throw new Error('Character authoring command is not expected by this test.');
+    }),
+    getCharacterPortableExportScope: vi.fn(async () => {
+      throw new Error('Character package export scope is not expected by this test.');
+    }),
+    exportCharacterPackage: vi.fn(async () => new Uint8Array()),
+    previewCharacterPackage: vi.fn(async () => {
+      throw new Error('Character package preview is not expected by this test.');
+    }),
+    commitCharacterPackage: vi.fn(async () => {
+      throw new Error('Character package commit is not expected by this test.');
     }),
     getWorldSnapshot: vi.fn(async () => {
       throw new Error('World authoring snapshot is not expected by this test.');
@@ -5082,6 +5552,12 @@ function characterAuthoringSnapshot() {
       updatedAt: '2026-08-11T00:00:00.000Z',
     },
     versions: [],
+    authoringTestSnapshots: [],
+    storylines: [],
+    storylineDrafts: [],
+    storylineVersions: [],
+    lineage: null,
+    referenceInventories: [],
     diagnostics: [],
   };
 }

@@ -69,7 +69,7 @@ Skill 提示词应提供：
 - 领域工作流和交互方式。
 - 输出标准：字段、表格、层次、示例和禁止项。
 - 资源引用规则：如何引用 host 已授权的素材，缺少绑定时如何诊断。
-- 相关 capability/profile：具体 id 进入机器可读 metadata、`agents/neko.yaml` 或 runtime catalog；正文只描述领域意图和成功条件，不写工具教程，也不伪造调用结果。
+- 相关 capability/profile：具体 id 由 owning package 的 runtime catalog 或 validator registry 拥有；正文只描述领域意图和成功条件，不写工具教程，也不伪造调用结果。Portable Skill 不增加 OpenNeko 私有 overlay。
 - 对应 validator id：由 Artifact/Profile Registry 或机器可读依赖声明，例如 `creative-table.storyboard`。
 
 Skill 提示词可以包含领域字段和示例，但示例必须能被对应 validator 通过。Skill 新增字段时，应同步更新 profile validator 或把字段标记为可扩展 metadata。

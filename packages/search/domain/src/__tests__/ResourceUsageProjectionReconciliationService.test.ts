@@ -7,19 +7,19 @@ import {
 
 const source: ResourceUsageProjectionSource = {
   ownerId: 'project',
-  sourceId: 'project-composition',
+  sourceId: 'project-derived-facts',
 };
 
 const record: ResourceUsageProjectionRecord = {
   projectionId: 'project:entity-rin',
   source,
   target: { ownerId: 'project-entity', resourceId: 'entity-rin' },
-  occurrences: [{ occurrenceId: 'association-rin', location: 'project-composition' }],
+  occurrences: [{ occurrenceId: 'association-rin', location: 'project-association-facts' }],
   usageCount: 1,
   dependencies: [{ targetOwnerId: 'character-project', count: 1 }],
   availability: 'available',
   freshness: 'fresh',
-  sourceFingerprint: 'sha256:composition',
+  sourceFingerprint: 'sha256:project-facts',
   updatedAt: '2026-08-13T08:00:00.000Z',
 };
 

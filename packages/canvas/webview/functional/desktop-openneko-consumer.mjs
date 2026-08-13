@@ -341,7 +341,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     if (
       quietConnections.connectionCount !== 6 ||
-      quietConnections.maximumLineOpacity > 0.26 ||
+      quietConnections.maximumLineOpacity > 0.38 ||
       quietConnections.flowDotCount !== 0
     ) {
       throw new Error(
@@ -367,7 +367,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       selectedConnectionVisual.selectedCount !== 1 ||
       selectedConnectionVisual.selectedLineOpacity !== 0.88 ||
-      selectedConnectionVisual.flowDotCount !== 1
+      selectedConnectionVisual.flowDotCount !== 0
     ) {
       throw new Error(
         `Canvas selected connection feedback is invalid: ${JSON.stringify(selectedConnectionVisual)}`,
@@ -451,7 +451,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     const imageActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
     if (
-      imageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      imageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      imageActions.disabledActionIds.join('|') !== 'image:crop|image:upscale|image:redraw' ||
       imageActions.overflowActionIds.length !== 0 ||
       imageActions.actionIds.some((actionId) =>
         ['cut:add-resource', 'video:separate-audio', 'audio:voice-denoise'].includes(actionId),
@@ -497,7 +499,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       'canvas:functional:video',
     );
     if (
-      duplicatedImageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      duplicatedImageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      duplicatedImageActions.disabledActionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw' ||
       duplicatedImageActions.overflowActionIds.length !== 0 ||
       duplicatedImageActions.hasError
     ) {
@@ -511,9 +516,13 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       'canvas:functional:video',
     );
-    await click(
-      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
-    );
+    await evaluate(`(() => {
+      const node = document.querySelector(
+        '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"]',
+      );
+      if (!(node instanceof HTMLElement)) throw new Error('Canvas Image node is unavailable.');
+      node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    })()`);
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-image-preview="true"] [data-preview-surface="visual"]',
     );
@@ -684,11 +693,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     const audioActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:audio');
     if (
-      audioActions.actionIds.join('|') !== 'cut:add-resource|node:duplicate|preview:open' ||
+      audioActions.actionIds.join('|') !==
+        'cut:add-resource|audio:voice-denoise|node:duplicate|preview:open' ||
+      audioActions.disabledActionIds.join('|') !== 'audio:voice-denoise' ||
       audioActions.overflowActionIds.length !== 0 ||
-      audioActions.actionIds.some((actionId) =>
-        ['video:separate-audio', 'audio:voice-denoise'].includes(actionId),
-      )
+      audioActions.actionIds.includes('video:separate-audio')
     ) {
       throw new Error(`Canvas audio actions are invalid: ${JSON.stringify(audioActions)}`);
     }
@@ -942,11 +951,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     if (
       evidence.quietConnections.connectionCount !== 6 ||
-      evidence.quietConnections.maximumLineOpacity > 0.26 ||
+      evidence.quietConnections.maximumLineOpacity > 0.38 ||
       evidence.quietConnections.flowDotCount !== 0 ||
       evidence.selectedConnectionVisual.selectedCount !== 1 ||
       evidence.selectedConnectionVisual.selectedLineOpacity !== 0.88 ||
-      evidence.selectedConnectionVisual.flowDotCount !== 1
+      evidence.selectedConnectionVisual.flowDotCount !== 0
     ) {
       throw new Error('Canvas connection visual hierarchy was not proven.');
     }
@@ -972,13 +981,20 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evidence.otioActions.actionIds.includes('cut:add-resource') ||
       evidence.videoActions.actionIds.join('|') !==
         'cut:add-resource|video:separate-audio|node:duplicate|preview:open' ||
-      evidence.imageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      evidence.imageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      evidence.imageActions.disabledActionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw' ||
       evidence.imageActions.overflowActionIds.length !== 0 ||
-      evidence.duplicatedImageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      evidence.duplicatedImageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      evidence.duplicatedImageActions.disabledActionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw' ||
       evidence.duplicatedImageActions.overflowActionIds.length !== 0 ||
       evidence.duplicatedImageActions.hasError ||
       evidence.audioActions.actionIds.join('|') !==
-        'cut:add-resource|node:duplicate|preview:open' ||
+        'cut:add-resource|audio:voice-denoise|node:duplicate|preview:open' ||
+      evidence.audioActions.disabledActionIds.join('|') !== 'audio:voice-denoise' ||
       evidence.audioActions.overflowActionIds.length !== 0 ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||
@@ -2240,6 +2256,9 @@ function inspectCanvasSelectionActions(evaluate, viewId) {
     const overflow = root?.querySelector('[data-selection-overflow="true"]');
     return {
       actionIds: actions.map((action) => action.getAttribute('data-selection-action')),
+      disabledActionIds: actions
+        .filter((action) => action instanceof HTMLButtonElement && action.disabled)
+        .map((action) => action.getAttribute('data-selection-action')),
       visible: actions
         .filter((action) => action.getAttribute('data-selection-action-location') === 'primary')
         .map((action) =>

@@ -42,31 +42,30 @@ describe('Canvas ContextMenu builders', () => {
     );
   });
 
-  it('exposes a node playback entry action before AI actions', () => {
-    const onSetPlaybackEntry = vi.fn();
+  it('keeps the node menu limited to functional graph layout actions', () => {
+    const onBringToFront = vi.fn();
+    const onSendToBack = vi.fn();
+    const onToggleLock = vi.fn();
     const items = buildNodeMenuItems({
       canvasPosition: { x: 0, y: 0 },
       hasSelection: true,
       selectedCount: 1,
       contextNodeId: 'scene-1',
-      onSetPlaybackEntry,
+      onBringToFront,
+      onSendToBack,
+      onToggleLock,
       onAddAction: vi.fn(),
       onSelectAll: vi.fn(),
       onFitContent: vi.fn(),
       onResetView: vi.fn(),
     });
 
-    const playbackEntry = items.find(
-      (item): item is MenuAction =>
-        !('separator' in item) && item.label === 'Set as Playback Start',
-    );
-
-    expect(playbackEntry).toBeDefined();
-    expect(playbackEntry?.disabled).toBe(false);
-
-    playbackEntry?.onClick?.();
-
-    expect(onSetPlaybackEntry).toHaveBeenCalledWith('scene-1');
+    const actions = items.filter((item): item is MenuAction => !('separator' in item));
+    expect(actions.map((item) => item.label)).toEqual(['Bring to Front', 'Send to Back', 'Lock']);
+    actions.forEach((action) => action.onClick?.());
+    expect(onBringToFront).toHaveBeenCalledOnce();
+    expect(onSendToBack).toHaveBeenCalledOnce();
+    expect(onToggleLock).toHaveBeenCalledOnce();
   });
 
   it('keeps node deletion out of the context menu so keyboard ownership stays canonical', () => {
@@ -101,8 +100,9 @@ describe('Canvas ContextMenu builders', () => {
     expect(labels).not.toContain('Cut');
     expect(labels).not.toContain('Duplicate');
     expect(labels).not.toContain('Crop');
-    expect(labels).toContain('Set as Playback Start');
-    expect(labels).toContain('Send to Agent');
+    expect(labels).not.toContain('Set as Playback Start');
+    expect(labels).not.toContain('Send to Agent');
+    expect(labels).toEqual(['Bring to Front', 'Send to Back', 'Lock']);
   });
 
   it('projects the canonical add catalog without an empty Job action', () => {

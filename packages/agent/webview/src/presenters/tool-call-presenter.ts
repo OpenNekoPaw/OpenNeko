@@ -10,6 +10,7 @@ import {
   isContentRepresentationLocator,
   parseDocumentLocator,
   parseDocumentSourceRef,
+  serializeContentReferenceTarget,
   validateContentLocator,
 } from '@neko/content';
 import {
@@ -795,11 +796,16 @@ function describeContentLocatorForDisplay(locator: ContentLocator): {
 } {
   switch (locator.kind) {
     case 'document-entry':
-      return { filePath: locator.source.path, path: locator.entryPath };
+      return { filePath: serializeContentReferenceTarget(locator.source), path: locator.entryPath };
     case 'workspace-file':
       return { filePath: locator.path, path: locator.path };
     case 'generated-output':
       return { filePath: locator.path, path: locator.path };
+    case 'media-library':
+      return {
+        filePath: locator.libraryName,
+        path: locator.relativePath,
+      };
     case 'package-resource':
       return {
         filePath: locator.manifestPath ?? `${locator.packageId}@${locator.revision}`,

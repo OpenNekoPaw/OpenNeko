@@ -178,6 +178,13 @@ function authoringBinding(target: AgentAuthoringBinding['target']): AgentAuthori
     kind: 'authoring',
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
+    authority:
+      target.kind === 'content-project'
+        ? { kind: 'content-project', contentProjectId: target.contentProjectId }
+        : {
+            kind: 'standalone-library',
+            library: target.kind === 'character-project' ? 'character' : 'world',
+          },
     target,
   };
 }

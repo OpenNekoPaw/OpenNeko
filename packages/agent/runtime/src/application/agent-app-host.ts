@@ -93,7 +93,11 @@ import {
 } from '@neko/content/node';
 import { CanvasProjectAuthoringService } from '@neko/canvas-domain';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
-import type { ContentLocator, ContentRepresentationLocator } from '@neko/content';
+import type {
+  ContentLocator,
+  ContentReadService,
+  ContentRepresentationLocator,
+} from '@neko/content';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
   AgentHomeActivitySummary,
@@ -382,6 +386,9 @@ export interface CreateAgentAppHostOptions {
   readonly resolveWorkspaceCapabilityProviders?: (
     workspace: AssetWorkspaceResolution,
   ) => readonly AgentCapabilityProvider[];
+  readonly resolveContentReadService?: (
+    workspace: AssetWorkspaceResolution,
+  ) => ContentReadService | undefined;
   readonly pluginToolAdapters?: AgentPluginToolAdapterPort;
   readonly loadTransientToolResultImage?: (input: {
     readonly receiptId: string;
@@ -728,6 +735,7 @@ class DefaultAgentAppHost implements AgentAppHost {
       await authority.dispose();
       throw new Error('Agent AppHost composition was disposed during workspace attach.');
     }
+    const contentReadService = this.options.resolveContentReadService?.(workspace);
     const runtime = new DefaultAgentWorkspaceRuntime({
       workspace,
       authority,
@@ -747,6 +755,7 @@ class DefaultAgentAppHost implements AgentAppHost {
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
       structuredProjectAuthoring: !isAssistantSpace,
+      ...(contentReadService ? { contentReadService } : {}),
       ...(this.options.loadTransientToolResultImage === undefined
         ? {}
         : { loadTransientToolResultImage: this.options.loadTransientToolResultImage }),
@@ -833,6 +842,7 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly onReleaseEligible: (workspace: DefaultAgentWorkspaceRuntime) => Promise<void>;
   readonly providerTurnAdmission: AgentProviderTurnScheduler;
   readonly structuredProjectAuthoring: boolean;
+  readonly contentReadService?: ContentReadService;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
   readonly workspaceCapabilityProviders: readonly AgentCapabilityProvider[];
@@ -893,7 +903,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   constructor(private readonly options: DefaultAgentWorkspaceRuntimeOptions) {
     this.models = createOpenNekoPiModels(options.credentialRuntime.credentials);
-    this.contentAccessRuntime = createAgentContentAccessRuntime(options.workspace);
+    this.contentAccessRuntime = createAgentContentAccessRuntime(
+      options.workspace,
+      options.contentReadService,
+    );
     this.toolResultAssetLoader = createPiToolResultAssetLoader(
       this.contentAccessRuntime,
       options.loadTransientToolResultImage,
@@ -917,9 +930,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       context,
     );
     if (options.structuredProjectAuthoring) {
-      const contentRead = createNodeHostContentReadService({
-        workspaceRoot: options.workspace.workspacePath,
-      });
+      const contentRead =
+        options.contentReadService ??
+        createNodeHostContentReadService({
+          workspaceRoot: options.workspace.workspacePath,
+        });
       const workspaceWriter = new NodeAuthorizedWorkspaceWriter({
         workspaceRoot: options.workspace.workspacePath,
       });
@@ -2165,16 +2180,19 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
 function createAgentContentAccessRuntime(
   workspace: AssetWorkspaceResolution,
+  contentRead?: ContentReadService,
 ): AgentContentAccessRuntime {
   const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
   return createHostAgentContentAccessRuntime({
-    contentRead: createNodeHostContentReadService({
-      workspaceRoot: workspace.workspacePath,
-      documentEntryReader: {
-        readEntry: (sourcePath, entryPath) =>
-          documentLowLevelAccess.readEntry(sourcePath, entryPath),
-      },
-    }),
+    contentRead:
+      contentRead ??
+      createNodeHostContentReadService({
+        workspaceRoot: workspace.workspacePath,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            documentLowLevelAccess.readEntry(sourcePath, entryPath),
+        },
+      }),
     documentAccess: createNodeDocumentAccessService(),
     resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
   });
@@ -2337,6 +2355,8 @@ function contentLocatorPortablePath(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return locator.relativePath;
     case 'document-entry':
       return locator.entryPath;
     case 'package-resource':

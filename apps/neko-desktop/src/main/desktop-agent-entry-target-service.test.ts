@@ -45,11 +45,17 @@ describe('Desktop Agent Entry target service', () => {
 
   it('requires project membership before delegating Character and World validation', async () => {
     const fixture = createFixture();
-    const character = authoring({
-      kind: 'character-project',
-      characterProjectId: 'character-1',
-    });
-    const world = authoring({ kind: 'world-project', worldProjectId: 'world-1' });
+    const character = authoring(
+      {
+        kind: 'character-project',
+        characterProjectId: 'character-1',
+      },
+      { kind: 'content-project', contentProjectId: 'content-1' },
+    );
+    const world = authoring(
+      { kind: 'world-project', worldProjectId: 'world-1' },
+      { kind: 'content-project', contentProjectId: 'content-1' },
+    );
 
     await fixture.service.configure({
       connection,
@@ -195,11 +201,20 @@ interface ProjectRef {
 
 function authoring(
   target: import('@neko/agent-contracts').AgentAuthoringTargetRef,
+  authority?: import('@neko/agent-contracts').AgentAuthoringAuthority,
 ): import('@neko/agent-contracts').AgentAuthoringBinding {
   return {
     kind: 'authoring',
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
+    authority:
+      authority ??
+      (target.kind === 'content-project'
+        ? { kind: 'content-project', contentProjectId: target.contentProjectId }
+        : {
+            kind: 'standalone-library',
+            library: target.kind === 'character-project' ? 'character' : 'world',
+          }),
     target,
   };
 }

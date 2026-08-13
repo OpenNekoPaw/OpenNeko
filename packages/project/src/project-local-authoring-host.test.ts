@@ -226,7 +226,7 @@ function partialReceipt(binding: {
     },
     target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
     entityId: 'entity-1',
-    completedSteps: ['character-project', 'project-membership'] as const,
+    completedSteps: ['character-project'] as const,
     nextStep: 'project-entity' as const,
   };
 }

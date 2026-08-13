@@ -921,6 +921,7 @@ describe('PiConversationRuntime', () => {
     });
     const skill = skills.records[0];
     if (!skill) throw new Error('Expected the fixture Skill record.');
+    const skillEvents: PiProductAgentEvent[] = [];
 
     await expect(
       runtime.executeSkill({
@@ -933,9 +934,10 @@ describe('PiConversationRuntime', () => {
         capabilityTools: [],
         permissionPolicy: { preflight: () => ({ allowed: true }) },
         workspaceTrusted: true,
-        events: { emit: () => undefined },
+        events: { emit: (event) => skillEvents.push(event) },
       }),
     ).rejects.toThrow('is not available in this turn snapshot');
+    expect(skillEvents).toEqual([]);
 
     await runtime.executeSkill({
       turnId: 'turn-skill',
@@ -948,8 +950,18 @@ describe('PiConversationRuntime', () => {
       capabilityTools: [],
       permissionPolicy: { preflight: () => ({ allowed: true }) },
       workspaceTrusted: true,
-      events: { emit: () => undefined },
+      events: { emit: (event) => skillEvents.push(event) },
     });
+
+    expect(skillEvents.map((event) => event.type)).toContain('skill.activated');
+    expect(skillEvents.find((event) => event.type === 'skill.activated')).toMatchObject({
+      skillName: 'fixture-skill',
+      source: 'project',
+      fingerprint: skill.fingerprint,
+    });
+    expect(skillEvents.findIndex((event) => event.type === 'turn.started')).toBeLessThan(
+      skillEvents.findIndex((event) => event.type === 'skill.activated'),
+    );
 
     expect(capturedContext?.systemPrompt).toContain('/__neko_skills/');
     expect(capturedContext?.systemPrompt).not.toContain(root);
@@ -1107,12 +1119,13 @@ describe('PiConversationRuntime', () => {
     const result = await runtime.compactContext({
       reserveTokens: 1_024,
       keepRecentTokens: 20,
-      retainedProductReferences: ['resource:asset-1'],
+      retainedProductReferences: ['resource:asset-1', 'character-version:original'],
     });
 
     expect(result).toMatchObject({ performed: true, originalTokens: expect.any(Number) });
     expect(summarizationPrompts).toHaveLength(1);
     expect(summarizationPrompts[0]).toContain('resource:asset-1');
+    expect(summarizationPrompts[0]).toContain('character-version:original');
     const compactedSession = await authority.openBranch('conversation-1', 'branch-main');
     expect((await compactedSession.getBranch()).at(-1)).toMatchObject({
       type: 'compaction',

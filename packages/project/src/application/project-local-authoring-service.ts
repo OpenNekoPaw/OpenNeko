@@ -3,21 +3,20 @@ import type { CharacterProject } from '@neko/chara/contracts';
 import type { CreateProjectEntityRequest } from '@neko/entity-domain';
 import type { WorldAuthoringService } from '@neko/world/application';
 import type { WorldProject } from '@neko/world/contracts';
-import type { ProjectLocalTargetRef } from '../contracts/project-composition';
+import type { ProjectLocalTargetRef } from '../contracts/project-target';
 import type {
   ProjectLocalCharacterCreationReceipt,
   ProjectLocalCharacterCreationStep,
   ProjectLocalCharacterEntitySelection,
   ProjectWorkspaceAuthority,
 } from '../contracts/project-local-authoring';
-import type { ProjectCompositionService } from './project-composition-service';
+import type { ProjectEntityCharacterAssociationWriterPort } from './project-fact-ports';
 
 export interface ProjectLocalCharacterAuthoringPort {
   createProject(
     input: CreateCharacterFromSourcesInput,
     signal?: AbortSignal,
   ): Promise<CharacterProject>;
-  deleteUnlinkedProject(characterProjectId: string, signal?: AbortSignal): Promise<void>;
 }
 
 export interface ProjectLocalWorldAuthoringPort {
@@ -25,7 +24,6 @@ export interface ProjectLocalWorldAuthoringPort {
     input: Parameters<WorldAuthoringService['createProject']>[0],
     signal?: AbortSignal,
   ): Promise<WorldProject>;
-  deleteUnlinkedProject(worldProjectId: string, signal?: AbortSignal): Promise<void>;
 }
 
 export interface ProjectLocalEntityAuthoringPort {
@@ -49,27 +47,10 @@ export class ProjectLocalCharacterCreationError extends Error {
   }
 }
 
-export class ProjectLocalTargetLinkError extends Error {
-  readonly code = 'project-local-target-unlinked';
-
-  constructor(
-    readonly authority: ProjectWorkspaceAuthority,
-    readonly target: ProjectLocalTargetRef,
-    readonly repairActions: readonly ['retry-link', 'delete-through-owner'],
-    options: ErrorOptions,
-  ) {
-    super(
-      `Target '${targetIdentity(target)}' was created in Workspace '${authority.workspaceId}' but could not be linked to Content Project '${authority.contentProjectId}'.`,
-      options,
-    );
-    this.name = 'ProjectLocalTargetLinkError';
-  }
-}
-
 export class ProjectLocalAuthoringService {
   constructor(
     private readonly options: {
-      readonly compositions: ProjectCompositionService;
+      readonly associations: ProjectEntityCharacterAssociationWriterPort;
       readonly characters: ProjectLocalCharacterAuthoringPort;
       readonly entities: ProjectLocalEntityAuthoringPort;
       readonly worlds: ProjectLocalWorldAuthoringPort;
@@ -100,7 +81,7 @@ export class ProjectLocalAuthoringService {
         target,
         entityId: entityIdentity(entity),
         completedSteps: ['character-project'],
-        nextStep: 'project-membership',
+        nextStep: 'project-entity',
       },
       entity,
       signal,
@@ -129,41 +110,7 @@ export class ProjectLocalAuthoringService {
       kind: 'world-project',
       worldProjectId: project.worldProjectId,
     };
-    await this.linkCreatedTarget(authority, target, signal);
     return { project, target };
-  }
-
-  retryLink(
-    authority: ProjectWorkspaceAuthority,
-    target: ProjectLocalTargetRef,
-    signal?: AbortSignal,
-  ) {
-    return this.options.compositions.addLocalTarget(authority.contentProjectId, target, signal);
-  }
-
-  deleteUnlinkedTarget(target: ProjectLocalTargetRef, signal?: AbortSignal): Promise<void> {
-    return target.kind === 'character-project'
-      ? this.options.characters.deleteUnlinkedProject(target.characterProjectId, signal)
-      : this.options.worlds.deleteUnlinkedProject(target.worldProjectId, signal);
-  }
-
-  private async linkCreatedTarget(
-    authority: ProjectWorkspaceAuthority,
-    target: ProjectLocalTargetRef,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    try {
-      await this.options.compositions.addLocalTarget(authority.contentProjectId, target, signal);
-    } catch (cause) {
-      throw new ProjectLocalTargetLinkError(
-        authority,
-        target,
-        ['retry-link', 'delete-through-owner'],
-        {
-          cause,
-        },
-      );
-    }
   }
 
   private async continueCharacterCreation(
@@ -173,14 +120,6 @@ export class ProjectLocalAuthoringService {
   ): Promise<ProjectLocalCharacterCreationReceipt> {
     let current = receipt;
     try {
-      if (current.nextStep === 'project-membership') {
-        await this.options.compositions.addLocalTarget(
-          current.authority.contentProjectId,
-          current.target,
-          signal,
-        );
-        current = advanceCharacterReceipt(current, 'project-membership', 'project-entity');
-      }
       if (current.nextStep === 'project-entity') {
         if (entity.kind === 'create') {
           await this.options.entities.createCharacterEntity(
@@ -209,14 +148,11 @@ export class ProjectLocalAuthoringService {
         );
       }
       if (current.nextStep === 'entity-character-association') {
-        await this.options.compositions.associateEntityCharacter(
-          current.authority.contentProjectId,
-          {
-            entityId: current.entityId,
-            characterProjectId: current.target.characterProjectId,
-          },
-          signal,
-        );
+        await this.options.associations.save({
+          projectId: current.authority.contentProjectId,
+          entityId: current.entityId,
+          characterProjectId: current.target.characterProjectId,
+        });
         current = advanceCharacterReceipt(current, 'entity-character-association');
       }
       return current;
@@ -224,10 +160,6 @@ export class ProjectLocalAuthoringService {
       throw new ProjectLocalCharacterCreationError(current, { cause });
     }
   }
-}
-
-function targetIdentity(target: ProjectLocalTargetRef): string {
-  return target.kind === 'character-project' ? target.characterProjectId : target.worldProjectId;
 }
 
 function entityIdentity(entity: ProjectLocalCharacterEntitySelection): string {
@@ -276,7 +208,6 @@ function requireRetryReceipt(
   }
   const validSteps: readonly ProjectLocalCharacterCreationStep[] = [
     'character-project',
-    'project-membership',
     'project-entity',
     'entity-character-association',
   ];

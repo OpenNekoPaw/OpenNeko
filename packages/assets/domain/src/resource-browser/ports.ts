@@ -1,20 +1,12 @@
-import type {
-  ProjectEntityInspectorIntent,
-  ProjectEntityInspectorOwnerCapabilities,
-  ProjectEntityDiagnostic,
-  ProjectEntityManagementProjection,
-} from '@neko/entity-domain';
 import type { ContentLocator } from '@neko/content';
-import type { ProjectEntityCharacterResourceProjection } from '@neko/project/contracts';
 import type { GlobalAssetItem } from '../global-library/contract';
-import type {
-  MediaLibraryProjectionEntry,
-  WorkspaceMediaLibraryStatus,
-} from '@neko/assets-domain/contracts';
+import type { MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
 import type {
   ResourceBrowserContentItem,
+  ResourceBrowserMediaLibraryRootItem,
   ResourceBrowserIdentity,
   ResourceBrowserItem,
+  ResourceBrowserMediaLibraryStatus,
   ResourceBrowserProjection,
   ResourceBrowserDiagnostic,
   ResourceBrowserThumbnailDescriptor,
@@ -23,12 +15,23 @@ import type {
 export type ResourceBrowserContentRole = 'directory' | 'library-root' | 'content';
 
 export interface ResourceBrowserContentEntry extends MediaLibraryProjectionEntry {
-  readonly role: ResourceBrowserContentRole;
+  readonly role: Exclude<ResourceBrowserContentRole, 'library-root'>;
   readonly parentLocator?: ContentLocator;
   readonly depth: number;
   readonly libraryName?: string;
-  readonly libraryStatus?: WorkspaceMediaLibraryStatus;
 }
+
+export interface ResourceBrowserMediaLibraryRootEntry {
+  readonly label: string;
+  readonly description?: string;
+  readonly role: 'library-root';
+  readonly depth: 0;
+  readonly libraryName: string;
+  readonly libraryStatus: ResourceBrowserMediaLibraryStatus;
+}
+
+export type ResourceBrowserMediaEntry =
+  ResourceBrowserContentEntry | ResourceBrowserMediaLibraryRootEntry;
 
 export interface ResourceBrowserFilesReader {
   list(input: {
@@ -48,28 +51,12 @@ export interface ResourceBrowserMediaSearch {
     readonly identity: ResourceBrowserIdentity;
     readonly query: string;
     readonly limit: number;
-  }): Promise<readonly ResourceBrowserContentEntry[]>;
+  }): Promise<readonly ResourceBrowserMediaEntry[]>;
   children(input: {
     readonly identity: ResourceBrowserIdentity;
-    readonly parent: ResourceBrowserContentItem;
+    readonly parent: ResourceBrowserContentItem | ResourceBrowserMediaLibraryRootItem;
     readonly limit: number;
-  }): Promise<readonly ResourceBrowserContentEntry[]>;
-}
-
-export interface ResourceBrowserEntityReader {
-  list(input: {
-    readonly identity: ResourceBrowserIdentity;
-    readonly query: string;
-    readonly limit: number;
-  }): Promise<{
-    readonly projections: readonly ProjectEntityManagementProjection[];
-    readonly diagnostics?: readonly ProjectEntityDiagnostic[];
-    readonly inspectorCapabilities?: readonly {
-      readonly projectionId: string;
-      readonly capabilities: ProjectEntityInspectorOwnerCapabilities;
-    }[];
-    readonly characterAssociations?: readonly ProjectEntityCharacterResourceProjection[];
-  }>;
+  }): Promise<readonly ResourceBrowserMediaEntry[]>;
 }
 
 export interface ResourceBrowserAssetReader {
@@ -84,7 +71,6 @@ export interface ResourceBrowserProjectionSource {
   readonly files: ResourceBrowserFilesReader;
   readonly media: ResourceBrowserMediaSearch;
   readonly assets: ResourceBrowserAssetReader;
-  readonly entities: ResourceBrowserEntityReader;
   refresh(identity: ResourceBrowserIdentity): Promise<void>;
 }
 
@@ -111,11 +97,6 @@ export interface ResourceBrowserInteractionPort {
   trashContent(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserContentItem;
-  }): Promise<void>;
-  manageEntity(input: {
-    readonly identity: ResourceBrowserIdentity;
-    readonly item: Extract<ResourceBrowserItem, { readonly source: 'entities' }>;
-    readonly intent: ProjectEntityInspectorIntent;
   }): Promise<void>;
   linkGlobalLibrary(input: {
     readonly identity: ResourceBrowserIdentity;

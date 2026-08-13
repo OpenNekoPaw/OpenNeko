@@ -15,6 +15,7 @@ import {
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
   parseDesktopWorkbenchSceneProjection,
+  type DesktopCharacterDetailSelection,
   type DesktopWorldDetailSelection,
 } from '@neko/host/desktop-scene-contract';
 import {
@@ -727,6 +728,78 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('starts Character quick generation through one fresh Host-owned Agent Draft', async () => {
+    const projection = withActiveScene(createProjection(), characterManagementScene());
+    const freshScene = createDefaultDesktopAgentScene('window-1', 'draft:character-quick-1');
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'character-quick-1',
+      scene: freshScene,
+    }));
+    const characterFoundationExecute = vi.fn();
+    installBridge({ projection, transition, characterFoundationExecute });
+    const { container, root } = await renderApplication();
+    const createCharacter = [...container.querySelectorAll<HTMLElement>('summary')].find(
+      (summary) => summary.textContent?.includes('Create character'),
+    );
+    if (!createCharacter) throw new Error('Desktop fixture requires Character creation menu.');
+
+    await act(async () => createCharacter.click());
+    const quickGenerate = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Generate with AI',
+    );
+    if (!quickGenerate) throw new Error('Desktop fixture requires Character quick generation.');
+
+    await act(async () => quickGenerate.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-agent-entry' },
+      characterManagementScene().sceneId,
+    );
+    expect(characterFoundationExecute).not.toHaveBeenCalled();
+    expect(container.querySelector('input[placeholder="Type anything..."]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('starts a Conversation from Character detail with the exact usable version', async () => {
+    const selection: DesktopCharacterDetailSelection = {
+      kind: 'project',
+      characterProjectId: 'character-project-1',
+    };
+    const projection = withActiveScene(createProjection(), characterManagementScene(selection));
+    const freshScene = createDefaultDesktopAgentScene('window-1', 'draft:character-dialogue-1');
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'character-dialogue-1',
+      scene: freshScene,
+    }));
+    installBridge({
+      projection,
+      transition,
+      characterFoundationGetSnapshot: vi.fn(async () => characterManagementDetailSnapshot()),
+    });
+    const { container, root } = await renderApplication();
+    await waitFor(
+      () => container.querySelector('[data-character-management-detail-surface="true"]') !== null,
+    );
+    const startConversation = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Start conversation',
+    );
+    if (!startConversation)
+      throw new Error('Desktop fixture requires Character conversation action.');
+
+    await act(async () => startConversation.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenCalledWith(
+      'window-1',
+      { kind: 'open-agent-entry' },
+      characterManagementScene(selection).sceneId,
+    );
+    await act(async () => root.unmount());
+  });
+
   it('opens the World catalog through Creative Management navigation', async () => {
     const projection = createProjection();
     const transition = vi.fn(async () => ({
@@ -1014,7 +1087,7 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, characterAvatarOpenSurface: openSurface });
     const { container, root } = await renderApplication();
 
-    await waitFor(() => container.textContent?.includes("unknown.presentation"));
+    await waitFor(() => container.textContent?.includes('unknown.presentation'));
     expect(container.querySelector('[data-character-context-manager="true"]')).not.toBeNull();
     expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
     expect(openSurface).not.toHaveBeenCalled();
@@ -2749,6 +2822,7 @@ function installBridge({
   projectPortability,
   textEditorExecute = vi.fn(),
   characterFoundationGetSnapshot = vi.fn(async () => emptyCharacterFoundationSnapshot()),
+  characterFoundationExecute = vi.fn(async () => emptyCharacterFoundationSnapshot()),
   characterAuthoringGetSnapshot = vi.fn(async () => {
     throw new Error('Character authoring is not expected by this test.');
   }),
@@ -2802,6 +2876,7 @@ function installBridge({
   readonly projectPortability?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
   readonly textEditorExecute?: (request: TextEditorHostRequest) => Promise<TextEditorHostResult>;
   readonly characterFoundationGetSnapshot?: typeof window.openNekoDesktop.characterFoundation.getSnapshot;
+  readonly characterFoundationExecute?: typeof window.openNekoDesktop.characterFoundation.execute;
   readonly characterAuthoringGetSnapshot?: typeof window.openNekoDesktop.characterAuthoring.getSnapshot;
   readonly characterAuthoringExecute?: typeof window.openNekoDesktop.characterAuthoring.execute;
   readonly worldFoundationGetSnapshot?: typeof window.openNekoDesktop.worldFoundation.getSnapshot;
@@ -2829,7 +2904,7 @@ function installBridge({
       characterFoundation: {
         getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
         getSnapshot: characterFoundationGetSnapshot,
-        execute: vi.fn(async () => emptyCharacterFoundationSnapshot()),
+        execute: characterFoundationExecute,
       },
       characterAuthoring: {
         getSnapshot: characterAuthoringGetSnapshot,
@@ -2857,6 +2932,19 @@ function installBridge({
       projectAuthoring: {
         getCatalog: projectAuthoringGetCatalog,
         getNavigation: projectAuthoringGetNavigation,
+        getContent: vi.fn(async (_windowId, binding) => ({
+          requestId: 'project-content',
+          workspaceId: binding.workspaceId,
+          contentProjectId: binding.contentProjectId,
+          projection: {
+            contentProjectId: binding.contentProjectId,
+            characters: [],
+            worlds: [],
+            elements: [],
+            candidates: [],
+            diagnostics: [],
+          },
+        })),
       },
       textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
       agentLaunch: {
@@ -3129,14 +3217,17 @@ function settingsScene() {
   });
 }
 
-function characterManagementScene() {
+function characterManagementScene(detail?: DesktopCharacterDetailSelection) {
   const sceneId = 'scene:window-1:creative-management';
   return parseDesktopWorkbenchSceneProjection({
     sceneId,
     windowId: 'window-1',
-    context: { kind: 'creative-management', catalog: 'characters' },
+    context: { kind: 'creative-management', catalog: 'characters', ...(detail ? { detail } : {}) },
     slots: {
       main: { kind: 'creative-management', catalog: 'characters' },
+      ...(detail
+        ? { secondaryMain: { kind: 'character-detail' as const, selection: detail } }
+        : {}),
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -3301,6 +3392,29 @@ function emptyCharacterFoundationSnapshot() {
       presentationConfigurations: [],
     },
     diagnostics: [],
+  };
+}
+
+function characterManagementDetailSnapshot() {
+  const snapshot = avatarCharacterFoundationSnapshot();
+  const version = snapshot.character.versions[0]!;
+  return {
+    ...snapshot,
+    character: {
+      ...snapshot.character,
+      projects: [
+        {
+          characterProjectId: version.characterProjectId,
+          displayName: 'Mira',
+          draft: version.definition,
+          reviewStatus: 'ready' as const,
+          evidence: [],
+          candidates: [],
+          createdAt: '2026-08-10T00:00:00.000Z',
+          updatedAt: '2026-08-10T00:00:00.000Z',
+        },
+      ],
+    },
   };
 }
 

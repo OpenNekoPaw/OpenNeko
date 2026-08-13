@@ -1,3 +1,9 @@
+> Follow-on storage decision (2026-08-13): Project association facts move to independent synchronized
+> Project records and the monolithic `ContentProjectComposition` path is retired by
+> [`separate-project-facts-local-state-and-media-bindings`](../separate-project-facts-local-state-and-media-bindings/).
+> This design remains authority for the Entity/Character/World semantic split, not for composition-file
+> persistence.
+
 ## Context
 
 The repository already has useful owner boundaries, but its product and contract vocabulary still treats
@@ -34,7 +40,7 @@ feature-flag alternatives.
 - Separate authoritative dependency facts from rebuildable usage/search/recent projections.
 - Remove product and public-contract reachability for legacy registries, Entity Asset lifecycle and
   Entity-owned Character interaction.
-- Record implementation gaps without presenting unimplemented Asset or World capabilities as available.
+- Present only existing Character and World authoring records; do not infer them from Entity kinds.
 
 **Non-Goals:**
 
@@ -43,7 +49,7 @@ feature-flag alternatives.
   latest-version selection or cross-world memory transfer.
 - Moving Character facts into Entity or usage statistics into any authoritative
   domain record.
-- Implementing World contracts/runtime/UI or Asset cloud distribution in this change.
+- Changing World contracts/runtime/authoring semantics or implementing Asset cloud distribution.
 - Reading, converting, migrating or deleting unsupported existing user records through normal product
   startup.
 
@@ -76,9 +82,15 @@ authority and deletion rules.
 
 ### 2. Unify resource presentation, not resource authority
 
-Resource Browser presents one resource experience with owner-preserving sources such as Project Files,
-Shared Media, Installed Assets and Project Elements. Source selection is package-owned display state; it
-does not convert identities, copy records or create a cross-owner catalog.
+Resource Browser presents one resource experience with exactly three owner-preserving sources: Files,
+Media and Assets. Source selection is package-owned display state; it does not convert identities, copy
+records or create a cross-owner catalog.
+
+Project Content is a separate Project-owned read model with four presentation groups: Characters,
+Worlds, Other Elements and Candidates. Character rows retain exact CharacterProject and associated
+ProjectEntity identities; World rows retain exact WorldProject identities; other elements are confirmed
+ProjectEntity rows not represented by a Character association; candidates remain rebuildable Entity
+candidate projections. Grouping never changes authority or persists copied domain payload.
 
 The internal owners remain exact:
 
@@ -90,9 +102,10 @@ The internal owners remain exact:
 Search can aggregate a common read-only result projection containing owner, exact identity, label,
 preview descriptor, availability and declared operations. The projection cannot become a write authority.
 
-Alternative considered: retain exactly four mandatory peer facets. Rejected because it leaks internal
-source taxonomy into every user workflow and causes linked Character/Entity results to appear as separate
-objects. Owner-preserving source filters provide the same safety without four user mental models.
+Alternative considered: retain Entity as a fourth Resources source. Rejected because semantic identity is
+not a foundational resource and linked Character/Entity results appear as duplicate objects. Alternative
+considered: call the aggregate Entity and classify Character/World as Entity subtypes. Rejected because it
+would make Entity the apparent owner of richer Character and World projects.
 
 ### 3. Narrow Project Entity to a project semantic anchor
 
@@ -120,7 +133,7 @@ because neither codecs nor tests can prevent Chara/World facts from becoming a s
 
 ### 4. Project owns the Entity-to-Character association
 
-The project composition owner records an exact association between one project Character Entity and one
+The Project owner records an exact association between one project Character Entity and one
 CharacterProject. It stores only identities, not Character payload:
 
 ```ts
@@ -130,8 +143,10 @@ interface ProjectEntityCharacterAssociation {
 }
 ```
 
-The association lives inside the exact `ContentProjectComposition`, whose `contentProjectId` is the
-owner identity; it does not duplicate that identity inside each association row.
+The follow-on storage boundary persists each association as an independent Project-owned synchronized
+record below `neko/project-bindings/entity-character/`; Project repository scope supplies the exact
+`contentProjectId`, so the association does not duplicate that identity. Project `.neko`, Search and
+Project Content remain non-authoritative for this decision.
 
 First-phase cardinality and behavior:
 
@@ -219,14 +234,27 @@ preserved; unsupported provenance is reported rather than migrated or reinterpre
 Alternative considered: keep Entity Asset hidden for future use. Rejected because unused public contracts
 and services preserve a parallel publication model and continue shaping Entity fields and UI intents.
 
-### 9. Keep World as a future consumer
+### 9. Project Content composes World without owning it
 
-World is outside this change's implementation and acceptance scope. A future World change may reference
-exact CharacterVersion and ProjectEntity identities, but it must keep world-local state in its own owner
-and cannot copy or mutate Character or Entity facts. No World registry, repository, DTO, handler or UI is
-added or changed by this change.
+Project Content reads the existing project-scoped World authoring catalog through its public port and
+projects exact WorldProject identity, title and availability. It does not infer Worlds from Entity kind,
+copy WorldDefinition, select a WorldVersion or own World authoring actions. A missing/invalid World record
+is isolated to its row or group diagnostic while Characters and Entity projections remain available.
 
-### 10. Owner and runtime boundary inventory
+### 10. Project Content is a read model, not a registry
+
+`@neko/project` owns the composition because ContentProject membership and Entity-to-Character
+association determine which owner records participate. The projection contains four disjoint groups:
+
+- Characters: associated CharacterProject rows, shown once rather than again as Entity;
+- Worlds: project-local WorldProject rows from the World catalog;
+- Other Elements: confirmed ProjectEntity rows not consumed by a Character association;
+- Candidates: unconfirmed Entity candidates, never promoted by display.
+
+The projection is closed, strictly parsed and rebuildable. Project Webview may filter these groups and
+invoke owner-qualified handoffs, but cannot mutate Entity, Character or World facts directly.
+
+### 11. Owner and runtime boundary inventory
 
 | Owner       | Canonical role/public path                              | Producer                                        | Consumer                                                        | Runtime boundary                         | Replaced path                                                              | User-data impact                                       |
 | ----------- | ------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------ |

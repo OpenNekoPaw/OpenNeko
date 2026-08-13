@@ -23,7 +23,7 @@ describe('Resource usage projection repository', () => {
   it('replaces one owner source and preserves sibling sources', async () => {
     const fixture = await createFixture();
     const documentSource = { ownerId: 'document' as const, sourceId: 'scripts/story.md' };
-    const projectSource = { ownerId: 'project' as const, sourceId: 'project-composition' };
+    const projectSource = { ownerId: 'project' as const, sourceId: 'project-derived-facts' };
     await fixture.store.repositories.resourceUsageProjections.replaceSource({
       partition: fixture.partition,
       source: documentSource,
@@ -55,7 +55,7 @@ describe('Resource usage projection repository', () => {
 
   it('queries an exact owner-qualified target without collapsing identities', async () => {
     const fixture = await createFixture();
-    const source = { ownerId: 'project' as const, sourceId: 'project-composition' };
+    const source = { ownerId: 'project' as const, sourceId: 'project-derived-facts' };
     await fixture.store.repositories.resourceUsageProjections.replaceSource({
       partition: fixture.partition,
       source,

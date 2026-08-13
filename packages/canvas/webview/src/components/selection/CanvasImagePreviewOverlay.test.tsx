@@ -85,6 +85,57 @@ describe('CanvasEmbeddedPreviewOverlay', () => {
     );
   });
 
+  it('does not open an invalid material locator through the Canvas preview path', () => {
+    const node = {
+      ...mediaNode('invalid-node', 'video', 'Books/story.epub/video/preview.mp4'),
+      data: {
+        ...mediaNode('invalid-node', 'video', 'Books/story.epub/video/preview.mp4').data,
+        contentLocator: {
+          kind: 'document-entry',
+          source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
+          entryPath: 'video/preview.mp4',
+        },
+      },
+    } as unknown as CanvasNode;
+
+    expect(resolveCanvasEmbeddedPreviewRequest(node)).toBeUndefined();
+  });
+
+  it('maps a generated Prompt output to the shared text preview renderer', () => {
+    const node: CanvasNode = {
+      id: 'generation-prompt',
+      type: 'generation',
+      position: { x: 0, y: 0 },
+      size: { width: 240, height: 180 },
+      zIndex: 1,
+      data: {
+        recipe: { kind: 'prompt', prompt: 'Scene outline' },
+        outputs: [
+          {
+            outputId: 'prompt-output',
+            jobRef: { kind: 'generation', jobId: 'prompt-job' },
+            locator: {
+              kind: 'generated-output',
+              outputId: 'prompt-output',
+              digest: 'sha256:prompt-output',
+              path: 'neko/generated/prompt-output.txt',
+            },
+            kind: 'prompt',
+            recipeInputFingerprint: 'sha256:prompt-recipe',
+          },
+        ],
+        selectedOutputId: 'prompt-output',
+      },
+    };
+
+    expect(resolveCanvasEmbeddedPreviewRequest(node)).toEqual(
+      expect.objectContaining({
+        nodeId: 'generation-prompt',
+        items: [expect.objectContaining({ previewKind: 'text', role: 'text' })],
+      }),
+    );
+  });
+
   it('resolves bounded text files but rejects document containers from embedded preview', () => {
     const markdown = fileNode('notes', 'notes/scene.md', 'text/markdown');
     const epub = fileNode('book', 'books/story.epub', 'application/epub+zip');

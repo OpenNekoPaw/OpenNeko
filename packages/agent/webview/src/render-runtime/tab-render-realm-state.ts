@@ -6,6 +6,7 @@ import type {
 } from './tab-render-runtime';
 import {
   isAgentEntryMode,
+  parseAgentAuthoringAuthority,
   parseAgentAuthoringTargetRef,
   parseAgentBoundDomainBinding,
   type AgentBoundDomainBinding,
@@ -27,11 +28,19 @@ export interface AgentEntryDraftSnapshot {
     readonly characterVersionId: string;
     readonly label: string;
   }[];
-  readonly workspaceTarget?: {
-    readonly label: string;
-    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
-    readonly target?: import('@neko/agent-contracts').AgentAuthoringTargetRef;
-  };
+  readonly workspaceTarget?:
+    | {
+        readonly label: string;
+        readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+        readonly target?: undefined;
+        readonly authority?: undefined;
+      }
+    | {
+        readonly label: string;
+        readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+        readonly target: import('@neko/agent-contracts').AgentAuthoringTargetRef;
+        readonly authority: import('@neko/agent-contracts').AgentAuthoringAuthority;
+      };
   readonly selectedModel: string;
   readonly mediaModelSelection?: Readonly<Record<'image' | 'video' | 'audio', string>>;
   readonly executionMode: 'plan' | 'ask' | 'auto';
@@ -421,10 +430,21 @@ function parseEntryWorkspaceTarget(
   if (context.kind !== 'workspace') {
     throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
   }
+  const label = nonEmptyString(value.label, `${path}.workspaceTarget.label`);
+  if (value.target === undefined) {
+    if (value.authority !== undefined) {
+      throw new Error(`${path}.workspaceTarget authority requires an authoring target.`);
+    }
+    return { label, context };
+  }
+  if (value.authority === undefined) {
+    throw new Error(`${path}.workspaceTarget target requires its exact authority.`);
+  }
   return {
-    label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
+    label,
     context,
-    ...(value.target === undefined ? {} : { target: parseAgentAuthoringTargetRef(value.target) }),
+    target: parseAgentAuthoringTargetRef(value.target),
+    authority: parseAgentAuthoringAuthority(value.authority),
   };
 }
 

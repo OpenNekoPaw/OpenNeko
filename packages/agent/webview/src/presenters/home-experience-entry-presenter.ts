@@ -46,6 +46,7 @@ export interface HomeExperienceEntryProjectionInput {
   readonly workspaceChooserAvailable: boolean;
   readonly characterTargetsAvailable?: boolean;
   readonly characterLaunches?: readonly import('../components/ChatView/InputArea/types').SelectedCharacterLaunch[];
+  readonly characterConversationMode?: import('../components/ChatView/InputArea/types').CharacterConversationMode;
   readonly bindingPending: boolean;
   readonly configurationReady: boolean;
 }
@@ -126,7 +127,14 @@ function projectSubmissionBlockedReason(
       if (!input.characterLaunches || input.characterLaunches.length === 0) {
         return 'chat.entryExperience.validation.characterRequired';
       }
-      if (!hasExactCharacterDialogueReceipt(input.intent, input.characterLaunches)) {
+      if (
+        !input.characterConversationMode ||
+        !hasExactCharacterDialogueReceipt(
+          input.intent,
+          input.characterLaunches,
+          input.characterConversationMode,
+        )
+      ) {
         return 'chat.entryExperience.validation.characterBindingMismatch';
       }
       return input.configurationReady
@@ -140,6 +148,7 @@ function projectSubmissionBlockedReason(
 function hasExactCharacterDialogueReceipt(
   intent: AgentEntryIntentProjection,
   selections: NonNullable<HomeExperienceEntryProjectionInput['characterLaunches']>,
+  mode: NonNullable<HomeExperienceEntryProjectionInput['characterConversationMode']>,
 ): boolean {
   const receipt = intent.targetReceipt;
   if (
@@ -154,7 +163,7 @@ function hasExactCharacterDialogueReceipt(
     characterVersionId: selection.characterVersionId,
   }));
   return (
-    receipt.binding.mode === 'companion' &&
+    receipt.binding.mode === mode &&
     JSON.stringify(receipt.binding.participants) === JSON.stringify(expectedParticipants) &&
     !receipt.binding.participants.some((participant) => 'storyline' in participant)
   );

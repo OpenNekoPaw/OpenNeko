@@ -9,7 +9,11 @@ export * from './character-presentation';
 export * from './character';
 export * from './character-creation-source';
 export * from './character-version-lineage';
+export * from './character-version-reference';
+export * from './character-management';
 export * from './character-portable-package';
+export * from './character-portable-host';
+export * from './character-localized-asset';
 export * from './character-companion-continuity';
 
 export * from './room';

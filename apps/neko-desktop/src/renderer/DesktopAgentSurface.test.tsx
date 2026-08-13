@@ -317,7 +317,11 @@ describe('DesktopAgentSurface', () => {
           characterProjectId: 'character-project-lin',
           handoffs: [
             { kind: 'open-character', characterProjectId: 'character-project-lin' },
-            { kind: 'open-character-studio', characterProjectId: 'character-project-lin' },
+            {
+              kind: 'open-character-studio',
+              characterProjectId: 'character-project-lin',
+              authority: { kind: 'standalone-library', library: 'character' },
+            },
           ],
         },
       },
@@ -340,13 +344,19 @@ describe('DesktopAgentSurface', () => {
       (button) => button.textContent?.trim() === 'Open Studio',
     );
     expect(viewCharacter).toBeTruthy();
-    expect(openStudio?.disabled).toBe(true);
+    expect(openStudio?.disabled).toBe(false);
     await act(async () => viewCharacter?.click());
     expect(onCharacterProductHandoff).toHaveBeenCalledWith({
       kind: 'open-character',
       characterProjectId: 'character-project-lin',
     });
-    expect(onCharacterProductHandoff).toHaveBeenCalledTimes(1);
+    await act(async () => openStudio?.click());
+    expect(onCharacterProductHandoff).toHaveBeenLastCalledWith({
+      kind: 'open-character-studio',
+      characterProjectId: 'character-project-lin',
+      authority: { kind: 'standalone-library', library: 'character' },
+    });
+    expect(onCharacterProductHandoff).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
   });
 
@@ -373,6 +383,33 @@ describe('DesktopAgentSurface', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'The Character draft result is missing valid actions.',
     );
+    await act(async () => root.unmount());
+  });
+
+  it('does not project result actions or navigate when Character draft filling fails', async () => {
+    projectedToolCall = {
+      id: 'tool-call-character-failed',
+      name: 'chara.character.fillDraft',
+      arguments: {},
+      result: {
+        success: false,
+        data: null,
+        error: 'chara.character.fillDraft failed: Character draft write interrupted.',
+      },
+    };
+    installBridge(vi.fn(async () => readyBootstrap()));
+    const onCharacterProductHandoff = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestAgentSurface onCharacterProductHandoff={onCharacterProductHandoff} />);
+    });
+    await act(async () => undefined);
+
+    expect(container.querySelector('[data-character-product-handoff="true"]')).toBeNull();
+    expect(onCharacterProductHandoff).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
@@ -957,6 +994,13 @@ function installBridge(
           throw new Error('Character authoring is not expected by this test.');
         }),
       },
+      characterPortable: {
+        getExportScope: vi.fn(),
+        exportPackage: vi.fn(),
+        previewImport: vi.fn(),
+        commitImport: vi.fn(),
+        cancelImport: vi.fn(),
+      },
       worldFoundation: {
         getSnapshot: vi.fn(async () => ({
           world: { projects: [], versions: [], runtimes: [] },
@@ -991,6 +1035,7 @@ function installBridge(
           diagnostics: [],
         })),
         getNavigation: vi.fn(),
+        getContent: vi.fn(),
       },
       projectLocalAuthoring: {
         createTarget: vi.fn(),

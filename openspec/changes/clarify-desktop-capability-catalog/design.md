@@ -35,12 +35,12 @@ enablement；Plugin bytes、`SKILL.md`、MCP document 与图标仍由 package fi
 
 ### 1. 四层 authority 保持单一职责
 
-| 层 | Canonical owner | 保存内容 | 不保存内容 |
-| --- | --- | --- | --- |
-| 发布内容 | Plugin/Skill package filesystem | `plugin.json`、`SKILL.md`、`mcp.json`、assets | 用户启用、授权、runtime state |
-| 安装与用户状态 | `neko.db#state` package-owned repository | plugin identity、delivery source、relative install locator、install lifecycle、enabled、非敏感配置引用 | package bytes、secret、健康状态 |
-| Host authority | Desktop Main adapters | exact root、picker grant、trash、SQLite connection、process/env/credential access | manifest policy、Agent routing |
-| Runtime | Agent extension service / Pi / MCPManager | verified descriptor、read receipt、Tool、connection、readiness、cancellation | durable user choice |
+| 层             | Canonical owner                           | 保存内容                                                                                               | 不保存内容                      |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| 发布内容       | Plugin/Skill package filesystem           | `plugin.json`、`SKILL.md`、`mcp.json`、assets                                                          | 用户启用、授权、runtime state   |
+| 安装与用户状态 | `neko.db#state` package-owned repository  | plugin identity、delivery source、relative install locator、install lifecycle、enabled、非敏感配置引用 | package bytes、secret、健康状态 |
+| Host authority | Desktop Main adapters                     | exact root、picker grant、trash、SQLite connection、process/env/credential access                      | manifest policy、Agent routing  |
+| Runtime        | Agent extension service / Pi / MCPManager | verified descriptor、read receipt、Tool、connection、readiness、cancellation                           | durable user choice             |
 
 Filesystem package 是内容 authority；SQLite row 是用户安装和启用 lifecycle authority。普通 catalog
 不得仅通过扫描任意目录创建成功的 installed record，也不得仅凭 SQLite row 报告 package ready。
@@ -131,14 +131,14 @@ install diagnostic，不得扫描 orphan bytes 自动注册、删除未知 packa
 
 ### 6. Package ownership 与公共路径
 
-| Responsibility | Owner / public entry | Producer | Consumer | Runtime boundary |
-| --- | --- | --- | --- | --- |
-| manifest/catalog/install policy | `@neko/agent-runtime/extensions` | Agent application service | Desktop AppHost、Agent composition | host-neutral Node application |
-| durable Plugin state | `@neko/local-metadata` Plugin repository port | Desktop-owned SQLite adapter | Agent extension service | Desktop Main single DB connection |
-| Skill discovery/receipt | `@neko/agent-runtime` Pi public entry | Pi SkillHost | Entry/Session input catalog、Agent turn | Node Agent runtime |
-| MCP connection/Tool | existing Agent MCP public entry | Plugin runtime generation | ToolRegistry/Pi | Node process/network boundary |
-| native selection/trash/process/secret | `apps/neko-desktop/src/main` adapters | Electron Main | Agent application ports | Electron trust boundary |
-| management presentation | Agent contracts + Webview public entry | AppHost typed projection | Renderer | preload sender-bound IPC |
+| Responsibility                        | Owner / public entry                          | Producer                     | Consumer                                | Runtime boundary                  |
+| ------------------------------------- | --------------------------------------------- | ---------------------------- | --------------------------------------- | --------------------------------- |
+| manifest/catalog/install policy       | `@neko/agent-runtime/extensions`              | Agent application service    | Desktop AppHost、Agent composition      | host-neutral Node application     |
+| durable Plugin state                  | `@neko/local-metadata` Plugin repository port | Desktop-owned SQLite adapter | Agent extension service                 | Desktop Main single DB connection |
+| Skill discovery/receipt               | `@neko/agent-runtime` Pi public entry         | Pi SkillHost                 | Entry/Session input catalog、Agent turn | Node Agent runtime                |
+| MCP connection/Tool                   | existing Agent MCP public entry               | Plugin runtime generation    | ToolRegistry/Pi                         | Node process/network boundary     |
+| native selection/trash/process/secret | `apps/neko-desktop/src/main` adapters         | Electron Main                | Agent application ports                 | Electron trust boundary           |
+| management presentation               | Agent contracts + Webview public entry        | AppHost typed projection     | Renderer                                | preload sender-bound IPC          |
 
 保留在 `apps/neko-desktop` 的代码必须真实依赖 Electron `dialog`、`shell.trashItem`、app/resources path、
 sender identity、SQLite connection composition、process environment 或 credential store。Manifest decode、

@@ -89,38 +89,59 @@
 - [x] 9.2 Run `neko-ui-validation` for changed resource, Entity and Character surfaces and
       `neko-quality-review` for canonical owner/producer/consumer/repository/handler evidence, removed-path
       poison proof, user-data preservation and residual risks.
-- [ ] 9.3 Run the relevant real visible Electron and provider-backed Character flows only with explicit
+- [x] 9.3 Run the relevant real visible Electron and provider-backed Character flows only with explicit
       provider/model/cost authorization; list unexecuted local Asset checks as unavailable residual risk rather
       than substituting mocks or hidden success paths. Asset cloud and World validation are outside this change.
 
-## Current validation evidence (2026-08-12)
+## 10. Project Content presentation
 
-- Passed strict OpenSpec validation; affected Entity, Search, local metadata, Assets, Chara, Project,
-  Agent, Webview and Desktop typechecks/tests; package/application boundary and storage-authority gates;
-  focused formatting; `git diff --check`; and the full key-free Agent Evaluation harness (26 suites,
-  76 cases). The retired generated-output Entity-binding Evaluation case was removed with its deleted
-  Entity Tool path.
-- The visible Electron `resource-browser-invalid-entity-document` scenario passed with direct screenshot
-  review: invalid Entity records remain local diagnostics and valid Files remain usable. The visible
-  `resource-browser-entity-management` scenario also passed after isolating its unrelated Cut coverage and
-  correcting the shared CDP text-replacement command. Its ten screenshots were inspected directly and cover
-  Files creation menus, narrow Resources layout, Entity candidate/confirmed states, explicit Character
-  destination confirmation, the exact `MIO Companion` Character Studio handoff and missing-binding
-  `needs-attention`; no clipping, overlap or unreadable state was observed. The report contains no console
-  error, warning or runtime exception. Duplicate reference-owner blocker wording remains a non-blocking
-  presentation refinement.
-- `check:unused` no longer reports the removed Agent-to-Entity dependency; it remains red for unrelated
-  `@neko/generation` / `@earendil-works/pi-ai` declarations. `check:no-internal-versioning` remains red on
-  the dirty-worktree allowance ledger and existing Character domain-version/revision findings. These results
-  are recorded quality findings rather than hidden successes; the new resource usage projection files add no
-  internal-versioning finding.
-- Added Search-owned owner-qualified usage projection contracts, bounded complete-source reconciliation,
-  local-metadata SQLite persistence with row-local diagnostics, and a Project composition producer. Full
-  Search Domain (85), Search local metadata (12), local metadata (90), Project (41) and Entity Domain (57)
-  test suites passed with all five affected typechecks. Strict OpenSpec validation, package/application
-  boundaries, storage authorities, legacy-debt, focused Prettier and `git diff --check` passed. Entity
-  destructive-operation poison tests prove the usage projection is not queried; incomplete authoritative
-  reference participants keep operations unavailable.
-- Real provider-backed Character evaluation was not run because no provider/model/cost authorization was
-  supplied. Local manifest-backed Asset representation creation remains explicitly unavailable and
-  fail-visible; Asset cloud and World remain outside this change.
+- [x] 10.1 Add a strict Project-owned read-only Project Content contract and service that composes exact
+      CharacterProject associations, WorldProject records, unassociated confirmed Entity elements and
+      Entity candidates without copying owner payloads or inferring Character/World from Entity kind.
+- [x] 10.2 Remove Entity from the Resource Browser source contract and UI so Resources exposes only Files,
+      Media and Assets; delete all Entity handlers, intents and tests from the Assets-owned path in the same switch.
+- [x] 10.3 Add a Project Webview surface with Characters, Worlds, Other Elements and Candidates groups,
+      owner-qualified identity/availability and explicit empty/diagnostic states.
+- [x] 10.4 Wire sender-bound Desktop Project Content IPC and navigation while keeping composition in
+      `@neko/project`; add producer, codec, delegation, Webview and lifecycle tests.
+- [x] 10.5 Update stable architecture/status documentation and run focused quality/UI validation, including
+      proof that associated Characters appear once and no Entity kind is promoted into a World.
+
+## Current validation evidence (2026-08-13)
+
+- Project Content is the default Project Main View and Resources exposes only Files, Media and Assets. The
+  Project contract/service tests prove associated Characters are emitted once, their Entity is absent from
+  Other Elements, scene/location Entity kinds do not create Worlds, candidates remain unconfirmed and no
+  Character/World/Entity payload is copied into the projection.
+- Passed Project typecheck and 49 tests, Project Webview typecheck and 8 tests, Assets Domain typecheck and 138
+  tests, Assets Node typecheck and 79 tests, Assets Webview typecheck and 60 tests, Host 312 tests, Desktop
+  typecheck and 178 focused Main/preload/renderer tests. Strict OpenSpec validation, package/application
+  boundaries, product-status reachability, legacy-debt and `git diff --check` pass. A fresh darwin-arm64 Desktop
+  package also succeeds.
+- The visible Electron `project-content` scenario passed through the production preload/Main bridge at
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-13T01-46-32.082Z-project-content-development/report.json`.
+  It verifies the four ordered groups and empty states, the three Resources sources, no horizontal overflow at
+  `1440x900` and the supported minimum `960x640`, and Project Content Root unmount after navigation. Both
+  screenshots were inspected directly; no overlap, clipping or unreadable state was observed, and the report
+  contains no console error, warning or runtime exception. The retired Assets-owned Entity scenarios and
+  selectors were deleted rather than retained as alternate product paths.
+- `pnpm smoke:webview` remains blocked before reaching the affected package because `@neko/agent-webview`'s
+  build command does not create the `dist` directory expected by the shared smoke script. `check:unused` remains
+  red for unrelated `@neko/generation` and `@earendil-works/pi-ai` declarations. The internal-versioning audit
+  remains red on the current dirty-worktree allowance ledger and existing Character continuity/relationship
+  work; this increment adds no Project Content contract version or version-dispatch path.
+- The explicitly authorized visible Electron Character Creator case passed with requested and effective
+  `nekoapi-chat / gpt-5.6-luna` at
+  `reports/agent-eval/character-creator-visible-final-2026-08-13/skill.character-creator/reviewable-character-proposal/focused-1-msrcky3q-r1/result.json`.
+  Hard gates prove the exact builtin Character Creator fingerprint, assistant binding, terminal completed Turn,
+  non-empty reviewable answer and absence of `chara.character.fillDraft`; usage records 6,581 input and 1,301
+  output tokens with no retry. The visible Desktop report records no console error, warning, runtime exception or
+  poisoned resource request.
+- The first real attempts failed visibly and were not counted as acceptance: initial Turn facts were unavailable
+  to the later Session connection, explicit Skill activation had no receipt, and React Virtualizer attempted
+  `flushSync` during the MessageList lifecycle. One connection-neutral facts store now hands the exact initial
+  Turn record to the later Session projector without copying facts; Pi emits the exact validated Skill activation
+  receipt; MessageList lets React schedule virtual measurement updates. Runtime, Desktop and Webview regression
+  tests cover exact identity, sibling Conversation isolation, disposal, stale activation rejection and scrolling.
+- Local Asset provider-backed checks were not part of the selected Character case and remain unavailable residual
+  risk rather than a mock success. Asset cloud and complete World authoring/runtime remain outside this change.

@@ -2,6 +2,7 @@ import {
   parseProjectAuthoringNavigation,
   type ProjectAuthoringNavigationItem,
 } from './project-authoring-navigation';
+import { parseProjectContentProjection, type ProjectContentProjection } from './project-content';
 
 export const PROJECT_AUTHORING_HOST_CHANNEL = 'openneko:project:authoring-navigation' as const;
 
@@ -18,6 +19,13 @@ export interface ProjectAuthoringNavigationHostRequest extends ProjectAuthoringN
   readonly operation: 'navigation-get';
 }
 
+export interface ProjectContentHostRequest extends ProjectAuthoringNavigationBinding {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly operation: 'content-get';
+}
+
 export interface ProjectAuthoringCatalogHostRequest {
   readonly requestId: string;
   readonly rendererSessionId: string;
@@ -26,7 +34,9 @@ export interface ProjectAuthoringCatalogHostRequest {
 }
 
 export type ProjectAuthoringHostRequest =
-  ProjectAuthoringNavigationHostRequest | ProjectAuthoringCatalogHostRequest;
+  | ProjectAuthoringNavigationHostRequest
+  | ProjectAuthoringCatalogHostRequest
+  | ProjectContentHostRequest;
 
 export interface ProjectAuthoringNavigationHostResult {
   readonly requestId: string;
@@ -53,6 +63,13 @@ export interface ProjectAuthoringCatalogHostResult {
   readonly diagnostics: readonly ProjectAuthoringCatalogDiagnostic[];
 }
 
+export interface ProjectContentHostResult {
+  readonly requestId: string;
+  readonly workspaceId: string;
+  readonly contentProjectId: string;
+  readonly projection: ProjectContentProjection;
+}
+
 export interface OpenNekoDesktopProjectAuthoringBridge {
   readonly projectAuthoring: {
     getCatalog(windowId: string): Promise<ProjectAuthoringCatalogHostResult>;
@@ -60,7 +77,26 @@ export interface OpenNekoDesktopProjectAuthoringBridge {
       windowId: string,
       binding: ProjectAuthoringNavigationBinding,
     ): Promise<ProjectAuthoringNavigationHostResult>;
+    getContent(
+      windowId: string,
+      binding: ProjectAuthoringNavigationBinding,
+    ): Promise<ProjectContentHostResult>;
   };
+}
+
+export function createProjectContentHostRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly binding: ProjectAuthoringNavigationBinding;
+}): ProjectContentHostRequest {
+  return parseProjectContentHostRequest({
+    requestId: input.requestId,
+    rendererSessionId: input.rendererSessionId,
+    windowId: input.windowId,
+    operation: 'content-get',
+    ...input.binding,
+  });
 }
 
 export function createProjectAuthoringCatalogHostRequest(input: {
@@ -123,6 +159,31 @@ export function parseProjectAuthoringCatalogHostRequest(
   return request;
 }
 
+export function parseProjectContentHostRequest(value: unknown): ProjectContentHostRequest {
+  const record = requireRecord(value, 'Project Content request');
+  requireExactKeys(record, [
+    'requestId',
+    'rendererSessionId',
+    'windowId',
+    'operation',
+    'workspaceId',
+    'workspaceGrantId',
+    'contentProjectId',
+  ]);
+  if (record['operation'] !== 'content-get') {
+    throw new Error(`Unknown Project authoring operation: ${String(record['operation'])}`);
+  }
+  return {
+    requestId: requireIdentity(record['requestId'], 'Project Content request'),
+    rendererSessionId: requireIdentity(record['rendererSessionId'], 'Renderer session'),
+    windowId: requireIdentity(record['windowId'], 'Desktop Window'),
+    operation: 'content-get',
+    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+    workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
+    contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+  };
+}
+
 export function parseProjectAuthoringHostRequest(value: unknown): ProjectAuthoringHostRequest {
   const record = requireRecord(value, 'Project authoring request');
   const operation = record['operation'];
@@ -138,7 +199,30 @@ export function parseProjectAuthoringHostRequest(value: unknown): ProjectAuthori
   if (operation === 'navigation-get') {
     return parseProjectAuthoringNavigationHostRequest(record);
   }
+  if (operation === 'content-get') {
+    return parseProjectContentHostRequest(record);
+  }
   throw new Error(`Unknown Project authoring operation: ${String(operation)}`);
+}
+
+export function parseProjectContentHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): ProjectContentHostResult {
+  const record = requireRecord(value, 'Project Content result');
+  requireExactKeys(record, ['requestId', 'workspaceId', 'contentProjectId', 'projection']);
+  const requestId = requireMatchingRequestId(record['requestId'], expectedRequestId);
+  const contentProjectId = requireIdentity(record['contentProjectId'], 'Content Project');
+  const projection = parseProjectContentProjection(record['projection']);
+  if (projection.contentProjectId !== contentProjectId) {
+    throw new Error('Project Content result projection belongs to another Content Project.');
+  }
+  return {
+    requestId,
+    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+    contentProjectId,
+    projection,
+  };
 }
 
 export function parseProjectAuthoringNavigationHostResult(

@@ -42,6 +42,18 @@ afterEach(async () => {
 });
 
 describe('DesktopCutRuntime', () => {
+  it('delegates draft and Canvas handoff policy to the Cut application owner', async () => {
+    const source = await readFile(new URL('./desktop-cut-runtime.ts', import.meta.url), 'utf8');
+
+    expect(source).toContain('this.draftApplication.createDraft(');
+    expect(source).toContain('resolveCutCanvasHandoffTarget({');
+    expect(source).toContain('sameCutCanvasHandoffTarget(currentTarget, input.target)');
+    expect(source).not.toContain('CUT_DRAFT_DOCUMENT_ID_PREFIX');
+    expect(source).not.toContain('createDesktopCutCanvasHandoffPayload');
+    expect(source).not.toContain('parseDesktopCutCanvasHandoffPayload');
+    expect(source).not.toContain('function sameCanvasHandoffTarget');
+  });
+
   it('coalesces concurrent draft creation, appends later drafts and rebinds on first save', async () => {
     const harness = await createDraftRuntimeHarness({ saveDestination: 'cuts/saved.otio' });
 
@@ -703,6 +715,7 @@ describe('DesktopCutRuntime', () => {
       },
     );
     const runtime = new DesktopCutRuntime({
+      globalMediaLibraryRoot: path.join(workspacePath, '.neko-home', 'media-libraries'),
       shell: {
         getProjection: vi.fn(async () => getProjection()),
         updateWorkbench,
@@ -1506,6 +1519,7 @@ function createRuntime(
     locator: { kind: 'relative' as const, value: '.' },
   };
   return new DesktopCutRuntime({
+    globalMediaLibraryRoot: path.join(workspacePath, '.neko-home', 'media-libraries'),
     shell: {
       getProjection: vi.fn(),
       updateWorkbench: vi.fn(),
@@ -1579,6 +1593,7 @@ function createViewIdentity(
   rendererSessionId: string,
 ): CutHostRuntimeIdentity {
   if (!view.documentId) throw new Error('Cut View requires a document identity.');
+  if (!view.projectId) throw new Error('Cut View requires a Project identity.');
   return {
     projectId: view.projectId,
     workspaceId: view.workspaceId,
@@ -1702,6 +1717,7 @@ async function createDraftRuntimeHarness(options: {
     domains: [],
   });
   const runtime = new DesktopCutRuntime({
+    globalMediaLibraryRoot: path.join(workspacePath, '.neko-home', 'media-libraries'),
     shell: {
       getProjection: vi.fn(async () => projection()),
       updateWorkbench: vi.fn(async (_windowId, _sessionId, _instanceId, next) => {

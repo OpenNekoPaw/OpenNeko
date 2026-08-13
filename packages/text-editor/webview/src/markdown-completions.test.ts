@@ -152,10 +152,10 @@ describe('Markdown CodeMirror completion source', () => {
         {
           kind: 'resource',
           source: 'asset',
-          ref: { kind: 'workspace-media-library', id: 'neko/assets/Reference/shot.mp4' },
+          ref: { kind: 'media-library', namespace: 'Reference', id: 'shot.mp4' },
           label: 'shot.mp4',
-          detail: 'neko/assets/Reference/shot.mp4',
-          target: 'neko/assets/Reference/shot.mp4',
+          detail: 'Reference/shot.mp4',
+          target: 'media-library:Reference/shot.mp4',
           embeddable: true,
         },
       ]),
@@ -173,7 +173,8 @@ describe('Markdown CodeMirror completion source', () => {
       expect.objectContaining({
         label: 'shot.mp4',
         type: 'neko-media-library',
-        detail: '媒体库 · neko/assets/Reference/shot.mp4',
+        detail: '媒体库 · Reference/shot.mp4',
+        apply: '[[media-library:Reference/shot.mp4]]',
         section: { name: '媒体库', rank: 3 },
       }),
     ]);

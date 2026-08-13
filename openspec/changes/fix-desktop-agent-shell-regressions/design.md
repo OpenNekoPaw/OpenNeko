@@ -122,6 +122,8 @@ Project attach/restoration 由 `DesktopShellService` 检查当前 project-owned 
 
 Project 已 attach 后，用户可以关闭最后一个 Main Tab；该当前会话状态由 renderer 显示为正常的空 Main surface，不附加 Canvas diagnostic，也不立即重建默认 Canvas。下一次 Project attach/restoration 仍按上述 Host 规则恢复 canonical Workspace Canvas。缺失 Canvas capability 或 Canvas 加载失败只针对实际 Canvas View 显示明确 diagnostic，不回退到伪 Canvas。
 
+CharacterProject 与 WorldProject 是 Workspace 内的特殊 authoring target，不是 Workspace 默认 Main，也不改变 Workspace kind。打开这类 target 时，Workbench 保留 primary Main 中的 canonical Board；没有 Content Project 的独立目录 authority 则保留显式空 primary Main，并把精确 Character/World authoring View 放入 Secondary Main。Scene 必须分别按稳定 primary/secondary Group 投影两个 Surface；关闭特殊 target 后折叠 Secondary Main，恢复原 Board 或空状态，不保留隐藏 authoring Root。旧 presentation 若把特殊 target 放入 primary，下一次显式打开该 target 时按同一 canonical 规则局部重排。
+
 应用启动恢复是 presentation reconciliation boundary。若持久 Scene 的 Workspace scope 与按当前
 `activeTarget` 恢复出的 Project-owned Main Views 不一致，说明 Window presentation 曾被非原子写入或
 来自已替换的旧 UI 状态。Host 只重置该 Scene 为 fresh Entry presentation，保留当前 Project 的合法

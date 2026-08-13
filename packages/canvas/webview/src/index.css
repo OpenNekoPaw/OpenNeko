@@ -1439,11 +1439,11 @@ html.canvas-webview-document #root,
   transform: translateX(-50%);
   border: 1px solid var(--toolbar-border);
   border-radius: 8px;
-  background: var(--canvas-overlay-surface);
+  background: var(--canvas-card-surface);
   color: var(--toolbar-fg);
   box-shadow: var(--canvas-floating-shadow);
-  backdrop-filter: var(--canvas-overlay-blur);
-  -webkit-backdrop-filter: var(--canvas-overlay-blur);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .selection-context-toolbar__label {
@@ -1512,8 +1512,19 @@ html.canvas-webview-document #root,
   min-height: 0;
   border: 0;
   border-radius: 8px;
-  background: transparent;
+  background: var(--canvas-card-surface);
   color: var(--node-fg);
+}
+
+[data-canvas-zoom-detail='distant'] .canvas-node-external-label,
+[data-canvas-zoom-detail='distant'] .canvas-generation-node__status,
+[data-canvas-zoom-detail='distant'] [data-playback-control] {
+  display: none;
+}
+
+[data-canvas-zoom-detail='distant'] video,
+[data-canvas-zoom-detail='distant'] audio {
+  pointer-events: none;
 }
 
 .canvas-node-external-label {

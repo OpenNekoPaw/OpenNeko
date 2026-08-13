@@ -65,14 +65,20 @@ export function createDesktopAgentConversationReferenceResolver(input: {
 
   function resolveReference(reference: AgentFileReference): AgentContextPayload {
     const locator = reference.contentLocator;
-    if (locator.kind !== 'workspace-file') {
-      throw new Error(`Agent reference '${reference.label}' is not a Workspace file locator.`);
+    if (locator.kind !== 'workspace-file' && locator.kind !== 'media-library') {
+      throw new Error(
+        `Agent reference '${reference.label}' is not an authorized project content locator.`,
+      );
     }
+    const portableLocation =
+      locator.kind === 'workspace-file'
+        ? `workspace-file:${locator.path}`
+        : `media-library:${locator.libraryName}/${locator.relativePath}`;
     return {
       type: 'file',
       id: reference.id,
       label: reference.label,
-      summary: `Workspace content: ${reference.label} (ContentLocator: workspace-file:${locator.path})`,
+      summary: `Project content: ${reference.label} (ContentLocator: ${portableLocation})`,
       data: {
         kind: AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
         locator,
@@ -212,9 +218,7 @@ export function createDesktopAgentLaunchRuntime(input: {
     readonly binding: Extract<AgentDomainBinding, { readonly kind: 'workspace' }>;
     readonly reference: DesktopAgentWorkspaceReference;
   }) => Promise<AgentContextPayload>;
-  readonly entryTargets?: Parameters<
-    typeof createAgentLaunchApplicationService
-  >[0]['entryTargets'];
+  readonly entryTargets?: Parameters<typeof createAgentLaunchApplicationService>[0]['entryTargets'];
 }): DesktopAgentLaunchRuntime {
   const createIdentity = input.createIdentity ?? randomUUID;
   const grants = new Map<string, DesktopAgentResourceGrant>();
@@ -489,7 +493,12 @@ function projectReferenceMessageContext(
       type: referenceMessageContextType(file.mediaType, file.source),
       id: referenceId,
       label: file.name,
-      summary: file.locator.path,
+      summary:
+        file.locator.kind === 'workspace-file'
+          ? file.locator.path
+          : file.locator.kind === 'media-library'
+            ? `${file.locator.libraryName}/${file.locator.relativePath}`
+            : file.name,
       ...(file.mediaType === undefined ? {} : { mediaType: file.mediaType }),
       contentLocator: file.locator,
     };

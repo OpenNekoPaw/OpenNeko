@@ -24,6 +24,7 @@ import {
 } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
+import { CharacterConversationModeSelector } from './CharacterConversationModeSelector';
 import { EntryPromptMenu as ComposerEntryPromptMenu } from './EntryPromptMenu';
 import { AttachmentPreview } from './FileAttachment';
 import { FileReferencePreview } from './FileReferencePreview';
@@ -42,6 +43,7 @@ import {
   EntryPromptMenu,
   DEFAULT_COMPOSER_MENU_STATE,
   type ComposerMenuState,
+  type CharacterConversationMode,
   type SelectedFileReference,
   type SelectedCharacterLaunch,
 } from './types';
@@ -123,6 +125,9 @@ interface InputAreaProps {
   selectedCharacterLaunches?: readonly SelectedCharacterLaunch[];
   onAddCharacterLaunch?: (selection: SelectedCharacterLaunch) => void;
   onRemoveCharacterLaunch?: (characterVersionId: string) => void;
+  entryCharacterConversationMode?: CharacterConversationMode;
+  onEntryCharacterConversationModeChange?: (mode: CharacterConversationMode) => void;
+  entryCharacterConversationModeDisabled?: boolean;
   /** Session-bound @file references selected from the mention menu. */
   selectedFileReferences?: SelectedFileReference[];
   onSelectedFileReferencesChange?: (references: SelectedFileReference[]) => void;
@@ -237,6 +242,9 @@ export function InputArea({
   selectedCharacterLaunches = [],
   onAddCharacterLaunch,
   onRemoveCharacterLaunch,
+  entryCharacterConversationMode,
+  onEntryCharacterConversationModeChange,
+  entryCharacterConversationModeDisabled = false,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
   isComposing = false,
@@ -1140,6 +1148,16 @@ export function InputArea({
                         modelConfigurationPolicy?.status === 'locked'
                           ? modelConfigurationPolicy.reason
                           : undefined
+                      }
+                    />
+                  ) : null}
+                  {presentation === 'entry' && entryCharacterConversationMode ? (
+                    <CharacterConversationModeSelector
+                      mode={entryCharacterConversationMode}
+                      onChange={(mode) => onEntryCharacterConversationModeChange?.(mode)}
+                      disabled={
+                        entryCharacterConversationModeDisabled ||
+                        onEntryCharacterConversationModeChange === undefined
                       }
                     />
                   ) : null}

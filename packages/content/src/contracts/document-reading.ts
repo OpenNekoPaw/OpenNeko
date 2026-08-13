@@ -2,6 +2,7 @@ import type { ContentRepresentationLocator } from './content-representation';
 import {
   isContentLocator,
   type DocumentEntryContentLocator,
+  type MediaLibraryContentLocator,
   type WorkspaceFileContentLocator,
 } from './content-locator';
 
@@ -75,8 +76,8 @@ export interface DocumentFileIdentity {
 export interface DocumentSourceRef {
   readonly filePath: string;
   readonly format: DocumentFormat;
-  /** Canonical workspace identity. Required before document entries can cross package boundaries. */
-  readonly contentLocator?: WorkspaceFileContentLocator;
+  /** Canonical container identity. Required before document entries can cross package boundaries. */
+  readonly contentLocator?: WorkspaceFileContentLocator | MediaLibraryContentLocator;
   readonly fileId?: string;
   readonly identity?: DocumentFileIdentity;
   readonly uri?: string;
@@ -293,7 +294,7 @@ export function parseDocumentSourceRef(value: unknown): DocumentSourceRef | unde
   }
 
   const fileId = readOptionalStringField(source, 'fileId');
-  const contentLocator = readOptionalWorkspaceFileContentLocator(source, 'contentLocator');
+  const contentLocator = readOptionalDocumentSourceContentLocator(source, 'contentLocator');
   const uri = readOptionalStringField(source, 'uri');
   const token = readOptionalStringField(source, 'token');
   const rangeUrl = readOptionalStringField(source, 'rangeUrl');
@@ -506,15 +507,18 @@ function readOptionalFileIdentityField(
   return parseDocumentFileIdentity(record[key]) ?? null;
 }
 
-function readOptionalWorkspaceFileContentLocator(
+function readOptionalDocumentSourceContentLocator(
   record: Record<string, unknown>,
   key: string,
-): WorkspaceFileContentLocator | undefined | null {
+): WorkspaceFileContentLocator | MediaLibraryContentLocator | undefined | null {
   if (!(key in record)) {
     return undefined;
   }
   const value = record[key];
-  return isContentLocator(value) && value.kind === 'workspace-file' ? value : null;
+  return isContentLocator(value) &&
+    (value.kind === 'workspace-file' || value.kind === 'media-library')
+    ? value
+    : null;
 }
 
 function readOptionalStringField(

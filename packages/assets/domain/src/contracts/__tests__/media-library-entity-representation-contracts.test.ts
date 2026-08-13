@@ -8,13 +8,14 @@ import { decodeProjectEntityDocument, type ProjectEntityDocument } from '@neko/e
 
 const representations = [
   {
-    kind: 'workspace-file',
-    path: 'neko/assets/Characters/alice.png',
+    kind: 'media-library',
+    libraryName: 'Characters',
+    relativePath: 'alice.png',
     fingerprint: { strategy: 'sha256', value: 'sha256:alice' },
   },
   {
     kind: 'document-entry',
-    source: { kind: 'workspace-file', path: 'neko/assets/Books/comic.epub' },
+    source: { kind: 'workspace-file', path: 'references/comic.epub' },
     entryPath: 'OPS/images/page-1.jpg',
   },
   {
@@ -42,7 +43,7 @@ const mediaEntry: MediaLibraryProjectionEntry = {
 };
 
 describe('Media Library projection contract', () => {
-  it('accepts all four canonical locator branches without catalog membership', () => {
+  it('accepts canonical locator branches without catalog membership', () => {
     for (const locator of representations) {
       expect(
         isMediaLibraryProjectionEntry({
@@ -79,7 +80,7 @@ describe('Media Library projection contract', () => {
 });
 
 describe('Project Entity accepted representation contract', () => {
-  it('accepts all four direct representation targets in the canonical Entity document', () => {
+  it('accepts direct canonical representation targets in the Entity document', () => {
     const document: ProjectEntityDocument = {
       projectId: 'project-alice',
       entities: [

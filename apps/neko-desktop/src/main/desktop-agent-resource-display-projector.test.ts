@@ -49,12 +49,21 @@ describe('Desktop Agent resource display projector', () => {
       throw new Error('Expected projected snapshot frame.');
     }
     const data = readToolResultData(projected.projection.turns[0]?.items[0]);
-    expect(data).toEqual({
+    expect(data).toMatchObject({
       contentLocator: fixture.locator,
       path: 'media/clip.mp4',
       mimeType: 'video/mp4',
-      renderUri: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      previewDescriptor: {
+        contentLocator: fixture.locator,
+        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        displayName: 'clip.mp4',
+        mediaType: 'video/mp4',
+        contentKind: 'video',
+        byteLength: 7,
+        sourceFingerprint: expect.any(String),
+      },
     });
+    expect(data).not.toHaveProperty('renderUri');
     expect(JSON.stringify(projected)).not.toContain('/private/tmp/clip.mp4');
     expect(registerFile).toHaveBeenCalledOnce();
     const [owner, source] = registerFile.mock.calls[0] ?? [];
@@ -190,10 +199,18 @@ describe('Desktop Agent resource display projector', () => {
     if (projected.type !== 'projectionSnapshot') {
       throw new Error('Expected projected snapshot frame.');
     }
-    expect(readToolResultData(projected.projection.turns[0]?.items[0])).toEqual({
+    expect(readToolResultData(projected.projection.turns[0]?.items[0])).toMatchObject({
       contentLocator: locator,
       mimeType: 'image/png',
-      renderUri: 'openneko://resource/cccccccccccccccccccccccccccccccc/content',
+      previewDescriptor: {
+        contentLocator: locator,
+        url: 'openneko://resource/cccccccccccccccccccccccccccccccc/content',
+        displayName: 'cover.png',
+        mediaType: 'image/png',
+        contentKind: 'image',
+        byteLength: bytes.byteLength,
+        sourceFingerprint: expect.any(String),
+      },
     });
     expect(loadDisplayAsset).toHaveBeenCalledWith({ locator, maxBytes: 64 * 1024 * 1024 });
     expect(registerBytes).toHaveBeenCalledWith(
@@ -262,7 +279,14 @@ describe('Desktop Agent resource display projector', () => {
       images: [
         {
           representationLocator,
-          renderUri: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
+          previewDescriptor: {
+            contentLocator: representationLocator.source,
+            url: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
+            displayName: 'story.pdf',
+            mediaType: 'image/png',
+            contentKind: 'document',
+            sourceFingerprint: expect.any(String),
+          },
         },
         {
           contentLocator: missingLocator,

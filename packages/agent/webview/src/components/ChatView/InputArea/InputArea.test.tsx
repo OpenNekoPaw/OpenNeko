@@ -39,6 +39,11 @@ const translations: Record<string, string> = {
   'chat.input.workspace.clear': '清除项目选择',
   'chat.entryAction.openDirectory': '打开目录',
   'chat.entryContext.chooseCharacters': '选择角色',
+  'chat.entryExperience.characterDialogue.modeLabel': '对话模式',
+  'chat.entryExperience.characterDialogue.modeDaily': '日常',
+  'chat.entryExperience.characterDialogue.modeDailyDescription': '使用日常关系与长期记忆。',
+  'chat.entryExperience.characterDialogue.modeNarrative': '叙事',
+  'chat.entryExperience.characterDialogue.modeNarrativeDescription': '使用角色与剧情上下文。',
   'chat.entryAction.chooseWorld': '选择世界',
   'chat.entryContext.bindingBar': '当前上下文',
   'chat.entryContext.clearTarget': '清除',
@@ -786,6 +791,38 @@ describe('InputArea composer controls', () => {
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
   });
 
+  it('places Character conversation mode beside the Entry model selector', () => {
+    const onModeChange = vi.fn();
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          entryCharacterConversationMode="companion"
+          onEntryCharacterConversationModeChange={onModeChange}
+        />
+      </Harness>,
+    );
+
+    const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
+    const modelTrigger = within(modeGroup).getByRole('button', { name: '配置模型' });
+    const conversationModeTrigger = within(modeGroup).getByRole('button', {
+      name: '对话模式: 日常',
+    });
+    expect(
+      modelTrigger.compareDocumentPosition(conversationModeTrigger) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    fireEvent.click(conversationModeTrigger);
+    const menu = screen.getByRole('menu', { name: '对话模式' });
+    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /叙事/u }));
+    expect(onModeChange).toHaveBeenCalledWith('narrative');
+  });
+
   it('omits the locked Workspace label from the conversation composer', () => {
     render(
       <Harness composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}>
@@ -902,6 +939,7 @@ describe('InputArea composer controls', () => {
               workspaceGrantId: 'grant-1',
             },
             target: { kind: 'content-project', contentProjectId: 'project-1' },
+            authority: { kind: 'content-project', contentProjectId: 'project-1' },
           }}
           onClearEntryWorkspaceTarget={onClearEntryWorkspaceTarget}
           selectedCharacterLaunches={[
@@ -1925,7 +1963,11 @@ describe('InputArea composer controls', () => {
             id: 'media-hero',
             kind: 'media',
             label: 'Hero portrait',
-            filePath: 'neko/assets/Characters/hero.png',
+            contentLocator: {
+              kind: 'media-library',
+              libraryName: 'Characters',
+              relativePath: 'hero.png',
+            },
             source: 'media-library',
             mediaType: 'image',
           },
@@ -1936,7 +1978,7 @@ describe('InputArea composer controls', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText('输入任何问题...'), {
-      target: { value: '参考 @neko/assets/Characters/hero.png' },
+      target: { value: '参考 @Characters/hero.png' },
     });
 
     const token = screen.getByText('Hero portrait').closest('[data-agent-reference-token]');
@@ -1955,8 +1997,9 @@ describe('InputArea composer controls', () => {
           expect.objectContaining({
             label: 'Hero portrait',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/hero.png',
+              kind: 'media-library',
+              libraryName: 'Characters',
+              relativePath: 'hero.png',
             },
             mediaType: 'image',
             source: 'media-library',
@@ -1978,7 +2021,11 @@ describe('InputArea composer controls', () => {
             id: 'media-lamp-spirit',
             kind: 'media',
             label: '灯神立绘',
-            filePath: 'neko/assets/Characters/lamp-spirit.png',
+            contentLocator: {
+              kind: 'media-library',
+              libraryName: 'Characters',
+              relativePath: 'lamp-spirit.png',
+            },
             source: 'media-library',
             mediaType: 'image',
             searchText: '灯神 神灯 aladdin genie',

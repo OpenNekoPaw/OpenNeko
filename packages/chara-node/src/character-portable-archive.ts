@@ -105,7 +105,9 @@ export async function writeCharacterPortableArchive(input: {
     embeddedAssets: input.embeddedAssets.map((entry) => ({
       representationId: entry.representationId,
       kind: entry.kind,
+      resourceRef: entry.resourceRef,
       archivePath: entry.archivePath,
+      entry: entry.entry,
       mediaType: entry.mediaType,
       byteLength: entry.bytes.byteLength,
       integrityDigest: digest(entry.bytes),

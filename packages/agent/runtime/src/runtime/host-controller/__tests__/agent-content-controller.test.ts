@@ -121,7 +121,7 @@ describe('Agent content controller', () => {
         filter: '',
         purpose: 'entry',
         searchLinkedMediaLibraryFiles: async () => [
-          { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+          { kind: 'media-library', libraryName: 'Reference', relativePath: 'hero.png' },
         ],
         reportMentionContributorError,
       });
@@ -129,7 +129,7 @@ describe('Agent content controller', () => {
       expect(projection.files).toEqual([
         expect.objectContaining({ name: 'local.md', source: 'workspace' }),
         expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+          locator: { kind: 'media-library', libraryName: 'Reference', relativePath: 'hero.png' },
           name: 'hero.png',
           source: 'media-library',
           mediaType: 'image',

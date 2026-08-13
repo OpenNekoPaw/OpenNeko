@@ -16,6 +16,17 @@ describe('Electron Agent launch Host runtime adapter', () => {
           characterVersionId: 'character-version-a',
           displayName: 'A',
           versionLabel: 'Published A',
+          lineage: {
+            coverage: 'complete',
+            state: 'declared-root',
+            isHead: true,
+            path: [
+              {
+                characterVersionId: 'character-version-a',
+                label: 'Published A',
+              },
+            ],
+          },
           storylines: [
             {
               characterStorylineVersionId: 'storyline-version-a',
@@ -38,6 +49,17 @@ describe('Electron Agent launch Host runtime adapter', () => {
         characterVersionId: 'character-version-a',
         displayName: 'A',
         versionLabel: 'Published A',
+        lineage: {
+          coverage: 'complete',
+          state: 'declared-root',
+          isHead: true,
+          path: [
+            {
+              characterVersionId: 'character-version-a',
+              label: 'Published A',
+            },
+          ],
+        },
         storylines: [{ storylineVersionId: 'storyline-version-a', label: 'Arc A' }],
       },
     ]);
@@ -289,6 +311,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace:1',
       workspaceGrantId: 'workspace-grant:1',
+      authority: { kind: 'content-project' as const, contentProjectId: 'content:1' },
       target: { kind: 'content-project' as const, contentProjectId: 'content:1' },
     };
     const workspaceCatalog = createCatalog({

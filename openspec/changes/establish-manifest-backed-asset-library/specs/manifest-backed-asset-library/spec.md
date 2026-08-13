@@ -2,7 +2,7 @@
 
 ### Requirement: Managed Assets require explicit package lifecycle
 
-The Asset Library SHALL contain only reusable Assets explicitly imported, installed, or published through
+The Asset Library SHALL contain only reusable Assets explicitly imported or installed from local sources through
 a validated package lifecycle. Filesystem discovery MUST NOT create Asset membership, Asset identity, or
 package metadata for ordinary workspace or Media Library files.
 
@@ -18,7 +18,7 @@ package metadata for ordinary workspace or Media Library files.
 
 ### Requirement: Asset revisions have stable immutable identity
 
-Every installed or published Asset revision SHALL be identified by stable `assetId`, immutable `revision`,
+Every installed Asset revision SHALL be identified by stable `assetId`, immutable user-visible `revision`,
 and verified package `digest`. A committed revision MUST NOT change its manifest or member bytes; any
 change requires a new revision.
 
@@ -30,7 +30,7 @@ change requires a new revision.
 #### Scenario: Detect revision identity collision
 
 - **WHEN** content claims an existing `(assetId, revision)` with a different digest
-- **THEN** installation or publication fails with an integrity-conflict diagnostic and changes no installed revision
+- **THEN** installation fails with an integrity-conflict diagnostic and changes no installed revision
 
 ### Requirement: Manifests are closed portable package contracts
 
@@ -39,25 +39,20 @@ dependencies, license policy, and type-specific metadata required by its Asset t
 absolute paths, physical Media Library targets, cache paths, provider credentials, or runtime URLs as
 durable package identity.
 
-#### Scenario: Package a linked media representation
+#### Scenario: Import a linked media representation
 
-- **WHEN** an Asset publication selects content from a linked Media Library
-- **THEN** publication requires an owned package copy or an explicit installable Asset dependency and rejects the physical link target
+- **WHEN** an Asset import selects content from a linked Media Library
+- **THEN** import requires an owned package copy or an explicit installable Asset dependency and rejects the physical link target
 
 #### Scenario: Validate a non-canonical manifest
 
 - **WHEN** an installer receives a manifest with unknown fields or missing required semantic fields
 - **THEN** it rejects only that package visibly before writing installed state
 
-#### Scenario: Read remote provenance
+#### Scenario: Encounter a network source field
 
-- **WHEN** a manifest records a portable non-secret remote or registry origin
-- **THEN** the system treats it only as provenance and resolves synchronization through an explicit local account/repository binding
-
-#### Scenario: Encounter credential-bearing source URI
-
-- **WHEN** installation finds a signed, credential-bearing, machine-private, or otherwise unsafe source URI
-- **THEN** it rejects or archives the value without using or copying it into the installed manifest or synchronization state
+- **WHEN** a manifest declares a remote, registry, signed URL, account, credential, or provider resolver
+- **THEN** local installation rejects only that package as outside the canonical local contract
 
 ### Requirement: Dependencies commit as a validated closure
 
@@ -110,13 +105,13 @@ reference. Uninstall and garbage collection SHALL remain separate explicit opera
 - **THEN** the Asset owner creates or reactivates a validated membership through the canonical record path
 - **AND** filesystem discovery alone does not silently restore it
 
-### Requirement: Entity Assets use the generic Asset lifecycle
+### Requirement: Asset packages do not own semantic project aggregates
 
-The Asset Library SHALL support `identity` Entity Asset packages through the same manifest, revision,
-dependency, install, publish, and removal lifecycle as other Asset types. Asset Library MUST NOT become
-the mutable Project Entity fact authority.
+The Asset Library SHALL contain ordinary reusable resource packages only. It MUST NOT package or create
+Project Entity facts, CharacterProject/CharacterVersion facts, WorldProject/WorldVersion facts, or use an
+`identity` Asset type as a semantic aggregate.
 
-#### Scenario: Install an Entity Asset
+#### Scenario: Import a semantic project record
 
-- **WHEN** a valid Entity Asset revision is installed
-- **THEN** Asset Library exposes its immutable package and metadata without creating or modifying a Project Entity
+- **WHEN** selected input claims to be an Entity, Character or World project package
+- **THEN** Asset import rejects that package and leaves the semantic owner's record unchanged

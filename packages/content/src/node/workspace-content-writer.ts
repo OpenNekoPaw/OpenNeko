@@ -15,17 +15,15 @@ import {
   type WorkspaceFileContentLocator,
 } from '../contracts';
 import {
-  authorizeWorkspaceLinkedPath,
-  type AuthorizeWorkspaceLinkedPathInput,
-  type WorkspaceLinkedPathGuardResult,
-} from './workspace-linked-path-guard';
+  authorizeWorkspaceContainedPath,
+  type AuthorizeWorkspacePathInput,
+  type WorkspacePathGuardResult,
+} from './workspace-path-guard';
 
 export interface NodeAuthorizedWorkspaceWriterOptions {
   readonly workspaceRoot: string;
   readonly defaultMaxBytes?: number;
-  readonly authorize?: (
-    input: AuthorizeWorkspaceLinkedPathInput,
-  ) => Promise<WorkspaceLinkedPathGuardResult>;
+  readonly authorize?: (input: AuthorizeWorkspacePathInput) => Promise<WorkspacePathGuardResult>;
 }
 
 export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter {
@@ -70,7 +68,7 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
       return unavailable(locator, writeDiagnostic(error));
     }
     const createdParentAuthorization = await (
-      this.options.authorize ?? authorizeWorkspaceLinkedPath
+      this.options.authorize ?? authorizeWorkspaceContainedPath
     )({
       workspaceRoot: this.options.workspaceRoot,
       requestedPath: path.dirname(targetPath),
@@ -115,7 +113,7 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
     }
     if (targetState === 'unsupported') return unavailable(locator, 'content-unauthorized');
     const authorizationPath = targetState === 'missing' ? path.dirname(targetPath) : targetPath;
-    const authorization = await (this.options.authorize ?? authorizeWorkspaceLinkedPath)({
+    const authorization = await (this.options.authorize ?? authorizeWorkspaceContainedPath)({
       workspaceRoot: this.options.workspaceRoot,
       requestedPath: authorizationPath,
     });
@@ -175,12 +173,12 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
     }
   }
 
-  private async authorizeParent(targetPath: string): Promise<WorkspaceLinkedPathGuardResult> {
+  private async authorizeParent(targetPath: string): Promise<WorkspacePathGuardResult> {
     let candidate = path.dirname(targetPath);
     while (true) {
       try {
         await lstat(candidate);
-        return (this.options.authorize ?? authorizeWorkspaceLinkedPath)({
+        return (this.options.authorize ?? authorizeWorkspaceContainedPath)({
           workspaceRoot: this.options.workspaceRoot,
           requestedPath: candidate,
         });
@@ -189,10 +187,7 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
           return {
             authorized: false,
             diagnostic: {
-              code:
-                isNodeError(error, 'EACCES') || isNodeError(error, 'EPERM')
-                  ? 'library-permission-denied'
-                  : 'workspace-path-unavailable',
+              code: 'workspace-path-unavailable',
               message: 'Workspace content parent cannot be inspected.',
             },
           };
@@ -268,11 +263,9 @@ async function fingerprintForPath(
 }
 
 function guardDiagnosticCode(
-  code: import('./workspace-linked-path-guard').WorkspaceLinkedPathGuardDiagnosticCode,
+  code: import('./workspace-path-guard').WorkspacePathGuardDiagnosticCode,
 ): ContentIoDiagnosticCode {
-  return code === 'workspace-path-unavailable' || code === 'library-link-broken'
-    ? 'content-missing'
-    : 'content-unauthorized';
+  return code === 'workspace-path-unavailable' ? 'content-missing' : 'content-unauthorized';
 }
 
 function writeDiagnostic(error: unknown): ContentIoDiagnosticCode {

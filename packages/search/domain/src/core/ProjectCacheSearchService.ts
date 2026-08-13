@@ -20,11 +20,11 @@ import type {
 export class ProjectCacheSearchService implements ProjectSearchDisposable {
   readonly onDidChangeProjectIndex: ProjectSearchEvent<ProjectIndexChangeEvent>;
 
-  constructor(private readonly coordinator = new ProjectIndexCoordinator()) {
+  constructor(private readonly coordinator: ProjectIndexCoordinator) {
     this.onDidChangeProjectIndex = this.coordinator.onDidChangeProjectIndex;
   }
 
-  static create(ports: Partial<ProjectSearchRuntimePorts> = {}): ProjectCacheSearchService {
+  static create(ports: ProjectSearchRuntimePorts): ProjectCacheSearchService {
     return new ProjectCacheSearchService(new ProjectIndexCoordinator(ports));
   }
 

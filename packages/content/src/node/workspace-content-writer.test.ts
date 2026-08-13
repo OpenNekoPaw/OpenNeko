@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -79,6 +79,29 @@ describe('NodeAuthorizedWorkspaceWriter', () => {
     expect(['first\n', 'second\n']).toContain(
       await readFile(path.join(root, 'notes/story.md'), 'utf8'),
     );
+  });
+});
+
+describe('Node workspace content path ownership', () => {
+  it('does not read the retired neko/assets link through workspace-file', async () => {
+    const root = await createWorkspace();
+    const externalRoot = await mkdtemp(path.join(tmpdir(), 'openneko-retired-content-'));
+    roots.push(externalRoot);
+    await writeFile(path.join(externalRoot, 'shot.mov'), 'retired-link');
+    await mkdir(path.join(root, 'neko', 'assets'), { recursive: true });
+    await symlink(
+      externalRoot,
+      path.join(root, 'neko', 'assets', 'Footage'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const locator = {
+      kind: 'workspace-file' as const,
+      path: 'neko/assets/Footage/shot.mov',
+    };
+
+    await expect(
+      createNodeHostContentReadService({ workspaceRoot: root }).read(locator),
+    ).rejects.toMatchObject({ code: 'invalid-content-locator' });
   });
 });
 

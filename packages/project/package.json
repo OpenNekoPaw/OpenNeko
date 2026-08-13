@@ -1,6 +1,6 @@
 {
   "name": "@neko/project",
-  "description": "Host-neutral Content Project composition contracts and application services",
+  "description": "Host-neutral Content Project facts and rebuildable projection services",
   "private": true,
   "type": "module",
   "exports": {
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@neko/chara": "workspace:*",
+    "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/search-domain": "workspace:*",
     "@neko/world": "workspace:*"

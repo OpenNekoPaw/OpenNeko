@@ -42,7 +42,11 @@ import type { ContentLocator, DocumentContextData, DocumentLocator } from '@neko
 import type { ProviderGenerationCapability } from '@neko/agent-contracts';
 import type { CanvasNodeType } from '@neko/canvas-domain';
 import { isDocumentFile } from '@neko/media';
-import { contentLocatorKey, isContentLocator } from '@neko/content';
+import {
+  contentLocatorKey,
+  isContentLocator,
+  serializeContentReferenceTarget,
+} from '@neko/content';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   extractFileReferencePaths,
@@ -353,6 +357,7 @@ export interface AgentProjectFileSearchPlan {
 
 export interface AgentProjectFileCandidate {
   readonly relativePath: string;
+  readonly contentLocator?: ContentLocator;
   readonly icon?: string;
   readonly source?: ProjectMentionSource;
   readonly mediaType?: ProjectMentionMediaType;
@@ -1460,8 +1465,12 @@ export function projectAgentFileMentions(
 ): ProjectFileMentionInfo[] {
   return files.map((file) => {
     const relativePath = normalizeRelativeProjectPath(file.relativePath);
+    const locator = file.contentLocator ?? { kind: 'workspace-file' as const, path: relativePath };
+    if (!isContentLocator(locator)) {
+      throw new Error('Agent Project file candidate contains an invalid content locator.');
+    }
     return {
-      locator: { kind: 'workspace-file', path: relativePath },
+      locator,
       name: getProjectPathBaseName(relativePath),
       type: 'file',
       ...(file.icon ? { icon: file.icon } : {}),
@@ -1971,8 +1980,10 @@ function contentLocatorDisplayPath(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return `${locator.libraryName}/${locator.relativePath}`;
     case 'document-entry':
-      return `${locator.source.path}#${locator.entryPath}`;
+      return `${serializeContentReferenceTarget(locator.source)}#${locator.entryPath}`;
     case 'package-resource':
       return `${locator.packageId}/${locator.resourcePath}`;
   }

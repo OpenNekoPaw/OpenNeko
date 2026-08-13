@@ -137,6 +137,16 @@ export class CharacterConversationLaunchService {
     if (existing) return existing;
 
     const characters = await this.prepareCharacters(input.selection, input.requestId, signal);
+    if (
+      new Set(characters.map((character) => character.publication.characterProjectId)).size !==
+      characters.length
+    ) {
+      throw launchError(
+        'character-launch-selection-invalid',
+        'Character conversation launch must select at most one CharacterVersion per CharacterProject.',
+        input.requestId,
+      );
+    }
     const companionAuthorities =
       input.selection.mode === 'companion'
         ? await this.resolveCompanionAuthorities(input, identities, characters, signal)

@@ -3,8 +3,8 @@
 ### Requirement: Media Library is the single file-resource entry
 
 The product SHALL expose one Resources presentation for browsing, searching, opening and diagnosing
-accessible resources. Project Files, linked Media, installed Assets and Project Elements SHALL remain
-owner-preserving sources or filters inside that experience. Media Library SHALL remain the direct entry
+accessible resources. Files, linked Media and installed Assets SHALL remain owner-preserving sources or
+filters inside that experience. Media Library SHALL remain the direct entry
 for linked ordinary files, while explicitly managed Asset packages retain Asset identity and lifecycle;
 the presentation MUST NOT copy them into a common mutable catalog.
 
@@ -21,15 +21,20 @@ Asset or Entity record
 
 #### Scenario: Switch resource sources
 
-- **WHEN** a user filters Resources by Project Files, Shared Media, Installed Assets or Project Elements
+- **WHEN** a user filters Resources by Files, Media or Assets
 - **THEN** the presentation queries the selected owner projection and retains exact owner identity,
   availability and supported actions without copying or converting the result
 
-#### Scenario: Search linked Entity and Character results
+### Requirement: Semantic project content is not a Resource source
 
-- **WHEN** one query matches a ProjectEntity and its explicitly associated CharacterProject
-- **THEN** the presentation MAY compose one Character card with owner-qualified project and interaction
-  status while preserving both exact identities and mutation owners
+Resource Browser SHALL NOT expose Entity, Character, World or Candidate as a resource source. Project
+Content SHALL present those semantic/authoring records through a separate Project-owned read model.
+
+#### Scenario: Browse project content
+
+- **WHEN** a project contains associated Characters, WorldProjects, other confirmed Entities and candidates
+- **THEN** Project Content groups them as Characters, Worlds, Other Elements and Candidates
+- **AND** Resources continues to expose only Files, Media and Assets
 
 ### Requirement: Media entries are source-derived projections
 

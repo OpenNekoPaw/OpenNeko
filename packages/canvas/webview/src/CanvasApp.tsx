@@ -73,6 +73,7 @@ import { t } from './i18n';
 import { getLogger } from './utils/logger';
 import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
 import { centerNodeAt } from './utils/nodeSizing';
+import { findFreePosition } from './utils/containerLayout';
 
 // =============================================================================
 // Constants & Host API
@@ -101,7 +102,6 @@ export interface CanvasAppProps {
 export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const canOpenHostExport = hostPort.supportsMessage('canvasAction');
   const canOpenHostPlayback = hostPort.supportsMessage('media:probe');
-  const canSendToAgent = hostPort.supportsMessage('sendToAgent');
   const canOpenBoardRef = hostPort.supportsMessage('openCanvasBoardRef');
   const canvasStoreApi = useCanvasStoreApi();
   const playbackStoreApi = usePlaybackStoreApi();
@@ -142,7 +142,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const addNode = useCanvasStore((state) => state.addNode);
   const updateConnection = useCanvasStore((state) => state.updateConnection);
   const deleteSelected = useCanvasStore((state) => state.deleteSelected);
-  const setPlaybackEntry = useCanvasStore((state) => state.setPlaybackEntry);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
@@ -364,10 +363,16 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
         if (!action.generationKind) {
           throw new Error(`Canvas generation action "${actionId}" has no Generation kind`);
         }
-        const nodePosition = centerNodeAt(
-          position,
-          resolveCanvasGenerationNodeDefaultSize(action.generationKind),
-        );
+        const nodeSize = resolveCanvasGenerationNodeDefaultSize(action.generationKind);
+        const preferredPosition = centerNodeAt(position, nodeSize);
+        const nodePosition = findFreePosition({
+          preferred: {
+            x: Math.round(preferredPosition.x / 20) * 20,
+            y: Math.round(preferredPosition.y / 20) * 20,
+          },
+          size: nodeSize,
+          nodes: canvasData?.nodes ?? [],
+        });
         void hostPort
           .createGenerationNode(action.generationKind, nodePosition)
           .catch((error: unknown) => {
@@ -389,7 +394,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       }
       throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
     },
-    [requestCanvasFilePickerSource, hostPort],
+    [canvasData?.nodes, requestCanvasFilePickerSource, hostPort],
   );
 
   const handleSelectAddAction = useCallback(
@@ -593,19 +598,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     intervalMs: 100,
   });
 
-  // =========================================================================
-  // Agent handlers
-  // =========================================================================
-
-  /** Send selected nodes as context to the Agent panel */
-  const handleSendToAgent = useCallback(() => {
-    hostPort.postMessage({
-      type: 'sendToAgent',
-      nodeIds: selectedNodeIds,
-      action: 'context',
-    });
-  }, [selectedNodeIds, hostPort]);
-
   const handleDocumentOpen = useCallback(
     (locator: ContentLocator) => {
       void hostPort.previewResource(locator);
@@ -656,8 +648,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     handleUngroup,
     undo,
     redo,
-    onSendToAgent: canSendToAgent ? handleSendToAgent : undefined,
-    onSetPlaybackEntry: setPlaybackEntry,
   });
 
   // =========================================================================

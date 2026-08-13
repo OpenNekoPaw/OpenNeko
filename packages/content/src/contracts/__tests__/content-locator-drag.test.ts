@@ -10,12 +10,20 @@ describe('ContentLocator drag contract', () => {
     expect(CONTENT_LOCATOR_DRAG_MIME).toBe('application/x-openneko-content-locator+json');
     expect(
       createContentLocatorDragData({
-        locator: { kind: 'workspace-file', path: 'media/cat.png' },
+        locator: {
+          kind: 'media-library',
+          libraryName: 'Reference',
+          relativePath: 'cat.png',
+        },
         name: 'cat.png',
       }),
     ).toEqual({
       type: 'content-locator',
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
+      locator: {
+        kind: 'media-library',
+        libraryName: 'Reference',
+        relativePath: 'cat.png',
+      },
       name: 'cat.png',
     });
   });

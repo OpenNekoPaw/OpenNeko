@@ -87,6 +87,28 @@ describe('Canvas File node text preview', () => {
     );
   });
 
+  it('keeps an invalid locator unavailable and does not dispatch a preview read', async () => {
+    const readTextFilePreview = vi.fn();
+    const host = createCanvasWebviewHost(runtime(readTextFilePreview));
+    const node = {
+      ...fileNode('invalid-file', 'neko/assets/Books/story.epub', 'application/epub+zip'),
+      data: {
+        ...fileNode('invalid-file', 'neko/assets/Books/story.epub', 'application/epub+zip').data,
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/assets/Books/story.epub',
+        },
+      },
+    } as unknown as FileCanvasNode;
+
+    await renderFile(root, host, node);
+
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      'Content unavailable',
+    );
+    expect(readTextFilePreview).not.toHaveBeenCalled();
+  });
+
   it('renders Markdown read-only and keeps empty and diagnostic states visible', async () => {
     const markdownHost = createCanvasWebviewHost(
       runtime(async (request) => ({

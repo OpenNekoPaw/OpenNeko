@@ -3,12 +3,9 @@ import {
   normalizeWorkspaceContentPath,
   validateContentLocator,
   type ContentLocator,
-  type WorkspaceFileContentLocator,
+  type MediaLibraryContentLocator,
 } from '@neko/content';
-import {
-  WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
-  validateWorkspaceLinkedMediaLibraryName,
-} from './workspace-linked-media-library';
+import { isPortablePathSegment } from '@neko/shared/path';
 
 export type ProjectContentReferenceOwnerKind = 'canvas' | 'cut' | 'entity-representation';
 
@@ -28,7 +25,7 @@ export interface WorkspaceMediaLibraryReference {
   readonly ownerKind: ProjectContentReferenceOwnerKind;
   readonly ownerId: string;
   readonly ownerFingerprint: string;
-  readonly locator: WorkspaceFileContentLocator;
+  readonly locator: MediaLibraryContentLocator;
   readonly descendantPath: string;
 }
 
@@ -293,8 +290,9 @@ export function parsePortableMediaLibrarySnapshotPlan(
       library['libraryName'],
       'Portable snapshot library name is required.',
     );
-    const diagnostic = validateWorkspaceLinkedMediaLibraryName(libraryName);
-    if (diagnostic) throw new Error('Portable snapshot library name is invalid.');
+    if (!isPortablePathSegment(libraryName)) {
+      throw new Error('Portable snapshot library name is invalid.');
+    }
     return {
       libraryName,
       entryCount: requireNonNegativeInteger(
@@ -424,34 +422,14 @@ function workspaceMediaLibraryReference(
   if (!validated.ok) {
     throw new Error(`Project content owner '${owner.ownerId}' returned an invalid ContentLocator.`);
   }
-  const workspaceLocator =
-    validated.locator.kind === 'workspace-file'
-      ? validated.locator
-      : validated.locator.kind === 'document-entry'
-        ? validated.locator.source
-        : undefined;
-  if (!workspaceLocator) return undefined;
-  const prefix = `${WORKSPACE_MEDIA_LIBRARY_DIRECTORY}/`;
-  if (!workspaceLocator.path.startsWith(prefix)) return undefined;
-  const relative = workspaceLocator.path.slice(prefix.length);
-  const separator = relative.indexOf('/');
-  if (separator <= 0 || separator === relative.length - 1) {
-    throw new Error(
-      `Project content owner '${owner.ownerId}' returned a Media Library locator without a descendant.`,
-    );
-  }
-  const libraryName = relative.slice(0, separator);
-  const diagnostic = validateWorkspaceLinkedMediaLibraryName(libraryName);
-  if (diagnostic) {
-    throw new Error(`Project content owner '${owner.ownerId}' returned an invalid library name.`);
-  }
+  if (validated.locator.kind !== 'media-library') return undefined;
   return {
-    libraryName,
+    libraryName: validated.locator.libraryName,
     ownerKind: owner.ownerKind,
     ownerId: owner.ownerId,
     ownerFingerprint: owner.sourceFingerprint,
-    locator: workspaceLocator,
-    descendantPath: relative.slice(separator + 1),
+    locator: validated.locator,
+    descendantPath: validated.locator.relativePath,
   };
 }
 

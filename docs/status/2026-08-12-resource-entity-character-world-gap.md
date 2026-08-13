@@ -2,18 +2,24 @@
 
 本文是当前实现与目标架构之间的审计快照，不是长期架构事实。目标边界见
 [`creative-resource-semantic-boundaries.md`](../architecture/creative-resource-semantic-boundaries.md)，实施任务见
-[`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)。
+[`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
+与后续存储切换
+[`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)。
 
 ## 已有基础
 
 | 领域            | 已有基础                                                                                | 不能据此宣称                                 |
 | --------------- | --------------------------------------------------------------------------------------- | -------------------------------------------- |
 | Content / Media | `ContentLocator`、直接文件读取、媒体库连接与投影边界                                    | 普通文件已成为 Asset 或 Entity               |
-| Asset           | manifest/revision/digest 方向与部分管理投影                                             | 云 provider、完整发布/安装闭环已可用         |
+| Asset           | 本地 manifest/revision/digest 方向与部分管理投影                                        | 完整本地 package 安装闭环已可用              |
 | Entity          | 最小项目 identity/names/lifecycle/binding、candidate/occurrence、Inspector 基础操作     | Entity Asset 或角色互动是生产能力            |
 | Chara           | CharacterProject/Version、Storyline、Companion/Narrative、Dialogue/Room 的 owning model | 全部 Desktop 路径与真实 provider 验收已完成  |
 | World           | Foundation project/version/run/save/branch 模型                                         | Story/Gameplay/Experience/实时生成已完成     |
 | Project         | Character/World membership、精确外部引用、Entity-to-Character 关联及可重试多步编排      | 所有 Character seed 来源均已完成真实产品验收 |
+
+截至 2026-08-13，Project 已提供 Project Content 只读聚合与 sender-bound Desktop 路径；Resources 已收窄为
+Files、Media、Assets 三个 source。Project Content 独立展示角色、世界、其他元素与待确认，关联角色不重复
+显示为元素，scene/location Entity 不会被提升为 World。
 
 ## 主要 Gap
 
@@ -21,6 +27,13 @@
 
 - creative Entity asset-composition 仍有公共导出与真实类型消费者，尚未完成
   producer/consumer/registration 级切换；legacy Character Registry 公共入口已删除。
+- `neko/project-composition.json` 仍把 Project identity、local membership、dependency 与
+  Entity-to-Character association 绑定为一个严格 root；单个字段失效会阻断 Workspace transition。
+  新提案将 association 拆为 Project-owned facts，并从 Chara/World/consumer owner 重建 membership、
+  dependency 与 Project Content。
+- 项目 Media Library 仍以 `workspace-file: neko/assets/...` 和工作区 OS link 运行，机器本地映射位于
+  同步项目 namespace。新提案将 durable 引用改为 owner-qualified Media Library locator，并把 target-free
+  本机 binding 放入可删除项目 `.neko`。
 
 ### P0：用户数据保护
 
@@ -31,11 +44,10 @@
 
 ### P1：产品和 contract 收敛
 
-- Resource Browser 已将唯一展示 contract 从 peer `facet` 原子收敛为 owner-preserving `source`，并以
-  “项目文件 / 共享媒体 / 已安装素材 / 项目元素”作为筛选；各 owner 的精确操作、选择状态与局部
-  diagnostic 保持不变。Project Elements 现在可把显式关联的 Entity/Character 组合成一张只读卡片，
-  保留双方精确 identity、项目内位置、availability 和 Chara-owned handoff；按 Character display name
-  搜索仍返回同一 Entity 项。Search 已定义 owner-qualified usage projection，local metadata 已提供按
+- Resource Browser 已将唯一展示 contract 从 peer `facet` 原子收敛为 Files、Media、Assets 三个
+  owner-preserving `source`；Entity handler、intent、UI 与测试已从 Assets-owned 路径删除。Project-owned
+  Project Content 通过现有 Project bridge 聚合角色、世界、其他元素和待确认内容，保留 owner-qualified
+  identity、availability 与局部 diagnostic，不复制领域 payload 或提供 Entity 通用 mutation。Search 已定义 owner-qualified usage projection，local metadata 已提供按
   owner/source 原子替换、精确 target 查询和坏行局部 diagnostic，Project composition 已能投影 Entity、
   CharacterProject 与 CharacterVersion 的 occurrence、usage、dependency 和 availability；其他 owner 的
   producer 与 recent-use 通知仍需按真实 authoritative record 逐项接入。
@@ -73,8 +85,8 @@
 
 ### P2：体验与文档一致性
 
-- Resources 与 Project Elements 的筛选术语、关联卡片和关联失效状态已接入；Characters、Worlds、空态、
-  无效记录修复入口以及 standalone/project-local/external placement 的跨页面一致展示仍未统一。
+- Resources 三源与 Project Content 四组、空态和局部无效诊断已接入；修复入口以及
+  standalone/project-local/external placement 的跨页面一致展示仍未统一。
 - 全局角色与项目角色需要明确展示 standalone、project-local、external dependency，而不是制造两类
   Character aggregate。
 - Character Studio 应复用创作工作区组合能力；快速创建应可跳过 Studio，但后续进入同一个项目记录。
@@ -83,7 +95,8 @@
 ## 当前不可用或延后
 
 - 通用 Entity Asset 的发布、实例化、更新与共享服务端操作退出当前 canonical 方案。
-- Asset 云同步、远端 provider、认证、retention 和完整 package runtime 未完成真实 Electron 验收。
+- Asset 当前只处理本地 package；远端 provider、发布与同步需未来独立 OpenSpec。本地完整 package runtime
+  尚未完成真实 Electron 验收。
 - 完整 World Story、Gameplay、Experience、实时生成与生产级 Presentation 不属于 Foundation 完成事实。
 - 自动把文件/素材识别成 Entity、自动创建 Character、自动选 latest CharacterVersion、自动修复旧记录均不支持。
 
@@ -95,7 +108,10 @@
 3. 扩展各 owner 的 usage producer，并仅在对应 owner 提供真实 read/rewrite commit 后开放 destructive
    operation。
 4. 删除 legacy registry/creative composition 的剩余公共可达路径并重命名泛化 projection。
-5. 完成 World 精确绑定、Desktop delegation、UI 验收和路径级 poison tests。
+5. 原子切换项目 `.neko`、Media Library locator/binding、Project association facts 与同步/便携快照，
+   删除 `neko/assets` 和 `project-composition.json` 成功路径。
+6. Project Content Desktop delegation、路径级 poison tests 与真实可见 Electron UI 验收已完成；World
+   精确绑定仍由未来 World 变更处理。
 
 完成定义不以“类型存在”或“单测通过”为准；必须覆盖真实 producer、consumer、repository、Desktop
 delegation、用户可见 failure 和相关 Electron 路径。

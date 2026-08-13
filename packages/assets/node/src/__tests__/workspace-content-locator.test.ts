@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -37,18 +37,24 @@ describe('resolveWorkspaceContentLocator', () => {
     ).rejects.toThrow('Generated output content is unavailable: content-changed.');
   });
 
-  it('rejects locator kinds without a file-backed Workspace path', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-non-file-content-path-'));
-    roots.push(workspacePath);
+  it('rejects the retired linked-media prefix even when it resolves to an existing file', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-retired-media-path-'));
+    const externalPath = await mkdtemp(path.join(tmpdir(), 'openneko-retired-media-target-'));
+    roots.push(workspacePath, externalPath);
+    await writeFile(path.join(externalPath, 'shot.mov'), 'retired-link');
+    await mkdir(path.join(workspacePath, 'neko', 'assets'), { recursive: true });
+    await symlink(
+      externalPath,
+      path.join(workspacePath, 'neko', 'assets', 'Footage'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
 
     await expect(
       resolveWorkspaceContentLocator(workspace(workspacePath), {
-        kind: 'package-resource',
-        packageId: 'package-1',
-        revision: 'release-1',
-        resourcePath: 'image.png',
+        kind: 'workspace-file',
+        path: 'neko/assets/Footage/shot.mov',
       }),
-    ).rejects.toThrow('workspace-file or generated-output ContentLocator');
+    ).rejects.toThrow('outside its authorized workspace source');
   });
 });
 

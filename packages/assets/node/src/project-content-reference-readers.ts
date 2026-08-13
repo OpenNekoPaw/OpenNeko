@@ -5,9 +5,13 @@ import { parseOtio, serializeOtio, type OtioTimeline } from '@neko/cut-domain';
 import { PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH } from '@neko/entity-domain';
 import { NodeProjectEntityRepresentationReferenceService } from '@neko/entity-node';
 import {
+  contentLocatorKey,
   normalizeWorkspaceContentPath,
+  parseContentReferenceTarget,
   validateContentLocator,
   type ContentLocator,
+  type MediaLibraryContentLocator,
+  type WorkspaceFileContentLocator,
 } from '@neko/content';
 import {
   aggregateWorkspaceMediaLibraryRequirements,
@@ -168,13 +172,9 @@ async function readCutReferences(
   for (const track of parsed.document.tracks.children) {
     for (const item of track.children) {
       if (item.OTIO_SCHEMA !== 'Clip.2') continue;
-      const targetPath = normalizeWorkspaceContentPath(
-        path.posix.normalize(path.posix.join(documentDirectory, item.media_reference.target_url)),
+      references.push(
+        readCutContentLocator(documentDirectory, item.media_reference.target_url, ownerId),
       );
-      if (!targetPath) {
-        throw invalidProjectDocument('cut', ownerId);
-      }
-      references.push({ kind: 'workspace-file', path: targetPath });
     }
   }
   return {
@@ -206,15 +206,14 @@ async function rewriteCutReferences(
         ...track,
         children: track.children.map((item) => {
           if (item.OTIO_SCHEMA !== 'Clip.2') return item;
-          const sourcePath = normalizeWorkspaceContentPath(
-            path.posix.normalize(
-              path.posix.join(documentDirectory, item.media_reference.target_url),
-            ),
+          const source = readCutContentLocator(
+            documentDirectory,
+            item.media_reference.target_url,
+            ownerId,
           );
-          if (!sourcePath) {
-            throw invalidProjectDocument('cut', ownerId);
-          }
-          const replacement = replacements.get(sourcePath);
+          const replacement = replacements.get(
+            source.kind === 'media-library' ? contentLocatorKey(source) : source.path,
+          );
           if (!replacement) return item;
           rewrittenCount += 1;
           return {
@@ -231,6 +230,20 @@ async function rewriteCutReferences(
   if (rewrittenCount > 0) {
     await fs.writeFile(documentPath, serializeOtio(document));
   }
+}
+
+function readCutContentLocator(
+  documentDirectory: string,
+  targetUrl: string,
+  ownerId: string,
+): MediaLibraryContentLocator | WorkspaceFileContentLocator {
+  const portable = parseContentReferenceTarget(targetUrl);
+  if (portable?.kind === 'media-library') return portable;
+  const targetPath = normalizeWorkspaceContentPath(
+    path.posix.normalize(path.posix.join(documentDirectory, targetUrl)),
+  );
+  if (!targetPath) throw invalidProjectDocument('cut', ownerId);
+  return { kind: 'workspace-file', path: targetPath };
 }
 
 async function readEntityRepresentationReferences(input: {
@@ -260,7 +273,7 @@ async function rewriteEntityRepresentationReferences(
     workspacePath,
     projectId,
   });
-  await service.rewriteWorkspacePaths({
+  await service.rewriteContentLocators({
     replacements,
   });
 }
@@ -326,13 +339,19 @@ function replaceContentLocator(
   locator: ContentLocator,
   replacements: ReadonlyMap<string, string>,
 ): ContentLocator {
+  if (locator.kind === 'media-library') {
+    const replacement = replacements.get(contentLocatorKey(locator));
+    return replacement ? { kind: 'workspace-file', path: replacement } : locator;
+  }
   if (locator.kind === 'workspace-file') {
     const replacement = replacements.get(locator.path);
     return replacement ? { ...locator, path: replacement } : locator;
   }
   if (locator.kind === 'document-entry') {
-    const replacement = replacements.get(locator.source.path);
-    return replacement ? { ...locator, source: { ...locator.source, path: replacement } } : locator;
+    const source = replaceContentLocator(locator.source, replacements);
+    return source.kind === 'workspace-file' || source.kind === 'media-library'
+      ? { ...locator, source }
+      : locator;
   }
   return locator;
 }

@@ -190,6 +190,71 @@ describe('Resource Browser Workspace File mutations', () => {
     );
   });
 
+  it('rejects generic mutations of package-owned project facts and local state', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-owned-storage-'));
+    roots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
+    await mkdir(path.join(workspacePath, '.neko'), { recursive: true });
+    await writeFile(path.join(workspacePath, 'neko', 'project.json'), '{}', 'utf8');
+    await writeFile(path.join(workspacePath, '.neko', 'local.json'), '{}', 'utf8');
+    const trashWorkspaceItem = vi.fn(async (_absolutePath: string) => undefined);
+    const composition = createComposition(workspacePath, createFilePort(), { trashWorkspaceItem });
+    const factsDirectory = {
+      resourceId: 'content:neko',
+      source: 'files' as const,
+      kind: 'directory' as const,
+      label: 'neko',
+      role: 'directory' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: 'neko' },
+      capabilities: [],
+    };
+    const factsFile = {
+      resourceId: 'content:neko/project.json',
+      source: 'files' as const,
+      kind: 'file' as const,
+      label: 'project.json',
+      role: 'content' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: 'neko/project.json' },
+      capabilities: [],
+    };
+    const localStateFile = {
+      resourceId: 'content:.neko/local.json',
+      source: 'files' as const,
+      kind: 'file' as const,
+      label: 'local.json',
+      role: 'content' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: '.neko/local.json' },
+      capabilities: [],
+    };
+
+    await expect(
+      composition.interactions.createFile({
+        identity,
+        parent: factsDirectory,
+        name: 'bypass.json',
+      }),
+    ).rejects.toThrow('project-facts');
+    await expect(
+      composition.interactions.trashContent({ identity, item: factsFile }),
+    ).rejects.toThrow('project-facts');
+    await expect(
+      composition.interactions.trashContent({ identity, item: localStateFile }),
+    ).rejects.toThrow('project-local-state');
+
+    expect(trashWorkspaceItem).not.toHaveBeenCalled();
+    await expect(stat(path.join(workspacePath, 'neko', 'bypass.json'))).rejects.toThrow();
+    await expect(readFile(path.join(workspacePath, 'neko', 'project.json'), 'utf8')).resolves.toBe(
+      '{}',
+    );
+    await expect(readFile(path.join(workspacePath, '.neko', 'local.json'), 'utf8')).resolves.toBe(
+      '{}',
+    );
+  });
+
   it('rejects non-portable entry names before publishing Workspace content', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-portable-name-'));
     roots.push(root);
@@ -202,44 +267,6 @@ describe('Resource Browser Workspace File mutations', () => {
     ).rejects.toThrow('portable path segment');
     await expect(readdir(workspacePath)).resolves.toEqual([]);
   });
-
-  it('delegates exact linked Character presentation to the Project-owned reader', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-character-link-'));
-    roots.push(root);
-    const workspacePath = path.join(root, 'workspace');
-    await mkdir(workspacePath);
-    const readEntityCharacterResources = vi.fn(async () => [
-      {
-        entityId: 'entity-rin',
-        characterProjectId: 'character-project-rin',
-        displayName: 'Rin',
-        placement: 'project-local' as const,
-        availability: 'available' as const,
-        handoffs: [
-          { kind: 'open-character' as const, characterProjectId: 'character-project-rin' },
-          { kind: 'open-character-studio' as const, characterProjectId: 'character-project-rin' },
-        ],
-        publishedVersionCount: 1,
-        interactionStatus: 'select-version' as const,
-      },
-    ]);
-    const composition = createComposition(workspacePath, createFilePort(), {
-      readEntityCharacterResources,
-    });
-
-    const result = await composition.source.entities.list({ identity, query: '', limit: 20 });
-
-    expect(result.characterAssociations).toEqual([
-      expect.objectContaining({
-        entityId: 'entity-rin',
-        characterProjectId: 'character-project-rin',
-      }),
-    ]);
-    expect(readEntityCharacterResources).toHaveBeenCalledWith({
-      identity,
-      workspace: expect.objectContaining({ workspaceId: identity.workspaceId, workspacePath }),
-    });
-  });
 });
 
 function createComposition(
@@ -250,12 +277,10 @@ function createComposition(
     readonly openCreativeDocument?: Parameters<
       typeof createResourceBrowserNodeProjectionSource
     >[0]['openCreativeDocument'];
-    readonly readEntityCharacterResources?: Parameters<
-      typeof createResourceBrowserNodeProjectionSource
-    >[0]['readEntityCharacterResources'];
   } = {},
 ) {
   return createResourceBrowserNodeProjectionSource({
+    projectId: identity.projectId,
     globalAssetRoot: path.join(path.dirname(workspacePath), 'assets'),
     globalMediaLibraryRoot: path.join(path.dirname(workspacePath), 'media-libraries'),
     workspace: {
@@ -264,7 +289,6 @@ function createComposition(
       displayName: 'Workspace',
       locator: { kind: 'relative', value: 'workspace' },
     },
-    readEntityCharacterResources: overrides.readEntityCharacterResources ?? (async () => []),
     host: {
       files,
       external: { openExternal: async () => undefined },
@@ -279,7 +303,6 @@ function createComposition(
     createThumbnail: async () => 'data:image/png;base64,AA==',
     addToCanvas: async () => undefined,
     addToCut: async () => undefined,
-    manageEntity: async () => undefined,
   });
 }
 

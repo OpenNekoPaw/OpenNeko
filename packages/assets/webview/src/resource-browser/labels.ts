@@ -5,7 +5,6 @@ export interface ResourceBrowserLabels {
   readonly files: string;
   readonly media: string;
   readonly assets: string;
-  readonly entities: string;
   readonly search: string;
   readonly searchPlaceholder: string;
   readonly createMenu: string;
@@ -34,11 +33,11 @@ export interface ResourceBrowserLabels {
   readonly recoveryReferences: string;
   readonly statusAvailable: string;
   readonly statusRequiredUnlinked: string;
-  readonly statusGlobalConnectionMissing: string;
+  readonly statusConnectionMissing: string;
   readonly statusTargetUnavailable: string;
   readonly statusContentIncomplete: string;
-  readonly statusEntryConflict: string;
-  readonly statusUnreferencedLinked: string;
+  readonly statusBindingInvalid: string;
+  readonly statusUnreferencedLocalBinding: string;
   readonly preview: string;
   readonly editText: string;
   readonly openCut: string;
@@ -61,15 +60,6 @@ export interface ResourceBrowserLabels {
   readonly breadcrumbs: string;
   readonly workspaceRoot: string;
   readonly mediaLibraries: string;
-  readonly linkedCharacter: string;
-  readonly projectLocalCharacter: string;
-  readonly characterNeedsAttention: string;
-  readonly openCharacter: string;
-  readonly openCharacterStudio: string;
-  readonly selectCharacterVersion: string;
-  readonly noPublishedCharacterVersion: string;
-  readonly entityIdentity: string;
-  readonly characterProjectIdentity: string;
   readonly createCharacter: string;
   readonly characterName: string;
   readonly characterDestination: string;
@@ -83,7 +73,6 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     files: 'Project files',
     media: 'Shared media',
     assets: 'Installed assets',
-    entities: 'Project elements',
     search: 'Search',
     searchPlaceholder: 'Search project resources…',
     createMenu: 'New',
@@ -113,11 +102,11 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     recoveryReferences: 'referenced entries',
     statusAvailable: 'Available',
     statusRequiredUnlinked: 'Required library is not linked',
-    statusGlobalConnectionMissing: 'Global connection is missing',
+    statusConnectionMissing: 'Global connection is missing',
     statusTargetUnavailable: 'Library target is unavailable',
     statusContentIncomplete: 'Referenced content is incomplete',
-    statusEntryConflict: 'A real workspace entry conflicts with this library',
-    statusUnreferencedLinked: 'Linked but not referenced by project content',
+    statusBindingInvalid: 'The project-local binding record is invalid',
+    statusUnreferencedLocalBinding: 'Bound locally but not referenced by project content',
     preview: 'Preview',
     editText: 'Edit text',
     openCut: 'Open in Cut',
@@ -141,15 +130,6 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     breadcrumbs: 'Resource location',
     workspaceRoot: 'Workspace',
     mediaLibraries: 'Media libraries',
-    linkedCharacter: 'Linked character',
-    projectLocalCharacter: 'Project-local character',
-    characterNeedsAttention: 'Character needs attention',
-    openCharacter: 'Open Character',
-    openCharacterStudio: 'Open Studio',
-    selectCharacterVersion: 'Select an exact version to interact',
-    noPublishedCharacterVersion: 'Publish a Character version before interaction',
-    entityIdentity: 'Project element',
-    characterProjectIdentity: 'Character project',
     createCharacter: 'Create Character from this resource',
     characterName: 'Character name',
     characterDestination: 'Create in {destination}',
@@ -161,7 +141,6 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     files: '项目文件',
     media: '共享媒体',
     assets: '已安装素材',
-    entities: '项目元素',
     search: '搜索',
     searchPlaceholder: '搜索项目资源…',
     createMenu: '新建',
@@ -190,11 +169,11 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     recoveryReferences: '个引用条目',
     statusAvailable: '可用',
     statusRequiredUnlinked: '项目需要此媒体库，但尚未链接',
-    statusGlobalConnectionMissing: '全局媒体库连接缺失',
+    statusConnectionMissing: '全局媒体库连接缺失',
     statusTargetUnavailable: '媒体库目标不可用',
     statusContentIncomplete: '部分引用素材缺失',
-    statusEntryConflict: '工作区存在同名真实目录或文件',
-    statusUnreferencedLinked: '已链接，但项目内容暂未引用',
+    statusBindingInvalid: '项目本地媒体库绑定记录无效',
+    statusUnreferencedLocalBinding: '已有本地绑定，但项目内容暂未引用',
     preview: '预览',
     editText: '编辑文本',
     openCut: '使用剪辑器打开',
@@ -217,15 +196,6 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     breadcrumbs: '资源位置',
     workspaceRoot: '工作区',
     mediaLibraries: '媒体库',
-    linkedCharacter: '关联角色',
-    projectLocalCharacter: '项目内角色',
-    characterNeedsAttention: '角色需要处理',
-    openCharacter: '打开角色',
-    openCharacterStudio: '打开创作工作区',
-    selectCharacterVersion: '选择一个确定版本后开始互动',
-    noPublishedCharacterVersion: '发布角色版本后才能互动',
-    entityIdentity: '项目元素',
-    characterProjectIdentity: '角色项目',
     createCharacter: '基于此资源创建角色',
     characterName: '角色名称',
     characterDestination: '创建到 {destination}',

@@ -1,19 +1,13 @@
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ContentLocator } from '@neko/content';
+import type { GeneratedOutputContentLocator, WorkspaceFileContentLocator } from '@neko/content';
 import { createNodeHostContentReadService } from '@neko/content/node';
-import { listWorkspaceLinkedMediaLibraries } from './workspace-linked-media-libraries';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 export async function resolveWorkspaceContentLocator(
   workspace: AssetWorkspaceResolution,
-  locator: ContentLocator,
+  locator: WorkspaceFileContentLocator | GeneratedOutputContentLocator,
 ): Promise<string> {
-  if (locator.kind !== 'workspace-file' && locator.kind !== 'generated-output') {
-    throw new Error(
-      'Workspace content path resolution requires a workspace-file or generated-output ContentLocator.',
-    );
-  }
   if (locator.kind === 'generated-output') {
     const content = await createNodeHostContentReadService({
       workspaceRoot: workspace.workspacePath,
@@ -26,21 +20,6 @@ export async function resolveWorkspaceContentLocator(
   const resolvedPath = await realpath(requestedPath);
   const workspaceRoot = await realpath(workspace.workspacePath);
   if (isInside(resolvedPath, workspaceRoot)) return resolvedPath;
-
-  const libraries = await listWorkspaceLinkedMediaLibraries(workspace.workspacePath);
-  for (const library of libraries) {
-    if (library.availability !== 'available') continue;
-    if (
-      locator.path !== library.workspacePath &&
-      !locator.path.startsWith(`${library.workspacePath}/`)
-    ) {
-      continue;
-    }
-    const libraryRoot = await realpath(
-      path.join(workspace.workspacePath, ...library.workspacePath.split('/')),
-    );
-    if (isInside(resolvedPath, libraryRoot)) return resolvedPath;
-  }
   throw new Error('ContentLocator is outside its authorized workspace source.');
 }
 

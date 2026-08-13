@@ -10,6 +10,7 @@ export * from './skill-creation-capability-provider';
 export * from './agent-launch-submit-service';
 export * from './agent-conversation-lifecycle-service';
 export * from './agent-conversation-lifecycle-repository';
+export * from './agent-conversation-character-version-reference-reader';
 export * from './agent-provider-execution-router';
 export * from './assistant-resource-service';
 export * from './agent-runtime-settings-repository';

@@ -1,5 +1,21 @@
 ## ADDED Requirements
 
+### Requirement: Generation owns the canonical Recipe contract
+
+`@neko/generation` SHALL own the one strict Prompt/Text, Image, Video and Audio Recipe union, its typed defaults, validation, purpose mapping and projection to canonical GenerationJob requests. Canvas and other consumers MAY persist or display the public Recipe value but SHALL NOT define a parallel union, default catalog, validator or request mapper.
+
+#### Scenario: Canvas authors and runs a Recipe
+
+- **WHEN** Canvas creates, edits, validates or runs a Generation Node
+- **THEN** it consumes the same generation-owned Recipe contract and request projection used at the Generation boundary
+- **AND** changing a Recipe branch requires one atomic update of the canonical Generation producer, every consumer, fixture and test rather than Canvas-specific translation
+
+#### Scenario: A Recipe is invalid
+
+- **WHEN** one Recipe contains an illegal field, kind-specific parameter or purpose/model binding
+- **THEN** the generation-owned validator rejects that Recipe at the current request or record boundary
+- **AND** unrelated Recipes, Canvas nodes, Jobs and Workspaces remain usable
+
 ### Requirement: Prompt and media generation share one canonical Job lifecycle
 
 Generation SHALL support strict Prompt/Text, Image, Video and Audio request/result branches through the same Workspace-qualified GenerationJob coordinator, persistence and observation lifecycle. Prompt execution SHALL use a narrow Host-injected completion port and SHALL NOT import Agent runtime or create a Conversation, Pi Session or Tool Call.

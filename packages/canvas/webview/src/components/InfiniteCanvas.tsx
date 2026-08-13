@@ -420,6 +420,7 @@ export function InfiniteCanvas({
     <div
       ref={containerRef}
       data-canvas-viewport-root="true"
+      data-canvas-zoom-detail={viewport.zoom < 0.55 ? 'distant' : 'readable'}
       data-canvas-interaction-suspended={embeddedPreviewRequest ? 'true' : undefined}
       className="relative w-full h-full overflow-hidden select-none"
       style={{ cursor: getCursor() }}
@@ -548,7 +549,6 @@ export function InfiniteCanvas({
           (transformingNodeIds.length > 0 && !dragPreview) ||
           isMarqueeSelecting
         }
-        onCanvasEmbeddedPreview={setEmbeddedPreviewRequest}
       />
       <SelectionGenerationInputPanel
         nodes={interactionNodes}

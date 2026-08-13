@@ -1,4 +1,5 @@
 export * from './generation-params';
+export * from './recipe';
 export type {
   AudioGenerationRequest,
   ControlMode,

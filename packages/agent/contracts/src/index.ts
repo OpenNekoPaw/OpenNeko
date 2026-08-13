@@ -678,3 +678,4 @@ export * from './composite-artifact';
 export * from './storyboard-plan-overlay';
 export * from './shot-image-prep';
 export * from './external-research';
+export * from './character-dialogue-handoff';

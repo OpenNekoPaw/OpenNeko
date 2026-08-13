@@ -226,3 +226,92 @@ path helpers and adapters can be deleted.
   is removed so the exact retry remains visible while the surface stays mounted. Unmounting still loses the
   convenience action but does not delete, redirect or rewrite any successfully committed Character, membership,
   Entity or association fact.
+
+## 2026-08-13 Project Content completion evidence
+
+- `@neko/project` now owns the strict, read-only Project Content contract and composition service. Its projection
+  has four disjoint groups: associated Characters, real WorldProjects, unassociated confirmed Entity elements
+  and Entity candidates. Contract and service tests reject copied domain payload, scope mismatch, generic
+  mutation data and unknown fields. Projection tests prove a linked Character appears exactly once, a
+  scene/location Entity is not promoted into a World, and displaying a candidate does not confirm it.
+- Resources now has one canonical three-source contract: Files, Media and Assets. Entity source, intent, handler,
+  reader, inspector, association UI and Desktop adapter were removed together. The obsolete Assets-owned
+  `resource-browser-entity-management` and `resource-browser-invalid-entity-document` Electron scenarios were
+  deleted; their still-valid Files creation coverage remains as the renamed
+  `desktop-workspace-file-creation.mjs` scenario. Repository scans find no retained scenario ID, Entity Inspector
+  selector or old functional filename below Assets Webview and Desktop functional registration.
+- Project Content uses the existing sender-bound `projectAuthoring` bridge. Preload parses the canonical request
+  and result, AppHost validates exact window, renderer session, Workspace grant and registered Content Project,
+  and Main injects only Project composition, Character catalog, World catalog and Entity projection readers.
+  Aggregation policy stays in `ProjectContentService`; reading the view does not trigger Entity discovery or
+  mutation. The default Project Main View is `project-content`; Canvas remains an explicit view.
+- Focused verification passed: Project 49 tests, Project Webview 8, Assets Domain 138, Assets Node 79, Assets
+  Webview 60, Host 312, Desktop 178, all affected typechecks, package/application/product-status boundaries,
+  legacy-debt, strict OpenSpec validation and `git diff --check`. A fresh darwin-arm64 Desktop package completed.
+  `check:unused`, `check:no-internal-versioning` and `smoke:webview` retain the unrelated or upstream failures
+  recorded in `tasks.md`; they are not reported as successful gates.
+- UI validation is applicable and passed for the implemented empty Project Content path. The authoritative
+  visible Electron scenario report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-13T01-46-32.082Z-project-content-development/report.json`.
+  It traverses the production preload/Main/renderer path, verifies four ordered groups and three Resources
+  sources, checks `1440x900` and the supported minimum `960x640` without document or root overflow, then
+  navigates to All Projects and proves the Project Content Root is unmounted. Both PNG artifacts were opened and
+  inspected directly: hierarchy, spacing, labels and empty states are readable with no overlap or clipping. The
+  report records no console error, warning, runtime exception or poisoned resource request. Dense rows and
+  record-local diagnostics remain component-test evidence rather than visible Electron screenshot evidence.
+- Quality review classifies the Project Content increment as L2: it changes a shared Project contract and
+  renderer/preload/Main messaging, but introduces no new persistence owner or domain mutation. Responsibility,
+  dependency direction, interface shape, extension ports and package/IPC/Electron coverage align with the local
+  Desktop architecture. The remaining OpenSpec task is the explicitly authorized real provider-backed Character
+  flow; it was not run without provider, model and cost authorization. Asset cloud and complete World
+  authoring/runtime are outside this change.
+
+## 2026-08-13 visible Character provider acceptance
+
+- Evaluation disposition is `update` for the existing
+  `skill.character-creator/reviewable-character-proposal` case. The canonical path is visible Electron, the
+  ordinary composer, Desktop-owned complete Session runtime, exact builtin Character Creator activation and the
+  configured real provider. Forbidden paths are a mock provider, direct turn runner, hidden UI, inferred model,
+  copied Skill metadata, `chara.character.fillDraft` mutation and fallback provider/source.
+- The canonical `~/.neko/config.toml` parser selected enabled `nekoapi-chat / gpt-5.6-luna`; provider, model and
+  cost were explicitly authorized for each real invocation. No secret was read, copied or recorded. Key-free
+  validation passed 45 files / 308 tests and all 26 suites / 76 cases dry-run before the final invocation; these
+  remain infrastructure evidence rather than behavior acceptance.
+- Real execution first exposed three fail-visible observability/UI defects. Initial Turn facts completed in the
+  Conversation authority before the visible Session projector existed, so the later connection could not read
+  the Turn identity. A connection-neutral store now owns the exact record while each projector retains its own
+  connection/disposal projection; unit and Desktop integration tests prove the later Session sees the initial
+  Turn, the current connection identity is projected, disposal does not mutate the shared record and a sibling
+  Conversation does not match. Explicit Skill execution previously produced no receipt because only a later
+  model-selected `read_skill` Tool result was observed. Pi now emits `skill.activated` only after the exact
+  snapshot activation succeeds; stale activation emits nothing, Timeline ignores this non-visual fact and the
+  facts projector records the exact source/fingerprint. MessageList also disabled TanStack Virtualizer's internal
+  lifecycle `flushSync`; React now schedules measurement updates while the existing viewport/scroll behavior is
+  retained and component-tested.
+- The final visible provider-backed run passed at
+  `reports/agent-eval/character-creator-visible-final-2026-08-13/skill.character-creator/reviewable-character-proposal/focused-1-msrcky3q-r1/result.json`.
+  Requested and effective model identities are both `nekoapi-chat / gpt-5.6-luna`; the Skill receipt matches
+  builtin fingerprint `sha256:5013de13b4bc6bbff342615e875b7d471022a7a7fc994cb8583513a21feaf6a8`;
+  assistant binding, terminal completed state, non-empty reviewable answer and no
+  `chara.character.fillDraft` all pass. Usage is 6,581 input tokens, 1,301 output tokens, zero retries and
+  provider-reported USD 0. The adjacent Desktop report is
+  `reports/agent-eval/character-creator-visible-final-2026-08-13/focused-1-msrcky3q-r1/desktop-functional.json`;
+  it records successful composer submit, exact terminal Turn identity, zero console errors, zero warnings, zero
+  exceptions and no poisoned resource request.
+- Agent foundational-matrix disposition for this focused change: initial Conversation submit/terminal completion,
+  initial-Turn-to-Session handoff and sibling Conversation fact isolation are directly covered; ordinary later
+  Turn projection remains covered by the existing Desktop composition tests. Context compaction continuation,
+  full owner/application reopen, restored generation records and multi-Conversation UI switching were not rerun
+  with a real provider because this change does not alter their persistence, queue or navigation owners. Their
+  existing deterministic coverage remains, with real-provider rerun retained as release-level residual risk.
+- UI validation is applicable. Functional and adjacent-regression checks passed for normal composer submit,
+  thinking/streaming MessageList updates and final response presentation; the authoritative visible Desktop report
+  proves the complete path and no runtime diagnostic. MessageList's 26 component tests protect virtual measurement
+  configuration, viewport restoration, follow-tail/detached scrolling and adjacent transcript presentation. The
+  Evaluation report contains no screenshot artifact, so the new Character transcript pixel-level visual check is
+  blocked rather than inferred from DOM/runtime success; typography and responsive layout are not newly claimed by
+  this acceptance. The earlier Project Content screenshot review remains the visual evidence for the
+  resource/entity grouping surfaces.
+- Local Asset provider-backed checks were not selected and remain unavailable residual risk. Asset cloud and
+  complete World authoring/runtime are outside this change. Task 9.3 is complete without substituting mock or
+  hidden execution for those unexecuted areas.

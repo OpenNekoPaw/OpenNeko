@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import { resolveWorkspaceContentLocator } from '@neko/assets-node';
+import {
+  resolveProjectMediaLibraryContentPath,
+  resolveWorkspaceContentLocator,
+} from '@neko/assets-node';
+import { parseContentReferenceTarget } from '@neko/content';
 import { projectNekoMarkdownExtensions } from '@neko/markdown';
 import { detectPreviewContentKind, getPreviewMediaType } from '@neko/preview-domain';
 import {
@@ -37,6 +41,7 @@ export interface NodeTextEditorMarkdownMediaResourcePort {
 
 export interface NodeTextEditorMarkdownMediaServiceOptions {
   readonly resolveWorkspace: (workspaceId: string) => Promise<AssetWorkspaceResolution>;
+  readonly globalMediaLibraryRoot: string;
   readonly resources: NodeTextEditorMarkdownMediaResourcePort;
   readonly createLeaseId?: () => string;
 }
@@ -92,10 +97,19 @@ export class NodeTextEditorMarkdownMediaService {
       if (workspace.workspaceId !== request.identity.workspaceId) {
         return unavailable(request, 'text-editor-markdown-media-unauthorized');
       }
-      absolutePath = await resolveWorkspaceContentLocator(workspace, {
-        kind: 'workspace-file',
-        path: request.token.target,
-      });
+      const locator = parseContentReferenceTarget(request.token.target);
+      if (!locator) return unavailable(request, 'text-editor-markdown-media-unauthorized');
+      absolutePath =
+        locator.kind === 'media-library'
+          ? await resolveProjectMediaLibraryContentPath(
+              {
+                projectId: request.identity.owner.projectId,
+                workspaceRoot: workspace.workspacePath,
+                globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+              },
+              locator,
+            )
+          : await resolveWorkspaceContentLocator(workspace, locator);
     } catch (error) {
       return unavailable(request, diagnosticForResolutionError(error));
     }

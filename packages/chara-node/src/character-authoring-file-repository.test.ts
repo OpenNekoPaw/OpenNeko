@@ -9,6 +9,7 @@ import { CharacterAuthoringService, CharacterStorylineService } from '@neko/char
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   characterAuthoringTestPath,
+  characterLocalizedAssetBindingCatalogPath,
   characterLocalizedAssetPath,
   characterLineagePath,
   characterProjectPath,
@@ -83,6 +84,25 @@ describe('Character authoring file repository', () => {
       'live2d/model/model3.json',
       localizedAsset,
     );
+    const localizedAssetBindings = {
+      characterProjectId: 'character-project-1',
+      bindings: [
+        {
+          representationId: 'live2d-main',
+          kind: 'live2d' as const,
+          resourceRef: 'asset:live2d-source',
+          entryRelativeAssetPath: 'live2d/model/model3.json',
+          files: [
+            {
+              relativeAssetPath: 'live2d/model/model3.json',
+              mediaType: 'application/json',
+              byteLength: localizedAsset.byteLength,
+            },
+          ],
+        },
+      ],
+    };
+    await repository.saveLocalizedAssetBindingCatalog(localizedAssetBindings);
 
     await expect(repository.readProject('character-project-1')).resolves.toMatchObject({
       displayName: 'Lin',
@@ -104,6 +124,9 @@ describe('Character authoring file repository', () => {
     await expect(
       repository.readLocalizedAsset('character-project-1', 'live2d/model/model3.json', 4),
     ).resolves.toEqual(localizedAsset);
+    await expect(
+      repository.readLocalizedAssetBindingCatalog('character-project-1'),
+    ).resolves.toEqual(localizedAssetBindings);
     await expect(
       readFile(join(root, characterProjectPath('character-project-1')), 'utf8'),
     ).resolves.toContain('"characterProjectId": "character-project-1"');
@@ -146,6 +169,12 @@ describe('Character authoring file repository', () => {
         join(root, characterLocalizedAssetPath('character-project-1', 'live2d/model/model3.json')),
       ),
     ).resolves.toEqual(Buffer.from(localizedAsset));
+    await expect(
+      readFile(
+        join(root, characterLocalizedAssetBindingCatalogPath('character-project-1')),
+        'utf8',
+      ),
+    ).resolves.toContain('asset:live2d-source');
     await expect(repository.readProject('character-project-1')).resolves.toMatchObject({
       draft: {
         representationRefs: [expect.objectContaining({ resourceRef: 'asset:live2d-source' })],
@@ -246,6 +275,144 @@ describe('Character authoring file repository', () => {
     await expect(repository.readPublication('character-version-1')).resolves.toMatchObject({
       label: 'First',
     });
+  });
+
+  it('deletes only the exact owned publication and preserves sibling versions', async () => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    await new CharacterAuthoringService({ repository, now: () => NOW }).createProject({
+      characterProjectId: 'character-project-delete',
+      displayName: 'Delete',
+      draft: definition(),
+    });
+    await repository.storePublication({
+      characterVersionId: 'character-version-delete',
+      characterProjectId: 'character-project-delete',
+      label: 'Delete',
+      definition: definition(),
+      acceptedEvidenceIds: [],
+      publishedAt: NOW,
+    });
+    await repository.storePublication({
+      characterVersionId: 'character-version-sibling',
+      characterProjectId: 'character-project-delete',
+      label: 'Sibling',
+      definition: definition(),
+      acceptedEvidenceIds: [],
+      publishedAt: NOW,
+    });
+
+    await repository.deletePublication('character-project-delete', 'character-version-delete');
+
+    await expect(repository.readPublication('character-version-delete')).resolves.toBeUndefined();
+    await expect(repository.readPublication('character-version-sibling')).resolves.toMatchObject({
+      characterProjectId: 'character-project-delete',
+      label: 'Sibling',
+    });
+    await expect(
+      readFile(
+        join(root, characterVersionPath('character-project-delete', 'character-version-delete')),
+        'utf8',
+      ),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readFile(
+        join(root, characterVersionPath('character-project-delete', 'character-version-sibling')),
+        'utf8',
+      ),
+    ).resolves.toContain('character-version-sibling');
+  });
+
+  it('rejects wrong-owner and symlink publication deletion without removing either target', async () => {
+    const root = await workspace();
+    const outside = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    const service = new CharacterAuthoringService({ repository, now: () => NOW });
+    await service.createProject({
+      characterProjectId: 'character-project-owner',
+      displayName: 'Owner',
+      draft: definition(),
+    });
+    await service.createProject({
+      characterProjectId: 'character-project-other',
+      displayName: 'Other',
+      draft: definition(),
+    });
+    await repository.storePublication({
+      characterVersionId: 'character-version-owned',
+      characterProjectId: 'character-project-owner',
+      label: 'Owned',
+      definition: definition(),
+      acceptedEvidenceIds: [],
+      publishedAt: NOW,
+    });
+    const wrongOwnerRecord = join(
+      root,
+      characterVersionPath('character-project-other', 'character-version-owned'),
+    );
+    await mkdir(join(root, 'neko/characters/character-project-other/versions'), {
+      recursive: true,
+    });
+    await writeFile(
+      wrongOwnerRecord,
+      JSON.stringify({
+        characterVersionId: 'character-version-owned',
+        characterProjectId: 'character-project-owner',
+        label: 'Wrong owner',
+        definition: definition(),
+        acceptedEvidenceIds: [],
+        publishedAt: NOW,
+      }),
+      'utf8',
+    );
+
+    await expect(
+      repository.deletePublication('character-project-other', 'character-version-owned'),
+    ).rejects.toMatchObject({ code: 'character-record-invalid' });
+    await expect(
+      readFile(
+        join(root, characterVersionPath('character-project-owner', 'character-version-owned')),
+        'utf8',
+      ),
+    ).resolves.toContain('character-project-owner');
+    await expect(readFile(wrongOwnerRecord, 'utf8')).resolves.toContain('character-project-owner');
+    await rm(wrongOwnerRecord);
+    await expect(repository.readPublication('character-version-owned')).resolves.toMatchObject({
+      characterProjectId: 'character-project-owner',
+    });
+
+    const outsideRecord = join(outside, 'character-version-linked.json');
+    await writeFile(
+      outsideRecord,
+      JSON.stringify({
+        characterVersionId: 'character-version-linked',
+        characterProjectId: 'character-project-owner',
+        label: 'Linked',
+        definition: definition(),
+        acceptedEvidenceIds: [],
+        publishedAt: NOW,
+      }),
+      'utf8',
+    );
+    const linkedRecord = join(
+      root,
+      characterVersionPath('character-project-owner', 'character-version-linked'),
+    );
+    await symlink(outsideRecord, linkedRecord);
+
+    await expect(
+      repository.deletePublication('character-project-owner', 'character-version-linked'),
+    ).rejects.toMatchObject({
+      code: 'character-workspace-path-escape',
+      recordId: 'character-version-linked',
+    });
+    await expect(readFile(outsideRecord, 'utf8')).resolves.toContain('character-version-linked');
   });
 
   it.each([
@@ -420,6 +587,75 @@ describe('Character authoring file repository', () => {
     await expect(
       repository.readLocalizedAsset('character-assets', 'portrait/linked.png', 10),
     ).rejects.toMatchObject({ code: 'character-workspace-path-escape' });
+  });
+
+  it('publishes localized bindings only for exact representations and complete owned files', async () => {
+    const root = await workspace();
+    const repository = createCharacterAuthoringFileRepository({
+      workspaceRoot: root,
+      scope: { kind: 'standalone-library' },
+    });
+    await new CharacterAuthoringService({
+      repository,
+      lineage: repository,
+      now: () => NOW,
+    }).createProject({
+      characterProjectId: 'character-bindings',
+      displayName: 'Bindings',
+      draft: {
+        ...definition(),
+        representationRefs: [
+          {
+            representationId: 'portrait-main',
+            kind: 'portrait',
+            resourceRef: 'asset:portrait-main',
+          },
+        ],
+      },
+    });
+    const catalog = {
+      characterProjectId: 'character-bindings',
+      bindings: [
+        {
+          representationId: 'portrait-main',
+          kind: 'portrait' as const,
+          resourceRef: 'asset:portrait-main',
+          entryRelativeAssetPath: 'portrait/main.png',
+          files: [
+            {
+              relativeAssetPath: 'portrait/main.png',
+              mediaType: 'image/png',
+              byteLength: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    await expect(repository.saveLocalizedAssetBindingCatalog(catalog)).rejects.toMatchObject({
+      code: 'character-record-conflict',
+    });
+    await repository.storeLocalizedAsset(
+      'character-bindings',
+      'portrait/main.png',
+      new Uint8Array([1, 2]),
+    );
+    await expect(repository.saveLocalizedAssetBindingCatalog(catalog)).resolves.toBeUndefined();
+    await expect(repository.saveLocalizedAssetBindingCatalog(catalog)).resolves.toBeUndefined();
+    await expect(
+      repository.saveLocalizedAssetBindingCatalog({
+        characterProjectId: 'character-bindings',
+        bindings: [],
+      }),
+    ).rejects.toMatchObject({ code: 'character-record-conflict' });
+
+    await writeFile(
+      join(root, characterLocalizedAssetPath('character-bindings', 'portrait/main.png')),
+      new Uint8Array([1]),
+    );
+    await expect(
+      repository.readLocalizedAssetBindingCatalog('character-bindings'),
+    ).rejects.toMatchObject({ code: 'character-record-conflict' });
   });
 });
 

@@ -108,7 +108,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(cssSource).toMatch(/--canvas-card-shadow-hover:/);
     expect(cssSource).toMatch(/--canvas-card-shadow-selected:/);
     expect(cssSource).toMatch(
-      /\.selection-context-toolbar\s*\{[^}]*background:\s*var\(--canvas-overlay-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);/s,
+      /\.selection-context-toolbar\s*\{[^}]*background:\s*var\(--canvas-card-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);[^}]*backdrop-filter:\s*none;/s,
     );
     expect(cssSource).toMatch(
       /\.selection-generation-input-panel\s*\{[^}]*background:\s*var\(--canvas-card-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);[^}]*backdrop-filter:\s*none;/s,

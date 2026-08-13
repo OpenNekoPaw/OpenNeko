@@ -53,6 +53,38 @@ describe('persistent Agent conversation lifecycle repository', () => {
     await fixture.store.dispose();
   });
 
+  it('reopens the original exact CharacterVersion after a sibling branch conversation exists', async () => {
+    const fixture = await createFixture();
+    const original = {
+      kind: 'character' as const,
+      characterId: 'character:neko',
+      characterVersionId: 'character-version:original',
+      characterRunId: 'character-run:original',
+      dialogueRunId: 'dialogue-run:original',
+    };
+    const siblingBranch = {
+      ...original,
+      characterVersionId: 'character-version:new-branch',
+      characterRunId: 'character-run:new-branch',
+      dialogueRunId: 'dialogue-run:new-branch',
+    };
+    await fixture.contexts.bindContext('conversation:original', original);
+    await fixture.contexts.bindContext('conversation:new-branch', siblingBranch);
+    await fixture.store.dispose();
+
+    const reopenedStore = createNodeSqliteLocalMetadataStore({ homedir: fixture.root });
+    await reopenedStore.open({
+      databasePath: join(fixture.root, '.neko', 'neko.db'),
+      busyTimeoutMs: 1_000,
+    });
+    const reopened = createPersistentAgentConversationContextAuthority({
+      metadataStore: reopenedStore,
+    });
+    await expect(reopened.readContext('conversation:original')).resolves.toEqual(original);
+    await expect(reopened.readContext('conversation:new-branch')).resolves.toEqual(siblingBranch);
+    await reopenedStore.dispose();
+  });
+
   it('recovers the exact canonical first-submit record, context and provider claim', async () => {
     const fixture = await createFixture();
     const record = createRecord('conversation:1', 'request:1', 'turn:1', 'openai', 'gpt-5', {
@@ -64,6 +96,7 @@ describe('persistent Agent conversation lifecycle repository', () => {
         kind: 'authoring',
         workspaceId: 'workspace:1',
         workspaceGrantId: 'workspace-grant:1',
+        authority: { kind: 'standalone-library', library: 'world' },
         target: { kind: 'world-project', worldProjectId: 'world:1' },
       },
     });
@@ -262,6 +295,7 @@ async function createFixture() {
   await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
   await initializeAgentConversationLifecycleTables(store);
   return {
+    root,
     store,
     repository: createPersistentAgentConversationLifecycleRepository({ metadataStore: store }),
     contexts: createPersistentAgentConversationContextAuthority({ metadataStore: store }),

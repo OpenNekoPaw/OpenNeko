@@ -5,25 +5,24 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Search a linked Media Library by its canonical projection and read the selected workspace-relative file through the normal content capability.",
+    "userBehavior": "Attach a confirmed linked Media Library image by its portable locator and read the same short reference through the normal content capability.",
     "canonicalPath": [
-      "Desktop Agent input queue",
-      "QueryProjectSearch media-library partition",
-      "desktop-media-library-files adapter",
-      "workspace-file locator binding",
+      "Desktop Media Library registration controls",
+      "Project explicit Media Library recovery controls",
+      "media-library locator context binding",
       "ReadImage image_ref resolution",
-      "Host ContentReadService"
+      "Project ContentReadService"
     ],
     "observables": [
       {
         "ref": "media-library-facts",
         "kind": "runtime-fact",
-        "description": "Successful project-search and content-read Tool facts preserve the linked workspace locator and marker text.",
+        "description": "Successful content-read Tool facts preserve the portable Media Library locator and marker text without Host binding details.",
         "required": true
       }
     ],
-    "expectedResult": "Search returns neko/assets/Reference/library-image.svg and ReadImage loads that exact workspace-file locator before the final marker.",
-    "expectedFailure": "Missing projection, absolute path disclosure, failed image read, Asset Tool participation, runtime diagnostics, or missing marker fails visibly."
+    "expectedResult": "The linked image context exposes one short image_ref and ReadImage resolves it to the exact media-library locator before the final marker.",
+    "expectedFailure": "Missing explicit binding, workspace-file substitution, absolute path disclosure, failed image read, runtime diagnostics, or missing marker fails visibly."
   },
   "fixtureRefs": [
     "media-library-workspace"
@@ -36,7 +35,25 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "严格执行两步：先调用 QueryProjectSearch，query=library-image、mode=agent-tool、partitions=[media-library]、limit=5；再把返回项的 image_ref 原样放入 ReadImage.image_refs，且只传这一个短引用。不要调用 Asset 工具，不要构造 locator、绝对路径、链接目标、缓存路径或 project://assets。读取成功后输出 MEDIA_LIBRARY_CANONICAL_7X9，并单独输出 MEDIA_LIBRARY_READ_OK。"
+      "prompt": "使用附件中显示的 image_ref 调用 ReadImage 一次，image_refs 只包含这一个短引用，analysis=describe。不要调用搜索、Asset、Read 或 shell 工具，不要构造 locator、绝对路径、链接目标、缓存路径或 project://assets。读取成功后输出 MEDIA_LIBRARY_CANONICAL_7X9，并单独输出 MEDIA_LIBRARY_READ_OK。",
+      "contextPayloads": [
+        {
+          "type": "image",
+          "id": "media-library:workspace/library-image.svg",
+          "label": "library-image.svg",
+          "summary": "Confirmed linked Media Library image",
+          "data": {
+            "kind": "authorized-content-reference",
+            "locator": {
+              "kind": "media-library",
+              "libraryName": "workspace",
+              "relativePath": "library-image.svg"
+            },
+            "mediaType": "image",
+            "source": "media-library"
+          }
+        }
+      ]
     },
     {
       "id": "idle",
@@ -56,34 +73,6 @@
       "evidenceRef": "media-library-facts"
     },
     {
-      "id": "search",
-      "kind": "tool-call",
-      "name": "QueryProjectSearch",
-      "status": "success",
-      "expectedArguments": {
-        "query": "library-image",
-        "mode": "agent-tool",
-        "partitions": [
-          "media-library"
-        ],
-        "limit": 5
-      },
-      "resultIncludes": {
-        "itemCount": 1,
-        "items": [
-          {
-            "filePath": "neko/assets/Reference/library-image.svg",
-            "source": {
-              "partition": "media-library",
-              "sourceKind": "workspace-file",
-              "projectRelativePath": "neko/assets/Reference/library-image.svg"
-            }
-          }
-        ]
-      },
-      "evidenceRef": "media-library-facts"
-    },
-    {
       "id": "read",
       "kind": "tool-call",
       "name": "ReadImage",
@@ -92,8 +81,9 @@
         "images": [
           {
             "contentLocator": {
-              "kind": "workspace-file",
-              "path": "neko/assets/Reference/library-image.svg"
+              "kind": "media-library",
+              "libraryName": "workspace",
+              "relativePath": "library-image.svg"
             }
           }
         ],
@@ -106,8 +96,9 @@
         "images": [
           {
             "contentLocator": {
-              "kind": "workspace-file",
-              "path": "neko/assets/Reference/library-image.svg"
+              "kind": "media-library",
+              "libraryName": "workspace",
+              "relativePath": "library-image.svg"
             }
           }
         ]
@@ -115,20 +106,10 @@
       "evidenceRef": "media-library-facts"
     },
     {
-      "id": "order",
-      "kind": "process-order",
-      "events": [
-        {
-          "kind": "tool",
-          "name": "QueryProjectSearch",
-          "status": "success"
-        },
-        {
-          "kind": "tool",
-          "name": "ReadImage",
-          "status": "success"
-        }
-      ],
+      "id": "no-project-search",
+      "kind": "tool-call",
+      "name": "QueryProjectSearch",
+      "status": "absent",
       "evidenceRef": "media-library-facts"
     },
     {

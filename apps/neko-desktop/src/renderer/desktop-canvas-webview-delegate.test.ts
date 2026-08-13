@@ -90,7 +90,7 @@ describe('Desktop Canvas Webview delegate', () => {
     delegate.postMessage({
       type: 'media:probe',
       nodeId: 'audio-1',
-      contentLocator: { kind: 'workspace-file', path: 'media/test.aac' },
+      locator: { kind: 'workspace-file', path: 'media/test.aac' },
       mediaType: 'audio',
     });
 
@@ -236,7 +236,7 @@ describe('Desktop Canvas Webview delegate', () => {
         assetPath: 'media/cat.mp4',
         mediaType: 'video',
       }),
-    ).toThrow('media source is invalid');
+    ).toThrow('portable workspace-file');
     expect(() =>
       delegate.postMessage({
         type: 'preview:resolveVariant',

@@ -12,10 +12,15 @@ export type AgentAuthoringTargetRef =
   | { readonly kind: 'character-project'; readonly characterProjectId: string }
   | { readonly kind: 'world-project'; readonly worldProjectId: string };
 
+export type AgentAuthoringAuthority =
+  | { readonly kind: 'content-project'; readonly contentProjectId: string }
+  | { readonly kind: 'standalone-library'; readonly library: 'character' | 'world' };
+
 export interface AgentAuthoringBinding {
   readonly kind: 'authoring';
   readonly workspaceId: string;
   readonly workspaceGrantId: string;
+  readonly authority: AgentAuthoringAuthority;
   readonly target: AgentAuthoringTargetRef;
 }
 
@@ -61,11 +66,29 @@ export interface AgentCharacterDialogueStorylineOption {
   readonly label: string;
 }
 
+export interface AgentCharacterDialogueLineageSegment {
+  readonly characterVersionId: string;
+  readonly label: string;
+}
+
+export type AgentCharacterDialogueLineage =
+  | {
+      readonly coverage: 'complete';
+      readonly state: 'declared-root' | 'linked' | 'unlinked';
+      readonly isHead: boolean;
+      readonly path: readonly AgentCharacterDialogueLineageSegment[];
+    }
+  | {
+      readonly coverage: 'unavailable';
+      readonly message: string;
+    };
+
 export interface AgentCharacterDialogueTargetOption {
   readonly characterProjectId: string;
   readonly characterVersionId: string;
   readonly displayName: string;
   readonly versionLabel: string;
+  readonly lineage: AgentCharacterDialogueLineage;
   readonly storylines: readonly AgentCharacterDialogueStorylineOption[];
 }
 
@@ -174,14 +197,18 @@ export function parseAgentEntryTargetBinding(value: unknown): AgentEntryTargetBi
     case 'authoring':
       requireExactKeys(
         record,
-        ['kind', 'workspaceId', 'workspaceGrantId', 'target'],
+        ['kind', 'workspaceId', 'workspaceGrantId', 'authority', 'target'],
         'Agent authoring binding',
       );
+      const authority = parseAgentAuthoringAuthority(record['authority']);
+      const target = parseAgentAuthoringTargetRef(record['target']);
+      requireCompatibleAuthoringAuthority(authority, target);
       return {
         kind: 'authoring',
         workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
         workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-        target: parseAgentAuthoringTargetRef(record['target']),
+        authority,
+        target,
       };
     case 'character-dialogue': {
       requireExactKeys(
@@ -239,7 +266,14 @@ export function parseAgentCharacterDialogueTargetOptions(
     const record = requireRecord(item, 'Agent Character Dialogue target option');
     requireExactKeys(
       record,
-      ['characterProjectId', 'characterVersionId', 'displayName', 'versionLabel', 'storylines'],
+      [
+        'characterProjectId',
+        'characterVersionId',
+        'displayName',
+        'versionLabel',
+        'lineage',
+        'storylines',
+      ],
       'Agent Character Dialogue target option',
     );
     if (!Array.isArray(record['storylines'])) {
@@ -268,6 +302,7 @@ export function parseAgentCharacterDialogueTargetOptions(
       characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
       displayName: requireIdentity(record['displayName'], 'Character display name'),
       versionLabel: requireIdentity(record['versionLabel'], 'Character version label'),
+      lineage: parseAgentCharacterDialogueLineage(record['lineage']),
       storylines,
     };
   });
@@ -275,6 +310,69 @@ export function parseAgentCharacterDialogueTargetOptions(
     throw new Error('Agent Character Dialogue target options must use unique CharacterVersions.');
   }
   return options;
+}
+
+function parseAgentCharacterDialogueLineage(value: unknown): AgentCharacterDialogueLineage {
+  const record = requireRecord(value, 'Agent Character Dialogue lineage');
+  if (record['coverage'] === 'unavailable') {
+    requireExactKeys(
+      record,
+      ['coverage', 'message'],
+      'Unavailable Agent Character Dialogue lineage',
+    );
+    return {
+      coverage: 'unavailable',
+      message: requireIdentity(record['message'], 'Character lineage diagnostic'),
+    };
+  }
+  requireExactKeys(
+    record,
+    ['coverage', 'state', 'isHead', 'path'],
+    'Complete Agent Character Dialogue lineage',
+  );
+  if (record['coverage'] !== 'complete') {
+    throw new Error(`Unknown Agent Character Dialogue lineage '${String(record['coverage'])}'.`);
+  }
+  if (
+    record['state'] !== 'declared-root' &&
+    record['state'] !== 'linked' &&
+    record['state'] !== 'unlinked'
+  ) {
+    throw new Error(`Unknown Agent Character Dialogue lineage state '${String(record['state'])}'.`);
+  }
+  if (typeof record['isHead'] !== 'boolean') {
+    throw new Error('Agent Character Dialogue lineage head state must be boolean.');
+  }
+  if (!Array.isArray(record['path'])) {
+    throw new Error('Agent Character Dialogue lineage path must be an array.');
+  }
+  const path = record['path'].map((value) => {
+    const segment = requireRecord(value, 'Agent Character Dialogue lineage path segment');
+    requireExactKeys(
+      segment,
+      ['characterVersionId', 'label'],
+      'Agent Character Dialogue lineage path segment',
+    );
+    return {
+      characterVersionId: requireIdentity(
+        segment['characterVersionId'],
+        'Character lineage path version',
+      ),
+      label: requireIdentity(segment['label'], 'Character lineage path label'),
+    };
+  });
+  if (
+    path.length === 0 ||
+    new Set(path.map((segment) => segment.characterVersionId)).size !== path.length
+  ) {
+    throw new Error('Agent Character Dialogue lineage path must be non-empty and unique.');
+  }
+  return {
+    coverage: 'complete',
+    state: record['state'],
+    isHead: record['isHead'],
+    path,
+  };
 }
 
 function parseAgentEntryMode(value: unknown): AgentEntryMode {
@@ -310,6 +408,48 @@ export function parseAgentAuthoringTargetRef(value: unknown): AgentAuthoringTarg
   throw new Error(`Unknown Agent authoring target '${String(record['kind'])}'.`);
 }
 
+export function parseAgentAuthoringAuthority(value: unknown): AgentAuthoringAuthority {
+  const record = requireRecord(value, 'Agent authoring authority');
+  if (record['kind'] === 'content-project') {
+    requireExactKeys(record, ['kind', 'contentProjectId'], 'Content Project authoring authority');
+    return {
+      kind: 'content-project',
+      contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+    };
+  }
+  if (record['kind'] === 'standalone-library') {
+    requireExactKeys(record, ['kind', 'library'], 'Standalone authoring authority');
+    if (record['library'] !== 'character' && record['library'] !== 'world') {
+      throw new Error(`Unknown standalone authoring library '${String(record['library'])}'.`);
+    }
+    return { kind: 'standalone-library', library: record['library'] };
+  }
+  throw new Error(`Unknown Agent authoring authority '${String(record['kind'])}'.`);
+}
+
+function requireCompatibleAuthoringAuthority(
+  authority: AgentAuthoringAuthority,
+  target: AgentAuthoringTargetRef,
+): void {
+  if (target.kind === 'content-project') {
+    if (
+      authority.kind !== 'content-project' ||
+      authority.contentProjectId !== target.contentProjectId
+    ) {
+      throw new Error('Content Project target requires its exact Content Project authority.');
+    }
+    return;
+  }
+  if (authority.kind === 'standalone-library') {
+    const expectedLibrary = target.kind === 'character-project' ? 'character' : 'world';
+    if (authority.library !== expectedLibrary) {
+      throw new Error(
+        `Agent authoring target does not belong to the '${authority.library}' library.`,
+      );
+    }
+  }
+}
+
 function parseCharacterConversationMode(value: unknown): 'companion' | 'narrative' {
   if (value !== 'companion' && value !== 'narrative') {
     throw new Error(`Unknown Character Conversation mode '${String(value)}'.`);
@@ -323,6 +463,12 @@ function requireUniqueCharacterVersions(
   const versionIds = participants.map((participant) => participant.characterVersionId);
   if (new Set(versionIds).size !== versionIds.length) {
     throw new Error('Agent Character Dialogue participants must use unique CharacterVersions.');
+  }
+  const projectIds = participants.map((participant) => participant.characterProjectId);
+  if (new Set(projectIds).size !== projectIds.length) {
+    throw new Error(
+      'Agent Character Dialogue participants must select at most one version of each Character.',
+    );
   }
 }
 

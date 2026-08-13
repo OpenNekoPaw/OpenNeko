@@ -85,7 +85,12 @@ describe('Agent controller composition', () => {
         references: 'none',
       }),
       personalSkillOwnerId: 'assistant-space-1',
-      readGlobalSkillCatalog: async () => ({ records: [], diagnostics: [], warnings: [], commands: { records: [], diagnostics: [] } }),
+      readGlobalSkillCatalog: async () => ({
+        records: [],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      }),
     });
     const posted: AgentHostToWebviewMessage[] = [];
 
@@ -137,10 +142,7 @@ describe('Agent controller composition', () => {
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
     });
-    const configuration = missingTurnConfiguration(
-      'conversation-narrative',
-      'turn-narrative',
-    );
+    const configuration = missingTurnConfiguration('conversation-narrative', 'turn-narrative');
     const effects = composition.createEffects({
       workspace,
       identity: {
@@ -466,53 +468,57 @@ describe('Agent controller composition', () => {
         },
       }),
     };
-    const turnIdentity = {
-      workspaceId: workspace.workspaceId,
-      conversationId: 'conversation-image',
-      branchId: 'main',
-      turnId: 'turn-image',
-      runId: 'run-image',
-    };
-    workspace.startTurn.mockImplementation((input) => ({
-      identity: turnIdentity,
-      completion: Promise.resolve({
+    workspace.startTurn.mockImplementation((input) => {
+      const turnId = input.turnId;
+      if (!turnId) throw new Error('Fixture Turn requires an exact identity.');
+      const turnIdentity = {
+        workspaceId: workspace.workspaceId,
+        conversationId: 'conversation-image',
+        branchId: 'main',
+        turnId,
+        runId: `run-${turnId}`,
+      };
+      return {
         identity: turnIdentity,
-        durability: 'durable',
-        projection: {
-          conversationId: 'conversation-image',
-          turns: [
-            {
-              turnId: 'turn-image',
-              runId: 'run-image',
-              messageId: 'message-image',
-              items: [
-                {
-                  conversationId: 'conversation-image',
-                  turnId: 'turn-image',
-                  runId: 'run-image',
-                  messageId: 'message-image',
-                  itemId: 'assistant-image',
-                  sequence: 1,
-                  kind: 'assistant_text',
-                  status: 'complete',
-                  createdAt: 1,
-                  updatedAt: 1,
-                  payload: { content: 'Image request completed.' },
-                },
-              ],
-              completion: { status: 'completed', completedAt: 1 },
-            },
-          ],
-        },
-        configuration: input.configuration,
-        path: {
-          runtime: 'pi-conversation-runtime',
-          transcript: 'pi-session',
-          metadata: 'sqlite',
-          projection: 'conversation-projection-store',
-        },
-      }),
-    }));
+        completion: Promise.resolve({
+          identity: turnIdentity,
+          durability: 'durable',
+          projection: {
+            conversationId: 'conversation-image',
+            turns: [
+              {
+                turnId: turnIdentity.turnId,
+                runId: turnIdentity.runId,
+                messageId: 'message-image',
+                items: [
+                  {
+                    conversationId: 'conversation-image',
+                    turnId: turnIdentity.turnId,
+                    runId: turnIdentity.runId,
+                    messageId: 'message-image',
+                    itemId: 'assistant-image',
+                    sequence: 1,
+                    kind: 'assistant_text',
+                    status: 'complete',
+                    createdAt: 1,
+                    updatedAt: 1,
+                    payload: { content: 'Image request completed.' },
+                  },
+                ],
+                completion: { status: 'completed', completedAt: 1 },
+              },
+            ],
+          },
+          configuration: input.configuration,
+          path: {
+            runtime: 'pi-conversation-runtime',
+            transcript: 'pi-session',
+            metadata: 'sqlite',
+            projection: 'conversation-projection-store',
+          },
+        }),
+      };
+    });
     workspace.readConversationEvidence.mockReturnValue({
       workspaceId: workspace.workspaceId,
       conversationId: 'conversation-image',
@@ -788,6 +794,213 @@ describe('Agent controller composition', () => {
         },
       },
     ]);
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('projects completed initial Turn facts into the later exact Session connection', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'desktop-agent-initial-facts-'));
+    temporaryRoots.push(root);
+    const configPath = join(root, 'config.toml');
+    await writeFile(
+      configPath,
+      [
+        '[[providers]]',
+        'id = "provider-1"',
+        'name = "Provider"',
+        'type = "openai"',
+        'api_url = "https://provider.example.test/v1"',
+        'protocol_profile = "openai-chat"',
+        'enabled = true',
+        'requires_api_key = false',
+        '',
+        '[[models]]',
+        'id = "model-1"',
+        'name = "Model"',
+        'provider_id = "provider-1"',
+        'type = "llm"',
+        'capabilities = ["chat", "tools"]',
+        'context_window = 8192',
+        'max_output_tokens = 4096',
+        'enabled = true',
+      ].join('\n'),
+      'utf8',
+    );
+    const config = new ConfigManager({
+      userConfigManager: new FileUserConfigManager({ filePath: configPath }),
+      assistantRuntimeSettings: createRuntimeSettings({
+        selectedProviderId: 'provider-1',
+        selectedModelId: 'model-1',
+      }),
+    });
+    const workspace = createWorkspace(root);
+    await workspace.createConversation('conversation-initial-facts');
+    await workspace.createConversation('conversation-sibling');
+    const request = {
+      modelCatalogEntryId: 'provider-1:model-1',
+      providerId: 'provider-1',
+      modelId: 'model-1',
+      executionMode: 'ask' as const,
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    };
+    const configuration = {
+      conversationId: 'conversation-initial-facts',
+      turnId: 'turn-initial-facts',
+      request,
+      projection: projectAgentConfigurationPolicy({
+        models: projectAgentModelCatalog(config.getAssistantConfigState()),
+        request,
+        source: 'draft-request' as const,
+        defaults: {
+          executionMode: 'ask' as const,
+          temperature: 0.7,
+          maximumOutputTokens: 4096,
+          thinkingBudget: 0,
+        },
+      }),
+    };
+    const turnIdentity = {
+      workspaceId: workspace.workspaceId,
+      conversationId: 'conversation-initial-facts',
+      branchId: 'main',
+      turnId: 'turn-initial-facts',
+      runId: 'run-initial-facts',
+    };
+    workspace.startTurn.mockImplementation((input) => {
+      input.events?.emit({
+        identity: turnIdentity,
+        timestamp: 1,
+        type: 'skill.activated',
+        skillName: 'character-creator',
+        source: 'builtin',
+        fingerprint: 'sha256:character-creator-fixture',
+      });
+      input.events?.emit({
+        identity: turnIdentity,
+        timestamp: 2,
+        type: 'usage',
+        provider: 'provider-1',
+        model: 'model-1',
+        usage: {
+          input: 12,
+          output: 8,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 20,
+          cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
+        },
+      });
+      return {
+        identity: turnIdentity,
+        completion: Promise.resolve({
+          identity: turnIdentity,
+          durability: 'durable',
+          projection: {
+            conversationId: turnIdentity.conversationId,
+            turns: [
+              {
+                turnId: turnIdentity.turnId,
+                runId: turnIdentity.runId,
+                messageId: 'message-initial-facts',
+                items: [],
+                completion: { status: 'completed', completedAt: 3 },
+              },
+            ],
+          },
+          configuration: input.configuration,
+          path: {
+            runtime: 'pi-conversation-runtime',
+            transcript: 'pi-session',
+            metadata: 'sqlite',
+            projection: 'conversation-projection-store',
+          },
+        }),
+      };
+    });
+    workspace.readConversationEvidence.mockReturnValue({
+      workspaceId: workspace.workspaceId,
+      conversationId: turnIdentity.conversationId,
+      branchId: turnIdentity.branchId,
+      piSessionId: 'pi-session-initial-facts',
+      writerLeaseId: 'writer-lease-initial-facts',
+    });
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: () => config,
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+    });
+
+    await composition.startInitialTurn?.({
+      workspace,
+      conversationId: turnIdentity.conversationId,
+      turnId: turnIdentity.turnId,
+      messageText: 'Create a reviewable character.',
+      configuration,
+      context: {
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      skillName: 'character-creator',
+      skillActivationId: 'skill:builtin:character-creator-fixture',
+      locale: 'en',
+      capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
+    });
+    const effects = composition.createEffects({
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'session-connection-initial-facts',
+      },
+      initialConversationId: turnIdentity.conversationId,
+    });
+
+    expect(effects.automation?.readLatestTurnIdentity(turnIdentity.conversationId)).toEqual(
+      turnIdentity,
+    );
+    expect(effects.automation?.readLatestTurnIdentity('conversation-sibling')).toBeUndefined();
+    expect(effects.automation?.readFacts(turnIdentity)).toMatchObject({
+      identity: {
+        connection: { connectionId: 'session-connection-initial-facts' },
+      },
+      receipts: {
+        skills: {
+          items: [
+            {
+              name: 'character-creator',
+              source: 'builtin',
+              fingerprint: 'sha256:character-creator-fixture',
+              status: 'injected',
+            },
+          ],
+        },
+      },
+      usage: { inputTokens: 12, outputTokens: 8, costUsd: 0.3 },
+    });
 
     effects.dispose();
     await composition.dispose?.();
@@ -1535,6 +1748,7 @@ function authoringReceipt(): AgentEntryTargetReceipt {
       kind: 'authoring',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
+      authority: { kind: 'content-project', contentProjectId: 'content-1' },
       target: { kind: 'content-project', contentProjectId: 'content-1' },
     },
   };

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import type { LocalMetadataRepositories } from '@neko/local-metadata';
@@ -8,7 +8,6 @@ import {
   initializeCoreLocalMetadataTables,
   initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
-import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type DesktopProjectPortabilityIdentity,
@@ -16,6 +15,14 @@ import {
 } from '@neko/assets-domain/contracts';
 import { ProjectPortabilityRuntime } from './project-portability-runtime';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import {
+  confirmProjectMediaLibraryRecovery,
+  createProjectMediaLibraryRecoveryPlan,
+} from '@neko/assets-domain/contracts';
+import {
+  createProjectMediaLibraryBindingFingerprint,
+  ProjectMediaLibraryBindingRepository,
+} from './project-media-library-binding-repository';
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -125,17 +132,42 @@ async function createFixture(): Promise<{
     mkdir(home, { recursive: true }),
     mkdir(workspacePath, { recursive: true }),
     mkdir(mediaRoot, { recursive: true }),
-    mkdir(globalRoot, { recursive: true }),
+    mkdir(path.join(globalRoot, 'local'), { recursive: true }),
   ]);
   await Promise.all([
     writeFile(path.join(mediaRoot, 'shot.mov'), 'linked-media'),
     writeBinding(workspacePath),
   ]);
-  await createWorkspaceLinkedMediaLibrary({
-    workspaceRoot: workspacePath,
-    name: 'Footage',
-    targetDirectory: mediaRoot,
+  await mkdir(path.join(workspacePath, 'neko', 'assets'), { recursive: true });
+  await symlink(
+    mediaRoot,
+    path.join(workspacePath, 'neko', 'assets', 'Footage'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  await symlink(
+    mediaRoot,
+    path.join(globalRoot, 'local', 'Footage'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  const connectionId = 'media-library:local:Footage';
+  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
+    projectId: 'project-a',
+    libraryName: 'Footage',
+    connectionId,
   });
+  await new ProjectMediaLibraryBindingRepository(workspacePath, 'project-a').applyRecovery(
+    confirmProjectMediaLibraryRecovery(
+      createProjectMediaLibraryRecoveryPlan({
+        projectId: 'project-a',
+        libraryName: 'Footage',
+        connectionId,
+        requirementFingerprint: 'sha256:portability-fixture-1234',
+        validatedRelativePaths: ['shot.mov'],
+        expectedBindingFingerprint: null,
+        replacementBindingFingerprint,
+      }),
+    ),
+  );
 
   const store = createNodeSqliteLocalMetadataStore({ homedir: home });
   await store.open({
@@ -174,7 +206,7 @@ async function writeBinding(workspacePath: string): Promise<void> {
     path.join(workspacePath, 'neko/entities.json'),
     `${JSON.stringify(
       {
-        projectId: 'workspace-a',
+        projectId: 'project-a',
         entities: [
           {
             entityId: 'character-a',
@@ -184,8 +216,9 @@ async function writeBinding(workspacePath: string): Promise<void> {
               {
                 bindingId: 'binding-a',
                 target: {
-                  kind: 'workspace-file',
-                  path: 'neko/assets/Footage/shot.mov',
+                  kind: 'media-library',
+                  libraryName: 'Footage',
+                  relativePath: 'shot.mov',
                 },
                 role: 'portrait',
                 source: 'user',

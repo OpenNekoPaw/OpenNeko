@@ -17,6 +17,7 @@ describe('AuthoringTargetSelector', () => {
         workspaceGrantId: 'grant-character',
       },
       target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+      authority: { kind: 'standalone-library' as const, library: 'character' as const },
     };
     const characterOption = {
       optionId: 'standalone-character:character-1',
@@ -46,6 +47,7 @@ describe('AuthoringTargetSelector', () => {
             ...selected,
             label: 'Projects / Novel',
             target: contentOption.target,
+            authority: contentOption.placement,
           },
     );
     const onChange = vi.fn(async () => undefined);
@@ -140,6 +142,7 @@ describe('AuthoringTargetSelector', () => {
         workspaceGrantId: 'grant-project-1',
       },
       target: { kind: 'content-project' as const, contentProjectId: 'project-1' },
+      authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
     };
     const onSelectProject = vi.fn(async () => selectedProject);
     const onChange = vi.fn(async () => undefined);
@@ -193,6 +196,7 @@ describe('AuthoringTargetSelector', () => {
         workspaceGrantId: 'grant-character',
       },
       target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+      authority: { kind: 'standalone-library' as const, library: 'character' as const },
     };
     const onCreateAuthoringTarget = vi.fn(async () => ({
       status: 'created' as const,
@@ -258,6 +262,7 @@ describe('AuthoringTargetSelector', () => {
         workspaceGrantId: 'grant-1',
       },
       target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
+      authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
     };
     const retry = vi.fn(async () => ({ status: 'created' as const, target: created }));
     const onCreateAuthoringTarget = vi.fn(async () => ({

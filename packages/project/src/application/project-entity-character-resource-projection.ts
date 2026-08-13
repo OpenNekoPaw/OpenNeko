@@ -2,20 +2,20 @@ import type {
   CharacterAuthoringCatalog,
   CharacterDurableRecordDiagnostic,
 } from '@neko/chara/application';
-import {
-  parseContentProjectComposition,
-  type ContentProjectComposition,
-} from '../contracts/project-composition';
+import type { ProjectEntityCharacterAssociationFact } from '../contracts/project-entity-character-association';
 import type { ProjectEntityCharacterResourceProjection } from '../contracts/project-entity-character-resource-projection';
 import { projectEntityCharacterHandoffs } from './project-entity-character-handoff';
 
 export function projectEntityCharacterResourceProjections(input: {
-  readonly composition: ContentProjectComposition;
+  readonly projectId: string;
+  readonly associations: readonly ProjectEntityCharacterAssociationFact[];
   readonly characters: CharacterAuthoringCatalog;
 }): readonly ProjectEntityCharacterResourceProjection[] {
-  const composition = parseContentProjectComposition(input.composition);
-  requireMatchingCatalogScope(composition, input.characters);
-  return composition.entityCharacterAssociations.map((association) => {
+  requireMatchingCatalogScope(input.projectId, input.characters);
+  return input.associations.map((association) => {
+    if (association.projectId !== input.projectId) {
+      throw new Error('Project Entity Character association belongs to another Content Project.');
+    }
     const project = input.characters.projects.find(
       (candidate) => candidate.characterProjectId === association.characterProjectId,
     );
@@ -47,7 +47,8 @@ export function projectEntityCharacterResourceProjections(input: {
       placement: 'project-local',
       availability: 'available',
       handoffs: projectEntityCharacterHandoffs({
-        composition,
+        projectId: input.projectId,
+        associations: input.associations,
         entityId: association.entityId,
       }),
       publishedVersionCount,
@@ -57,16 +58,14 @@ export function projectEntityCharacterResourceProjections(input: {
 }
 
 function requireMatchingCatalogScope(
-  composition: ContentProjectComposition,
+  projectId: string,
   characters: CharacterAuthoringCatalog,
 ): void {
   if (
     characters.scope.kind !== 'content-project' ||
-    characters.scope.contentProjectId !== composition.contentProjectId
+    characters.scope.contentProjectId !== projectId
   ) {
-    throw new Error(
-      `Character catalog does not belong to Content Project '${composition.contentProjectId}'.`,
-    );
+    throw new Error(`Character catalog does not belong to Content Project '${projectId}'.`);
   }
 }
 

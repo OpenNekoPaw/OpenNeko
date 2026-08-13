@@ -6,15 +6,15 @@ Human-readable architecture decisions, review policies, and validation matrices 
 
 ## Contents
 
-| Path                                        | Purpose                                                                                          |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Path                                       | Purpose                                                                                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | `agent-extension-surface.json`             | Audited Skill, composition package, marketplace, MCP, and Host capability boundaries.          |
-| `ledgers/neko-shared-public-surface.json`   | Canonical minimal Shared exports.                                                                 |
-| `ledgers/package-boundary-exceptions.json`  | Exact, expiring exceptions for current package identity, export, and source-alias rules.          |
-| `local-metadata-runtime-matrix.json`        | Supported SQLite Host, OS, architecture, and minimum runtime matrix.                             |
-| `package-roles.json`                        | Complete workspace package role, runtime, product-status, and architecture-state catalog.        |
-| `package-product-status.json`               | Supported production entries plus exact expiring declarations for non-literal runtime edges.     |
-| `skill-development-history/history.json`    | Immutable, evidence-linked local Skill development checkpoints; excludes Market release state.   |
+| `ledgers/neko-shared-public-surface.json`  | Canonical minimal Shared exports.                                                              |
+| `ledgers/package-boundary-exceptions.json` | Exact, expiring exceptions for current package identity, export, and source-alias rules.       |
+| `local-metadata-runtime-matrix.json`       | Supported SQLite Host, OS, architecture, and minimum runtime matrix.                           |
+| `package-roles.json`                       | Complete workspace package role, runtime, product-status, and architecture-state catalog.      |
+| `package-product-status.json`              | Supported production entries plus exact expiring declarations for non-literal runtime edges.   |
+| `skill-development-history/history.json`   | Immutable, evidence-linked local Skill development checkpoints; excludes Market release state. |
 
 ## Rules
 

@@ -1,21 +1,19 @@
-export {
-  WorkspaceLinkedMediaLibraryError,
-  createWorkspaceLinkedMediaLibrary,
-  listWorkspaceLinkedMediaLibraries,
-  removeWorkspaceLinkedMediaLibrary,
-  replaceWorkspaceLinkedMediaLibrary,
-} from './workspace-linked-media-libraries';
 export { resolveWorkspaceContentLocator } from './workspace-content-locator';
 export {
   WORKSPACE_MEDIA_LIBRARY_PROBE_METADATA_DOMAIN,
   createWorkspaceMediaLibrarySyncMetadataBinding,
   type WorkspaceMediaLibrarySyncMetadataBinding,
 } from './workspace-media-library-sync-binding';
+export * from './project-media-library-binding-repository';
+export * from './project-media-library-binding-service';
+export * from './project-media-library-availability-service';
+export * from './project-media-library-portability';
+export * from './project-media-library-content-handler';
+export * from './project-content-read-service';
 export * from './global-media-library-files';
 export * from './portable-media-library-snapshot';
 export * from './project-content-reference-readers';
 export * from './project-portability-runtime';
-export * from './workspace-media-library-sync';
 export * from './workspace-directory-observer';
 export * from './resource-browser-node-source';
 export * from './global-asset-files';

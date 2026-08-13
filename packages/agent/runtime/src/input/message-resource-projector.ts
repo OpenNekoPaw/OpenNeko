@@ -325,6 +325,8 @@ function portableContentPath(locator: ContentLocator): string {
   switch (locator.kind) {
     case 'workspace-file':
       return locator.path;
+    case 'media-library':
+      return `${locator.libraryName}/${locator.relativePath}`;
     case 'document-entry':
       return locator.entryPath;
     case 'generated-output':

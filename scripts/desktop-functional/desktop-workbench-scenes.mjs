@@ -1,6 +1,7 @@
-import { access, copyFile, mkdir, rename, symlink, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
+import { openFixtureWorkspace } from './desktop-operations.mjs';
 
 const ACTIVE_AGENT_SURFACE_SELECTOR = '[data-primary-surface="agent"]';
 const ACTIVE_AGENT_TEXTAREA_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
@@ -22,11 +23,13 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     const providerPort = await reserveFunctionalProviderPort();
     const workspacePath = join(fixtureHome, 'workspace');
     const secondaryWorkspacePath = join(fixtureHome, 'workspace-b');
+    const mediaLibraryPath = join(fixtureHome, 'global-media', 'workspace');
     const configRoot = join(fixtureHome, '.neko');
     const assetRoot = join(configRoot, 'assets');
     await Promise.all([
       mkdir(workspacePath, { recursive: true }),
       mkdir(secondaryWorkspacePath, { recursive: true }),
+      mkdir(mediaLibraryPath, { recursive: true }),
       mkdir(configRoot, { recursive: true }),
       mkdir(assetRoot, { recursive: true }),
     ]);
@@ -38,6 +41,10 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       copyFile(
         join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
         join(workspacePath, 'test.png'),
+      ),
+      copyFile(
+        join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
+        join(mediaLibraryPath, 'preview.png'),
       ),
       copyFile(
         join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
@@ -103,7 +110,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       ].join('\n'),
       { encoding: 'utf8', mode: 0o600 },
     );
-    return { workspacePath, secondaryWorkspacePath, providerPort };
+    return { workspacePath, secondaryWorkspacePath, mediaLibraryPath, providerPort };
   },
   async run({
     checkpoint,
@@ -167,7 +174,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await resizeWindow(evaluate, 1440, 960);
 
       const assetsProjectionStart = await readShellProjectionProbe(evaluate);
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
       const assetsProjection = await assertSingleShellProjection(
@@ -1167,27 +1174,117 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
   owner: '@neko/agent-runtime',
   async prepare(context) {
     const prepared = await desktopWorkbenchScenesScenario.prepare(context);
-    const linkedMediaTarget = join(context.fixtureHome, 'linked-media-reference');
-    const linkedMediaDirectory = join(prepared.workspacePath, 'neko', 'assets');
+    const boardDirectory = join(prepared.workspacePath, 'neko', 'boards');
+    const worldDirectory = join(prepared.workspacePath, 'neko', 'worlds', 'world-valid');
     await Promise.all([
-      mkdir(linkedMediaTarget, { recursive: true }),
-      mkdir(linkedMediaDirectory, { recursive: true }),
+      mkdir(boardDirectory, { recursive: true }),
+      mkdir(worldDirectory, { recursive: true }),
     ]);
     await copyFile(
       join(context.repositoryRoot, 'docs/assets/openneko-desktop.png'),
-      join(linkedMediaTarget, 'library-image.png'),
+      join(prepared.mediaLibraryPath, 'library-image.png'),
     );
-    await symlink(
-      linkedMediaTarget,
-      join(linkedMediaDirectory, 'Reference'),
-      process.platform === 'win32' ? 'junction' : 'dir',
+    await writeFile(
+      join(boardDirectory, 'media-reference.nkc'),
+      `${JSON.stringify(
+        {
+          name: 'Media Reference',
+          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+          nodes: [
+            {
+              id: 'media-reference-1',
+              type: 'media',
+              position: { x: 40, y: 40 },
+              size: { width: 320, height: 180 },
+              zIndex: 1,
+              data: {
+                assetPath: 'workspace/library-image.png',
+                contentLocator: {
+                  kind: 'media-library',
+                  libraryName: 'workspace',
+                  relativePath: 'library-image.png',
+                },
+                mediaType: 'image',
+              },
+            },
+            {
+              id: 'media-reference-invalid-sibling',
+              type: 'media',
+              position: { x: 400, y: 40 },
+              size: { width: 320, height: 180 },
+              zIndex: 1,
+              data: {
+                assetPath: 'Broken/missing-image.png',
+                contentLocator: {
+                  kind: 'media-library',
+                  libraryName: 'Broken',
+                  relativePath: 'missing-image.png',
+                },
+                mediaType: 'image',
+              },
+            },
+          ],
+          connections: [],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    await writeFile(
+      join(worldDirectory, 'project.json'),
+      `${JSON.stringify(
+        {
+          worldProjectId: 'world-valid',
+          title: 'Valid World',
+          draft: {
+            background: '',
+            worldBook: [],
+            locations: [],
+            organizations: [],
+            rules: [],
+            initialFacts: [],
+          },
+          sourceRefs: [],
+          reviewStatus: 'draft',
+          createdAt: '2026-08-13T00:00:00.000Z',
+          updatedAt: '2026-08-13T00:00:00.000Z',
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
     );
     return prepared;
   },
-  async run({ checkpoint, evaluate, prepared, pressKey, screenshot, type, waitForSelector }) {
+  async run({
+    cdp,
+    checkpoint,
+    click,
+    evaluate,
+    prepared,
+    pressKey,
+    restartApplication,
+    screenshot,
+    type,
+    waitForDesktopBridge,
+    waitForSelector,
+  }) {
     const providerServer = await startFunctionalProviderServer(prepared.providerPort, 750);
     try {
       await resizeWindow(evaluate, 1440, 960);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+
+      const globalMediaLibrary = await registerFixtureGlobalMediaLibrary({
+        evaluate,
+        click,
+        waitForSelector,
+        libraryName: 'workspace',
+      });
+
+      await clickApplicationNavigation(evaluate, click, 0);
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -1198,14 +1295,20 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
       await waitForSelector('.desktop-scene-workbench--workspace');
       const workspaceAgent = await inspectActivatedWorkspaceAgent(evaluate);
 
+      const recoveryRequired = await recoverFixtureProjectMediaLibrary({
+        evaluate,
+        screenshot,
+        waitForSelector,
+      });
+
       const mention = await exerciseWorkspaceDraftMention({
         evaluate,
         pressKey,
         referenceLabel: 'library-image.png',
         referenceQuery: 'library-image',
-        expectedPortablePath: 'neko/assets/Reference/library-image.png',
+        expectedPortablePath: 'workspace/library-image.png',
         expectedSourceLabels: ['Media', '媒体'],
-        forbiddenText: 'linked-media-reference',
+        forbiddenText: prepared.workspacePath,
         screenshot,
         type,
         screenshotLabel: 'workspace-linked-media-mention-selected',
@@ -1215,6 +1318,8 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         entryRoot,
         workspaceActivation,
         workspaceAgent,
+        recoveryRequired: recoveryRequired.required,
+        recoveryApplied: recoveryRequired.applied,
         mention: mention.selection,
       });
 
@@ -1230,13 +1335,18 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
       );
       await evaluate(`(() => {
         const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+        const forbidden = [
+          ${JSON.stringify(prepared.workspacePath)},
+          '.neko',
+          'connectionId',
+        ];
         const exposed = [
           activeSurface?.textContent ?? '',
           ...[...(activeSurface?.querySelectorAll('[title]') ?? [])]
             .map((element) => element.getAttribute('title') ?? ''),
-        ].some((value) => value.includes('linked-media-reference'));
+        ].some((value) => forbidden.some((marker) => value.includes(marker)));
         if (exposed) {
-          throw new Error('Workspace mention UI exposed the linked Media Library target path.');
+          throw new Error('Workspace mention UI exposed project-local or Host binding details.');
         }
         return true;
       })()`);
@@ -1263,7 +1373,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         providerEvidence.requests[0]?.nativeImageCount !== 1
       ) {
         throw new Error(
-          `Linked Media Library first submit did not produce one exact native image request: ${JSON.stringify(providerEvidence)}`,
+          `Linked Media Library submit did not produce one exact native image request: ${JSON.stringify(providerEvidence)}`,
         );
       }
       const completedScreenshot = await captureSettledScreenshot(
@@ -1274,15 +1384,108 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         workspaceSession,
         provider: providerEvidence,
       });
+
+      const bindingDirectory = join(prepared.workspacePath, '.neko', 'media-libraries');
+      const associationDirectory = join(
+        prepared.workspacePath,
+        'neko',
+        'project-bindings',
+        'entity-character',
+      );
+      await mkdir(bindingDirectory, { recursive: true });
+      await mkdir(associationDirectory, { recursive: true });
+      await writeFile(join(bindingDirectory, 'Broken.json'), '{"projectId":', 'utf8');
+      await writeFile(join(associationDirectory, 'invalid-row.json'), '{not-json', 'utf8');
+      await restartFixtureWorkspaceApplication({
+        evaluate,
+        restartApplication,
+        waitForDesktopBridge,
+        waitForSelector,
+      });
+      await waitForProjectMediaLibraryStates(evaluate, {
+        workspace: 'available',
+        Broken: 'binding-invalid',
+      });
+      const projectFactIsolation = await inspectInvalidProjectAssociationIsolation(evaluate);
+      const invalidBinding = {
+        valid: await inspectFixtureProjectMediaLibrary(evaluate, 'available', 'workspace'),
+        invalid: await inspectFixtureProjectMediaLibrary(evaluate, 'binding-invalid', 'Broken'),
+        projectFactIsolation,
+      };
+      const invalidBindingScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-media-library-invalid-binding-isolated',
+      );
+      checkpoint('workspace-media-library-invalid-binding-isolated', invalidBinding);
+
+      await rm(join(prepared.workspacePath, '.neko'), { recursive: true, force: true });
+      await restartFixtureWorkspaceApplication({
+        evaluate,
+        restartApplication,
+        waitForDesktopBridge,
+        waitForSelector,
+      });
+      await waitForProjectMediaLibraryStates(evaluate, {
+        workspace: 'required-unlinked',
+        Broken: 'required-unlinked',
+      });
+      const afterLocalStateDeletion = {
+        workspace: await inspectFixtureProjectMediaLibrary(
+          evaluate,
+          'required-unlinked',
+          'workspace',
+        ),
+        broken: await inspectFixtureProjectMediaLibrary(
+          evaluate,
+          'required-unlinked',
+          'Broken',
+        ),
+      };
+      const deletedLocalStateScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-media-library-after-local-state-deletion',
+      );
+      const recoveryAfterDeletion = await recoverFixtureProjectMediaLibrary({
+        evaluate,
+        screenshot,
+        waitForSelector,
+      });
+      const reservedMutation = await exerciseReservedProjectFactMutationRejection({
+        checkpoint,
+        evaluate,
+        pressKey,
+        screenshot,
+        workspacePath: prepared.workspacePath,
+      });
+      checkpoint('workspace-media-library-reinitialized-after-deletion', {
+        afterLocalStateDeletion,
+        recoveryAfterDeletion: recoveryAfterDeletion.applied,
+        reservedMutation: reservedMutation.evidence,
+      });
       return {
         entryDraft,
         entryRoot,
         workspaceActivation,
         workspaceAgent,
+        recoveryRequired,
         mentionSelection: mention.selection,
         workspaceSession,
         provider: providerEvidence,
-        screenshots: [mention.screenshot, completedScreenshot],
+        invalidBinding,
+        afterLocalStateDeletion,
+        recoveryAfterDeletion,
+        reservedMutation: reservedMutation.evidence,
+        screenshots: [
+          recoveryRequired.requiredScreenshot,
+          recoveryRequired.appliedScreenshot,
+          mention.screenshot,
+          completedScreenshot,
+          invalidBindingScreenshot,
+          deletedLocalStateScreenshot,
+          recoveryAfterDeletion.requiredScreenshot,
+          recoveryAfterDeletion.appliedScreenshot,
+          reservedMutation.screenshot,
+        ],
       };
     } finally {
       await providerServer.close();
@@ -1717,7 +1920,7 @@ async function waitForNavigationButton(evaluate, index) {
   );
 }
 
-async function clickApplicationNavigation(evaluate, click, index) {
+export async function clickApplicationNavigation(evaluate, click, index) {
   await waitForNavigationButton(evaluate, index);
   await click(APPLICATION_NAVIGATION_BUTTON_SELECTOR, index);
 }
@@ -2788,13 +2991,29 @@ async function exerciseWorkspaceDraftMention({
   screenshotLabel,
 }) {
   await replaceActiveAgentComposerText({ evaluate, pressKey, type }, `@${referenceQuery}`);
-  await waitForCondition(
-    evaluate,
-    `(() => [...document.querySelectorAll(
-      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
-    )].some((item) => item.textContent?.includes(${JSON.stringify(referenceLabel)})))()`,
-    'Workspace Draft @ search did not return its exact authorized Workspace file.',
-  );
+  try {
+    await waitForCondition(
+      evaluate,
+      `(() => [...document.querySelectorAll(
+        '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
+      )].some((item) => item.textContent?.includes(${JSON.stringify(referenceLabel)})))()`,
+      'Workspace Draft @ search did not return its exact authorized Workspace file.',
+    );
+  } catch (error) {
+    const mentionProjection = await evaluate(`(() => ({
+      items: [...document.querySelectorAll(
+        '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
+      )].map((item) => ({ text: item.textContent?.trim() ?? '', title: item.getAttribute('title') ?? '' })),
+      empty: document.querySelector(
+        '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu .agent-composer-popover-empty',
+      )?.textContent?.trim() ?? '',
+      alerts: [...document.querySelectorAll('[role="alert"]')]
+        .map((element) => element.textContent?.trim() ?? '').filter(Boolean),
+    }))()`);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} Projection: ${JSON.stringify(mentionProjection)}`,
+    );
+  }
   const selection = await evaluate(`(() => {
     const menu = document.querySelector(
       '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu',
@@ -5011,6 +5230,362 @@ async function selectGlobalLibraryCatalog(evaluate, labelPattern) {
     evaluate,
     selectedExpression,
     'Requested Global Library catalog did not become active.',
+  );
+}
+
+export async function registerFixtureGlobalMediaLibrary({
+  evaluate,
+  click,
+  waitForSelector,
+  libraryName,
+}) {
+  await clickApplicationNavigation(evaluate, click, 3);
+  await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
+  await selectGlobalLibraryCatalog(evaluate, /^(Media Library|媒体库)$/u);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__commands button',
+    )].some((button) => /^(Connect directory|连接目录)$/u.test(button.textContent?.trim() ?? '') &&
+      !button.disabled))()`,
+    'The global Media Library registration action did not become interactive.',
+  );
+  await evaluate(`(() => {
+    const button = [...document.querySelectorAll(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__commands button',
+    )].find((candidate) => /^(Connect directory|连接目录)$/u.test(
+      candidate.textContent?.trim() ?? '',
+    ));
+    if (!(button instanceof HTMLButtonElement) || button.disabled) {
+      throw new Error('The global Media Library registration action is unavailable.');
+    }
+    button.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__entry strong')]
+      .some((element) => element.textContent?.trim() === ${JSON.stringify(libraryName)}) ||
+      Boolean(document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__diagnostic[role="alert"]')))()`,
+    'The fixture global Media Library registration did not settle.',
+  );
+  const projection = await evaluate(`(() => ({
+    labels: [...document.querySelectorAll(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__entry strong',
+    )].map((element) => element.textContent?.trim() ?? ''),
+    alert: document.querySelector(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__diagnostic[role="alert"]',
+    )?.textContent?.trim() ?? '',
+  }))()`);
+  if (!projection.labels.includes(libraryName)) {
+    throw new Error(
+      `The fixture global Media Library was not registered: ${JSON.stringify(projection)}`,
+    );
+  }
+  return projection;
+}
+
+export async function recoverFixtureProjectMediaLibrary({
+  evaluate,
+  screenshot,
+  waitForSelector,
+  libraryName = 'workspace',
+  expectedContentLabel = 'library-image.png',
+}) {
+  await waitForSelector('.neko-resource-browser__sources[role="tablist"]');
+  await activateWorkspaceResourceSource(evaluate, /^(Shared media|共享媒体)$/u);
+  await waitForCondition(
+    evaluate,
+    `(() => document.querySelectorAll('.neko-resource-browser__item-row').length > 0 ||
+      Boolean(document.querySelector('.neko-resource-browser__empty')) ||
+      Boolean(document.querySelector('.neko-resource-browser__diagnostics')))()`,
+    'The project Media Library projection did not settle.',
+  );
+  const unlinkedProjection = await evaluate(`(() => ({
+    rows: [...document.querySelectorAll('.neko-resource-browser__item-row')].map((row) => ({
+      label: row.querySelector('strong')?.textContent?.trim() ?? '',
+      status: row.querySelector('.neko-resource-browser__library-status')?.getAttribute('data-state') ?? '',
+    })),
+    diagnostics: [...document.querySelectorAll('.neko-resource-browser__diagnostics')]
+      .map((element) => element.textContent?.trim() ?? ''),
+    empty: document.querySelector('.neko-resource-browser__empty')?.textContent?.trim() ?? '',
+  }))()`);
+  if (
+    !unlinkedProjection.rows.some(
+      (row) => row.label === libraryName && row.status === 'required-unlinked',
+    )
+  ) {
+    throw new Error(
+      `The project Media Library requirement did not remain visibly unlinked: ${JSON.stringify(unlinkedProjection)}`,
+    );
+  }
+  const required = await inspectFixtureProjectMediaLibrary(
+    evaluate,
+    'required-unlinked',
+    libraryName,
+  );
+  const requiredScreenshot = screenshot
+    ? await captureSettledScreenshot(
+        screenshot,
+        'workspace-media-library-recovery-required-unlinked',
+      )
+    : undefined;
+
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)},
+    );
+    const recover = row?.querySelector(
+      'button[aria-label="Recover media library"], button[aria-label="恢复媒体库"]',
+    );
+    if (!(recover instanceof HTMLButtonElement)) {
+      throw new Error('Project Media Library recovery action is unavailable.');
+    }
+    recover.click();
+    return true;
+  })()`);
+  await waitForSelector('.neko-resource-browser__dialog[role="dialog"]');
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__dialog[role="dialog"] button')]
+      .some((button) => /^(Confirm recovery|确认恢复)$/u.test(button.textContent?.trim() ?? '') &&
+        !button.disabled))()`,
+    'The exact global Media Library recovery candidate was not available.',
+  );
+  await evaluate(`(() => {
+    const confirm = [...document.querySelectorAll(
+      '.neko-resource-browser__dialog[role="dialog"] button',
+    )].find((button) => /^(Confirm recovery|确认恢复)$/u.test(button.textContent?.trim() ?? ''));
+    if (!(confirm instanceof HTMLButtonElement) || confirm.disabled) {
+      throw new Error('Project Media Library recovery confirmation is unavailable.');
+    }
+    confirm.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__item-row')]
+      .some((row) => row.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)} &&
+        row.querySelector('.neko-resource-browser__library-status')?.getAttribute('data-state') ===
+          'available'))()`,
+    'The project Media Library binding did not become available.',
+  );
+  const applied = await inspectFixtureProjectMediaLibrary(evaluate, 'available', libraryName);
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)},
+    );
+    const disclosure = row?.querySelector('.neko-resource-browser__disclosure');
+    if (!(disclosure instanceof HTMLElement)) {
+      throw new Error('Recovered Media Library disclosure is unavailable.');
+    }
+    disclosure.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__item-row strong')]
+      .some((element) => element.textContent?.trim() === ${JSON.stringify(expectedContentLabel)}))()`,
+    'The recovered Media Library did not expose its referenced image.',
+  );
+  const appliedScreenshot = screenshot
+    ? await captureSettledScreenshot(screenshot, 'workspace-media-library-recovered')
+    : undefined;
+  return {
+    required,
+    applied: { ...applied, contentVisible: true },
+    requiredScreenshot,
+    appliedScreenshot,
+  };
+}
+
+async function inspectFixtureProjectMediaLibrary(evaluate, expectedState, libraryName) {
+  return evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)},
+    );
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('Fixture project Media Library row is unavailable.');
+    }
+    const status = row.querySelector('.neko-resource-browser__library-status');
+    const state = status?.getAttribute('data-state') ?? '';
+    const statusLabel = status?.getAttribute('title') ?? '';
+    if (state !== ${JSON.stringify(expectedState)}) {
+      throw new Error('Fixture project Media Library has an unexpected state: ' + state);
+    }
+    const exposedText = [
+      row.textContent ?? '',
+      ...[...row.querySelectorAll('[title]')].map((element) => element.getAttribute('title') ?? ''),
+    ];
+    if (exposedText.some((value) => value.includes('.neko') || value.includes('connectionId'))) {
+      throw new Error('Project Media Library row exposed local binding details.');
+    }
+    return {
+      label: row.querySelector('strong')?.textContent?.trim() ?? '',
+      state,
+      statusLabel,
+      recoverActionVisible: Boolean(row.querySelector(
+        'button[aria-label="Recover media library"], button[aria-label="恢复媒体库"]',
+      )),
+    };
+  })()`);
+}
+
+async function inspectInvalidProjectAssociationIsolation(evaluate) {
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const diagnostic = document.querySelector(
+        '.project-content-group[data-project-content-group="characters"] .project-content-diagnostic',
+      );
+      const world = document.querySelector(
+        '[data-owner-identity="world:world-valid"][data-availability="available"]',
+      );
+      return diagnostic instanceof HTMLElement &&
+        (diagnostic.textContent?.trim().length ?? 0) > 0 &&
+        world?.querySelector('strong')?.textContent?.trim() === 'Valid World';
+    })()`,
+    'Invalid Project association did not remain local beside the valid World sibling.',
+  );
+  return evaluate(`(() => {
+    const diagnostic = document.querySelector(
+      '.project-content-group[data-project-content-group="characters"] .project-content-diagnostic',
+    );
+    const world = document.querySelector(
+      '[data-owner-identity="world:world-valid"][data-availability="available"]',
+    );
+    return {
+      diagnosticVisible: diagnostic instanceof HTMLElement,
+      diagnostic: diagnostic?.textContent?.trim() ?? '',
+      validWorldVisible: world?.querySelector('strong')?.textContent?.trim() === 'Valid World',
+      validWorldAvailability: world?.getAttribute('data-availability') ?? '',
+    };
+  })()`);
+}
+
+async function exerciseReservedProjectFactMutationRejection({
+  checkpoint,
+  evaluate,
+  pressKey,
+  screenshot,
+  workspacePath,
+}) {
+  await activateWorkspaceResourceSource(evaluate, /^(Project files|项目文件)$/u);
+  checkpoint('workspace-project-fact-mutation-source-active', {});
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__item-row')]
+      .some((row) => row.querySelector('strong')?.textContent?.trim() === 'neko'))()`,
+    'Project files did not expose the synchronized neko root for mutation validation.',
+  );
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'neko',
+    );
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('Synchronized neko root is unavailable for mutation validation.');
+    }
+    row.dataset.functionalReservedProjectRoot = 'true';
+    return true;
+  })()`);
+  checkpoint('workspace-project-fact-mutation-root-visible', {});
+  await evaluate(`(() => {
+    const trigger = document.querySelector(
+      '[data-functional-reserved-project-root="true"] .neko-resource-browser__item',
+    );
+    if (!(trigger instanceof HTMLButtonElement)) {
+      throw new Error('Synchronized neko root context trigger is unavailable.');
+    }
+    trigger.focus();
+    return true;
+  })()`);
+  await pressKey('F10', ['Shift']);
+  checkpoint('workspace-project-fact-mutation-context-requested', {});
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const visibleActions = await evaluate(`(() =>
+    [...document.querySelectorAll('[role="menuitem"]')]
+      .map((item) => item.textContent?.trim() ?? '')
+  )()`);
+  const forbiddenActions = visibleActions.filter((text) =>
+    /Move to Trash|移到废纸篓|New file|新建文件|New folder|新建文件夹|New Canvas|新建画布|New Cut|新建剪辑/u.test(
+      text,
+    ),
+  );
+  if (forbiddenActions.length > 0) {
+    throw new Error(
+      `Reserved Project root exposed generic mutation actions: ${JSON.stringify(visibleActions)}`,
+    );
+  }
+  const evidence = await evaluate(`(() => {
+    const preserved = [...document.querySelectorAll('.neko-resource-browser__item-row')]
+      .some((row) => row.querySelector('strong')?.textContent?.trim() === 'neko');
+    return {
+      projectRootVisible: preserved,
+    };
+  })()`);
+  await access(join(workspacePath, 'neko'));
+  return {
+    evidence: {
+      ...evidence,
+      projectRootExists: true,
+      genericMutationActionCount: forbiddenActions.length,
+      visibleActions,
+    },
+    screenshot: await captureSettledScreenshot(
+      screenshot,
+      'workspace-project-fact-generic-mutation-rejected',
+    ),
+  };
+}
+
+async function restartFixtureWorkspaceApplication({
+  evaluate,
+  restartApplication,
+  waitForDesktopBridge,
+  waitForSelector,
+}) {
+  await restartApplication();
+  await waitForDesktopBridge(60_000);
+  await openFixtureWorkspace(evaluate);
+  await waitForSelector('.desktop-scene-workbench--workspace');
+  await waitForSelector('.neko-resource-browser__sources[role="tablist"]');
+  await activateWorkspaceResourceSource(evaluate, /^(Shared media|共享媒体)$/u);
+}
+
+async function activateWorkspaceResourceSource(evaluate, labelPattern) {
+  await evaluate(`(() => {
+    const tab = [...document.querySelectorAll(
+      '.neko-resource-browser__sources [role="tab"]',
+    )].find((candidate) => ${String(labelPattern)}.test(candidate.textContent?.trim() ?? ''));
+    if (!(tab instanceof HTMLButtonElement)) {
+      throw new Error('Requested Workspace resource source is unavailable.');
+    }
+    if (tab.getAttribute('aria-selected') !== 'true') tab.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__sources [role="tab"]')]
+      .some((candidate) => ${String(labelPattern)}.test(candidate.textContent?.trim() ?? '') &&
+        candidate.getAttribute('aria-selected') === 'true'))()`,
+    'Requested Workspace resource source did not become active.',
+  );
+}
+
+async function waitForProjectMediaLibraryStates(evaluate, expectedStates) {
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const states = Object.fromEntries(
+        [...document.querySelectorAll('.neko-resource-browser__item-row')].map((row) => [
+          row.querySelector('strong')?.textContent?.trim() ?? '',
+          row.querySelector('.neko-resource-browser__library-status')?.getAttribute('data-state') ?? '',
+        ]),
+      );
+      return Object.entries(${JSON.stringify(expectedStates)})
+        .every(([libraryName, state]) => states[libraryName] === state);
+    })()`,
+    `Project Media Library states did not settle: ${JSON.stringify(expectedStates)}`,
   );
 }
 

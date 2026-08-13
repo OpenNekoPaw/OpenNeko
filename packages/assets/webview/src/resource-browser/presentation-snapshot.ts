@@ -2,7 +2,6 @@ import type {
   ResourceBrowserSource,
   ResourceBrowserIdentity,
 } from '@neko/assets-domain/resource-browser/contract';
-import type { EntityInspectorDraft } from '@neko/entity-webview/inspector';
 
 export type ResourceBrowserPresentationIdentity = Pick<
   ResourceBrowserIdentity,
@@ -16,7 +15,6 @@ export interface ResourceBrowserPresentationSnapshot {
   readonly expandedResourceIds: readonly string[];
   readonly selectedResourceIds: Readonly<Partial<Record<ResourceBrowserSource, string>>>;
   readonly activeContainerResourceIds: Readonly<Partial<Record<'files' | 'media', string>>>;
-  readonly entityDrafts: Readonly<Record<string, EntityInspectorDraft>>;
 }
 
 export interface ResourceBrowserPresentationSnapshotStore {
@@ -68,11 +66,5 @@ function cloneSnapshot(
     expandedResourceIds: [...snapshot.expandedResourceIds],
     selectedResourceIds: { ...snapshot.selectedResourceIds },
     activeContainerResourceIds: { ...snapshot.activeContainerResourceIds },
-    entityDrafts: Object.fromEntries(
-      Object.entries(snapshot.entityDrafts).map(([resourceId, draft]) => [
-        resourceId,
-        { ...draft },
-      ]),
-    ),
   };
 }

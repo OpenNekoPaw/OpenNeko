@@ -6,8 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
-import type { CanvasConnection, CanvasNode, PortDefinition } from '@neko/canvas-domain';
-import { getDefaultPorts } from '@neko/canvas-domain';
+import type { CanvasConnection, CanvasNode } from '@neko/canvas-domain';
 import { Connection } from './Connection';
 import {
   projectCanvasConnectionView,
@@ -71,64 +70,6 @@ function getNodeSidePoint(node: CanvasNode, side: string): Point {
   }
 }
 
-/**
- * Get the anchor point for a port-based connection.
- * Calculates position based on port side and index among ports on the same side.
- */
-function getPortAnchorPoint(node: CanvasNode, portId: string): Point | null {
-  const ports = node.ports ?? getDefaultPorts(node.type);
-  const port = ports.find((p: PortDefinition) => p.id === portId);
-  if (!port) return null;
-
-  // Count ports on the same side and find index
-  const portsOnSide = ports.filter((p: PortDefinition) => p.position === port.position);
-  const index = portsOnSide.indexOf(port);
-  const total = portsOnSide.length;
-
-  const { position, size } = node;
-  const spacing = 1 / (total + 1);
-  const fraction = spacing * (index + 1);
-
-  switch (port.position) {
-    case 'top':
-      return { x: position.x + size.width * fraction, y: position.y };
-    case 'right':
-      return { x: position.x + size.width, y: position.y + size.height * fraction };
-    case 'bottom':
-      return { x: position.x + size.width * fraction, y: position.y + size.height };
-    case 'left':
-      return { x: position.x, y: position.y + size.height * fraction };
-    default:
-      return null;
-  }
-}
-
-function getHandlePoint(node: CanvasNode, handleId: string, portId?: string): Point {
-  if (portId) {
-    const portPoint = getPortAnchorPoint(node, portId);
-    if (portPoint) return portPoint;
-  }
-
-  const portPoint = getPortAnchorPoint(node, handleId);
-  if (portPoint) return portPoint;
-
-  return getNodeSidePoint(node, handleId);
-}
-
-function getHandleDirection(node: CanvasNode, handleId: string, portId?: string): string {
-  if (portId) {
-    const ports = node.ports ?? getDefaultPorts(node.type);
-    const port = ports.find((p: PortDefinition) => p.id === portId);
-    if (port) return port.position;
-  }
-
-  const ports = node.ports ?? getDefaultPorts(node.type);
-  const port = ports.find((p: PortDefinition) => p.id === handleId);
-  if (port) return port.position;
-
-  return handleId;
-}
-
 function getControlPoint(point: Point, anchor: string, offset: number): Point {
   switch (anchor) {
     case 'top':
@@ -189,8 +130,8 @@ export function ConnectionLayer({
     const sourceNode = nodeMap.get(pendingConnection.sourceNodeId);
     if (!sourceNode) return null;
 
-    const sourcePoint = getHandlePoint(sourceNode, pendingConnection.sourceHandleId);
-    const sourceDir = getHandleDirection(sourceNode, pendingConnection.sourceHandleId);
+    const sourcePoint = getNodeSidePoint(sourceNode, 'right');
+    const sourceDir = 'right';
     const targetPoint = pendingConnection.mousePosition;
 
     // Calculate control points

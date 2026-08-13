@@ -11,8 +11,9 @@ import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasWorkspaceBoardProjection } from '../canvasWorkspaceBoardProjection';
 
 const sourceLocator: ContentLocator = {
-  kind: 'workspace-file',
-  path: 'neko/assets/references/source-image.png',
+  kind: 'media-library',
+  libraryName: 'References',
+  relativePath: 'source-image.png',
   fingerprint: { strategy: 'sha256', value: 'sha256:source-image' },
 };
 const generatedLocator = generatedOutputLocator('shot-1', 'sha256:shot-1');
@@ -280,7 +281,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
   });
 
   it('uses locator fingerprints as exact content identities', () => {
-    const portablePath = 'neko/assets/books/volume-01.epub';
+    const portablePath = 'references/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,
@@ -319,7 +320,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
   });
 
   it('does not mutate an existing locator when a new content fingerprint arrives', () => {
-    const portablePath = 'neko/assets/books/volume-01.epub';
+    const portablePath = 'references/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,

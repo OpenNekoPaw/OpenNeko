@@ -19,6 +19,17 @@ describe('CharacterFoundationService conversation launch catalog', () => {
           characterVersionId: 'character-version-lin',
           displayName: 'Lin',
           versionLabel: 'Published Lin',
+          lineage: {
+            coverage: 'complete',
+            state: 'unlinked',
+            isHead: false,
+            path: [
+              {
+                characterVersionId: 'character-version-lin',
+                label: 'Published Lin',
+              },
+            ],
+          },
           storylines: [
             {
               characterStorylineVersionId: 'storyline-version-lin',
@@ -33,6 +44,80 @@ describe('CharacterFoundationService conversation launch catalog', () => {
           message:
             "CharacterVersion 'character-version-orphan' references unavailable CharacterProject 'character-project-missing'.",
         },
+      ],
+    });
+  });
+
+  it('projects exact branch paths and isolates a lineage-reader failure to its Character', async () => {
+    const base = createCatalog();
+    const linVersion = base.versions[0];
+    if (!linVersion) throw new Error('Character fixture version is missing.');
+    const catalog: CharacterDurableCatalog = {
+      ...base,
+      versions: [
+        { ...linVersion, characterVersionId: 'version-root', label: 'Root' },
+        { ...linVersion, characterVersionId: 'version-left', label: 'Left' },
+        { ...linVersion, characterVersionId: 'version-right', label: 'Right' },
+      ],
+      storylineVersions: [],
+    };
+    const service = new CharacterFoundationService({
+      characterCatalog: { readCatalog: async () => catalog },
+      lineage: {
+        readLineage: async () => ({
+          characterProjectId: 'character-project-lin',
+          relations: [
+            { characterVersionId: 'version-root', parentCharacterVersionIds: [] },
+            {
+              characterVersionId: 'version-left',
+              parentCharacterVersionIds: ['version-root'],
+            },
+            {
+              characterVersionId: 'version-right',
+              parentCharacterVersionIds: ['version-root'],
+            },
+          ],
+        }),
+      },
+    });
+
+    const result = await service.getConversationLaunchCatalog();
+    expect(result.targets.map((target) => target.lineage)).toEqual([
+      {
+        coverage: 'complete',
+        state: 'declared-root',
+        isHead: false,
+        path: [{ characterVersionId: 'version-root', label: 'Root' }],
+      },
+      {
+        coverage: 'complete',
+        state: 'linked',
+        isHead: true,
+        path: [
+          { characterVersionId: 'version-root', label: 'Root' },
+          { characterVersionId: 'version-left', label: 'Left' },
+        ],
+      },
+      {
+        coverage: 'complete',
+        state: 'linked',
+        isHead: true,
+        path: [
+          { characterVersionId: 'version-root', label: 'Root' },
+          { characterVersionId: 'version-right', label: 'Right' },
+        ],
+      },
+    ]);
+
+    const unavailable = new CharacterFoundationService({
+      characterCatalog: { readCatalog: async () => catalog },
+      lineage: { readLineage: async () => Promise.reject(new Error('lineage is corrupt')) },
+    });
+    await expect(unavailable.getConversationLaunchCatalog()).resolves.toMatchObject({
+      targets: [
+        { lineage: { coverage: 'unavailable', message: 'lineage is corrupt' } },
+        { lineage: { coverage: 'unavailable', message: 'lineage is corrupt' } },
+        { lineage: { coverage: 'unavailable', message: 'lineage is corrupt' } },
       ],
     });
   });

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
 import type { NekoHostPorts } from '@neko/host/ports';
@@ -57,15 +58,20 @@ import type {
   GlobalMediaLibraryLocationKind,
   GlobalMediaLibraryProjection,
 } from '@neko/assets-domain/global-library/contract';
-import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
+  confirmProjectMediaLibraryRecovery,
+  type AssetWorkspaceResolution,
+  type ProjectMediaLibraryRecoveryPlan,
+} from '@neko/assets-domain/contracts';
+import {
+  createGlobalMediaLibraryId,
   createGlobalMediaLibraryConnection,
   listGlobalMediaLibraryConnections,
   removeGlobalMediaLibraryConnection,
   replaceGlobalMediaLibraryConnection,
+  rollbackGlobalMediaLibraryConnection,
   resolveGlobalMediaLibraryTarget,
 } from './global-media-library-files';
-import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync';
 import { WorkspaceDirectoryObserver } from './workspace-directory-observer';
 import {
   createResourceBrowserNodeProjectionSource,
@@ -82,6 +88,9 @@ import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/globa
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
 import type { ContentLocator } from '@neko/content';
+import { ProjectMediaLibraryAvailabilityService } from './project-media-library-availability-service';
+import { ProjectMediaLibraryBindingRepository } from './project-media-library-binding-repository';
+import { ProjectMediaLibraryBindingService } from './project-media-library-binding-service';
 import {
   resolveDesktopWindowWorkspaceWorkbench,
   type DesktopShellProjection,
@@ -116,8 +125,6 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly globalMediaLibraryRoot: string;
   readonly assetLibraryMemberships?: AssetLibraryMembershipRepository;
   readonly localMetadataRepositories?: LocalMetadataRepositories;
-  readonly refreshEntityProjections?: ResourceBrowserNodeSourceOptions['refreshEntityProjections'];
-  readonly readEntityCharacterResources: ResourceBrowserNodeSourceOptions['readEntityCharacterResources'];
   readonly shell: ResourceBrowserShellPort;
   readonly host: Pick<NekoHostPorts, 'files' | 'external' | 'diagnostics'>;
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
@@ -164,13 +171,6 @@ export interface ResourceBrowserNodeRuntimeOptions {
       };
     }): Promise<void>;
   };
-  readonly entity: {
-    executeIntent(
-      input: Parameters<ResourceBrowserNodeSourceOptions['manageEntity']>[0] & {
-        readonly workspace: AssetWorkspaceResolution;
-      },
-    ): Promise<void>;
-  };
 }
 
 export class ResourceBrowserNodeRuntime {
@@ -182,14 +182,19 @@ export class ResourceBrowserNodeRuntime {
   private globalAssetMutationTail: Promise<void> = Promise.resolve();
   private globalMediaLibraryMutationTail: Promise<void> = Promise.resolve();
   private disposed = false;
-  private readonly workspaceMediaLibrarySync: WorkspaceMediaLibrarySyncService;
+  private readonly mediaRecoveryPlans = new Map<
+    string,
+    {
+      readonly identity: ResourceBrowserIdentity;
+      readonly resourceId: string;
+      readonly operationFingerprint: string;
+      readonly plan: ProjectMediaLibraryRecoveryPlan;
+      readonly selectedDirectory?: string;
+      readonly locationKind?: GlobalMediaLibraryLocationKind;
+    }
+  >();
 
-  constructor(private readonly options: ResourceBrowserNodeRuntimeOptions) {
-    this.workspaceMediaLibrarySync = new WorkspaceMediaLibrarySyncService(
-      options.globalMediaLibraryRoot,
-      options.localMetadataRepositories,
-    );
-  }
+  constructor(private readonly options: ResourceBrowserNodeRuntimeOptions) {}
 
   async getSnapshot(
     windowId: string,
@@ -240,7 +245,9 @@ export class ResourceBrowserNodeRuntime {
     }
     const absolutePath = await resolveResourceBrowserItemPath({
       workspace,
+      projectId: request.identity.projectId,
       globalAssetRoot: this.options.globalAssetRoot,
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       memberships: this.requireAssetLibraryMemberships(),
       item,
     });
@@ -279,9 +286,13 @@ export class ResourceBrowserNodeRuntime {
   ): Promise<ResourceBrowserRecoveryPlanResult> {
     const request = parseResourceBrowserRecoveryPlanRequest(value);
     const context = await this.resolveRecoveryContext(windowId, request);
+    let selectedDirectory: string | undefined;
+    let locationKind: GlobalMediaLibraryLocationKind | undefined;
+    let connectionId: string;
+    let connectionName: string;
     if (request.candidate === 'select-directory') {
-      const sourceDirectory = await this.options.selectSource(windowId);
-      if (!sourceDirectory) {
+      selectedDirectory = await this.options.selectSource(windowId);
+      if (!selectedDirectory) {
         return {
           requestId: request.requestId,
           identity: request.identity,
@@ -289,30 +300,64 @@ export class ResourceBrowserNodeRuntime {
           status: 'cancelled',
         };
       }
-      const plan = await this.workspaceMediaLibrarySync.planSelectedDirectory({
-        workspace: context.workspace,
-        libraryName: context.libraryName,
-        locationKind: 'local',
-        sourceDirectory,
-      });
-      return {
-        requestId: request.requestId,
-        identity: request.identity,
-        resourceId: request.resourceId,
-        status: 'planned',
-        plan,
-      };
+      connectionName = path.basename(selectedDirectory);
+      if (connectionName !== context.libraryName) {
+        throw new Error('Selected Media Library directory must exactly match the logical name.');
+      }
+      locationKind = 'local';
+      connectionId = createGlobalMediaLibraryId(locationKind, connectionName);
+    } else {
+      const candidates = (
+        await listGlobalMediaLibraryConnections(this.options.globalMediaLibraryRoot)
+      ).filter(
+        (connection) =>
+          connection.name === context.libraryName && connection.availability === 'available',
+      );
+      if (candidates.length !== 1) {
+        throw new Error('Recovery requires exactly one available exact-name global connection.');
+      }
+      const candidate = candidates[0];
+      if (!candidate) throw new Error('Recovery candidate is unavailable.');
+      connectionId = candidate.libraryId;
+      connectionName = candidate.name;
+      locationKind = candidate.locationKind;
     }
-    const plan = await this.workspaceMediaLibrarySync.planRecovery({
+    const bindingService = this.createMediaBindingService({
+      projectId: request.identity.projectId,
       workspace: context.workspace,
+      ...(selectedDirectory ? { resolveConnectionTarget: async () => selectedDirectory } : {}),
+    });
+    const plan = await bindingService.plan({
       libraryName: context.libraryName,
+      connectionId,
+    });
+    const planId = `media-library-recovery:${randomUUID()}`;
+    this.mediaRecoveryPlans.set(planId, {
+      identity: request.identity,
+      resourceId: request.resourceId,
+      operationFingerprint: request.expectedOperationFingerprint,
+      plan,
+      ...(selectedDirectory ? { selectedDirectory, locationKind } : {}),
     });
     return {
       requestId: request.requestId,
       identity: request.identity,
       resourceId: request.resourceId,
       status: 'planned',
-      plan,
+      plan: {
+        planId,
+        workspaceId: request.identity.workspaceId,
+        libraryName: context.libraryName,
+        requirementFingerprint: plan.requirementFingerprint,
+        operationFingerprint: request.expectedOperationFingerprint,
+        candidate: {
+          kind: 'global-alias',
+          name: connectionName,
+          locationKind,
+        },
+        referencedCount: plan.validatedRelativePaths.length,
+        validatedCount: plan.validatedRelativePaths.length,
+      },
     };
   }
 
@@ -326,13 +371,28 @@ export class ResourceBrowserNodeRuntime {
     if (workspace.workspaceId !== request.identity.workspaceId) {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
     }
-    await this.withGlobalMediaLibraryMutation(() =>
-      this.workspaceMediaLibrarySync.applyRecovery({
-        workspace,
-        planId: request.planId,
-        expectedOperationFingerprint: request.expectedOperationFingerprint,
-      }),
-    );
+    const pending = this.mediaRecoveryPlans.get(request.planId);
+    if (
+      !pending ||
+      resourceBrowserIdentityKey(pending.identity) !==
+        resourceBrowserIdentityKey(request.identity) ||
+      pending.operationFingerprint !== request.expectedOperationFingerprint
+    ) {
+      throw new Error('Desktop Resource Browser recovery plan is stale.');
+    }
+    await this.assertRecoveryProjectionCurrent(controller, pending);
+    try {
+      if (pending.selectedDirectory) {
+        await this.applySelectedDirectoryRecovery(workspace, pending);
+      } else {
+        await this.createMediaBindingService({
+          projectId: request.identity.projectId,
+          workspace,
+        }).apply(confirmProjectMediaLibraryRecovery(pending.plan));
+      }
+    } finally {
+      this.mediaRecoveryPlans.delete(request.planId);
+    }
     return controller.reconcile();
   }
 
@@ -346,10 +406,14 @@ export class ResourceBrowserNodeRuntime {
     if (workspace.workspaceId !== request.identity.workspaceId) {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
     }
-    this.workspaceMediaLibrarySync.cancelRecovery({
-      workspace,
-      planId: request.planId,
-    });
+    const pending = this.mediaRecoveryPlans.get(request.planId);
+    if (
+      !pending ||
+      resourceBrowserIdentityKey(pending.identity) !== resourceBrowserIdentityKey(request.identity)
+    ) {
+      throw new Error('Desktop Resource Browser recovery plan is stale.');
+    }
+    this.mediaRecoveryPlans.delete(request.planId);
     return {
       requestId: request.requestId,
       identity: request.identity,
@@ -684,6 +748,9 @@ export class ResourceBrowserNodeRuntime {
       this.controllers.delete(key);
     }
     this.homeItemsByWindow.delete(windowId);
+    for (const [planId, plan] of this.mediaRecoveryPlans) {
+      if (plan.identity.windowId === windowId) this.mediaRecoveryPlans.delete(planId);
+    }
     const controllers = this.homeThumbnailControllers.get(windowId);
     if (controllers) {
       for (const controller of controllers) {
@@ -784,6 +851,7 @@ export class ResourceBrowserNodeRuntime {
     }
     this.homeThumbnailControllers.clear();
     this.homeItemsByWindow.clear();
+    this.mediaRecoveryPlans.clear();
   }
 
   private recordHomeItems(
@@ -1048,15 +1116,12 @@ export class ResourceBrowserNodeRuntime {
       await this.options.cut.addResource({ resourceIdentity, item, target });
     };
     const composition = createResourceBrowserNodeProjectionSource({
+      projectId: project.projectId,
       globalAssetRoot: this.options.globalAssetRoot,
       ...((this.options.assetLibraryMemberships ?? this.options.localMetadataRepositories)
         ? { assetLibraryMemberships: this.requireAssetLibraryMemberships() }
         : {}),
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
-      workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
-      entityProjections: this.options.localMetadataRepositories?.projectEntityProjections,
-      refreshEntityProjections: this.options.refreshEntityProjections,
-      readEntityCharacterResources: this.options.readEntityCharacterResources,
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
@@ -1069,7 +1134,6 @@ export class ResourceBrowserNodeRuntime {
       createThumbnail: this.options.createThumbnail,
       addToCanvas,
       addToCut,
-      manageEntity: (input) => this.options.entity.executeIntent({ ...input, workspace }),
     });
     const controller = new ResourceBrowserController({
       identity: expected,
@@ -1106,6 +1170,111 @@ export class ResourceBrowserNodeRuntime {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
     }
     return { workspace, libraryName: item.libraryName };
+  }
+
+  private createMediaBindingService(input: {
+    readonly projectId: string;
+    readonly workspace: AssetWorkspaceResolution;
+    readonly resolveConnectionTarget?: (connectionId: string) => Promise<string>;
+  }): ProjectMediaLibraryBindingService {
+    const availability = new ProjectMediaLibraryAvailabilityService({
+      projectId: input.projectId,
+      workspaceRoot: input.workspace.workspacePath,
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+    });
+    return new ProjectMediaLibraryBindingService({
+      projectId: input.projectId,
+      bindings: new ProjectMediaLibraryBindingRepository(
+        input.workspace.workspacePath,
+        input.projectId,
+      ),
+      connections: {
+        resolveAuthorizedTarget:
+          input.resolveConnectionTarget ??
+          ((connectionId) =>
+            resolveGlobalMediaLibraryTarget({
+              mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+              libraryId: connectionId,
+            })),
+      },
+      requirements: { read: (libraryName) => availability.readRequirement(libraryName) },
+    });
+  }
+
+  private async assertRecoveryProjectionCurrent(
+    controller: ResourceBrowserController,
+    pending: {
+      readonly resourceId: string;
+      readonly operationFingerprint: string;
+    },
+  ): Promise<void> {
+    const item = (await controller.getSnapshot()).items.find(
+      (candidate) => candidate.resourceId === pending.resourceId,
+    );
+    if (item?.libraryStatus?.operationFingerprint !== pending.operationFingerprint) {
+      throw new Error('Desktop Resource Browser recovery projection changed after planning.');
+    }
+  }
+
+  private async applySelectedDirectoryRecovery(
+    workspace: AssetWorkspaceResolution,
+    pending: {
+      readonly identity: ResourceBrowserIdentity;
+      readonly plan: ProjectMediaLibraryRecoveryPlan;
+      readonly selectedDirectory?: string;
+      readonly locationKind?: GlobalMediaLibraryLocationKind;
+    },
+  ): Promise<void> {
+    const selectedDirectory = pending.selectedDirectory;
+    const locationKind = pending.locationKind;
+    if (!selectedDirectory || !locationKind) {
+      throw new Error('Desktop Resource Browser selected-directory recovery is invalid.');
+    }
+    await this.withGlobalMediaLibraryMutation(async () => {
+      const existing = (
+        await listGlobalMediaLibraryConnections(this.options.globalMediaLibraryRoot)
+      ).find((connection) => connection.libraryId === pending.plan.connectionId);
+      let created = false;
+      let rollback: Awaited<ReturnType<typeof replaceGlobalMediaLibraryConnection>> | undefined;
+      try {
+        if (existing) {
+          rollback = await replaceGlobalMediaLibraryConnection({
+            mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+            libraryId: existing.libraryId,
+            sourceDirectory: selectedDirectory,
+          });
+        } else {
+          const result = await createGlobalMediaLibraryConnection({
+            mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+            sourceDirectory: selectedDirectory,
+            locationKind,
+          });
+          if (result.libraryId !== pending.plan.connectionId) {
+            throw new Error(
+              'Created global Media Library identity differs from the recovery plan.',
+            );
+          }
+          created = true;
+        }
+        await this.createMediaBindingService({
+          projectId: pending.identity.projectId,
+          workspace,
+        }).apply(confirmProjectMediaLibraryRecovery(pending.plan));
+      } catch (error) {
+        if (rollback) {
+          await rollbackGlobalMediaLibraryConnection({
+            mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+            rollback,
+          });
+        } else if (created) {
+          await removeGlobalMediaLibraryConnection({
+            mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+            libraryId: pending.plan.connectionId,
+          });
+        }
+        throw error;
+      }
+    });
   }
 
   private requireAssetLibraryMemberships(): AssetLibraryMembershipRepository {
@@ -1161,13 +1330,7 @@ export function createResourceToCanvasInteraction(options: {
       rendererSessionId: resourceIdentity.rendererSessionId,
     };
     const locator =
-      item.source === 'entities'
-        ? item.entityStatus === 'candidate'
-          ? undefined
-          : item.representationLocator
-        : item.source === 'assets'
-          ? undefined
-          : item.locator;
+      item.source === 'assets' || item.role === 'library-root' ? undefined : item.locator;
     if (!locator) {
       throw new Error('Resource Browser item has no Canvas representation.');
     }
@@ -1202,15 +1365,6 @@ export function createResourceToCanvasInteraction(options: {
             locator,
             mediaKind: resourceItemMediaKind(item),
             title: item.label,
-            ...(item.source === 'entities' && item.entityStatus !== 'candidate'
-              ? {
-                  entity: {
-                    entityId: item.entityRef.entityId,
-                    bindingId: requireEntityRepresentationBindingId(item),
-                    role: requireEntityRepresentationRole(item),
-                  },
-                }
-              : {}),
           },
         },
       }),
@@ -1219,30 +1373,6 @@ export function createResourceToCanvasInteraction(options: {
       throw new Error(result.diagnostic.message);
     }
   };
-}
-
-function requireEntityRepresentationBindingId(
-  item: Extract<ResourceBrowserItem, { readonly source: 'entities' }>,
-): string {
-  if (item.entityStatus === 'candidate') {
-    throw new Error('Resource Browser candidate has no representation binding identity.');
-  }
-  if (!item.representationBindingId) {
-    throw new Error('Resource Browser Entity has no active representation binding identity.');
-  }
-  return item.representationBindingId;
-}
-
-function requireEntityRepresentationRole(
-  item: Extract<ResourceBrowserItem, { readonly source: 'entities' }>,
-) {
-  if (item.entityStatus === 'candidate') {
-    throw new Error('Resource Browser candidate has no representation role.');
-  }
-  if (!item.representationRole) {
-    throw new Error('Resource Browser Entity has no active representation role.');
-  }
-  return item.representationRole;
 }
 
 function resourceItemMediaKind(item: ResourceBrowserItem): CanvasMaterialMediaKind {
@@ -1261,11 +1391,6 @@ function resourceItemMediaKind(item: ResourceBrowserItem): CanvasMaterialMediaKi
     }
     case 'directory':
     case 'asset':
-    case 'character':
-    case 'scene':
-    case 'object':
-    case 'location':
-    case 'style':
       return 'other';
   }
 }
@@ -1274,6 +1399,17 @@ function resourceBrowserControllerKey(identity: ResourceBrowserIdentity): string
   return [
     identity.windowId,
     identity.projectId,
+    identity.viewId,
+    String(identity.viewInstanceId),
+    identity.rendererSessionId,
+  ].join(':');
+}
+
+function resourceBrowserIdentityKey(identity: ResourceBrowserIdentity): string {
+  return [
+    identity.projectId,
+    identity.workspaceId,
+    identity.windowId,
     identity.viewId,
     String(identity.viewInstanceId),
     identity.rendererSessionId,

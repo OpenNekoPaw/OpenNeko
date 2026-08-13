@@ -5,7 +5,6 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CodeIcon,
-  CubeIcon,
   EditIcon,
   FileIcon,
   FolderIcon,
@@ -39,7 +38,6 @@ import {
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserOperationRejectedError,
   createResourceBrowserChildrenRequest,
-  createResourceBrowserEntityIntentRequest,
   createResourceBrowserQuickPreviewReleaseRequest,
   createResourceBrowserQuickPreviewRequest,
   createResourceBrowserRecoveryApplyRequest,
@@ -54,13 +52,9 @@ import {
   type ResourceBrowserQuickPreviewResult,
   type ResourceBrowserRecoveryPlanResult,
 } from '@neko/assets-domain/resource-browser/contract';
+import { inspectResourceBrowserProjectStorageMutation } from '@neko/assets-domain/resource-browser';
 import { QuickPreviewSurface } from '@neko/preview-webview/embedded';
 import { getResourceBrowserLabels } from './labels';
-import {
-  EntityInspector,
-  type EntityInspectorDraft,
-  type EntityInspectorProps,
-} from '@neko/entity-webview/inspector';
 import { useResourceBrowserPresentationSnapshotStore } from './presentation-snapshot-context';
 import type {
   ResourceBrowserPresentationIdentity,
@@ -144,9 +138,6 @@ export function ResourceBrowserRoot({
   const [activeContainerBySource, setActiveContainerBySource] = useState<
     Readonly<Partial<Record<'files' | 'media', string>>>
   >(() => initialDisplayState?.activeContainerResourceIds ?? {});
-  const [entityDrafts, setEntityDrafts] = useState<Readonly<Record<string, EntityInspectorDraft>>>(
-    () => initialDisplayState?.entityDrafts ?? {},
-  );
   const requestSequence = useRef(0);
   const eventSequence = useRef(0);
   const pendingChildrenSource = useRef<'files' | 'media'>();
@@ -349,7 +340,6 @@ export function ResourceBrowserRoot({
       expandedIds,
       selectedIdBySource,
       activeContainerBySource,
-      entityDrafts,
     );
     activeDisplayStateKey.current = displayStateKey;
     activePresentationIdentity.current = presentationIdentity;
@@ -360,12 +350,10 @@ export function ResourceBrowserRoot({
     setExpandedIds(new Set(saved?.expandedResourceIds ?? []));
     setSelectedIdBySource(saved?.selectedResourceIds ?? {});
     setActiveContainerBySource(saved?.activeContainerResourceIds ?? {});
-    setEntityDrafts(saved?.entityDrafts ?? {});
   }, [
     activeContainerBySource,
     defaultViewMode,
     expandedIds,
-    entityDrafts,
     displayStateKey,
     presentationIdentity,
     presentationSnapshots,
@@ -390,13 +378,11 @@ export function ResourceBrowserRoot({
       expandedIds,
       selectedIdBySource,
       activeContainerBySource,
-      entityDrafts,
     );
   }, [
     activeContainerBySource,
     defaultViewMode,
     expandedIds,
-    entityDrafts,
     presentationSnapshots,
     query,
     selectedIdBySource,
@@ -621,37 +607,6 @@ export function ResourceBrowserRoot({
       {createEntryError ? <small role="alert">{createEntryError}</small> : null}
     </form>
   ) : null;
-  const selectedEntity = selectedId
-    ? projection.items.find((item) => item.resourceId === selectedId && item.source === 'entities')
-    : undefined;
-  const executeEntityIntent = async (
-    resourceId: string,
-    intent: Parameters<EntityInspectorProps['onIntent']>[0],
-  ): Promise<void> => {
-    const entity = projection.items.find(
-      (item) => item.resourceId === resourceId && item.source === 'entities',
-    );
-    if (!entity) {
-      throw new Error('Resource Browser Entity selection is stale.');
-    }
-    requestSequence.current += 1;
-    setPending(true);
-    try {
-      const next = await runtime.execute(
-        createResourceBrowserEntityIntentRequest({
-          requestId: `resource-entity-${requestSequence.current}`,
-          identity: runtime.identity,
-          resourceId: entity.resourceId,
-          intent,
-        }),
-      );
-      setState({ kind: 'ready', projection: next });
-    } catch (error: unknown) {
-      setState({ kind: 'error', message: describeError(error) });
-    } finally {
-      setPending(false);
-    }
-  };
   const requestRecovery = async (
     item: ResourceBrowserItem,
     candidate: 'existing-global' | 'select-directory',
@@ -955,7 +910,7 @@ export function ResourceBrowserRoot({
         </div>
       </form>
       <div className="neko-resource-browser__sources" role="tablist">
-        {(['files', 'media', 'assets', 'entities'] as const).map((source) => (
+        {(['files', 'media', 'assets'] as const).map((source) => (
           <button
             type="button"
             role="tab"
@@ -1264,22 +1219,6 @@ export function ResourceBrowserRoot({
           )}
         </div>
       </>
-      {selectedEntity?.source === 'entities' ? (
-        <>
-          <EntityInspector
-            key={selectedEntity.resourceId}
-            disabled={pending}
-            initialDraft={entityDrafts[selectedEntity.resourceId]}
-            locale={locale}
-            onDraftChange={(draft) =>
-              setEntityDrafts((current) => ({ ...current, [selectedEntity.resourceId]: draft }))
-            }
-            projection={selectedEntity.inspector}
-            onIntent={(intent) => executeEntityIntent(selectedEntity.resourceId, intent)}
-          />
-          <CharacterAssociationCard item={selectedEntity} labels={labels} />
-        </>
-      ) : null}
       {contextMenu ? (
         <ResourceBrowserContextMenu
           menu={contextMenu}
@@ -1503,62 +1442,6 @@ export function ResourceBrowserRoot({
   );
 }
 
-function CharacterAssociationCard({
-  item,
-  labels,
-}: {
-  readonly item: Extract<ResourceBrowserItem, { readonly source: 'entities' }>;
-  readonly labels: ReturnType<typeof getResourceBrowserLabels>;
-}): ReactElement | null {
-  if (!('characterAssociation' in item) || !item.characterAssociation) return null;
-  const association = item.characterAssociation;
-  const available = association.availability === 'available';
-  return (
-    <aside
-      className="neko-resource-browser__character-association"
-      data-availability={association.availability}
-      aria-label={labels.linkedCharacter}
-    >
-      <header>
-        <div>
-          <strong>{association.displayName ?? association.characterProjectId}</strong>
-          <span>{available ? labels.projectLocalCharacter : labels.characterNeedsAttention}</span>
-        </div>
-        {available ? <SuccessIcon size={14} /> : <WarningIcon size={14} />}
-      </header>
-      <dl>
-        <div>
-          <dt>{labels.entityIdentity}</dt>
-          <dd>{association.entityId}</dd>
-        </div>
-        <div>
-          <dt>{labels.characterProjectIdentity}</dt>
-          <dd>{association.characterProjectId}</dd>
-        </div>
-      </dl>
-      {association.diagnostic ? <p>{association.diagnostic}</p> : null}
-      {available ? (
-        <section>
-          <div className="neko-resource-browser__character-handoffs">
-            {association.handoffs.map((handoff) => (
-              <span key={handoff.kind}>
-                {handoff.kind === 'open-character'
-                  ? labels.openCharacter
-                  : labels.openCharacterStudio}
-              </span>
-            ))}
-          </div>
-          <small>
-            {association.interactionStatus === 'select-version'
-              ? labels.selectCharacterVersion
-              : labels.noPublishedCharacterVersion}
-          </small>
-        </section>
-      ) : null}
-    </aside>
-  );
-}
-
 function describeOperationError(
   error: unknown,
   labels: ReturnType<typeof getResourceBrowserLabels>,
@@ -1646,7 +1529,11 @@ function ResourceBrowserContextMenu({
         icon: <PlusIcon size={14} />,
       });
     }
-    if (item.source === 'files' && item.kind === 'directory') {
+    if (
+      item.source === 'files' &&
+      item.kind === 'directory' &&
+      !isPackageOwnedProjectStorage(item)
+    ) {
       actions.push(...createContextActions(creationKinds, labels));
     }
     if (item.capabilities.includes('edit-text')) {
@@ -1664,7 +1551,7 @@ function ResourceBrowserContextMenu({
     if (item.capabilities.includes('reveal')) {
       actions.push({ action: 'reveal', label: labels.reveal, icon: <FolderIcon size={14} /> });
     }
-    if (item.source === 'files') {
+    if (item.source === 'files' && !isPackageOwnedProjectStorage(item)) {
       actions.push({
         action: 'trash-content',
         label: labels.trashContent,
@@ -1705,14 +1592,17 @@ function ResourceBrowserContextMenu({
   );
 }
 
-function canCreateCharacterFromResource(item: ResourceBrowserItem | undefined): boolean {
-  if (!item) return false;
-  if (item.source === 'files' || item.source === 'media') return item.role === 'content';
+function isPackageOwnedProjectStorage(item: ResourceBrowserItem): boolean {
   return (
-    item.source === 'entities' &&
-    item.entityStatus === 'confirmed' &&
-    !('characterAssociation' in item && item.characterAssociation !== undefined)
+    item.source === 'files' &&
+    'locator' in item &&
+    item.locator.kind === 'workspace-file' &&
+    inspectResourceBrowserProjectStorageMutation(item.locator.path) !== undefined
   );
+}
+
+function canCreateCharacterFromResource(item: ResourceBrowserItem | undefined): boolean {
+  return item?.source === 'files' || item?.source === 'media' ? item.role === 'content' : false;
 }
 
 function suggestedCharacterName(label: string): string {
@@ -1726,7 +1616,7 @@ function canBrowseResourceContainer(item: ResourceBrowserItem): boolean {
   return (
     !state ||
     state === 'available' ||
-    state === 'unreferenced-linked' ||
+    state === 'unreferenced-local-binding' ||
     state === 'content-incomplete'
   );
 }
@@ -1735,7 +1625,7 @@ function canRecoverLibrary(item: ResourceBrowserItem): boolean {
   const state = item.libraryStatus?.state;
   return (
     state === 'required-unlinked' ||
-    state === 'global-connection-missing' ||
+    state === 'connection-missing' ||
     state === 'target-unavailable' ||
     state === 'content-incomplete'
   );
@@ -1743,16 +1633,11 @@ function canRecoverLibrary(item: ResourceBrowserItem): boolean {
 
 function hasManagedLibraryLink(item: ResourceBrowserItem): boolean {
   const state = item.libraryStatus?.state;
-  return state !== 'required-unlinked' && state !== 'entry-conflict';
+  return state !== 'required-unlinked' && state !== 'binding-invalid';
 }
 
 function canDragResourceToCanvas(item: ResourceBrowserItem): boolean {
-  return (
-    item.capabilities.includes('add-to-canvas') &&
-    (item.source === 'entities'
-      ? item.entityStatus !== 'candidate' && item.representationLocator !== undefined
-      : item.source !== 'assets')
-  );
+  return item.capabilities.includes('add-to-canvas') && item.source !== 'assets';
 }
 
 function ResourceBrowserItemCopy({
@@ -1784,16 +1669,16 @@ function presentLibraryStatus(
       return labels.statusAvailable;
     case 'required-unlinked':
       return labels.statusRequiredUnlinked;
-    case 'global-connection-missing':
-      return labels.statusGlobalConnectionMissing;
+    case 'connection-missing':
+      return labels.statusConnectionMissing;
     case 'target-unavailable':
       return labels.statusTargetUnavailable;
     case 'content-incomplete':
       return labels.statusContentIncomplete;
-    case 'entry-conflict':
-      return labels.statusEntryConflict;
-    case 'unreferenced-linked':
-      return labels.statusUnreferencedLinked;
+    case 'binding-invalid':
+      return labels.statusBindingInvalid;
+    case 'unreferenced-local-binding':
+      return labels.statusUnreferencedLocalBinding;
     case undefined:
       return undefined;
   }
@@ -1824,7 +1709,6 @@ function writePresentationSnapshot(
   expandedIds: ReadonlySet<string>,
   selectedResourceIds: Readonly<Partial<Record<ResourceBrowserSource, string>>>,
   activeContainerResourceIds: Readonly<Partial<Record<'files' | 'media', string>>>,
-  entityDrafts: Readonly<Record<string, EntityInspectorDraft>>,
 ): void {
   if (!store || state.kind !== 'ready') return;
   if (
@@ -1840,7 +1724,6 @@ function writePresentationSnapshot(
     expandedResourceIds: [...expandedIds].sort(),
     selectedResourceIds,
     activeContainerResourceIds,
-    entityDrafts,
   };
   const isDefault =
     snapshot.query.length === 0 &&
@@ -1848,8 +1731,7 @@ function writePresentationSnapshot(
     snapshot.viewMode === defaultViewMode &&
     snapshot.expandedResourceIds.length === 0 &&
     !Object.values(snapshot.selectedResourceIds).some(Boolean) &&
-    !Object.values(snapshot.activeContainerResourceIds).some(Boolean) &&
-    Object.keys(snapshot.entityDrafts).length === 0;
+    !Object.values(snapshot.activeContainerResourceIds).some(Boolean);
   store.write(identity, isDefault ? undefined : snapshot);
 }
 
@@ -2090,6 +1972,7 @@ function resolveCreatedEntryPath(
 function isWorkspaceDocument(item: ResourceBrowserItem, extension: '.nkc' | '.otio'): boolean {
   return (
     (item.source === 'files' || item.source === 'media') &&
+    item.role !== 'library-root' &&
     item.locator.kind === 'workspace-file' &&
     item.locator.path.toLocaleLowerCase().endsWith(extension)
   );
@@ -2100,13 +1983,7 @@ function startResourceCanvasDrag(
   item: ResourceBrowserItem,
 ): void {
   const locator =
-    item.source === 'entities'
-      ? item.entityStatus === 'candidate'
-        ? undefined
-        : item.representationLocator
-      : item.source === 'assets'
-        ? undefined
-        : item.locator;
+    item.source === 'assets' || item.role === 'library-root' ? undefined : item.locator;
   if (!locator || !item.capabilities.includes('add-to-canvas')) {
     event.preventDefault();
     return;
@@ -2221,7 +2098,7 @@ function ResourceBrowserThumbnail({
         >
           {item.libraryStatus.state === 'available' ? (
             <SuccessIcon size={10} />
-          ) : item.libraryStatus.state === 'unreferenced-linked' ? (
+          ) : item.libraryStatus.state === 'unreferenced-local-binding' ? (
             <InfoIcon size={10} />
           ) : (
             <WarningIcon size={10} />
@@ -2249,13 +2126,6 @@ function ResourceBrowserPlaceholderIcon({
     case 'document':
       return <CodeIcon size={15} />;
     case 'asset':
-      return <PackageIcon size={15} />;
-    case 'character':
-      return <CubeIcon size={15} />;
-    case 'scene':
-    case 'object':
-    case 'location':
-    case 'style':
       return <PackageIcon size={15} />;
     case 'image':
       return <FileIcon size={15} />;

@@ -1,4 +1,5 @@
 import { CHARACTER_REPRESENTATION_KINDS, type CharacterRepresentationKind } from './character';
+import { parseCharacterRepresentationRef } from './character';
 import {
   requireArray,
   requireExactRecord,
@@ -32,7 +33,9 @@ export interface CharacterPortableRecordEntry {
 export interface CharacterPortableEmbeddedAssetEntry {
   readonly representationId: string;
   readonly kind: CharacterRepresentationKind;
+  readonly resourceRef: string;
   readonly archivePath: string;
+  readonly entry: boolean;
   readonly mediaType: string;
   readonly byteLength: number;
   readonly integrityDigest: string;
@@ -114,6 +117,7 @@ export function parseCharacterPortablePackageManifest(
     'Character portable package embedded assets',
   );
   requireUniqueArchivePaths(embeddedAssets, 'Character portable package embedded assets');
+  validateEmbeddedAssetBindings(embeddedAssets);
   const externalDependencies = requireUniqueIdentities(
     requireArray(
       record['externalDependencies'],
@@ -312,28 +316,35 @@ export function parseCharacterPortableEmbeddedAssetEntry(
 ): CharacterPortableEmbeddedAssetEntry {
   const record = requireExactRecord(
     value,
-    ['representationId', 'kind', 'archivePath', 'mediaType', 'byteLength', 'integrityDigest'],
+    [
+      'representationId',
+      'kind',
+      'resourceRef',
+      'archivePath',
+      'entry',
+      'mediaType',
+      'byteLength',
+      'integrityDigest',
+    ],
     'Character portable embedded asset entry',
   );
+  const representation = parseCharacterRepresentationRef({
+    representationId: record['representationId'],
+    kind: record['kind'],
+    resourceRef: record['resourceRef'],
+  });
   const mediaType = requireString(record['mediaType'], 'Character portable asset media type');
   if (!/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(mediaType)) {
     throw new Error('Character portable asset media type must be a valid MIME type.');
   }
   return {
-    representationId: requireIdentity(
-      record['representationId'],
-      'Character portable asset representation identity',
-    ),
-    kind: requireOneOf(
-      record['kind'],
-      CHARACTER_REPRESENTATION_KINDS,
-      'Character portable asset representation kind',
-    ),
+    ...representation,
     archivePath: requireArchivePath(
       record['archivePath'],
       'Character portable asset archive path',
       'assets/',
     ),
+    entry: requireBoolean(record['entry'], 'Character portable asset entry state'),
     mediaType,
     byteLength: requireNonNegativeInteger(
       record['byteLength'],
@@ -344,6 +355,35 @@ export function parseCharacterPortableEmbeddedAssetEntry(
       'Character portable asset integrity digest',
     ),
   };
+}
+
+function validateEmbeddedAssetBindings(
+  assets: readonly CharacterPortableEmbeddedAssetEntry[],
+): void {
+  const byRepresentation = new Map<string, CharacterPortableEmbeddedAssetEntry[]>();
+  for (const asset of assets) {
+    const entries = byRepresentation.get(asset.representationId) ?? [];
+    entries.push(asset);
+    byRepresentation.set(asset.representationId, entries);
+  }
+  for (const [representationId, entries] of byRepresentation) {
+    const first = entries[0];
+    if (first === undefined) {
+      throw new Error(`Character portable embedded representation '${representationId}' is empty.`);
+    }
+    if (
+      entries.some((entry) => entry.kind !== first.kind || entry.resourceRef !== first.resourceRef)
+    ) {
+      throw new Error(
+        `Character portable embedded representation '${representationId}' has inconsistent binding facts.`,
+      );
+    }
+    if (entries.filter((entry) => entry.entry).length !== 1) {
+      throw new Error(
+        `Character portable embedded representation '${representationId}' must declare one exact entry file.`,
+      );
+    }
+  }
 }
 
 export function parseCharacterPortableExternalDependency(

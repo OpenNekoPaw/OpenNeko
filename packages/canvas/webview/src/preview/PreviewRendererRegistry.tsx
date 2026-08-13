@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
+import {
+  contentLocatorKey,
+  isContentLocator,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content';
+import { parseCanvasMediaHostMessage } from '@neko/canvas-domain';
 import { type DelegateAction } from '@neko/canvas-domain';
 import {
   formatMediaTime as formatTime,
@@ -116,12 +122,14 @@ function useCaptureFrame(
     };
 
     const unsubscribe = hostPort.subscribe(handleMessage);
-    hostPort.postMessage({
-      type: 'media:captureFrame',
-      nodeId,
-      contentLocator,
-      time: 1,
-    });
+    hostPort.postMessage(
+      parseCanvasMediaHostMessage({
+        type: 'media:captureFrame',
+        nodeId,
+        locator: contentLocator,
+        time: 1,
+      }),
+    );
 
     return unsubscribe;
   }, [host, nodeId, contentLocator]);
@@ -217,15 +225,17 @@ function useMediaStream(
       const hostPort = host;
       if (!hostPort || !contentLocator) return;
       playbackRequestSentRef.current = true;
-      hostPort.postMessage({
-        type: 'media:play',
-        nodeId: surfaceId,
-        contentLocator,
-        mediaInfo,
-        mediaType,
-        startTime,
-        speed: 1.0,
-      });
+      hostPort.postMessage(
+        parseCanvasMediaHostMessage({
+          type: 'media:play',
+          nodeId: surfaceId,
+          locator: contentLocator,
+          mediaInfo,
+          mediaType,
+          startTime,
+          speed: 1.0,
+        }),
+      );
     },
     [host, mediaType, contentLocator, surfaceId],
   );
@@ -247,12 +257,14 @@ function useMediaStream(
       if (probeRequested) return;
       probeRequested = true;
       setProbing(true);
-      hostPort.postMessage({
-        type: 'media:probe',
-        nodeId: surfaceId,
-        contentLocator,
-        mediaType,
-      });
+      hostPort.postMessage(
+        parseCanvasMediaHostMessage({
+          type: 'media:probe',
+          nodeId: surfaceId,
+          locator: contentLocator,
+          mediaType,
+        }),
+      );
     };
     requestProbeRef.current = requestProbe;
 
@@ -417,7 +429,7 @@ function useMediaStream(
       const hostPort = host;
       const sourceKey = createMediaPlaybackSourceKey(contentLocator);
       if (!hostPort || !sourceKey) return;
-      hostPort.postMessage({ type: 'media:pause', nodeId: surfaceId });
+      hostPort.postMessage(parseCanvasMediaHostMessage({ type: 'media:pause', nodeId: surfaceId }));
       isPausedRef.current = true;
       lastProgressSyncRef.current = {
         currentTime,
@@ -443,7 +455,7 @@ function useMediaStream(
     const hostPort = host;
     const sourceKey = createMediaPlaybackSourceKey(contentLocator);
     if (!hostPort || !sourceKey) return;
-    hostPort.postMessage({ type: 'media:resume', nodeId: surfaceId });
+    hostPort.postMessage(parseCanvasMediaHostMessage({ type: 'media:resume', nodeId: surfaceId }));
     isPausedRef.current = false;
     if (persistence === 'surface') {
       playbackStoreApi.getState().updateActivePlayback(sourceKey, surfaceId, { isPlaying: true });
@@ -455,7 +467,9 @@ function useMediaStream(
       const hostPort = host;
       const sourceKey = createMediaPlaybackSourceKey(contentLocator);
       if (!hostPort || !sourceKey) return;
-      hostPort.postMessage({ type: 'media:seek', nodeId: surfaceId, time });
+      hostPort.postMessage(
+        parseCanvasMediaHostMessage({ type: 'media:seek', nodeId: surfaceId, time }),
+      );
       lastProgressSyncRef.current = {
         currentTime: time,
         updatedAtMs: getMonotonicTimeMs(),
@@ -503,7 +517,9 @@ function useMediaStream(
       stoppedPlaybackRef.current = true;
       const hostPort = host;
       if (hostPort && createMediaPlaybackSourceKey(contentLocator)) {
-        hostPort.postMessage({ type: 'media:stop', nodeId: surfaceId });
+        hostPort.postMessage(
+          parseCanvasMediaHostMessage({ type: 'media:stop', nodeId: surfaceId }),
+        );
       }
       const sourceKey = createMediaPlaybackSourceKey(contentLocator);
       if (playbackRequestSent && sourceKey && persistence === 'surface') {
@@ -1155,7 +1171,8 @@ function getAudioPreviewFrameClassName(
 function readPreviewSourceContentLocator(
   source: PreviewSourceDescriptor,
 ): ContentLocator | undefined {
-  return source.contentLocator;
+  const validation = validateContentLocator(source.contentLocator);
+  return validation.ok ? validation.locator : undefined;
 }
 
 function readPreviewSourceDuration(source: PreviewSourceDescriptor): number {

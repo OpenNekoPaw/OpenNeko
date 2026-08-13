@@ -5,6 +5,7 @@ export interface AgentResourceDisplayProjectionFact {
   readonly status: 'authorized' | 'denied';
   readonly locatorKind:
     | 'workspace-file'
+    | 'media-library'
     | 'document-entry'
     | 'generated-output'
     | 'package-resource'

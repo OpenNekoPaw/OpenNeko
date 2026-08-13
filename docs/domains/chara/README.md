@@ -4,6 +4,14 @@ Chara 是角色创作、发布、个人故事线创作、日常长期记忆、Di
 
 Agent 继续唯一拥有 Conversation、AgentSession、turn、queue、Tool、Approval、provider/model 执行、transcript 和 compaction；Desktop 只负责 Electron sender/Window/Scene、typed IPC、本地资源授权和 public Surface 组合。
 
+## 管理、创作与互动入口
+
+角色管理是 Window 级单例导航场景：Main 只显示角色卡片目录，Secondary Main 只显示只读详情和生命周期操作。它不挂载角色编辑器，也不拥有 Agent runtime。快速生成只把精确 builtin Character Creator、完整提示词和已授权引用交给标准 Agent Composer；手动创建只在用户授权目标目录后建立空白草稿。
+
+完整编辑属于 Workspace Authoring 中的 Chara capability。Standalone 角色库与 project-local Content Project 使用同一个 Chara repository/service/Surface 和相同相对布局，但携带不同且显式的 authority；切换目标会卸载旧管理或创作 Root，不保留隐藏编辑器。Character Interaction 是独立 Conversation/Room runtime，只消费用户选择的精确可用版本。
+
+“创建可用版本”是本地不可变领域版本操作，不是远程发布，也不自动开始对话。版本图只投影 authoritative lineage；旧的未关联版本保持 `unlinked` 可见，任何启动操作都必须引用精确 CharacterVersion，不解析 latest/current/head。
+
 ## 核心模型
 
 ```text
@@ -112,7 +120,7 @@ Main 不固定为 Avatar，也不尝试 first-compatible renderer。未知、失
 
 现有 foundation 已实现部分 Character/Room、StorylineRun、run-scoped memory 和固定 Avatar Workbench 原型。`separate-companion-and-narrative-character-conversations` 正在原子替换这些路径；旧记录必须保留可见 diagnostic，但不得进入新成功路径。
 
-Character 产品 promotion gate 继续关闭。包内服务、fixture 和隔离 UI 存在不代表生产 Character/Room 入口已晋级。
+Character 管理与 Workspace Authoring 已进入 Desktop 组合；真实 provider 驱动的 Character Creator/Conversation 完整验收仍受发布门禁约束。包内服务、fixture 和隔离 UI 不能替代可见 Electron 与真实 Agent 路径证据。
 
 ## 阅读路径
 

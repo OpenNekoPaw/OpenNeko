@@ -14,9 +14,6 @@ describe('Resource Browser presentation snapshot store', () => {
       expandedResourceIds,
       selectedResourceIds: { files: 'content:shots/one.png' },
       activeContainerResourceIds: {},
-      entityDrafts: {
-        'entity:rin': { canonicalName: 'Rin draft', mergeTargetId: '', bindingPath: '' },
-      },
     });
     expandedResourceIds.push('content:mutated');
 
@@ -27,9 +24,6 @@ describe('Resource Browser presentation snapshot store', () => {
       expandedResourceIds: ['content:shots'],
       selectedResourceIds: { files: 'content:shots/one.png' },
       activeContainerResourceIds: {},
-      entityDrafts: {
-        'entity:rin': { canonicalName: 'Rin draft', mergeTargetId: '', bindingPath: '' },
-      },
     });
     expect(store.read(second)).toBeUndefined();
     expect(JSON.stringify(store.read(first))).not.toMatch(
@@ -47,7 +41,6 @@ describe('Resource Browser presentation snapshot store', () => {
       expandedResourceIds: [],
       selectedResourceIds: {},
       activeContainerResourceIds: {},
-      entityDrafts: {},
     });
     store.write(identity, undefined);
 

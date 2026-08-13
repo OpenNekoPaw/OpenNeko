@@ -410,7 +410,7 @@ export function assertCanvasHostRuntimeIdentity(
   }
 }
 
-function parseCanvasHostRuntimeIdentity(value: unknown): CanvasHostRuntimeIdentity {
+export function parseCanvasHostRuntimeIdentity(value: unknown): CanvasHostRuntimeIdentity {
   const record = requireRecord(value, 'Canvas Host runtime identity is required.');
   return {
     projectId: requireOpaqueIdentity(

@@ -141,154 +141,6 @@ describe('ResourceBrowserRoot', () => {
     expect(runtime.execute).toHaveBeenCalledTimes(2);
   });
 
-  it('shows an Entity record diagnostic without hiding valid siblings', async () => {
-    const entityProjection: ResourceBrowserProjection = {
-      ...projection,
-      source: 'entities',
-      diagnostics: [
-        {
-          code: 'invalid-project-entity-document',
-          message: "Project Entity 'character-invalid' is invalid.",
-          recordId: 'character-invalid',
-        },
-      ],
-      items: [
-        {
-          resourceId: 'entity:character-rin',
-          source: 'entities',
-          role: 'entity',
-          depth: 0,
-          kind: 'character',
-          label: 'Rin',
-          entityRef: { entityId: 'character-rin', entityKind: 'character' },
-          entityStatus: 'confirmed',
-          sourceOwners: ['project-entity'],
-          attentionBindingIds: [],
-          representationAvailability: 'unbound',
-          inspector: {
-            status: 'confirmed',
-            kind: 'character',
-            names: { canonical: 'Rin', aliases: [] },
-            entityId: 'character-rin',
-            bindings: [],
-            operations: ['edit'],
-            blockers: [],
-          },
-          capabilities: [],
-        },
-      ],
-    };
-
-    const runtime = createRuntime(entityProjection);
-    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
-
-    expect(await screen.findByText('Rin')).toBeTruthy();
-    expect(screen.getByText("Project Entity 'character-invalid' is invalid.")).toBeTruthy();
-    expect(screen.queryByText('Resource Browser unavailable')).toBeNull();
-  });
-
-  it('shows one linked Entity and Character card without generic Character mutations', async () => {
-    const entityProjection: ResourceBrowserProjection = {
-      ...projection,
-      source: 'entities',
-      items: [
-        {
-          resourceId: 'entity:character-rin',
-          source: 'entities',
-          role: 'entity',
-          depth: 0,
-          kind: 'character',
-          label: 'Rin element',
-          entityRef: { entityId: 'character-rin', entityKind: 'character' },
-          entityStatus: 'confirmed',
-          sourceOwners: ['project-entity'],
-          attentionBindingIds: [],
-          representationAvailability: 'unbound',
-          inspector: {
-            status: 'confirmed',
-            kind: 'character',
-            names: { canonical: 'Rin element', aliases: [] },
-            entityId: 'character-rin',
-            bindings: [],
-            operations: ['edit'],
-            blockers: [],
-          },
-          characterAssociation: {
-            entityId: 'character-rin',
-            characterProjectId: 'character-project-rin',
-            displayName: 'Rin',
-            placement: 'project-local',
-            availability: 'available',
-            handoffs: [
-              { kind: 'open-character', characterProjectId: 'character-project-rin' },
-              { kind: 'open-character-studio', characterProjectId: 'character-project-rin' },
-            ],
-            publishedVersionCount: 2,
-            interactionStatus: 'select-version',
-          },
-          capabilities: [],
-        },
-      ],
-    };
-
-    const runtime = createRuntime(entityProjection);
-    render(
-      <ResourceBrowserRoot
-        runtime={runtime}
-        locale="en"
-        characterCreation={{ destinationLabel: 'Project', create: vi.fn() }}
-      />,
-    );
-    fireEvent.click(await screen.findByText('Rin element'));
-
-    expect(document.querySelectorAll('.neko-resource-browser__item-row')).toHaveLength(1);
-    expect(screen.getByRole('complementary', { name: 'Linked character' })).toBeTruthy();
-    expect(screen.getByText('Project-local character')).toBeTruthy();
-    expect(screen.getByText('character-rin')).toBeTruthy();
-    expect(screen.getByText('character-project-rin')).toBeTruthy();
-    expect(screen.getByText('Open Character')).toBeTruthy();
-    expect(screen.getByText('Open Studio')).toBeTruthy();
-    expect(screen.getByText('Select an exact version to interact')).toBeTruthy();
-    expect(screen.queryByText(/start interaction/i)).toBeNull();
-    expect(screen.queryByText(/room/i)).toBeNull();
-    fireEvent.contextMenu(document.querySelector('.neko-resource-browser__item')!);
-    expect(
-      screen.queryByRole('menuitem', { name: 'Create Character from this resource' }),
-    ).toBeNull();
-
-    const item = entityProjection.items[0];
-    if (!item || item.source !== 'entities' || item.entityStatus === 'candidate') {
-      throw new Error('Missing linked Character fixture.');
-    }
-    act(() =>
-      runtime.emit({
-        sequence: 1,
-        projection: {
-          ...entityProjection,
-          items: [
-            {
-              ...item,
-              characterAssociation: {
-                entityId: 'character-rin',
-                characterProjectId: 'character-project-rin',
-                placement: 'project-local',
-                availability: 'needs-attention',
-                handoffs: [],
-                publishedVersionCount: 0,
-                interactionStatus: 'unavailable',
-                diagnostic: 'Associated Character record is invalid.',
-              },
-            },
-          ],
-        },
-      }),
-    );
-    expect(await screen.findByText('Character needs attention')).toBeTruthy();
-    expect(screen.getByText('Associated Character record is invalid.')).toBeTruthy();
-    expect(screen.queryByText('Open Character')).toBeNull();
-    expect(screen.queryByText('Open Studio')).toBeNull();
-  });
-
   it('routes Files context actions and never offers generic deletion for Media content', async () => {
     const filesProjection: ResourceBrowserProjection = {
       ...projection,
@@ -368,6 +220,34 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.queryByRole('menuitem', { name: 'Move to Trash' })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Reveal' })).toBeTruthy();
   }, 15_000);
+
+  it('does not offer generic deletion for package-owned Project storage', async () => {
+    const runtime = createRuntime({
+      ...projection,
+      source: 'files',
+      items: [
+        {
+          resourceId: 'content:neko',
+          source: 'files',
+          role: 'directory',
+          depth: 0,
+          kind: 'directory',
+          label: 'neko',
+          locator: { kind: 'workspace-file', path: 'neko' },
+          capabilities: ['reveal'],
+        },
+      ],
+    });
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    const projectStorage = (await screen.findByText('neko')).closest('button');
+    expect(projectStorage).toBeTruthy();
+    fireEvent.contextMenu(projectStorage!);
+    expect(screen.queryByRole('menuitem', { name: 'Move to Trash' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'New folder' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Reveal' })).toBeTruthy();
+    expect(runtime.execute).not.toHaveBeenCalled();
+  });
 
   it('cancels and resets inline entry naming with Escape', async () => {
     const runtime = createRuntime({
@@ -871,10 +751,11 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.getByRole('tab', { name: '项目文件' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: '共享媒体' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: '已安装素材' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: '项目元素' }));
+    expect(screen.queryByRole('tab', { name: '项目元素' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '已安装素材' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'entities', route: 'search' }),
+        expect.objectContaining({ source: 'assets', route: 'search' }),
       ),
     );
     expect(screen.queryByRole('button', { name: '配置媒体库' })).toBeNull();
@@ -1061,8 +942,14 @@ describe('ResourceBrowserRoot', () => {
           kind: 'directory',
           label: 'Assets',
           libraryName: 'Assets',
-          locator: { kind: 'workspace-file', path: 'neko/assets/Assets' },
-          capabilities: ['reveal'],
+          libraryStatus: {
+            libraryName: 'Assets',
+            state: 'available',
+            referenceCount: 1,
+            missingCount: 0,
+            operationFingerprint: 'sha256:assets',
+          },
+          capabilities: [],
         },
       ],
     };
@@ -1078,7 +965,11 @@ describe('ResourceBrowserRoot', () => {
           depth: 1,
           kind: 'image' as const,
           label: 'portrait.png',
-          locator: { kind: 'workspace-file' as const, path: 'neko/assets/Assets/portrait.png' },
+          locator: {
+            kind: 'media-library' as const,
+            libraryName: 'Assets',
+            relativePath: 'portrait.png',
+          },
           capabilities: ['preview' as const],
         },
       ],
@@ -1459,8 +1350,14 @@ describe('ResourceBrowserRoot', () => {
           depth: 0,
           kind: 'directory',
           label: 'Footage',
-          locator: { kind: 'workspace-file', path: 'neko/assets/Footage' },
-          capabilities: ['reveal'],
+          libraryStatus: {
+            libraryName: 'Footage',
+            state: 'available',
+            referenceCount: 1,
+            missingCount: 0,
+            operationFingerprint: 'sha256:footage',
+          },
+          capabilities: [],
         },
       ],
     };
@@ -1496,118 +1393,6 @@ describe('ResourceBrowserRoot', () => {
     expect(document.querySelector('.neko-resource-browser__actions')).toBeNull();
   });
 
-  it('submits Entity edits through the canonical Resource Browser runtime', async () => {
-    const entityProjection: ResourceBrowserProjection = {
-      ...projection,
-      source: 'entities',
-      items: [
-        {
-          resourceId: 'entity:character-rin',
-          source: 'entities',
-          role: 'entity',
-          depth: 0,
-          kind: 'character',
-          label: 'Rin',
-          entityRef: { entityId: 'character-rin', entityKind: 'character' },
-          entityStatus: 'confirmed',
-          sourceOwners: ['project-entity'],
-          attentionBindingIds: [],
-          representationAvailability: 'unbound',
-          inspector: {
-            status: 'confirmed',
-            kind: 'character',
-            names: { canonical: 'Rin', aliases: [] },
-            entityId: 'character-rin',
-            bindings: [],
-            operations: ['edit'],
-            blockers: [],
-          },
-          capabilities: [],
-        },
-      ],
-    };
-    const runtime = createRuntime(entityProjection);
-    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
-
-    fireEvent.click(await screen.findByText('Rin'));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
-      target: { value: 'Rin Aoki' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() =>
-      expect(runtime.execute).toHaveBeenCalledWith(
-        expect.objectContaining({
-          route: 'entity.manage',
-          resourceId: 'entity:character-rin',
-          entityIntent: {
-            type: 'edit',
-            entityId: 'character-rin',
-            changes: { names: { canonical: 'Rin Aoki', aliases: [] } },
-          },
-        }),
-      ),
-    );
-  });
-
-  it('restores Entity drafts from presentation state without retaining hidden Inspector Roots', async () => {
-    const entity = (
-      resourceId: string,
-      entityId: string,
-      label: string,
-    ): ResourceBrowserProjection['items'][number] => ({
-      resourceId,
-      source: 'entities',
-      role: 'entity',
-      depth: 0,
-      kind: 'character',
-      label,
-      entityRef: { entityId, entityKind: 'character' },
-      entityStatus: 'confirmed',
-      sourceOwners: ['project-entity'],
-      attentionBindingIds: [],
-      representationAvailability: 'unbound',
-      inspector: {
-        status: 'confirmed',
-        kind: 'character',
-        names: { canonical: label, aliases: [] },
-        entityId,
-        bindings: [],
-        operations: ['edit'],
-        blockers: [],
-      },
-      capabilities: [],
-    });
-    const first = entity('entity:rin', 'rin', 'Rin');
-    const second = entity('entity:mika', 'mika', 'Mika');
-    const entityProjection: ResourceBrowserProjection = {
-      ...projection,
-      source: 'entities',
-      items: [first, second],
-    };
-    const runtime = createRuntime(entityProjection);
-    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
-
-    fireEvent.click((await screen.findByText('Rin')).closest('button')!);
-    const firstDetail = document.querySelector<HTMLElement>('.neko-entity-inspector');
-    expect(firstDetail).not.toBeNull();
-    fireEvent.change(firstDetail!.querySelector<HTMLInputElement>('[aria-label="Name"]')!, {
-      target: { value: 'Uncommitted Rin' },
-    });
-
-    fireEvent.click(screen.getByText('Mika').closest('button')!);
-    const secondDetail = document.querySelector<HTMLElement>('.neko-entity-inspector');
-    expect(secondDetail).not.toBe(firstDetail);
-    expect(document.querySelectorAll('.neko-entity-inspector')).toHaveLength(1);
-    fireEvent.click(screen.getByText('Rin').closest('button')!);
-    expect(
-      document.querySelector<HTMLInputElement>('.neko-entity-inspector [aria-label="Name"]')?.value,
-    ).toBe('Uncommitted Rin');
-
-    act(() => runtime.emit({ sequence: 1, projection: { ...entityProjection, items: [second] } }));
-    await waitFor(() => expect(document.querySelector('.neko-entity-inspector')).toBeNull());
-  });
-
   it('keeps missing library identity across list/grid and confirms revisioned recovery', async () => {
     const libraryProjection: ResourceBrowserProjection = {
       ...projection,
@@ -1628,7 +1413,6 @@ describe('ResourceBrowserRoot', () => {
           depth: 0,
           kind: 'directory',
           label: 'Footage',
-          locator: { kind: 'workspace-file', path: 'neko/assets/Footage' },
           capabilities: [],
         },
       ],

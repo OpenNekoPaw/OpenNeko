@@ -7,7 +7,7 @@
  */
 
 import type { ChatModelOption, ModelType } from '@neko/ai-contracts';
-import type { ContentLocator, DocumentLocator, WorkspaceFileContentLocator } from '@neko/content';
+import type { ContentLocator, DocumentLocator } from '@neko/content';
 import type { CanvasNodeType, StoryboardTable } from '@neko/canvas-domain';
 import type {
   CanvasMarkdownCapabilityResult,
@@ -450,7 +450,7 @@ export type AgentWebviewToHostMessage =
   | ProjectionDetachMessage;
 
 export interface ProjectFileMentionInfo {
-  locator: WorkspaceFileContentLocator;
+  locator: ContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;

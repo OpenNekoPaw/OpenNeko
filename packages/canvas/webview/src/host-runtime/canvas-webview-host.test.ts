@@ -920,19 +920,64 @@ describe('createCanvasWebviewHost', () => {
       postMessage,
       getState: () => undefined,
       setState: () => undefined,
-      supportsMessage: (messageType) => messageType === 'canvasAction',
+      supportsMessage: (messageType) =>
+        messageType === 'canvasAction' || messageType === 'media:probe',
     });
 
     expect(host.supportsMessage('canvasAction')).toBe(true);
+    expect(host.supportsMessage('media:probe')).toBe(true);
     expect(host.supportsMessage('sendToAgent')).toBe(false);
     host.postMessage({ type: 'canvasAction', action: 'selectNode' });
     host.postMessage({ type: 'canvasAction', action: 'openExport' });
+    host.postMessage({
+      type: 'media:probe',
+      nodeId: 'video-1',
+      locator: { kind: 'workspace-file', path: 'media/cat.mp4' },
+      mediaType: 'video',
+    });
 
-    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledTimes(2);
     expect(postMessage).toHaveBeenCalledWith({ type: 'canvasAction', action: 'openExport' });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'media:probe',
+      nodeId: 'video-1',
+      locator: { kind: 'workspace-file', path: 'media/cat.mp4' },
+      mediaType: 'video',
+    });
     expect(() => host.postMessage({ type: 'sendToAgent' })).toThrow(
       "does not implement message 'sendToAgent'",
     );
+    host.dispose();
+    runtime.dispose();
+  });
+
+  it('rejects unknown delegated messages even when a delegate claims generic support', () => {
+    const runtime = new CanvasHostRuntimeSession({
+      identity: {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        viewInstanceId: 'view-instance-1',
+        documentId: 'neko/boards/workspace.nkc',
+        sessionId: 'session-1',
+        rendererSessionId: 'endpoint-1',
+      },
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: {},
+    });
+    const postMessage = vi.fn();
+    const host = createCanvasWebviewHost(runtime, {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+      supportsMessage: () => true,
+    });
+
+    expect(() => host.postMessage({ type: 'unregistered:message' })).toThrow(
+      "does not implement message 'unregistered:message'",
+    );
+    expect(postMessage).not.toHaveBeenCalled();
     host.dispose();
     runtime.dispose();
   });

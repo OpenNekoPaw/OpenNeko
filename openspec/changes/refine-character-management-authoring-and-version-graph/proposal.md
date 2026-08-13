@@ -10,7 +10,7 @@
 
 ## What Changes
 
-- **BREAKING**：将 Character Management、快速新增、Workspace Character Authoring 和 Character Interaction 明确拆为不同能力与生命周期。管理页 Secondary Main 只显示角色归属、摘要、草稿/可用版本状态、版本关系、故事线和引用，不再挂载完整 Character 编辑表单；Character Studio 只作为 Workspace Authoring 对精确 CharacterProject 的 Chara-owned Main surface，不再被设计为独立应用、独立 Workspace 类型或第二套 authoring runtime。
+- **BREAKING**：将 Character Management、快速新增、Workspace Character Authoring 和 Character Interaction 明确拆为不同能力与生命周期。管理页 Secondary Main 默认只显示角色归属、摘要、草稿/可用版本状态与主要操作；版本关系、故事线、引用和破坏性管理进入 Workspace Character Authoring 的高级区域，不再挂载完整 Character 编辑表单或把内部领域清单暴露为管理首页内容。Character Studio 只作为 Workspace Authoring 对精确 CharacterProject 的 Chara-owned Main surface，不再被设计为独立应用、独立 Workspace 类型或第二套 authoring runtime。
 - 在角色管理页提供“快速生成 / 手动创建 / 导入”入口。快速生成通过 typed handoff 打开 canonical Agent Entry/Composer 并激活唯一 `character-creator` Skill，继续使用标准 operation-level destination chooser、精确 fresh CharacterProject 和 Tool approval；不在管理页复制 Composer/模型配置，不增加 Chara 专用模型执行路径，也不强制进入 Studio。
 - Character authoring 直接作为 Host 授权目录型 Authoring Workspace 的领域能力运行：standalone Character 使用角色库管理的 Workspace authority，project-local Character 使用 Content Project Workspace authority；两者绑定同一个精确 CharacterProject，复用 Workspace target switching、Workbench composition、Agent/资源能力以及相同 Chara surface、service、codec、repository 和 publication path。Character authoring 不把 standalone Character 伪装成 Content Project，也不创建 Chara 专用 Workspace/controller，不从当前/最近目录推断 authority。
 - 定义一个可移植的 `.neko-character` ZIP 角色包，只作为用户显式触发的导入/导出容器。包内使用 manifest 描述入口 CharacterProject、包含的用户领域版本/故事线、素材清单、外部依赖和完整性信息，并携带 canonical Character records 与用户明确选择内嵌的角色自有素材。导出生成一次性快照；导入完成后关闭归档并只使用已安装的 Workspace 目录记录，绝不保留 ZIP 绑定、挂载、监听、同步、编辑或运行路径。包不包含 Conversation、Room、长期记忆、provider/model 配置、凭据或运行状态。

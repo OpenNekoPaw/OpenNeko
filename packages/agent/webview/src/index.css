@@ -1055,7 +1055,8 @@ body {
   gap: 8px;
 }
 
-.agent-entry-authoring-actions {
+.agent-entry-authoring-actions,
+.agent-entry-character-target-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
@@ -1256,7 +1257,8 @@ body {
 }
 
 @media (max-width: 700px) {
-  .agent-entry-authoring-actions {
+  .agent-entry-authoring-actions,
+  .agent-entry-character-target-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1265,30 +1267,43 @@ body {
   margin-top: 8px;
 }
 
-.agent-entry-character-mode-section {
+.agent-entry-character-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 7px 10px;
-  margin-bottom: 10px;
-}
-
-.agent-entry-character-mode-label {
-  color: var(--agent-fg-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-}
-
-.agent-entry-character-mode-switch {
   min-width: 0;
+  align-content: start;
+  gap: 6px;
 }
 
-.agent-entry-character-mode-diagnostic {
-  grid-column: 2;
+.agent-entry-character-version-picker {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding-inline: 2px;
   color: var(--agent-fg-secondary);
   font-size: 10px;
-  line-height: 15px;
+  line-height: 14px;
+}
+
+.agent-entry-character-version-picker select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 28px 7px 9px;
+  border: 1px solid var(--agent-control-border);
+  border-radius: 8px;
+  background: var(--agent-composer-bg);
+  color: var(--agent-fg);
+  font: inherit;
+  font-size: 11px;
+}
+
+.agent-entry-character-version-picker select:focus-visible {
+  border-color: var(--agent-composer-focus-border);
+  outline: none;
+}
+
+.agent-entry-character-version-picker select:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .agent-entry-quick-detail {
@@ -2429,6 +2444,11 @@ body {
   max-width: 112px;
 }
 
+.agent-character-conversation-mode-trigger {
+  max-width: 72px;
+  font-weight: 600;
+}
+
 .agent-control-chip-understand {
   max-width: 132px;
 }
@@ -3037,12 +3057,8 @@ body {
 
 @media (max-width: 520px) {
   .agent-entry-authoring-actions,
-  .agent-entry-character-mode-section {
+  .agent-entry-character-target-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .agent-entry-character-mode-diagnostic {
-    grid-column: 1;
   }
 
   .agent-composer-toolbar {

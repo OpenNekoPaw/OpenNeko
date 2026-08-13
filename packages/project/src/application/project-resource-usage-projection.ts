@@ -3,17 +3,25 @@ import type {
   ResourceUsageProjectionRecord,
   ResourceUsageTarget,
 } from '@neko/search-domain';
-import type { ContentProjectComposition } from '../contracts/project-composition';
+import {
+  projectPublicationDependencyKey,
+  type ProjectLocalTargetRef,
+  type ProjectPublicationDependencyRef,
+} from '../contracts/project-target';
+import type { ProjectEntityCharacterAssociationFact } from '../contracts/project-entity-character-association';
 
-export function projectCompositionResourceUsageProjections(input: {
-  readonly composition: ContentProjectComposition;
+export function projectResourceUsageProjections(input: {
+  readonly projectId: string;
+  readonly localTargets: readonly ProjectLocalTargetRef[];
+  readonly dependencies: readonly ProjectPublicationDependencyRef[];
+  readonly associations: readonly ProjectEntityCharacterAssociationFact[];
   readonly sourceFingerprint: string;
   readonly updatedAt: string;
   readonly availability: (target: ResourceUsageTarget) => ResourceUsageAvailability;
 }): readonly ResourceUsageProjectionRecord[] {
   const source = {
     ownerId: 'project' as const,
-    sourceId: input.composition.contentProjectId,
+    sourceId: input.projectId,
   };
   const targets = new Map<
     string,
@@ -44,27 +52,27 @@ export function projectCompositionResourceUsageProjections(input: {
     }
   };
 
-  for (const target of input.composition.localTargets) {
-    if (target.kind !== 'character-project') continue;
-    append(
-      { ownerId: 'character-project', resourceId: target.characterProjectId },
-      {
-        occurrenceId: `local-character:${target.characterProjectId}`,
-        location: 'project-local-targets',
-      },
-    );
+  for (const target of input.localTargets) {
+    const usageTarget: ResourceUsageTarget =
+      target.kind === 'character-project'
+        ? { ownerId: 'character-project', resourceId: target.characterProjectId }
+        : { ownerId: 'world-project', resourceId: target.worldProjectId };
+    append(usageTarget, {
+      occurrenceId: `project-member:${usageTarget.ownerId}:${usageTarget.resourceId}`,
+      location: 'owner-project-scope',
+    });
   }
-  for (const dependency of input.composition.dependencies) {
-    if (dependency.kind !== 'character-version') continue;
-    append(
-      { ownerId: 'character-version', resourceId: dependency.characterVersionId },
-      {
-        occurrenceId: `character-version:${dependency.characterVersionId}`,
-        location: 'project-publication-dependencies',
-      },
-    );
+  for (const dependency of input.dependencies) {
+    const target = dependencyTarget(dependency);
+    append(target, {
+      occurrenceId: projectPublicationDependencyKey(dependency),
+      location: 'owner-reference-readers',
+    });
   }
-  for (const association of input.composition.entityCharacterAssociations) {
+  for (const association of input.associations) {
+    if (association.projectId !== input.projectId) {
+      throw new Error('Project resource usage received an association from another Project.');
+    }
     const entity = { ownerId: 'project-entity' as const, resourceId: association.entityId };
     const character = {
       ownerId: 'character-project' as const,
@@ -104,6 +112,27 @@ export function projectCompositionResourceUsageProjections(input: {
       sourceFingerprint: input.sourceFingerprint,
       updatedAt: input.updatedAt,
     }));
+}
+
+function dependencyTarget(dependency: ProjectPublicationDependencyRef): ResourceUsageTarget {
+  switch (dependency.kind) {
+    case 'character-version':
+      return { ownerId: 'character-version', resourceId: dependency.characterVersionId };
+    case 'world-experience-version':
+      return { ownerId: 'world-version', resourceId: dependency.worldExperienceVersionId };
+    case 'asset-revision':
+      return { ownerId: 'asset', resourceId: `${dependency.assetId}:${dependency.revision}` };
+    case 'media-library':
+      return {
+        ownerId: 'media-library',
+        resourceId: `${dependency.libraryName}:${dependency.relativePath}`,
+      };
+    case 'package-resource':
+      return {
+        ownerId: 'package-resource',
+        resourceId: `${dependency.packageId}:${dependency.revision}:${dependency.resourcePath}`,
+      };
+  }
 }
 
 function targetKey(target: ResourceUsageTarget): string {

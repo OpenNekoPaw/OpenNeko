@@ -3,10 +3,14 @@ import * as nodePath from 'node:path';
 
 import {
   CUT_HOST_RUNTIME_ROUTES,
-  CUT_DRAFT_DOCUMENT_ID_PREFIX,
+  CutDraftApplicationService,
   createCutHostSessionId,
   isCutDraftDocumentId,
   parseCutHostRuntimeRequest,
+  resolveCutCanvasHandoffTarget,
+  sameCutCanvasHandoffTarget,
+  type CutCanvasHandoffTarget,
+  type CutCanvasSourceIdentity,
   type CutDocumentStorage,
   type CutHostRuntimeIdentity,
   type CutHostRuntimeProjectionEvent,
@@ -28,7 +32,10 @@ import {
   type WorkspaceFileContentLocator,
 } from '@neko/content';
 import { NodeAuthorizedWorkspaceWriter } from '@neko/content/node';
-import { resolveWorkspaceContentLocator } from '@neko/assets-node';
+import {
+  resolveProjectMediaLibraryContentPath,
+  resolveWorkspaceContentLocator,
+} from '@neko/assets-node';
 
 import type { DesktopShellService } from '@neko/host/desktop-shell-service';
 import {
@@ -53,73 +60,6 @@ interface DesktopCutOpenInput {
   readonly absolutePath: string;
 }
 
-export interface DesktopCutCanvasSourceIdentity {
-  readonly projectId: string;
-  readonly workspaceId: string;
-  readonly windowId: string;
-  readonly viewId: string;
-  readonly viewInstanceId: string;
-  readonly rendererSessionId: string;
-}
-
-export type DesktopCutCanvasHandoffTarget =
-  | {
-      readonly kind: 'existing-cut';
-      readonly workbenchInstanceId: string;
-      readonly viewId: string;
-      readonly viewInstanceId: string;
-      readonly documentId: string;
-      readonly sessionId: string;
-    }
-  | {
-      readonly kind: 'new-cut-draft';
-      readonly workbenchInstanceId: string;
-    };
-
-export function createDesktopCutCanvasHandoffPayload(
-  target: DesktopCutCanvasHandoffTarget,
-): Readonly<Record<string, unknown>> {
-  return { target };
-}
-
-export function parseDesktopCutCanvasHandoffPayload(
-  value: Readonly<Record<string, unknown>>,
-): DesktopCutCanvasHandoffTarget {
-  const payloadKeys = Object.keys(value);
-  if (payloadKeys.length !== 1 || payloadKeys[0] !== 'target') {
-    throw new Error('Desktop Cut Canvas handoff payload is invalid.');
-  }
-  const target = value['target'];
-  if (!isRecord(target)) throw new Error('Desktop Cut Canvas handoff target is required.');
-  const kind = target['kind'];
-  if (kind === 'new-cut-draft') {
-    requireExactTargetKeys(target, ['kind', 'workbenchInstanceId']);
-    return {
-      kind,
-      workbenchInstanceId: requireTargetIdentity(target['workbenchInstanceId']),
-    };
-  }
-  if (kind !== 'existing-cut') {
-    throw new Error('Desktop Cut Canvas handoff target kind is invalid.');
-  }
-  requireExactTargetKeys(target, [
-    'kind',
-    'workbenchInstanceId',
-    'viewId',
-    'viewInstanceId',
-    'documentId',
-    'sessionId',
-  ]);
-  return {
-    kind,
-    workbenchInstanceId: requireTargetIdentity(target['workbenchInstanceId']),
-    viewId: requireTargetIdentity(target['viewId']),
-    viewInstanceId: requireTargetIdentity(target['viewInstanceId']),
-    documentId: requireTargetIdentity(target['documentId']),
-    sessionId: requireTargetIdentity(target['sessionId']),
-  };
-}
-
 export interface DesktopCutRuntimeOptions {
   readonly shell: Pick<
     DesktopShellService,
@@ -130,6 +70,7 @@ export interface DesktopCutRuntimeOptions {
     | 'resolveCutCreationGrant'
   >;
   readonly host: NekoHostPorts;
+  readonly globalMediaLibraryRoot: string;
   readonly resources?: Pick<DesktopResourceRegistry, 'createMediaPublisher'>;
   readonly createMediaAdapter?: CutApplicationRuntimeOptions['createMediaAdapter'];
   readonly createAuthoringMediaAdapter?: CutApplicationRuntimeOptions['createAuthoringMediaAdapter'];
@@ -151,6 +92,7 @@ export interface DesktopCutRuntimeOptions {
 
 export class DesktopCutRuntime {
   private readonly application: CutApplicationRuntime;
+  private readonly draftApplication = new CutDraftApplicationService(() => randomUUID());
   private readonly draftOpenings = new Map<string, Promise<DesktopShellProjection>>();
   private disposed = false;
 
@@ -194,9 +136,22 @@ export class DesktopCutRuntime {
           ),
         };
       },
-      resolveResourcePath: async (workspaceId, locator) => {
-        const workspace = await options.shell.resolveAgentWorkspace(workspaceId);
-        return resolveWorkspaceContentLocator(workspace, locator);
+      resolveResourcePath: async (identity, locator) => {
+        const workspace = await options.shell.resolveAgentWorkspace(identity.workspaceId);
+        if (locator.kind === 'media-library') {
+          return resolveProjectMediaLibraryContentPath(
+            {
+              projectId: identity.projectId,
+              workspaceRoot: workspace.workspacePath,
+              globalMediaLibraryRoot: options.globalMediaLibraryRoot,
+            },
+            locator,
+          );
+        }
+        if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
+          return resolveWorkspaceContentLocator(workspace, locator);
+        }
+        throw new Error('Desktop Cut resource has no directly resolvable Host file path.');
       },
       readText: (absolutePath) => options.host.files.readText(absolutePath),
       ...(resources === undefined
@@ -246,6 +201,7 @@ export class DesktopCutRuntime {
   supportsOpen(item: ResourceBrowserItem): item is DesktopCutOpenResourceItem {
     this.requireActive();
     if (item.source !== 'files' && item.source !== 'media') return false;
+    if (item.role === 'library-root') return false;
     return (
       item.locator.kind === 'workspace-file' &&
       item.locator.path.toLocaleLowerCase().endsWith('.otio')
@@ -278,8 +234,8 @@ export class DesktopCutRuntime {
   }
 
   async resolveCanvasHandoffTarget(
-    identity: DesktopCutCanvasSourceIdentity,
-  ): Promise<DesktopCutCanvasHandoffTarget> {
+    identity: CutCanvasSourceIdentity,
+  ): Promise<CutCanvasHandoffTarget> {
     this.requireActive();
     const current = await this.options.shell.getProjection(identity.windowId);
     if (current.rendererSessionId !== identity.rendererSessionId) {
@@ -314,44 +270,37 @@ export class DesktopCutRuntime {
       workbench.layout.cutPanel?.presentation === 'docked'
         ? getActiveCutView(workbench.layout)
         : undefined;
-    if (!activeCut) {
-      return {
-        kind: 'new-cut-draft',
-        workbenchInstanceId: workbench.workbenchInstanceId,
-      };
+    if (activeCut && !activeCut.projectId) {
+      throw new Error('Desktop Cut active View has no exact Project owner.');
     }
-    if (
-      activeCut.kind !== 'cut' ||
-      !activeCut.documentId ||
-      activeCut.projectId !== identity.projectId ||
-      activeCut.workspaceId !== identity.workspaceId ||
-      activeCut.viewInstanceId !== identity.viewInstanceId
-    ) {
-      throw new Error('Desktop Cut Canvas handoff target is outside the exact Workspace View.');
-    }
-    const sessionId = createCutHostSessionId(activeCut.viewId, activeCut.viewInstanceId);
-    if (activeCut.ownerId !== sessionId) {
-      throw new Error('Desktop Cut Canvas handoff target session identity is invalid.');
-    }
-    return {
-      kind: 'existing-cut',
+    return resolveCutCanvasHandoffTarget({
+      source: identity,
       workbenchInstanceId: workbench.workbenchInstanceId,
-      viewId: activeCut.viewId,
-      viewInstanceId: activeCut.viewInstanceId,
-      documentId: activeCut.documentId,
-      sessionId,
-    };
+      ...(activeCut
+        ? {
+            activeCut: {
+              kind: 'cut' as const,
+              projectId: activeCut.projectId!,
+              workspaceId: activeCut.workspaceId,
+              viewId: activeCut.viewId,
+              viewInstanceId: activeCut.viewInstanceId,
+              ...(activeCut.documentId ? { documentId: activeCut.documentId } : {}),
+              ownerId: activeCut.ownerId,
+            },
+          }
+        : {}),
+    });
   }
 
   async addCanvasMaterial(input: {
-    readonly identity: DesktopCutCanvasSourceIdentity;
+    readonly identity: CutCanvasSourceIdentity;
     readonly nodeId: string;
     readonly label: string;
     readonly locator: ContentLocator;
-    readonly target: DesktopCutCanvasHandoffTarget;
+    readonly target: CutCanvasHandoffTarget;
   }): Promise<CutHostRuntimeSnapshot> {
     const currentTarget = await this.resolveCanvasHandoffTarget(input.identity);
-    if (!sameCanvasHandoffTarget(currentTarget, input.target)) {
+    if (!sameCutCanvasHandoffTarget(currentTarget, input.target)) {
       throw new Error('Desktop Cut Canvas handoff target changed before execution.');
     }
     const target =
@@ -382,14 +331,14 @@ export class DesktopCutRuntime {
   }
 
   async addCanvasMaterialAndSeparateAudio(input: {
-    readonly identity: DesktopCutCanvasSourceIdentity;
+    readonly identity: CutCanvasSourceIdentity;
     readonly nodeId: string;
     readonly label: string;
     readonly locator: ContentLocator;
-    readonly target: DesktopCutCanvasHandoffTarget;
+    readonly target: CutCanvasHandoffTarget;
   }): Promise<CutHostRuntimeSnapshot> {
     const currentTarget = await this.resolveCanvasHandoffTarget(input.identity);
-    if (!sameCanvasHandoffTarget(currentTarget, input.target)) {
+    if (!sameCutCanvasHandoffTarget(currentTarget, input.target)) {
       throw new Error('Desktop Cut Canvas handoff target changed before execution.');
     }
     const target =
@@ -421,9 +370,9 @@ export class DesktopCutRuntime {
   }
 
   private async resolveCreatedDraftTarget(
-    identity: DesktopCutCanvasSourceIdentity,
-    target: Extract<DesktopCutCanvasHandoffTarget, { readonly kind: 'new-cut-draft' }>,
-  ): Promise<Extract<DesktopCutCanvasHandoffTarget, { readonly kind: 'existing-cut' }>> {
+    identity: CutCanvasSourceIdentity,
+    target: Extract<CutCanvasHandoffTarget, { readonly kind: 'new-cut-draft' }>,
+  ): Promise<Extract<CutCanvasHandoffTarget, { readonly kind: 'existing-cut' }>> {
     const projection = await this.createDraft({
       windowId: identity.windowId,
       rendererSessionId: identity.rendererSessionId,
@@ -482,54 +431,49 @@ export class DesktopCutRuntime {
       : undefined;
     if (!project || !tab) throw new Error('Desktop Cut draft has no exact Project View owner.');
     const workspace = await this.options.shell.resolveAgentWorkspace(workspaceId);
-    const draftId = randomUUID();
-    const viewId = `cut:${tab.viewId}:${draftId}`;
-    const documentId = `${CUT_DRAFT_DOCUMENT_ID_PREFIX}${draftId}`;
-    const identity: CutHostRuntimeIdentity = {
-      projectId: project.projectId,
-      workspaceId,
-      windowId: input.windowId,
-      viewId,
-      viewInstanceId: tab.viewInstanceId,
-      documentId,
-      sessionId: createCutHostSessionId(viewId, tab.viewInstanceId),
-      rendererSessionId: input.rendererSessionId,
-    };
-    const baseLabel = this.options.draftLabel ?? 'Untitled Cut';
-    const existingLabels = new Set(
-      workbench.layout.cutPanel?.views.map((view) => view.displayLabel) ?? [],
-    );
-    let label = baseLabel;
-    for (let suffix = 2; existingLabels.has(label); suffix += 1) {
-      label = `${baseLabel} ${String(suffix)}`;
-    }
-    this.application.createDraft({
-      identity,
-      name: label,
-      documentPath: nodePath.join(workspace.workspacePath, `${label}.otio`),
-      workspacePath: workspace.workspacePath,
-      storage: unavailableDraftStorage(),
-    });
-    try {
-      return await this.options.shell.updateWorkbench(
-        input.windowId,
-        input.rendererSessionId,
-        input.workbenchInstanceId,
-        openOrFocusCutView(workbench.layout, {
-          viewId,
-          viewInstanceId: tab.viewInstanceId,
+    return this.draftApplication.createDraft(
+      {
+        owner: {
           projectId: project.projectId,
           workspaceId,
-          kind: 'cut',
-          ownerId: identity.sessionId,
-          displayLabel: label,
-          documentId,
-        }),
-      );
-    } catch (error) {
-      this.application.discardSession(input.windowId, identity);
-      throw error;
-    }
+          windowId: input.windowId,
+          parentViewId: tab.viewId,
+          viewInstanceId: tab.viewInstanceId,
+          rendererSessionId: input.rendererSessionId,
+          workbenchInstanceId: input.workbenchInstanceId,
+        },
+        existingLabels: workbench.layout.cutPanel?.views.map((view) => view.displayLabel) ?? [],
+        ...(this.options.draftLabel ? { baseLabel: this.options.draftLabel } : {}),
+      },
+      {
+        createSession: ({ identity, label }) => {
+          this.application.createDraft({
+            identity,
+            name: label,
+            documentPath: nodePath.join(workspace.workspacePath, `${label}.otio`),
+            workspacePath: workspace.workspacePath,
+            storage: unavailableDraftStorage(),
+          });
+        },
+        openPresentation: ({ identity, label }) =>
+          this.options.shell.updateWorkbench(
+            input.windowId,
+            input.rendererSessionId,
+            input.workbenchInstanceId,
+            openOrFocusCutView(workbench.layout, {
+              viewId: identity.viewId,
+              viewInstanceId: identity.viewInstanceId,
+              projectId: identity.projectId,
+              workspaceId: identity.workspaceId,
+              kind: 'cut',
+              ownerId: identity.sessionId,
+              displayLabel: label,
+              documentId: identity.documentId,
+            }),
+          ),
+        discardSession: (identity) => this.application.discardSession(input.windowId, identity),
+      },
+    );
   }
 
   async closeView(input: {
@@ -851,47 +795,6 @@ export class DesktopCutRuntime {
   private requireActive(): void {
     if (this.disposed) throw new Error('Desktop Cut runtime is disposed.');
   }
-}
-
-function sameCanvasHandoffTarget(
-  left: DesktopCutCanvasHandoffTarget,
-  right: DesktopCutCanvasHandoffTarget,
-): boolean {
-  if (left.kind !== right.kind || left.workbenchInstanceId !== right.workbenchInstanceId) {
-    return false;
-  }
-  if (left.kind === 'new-cut-draft' || right.kind === 'new-cut-draft') return true;
-  return (
-    left.viewId === right.viewId &&
-    left.viewInstanceId === right.viewInstanceId &&
-    left.documentId === right.documentId &&
-    left.sessionId === right.sessionId
-  );
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function requireExactTargetKeys(
-  value: Readonly<Record<string, unknown>>,
-  expected: readonly string[],
-): void {
-  const actual = Object.keys(value).sort();
-  const sortedExpected = [...expected].sort();
-  if (
-    actual.length !== sortedExpected.length ||
-    actual.some((key, index) => key !== sortedExpected[index])
-  ) {
-    throw new Error('Desktop Cut Canvas handoff target fields are invalid.');
-  }
-}
-
-function requireTargetIdentity(value: unknown): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error('Desktop Cut Canvas handoff target identity is invalid.');
-  }
-  return value;
 }
 
 function unavailableDraftStorage(): CutDocumentStorage {

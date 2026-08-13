@@ -26,6 +26,7 @@ export type NekoStorageScope =
 export type NekoStorageClass =
   | 'project-fact'
   | 'user-editable'
+  | 'disposable-local-state'
   | 'valuable-local-state'
   | 'rebuildable-metadata'
   | 'artifact-file'
@@ -60,6 +61,7 @@ export type NekoStorageDurability =
 export type NekoStorageOwner =
   | 'project-domain'
   | 'user'
+  | 'package-owner'
   | 'agent'
   | 'local-metadata-store'
   | 'resource-cache'
@@ -98,6 +100,7 @@ export type NekoStorageClassificationId =
   | 'project-facts'
   | 'user-editable-global'
   | 'user-editable-project'
+  | 'project-local-disposable'
   | 'valuable-local-state'
   | 'rebuildable-metadata'
   | 'workspace-cache-artifacts'
@@ -217,7 +220,7 @@ const STORAGE_CLASSIFICATIONS: Readonly<
   },
   'user-editable-project': {
     id: 'user-editable-project',
-    scope: 'project-local',
+    scope: 'project-fact',
     storageClass: 'user-editable',
     metadataOwnership: null,
     durability: 'authoritative',
@@ -233,6 +236,25 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     tracking: 'git-trackable',
     cleanup: 'never-automatic',
     backup: 'required',
+  },
+  'project-local-disposable': {
+    id: 'project-local-disposable',
+    scope: 'project-local',
+    storageClass: 'disposable-local-state',
+    metadataOwnership: null,
+    durability: 'rebuildable',
+    owner: 'package-owner',
+    authorityKind: 'file',
+    userManagement: 'opaque',
+    portability: 'machine-local',
+    sensitivity: 'local-sensitive',
+    sqliteRole: 'prohibited',
+    deletion: 'owner-controlled',
+    retention: 'rebuildable',
+    defaultLocation: '<workspace>/.neko/<owner-path>/',
+    tracking: 'gitignored',
+    cleanup: 'rebuildable-only',
+    backup: 'not-applicable',
   },
   'valuable-local-state': {
     id: 'valuable-local-state',
@@ -525,8 +547,17 @@ export interface IProjectFactsLayout {
   readonly entityBindings: string;
 }
 
+/** Package-owned disposable machine-local state (`.neko/`). */
+export interface IProjectLocalStorageLayout {
+  readonly root: string;
+  readonly mediaLibraries: string;
+  readonly presentation: string;
+  readonly cache: string;
+}
+
 export interface IProjectStorageLayout {
   readonly facts: IProjectFactsLayout;
+  readonly local: IProjectLocalStorageLayout;
 }
 
 export interface IStorageLayout {
@@ -568,6 +599,7 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
 
 export function resolveStorageLayout(workspaceRoot: string, homedir: string): IStorageLayout {
   const factsRoot = join(workspaceRoot, 'neko');
+  const localRoot = join(workspaceRoot, '.neko');
 
   const facts: IProjectFactsLayout = {
     root: factsRoot,
@@ -577,9 +609,16 @@ export function resolveStorageLayout(workspaceRoot: string, homedir: string): IS
     entityBindings: join(factsRoot, 'entity-bindings.json'),
   };
 
+  const local: IProjectLocalStorageLayout = {
+    root: localRoot,
+    mediaLibraries: join(localRoot, 'media-libraries'),
+    presentation: join(localRoot, 'presentation'),
+    cache: join(localRoot, 'cache'),
+  };
+
   return {
     global: resolveGlobalStorageLayout(homedir),
-    project: { facts },
+    project: { facts, local },
   };
 }
 

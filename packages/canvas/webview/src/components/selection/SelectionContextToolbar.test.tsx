@@ -86,10 +86,9 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
-  it('keeps Canvas embedded preview distinct from the Host-owned Main Preview action', async () => {
+  it('keeps the toolbar preview owned by Main Preview without duplicating Canvas fullscreen', async () => {
     const node = mediaNode('image-preview', 'image', 'assets/image.png');
     const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
-    const onCanvasEmbeddedPreview = vi.fn();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -107,37 +106,13 @@ describe('SelectionContextToolbar', () => {
             selectedNodeIds={[node.id]}
             viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
             viewportSize={{ width: 800, height: 600 }}
-            onCanvasEmbeddedPreview={onCanvasEmbeddedPreview}
           />
         </CanvasHostProvider>,
       );
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('[data-selection-action="canvas:preview"]')
-        ?.click();
-    });
-
-    expect(onCanvasEmbeddedPreview).toHaveBeenCalledWith(
-      expect.objectContaining({
-        nodeId: node.id,
-        initialIndex: 0,
-        items: [
-          expect.objectContaining({
-            role: 'image',
-            contentLocator: { kind: 'workspace-file', path: 'assets/image.png' },
-          }),
-        ],
-      }),
-    );
-    expect(executeMaterialAction).not.toHaveBeenCalled();
-    expect(
-      container
-        .querySelector('[data-selection-action="canvas:preview"]')
-        ?.getAttribute('aria-label'),
-    ).toBe('Preview in canvas');
+    expect(container.querySelector('[data-selection-action="canvas:preview"]')).toBeNull();
     expect(
       container.querySelector('[data-selection-action="preview:open"]')?.getAttribute('aria-label'),
     ).toBe('Full-screen preview');
@@ -151,10 +126,9 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
-  it('offers Canvas preview for text files but leaves EPUB files Main Preview-only', async () => {
+  it('keeps file toolbar preview Main Preview-only', async () => {
     const textNode = fileNode('notes', 'notes/scene.md');
     const epubNode = fileNode('book', 'books/story.epub');
-    const onCanvasEmbeddedPreview = vi.fn();
     const host = createMaterialHost([descriptor('preview:open', 'Main Preview', 'read')]);
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -167,7 +141,6 @@ describe('SelectionContextToolbar', () => {
             selectedNodeIds={[node.id]}
             viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
             viewportSize={{ width: 800, height: 600 }}
-            onCanvasEmbeddedPreview={onCanvasEmbeddedPreview}
           />
         </CanvasHostProvider>,
       );
@@ -176,7 +149,7 @@ describe('SelectionContextToolbar', () => {
       render(textNode);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(container.querySelector('[data-selection-action="canvas:preview"]')).not.toBeNull();
+    expect(container.querySelector('[data-selection-action="canvas:preview"]')).toBeNull();
     expect(container.querySelector('[data-selection-action="preview:open"]')).not.toBeNull();
 
     await act(async () => {
@@ -489,7 +462,8 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-kind-label="true"');
     expect(markup).toContain('>Image</span>');
     expect(markup).toContain('data-selection-action="node:duplicate"');
-    expect(markup).not.toContain('preview:open');
+    expect(markup).toContain('data-selection-action="preview:open"');
+    expect(markup).toContain('data-disabled-reason="This capability is unavailable"');
     expect(markup).not.toContain('text:edit');
     expect(markup).not.toContain('cut:add-resource');
   });
@@ -534,13 +508,16 @@ describe('SelectionContextToolbar', () => {
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual(['node:duplicate', 'preview:open']);
-    expect(toolbar.container.innerHTML).not.toContain('data-selection-action="text:edit"');
+    ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
+    expect(
+      toolbar.container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
+        ?.disabled,
+    ).toBe(true);
     expect(toolbar.container.innerHTML).not.toContain('desktop:reveal');
     await toolbar.dispose();
   });
 
-  it('refreshes material actions when a selected Generation node receives its first output', async () => {
+  it('enables and disables stable Video slots without reordering as capability changes', async () => {
     const emptyNode: CanvasNode = {
       id: 'generation-video',
       type: 'generation',
@@ -576,7 +553,8 @@ describe('SelectionContextToolbar', () => {
       .mockResolvedValueOnce([
         descriptor('cut:add-resource', 'Edit', 'handoff'),
         descriptor('video:separate-audio', 'Separate audio', 'derive'),
-      ]);
+      ])
+      .mockResolvedValueOnce([]);
     const host = { ...createMaterialHost([]), resolveMaterialActions };
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -597,7 +575,13 @@ describe('SelectionContextToolbar', () => {
       render(emptyNode);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
+        ?.disabled,
+    ).toBe(true);
+    const stableOrder = Array.from(
+      container.querySelectorAll('[data-selection-action-location="primary"]'),
+    ).map((element) => element.getAttribute('data-selection-action'));
 
     await act(async () => {
       render(completedNode);
@@ -606,6 +590,30 @@ describe('SelectionContextToolbar', () => {
 
     expect(resolveMaterialActions).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[data-selection-action="cut:add-resource"]')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
+        ?.disabled,
+    ).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
+        (element) => element.getAttribute('data-selection-action'),
+      ),
+    ).toEqual(stableOrder);
+
+    await act(async () => {
+      render(emptyNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(resolveMaterialActions).toHaveBeenCalledTimes(3);
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
+        ?.disabled,
+    ).toBe(true);
+    expect(
+      Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
+        (element) => element.getAttribute('data-selection-action'),
+      ),
+    ).toEqual(stableOrder);
     expect(
       container.querySelector('[data-selection-action="video:separate-audio"]'),
     ).not.toBeNull();
