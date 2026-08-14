@@ -86,14 +86,6 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                       descriptor={thumbnail.previewDescriptor}
                       locale={getLocale()}
                     />
-                  ) : thumbnail.src ? (
-                    <img
-                      src={thumbnail.src}
-                      alt={thumbnail.label}
-                      loading="lazy"
-                      draggable={false}
-                      className="h-full w-full object-contain"
-                    />
                   ) : (
                     <div
                       className="flex h-full w-full items-center justify-center text-[var(--agent-fg-secondary)]"
@@ -113,7 +105,7 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                   {byteSize && <div className="truncate">{byteSize}</div>}
                 </div>
               )}
-              {thumbnail.previewDiagnostic && !thumbnail.src && (
+              {thumbnail.previewDiagnostic && (
                 <div
                   className="border-t border-[var(--agent-input-border)] px-1.5 py-1 text-[9px] leading-tight text-[var(--agent-danger)]"
                   title={thumbnail.previewDiagnostic}
