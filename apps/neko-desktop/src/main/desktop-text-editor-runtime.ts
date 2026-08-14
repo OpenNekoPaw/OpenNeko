@@ -174,6 +174,14 @@ export class DesktopTextEditorRuntime {
       binding = await this.restoreReleasedCleanSession(windowId, request.identity);
       return readyResult(request.requestId, binding);
     }
+    if (!binding && request.route === TEXT_EDITOR_HOST_ROUTES.close) {
+      await this.closeReleasedCleanView(windowId, request.identity);
+      return {
+        requestId: request.requestId,
+        identity: request.identity,
+        status: 'closed',
+      };
+    }
     if (!binding || request.identity.windowId !== windowId) {
       throw new Error('Desktop Text Editor session is unavailable.');
     }
@@ -515,6 +523,37 @@ export class DesktopTextEditorRuntime {
       closeMainView(owner.layout, binding.runtimeIdentity.viewId),
     );
     this.releaseBinding(binding);
+  }
+
+  private async closeReleasedCleanView(
+    windowId: string,
+    requested: TextEditorRuntimeIdentity,
+  ): Promise<void> {
+    if (requested.windowId !== windowId) {
+      throw new Error('Desktop Text Editor session is unavailable.');
+    }
+    const shell = await this.options.shell.getProjection(windowId);
+    if (shell.rendererSessionId !== requested.rendererSessionId) {
+      throw new Error('Desktop Text Editor runtime identity is stale.');
+    }
+    const owner = resolveDesktopWindowWorkspaceWorkbench(shell.window, requested.workspaceId);
+    const view = requireTextEditorView(owner.layout, requested.viewId);
+    if (
+      view.projectId !== requested.projectId ||
+      view.workspaceId !== requested.workspaceId ||
+      view.viewInstanceId !== requested.viewInstanceId ||
+      view.documentId !== requested.documentId ||
+      view.editorSessionId !== requested.sessionId ||
+      view.ownerId !== requested.sessionId
+    ) {
+      throw new Error('Desktop Text Editor View identity is stale.');
+    }
+    await this.options.shell.updateWorkbench(
+      windowId,
+      shell.rendererSessionId,
+      owner.workbenchInstanceId,
+      closeMainView(owner.layout, requested.viewId),
+    );
   }
 
   private queueExternalChange(binding: TextEditorBinding): Promise<void> {

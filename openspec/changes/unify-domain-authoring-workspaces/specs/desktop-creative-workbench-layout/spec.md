@@ -32,6 +32,13 @@ A Project Workbench MAY display lightweight Content, project-local Character, pr
 - **THEN** only that presentation reference and allowed snapshot are removed
 - **AND** the CharacterProject, WorldProject, publications, Conversations, Runs, Saves, and project membership remain unchanged
 
+#### Scenario: User closes a Text Editor tab after its file was deleted
+
+- **GIVEN** a clean Text Editor session was released while its exact Workbench View remained visible and the underlying Workspace file was subsequently deleted
+- **WHEN** the user closes that View
+- **THEN** the Text Editor owner validates and removes only the exact presentation reference without reopening or reading the deleted file
+- **AND** dirty sessions still require an explicit save, discard, or cancel decision before their View can close
+
 ### Requirement: Domain tools remain package-owned within shared slots
 
 Character, World, Content/Text, Canvas, Cut, Assets, Generation, Preview, Voice, and Avatar packages SHALL provide their own editor, inspector, resource, preview, and timeline surfaces through public entries. Desktop Workbench SHALL compose only the surfaces required by the exact target and MUST NOT create a dynamic all-domain tool registry, duplicate a package tool, or expose unavailable tools as successful controls.

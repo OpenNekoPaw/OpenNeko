@@ -61,6 +61,7 @@
 - [x] 6.10 Split World management into a package-owned list/grid catalog Surface and exact configuration/detail Surface composed through controlled Workbench Main and Secondary Main slots.
 - [x] 6.11 Verify Content, Character, and World authoring use the same controlled Workbench geometry while retaining owner-specific components, commands, snapshots, and runtime boundaries.
 - [x] 6.12 Project expanded application-sidebar sections for Projects, Conversations, Characters, and Worlds; group Character Dialogue/Room conversations exactly and keep Worlds empty until an exact World Conversation owner exists.
+- [x] 6.14 Make Text Editor tab close an owner-atomic operation: close released clean Views without reopening deleted files, while preserving explicit dirty save/discard/cancel handling and exact identity validation.
 
 ## 7. Agent Entry and target routing
 

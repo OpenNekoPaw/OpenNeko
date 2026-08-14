@@ -345,26 +345,39 @@ describe('DesktopApplication scene lifecycle', () => {
   });
 
   it.each([
-    { label: 'clean', dirty: false, confirmations: [] as boolean[], decision: 'discard' as const },
-    { label: 'dirty save', dirty: true, confirmations: [true], decision: 'save' as const },
+    {
+      label: 'clean',
+      dirty: false,
+      confirmations: [] as boolean[],
+      decisions: ['cancel'] as const,
+    },
+    {
+      label: 'dirty save',
+      dirty: true,
+      confirmations: [true],
+      decisions: ['cancel', 'save'] as const,
+    },
     {
       label: 'dirty discard',
       dirty: true,
       confirmations: [false, true],
-      decision: 'discard' as const,
+      decisions: ['cancel', 'discard'] as const,
     },
   ])('closes a $label Text Editor tab through its exact session', async (fixture) => {
     const projection = createTextEditorShellProjection();
     const confirm = vi.spyOn(globalThis, 'confirm');
     for (const response of fixture.confirmations) confirm.mockReturnValueOnce(response);
-    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> =>
-      request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet
-        ? readyTextEditorResult(request, fixture.dirty)
-        : {
-            requestId: request.requestId,
-            identity: request.identity,
-            status: 'closed',
-          },
+    const execute = vi.fn(
+      async (request: TextEditorHostRequest): Promise<TextEditorHostResult> => ({
+        requestId: request.requestId,
+        identity: request.identity,
+        status:
+          request.route === TEXT_EDITOR_HOST_ROUTES.close &&
+          request.decision === 'cancel' &&
+          fixture.dirty
+            ? 'cancelled'
+            : 'closed',
+      }),
     );
     installBridge({ projection, textEditorExecute: execute });
     const { container, root } = await renderApplication();
@@ -374,26 +387,30 @@ describe('DesktopApplication scene lifecycle', () => {
     );
     if (!close) throw new Error('Desktop fixture requires the Text Editor close control.');
     await act(async () => close.click());
-    await waitFor(() => execute.mock.calls.length === 2);
+    await waitFor(() => execute.mock.calls.length === fixture.decisions.length);
 
     expect(confirm.mock.calls).toHaveLength(fixture.confirmations.length);
-    expect(execute.mock.calls[0]?.[0]).toMatchObject({
-      route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
-      identity: textEditorRuntimeIdentity(projection),
-    });
-    expect(execute.mock.calls[1]?.[0]).toMatchObject({
-      route: TEXT_EDITOR_HOST_ROUTES.close,
-      identity: textEditorRuntimeIdentity(projection),
-      decision: fixture.decision,
-    });
+    expect(execute.mock.calls.map(([request]) => request)).toEqual(
+      fixture.decisions.map((decision) =>
+        expect.objectContaining({
+          route: TEXT_EDITOR_HOST_ROUTES.close,
+          identity: textEditorRuntimeIdentity(projection),
+          decision,
+        }),
+      ),
+    );
     await act(async () => root.unmount());
   });
 
   it('keeps a dirty Text Editor tab when close is cancelled', async () => {
     const projection = createTextEditorShellProjection();
     vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(false);
-    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> =>
-      readyTextEditorResult(request, true),
+    const execute = vi.fn(
+      async (request: TextEditorHostRequest): Promise<TextEditorHostResult> => ({
+        requestId: request.requestId,
+        identity: request.identity,
+        status: 'cancelled',
+      }),
     );
     installBridge({ projection, textEditorExecute: execute });
     const { container, root } = await renderApplication();
@@ -415,8 +432,12 @@ describe('DesktopApplication scene lifecycle', () => {
     const getSnapshot = vi.fn(async () => projection);
     vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(true);
     const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> => {
-      if (request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
-        return readyTextEditorResult(request, true);
+      if (request.route === TEXT_EDITOR_HOST_ROUTES.close && request.decision === 'cancel') {
+        return {
+          requestId: request.requestId,
+          identity: request.identity,
+          status: 'cancelled',
+        };
       }
       return {
         requestId: request.requestId,
@@ -3150,32 +3171,6 @@ function textEditorRuntimeIdentity(projection: DesktopShellProjection) {
     documentId: 'story.fountain',
     sessionId: 'text-document:session-1',
     rendererSessionId: projection.rendererSessionId,
-  };
-}
-
-function readyTextEditorResult(
-  request: TextEditorHostRequest,
-  dirty: boolean,
-): TextEditorHostResult {
-  return {
-    requestId: request.requestId,
-    identity: request.identity,
-    status: 'ready',
-    projection: {
-      identity: {
-        owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
-        workspaceId: 'workspace-1',
-        documentId: 'story.fountain',
-        locator: { kind: 'workspace-file', path: 'story.fountain' },
-      },
-      sessionId: 'text-document:session-1',
-      editSequence: dirty ? 1 : 0,
-      mode: 'fountain',
-      source: '.INT. ROOM - NIGHT\n',
-      dirty,
-      conflict: false,
-      diagnostics: [],
-    },
   };
 }
 

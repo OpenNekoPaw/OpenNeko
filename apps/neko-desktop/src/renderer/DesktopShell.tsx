@@ -727,24 +727,27 @@ export function DesktopApplication(): JSX.Element {
       setDiagnostic(undefined);
       void window.openNekoDesktop.textEditor
         .execute({
-          route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
-          requestId: `${requestPrefix}:projection`,
+          route: TEXT_EDITOR_HOST_ROUTES.close,
+          requestId: `${requestPrefix}:probe`,
           identity,
+          decision: 'cancel',
         })
         .then(async (result) => {
           if (result.status === 'rejected') throw new Error(result.diagnostic.code);
-          if (result.status !== 'ready') {
-            throw new Error('Desktop Text Editor close requires a ready projection.');
+          if (result.status === 'closed') {
+            await refresh();
+            return;
           }
-          let decision: 'save' | 'discard' | 'cancel' = 'discard';
-          if (result.projection.dirty) {
-            if (globalThis.confirm(t('workspace.textEditorCloseSave'))) {
-              decision = 'save';
-            } else if (globalThis.confirm(t('workspace.textEditorCloseDiscard'))) {
-              decision = 'discard';
-            } else {
-              decision = 'cancel';
-            }
+          if (result.status !== 'cancelled') {
+            throw new Error(`Desktop Text Editor close returned '${result.status}'.`);
+          }
+          let decision: 'save' | 'discard' | 'cancel';
+          if (globalThis.confirm(t('workspace.textEditorCloseSave'))) {
+            decision = 'save';
+          } else if (globalThis.confirm(t('workspace.textEditorCloseDiscard'))) {
+            decision = 'discard';
+          } else {
+            decision = 'cancel';
           }
           if (decision === 'cancel') return;
           const closed = await window.openNekoDesktop.textEditor.execute({
