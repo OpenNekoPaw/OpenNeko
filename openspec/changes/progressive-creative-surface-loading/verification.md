@@ -116,3 +116,16 @@ Development-runtime note: adding new package export specifiers while an old Vite
 
 - The Canvas media element was visible but still reported its own `正在缓冲` state during inspection. Media playback readiness is a separate resource/codec path and is not treated as evidence for or against document bootstrap completion.
 - No numeric cold-start latency budget was measured; this verification establishes independent progress and absence of the previous serial/global loading dependency, not a millisecond performance guarantee.
+
+## Canvas Video Content-Box Alignment — 2026-08-14
+
+- Canonical path: Canvas `MediaNode` -> Preview `LightweightPreview` -> shared `VideoPlayer` -> one native `<video>` element. No Canvas-specific player or media capability path was added.
+- Layout contract: the native video element now fills the owning preview width and height; `object-fit: contain` preserves picture ratio inside that exact content box.
+- `pnpm --filter @neko/preview-webview test`: passed, 20 files / 112 tests.
+- `pnpm --filter @neko/canvas-webview test`: passed, 65 files / 409 tests.
+- `pnpm --filter @neko/preview-webview build`: passed.
+- `pnpm check:webview-boundaries`: passed.
+- `pnpm check:legacy-debt`: passed with zero blocking findings.
+- `pnpm check:unused`: reported only pre-existing Canvas findings outside this change (`@neko/media` in Canvas Domain and two `previewResolver` exports); no changed Preview file was reported.
+- Authoritative Electron inspection: passed at 100% and 173% Canvas zoom. The black media field matched the node frame, native controls/progress aligned to the content-box bottom, and the source picture remained centered and undistorted with expected letterboxing.
+- Adjacent path: Main Preview and Lightweight Preview remain covered by the shared-element test and use the same full-size video element; control density remains the only presentation difference.

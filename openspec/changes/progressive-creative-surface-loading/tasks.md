@@ -39,3 +39,7 @@
 - [x] 6.4 Add the same package-owned Surface bootstrap contract to Text Editor and remove its Root-owned duplicate first projection request, with exact identity and stale completion tests.
 - [x] 6.5 Add the same package-owned Surface bootstrap contract to Resource Browser and remove its Root-owned duplicate first projection request while preserving event ordering and presentation restore, with exact identity tests.
 - [x] 6.6 Run focused Canvas/Text Editor/Assets/Desktop tests and builds, strict OpenSpec and architecture checks, then use authoritative Electron to inspect cold/warm View switching and record remaining UI evidence or blockers.
+
+## 7. Canvas Media Content-Box Alignment
+
+- [x] 7.1 Make the shared Preview video element fill its owning Surface while retaining `object-fit: contain`, update shared-path tests, and verify Canvas node/frame alignment without adding a Canvas-only player.

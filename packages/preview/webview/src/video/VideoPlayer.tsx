@@ -200,7 +200,7 @@ function SourceVideoPlayer({
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
         <video
           ref={videoRef}
-          className="max-w-full max-h-full object-contain"
+          className="h-full w-full object-contain"
           src={sourceUrl}
           aria-label={displayName}
           autoPlay={autoPlay}
@@ -643,7 +643,7 @@ function EngineVideoPlayer() {
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
         <video
           ref={videoRef}
-          className="max-w-full max-h-full object-contain"
+          className="h-full w-full object-contain"
           poster={posterUrl}
           playsInline
           muted

@@ -888,8 +888,8 @@ describe('PreviewRoot', () => {
     expect(videos).toHaveLength(2);
     expect(videos.map((video) => video.src)).toEqual([descriptor.url, descriptor.url]);
     expect(videos.map((video) => video.className)).toEqual([
-      'max-w-full max-h-full object-contain',
-      'max-w-full max-h-full object-contain',
+      'h-full w-full object-contain',
+      'h-full w-full object-contain',
     ]);
     expect(videos[0]?.controls).toBe(true);
     expect(videos[1]?.controls).toBe(false);

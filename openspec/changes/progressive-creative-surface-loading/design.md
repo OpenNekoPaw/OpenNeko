@@ -51,6 +51,16 @@ Canvas authority。Session dispose 后的晚到结果必须被拒绝或忽略。
 替代方案是把恢复结果放进独立 Renderer fetch 或空默认 Snapshot。前者会建立第二条事实路径，后者会掩盖
 真实节点状态；两者都拒绝。
 
+### Lightweight video owns the full node content box
+
+Canvas 继续复用 Preview package 的 canonical `LightweightPreview` 和同一个原生 `<video>` 播放能力。
+视频元素本身占满 Lightweight Preview 的可用宽高，`object-fit: contain` 只约束视频画面比例；节点外框、
+黑色媒体场和原生控制条因此共享同一个 content box。不得让 `<video>` 按 intrinsic ratio 缩小元素边界，
+否则控制条会悬在节点内部并形成看似额外的上下 margin。
+
+该规则属于共享 Viewer 的尺寸语义，不在 Canvas 复制播放器或增加节点专用视频实现。Main Preview 与
+Lightweight Preview 仍使用同一 `<video>` 组件，只由接入 Surface 决定外层尺寸和控制密度。
+
 ### Preview session publication becomes demand-driven
 
 Preview open 先创建 exact View/session 和 `loading` projection，保存 Host-only、session-bound source preparation；它不读取文档内容或注册 runtime URL。Surface 的 bootstrap `getSnapshot()` 触发一次 preparation：普通文件注册 exact file，glTF 注册 frozen dependency set，EPUB 创建 ZIP entry source并注册资源树。成功后 Preview session 原子提交 `ready` projection；失败提交当前 session 的 `unavailable` diagnostic。

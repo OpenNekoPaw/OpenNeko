@@ -56,3 +56,17 @@ The renderer MAY prefetch an ESM module from explicit user intent or bounded idl
 - **WHEN** the selected Viewer module was already resolved but its previous Surface was unmounted
 - **THEN** the new exact Surface reconstructs from its domain authority and presentation snapshot without a second module cold load
 - **AND** no hidden historical Root or document-data cache supplies success
+
+### Requirement: Lightweight video SHALL fill the owning content box
+
+Canvas and other lightweight video consumers SHALL use the Preview-owned canonical video element.
+The video element SHALL occupy the full width and height of the owning preview content box while
+preserving the source picture ratio through `object-fit: contain`. Native controls SHALL therefore
+align to the same content-box boundary as the node or lightweight preview frame rather than an
+intrinsic-size media element nested inside it.
+
+#### Scenario: Video aspect ratio differs from the Canvas node
+
+- **WHEN** a Canvas video node is wider or taller than the source video's intrinsic aspect ratio
+- **THEN** the media field remains the exact size of the node content box and the picture is letterboxed without distortion
+- **AND** the native control bar aligns with the bottom of that content box instead of floating above unused node space
