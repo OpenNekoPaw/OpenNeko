@@ -277,6 +277,10 @@ export class DesktopPreviewRuntime {
     if (projected.status === 'unavailable') {
       throw new Error(projected.diagnostic.message);
     }
+    if (projected.descriptor.contentKind !== contentKind) {
+      projected.lease.release();
+      throw new Error('Desktop quick Preview descriptor kind does not match its item.');
+    }
     try {
       this.sessions.registerTransient(input.identity.windowId, previewSessionId);
     } catch (error) {
@@ -285,7 +289,7 @@ export class DesktopPreviewRuntime {
     }
     return {
       previewSessionId,
-      descriptor: projected.descriptor,
+      descriptor: { ...projected.descriptor, contentKind },
     };
   }
 

@@ -129,7 +129,7 @@ describe('Desktop Agent resource display projector', () => {
       },
       resourceProjectionDiagnostics: expect.arrayContaining([
         expect.objectContaining({
-          code: 'resource-projection-denied',
+          code: 'agent-preview-content-unavailable',
           severity: 'error',
           sourceKind: 'authorization-denied',
         }),
@@ -141,7 +141,7 @@ describe('Desktop Agent resource display projector', () => {
         toolCallId: 'tool-call-1',
         status: 'denied',
         transport: 'none',
-        diagnosticCodes: ['resource-projection-denied'],
+        diagnosticCodes: ['agent-preview-content-unavailable'],
       }),
     );
   });

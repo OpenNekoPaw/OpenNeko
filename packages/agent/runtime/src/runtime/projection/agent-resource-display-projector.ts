@@ -5,6 +5,7 @@ import {
   projectConversationProjectionPatchForResourceDisplay,
   projectConversationProjectionSnapshotForResourceDisplay,
   messageResourceProjectionKey,
+  type MessageResourceDisplayResolution,
 } from '../../input/message-resource-projector';
 import type { ConversationProjectionAttachmentHostFrame } from './conversation-projection-attachment-server';
 import { createNodeHostContentReadService } from '@neko/content/node';
@@ -207,7 +208,7 @@ export function createAgentResourceDisplayProjector<
     context: { readonly mediaType?: string },
     attachmentId: string,
     conversationId: string,
-  ): Promise<PreviewMediaDescriptor | undefined> => {
+  ): Promise<MessageResourceDisplayResolution> => {
     if (disposed) throw new Error('Desktop Agent resource display projector is disposed.');
     const descriptorId = `agent-display:${attachmentId}:${displayLocatorIdentity(locator)}`;
     const displayPath = displayLocatorPath(locator);
@@ -224,11 +225,11 @@ export function createAgentResourceDisplayProjector<
       },
       ...(context.mediaType ? { requestedMediaType: context.mediaType } : {}),
     });
-    if (projection.status === 'unavailable') return undefined;
+    if (projection.status === 'unavailable') return projection;
     const descriptorIds = descriptorIdsByAttachment.get(attachmentId) ?? new Set<string>();
     descriptorIds.add(descriptorId);
     descriptorIdsByAttachment.set(attachmentId, descriptorIds);
-    return projection.descriptor;
+    return { status: 'ready', descriptor: projection.descriptor };
   };
 
   return {

@@ -59,7 +59,12 @@ describe('conversation-host-message', () => {
           messages: [messageWithToolCalls],
           updatedAt: 100,
         },
-        { resolveDisplayLocator: async () => previewDescriptor(contentLocator) },
+        {
+          resolveDisplayLocator: async () => ({
+            status: 'ready',
+            descriptor: previewDescriptor(contentLocator),
+          }),
+        },
       ),
     ).resolves.toEqual({
       type: 'activeConversation',

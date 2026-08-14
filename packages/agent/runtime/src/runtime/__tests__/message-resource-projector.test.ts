@@ -33,7 +33,7 @@ describe('message resource projector', () => {
 
   it('preserves ContentLocator, removes absolute display paths and adds one Preview descriptor', async () => {
     const descriptor = previewDescriptor(contentLocator);
-    const resolveDisplayLocator = vi.fn(async () => descriptor);
+    const resolveDisplayLocator = vi.fn(async () => ({ status: 'ready' as const, descriptor }));
 
     await expect(
       projectResourceValue(
@@ -116,7 +116,7 @@ describe('message resource projector', () => {
 
     const descriptor = previewDescriptor(contentLocator);
     const [projected] = await projectMessagesForResourceDisplay(messages, {
-      resolveDisplayLocator: async () => descriptor,
+      resolveDisplayLocator: async () => ({ status: 'ready', descriptor }),
     });
     expect(messages[0]?.contentBlocks?.[0]).toEqual({
       id: 'block-1',
@@ -158,7 +158,13 @@ describe('message resource projector', () => {
         },
         {
           resolveDisplayLocator: async () => {
-            throw new Error('denied');
+            return {
+              status: 'unavailable',
+              diagnostic: {
+                code: 'agent-preview-content-unavailable',
+                message: 'The requested image is unavailable.',
+              },
+            };
           },
         },
       ),
@@ -168,11 +174,11 @@ describe('message resource projector', () => {
       mimeType: 'image/jpeg',
       resourceProjectionDiagnostics: [
         {
-          code: 'resource-projection-denied',
+          code: 'agent-preview-content-unavailable',
           severity: 'error',
           field: 'contentLocator',
           sourceKind: 'authorization-denied',
-          message: 'Content could not be authorized for Webview display.',
+          message: 'The requested image is unavailable.',
         },
       ],
     });
@@ -180,7 +186,7 @@ describe('message resource projector', () => {
 
   it('projects the exact representation locator instead of substituting its source', async () => {
     const descriptor = previewDescriptor(representationLocator.source);
-    const resolveDisplayLocator = vi.fn(async () => descriptor);
+    const resolveDisplayLocator = vi.fn(async () => ({ status: 'ready' as const, descriptor }));
 
     await expect(
       projectResourceValue(

@@ -54,11 +54,18 @@ export interface MessageResourceProjectionContext {
   readonly mediaType?: string;
 }
 
+export type MessageResourceDisplayResolution =
+  | { readonly status: 'ready'; readonly descriptor: PreviewMediaDescriptor }
+  | {
+      readonly status: 'unavailable';
+      readonly diagnostic: { readonly code: string; readonly message: string };
+    };
+
 export interface MessageResourceProjectionOptions {
   resolveDisplayLocator?: (
     locator: ContentLocator | ContentRepresentationLocator,
     context: MessageResourceProjectionContext,
-  ) => Promise<PreviewMediaDescriptor | undefined>;
+  ) => Promise<MessageResourceDisplayResolution>;
 }
 
 export function isLocalMediaFilePath(value: string): boolean {
@@ -283,14 +290,15 @@ async function projectResourceValueInternal(
   }
 
   if (displayLocator) {
-    const previewDescriptor = await resolveDisplayLocator(displayLocator, mediaType, options);
-    if (previewDescriptor) {
-      projected['previewDescriptor'] = previewDescriptor;
+    const resolution = await resolveDisplayLocator(displayLocator, mediaType, options);
+    if (resolution.status === 'ready') {
+      projected['previewDescriptor'] = resolution.descriptor;
     } else {
       appendProjectionDiagnostic(
         projected,
         representationLocator ? 'representationLocator' : 'contentLocator',
         'authorization-denied',
+        resolution.diagnostic,
       );
     }
   }
@@ -311,14 +319,20 @@ async function resolveDisplayLocator(
   locator: ContentLocator | ContentRepresentationLocator,
   mediaType: string | undefined,
   options: MessageResourceProjectionOptions,
-): Promise<PreviewMediaDescriptor | undefined> {
-  try {
-    return await options.resolveDisplayLocator?.(locator, {
-      ...(mediaType ? { mediaType } : {}),
-    });
-  } catch {
-    return undefined;
+): Promise<MessageResourceDisplayResolution> {
+  const resolve = options.resolveDisplayLocator;
+  if (!resolve) {
+    return {
+      status: 'unavailable',
+      diagnostic: {
+        code: 'resource-projection-denied',
+        message: 'Content display projection is unavailable.',
+      },
+    };
   }
+  return resolve(locator, {
+    ...(mediaType ? { mediaType } : {}),
+  });
 }
 
 function portableContentPath(locator: ContentLocator): string {
@@ -340,19 +354,20 @@ function appendProjectionDiagnostic(
   projected: Record<string, unknown>,
   field: string,
   reason: 'missing-content-locator' | 'authorization-denied',
+  diagnostic?: { readonly code: string; readonly message: string },
 ): void {
   const diagnostics = Array.isArray(projected['resourceProjectionDiagnostics'])
     ? [...projected['resourceProjectionDiagnostics']]
     : [];
   diagnostics.push({
-    code: 'resource-projection-denied',
+    code: diagnostic?.code ?? 'resource-projection-denied',
     severity: 'error',
     field,
     sourceKind: reason,
     message:
       reason === 'missing-content-locator'
         ? 'Local media display requires a validated ContentLocator.'
-        : 'Content could not be authorized for Webview display.',
+        : (diagnostic?.message ?? 'Content could not be authorized for Webview display.'),
   });
   projected['resourceProjectionDiagnostics'] = diagnostics;
 }

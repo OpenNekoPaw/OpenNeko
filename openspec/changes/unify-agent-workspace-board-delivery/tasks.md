@@ -34,6 +34,6 @@
 - [x] 3.5 Extract one package-owned Preview resource projection service for image, audio and video; switch Agent,
       Canvas, Resource Browser and Asset Center descriptor/lease creation to it while retaining one shared viewer
       kernel for lightweight and full presentation.
-- [ ] 3.6 Remove raw media display fallbacks, preserve seekable file transport and authorized byte transport behind
+- [x] 3.6 Remove raw media display fallbacks, preserve seekable file transport and authorized byte transport behind
       the same service, and add path-level tests for shared service usage, typed sibling-local diagnostics and exact
       Surface lease release.
