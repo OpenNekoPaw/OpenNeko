@@ -8,6 +8,7 @@ import {
   createAgentResourceDisplayProjector,
   type AgentResourceDisplayRegistrationPort,
 } from '@neko/agent-runtime/runtime';
+import { parsePreviewMediaDescriptor } from '@neko/preview-domain';
 import type { DesktopResourceLease } from './desktop-resource-registry';
 
 const temporaryRoots: string[] = [];
@@ -199,7 +200,8 @@ describe('Desktop Agent resource display projector', () => {
     if (projected.type !== 'projectionSnapshot') {
       throw new Error('Expected projected snapshot frame.');
     }
-    expect(readToolResultData(projected.projection.turns[0]?.items[0])).toMatchObject({
+    const data = readToolResultData(projected.projection.turns[0]?.items[0]);
+    expect(data).toMatchObject({
       contentLocator: locator,
       mimeType: 'image/png',
       previewDescriptor: {
@@ -212,6 +214,14 @@ describe('Desktop Agent resource display projector', () => {
         sourceFingerprint: expect.any(String),
       },
     });
+    expect(parsePreviewMediaDescriptor(data.previewDescriptor)).toMatchObject({
+      contentLocator: locator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+    });
+    expect(String((data.previewDescriptor as { descriptorId: string }).descriptorId)).not.toContain(
+      'story.epub',
+    );
     expect(loadDisplayAsset).toHaveBeenCalledWith({ locator, maxBytes: 64 * 1024 * 1024 });
     expect(registerBytes).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'connection-1' }),

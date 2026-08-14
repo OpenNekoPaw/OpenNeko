@@ -350,7 +350,7 @@ function createDisplayDescriptor(input: {
     throw new Error(`Agent display media type is unsupported: ${input.mediaType}.`);
   }
   return {
-    descriptorId: `agent-display:${input.attachmentId}:${messageResourceProjectionKey(input.locator)}`,
+    descriptorId: `agent-display:${input.attachmentId}:${displayLocatorIdentity(input.locator)}`,
     sourceFingerprint: input.sourceFingerprint,
     contentLocator: source,
     url: input.url,
@@ -359,6 +359,10 @@ function createDisplayDescriptor(input: {
     displayName: path.posix.basename(displayPath),
     byteLength: input.byteLength,
   };
+}
+
+function displayLocatorIdentity(locator: ContentLocator | ContentRepresentationLocator): string {
+  return createHash('sha256').update(messageResourceProjectionKey(locator)).digest('hex');
 }
 
 function contentKindFromMediaType(mediaType: string): PreviewContentKind | undefined {
