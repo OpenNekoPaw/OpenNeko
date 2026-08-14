@@ -17,6 +17,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { createPortal } from 'react-dom';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { TextEditorHostRuntime } from './host-runtime';
+import { createTextEditorRuntimeBootstrap } from './runtime-bootstrap';
 import { createDefaultTextEditorPresentationSnapshot } from './presentation-snapshot';
 import { TextEditorRoot } from './root';
 
@@ -1138,7 +1139,7 @@ async function renderEditor(
   await act(async () => {
     const editor = (
       <TextEditorRoot
-        runtime={runtime}
+        bootstrap={createTextEditorRuntimeBootstrap(runtime)}
         locale={locale}
         cspNonce="text-editor-test-csp"
         renderContextActions={(actions) => createPortal(actions, contextActionsTarget)}

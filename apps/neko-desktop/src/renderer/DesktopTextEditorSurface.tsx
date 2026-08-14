@@ -4,7 +4,8 @@ import type {
 } from '@neko/host/desktop-shell-contract';
 import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { lazy, Suspense, useCallback, useMemo, type ReactElement } from 'react';
+import { createTextEditorRuntimeBootstrap } from '@neko/text-editor-webview/runtime-bootstrap';
+import { lazy, Suspense, useCallback, useEffect, useMemo, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { createElectronTextEditorHostRuntime } from './desktop-text-editor-host-runtime';
 
@@ -58,6 +59,21 @@ export function DesktopTextEditorSurface({
     view.viewId,
     view.viewInstanceId,
   ]);
+  const bootstrapLifetime = useMemo(
+    () => ({ bootstrap: createTextEditorRuntimeBootstrap(runtime), mounted: false }),
+    [runtime],
+  );
+  const bootstrap = bootstrapLifetime.bootstrap;
+  useEffect(() => {
+    bootstrapLifetime.mounted = true;
+    bootstrap.prepare();
+    return () => {
+      bootstrapLifetime.mounted = false;
+      queueMicrotask(() => {
+        if (!bootstrapLifetime.mounted) bootstrap.dispose();
+      });
+    };
+  }, [bootstrap, bootstrapLifetime]);
   const renderContextActions = useCallback(
     (actions: ReactElement) =>
       contextActionsTarget ? createPortal(actions, contextActionsTarget) : null,
@@ -73,7 +89,7 @@ export function DesktopTextEditorSurface({
       <Suspense fallback={<div className="preview-main-loading" role="status" />}>
         <TextEditorRoot
           key={view.viewId}
-          runtime={runtime}
+          bootstrap={bootstrap}
           locale={locale}
           cspNonce={readRendererCspNonce()}
           renderContextActions={renderContextActions}
