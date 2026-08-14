@@ -49,9 +49,9 @@ Cut 的 Preview Panel 名称相近但职责不同：它是 OTIO 时间线的合�
 
 Viewer 不接收 `main | quick | embedded`。轻量 UI 可通过明确的控件参数表达是否显示紧凑控制、是否受控播放；这些参数不得选择另一个元素、codec、resource source 或播放器实现。全屏由调用方的 Overlay/View CSS 和输入边界实现。
 
-资源目录 hover preview 使用同一 `LightweightPreview` 的显式 ambient media policy：原生 `<video>` 静音、自动播放、循环且不显示完整控制条；原生 `<audio>` 有声自动播放且不渲染波形、缩略卡片或播放控件。它只改变共享元素的接入参数，不建立资源目录播放器。Agent、Canvas 与普通轻量预览仍使用交互式紧凑控制；Asset Center 选中项使用 Main Preview 外壳组合相同 Viewer。Asset Center catalog 只保留静态 icon thumbnail，不再把 hover thumbnail 描述为第二条媒体预览成功路径。
+资源目录 hover preview 使用同一 `LightweightPreview` 的显式 ambient media policy：原生 `<video>` 静音、自动播放、循环且不显示完整控制条；原生 `<audio>` 有声自动播放且不渲染波形、缩略卡片或播放控件。它只改变共享元素的接入参数，不建立资源目录播放器。Agent、Canvas 普通节点与普通轻量预览使用手动紧凑控制；Asset Center 选中项使用 Main Preview 外壳组合相同 Viewer。Asset Center catalog 只保留静态 icon thumbnail，不再把 hover thumbnail 描述为第二条媒体预览成功路径。
 
-媒体元素必须区分调用方下发的受控播放命令与用户在原生/轻量控件上的交互。自动播放或 Canvas hover 下发的 `play()` / `pause()` 所产生的 DOM 事件只更新元素本地状态，不得回投为手动交互；并发的异步 `play()` 在 hover 已离开后完成时，必须服从最新的暂停意图。只有真实用户交互可以把 Canvas owner 从 transient hover 提升为 manual，且 pointer leave 只能停止仍由 hover 拥有的播放。
+每个媒体元素挂载实例只有一个播放控制者。Canvas 普通节点不传受控播放参数，悬停只改变节点视觉反馈，用户通过原生视频控件或 Preview-owned 紧凑音频控件手动播放；指针离开、节点选择和拖拽均不得改变播放。Canvas 故事线播放工作区传入受控播放参数并独占播放意图，Viewer 在该挂载中隐藏内部播放控件。资源目录 ambient 挂载由悬停入口控制，离开时卸载并释放资源。受控或 ambient 的异步 `play()` 完成必须服从最新暂停/卸载意图。
 
 备选方案：所有场景挂载 `PreviewRoot`。拒绝，因为会为卡片/Overlay 创建无业务依据的 Preview session、订阅和持久 snapshot，并使卸载语义与主 View 混淆。
 
@@ -159,7 +159,7 @@ Shared media element setup/teardown is keyed by the descriptor resource, not by 
 - [多个 Surface 的 locale 相互覆盖] → 使用 Surface-bound locale provider，移除嵌入式路径对 module-global mutable locale 的依赖。
 - [完整 Preview Player 使轻量卡片 bundle 过重] → 按 content kind lazy-load；轻量图片不加载 audio/video/document/model chunk。
 - [主 Preview 与轻量 Surface 自动播放行为分叉] → 在 contract 中固定默认关闭，任何自动播放由明确入口 policy 和用户手势测试证明。
-- [Canvas 播放协调再次复制 Viewer] → Canvas 只保留意图和 handoff owner，元素与资源生命周期必须由共享 Viewer 执行；边界测试 poison package-local `<img>/<audio>/<video>` 成功路径。
+- [Canvas 播放协调再次复制 Viewer] → 只有故事线播放工作区保留受控意图；普通节点完全由共享 Viewer 手动控制。元素与资源生命周期必须由共享 Viewer 执行，边界测试 poison package-local `<img>/<audio>/<video>` 成功路径。
 
 ## Migration Plan
 

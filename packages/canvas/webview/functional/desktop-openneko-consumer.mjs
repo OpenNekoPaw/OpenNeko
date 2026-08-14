@@ -652,36 +652,28 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await hover(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
-    await waitForCanvasPackagePlaybackState(evaluate, 'canvas:functional:video', 'video');
+    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true);
+    checkpoint('canvas-video-hover-remains-paused');
+    await setCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', false);
     const videoPlayback = await waitForCanvasMediaPlayback(
       evaluate,
       'canvas:functional:video',
       'video',
     );
-    await setCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true);
-    await waitForCanvasPlaybackOwner(evaluate, 'canvas:functional:video', 'video', 'manual-paused');
-    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true);
-    await setCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', false);
-    await waitForCanvasPlaybackOwner(
-      evaluate,
-      'canvas:functional:video',
-      'video',
-      'manual-playing',
-    );
-    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', false);
     checkpoint('canvas-video-manual-playing', { currentTime: videoPlayback.currentTime });
     await hover(
-      '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-audio-node-title"]',
+      '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-media-node"][data-media-type="audio"]',
     );
+    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:audio', 'audio', true, false);
     const videoAfterPointerLeave = await waitForCanvasMediaPlayback(
       evaluate,
       'canvas:functional:video',
       'video',
       videoPlayback.currentTime,
     );
-    await waitForCanvasPackagePlaybackState(evaluate, 'canvas:functional:audio', 'audio');
+    checkpoint('canvas-audio-hover-remains-paused');
     await click(
-      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="audio-node"]',
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="audio-node"] [data-canvas-node-label]',
     );
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="cut:add-resource"]',
@@ -698,6 +690,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     checkpoint('canvas-audio-owner-actions', audioActions);
     const audioActionsScreenshot = await screenshot('canvas-audio-owner-actions');
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-testid="preview-lightweight-audio-toggle-playback"]',
+    );
     const audioPlayback = await waitForCanvasMediaPlayback(
       evaluate,
       'canvas:functional:audio',
@@ -1929,20 +1924,12 @@ async function waitForCanvasMediaPlayback(evaluate, viewId, mediaType, minimumTi
     const sample = await evaluate(`(() => {
       const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
       const media = root?.querySelector(${JSON.stringify(mediaType)});
-      const preview = root?.querySelector('[data-preview-surface=${JSON.stringify(mediaType)}]');
-      const node = root?.querySelector(
-        '[data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]',
-      );
       return {
         url: media instanceof HTMLMediaElement ? media.src : undefined,
         currentTime: media instanceof HTMLMediaElement ? media.currentTime : undefined,
         paused: media instanceof HTMLMediaElement ? media.paused : undefined,
         readyState: media instanceof HTMLMediaElement ? media.readyState : undefined,
         errorCode: media instanceof HTMLMediaElement ? media.error?.code : undefined,
-        previewDuration: preview?.getAttribute('data-media-duration'),
-        controlledIdle: preview?.getAttribute('data-preview-controlled-idle'),
-        playbackState: node?.getAttribute('data-playback-state'),
-        playbackOwner: node?.getAttribute('data-playback-owner'),
       };
     })()`);
     last = sample;
@@ -1959,48 +1946,13 @@ async function waitForCanvasMediaPlayback(evaluate, viewId, mediaType, minimumTi
   );
 }
 
-async function waitForCanvasPackagePlaybackState(
+async function waitForCanvasMediaPaused(
   evaluate,
   viewId,
   mediaType,
-  expectedState = 'playing',
+  expectedPaused,
+  expectedControls = true,
 ) {
-  const deadline = Date.now() + 5_000;
-  while (Date.now() < deadline) {
-    const state = await readCanvasPackagePlaybackState(evaluate, viewId, mediaType);
-    if (state === expectedState) return;
-    await delay(100);
-  }
-  throw new Error(
-    `Canvas ${mediaType} package-owned playback state did not reach ${expectedState}.`,
-  );
-}
-
-async function waitForCanvasPlaybackOwner(evaluate, viewId, mediaType, expectedOwner) {
-  const deadline = Date.now() + 5_000;
-  let last;
-  while (Date.now() < deadline) {
-    const selector = `[data-owner-view-id=${JSON.stringify(viewId)}] [data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]`;
-    const sample = await evaluate(`(() => {
-      const node = document.querySelector(${JSON.stringify(selector)});
-      const media = node?.querySelector(${JSON.stringify(mediaType)});
-      return {
-        owner: node?.getAttribute('data-playback-owner'),
-        state: node?.getAttribute('data-playback-state'),
-        paused: media instanceof HTMLMediaElement ? media.paused : undefined,
-        controls: media instanceof HTMLMediaElement ? media.controls : undefined,
-      };
-    })()`);
-    last = sample;
-    if (sample?.owner === expectedOwner) return;
-    await delay(100);
-  }
-  throw new Error(
-    `Canvas ${mediaType} playback owner did not reach ${expectedOwner} before timeout: ${JSON.stringify(last)}.`,
-  );
-}
-
-async function waitForCanvasMediaPaused(evaluate, viewId, mediaType, expectedPaused) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     const sample = await evaluate(`(() => {
@@ -2011,7 +1963,7 @@ async function waitForCanvasMediaPaused(evaluate, viewId, mediaType, expectedPau
         controls: media instanceof HTMLMediaElement ? media.controls : undefined,
       };
     })()`);
-    if (sample?.paused === expectedPaused && sample.controls === true) return;
+    if (sample?.paused === expectedPaused && sample.controls === expectedControls) return;
     await delay(100);
   }
   throw new Error(
@@ -2029,13 +1981,6 @@ async function setCanvasMediaPaused(evaluate, viewId, mediaType, paused) {
     if (${JSON.stringify(paused)}) media.pause();
     else void media.play();
   })()`);
-}
-
-function readCanvasPackagePlaybackState(evaluate, viewId, mediaType) {
-  const selector = `[data-owner-view-id=${JSON.stringify(viewId)}] [data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]`;
-  return evaluate(
-    `document.querySelector(${JSON.stringify(selector)})?.getAttribute('data-playback-state')`,
-  );
 }
 
 async function waitForCanvasRootsRemoved(evaluate) {

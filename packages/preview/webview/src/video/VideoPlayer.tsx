@@ -28,6 +28,7 @@ export interface VideoPlayerProps {
   readonly compact?: boolean;
   readonly ambient?: boolean;
   readonly muted?: boolean;
+  readonly controls?: boolean;
   readonly initialSnapshot?: PreviewMediaViewerSnapshot;
   readonly onSnapshotChange?: (snapshot: PreviewMediaViewerSnapshot) => void;
   readonly playback?: PreviewViewerPlayback;
@@ -40,6 +41,7 @@ export function VideoPlayer({
   compact = false,
   ambient = false,
   muted = false,
+  controls = true,
   initialSnapshot,
   onSnapshotChange,
   playback,
@@ -52,6 +54,7 @@ export function VideoPlayer({
       compact={compact}
       ambient={ambient}
       muted={muted}
+      controls={controls}
       initialSnapshot={initialSnapshot}
       onSnapshotChange={onSnapshotChange}
       playback={playback}
@@ -68,10 +71,13 @@ function SourceVideoPlayer({
   compact,
   ambient,
   muted,
+  controls,
   initialSnapshot,
   onSnapshotChange,
   playback,
-}: Required<Pick<VideoPlayerProps, 'sourceUrl' | 'autoPlay' | 'compact' | 'ambient' | 'muted'>> &
+}: Required<
+  Pick<VideoPlayerProps, 'sourceUrl' | 'autoPlay' | 'compact' | 'ambient' | 'muted' | 'controls'>
+> &
   Pick<VideoPlayerProps, 'displayName' | 'initialSnapshot' | 'onSnapshotChange' | 'playback'>) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -128,7 +134,7 @@ function SourceVideoPlayer({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !playback?.requestId) return;
+    if (!video || !playback) return;
     if (
       consumedRequestRef.current !== playback.requestId &&
       typeof playback.startTimeSeconds === 'number'
@@ -198,7 +204,7 @@ function SourceVideoPlayer({
           src={sourceUrl}
           aria-label={displayName}
           autoPlay={autoPlay}
-          controls={compact && !ambient}
+          controls={controls && compact && !ambient}
           loop={ambient}
           playsInline
           preload="metadata"
@@ -220,22 +226,15 @@ function SourceVideoPlayer({
             onSnapshotChange?.({ currentTime: nextTime, playbackRate: speed, volume });
             playback?.onTimeUpdate?.(nextTime, duration);
           }}
-          onPlay={(event) => {
+          onPlay={() => {
             setIsPlaying(true);
-            if (programmaticPlayback.consumeEvent('playing')) return;
-            if (ambient) return;
-            playback?.onInteraction?.('playing', event.currentTarget.currentTime);
           }}
-          onPause={(event) => {
+          onPause={() => {
             setIsPlaying(false);
-            if (programmaticPlayback.consumeEvent('paused')) return;
-            if (ambient) return;
-            playback?.onInteraction?.('paused', event.currentTarget.currentTime);
           }}
           onEnded={(event) => {
             setIsPlaying(false);
             if (!ambient) {
-              playback?.onInteraction?.('ended', event.currentTarget.currentTime);
               playback?.onEnded?.(event.currentTarget.currentTime, duration);
             }
           }}
@@ -244,7 +243,7 @@ function SourceVideoPlayer({
             setFailed(true);
           }}
         />
-        {!compact && !isPlaying && !failed ? (
+        {controls && !compact && !isPlaying && !failed ? (
           <button
             type="button"
             data-testid="preview-video-toggle-playback"
@@ -271,7 +270,7 @@ function SourceVideoPlayer({
           </div>
         ) : null}
       </div>
-      {!compact ? (
+      {controls && !compact ? (
         <div
           className={`absolute bottom-0 left-0 right-0 transition-opacity ${
             controlsVisible ? 'opacity-100' : 'opacity-0'

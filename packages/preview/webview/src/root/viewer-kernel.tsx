@@ -56,12 +56,11 @@ const ModelViewer = lazy(async () => {
 export type PreviewViewerControlDensity = 'compact' | 'full';
 
 export interface PreviewViewerPlayback {
-  readonly requestId?: string;
-  readonly state?: 'playing' | 'paused' | 'stopped';
+  readonly requestId: string;
+  readonly state: 'playing' | 'paused' | 'stopped';
   readonly startTimeSeconds?: number;
   readonly onTimeUpdate?: (currentTime: number, duration: number) => void;
   readonly onEnded?: (currentTime: number, duration: number) => void;
-  readonly onInteraction?: (state: 'playing' | 'paused' | 'ended', currentTime: number) => void;
 }
 
 export interface PreviewViewerKernelProps {
@@ -226,6 +225,7 @@ function VideoPreview(props: PreviewViewerKernelProps): ReactElement {
           ambient={ambient}
           autoPlay={ambient}
           muted={ambient}
+          controls={!props.playback}
           playback={ambient ? undefined : props.playback}
           initialSnapshot={props.snapshot?.media}
           onSnapshotChange={(media) => props.onSnapshotChange({ media })}
@@ -246,6 +246,7 @@ function AudioPreview(props: PreviewViewerKernelProps): ReactElement {
           compact={props.controlDensity === 'compact'}
           ambient={ambient}
           autoPlay={ambient}
+          controls={!props.playback}
           playback={ambient ? undefined : props.playback}
           initialSnapshot={props.snapshot?.media}
           onSnapshotChange={(media) => props.onSnapshotChange({ media })}

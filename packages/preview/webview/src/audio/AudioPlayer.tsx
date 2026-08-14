@@ -44,6 +44,7 @@ export interface AudioPlayerProps {
   readonly autoPlay?: boolean;
   readonly compact?: boolean;
   readonly ambient?: boolean;
+  readonly controls?: boolean;
   readonly initialSnapshot?: PreviewMediaViewerSnapshot;
   readonly onSnapshotChange?: (snapshot: PreviewMediaViewerSnapshot) => void;
   readonly playback?: PreviewViewerPlayback;
@@ -55,6 +56,7 @@ export function AudioPlayer({
   autoPlay = false,
   compact = false,
   ambient = false,
+  controls = true,
   initialSnapshot,
   onSnapshotChange,
   playback,
@@ -66,6 +68,7 @@ export function AudioPlayer({
       autoPlay={autoPlay}
       compact={compact}
       ambient={ambient}
+      controls={controls}
       initialSnapshot={initialSnapshot}
       onSnapshotChange={onSnapshotChange}
       playback={playback}
@@ -81,11 +84,15 @@ function SourceAudioPlayer({
   autoPlay,
   compact,
   ambient,
+  controls,
   initialSnapshot,
   onSnapshotChange,
   playback,
 }: Required<
-  Pick<AudioPlayerProps, 'sourceUrl' | 'displayName' | 'autoPlay' | 'compact' | 'ambient'>
+  Pick<
+    AudioPlayerProps,
+    'sourceUrl' | 'displayName' | 'autoPlay' | 'compact' | 'ambient' | 'controls'
+  >
 > &
   Pick<AudioPlayerProps, 'initialSnapshot' | 'onSnapshotChange' | 'playback'>) {
   const { t } = useTranslation();
@@ -131,7 +138,7 @@ function SourceAudioPlayer({
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !playback?.requestId) return;
+    if (!audio || !playback) return;
     if (
       consumedRequestRef.current !== playback.requestId &&
       typeof playback.startTimeSeconds === 'number'
@@ -217,22 +224,15 @@ function SourceAudioPlayer({
           onSnapshotChange?.({ currentTime: nextTime, playbackRate: speed, volume });
           playback?.onTimeUpdate?.(nextTime, duration);
         }}
-        onPlay={(event) => {
+        onPlay={() => {
           setIsPlaying(true);
-          if (programmaticPlayback.consumeEvent('playing')) return;
-          if (ambient) return;
-          playback?.onInteraction?.('playing', event.currentTarget.currentTime);
         }}
-        onPause={(event) => {
+        onPause={() => {
           setIsPlaying(false);
-          if (programmaticPlayback.consumeEvent('paused')) return;
-          if (ambient) return;
-          playback?.onInteraction?.('paused', event.currentTarget.currentTime);
         }}
         onEnded={(event) => {
           setIsPlaying(false);
           if (!ambient) {
-            playback?.onInteraction?.('ended', event.currentTarget.currentTime);
             playback?.onEnded?.(event.currentTarget.currentTime, duration);
           }
         }}
@@ -243,6 +243,7 @@ function SourceAudioPlayer({
       />
       {compact && !ambient ? (
         <LightweightAudioControls
+          interactive={controls}
           currentTime={currentTime}
           duration={duration}
           isPlaying={isPlaying}
@@ -253,12 +254,12 @@ function SourceAudioPlayer({
           onScrub={setCurrentTime}
           onToggleMute={() => changeVolume(volume > 0 ? 0 : 1)}
         />
-      ) : !ambient ? (
+      ) : !compact && !ambient ? (
         <div className="relative flex-1 flex items-center justify-center w-full min-h-[120px] py-2">
           <CoverView fileName={displayName} isPlaying={isPlaying} />
         </div>
       ) : null}
-      {!compact && !ambient ? (
+      {controls && !compact && !ambient ? (
         <div
           className={
             compact
@@ -272,7 +273,7 @@ function SourceAudioPlayer({
           {error ? <div className="text-xs text-red-400">{error}</div> : null}
         </div>
       ) : null}
-      {!compact && !ambient ? (
+      {controls && !compact && !ambient ? (
         <div className="shrink-0 w-full">
           <AudioControls
             isPlaying={isPlaying}
@@ -293,6 +294,7 @@ function SourceAudioPlayer({
 }
 
 interface LightweightAudioControlsProps {
+  readonly interactive: boolean;
   readonly currentTime: number;
   readonly duration: number;
   readonly isPlaying: boolean;
@@ -305,6 +307,7 @@ interface LightweightAudioControlsProps {
 }
 
 function LightweightAudioControls({
+  interactive,
   currentTime,
   duration,
   isPlaying,
@@ -351,21 +354,23 @@ function LightweightAudioControls({
           style={{ left: `${progress * 100}%` }}
           aria-hidden="true"
         />
-        <input
-          className="neko-preview-lightweight-audio__seek"
-          type="range"
-          min={0}
-          max={boundedDuration}
-          step={0.1}
-          value={boundedTime}
-          disabled={boundedDuration <= 0}
-          aria-label={t('preview.audio.seek')}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            onScrub(Number(event.currentTarget.value))
-          }
-          onPointerUp={commitRangeValue}
-          onKeyUp={handleRangeKeyUp}
-        />
+        {interactive ? (
+          <input
+            className="neko-preview-lightweight-audio__seek"
+            type="range"
+            min={0}
+            max={boundedDuration}
+            step={0.1}
+            value={boundedTime}
+            disabled={boundedDuration <= 0}
+            aria-label={t('preview.audio.seek')}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onScrub(Number(event.currentTarget.value))
+            }
+            onPointerUp={commitRangeValue}
+            onKeyUp={handleRangeKeyUp}
+          />
+        ) : null}
         {error ? (
           <span className="neko-preview-lightweight-audio__error" role="alert">
             {error}
@@ -378,25 +383,29 @@ function LightweightAudioControls({
           {formatMediaTime(boundedTime)} /{' '}
           {boundedDuration > 0 ? formatMediaTime(boundedDuration) : '--:--'}
         </span>
-        <button
-          type="button"
-          data-testid="preview-lightweight-audio-toggle-playback"
-          className="neko-preview-lightweight-audio__button is-primary"
-          onClick={onTogglePlay}
-          aria-label={playbackLabel}
-          title={playbackLabel}
-        >
-          {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
-        </button>
-        <button
-          type="button"
-          className="neko-preview-lightweight-audio__button is-volume"
-          onClick={onToggleMute}
-          aria-label={muteLabel}
-          title={muteLabel}
-        >
-          {volume > 0 ? <VolumeIcon size={14} /> : <VolumeOffIcon size={14} />}
-        </button>
+        {interactive ? (
+          <>
+            <button
+              type="button"
+              data-testid="preview-lightweight-audio-toggle-playback"
+              className="neko-preview-lightweight-audio__button is-primary"
+              onClick={onTogglePlay}
+              aria-label={playbackLabel}
+              title={playbackLabel}
+            >
+              {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
+            </button>
+            <button
+              type="button"
+              className="neko-preview-lightweight-audio__button is-volume"
+              onClick={onToggleMute}
+              aria-label={muteLabel}
+              title={muteLabel}
+            >
+              {volume > 0 ? <VolumeIcon size={14} /> : <VolumeOffIcon size={14} />}
+            </button>
+          </>
+        ) : null}
       </div>
     </div>
   );

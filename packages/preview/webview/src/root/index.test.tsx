@@ -552,7 +552,7 @@ describe('PreviewRoot', () => {
     expect(pause).toHaveBeenCalled();
   });
 
-  it('keeps native compact video usable when play is rejected without a media source error', async () => {
+  it('keeps controlled video source failures distinct from play rejection', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue(
       new DOMException('User gesture required.', 'NotAllowedError'),
     );
@@ -580,7 +580,7 @@ describe('PreviewRoot', () => {
       await Promise.resolve();
     });
 
-    expect(container.querySelector('video')?.controls).toBe(true);
+    expect(container.querySelector('video')?.controls).toBe(false);
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
@@ -625,7 +625,6 @@ describe('PreviewRoot', () => {
       .spyOn(HTMLMediaElement.prototype, 'play')
       .mockImplementation(async () => undefined);
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
-    const onInteraction = vi.fn();
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -644,7 +643,6 @@ describe('PreviewRoot', () => {
             displayName: 'ambient.aac',
             byteLength: 42,
           }}
-          playback={{ onInteraction }}
         />,
       );
       await import('../audio/AudioPlayer');
@@ -661,22 +659,19 @@ describe('PreviewRoot', () => {
     ).toBeNull();
     expect(container.textContent).not.toContain('ambient.aac');
     expect(play).toHaveBeenCalledOnce();
-    audio?.dispatchEvent(new Event('play', { bubbles: true }));
-    expect(onInteraction).not.toHaveBeenCalled();
   });
 
-  it('does not project controlled Canvas playback events as manual interaction', async () => {
+  it('hides internal controls when the Canvas storyline owns playback', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async () => undefined);
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
-    const onInteraction = vi.fn();
     const descriptor = {
-      descriptorId: 'descriptor-canvas-hover-video',
-      sourceFingerprint: 'fingerprint-canvas-hover-video',
+      descriptorId: 'descriptor-canvas-storyline-video',
+      sourceFingerprint: 'fingerprint-canvas-storyline-video',
       contentLocator: previewContentLocator,
       url: 'openneko://resource/45454545454545454545454545454545',
       contentKind: 'video' as const,
       mediaType: 'video/mp4',
-      displayName: 'hover.mp4',
+      displayName: 'storyline.mp4',
       byteLength: 42,
     };
     const container = document.createElement('div');
@@ -687,7 +682,7 @@ describe('PreviewRoot', () => {
         <LightweightPreview
           locale="en"
           descriptor={descriptor}
-          playback={{ requestId: 'hover-enter', state: 'playing', onInteraction }}
+          playback={{ requestId: 'storyline-play', state: 'playing' }}
         />,
       );
       await import('../video/VideoPlayer');
@@ -695,8 +690,8 @@ describe('PreviewRoot', () => {
 
     const video = container.querySelector('video');
     expect(video).not.toBeNull();
-    video?.dispatchEvent(new Event('play', { bubbles: true }));
-    expect(onInteraction).not.toHaveBeenCalled();
+    expect(video?.controls).toBe(false);
+    expect(container.querySelector('[data-testid="preview-video-toggle-playback"]')).toBeNull();
 
     Object.defineProperty(video, 'paused', { configurable: true, value: false });
     await act(async () => {
@@ -704,18 +699,39 @@ describe('PreviewRoot', () => {
         <LightweightPreview
           locale="en"
           descriptor={descriptor}
-          playback={{ requestId: 'hover-leave', state: 'stopped', onInteraction }}
+          playback={{ requestId: 'storyline-pause', state: 'paused' }}
         />,
       );
     });
-    video?.dispatchEvent(new Event('pause', { bubbles: true }));
-    expect(onInteraction).not.toHaveBeenCalled();
 
-    video?.dispatchEvent(new Event('play', { bubbles: true }));
-    expect(onInteraction).toHaveBeenCalledWith('playing', 0);
+    await act(async () => {
+      root.render(
+        <LightweightPreview
+          locale="en"
+          descriptor={{
+            ...descriptor,
+            descriptorId: 'descriptor-canvas-storyline-audio',
+            sourceFingerprint: 'fingerprint-canvas-storyline-audio',
+            url: 'openneko://resource/56565656565656565656565656565656',
+            contentKind: 'audio',
+            mediaType: 'audio/mpeg',
+            displayName: 'storyline.mp3',
+          }}
+          playback={{ requestId: 'storyline-audio-pause', state: 'paused' }}
+        />,
+      );
+      await import('../audio/AudioPlayer');
+    });
+    expect(
+      container.querySelector('[data-testid="preview-lightweight-audio-waveform"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="preview-lightweight-audio-toggle-playback"]'),
+    ).toBeNull();
+    expect(container.querySelector('input[type="range"]')).toBeNull();
   });
 
-  it('keeps a newer Canvas hover-leave pause authoritative over a pending play', async () => {
+  it('keeps a newer controlled pause authoritative over a pending play', async () => {
     let resolvePlay: (() => void) | undefined;
     const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(
       () =>
@@ -724,15 +740,14 @@ describe('PreviewRoot', () => {
         }),
     );
     const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
-    const onInteraction = vi.fn();
     const descriptor = {
-      descriptorId: 'descriptor-canvas-hover-race',
-      sourceFingerprint: 'fingerprint-canvas-hover-race',
+      descriptorId: 'descriptor-canvas-controlled-race',
+      sourceFingerprint: 'fingerprint-canvas-controlled-race',
       contentLocator: previewContentLocator,
       url: 'openneko://resource/67676767676767676767676767676767',
       contentKind: 'video' as const,
       mediaType: 'video/mp4',
-      displayName: 'hover-race.mp4',
+      displayName: 'controlled-race.mp4',
       byteLength: 42,
     };
     const container = document.createElement('div');
@@ -743,7 +758,7 @@ describe('PreviewRoot', () => {
         <LightweightPreview
           locale="en"
           descriptor={descriptor}
-          playback={{ requestId: 'hover-enter-race', state: 'playing', onInteraction }}
+          playback={{ requestId: 'controlled-play-race', state: 'playing' }}
         />,
       );
       await import('../video/VideoPlayer');
@@ -755,7 +770,7 @@ describe('PreviewRoot', () => {
         <LightweightPreview
           locale="en"
           descriptor={descriptor}
-          playback={{ requestId: 'hover-leave-race', state: 'stopped', onInteraction }}
+          playback={{ requestId: 'controlled-pause-race', state: 'paused' }}
         />,
       );
     });
@@ -764,7 +779,6 @@ describe('PreviewRoot', () => {
     video?.dispatchEvent(new Event('play', { bubbles: true }));
     await act(async () => resolvePlay?.());
     expect(pause).toHaveBeenCalled();
-    expect(onInteraction).not.toHaveBeenCalled();
   });
 
   it('does not pause shared video or audio when caller projection callbacks rerender', async () => {

@@ -2,7 +2,7 @@
 
 ### Requirement: Canvas ordinary playback SHALL use native elements
 
-Ordinary Canvas image, audio and video nodes SHALL pass an exact authorized `PreviewMediaDescriptor` to `@neko/preview-webview` `LightweightPreview`. Fullscreen Canvas preview SHALL mount the same component in a caller-owned Overlay. Host SHALL use the same Preview resource registration and Range path used by Main Preview; Canvas MUST NOT own another media preparation, extension whitelist, native element renderer, PCM path or fallback player. Canvas retains node, Overlay, result-group, action, playback-intent and durable selection ownership.
+Ordinary Canvas image, audio and video nodes SHALL pass an exact authorized `PreviewMediaDescriptor` to `@neko/preview-webview` `LightweightPreview`. Fullscreen Canvas preview SHALL mount the same component in a caller-owned Overlay. Host SHALL use the same Preview resource registration and Range path used by Main Preview; Canvas MUST NOT own another media preparation, extension whitelist, native element renderer, PCM path or fallback player. Canvas retains node, Overlay, result-group, action and durable selection ownership. Ordinary nodes SHALL leave playback to the mounted Viewer; only the explicit Canvas storyline workspace MAY own controlled playback intent.
 
 #### Scenario: Existing node is path-only
 
@@ -20,7 +20,14 @@ Ordinary Canvas image, audio and video nodes SHALL pass an exact authorized `Pre
 
 - **WHEN** Host returns an accepted audio or video descriptor for ordinary inline playback
 - **THEN** Canvas supplies it to `LightweightPreview`, whose shared Viewer owns the native element
-- **AND** Canvas playback intent controls that Viewer without importing another player or routing through Main Preview
+- **AND** the media remains paused until the user operates the Viewer control
+- **AND** pointer hover, leave, node selection and node dragging do not start, stop or reset playback
+
+#### Scenario: Storyline controls Canvas media
+
+- **WHEN** the explicit Canvas storyline workspace presents an audio or video unit
+- **THEN** it supplies controlled playback intent to the same `LightweightPreview` Viewer
+- **AND** that mounted Viewer hides its internal playback controls so the storyline transport is the only controller
 
 #### Scenario: User opens Canvas immersive preview
 

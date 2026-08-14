@@ -8,11 +8,7 @@ import { LightweightPreview, type LightweightPreviewPlayback } from '@neko/previ
 import type { DelegateAction } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
 import { dispatchPreviewDelegate } from './previewDelegates';
-import type {
-  PreviewPlaybackControl,
-  PreviewPlaybackInteractionHandler,
-  PreviewSourceDescriptor,
-} from './types';
+import type { PreviewPlaybackControl, PreviewSourceDescriptor } from './types';
 import type { PreviewRuntime } from './previewRuntime';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
 import { useOptionalCanvasHost } from '../host-runtime';
@@ -30,7 +26,6 @@ export interface PreviewRendererProps {
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
   audioLayout?: 'transport' | 'node-card';
-  onPlaybackInteraction?: PreviewPlaybackInteractionHandler;
 }
 
 export type PreviewRenderer = ComponentType<PreviewRendererProps>;
@@ -60,15 +55,14 @@ function CanonicalPreviewRenderer({
   source,
   chrome = 'contained',
   playbackControl,
-  onPlaybackInteraction,
 }: PreviewRendererProps): ReactNode {
   const { descriptor, diagnostic } = useCanvasPreviewDescriptor(source);
   const contentKind = previewContentKind(source);
   const playback = useMemo<LightweightPreviewPlayback | undefined>(() => {
     if (!playbackControl || (contentKind !== 'audio' && contentKind !== 'video')) return undefined;
     return {
-      ...(playbackControl.requestId ? { requestId: playbackControl.requestId } : {}),
-      ...(playbackControl.state ? { state: playbackControl.state } : {}),
+      requestId: playbackControl.requestId,
+      state: playbackControl.state,
       ...(typeof playbackControl.startTimeSeconds === 'number'
         ? { startTimeSeconds: playbackControl.startTimeSeconds }
         : {}),
@@ -89,9 +83,8 @@ function CanonicalPreviewRenderer({
               }),
           }
         : {}),
-      ...(onPlaybackInteraction ? { onInteraction: onPlaybackInteraction } : {}),
     };
-  }, [contentKind, onPlaybackInteraction, playbackControl, source.id]);
+  }, [contentKind, playbackControl, source.id]);
 
   return (
     <div

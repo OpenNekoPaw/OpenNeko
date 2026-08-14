@@ -9,7 +9,7 @@ Agent、Canvas 与 Assets 的内置预览仍存在 package-local 图片、音频
 - `@neko/preview-webview` 只公开一个 `LightweightPreview` 轻量组件给 Agent、Canvas 和 Assets；删除 `QuickPreviewSurface`、`EmbeddedPreviewSurface` 及 `main | quick | embedded` Viewer 分发。
 - 主 Preview 保留独立 View/session、标题栏、完整控制 UI 和持久 snapshot，但通过同一个 Viewer kernel、图片元素、音频播放器和视频播放器渲染内容。
 - 图片、音频和视频统一使用同一 `PreviewMediaDescriptor`、授权资源 URL、加载/错误/释放规则以及原生 `<img>`、`<audio>`、`<video>` 终点。轻量与主面板差异仅由 UI 参数、外层 chrome 和 snapshot owner 表达。
-- Canvas 普通图片、音频和视频节点改用 `LightweightPreview`，删除 Canvas 自有 `InlineVideoPlayer`、`InlineAudioPlayer` 及其独立成功路径；Canvas 仍拥有节点、选择、工具栏和播放意图。
+- Canvas 普通图片、音频和视频节点改用 `LightweightPreview`，删除 Canvas 自有 `InlineVideoPlayer`、`InlineAudioPlayer` 及其独立成功路径；普通节点只提供手动播放，不再把悬停解释为播放意图。Canvas 故事线播放工作区继续拥有显式受控播放意图。
 - Canvas 全屏 Overlay 也组合同一 `LightweightPreview`；Overlay 只负责尺寸、背景、关闭、焦点和快捷键隔离。
 - Agent 与 Assets 保留卡片、集合和业务操作，媒体 body 统一使用 `LightweightPreview`；多图网格缩略图可由集合外壳裁切，但单资源预览不得复制 Viewer。
 - Desktop 对 Agent、Canvas、Assets 和主 Preview 使用相同的 exact-resource registration 与 `openneko://resource` Range 能力；调用方不得自行按扩展名建立另一套可播放格式判断。

@@ -76,12 +76,18 @@ The shared Viewer SHALL render ordinary image, video and audio content through H
 - **THEN** the same shared native `<audio>` starts audible playback without rendering a waveform, thumbnail card or playback controls
 - **AND** leaving the item pauses the element and releases that exact preview lease
 
-#### Scenario: Canvas hover playback does not take manual ownership
+#### Scenario: Canvas ordinary media is manually controlled
 
-- **WHEN** Canvas starts or stops inline audio/video by issuing a hover playback command
-- **THEN** the shared media element consumes the resulting native `play` or `pause` event as command acknowledgement instead of reporting user interaction
-- **AND** pointer leave stops only transient hover playback while genuine manual playback remains owned by the user
-- **AND** a pending asynchronous play completion cannot restart media after a newer hover-leave pause command
+- **WHEN** an authorized inline Canvas audio or video node is mounted
+- **THEN** the shared media element remains paused until the user operates its native or Preview-owned control
+- **AND** pointer enter and leave change only Canvas visual feedback and never issue playback commands
+- **AND** manual playback remains under the Viewer instance until the resource changes or the node unmounts
+
+#### Scenario: Canvas storyline media is externally controlled
+
+- **WHEN** the explicit storyline workspace supplies controlled playback intent to an audio or video Viewer
+- **THEN** the same shared media element follows storyline play, pause and seek commands
+- **AND** the Viewer hides its internal playback controls so manual and storyline commands cannot compete
 
 #### Scenario: Canvas displays inline audio
 
