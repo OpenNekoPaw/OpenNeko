@@ -158,6 +158,17 @@ describe('fetchForEpub', () => {
       );
       expect(liveChapter).not.toBeNull();
       expect(liveChapter?.style.marginInline).toBe('auto');
+      const toolbar = container.querySelector<HTMLElement>('.epub-viewer__toolbar');
+      expect(toolbar?.tagName).toBe('HEADER');
+      expect(toolbar?.getAttribute('aria-label')).toBe('Book navigation');
+      expect(toolbar?.querySelector('.epub-viewer__chapter-navigation')).not.toBeNull();
+      expect(
+        toolbar?.querySelector<HTMLButtonElement>('[aria-label="Previous chapter"]')?.type,
+      ).toBe('button');
+      expect(toolbar?.querySelector<HTMLButtonElement>('[aria-label="Next chapter"]')?.type).toBe(
+        'button',
+      );
+      expect(toolbar?.querySelector('.epub-viewer__mode-button')).not.toBeNull();
       expect(requests).toContain('META-INF/container.xml');
       expect(requests).toContain('OEBPS/content.opf');
       expect(requests).toContain('OEBPS/page.xhtml');

@@ -33,6 +33,7 @@ interface EpubSection {
 }
 import { useTranslation } from '../i18n/I18nContext';
 import { getLogger } from '../utils/logger';
+import './epub.css';
 
 // epub.js expects querySelectorAll() results to expose Array#map. Keep this
 // compatibility requirement with the embeddable viewer instead of an entrypoint.
@@ -1382,47 +1383,50 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
       <div
         data-testid={!loading ? 'epub-preview-ready' : undefined}
         data-spine-count={spineEntriesRef.current.length}
-        className="flex h-full flex-col"
+        className="epub-viewer flex h-full flex-col"
         style={{ background: 'var(--neko-editor-background)' }}
       >
         {/* Toolbar */}
-        <div
-          className="flex items-center gap-1 border-b px-3 py-1.5 text-xs"
-          style={{
-            borderColor: 'var(--neko-panel-border)',
-            color: 'var(--neko-foreground)',
-            background: 'var(--neko-sideBar-background)',
-          }}
-        >
-          <button onClick={goToPrev} className="px-2 py-0.5 hover:opacity-70">
-            &lt;
-          </button>
-          <span className="flex-1 truncate text-center opacity-70">{currentChapter}</span>
-          <button onClick={goToNext} className="px-2 py-0.5 hover:opacity-70">
-            &gt;
-          </button>
-
-          <span className="mx-1 opacity-20">|</span>
+        <header className="epub-viewer__toolbar" aria-label={t('preview.epub.toolbar')}>
+          <div className="epub-viewer__chapter-navigation">
+            <button
+              type="button"
+              onClick={goToPrev}
+              className="epub-viewer__toolbar-button"
+              aria-label={t('preview.epub.previousChapter')}
+              title={t('preview.epub.previousChapter')}
+              disabled={loading}
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+            <span className="epub-viewer__chapter-title" title={currentChapter || undefined}>
+              {currentChapter}
+            </span>
+            <button
+              type="button"
+              onClick={goToNext}
+              className="epub-viewer__toolbar-button"
+              aria-label={t('preview.epub.nextChapter')}
+              title={t('preview.epub.nextChapter')}
+              disabled={loading}
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
 
           {/* View mode cycle button */}
           <button
+            type="button"
             onClick={cycleViewMode}
-            className="rounded px-2 py-0.5"
+            className="epub-viewer__toolbar-button epub-viewer__mode-button"
             title={viewModeTitle}
-            style={{
-              background:
-                viewMode !== 'paginated'
-                  ? 'var(--neko-button-background)'
-                  : 'var(--neko-button-secondaryBackground)',
-              color:
-                viewMode !== 'paginated'
-                  ? 'var(--neko-button-foreground)'
-                  : 'var(--neko-button-secondaryForeground)',
-            }}
+            aria-label={viewModeTitle}
+            data-active={viewMode !== 'paginated'}
+            disabled={loading}
           >
-            {viewModeIcon}
+            <span aria-hidden="true">{viewModeIcon}</span>
           </button>
-        </div>
+        </header>
 
         <div className="relative flex flex-1 overflow-hidden">
           {/* Loading overlay */}

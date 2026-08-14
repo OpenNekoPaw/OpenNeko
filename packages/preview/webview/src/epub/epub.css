@@ -1,0 +1,106 @@
+.epub-viewer {
+  min-width: 0;
+  min-height: 0;
+}
+
+.epub-viewer__toolbar {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: grid;
+  min-width: 0;
+  min-height: 38px;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--neko-panel-border, rgba(127, 127, 127, 0.22));
+  color: var(--neko-foreground, #1f2523);
+  background: var(--neko-sideBar-background, #f3f5f4);
+}
+
+.epub-viewer__chapter-navigation {
+  display: grid;
+  min-width: 0;
+  grid-column: 2;
+  grid-template-columns: 28px clamp(112px, 36vw, 320px) 28px;
+  align-items: center;
+  gap: 4px;
+}
+
+.epub-viewer__chapter-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--neko-descriptionForeground, var(--neko-foreground, #1f2523));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 28px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epub-viewer__toolbar-button {
+  box-sizing: border-box;
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--neko-foreground, #1f2523);
+  background: transparent;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.epub-viewer__toolbar-button > span {
+  display: block;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.epub-viewer__toolbar-button:hover:not(:disabled) {
+  background: var(--neko-toolbar-hoverBackground, rgba(127, 127, 127, 0.14));
+}
+
+.epub-viewer__toolbar-button:focus-visible {
+  outline: 2px solid var(--neko-focusBorder, #3b8c73);
+  outline-offset: -1px;
+}
+
+.epub-viewer__toolbar-button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.epub-viewer__mode-button {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.epub-viewer__mode-button[data-active='true'] {
+  color: var(--neko-button-foreground, #ffffff);
+  background: var(--neko-button-background, #3b8c73);
+}
+
+.epub-viewer__mode-button > span {
+  font-size: 16px;
+}
+
+.epub-viewer__mode-button[data-active='true']:hover:not(:disabled) {
+  background: var(--neko-button-hoverBackground, #327861);
+}
+
+@media (max-width: 480px) {
+  .epub-viewer__toolbar {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    padding-inline: 4px;
+  }
+
+  .epub-viewer__chapter-navigation {
+    grid-template-columns: 28px clamp(72px, 42vw, 160px) 28px;
+  }
+}

@@ -85,6 +85,9 @@ const preview: MessageBundle = {
   'preview.epub.toc': 'Table of Contents',
   'preview.epub.theme': 'Reading theme',
   'preview.epub.fontSize': 'Font size',
+  'preview.epub.toolbar': 'Book navigation',
+  'preview.epub.previousChapter': 'Previous chapter',
+  'preview.epub.nextChapter': 'Next chapter',
   'preview.epub.modePaginated': 'Switch to page mode',
   'preview.epub.modeWaterfall': 'Switch to waterfall mode',
   // DOCX

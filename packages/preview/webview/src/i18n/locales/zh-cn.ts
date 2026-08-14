@@ -84,6 +84,9 @@ const preview: MessageBundle = {
   'preview.epub.toc': '目录',
   'preview.epub.theme': '阅读主题',
   'preview.epub.fontSize': '字号',
+  'preview.epub.toolbar': '书籍导航',
+  'preview.epub.previousChapter': '上一章',
+  'preview.epub.nextChapter': '下一章',
   'preview.epub.modePaginated': '切换为分页模式',
   'preview.epub.modeWaterfall': '切换为瀑布流模式',
   // DOCX
