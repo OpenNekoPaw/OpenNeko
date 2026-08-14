@@ -294,7 +294,7 @@ describe('Desktop Agent resource display projector', () => {
             url: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
             displayName: 'story.pdf',
             mediaType: 'image/png',
-            contentKind: 'document',
+            contentKind: 'image',
             sourceFingerprint: expect.any(String),
           },
         },

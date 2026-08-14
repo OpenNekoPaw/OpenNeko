@@ -266,6 +266,37 @@ owning content runtime and SHALL expose the resulting bytes to the exact Rendere
 `openneko://resource` URL. Transcript, Tool result authority, delivery metadata and Canvas documents SHALL retain the
 stable locator and SHALL NOT persist the URL, raw bytes, data URL, temporary extraction path or absolute source path.
 
+The system SHALL use one package-owned Preview resource projection service for image, audio and video descriptors,
+exact-resource leases and release behavior across Agent cards, Canvas nodes, Resource Browser quick Preview, Asset
+Center Preview and the main Preview panel. Lightweight and full Preview SHALL differ only by presentation parameters
+and session attachment; they SHALL use the same descriptor contract, resource transport and viewer kernel.
+
+#### Scenario: The same media is presented in lightweight and full Preview
+
+- **WHEN** an authorized image, audio or video locator is shown in Agent, Canvas or Resource Browser and is also
+  opened in the main Preview panel
+- **THEN** every Surface SHALL receive its own exact-owner lease from the same Preview projection service and render
+  the same content through the same viewer kernel
+- **AND** only chrome, control density, playback policy and presentation snapshot ownership MAY differ
+
+#### Scenario: A direct media file requires seekable playback
+
+- **WHEN** an authorized audio or video locator resolves to an ordinary file
+- **THEN** the canonical Preview projection service SHALL register a seekable file resource that supports the shared
+  player rather than buffering the complete file or selecting a Surface-specific player
+
+#### Scenario: A document entry or computed representation is previewed
+
+- **WHEN** an image locator resolves to an archive entry or computed representation
+- **THEN** the same Preview projection service SHALL register the authorized bytes and construct the same descriptor
+  shape used for direct files
+
+#### Scenario: Preview projection fails
+
+- **WHEN** the canonical source resolver or exact-resource registration rejects one locator
+- **THEN** that Surface SHALL display the typed Preview diagnostic and SHALL NOT fall back to a raw path, raw URL,
+  direct `<img>`, separately created media element or another descriptor producer
+
 #### Scenario: EPUB image is displayed in Agent and Canvas
 
 - **WHEN** `ReadDocument` or `ReadImage` returns an EPUB `document-entry` image and that stable locator is also projected into a Workspace Board image node
