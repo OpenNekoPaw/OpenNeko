@@ -501,9 +501,8 @@ describe('MessageList auto-scroll lifecycle', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Processed/ }));
     const activity = screen.getByRole('region', { name: 'Processing details' });
-    const image = within(activity).getByAltText('Page 1');
-    const openButton = image.closest('button');
-    if (!openButton) throw new Error('Expected document thumbnail open button.');
+    const openButton = within(activity).getByTitle(/^Open Page 1/);
+    expect(within(openButton).queryByRole('img')).toBeNull();
     fireEvent.click(openButton);
     expect(revealDocumentLocatorMock).toHaveBeenCalledWith({
       contentLocator: {

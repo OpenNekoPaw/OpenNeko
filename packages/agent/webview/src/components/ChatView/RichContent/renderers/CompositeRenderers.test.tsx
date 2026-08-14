@@ -427,8 +427,8 @@ describe('composite rich content renderers', () => {
     expect(markup).toContain('style="width:1160px"');
     expect(markup).toContain('w-[132px]');
     expect(markup).toContain('max-h-[220px] max-w-[170px] overflow-hidden');
-    expect(markup).toContain('data-preview-presentation="quick"');
-    expect(markup).toContain('data-preview-presentation-owner="preview-webview"');
+    expect(markup).toContain('data-preview-ui="lightweight"');
+    expect(markup).toContain('data-preview-owner="preview-webview"');
     expect(markup).not.toContain('object-cover');
     expect(markup).not.toContain('max-h-[720px]');
   });
