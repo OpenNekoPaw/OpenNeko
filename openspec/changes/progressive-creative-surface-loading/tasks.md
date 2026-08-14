@@ -38,4 +38,4 @@
 - [x] 6.3 Add Canvas producer/consumer tests proving one Snapshot request, StrictMode-safe disposal, stale View isolation, immediate document readiness and asynchronous Generation projection updates; delete or poison the Root-owned bootstrap path.
 - [x] 6.4 Add the same package-owned Surface bootstrap contract to Text Editor and remove its Root-owned duplicate first projection request, with exact identity and stale completion tests.
 - [x] 6.5 Add the same package-owned Surface bootstrap contract to Resource Browser and remove its Root-owned duplicate first projection request while preserving event ordering and presentation restore, with exact identity tests.
-- [ ] 6.6 Run focused Canvas/Text Editor/Assets/Desktop tests and builds, strict OpenSpec and architecture checks, then use authoritative Electron to inspect cold/warm View switching and record remaining UI evidence or blockers.
+- [x] 6.6 Run focused Canvas/Text Editor/Assets/Desktop tests and builds, strict OpenSpec and architecture checks, then use authoritative Electron to inspect cold/warm View switching and record remaining UI evidence or blockers.

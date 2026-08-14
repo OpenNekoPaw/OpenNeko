@@ -65,3 +65,54 @@ Result: blocked.
 - Visible cold/warm Cut and large-image EPUB latency and pixels remain unqualified because authoritative UI capture was blocked.
 - ZIP central-directory indexing is range-based and cancellable, but its latency on unusually large entry counts has not been benchmarked.
 - Development Vite dependency discovery can reload the isolated fixture before first interaction; this is a validation-environment limitation, not accepted UI evidence.
+
+## Workbench Surface Bootstrap Extension — 2026-08-14
+
+### Canonical Path Evidence
+
+- Canvas, Text Editor, and Resource Browser now create one package-owned bootstrap resource at the Desktop Surface boundary beside their lazy Root import.
+- Each bootstrap starts its exact subscription and initial projection before the React module resolves, retains the latest result, and replays it to the eventual UI subscriber without issuing a second Root-owned request.
+- Canvas publishes the authoritative document Snapshot first, then reattaches Generation nodes asynchronously through the same exact Session projection. A slow or invalid Generation node no longer blocks unrelated Canvas nodes or the initial document UI.
+- Resource Browser keeps one host subscription while presenting a subscriber-local contiguous event sequence, so data prepared before module readiness cannot violate the Root's event-order contract.
+- Surface unmount disposes only the exact bootstrap/subscription; StrictMode remount does not create a parallel authority or hidden Root.
+
+### Automated Verification
+
+- `pnpm --filter @neko/canvas-webview test`: passed, 65 files / 409 tests.
+- Focused Desktop Canvas runtime/Surface tests: passed, 51 tests.
+- `pnpm --filter @neko/canvas-webview build`: passed.
+- `pnpm --filter @neko/text-editor-webview test`: passed, 5 files / 49 tests.
+- `pnpm --filter @neko/text-editor-webview build`: passed.
+- `pnpm --filter @neko/assets-webview test`: passed, 8 files / 66 tests.
+- `pnpm --filter @neko/assets-webview build`: passed.
+- `pnpm --filter @neko/app-desktop typecheck`: passed.
+- `openspec validate progressive-creative-surface-loading --strict`: passed.
+- `pnpm check:application-boundaries`: passed, 1706 files with no findings.
+- `pnpm check:webview-boundaries`: passed.
+- `pnpm check:legacy-debt`: passed with zero blocking findings.
+- `pnpm check:unused`: passed with no findings.
+- `pnpm smoke:webview`: blocked before scoped packages by the pre-existing Agent fixture type error in `packages/agent/webview/src/extension-management/root.test.tsx:161` (`plugin-tools` is not assignable to `personal | plugin`). All three changed Webview package builds passed independently.
+- `pnpm test:functional:headless`: 187/189 passed. The two failures are pre-existing expectation drift in standalone Character slot placement and Resource Browser project-content routing; neither enters the new bootstrap resources.
+
+### Authoritative Electron UI Validation
+
+Applicability: applicable. The change affects Workbench loading, document switching, and the visible relationship between Canvas/Text Editor/Resource Browser readiness.
+
+Runtime: real Electron Main/preload/renderer launched with the Desktop development entry. Direct pixel and accessibility-tree inspection were both used.
+
+Observed acceptance:
+
+- Cold project open: Canvas document and Resource Browser file tree became visible in the same Workbench composition; neither waited for the other and the Canvas did not remain on `加载画布中`.
+- Canvas initial projection: the existing media node, minimap, toolbar, zoom controls, and `1 nodes | 0 connections` projection were present on the first ready frame.
+- Text Editor switch: `test.md` mounted its WYSIWYG editor while the Resource Browser remained ready; the window Shell and Agent panel were not remounted or blocked.
+- Warm switch back to `test.nkc`: Canvas and Resource Browser were both ready within the inspected frame, with no global loading overlay or stale Text Editor UI.
+- Adjacent surface: the Agent composition remained responsive throughout Canvas/Text Editor switches.
+
+Result for the Workbench bootstrap extension: passed.
+
+Development-runtime note: adding new package export specifiers while an old Vite process was already running produced stale export-map errors until that process was restarted. The first fresh start also triggered Vite dependency optimization/reload for Milkdown. After the complete Electron + Vite runtime was restarted and optimization settled, the authoritative cold/warm observations above passed. This is development-server lifecycle evidence, not an accepted fallback path in product code.
+
+### Extension Residual Risk
+
+- The Canvas media element was visible but still reported its own `正在缓冲` state during inspection. Media playback readiness is a separate resource/codec path and is not treated as evidence for or against document bootstrap completion.
+- No numeric cold-start latency budget was measured; this verification establishes independent progress and absence of the previous serial/global loading dependency, not a millisecond performance guarantee.
