@@ -100,6 +100,26 @@ describe('Canvas Host runtime contract', () => {
     ).toThrowError(CanvasHostRuntimeContractError);
   });
 
+  it('preserves exact node removal evidence on save intents', () => {
+    const save = createCanvasHostIntentRequest({
+      requestId: 'request-save',
+      commandId: 'command-save',
+      identity,
+      intent: { type: 'save', removedNodeIds: ['node-1', 'node-2'] },
+    });
+
+    expect(parseCanvasHostIntentRequest(save).intent).toEqual({
+      type: 'save',
+      removedNodeIds: ['node-1', 'node-2'],
+    });
+    expect(() =>
+      parseCanvasHostIntentRequest({
+        ...save,
+        intent: { type: 'save', removedNodeIds: ['node-1', 'node-1'] },
+      }),
+    ).toThrowError(CanvasHostRuntimeContractError);
+  });
+
   it('preserves a stale-Recipe Generation projection and rejects invalid projection fields', () => {
     const projection = {
       nodeId: 'generation-1',

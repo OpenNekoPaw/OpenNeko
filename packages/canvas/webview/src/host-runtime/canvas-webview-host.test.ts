@@ -790,12 +790,18 @@ describe('createCanvasWebviewHost', () => {
     await vi.waitFor(async () => {
       expect((await runtime.getSnapshot()).canvas.name).toBe('Edited Canvas');
     });
+    host.postMessage({
+      type: 'canvasContentNodeDeltaApplied',
+      removedNodeIds: ['removed-node-1'],
+      restoredNodeIds: [],
+    });
     host.postMessage({ type: 'requestSave' });
     await vi.waitFor(() => {
       expect(saveDocument).toHaveBeenCalledWith(
         expect.objectContaining({
           canvas: expect.objectContaining({ name: 'Edited Canvas' }),
           identity: runtime.identity,
+          removedNodeIds: ['removed-node-1'],
         }),
       );
     });

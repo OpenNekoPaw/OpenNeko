@@ -62,6 +62,7 @@ export interface CanvasHostRuntimeSessionEffects {
   readonly saveDocument?: (input: {
     readonly canvas: CanvasData;
     readonly identity: CanvasHostRuntimeIdentity;
+    readonly removedNodeIds: readonly string[];
   }) => Promise<void>;
   readonly authorMaterial?: (input: {
     readonly canvas: CanvasData;
@@ -453,6 +454,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       await saveDocument({
         canvas: cloneCanvas(this.canvas),
         identity: { ...this.identity },
+        removedNodeIds: [...(intent.removedNodeIds ?? [])],
       });
       this.commitStateChange(false, request.commandId);
       return this.accepted(request);

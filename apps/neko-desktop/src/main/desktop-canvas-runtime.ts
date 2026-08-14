@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   CANVAS_WORKSPACE_BOARD_PATH,
+  CanvasHostVisibleEffectError,
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
   parseCanvasMaterialActionResolutionRequest,
@@ -745,7 +746,21 @@ export class DesktopCanvasRuntime {
             identity: requestIdentity,
             targets,
           }),
-        saveDocument: async ({ canvas }) => {
+        saveDocument: async ({ canvas, removedNodeIds }) => {
+          const authoritative = await this.loadDocument(
+            documentPath,
+            grant.workspace.displayName,
+          );
+          const candidateNodeIds = new Set(canvas.nodes.map((node) => node.id));
+          const removedNodeIdSet = new Set(removedNodeIds);
+          const unprovenMissingNodeIds = authoritative.nodes
+            .filter((node) => !candidateNodeIds.has(node.id) && !removedNodeIdSet.has(node.id))
+            .map((node) => node.id);
+          if (unprovenMissingNodeIds.length > 0) {
+            throw new CanvasHostVisibleEffectError(
+              `canvas-authoritative-save-conflict: The Canvas changed outside this View; reload before saving (${unprovenMissingNodeIds.length} protected node(s)).`,
+            );
+          }
           await this.saveDocument(documentPath, canvas);
         },
         authorMaterial: async ({ canvas, identity: requestIdentity, request }) =>

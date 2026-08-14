@@ -122,6 +122,7 @@ export function createCanvasWebviewHost(
   let operationTail: Promise<void> = Promise.resolve();
   const localCommandIds = new Set<string>();
   const localCommandOrder: string[] = [];
+  const pendingRemovedNodeIds = new Set<string>();
   let unsubscribeDelegate: (() => void) | undefined;
   let unsubscribeRuntime: (() => void) | undefined;
 
@@ -143,6 +144,7 @@ export function createCanvasWebviewHost(
   };
 
   const publishSnapshot = (next: CanvasHostSnapshot): void => {
+    pendingRemovedNodeIds.clear();
     snapshot = next;
     updatePresentationState(next);
     emit({ type: 'update', data: next.canvas });
@@ -214,7 +216,11 @@ export function createCanvasWebviewHost(
   };
 
   const executeSave = async (): Promise<void> => {
-    await executeIntent({ type: 'save' });
+    await executeIntent({
+      type: 'save',
+      removedNodeIds: [...pendingRemovedNodeIds],
+    });
+    pendingRemovedNodeIds.clear();
   };
 
   const executeCanvasStatus = async (value: unknown): Promise<void> => {
@@ -310,8 +316,11 @@ export function createCanvasWebviewHost(
       case 'webviewKeyboardEditable':
       case 'canvasChanged':
       case 'operationApplied':
-      case 'canvasContentNodeDeltaApplied':
         return;
+      case 'canvasContentNodeDeltaApplied': {
+        applyContentNodeDelta(value, pendingRemovedNodeIds);
+        return;
+      }
       case 'canvasAction':
         if (
           delegate &&
@@ -570,6 +579,32 @@ export function createCanvasWebviewHost(
       listeners.clear();
     },
   };
+}
+
+function applyContentNodeDelta(
+  value: Record<string, unknown>,
+  pendingRemovedNodeIds: Set<string>,
+): void {
+  const removedNodeIds = requireNodeIdentityArray(value['removedNodeIds'], 'removed');
+  const restoredNodeIds = requireNodeIdentityArray(value['restoredNodeIds'], 'restored');
+  for (const nodeId of removedNodeIds) pendingRemovedNodeIds.add(nodeId);
+  for (const nodeId of restoredNodeIds) pendingRemovedNodeIds.delete(nodeId);
+}
+
+function requireNodeIdentityArray(value: unknown, kind: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`Canvas Webview ${kind} node identities must be an array.`);
+  }
+  const identities = value.map((nodeId) => {
+    if (typeof nodeId !== 'string' || nodeId.trim().length === 0) {
+      throw new Error(`Canvas Webview ${kind} node identity is invalid.`);
+    }
+    return nodeId;
+  });
+  if (new Set(identities).size !== identities.length) {
+    throw new Error(`Canvas Webview ${kind} node identities must be unique.`);
+  }
+  return identities;
 }
 
 function mergeCanvasStatus(previous: CanvasData, value: unknown): CanvasData {

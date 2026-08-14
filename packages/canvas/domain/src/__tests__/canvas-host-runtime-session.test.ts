@@ -59,13 +59,16 @@ describe('CanvasHostRuntimeSession', () => {
     if (redone.status !== 'accepted') throw new Error('Expected redo to succeed.');
     expect(redone.snapshot.canvas.name).toBe('Changed');
 
-    const saved = await runtime.executeIntent(request('save-1', { type: 'save' }));
+    const saved = await runtime.executeIntent(
+      request('save-1', { type: 'save', removedNodeIds: ['removed-node-1'] }),
+    );
     expect(saved.status).toBe('accepted');
     if (saved.status !== 'accepted') throw new Error('Expected save to succeed.');
     expect(saved.snapshot).toMatchObject({ dirty: false });
     expect(saveDocument).toHaveBeenCalledWith({
       canvas: expect.objectContaining({ name: 'Changed' }),
       identity,
+      removedNodeIds: ['removed-node-1'],
     });
     expect(events).toEqual([1, 2, 3, 4]);
   });

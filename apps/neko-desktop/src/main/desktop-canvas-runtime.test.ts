@@ -2656,6 +2656,73 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
+  it('rejects a stale Canvas save that omits authoritative Board nodes without removal evidence', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-save-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const documentPath = path.join(workspacePath, identity.documentId);
+    await mkdir(path.dirname(documentPath), { recursive: true });
+    await writeFile(
+      documentPath,
+      JSON.stringify({
+        name: 'Before delivery',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      }),
+    );
+    const runtime = createRuntime(workspacePath, identity);
+    await runtime.getSnapshot('window-1', identity);
+    const delivered = {
+      name: 'Agent delivery',
+      viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+      nodes: [
+        {
+          id: 'agent-output',
+          type: 'media' as const,
+          position: { x: 40, y: 60 },
+          size: { width: 240, height: 160 },
+          zIndex: 1,
+          data: { assetPath: 'output.png', mediaType: 'image' as const },
+        },
+      ],
+      connections: [],
+    };
+    await writeFile(documentPath, JSON.stringify(delivered));
+
+    const staleSave = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'stale-board-save',
+        commandId: 'stale-board-save',
+        identity,
+        intent: { type: 'save' },
+      }),
+    );
+
+    expect(staleSave).toMatchObject({
+      status: 'rejected',
+      diagnostic: {
+        code: 'canvas-runtime-effect-failed',
+        message: expect.stringContaining('canvas-authoritative-save-conflict'),
+      },
+    });
+    expect(JSON.parse(await readFile(documentPath, 'utf8')).nodes).toEqual(delivered.nodes);
+
+    const explicitRemoval = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'explicit-board-removal',
+        commandId: 'explicit-board-removal',
+        identity,
+        intent: { type: 'save', removedNodeIds: ['agent-output'] },
+      }),
+    );
+    expect(explicitRemoval.status).toBe('accepted');
+    expect(JSON.parse(await readFile(documentPath, 'utf8')).nodes).toEqual([]);
+    await runtime.dispose();
+  });
+
   it('resolves a Workspace grant before entering the Board mutation queue', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-board-open-'));
     roots.push(workspacePath);

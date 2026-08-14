@@ -103,7 +103,11 @@ export type CanvasHostIntent =
       readonly canvas: CanvasData;
     }
   | {
-      readonly type: 'save' | 'undo' | 'redo';
+      readonly type: 'save';
+      readonly removedNodeIds?: readonly string[];
+    }
+  | {
+      readonly type: 'undo' | 'redo';
     }
   | {
       readonly type: 'author-material';
@@ -452,7 +456,20 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
     }
     return { type, canvas };
   }
-  if (type === 'save' || type === 'undo' || type === 'redo') {
+  if (type === 'save') {
+    requireExactKeys(record, ['type', 'removedNodeIds']);
+    const removedNodeIds =
+      record['removedNodeIds'] === undefined
+        ? undefined
+        : parseNodeIdentityList(
+            record['removedNodeIds'],
+            'Canvas Host removed node identities must be an array.',
+            'Canvas Host removed node identity is invalid.',
+          );
+    return { type, ...(removedNodeIds === undefined ? {} : { removedNodeIds }) };
+  }
+  if (type === 'undo' || type === 'redo') {
+    requireExactKeys(record, ['type']);
     return { type };
   }
   if (type === 'author-material') {
@@ -608,16 +625,25 @@ export function parseCanvasHostPresentationState(value: unknown): CanvasHostPres
 }
 
 function parseSelectedNodeIds(value: unknown): readonly string[] {
-  const selectedNodeIds = requireArray(
+  return parseNodeIdentityList(
     value,
     'Canvas Host selected node identities must be an array.',
-  ).map((selectedNodeId) =>
-    requireOpaqueIdentity(selectedNodeId, 'Canvas Host selected node identity is invalid.'),
+    'Canvas Host selected node identity is invalid.',
   );
-  if (new Set(selectedNodeIds).size !== selectedNodeIds.length) {
-    throw invalidPayload('Canvas Host selected node identities must be unique.');
+}
+
+function parseNodeIdentityList(
+  value: unknown,
+  arrayMessage: string,
+  identityMessage: string,
+): readonly string[] {
+  const identities = requireArray(value, arrayMessage).map((identity) =>
+    requireOpaqueIdentity(identity, identityMessage),
+  );
+  if (new Set(identities).size !== identities.length) {
+    throw invalidPayload('Canvas Host node identities must be unique.');
   }
-  return selectedNodeIds;
+  return identities;
 }
 
 function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthoringCapabilities {
