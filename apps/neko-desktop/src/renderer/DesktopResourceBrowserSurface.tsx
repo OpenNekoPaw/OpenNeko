@@ -1,5 +1,6 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { createResourceBrowserRuntimeBootstrap } from '@neko/assets-webview/resource-browser/runtime-bootstrap';
 import type {
   DesktopProjectCatalogItem,
   DesktopProjectTabProjection,
@@ -68,6 +69,21 @@ export function DesktopResourceBrowserSurface({
       tab.viewId,
     ],
   );
+  const bootstrapLifetime = useMemo(
+    () => ({ runtime: createResourceBrowserRuntimeBootstrap(runtime), mounted: false }),
+    [runtime],
+  );
+  const preparedRuntime = bootstrapLifetime.runtime;
+  useEffect(() => {
+    bootstrapLifetime.mounted = true;
+    preparedRuntime.prepare();
+    return () => {
+      bootstrapLifetime.mounted = false;
+      queueMicrotask(() => {
+        if (!bootstrapLifetime.mounted) preparedRuntime.dispose();
+      });
+    };
+  }, [bootstrapLifetime, preparedRuntime]);
   const characterCreation = useMemo<ResourceBrowserCharacterCreation | undefined>(() => {
     if (!characterCreationAuthority || !onCharacterCreated) return undefined;
     const binding = {
@@ -106,7 +122,7 @@ export function DesktopResourceBrowserSurface({
         <ResourceBrowserRoot
           characterCreation={characterCreation}
           chrome="embedded"
-          runtime={runtime}
+          runtime={preparedRuntime}
           locale={locale}
           lifecyclePresentation="active"
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
