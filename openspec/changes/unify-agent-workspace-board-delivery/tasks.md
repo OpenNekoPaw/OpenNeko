@@ -31,7 +31,7 @@
       lease release.
 - [x] 3.4 Update the existing Agent Evaluation cases with locator-backed display authorization evidence, run
       key-free validation and record any real Desktop/provider execution blocker.
-- [ ] 3.5 Extract one package-owned Preview resource projection service for image, audio and video; switch Agent,
+- [x] 3.5 Extract one package-owned Preview resource projection service for image, audio and video; switch Agent,
       Canvas, Resource Browser and Asset Center descriptor/lease creation to it while retaining one shared viewer
       kernel for lightweight and full presentation.
 - [ ] 3.6 Remove raw media display fallbacks, preserve seekable file transport and authorized byte transport behind

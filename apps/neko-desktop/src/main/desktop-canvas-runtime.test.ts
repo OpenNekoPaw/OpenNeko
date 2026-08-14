@@ -2800,6 +2800,7 @@ function createRuntime(
     },
   }),
 ): DesktopCanvasRuntime {
+  const previewLeases = new Map<string, { release(): void }>();
   return new DesktopCanvasRuntime({
     shell: {
       resolveCanvasViewGrant: vi.fn(resolveCanvasViewGrant),
@@ -2811,7 +2812,41 @@ function createRuntime(
       logger: new ConsoleLogger('DesktopCanvasRuntimeTest'),
     }),
     globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
-    ...(registerPreviewResource ? { registerPreviewResource } : {}),
+    ...(registerPreviewResource
+      ? {
+          projectPreviewResource: async ({ descriptorId, displayName, ...request }) => {
+            const lease = await registerPreviewResource(request);
+            previewLeases.set(descriptorId, lease);
+            const contentKind = lease.mediaType.startsWith('image/')
+              ? 'image'
+              : lease.mediaType.startsWith('video/')
+                ? 'video'
+                : lease.mediaType.startsWith('audio/')
+                  ? 'audio'
+                  : lease.mediaType.startsWith('text/')
+                    ? 'text'
+                    : 'document';
+            return {
+              status: 'ready' as const,
+              lease,
+              descriptor: {
+                descriptorId,
+                sourceFingerprint: lease.sourceFingerprint,
+                contentLocator: request.locator,
+                url: lease.url,
+                contentKind,
+                mediaType: lease.mediaType,
+                displayName,
+                byteLength: lease.byteLength,
+              },
+            };
+          },
+          releasePreviewResourceProjection: (descriptorId: string) => {
+            previewLeases.get(descriptorId)?.release();
+            previewLeases.delete(descriptorId);
+          },
+        }
+      : {}),
   });
 }
 

@@ -211,7 +211,10 @@ import {
   CanvasGenerationNodeRuntime,
   listAvailableProjectMediaLibraryDestinations,
 } from '@neko/canvas-node';
-import { CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES } from '@neko/canvas-domain';
+import {
+  CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
+  type CanvasHostRuntimeIdentity,
+} from '@neko/canvas-domain';
 import { GenerationApplicationRuntime } from '@neko/generation/job';
 import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
 import {
@@ -224,9 +227,10 @@ import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import type { ContentLocator } from '@neko/content';
 import {
-  DesktopCanvasRuntime,
-  type DesktopCanvasPreviewResourceLease,
-} from './desktop-canvas-runtime';
+  createPreviewResourceProjectionService,
+  type PreviewResourceSource,
+} from '@neko/preview-domain/resource-projection';
+import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
 import { createCutCanvasHandoffPayload, parseCutCanvasHandoffPayload } from '@neko/cut-domain';
 import { openDesktopCanvasDocument } from './desktop-creative-document-runtime';
@@ -1137,6 +1141,97 @@ async function startDesktop(): Promise<void> {
       },
     },
   });
+  type CanvasPreviewProjectionOwner = {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly workspace: AssetWorkspaceResolution;
+    readonly purpose: 'inline-variant' | 'viewer-source';
+  };
+  const canvasPreviewResources =
+    createPreviewResourceProjectionService<CanvasPreviewProjectionOwner>({
+      resolveSource: async ({ locator, requestedMediaType, owner }) => {
+        if (locator.kind === 'content-representation') {
+          throw new Error('Canvas Preview requires a canonical ContentLocator.');
+        }
+        const contentType = requireCanvasPreviewContentType(locator, requestedMediaType);
+        if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
+          if (owner.purpose === 'viewer-source' && isCanvasTextContentType(contentType)) {
+            const contentRead = createNodeHostContentReadService({
+              workspaceRoot: owner.workspace.workspacePath,
+              documentEntryReader: {
+                readEntry: (sourcePath, entryPath) =>
+                  canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+              },
+            });
+            const loaded = await contentRead.read(locator, {
+              maxBytes: CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
+            });
+            if (loaded.status !== 'ready') {
+              throw new Error(
+                `Canvas embedded text preview is unavailable: ${loaded.diagnostic.code}.`,
+              );
+            }
+            return readyCanvasPreviewBytes(loaded.bytes, loaded.mimeType ?? contentType);
+          }
+          const absolutePath = await resolveWorkspaceContentLocator(owner.workspace, locator);
+          if (owner.purpose === 'viewer-source' || contentType.startsWith('image/')) {
+            const metadata = await lstat(absolutePath);
+            return {
+              status: 'ready',
+              source: {
+                kind: 'file',
+                absolutePath,
+                mediaType: contentType,
+                sourceFingerprint: `${metadata.mtimeMs}:${metadata.size}`,
+                byteLength: metadata.size,
+              },
+            };
+          }
+          return readyCanvasPreviewBytes(
+            await createDesktopThumbnailPng(absolutePath, { width: 640, height: 400 }),
+            'image/png',
+          );
+        }
+        const contentRead = createProjectContentReadService({
+          projectId: owner.identity.projectId,
+          workspaceRoot: owner.workspace.workspacePath,
+          globalMediaLibraryRoot: globalStorage.mediaLibraries,
+          documentEntryReader: {
+            readEntry: (sourcePath, entryPath) =>
+              canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+          },
+        });
+        const loaded = await contentRead.read(locator, {
+          maxBytes:
+            owner.purpose === 'viewer-source' && isCanvasTextContentType(contentType)
+              ? CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES
+              : 64 * 1024 * 1024,
+        });
+        if (loaded.status !== 'ready') {
+          throw new Error(`Canvas preview content is unavailable: ${loaded.diagnostic.code}.`);
+        }
+        return readyCanvasPreviewBytes(loaded.bytes, loaded.mimeType ?? contentType);
+      },
+      registerSource: async ({ owner, source }) => {
+        const resourceOwner = {
+          windowId: owner.identity.windowId,
+          viewId: owner.identity.viewId,
+          sessionId: `canvas-preview:${owner.identity.sessionId}:${owner.identity.viewInstanceId}`,
+          rendererSessionId: owner.identity.rendererSessionId,
+        };
+        return {
+          status: 'ready',
+          lease:
+            source.kind === 'file'
+              ? await resourceRegistry.registerFile(resourceOwner, source)
+              : registerCanvasPreviewBytes(
+                  resourceRegistry,
+                  resourceOwner,
+                  source.bytes,
+                  source.mediaType,
+                ),
+        };
+      },
+    });
   const canvasRuntime = new DesktopCanvasRuntime({
     shell: shellService,
     host,
@@ -1400,89 +1495,24 @@ async function startDesktop(): Promise<void> {
         target: parseCutCanvasHandoffPayload(executionPayload),
       });
     },
-    registerPreviewResource: async ({
+    projectPreviewResource: ({
       identity,
       workspace,
       locator,
       purpose,
+      descriptorId,
+      displayName,
       mediaType,
-    }): Promise<DesktopCanvasPreviewResourceLease> => {
-      const owner = {
-        windowId: identity.windowId,
-        viewId: identity.viewId,
-        sessionId: `canvas-preview:${identity.sessionId}:${identity.viewInstanceId}`,
-        rendererSessionId: identity.rendererSessionId,
-      };
-      const contentType = requireCanvasPreviewContentType(locator, mediaType);
-      if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
-        if (purpose === 'viewer-source' && isCanvasTextContentType(contentType)) {
-          const contentRead = createNodeHostContentReadService({
-            workspaceRoot: workspace.workspacePath,
-            documentEntryReader: {
-              readEntry: (sourcePath, entryPath) =>
-                canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
-            },
-          });
-          const loaded = await contentRead.read(locator, {
-            maxBytes: CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
-          });
-          if (loaded.status !== 'ready') {
-            throw new Error(
-              `Canvas embedded text preview is unavailable: ${loaded.diagnostic.code}.`,
-            );
-          }
-          return registerCanvasPreviewBytes(
-            resourceRegistry,
-            owner,
-            loaded.bytes,
-            loaded.mimeType ?? contentType,
-          );
-        }
-        const absolutePath = await resolveWorkspaceContentLocator(workspace, locator);
-        if (purpose === 'viewer-source' || contentType.startsWith('image/')) {
-          const metadata = await lstat(absolutePath);
-          const lease = await resourceRegistry.registerFile(owner, {
-            absolutePath,
-            mediaType: contentType,
-          });
-          return {
-            ...lease,
-            sourceFingerprint: `${metadata.mtimeMs}:${metadata.size}`,
-            byteLength: metadata.size,
-            mediaType: contentType,
-          };
-        }
-        const thumbnail = await createDesktopThumbnailPng(absolutePath, {
-          width: 640,
-          height: 400,
-        });
-        return registerCanvasPreviewBytes(resourceRegistry, owner, thumbnail, 'image/png');
-      }
-      const contentRead = createProjectContentReadService({
-        projectId: identity.projectId,
-        workspaceRoot: workspace.workspacePath,
-        globalMediaLibraryRoot: globalStorage.mediaLibraries,
-        documentEntryReader: {
-          readEntry: (sourcePath, entryPath) =>
-            canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
-        },
-      });
-      const loaded = await contentRead.read(locator, {
-        maxBytes:
-          purpose === 'viewer-source' && isCanvasTextContentType(contentType)
-            ? CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES
-            : 64 * 1024 * 1024,
-      });
-      if (loaded.status !== 'ready') {
-        throw new Error(`Canvas preview content is unavailable: ${loaded.diagnostic.code}.`);
-      }
-      return registerCanvasPreviewBytes(
-        resourceRegistry,
-        owner,
-        loaded.bytes,
-        loaded.mimeType ?? contentType,
-      );
-    },
+    }) =>
+      canvasPreviewResources.project({
+        descriptorId,
+        locator,
+        displayName,
+        owner: { identity, workspace, purpose },
+        requestedMediaType: requireCanvasPreviewContentType(locator, mediaType),
+      }),
+    releasePreviewResourceProjection: (descriptorId) =>
+      canvasPreviewResources.release(descriptorId),
   });
   workspaceBoardMutationCoordinator.coordinate = (workspaceId, operation) =>
     canvasRuntime.coordinateWorkspaceBoardMutation(workspaceId, operation);
@@ -3460,6 +3490,25 @@ async function createDesktopThumbnailPng(
     // Native thumbnail errors may contain the private absolute source path.
   }
   throw new Error('Desktop could not project a thumbnail for this resource.');
+}
+
+function readyCanvasPreviewBytes(
+  bytes: Uint8Array,
+  mediaType: string,
+): {
+  readonly status: 'ready';
+  readonly source: PreviewResourceSource;
+} {
+  return {
+    status: 'ready',
+    source: {
+      kind: 'bytes',
+      bytes,
+      mediaType,
+      sourceFingerprint: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+      byteLength: bytes.byteLength,
+    },
+  };
 }
 
 function registerCanvasPreviewBytes(
