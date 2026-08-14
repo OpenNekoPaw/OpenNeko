@@ -176,6 +176,36 @@ describe('ProjectionEndpointController', () => {
     });
   });
 
+  it('drops a late frame from a replaced attachment without poisoning the active Tab', () => {
+    const { host, registry, errors } = createHarness([
+      { tabId: 'tab-a', conversationId: 'conv-a' },
+    ]);
+    host.emit({
+      type: 'projectionEndpointReady',
+      realmId: 'realm-1',
+    });
+    const activeKey = attachMessages(host.sent)[0]?.key;
+    if (!activeKey) throw new Error('Missing active attachment.');
+    const staleKey = { ...activeKey, attachmentId: 'replaced-attachment' };
+
+    host.emit(snapshotFrame(staleKey));
+
+    expect(errors).toEqual([
+      expect.objectContaining({
+        context: { operation: 'drop-stale-frame', key: staleKey },
+      }),
+    ]);
+    expect(registry.require('tab-a').projectionAttachment?.getSnapshot()).toMatchObject({
+      key: activeKey,
+      phase: 'awaiting-snapshot',
+    });
+    expect(host.sent).not.toContainEqual({
+      type: 'projectionSnapshotAck',
+      key: staleKey,
+      sequence: 0,
+    });
+  });
+
   it('reattaches a retained Tab when a replacement controller owns the next Host endpoint', () => {
     const bindings = [{ tabId: 'tab-a', conversationId: 'conv-a' }];
     const registry = createTabRenderRuntimeRegistry();
