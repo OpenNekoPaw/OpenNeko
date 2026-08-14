@@ -13,6 +13,60 @@ import { describe, expect, it, vi } from 'vitest';
 import { createCanvasWebviewHost } from './canvas-webview-host';
 
 describe('createCanvasWebviewHost', () => {
+  it('prepares one initial snapshot before UI subscription and replays it without refetching', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    let releaseSnapshot = (): void => undefined;
+    const snapshotGate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    const session = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: {},
+    });
+    const getSnapshot = vi.fn(async () => {
+      await snapshotGate;
+      return session.getSnapshot();
+    });
+    const runtime: CanvasHostRuntime = {
+      identity,
+      getSnapshot,
+      resolveMaterialActions: (request) => session.resolveMaterialActions(request),
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
+      subscribe: (listener) => session.subscribe(listener),
+      executeIntent: (request) => session.executeIntent(request),
+    };
+    const host = createCanvasWebviewHost(runtime);
+
+    host.prepare();
+    expect(getSnapshot).toHaveBeenCalledOnce();
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+    host.postMessage({ type: 'ready' });
+    expect(getSnapshot).toHaveBeenCalledOnce();
+
+    releaseSnapshot();
+    await vi.waitFor(() => {
+      expect(messages).toContainEqual({ type: 'update', data: DEFAULT_CANVAS_DATA });
+    });
+
+    const replayed: unknown[] = [];
+    host.subscribe((message) => replayed.push(message));
+    expect(replayed).toContainEqual({ type: 'update', data: DEFAULT_CANVAS_DATA });
+    expect(getSnapshot).toHaveBeenCalledOnce();
+    host.dispose();
+    session.dispose();
+  });
+
   it('routes the Add menu source picker through the injected runtime', async () => {
     const identity = {
       projectId: 'project-1',

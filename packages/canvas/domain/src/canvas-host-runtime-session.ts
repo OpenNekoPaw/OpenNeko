@@ -337,7 +337,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
 
   async reattachGenerationNodes(): Promise<void> {
     await this.enqueueOperation(async () => {
-      this.assertActive();
+      if (this.disposed) return;
       const generation = this.options.effects.generation;
       if (!generation) return;
       for (const node of this.canvas.nodes) {
@@ -350,10 +350,13 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
             run: node.data.latestRun,
             persistCanvas: (canvas) => this.persistCanvas(canvas),
           });
+          if (this.disposed) return;
           this.canvas = cloneCanvas(result.canvas);
           this.generationNodes.set(node.id, result.projection);
+          this.commitProjectionChange();
           this.startGenerationObservation(node.id);
         } catch (error) {
+          if (this.disposed) return;
           this.generationNodes.set(node.id, {
             nodeId: node.id,
             submissionId: node.data.latestRun.submissionId,
@@ -366,6 +369,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
                 error instanceof Error ? error.message : 'Canvas Generation reattachment failed.',
             },
           });
+          this.commitProjectionChange();
         }
       }
     });

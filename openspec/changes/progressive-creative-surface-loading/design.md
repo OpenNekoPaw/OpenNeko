@@ -1,6 +1,10 @@
 ## Context
 
-Desktop 当前只在 `DesktopCutSurface` / `DesktopPreviewSurface` 挂载后调用 `React.lazy`，Cut Root 发送 `cut:ready`、Preview Root effect 启动后才调用 `getSnapshot()`。因此模块解析、CSS 执行和领域 bootstrap 串行。Preview Root 还静态导入所有格式 Viewer；EPUB 使用 `ePub(url, { openAs: 'epub' })`，自定义 request 对 binary 调用 `arrayBuffer()`，导致完整 ZIP 在 Renderer 内进入 JSZip。
+Desktop 的 Cut/Preview 已在可见 Surface 层并行启动动态模块与 Snapshot，但 Canvas、Text Editor 和
+Resource Browser 仍由 Root effect 在模块解析后启动 Snapshot。Canvas Main 创建 Session 时还同步执行
+`reattachGenerationNodes()`，把外部 Job 查询与输入准备放在首份文档投影之前。Workbench 按当前 Scene
+卸载隐藏 Root 后，返回 View 会重新暴露这条串行链。Preview Root 的格式加载与 EPUB 历史问题也属于同一
+“重任务阻塞首个可用投影”问题。
 
 现有 `openneko://resource` handler 已提供 sender-bound、opaque、Range-aware 文件 URL；CBZ 已证明 `zip.js` 可以只读取 ZIP 目录和目标 entry。Renderer/Webview 不得获得本地路径，Desktop Main 不得拥有 EPUB 解析规则，不可见 Root 不得为了预热而常驻。
 
@@ -8,15 +12,16 @@ Desktop 当前只在 `DesktopCutSurface` / `DesktopPreviewSurface` 挂载后调�
 
 **Goals:**
 
-- Surface fallback 首次提交后即并行启动动态模块与精确 session Snapshot，不再由 Root 模块挂载触发首份数据读取。
+- 每个创作 Surface fallback 首次提交后即并行启动动态模块与精确 session Snapshot，不再由 Root 模块挂载触发首份数据读取。
+- Canvas 权威文档 Snapshot 不等待 Generation Job 恢复；恢复结果通过同一 Session projection 发布。
 - Preview 只执行当前格式 Viewer 的模块和 CSS。
 - EPUB 只在 Node ZIP owner 中读取中央目录及被请求 entry；epub.js 以虚拟目录模式自然请求 container、OPF、navigation、章节和关联资源。
-- 保持一个 authoritative Preview/Cut runtime、一条 Snapshot 路径、精确 identity、可取消释放和局部可见失败。
+- 每个 Surface 保持一个 authoritative runtime、一条 Snapshot 路径、精确 identity、可取消释放和局部可见失败。
 - 通过路径测试和真实 Electron 证据分别验证冷/热模块、首份数据并行以及未访问 EPUB entry 不被读取。
 
 **Non-Goals:**
 
-- 不保留隐藏 Cut/Preview Root，不新增通用 LRU、跨领域 cache manager 或数据预热 catalog。
+- 不保留隐藏业务 Root，不新增通用 LRU、跨领域 cache manager 或数据预热 catalog。
 - 不改变 OTIO/EPUB 文件内容、项目事实、阅读位置或 Viewer presentation snapshot 格式。
 - 不为 EPUB entry 建立 loopback server、Renderer 文件访问、完整归档 fallback 或临时全量解压目录。
 - 不承诺压缩 entry 内的随机访问；一个被请求 entry 可以被完整解压，但未请求 entry 不得读取或解压。
@@ -29,7 +34,22 @@ Desktop 当前只在 `DesktopCutSurface` / `DesktopPreviewSurface` 挂载后调�
 
 `@neko/preview-webview/runtime-bootstrap` 提供由 exact `PreviewHostRuntime` 构造的幂等 preparation resource。Desktop Preview Surface 在 effect 中启动它，Preview Root 只消费该 resource 的唯一 Snapshot Promise 和同一 runtime。该 resource 只缓存本次可见 Surface 的 Promise，不持有领域事实、React tree 或跨 View cache。
 
+Canvas、Text Editor 和 Resource Browser 采用相同的 package-owned preparation resource：Desktop Surface
+创建 exact runtime 后立即 `prepare()`，Root 消费同一 pending/latest Snapshot Promise 与同一 runtime。
+Canvas bootstrap 额外负责把 runtime projection 订阅建立在 Snapshot 前，防止首次 Snapshot 与后续事件之间
+出现窗口；它不复制 Canvas facts，也不跨 View 保存 Snapshot。
+
 替代方案是在 renderer startup 直接挂载或保留隐藏 Roots。拒绝原因是它违反 UI residency 约束，并把访问历史变成长期 React/subscription 资源。
+
+### Canvas publishes the document before background Generation recovery
+
+Desktop Canvas Session 在完成 grant、路径解析、`.nkc` 读取与校验后立即注册并返回首份 Snapshot。
+Generation 节点 reattach 作为同一个 Session 的后台恢复开始；每个节点的成功或局部 diagnostic 更新
+`generationNodes` projection 并发布 canonical event。恢复失败不得把文档退回 loading，也不得创建第二个
+Canvas authority。Session dispose 后的晚到结果必须被拒绝或忽略。
+
+替代方案是把恢复结果放进独立 Renderer fetch 或空默认 Snapshot。前者会建立第二条事实路径，后者会掩盖
+真实节点状态；两者都拒绝。
 
 ### Preview session publication becomes demand-driven
 
@@ -61,14 +81,18 @@ EPUB Viewer 删除 archived-binary loader，使用 descriptor base URL 以 `open
 
 ## Ownership And Runtime Path
 
-| Responsibility | Owner / role | Canonical public path | Producer | Consumer | Runtime boundary | Replaced path |
-| --- | --- | --- | --- | --- | --- | --- |
-| Cut preparation/replay | `@neko/cut-webview`, L2 | `runtime-bridge` | exact Cut host runtime | visible Cut Root | Renderer -> typed Cut IPC | Root-ready then first Snapshot |
-| Preview preparation | `@neko/preview-webview`, L2 | `runtime-bootstrap` | exact Preview host runtime | visible Preview Root | Renderer -> typed Preview IPC | Root effect then first Snapshot |
-| Viewer selection | `@neko/preview-webview`, L2 | `root`, `quick-preview` | ready descriptor | exact Viewer | browser ESM | one static all-viewer Root chunk |
-| ZIP entry index/read | `@neko/content`, L1 Node | `@neko/content/document/node` | authorized absolute file adapter | Preview resource publisher | Node file boundary | Renderer full ArrayBuffer + JSZip |
-| Opaque archive tree | Desktop Application trust adapter | `DesktopResourceRegistry.registerResourceTree` | package-owned entry source | authorized WebContents | Electron protocol/sender boundary | whole archive file registration |
-| EPUB chapter render | `@neko/preview-webview`, L2 | EPUB Viewer module | opaque virtual directory | visible chapter/rendition | browser Renderer | archived epub.js full-open path |
+| Responsibility               | Owner / role                                  | Canonical public path                          | Producer                         | Consumer                      | Runtime boundary                  | Replaced path                                 |
+| ---------------------------- | --------------------------------------------- | ---------------------------------------------- | -------------------------------- | ----------------------------- | --------------------------------- | --------------------------------------------- |
+| Cut preparation/replay       | `@neko/cut-webview`, L2                       | `runtime-bridge`                               | exact Cut host runtime           | visible Cut Root              | Renderer -> typed Cut IPC         | Root-ready then first Snapshot                |
+| Preview preparation          | `@neko/preview-webview`, L2                   | `runtime-bootstrap`                            | exact Preview host runtime       | visible Preview Root          | Renderer -> typed Preview IPC     | Root effect then first Snapshot               |
+| Canvas preparation/replay    | `@neko/canvas-webview`, L2                    | `runtime-bootstrap`                            | exact Canvas host runtime        | visible Canvas Root           | Renderer -> typed Canvas IPC      | Root-ready then first Snapshot                |
+| Canvas Generation recovery   | `@neko/canvas-domain`, L0 application session | `CanvasHostRuntimeSession`                     | exact Canvas Session             | Canvas projection subscribers | Host-neutral async task           | Session creation waiting for every Job resume |
+| Text Editor preparation      | `@neko/text-editor-webview`, L2               | `runtime-bootstrap`                            | exact Text Editor host runtime   | visible Text Editor Root      | Renderer -> typed Text Editor IPC | Root effect then first projection             |
+| Resource Browser preparation | `@neko/assets-webview`, L2                    | `resource-browser/runtime-bootstrap`           | exact Resource Browser runtime   | visible Resource Browser Root | Renderer -> typed Assets IPC      | Root effect then first projection             |
+| Viewer selection             | `@neko/preview-webview`, L2                   | `root`, `quick-preview`                        | ready descriptor                 | exact Viewer                  | browser ESM                       | one static all-viewer Root chunk              |
+| ZIP entry index/read         | `@neko/content`, L1 Node                      | `@neko/content/document/node`                  | authorized absolute file adapter | Preview resource publisher    | Node file boundary                | Renderer full ArrayBuffer + JSZip             |
+| Opaque archive tree          | Desktop Application trust adapter             | `DesktopResourceRegistry.registerResourceTree` | package-owned entry source       | authorized WebContents        | Electron protocol/sender boundary | whole archive file registration               |
+| EPUB chapter render          | `@neko/preview-webview`, L2                   | EPUB Viewer module                             | opaque virtual directory         | visible chapter/rendition     | browser Renderer                  | archived epub.js full-open path               |
 
 User data is unchanged. Runtime preparation, entry maps, opaque URLs, module promises and loading/error state are disposable projections; none are persisted or used as content identity.
 
@@ -89,6 +113,7 @@ User data is unchanged. Runtime preparation, entry maps, opaque URLs, module pro
 4. Replace EPUB archived loader with the virtual-directory path and remove full-binary tests/functions.
 5. Update the active EPUB progressive spec so full archive reads are no longer accepted; validate both changes strictly.
 6. Run package tests/typechecks/build, then visible Electron cold/warm Cut and EPUB acceptance with request instrumentation.
+7. Extend the same preparation contract to Canvas, Text Editor and Resource Browser; move Canvas Generation reattach behind the first Snapshot and qualify cold/warm Workbench View switching.
 
 Rollback restores the previous code as one atomic boundary. No data migration or user-file rewrite is required.
 

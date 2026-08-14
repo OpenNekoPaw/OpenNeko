@@ -66,6 +66,7 @@ interface DesktopCanvasSessionEntry {
   readonly documentPath: string;
   readonly workspace: DesktopCanvasViewGrant['workspace'];
   readonly session: CanvasHostRuntimeSession;
+  generationReattachmentScheduled: boolean;
 }
 
 export interface DesktopCanvasPreviewResourceLease {
@@ -219,7 +220,10 @@ export class DesktopCanvasRuntime {
     windowId: string,
     identity: CanvasHostRuntimeIdentity,
   ): Promise<CanvasHostSnapshot> {
-    return (await this.requireSession(windowId, identity)).session.getSnapshot();
+    const entry = await this.requireSession(windowId, identity);
+    const snapshot = await entry.session.getSnapshot();
+    this.scheduleGenerationReattachment(entry);
+    return snapshot;
   }
 
   async executeIntent(
@@ -846,10 +850,20 @@ export class DesktopCanvasRuntime {
       documentPath,
       workspace: grant.workspace,
       session,
+      generationReattachmentScheduled: false,
     };
     this.sessions.set(key, entry);
-    await session.reattachGenerationNodes();
     return entry;
+  }
+
+  private scheduleGenerationReattachment(entry: DesktopCanvasSessionEntry): void {
+    if (entry.generationReattachmentScheduled) return;
+    entry.generationReattachmentScheduled = true;
+    const key = sessionKey(entry.identity);
+    setImmediate(() => {
+      if (this.disposed || this.sessions.get(key) !== entry) return;
+      void entry.session.reattachGenerationNodes();
+    });
   }
 
   private async resolveContentPath(

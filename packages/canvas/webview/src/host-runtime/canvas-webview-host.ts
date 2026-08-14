@@ -98,10 +98,14 @@ export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
   dispose(): void;
 }
 
+export interface PreparedCanvasWebviewHostPort extends CanvasWebviewHostPort {
+  prepare(): void;
+}
+
 export function createCanvasWebviewHost(
   runtime: CanvasHostRuntime,
   delegate?: CanvasWebviewDelegate,
-): CanvasWebviewHostPort {
+): PreparedCanvasWebviewHostPort {
   const listeners = new Set<(message: unknown) => void>();
   let snapshot: CanvasHostSnapshot | undefined;
   let state: unknown = delegate?.getState();
@@ -111,8 +115,9 @@ export function createCanvasWebviewHost(
   let materialActionRequestSequence = 0;
   let textFilePreviewRequestSequence = 0;
   let currentMaterialActionRequestId: string | undefined;
-  let snapshotRequestSequence = 0;
-  let currentSnapshotRequestId: string | undefined;
+  let initialSnapshotRequest: Promise<CanvasHostSnapshot> | undefined;
+  let initialSnapshotFailure: unknown;
+  let runtimeEventObserved = false;
   let projectionSequence = 0;
   let operationTail: Promise<void> = Promise.resolve();
   const localCommandIds = new Set<string>();
@@ -144,6 +149,23 @@ export function createCanvasWebviewHost(
     emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
   };
 
+  const replaySnapshot = (listener: (message: unknown) => void, next: CanvasHostSnapshot): void => {
+    listener({ type: 'update', data: next.canvas });
+    listener({ type: 'canvas.hostPresentation', presentation: next.presentation });
+  };
+
+  const loadFailureMessage = (error: unknown): unknown => ({
+    type: 'canvas.loadFailed',
+    diagnostic: {
+      code: 'canvas-runtime-effect-failed',
+      message: error instanceof Error ? error.message : String(error),
+    },
+  });
+
+  const emitLoadFailure = (error: unknown): void => {
+    emit(loadFailureMessage(error));
+  };
+
   const adoptLocalSnapshot = (next: CanvasHostSnapshot): void => {
     snapshot = next;
     updatePresentationState(next);
@@ -160,7 +182,7 @@ export function createCanvasWebviewHost(
         }
         if (event.sequence <= projectionSequence) return;
         projectionSequence = event.sequence;
-        currentSnapshotRequestId = undefined;
+        runtimeEventObserved = true;
         if (event.originCommandId && localCommandIds.has(event.originCommandId)) {
           adoptLocalSnapshot(event.snapshot);
           return;
@@ -173,6 +195,22 @@ export function createCanvasWebviewHost(
       started = false;
       throw error;
     }
+  };
+
+  const readInitialSnapshot = (): Promise<CanvasHostSnapshot> => {
+    if (disposed) return Promise.reject(new Error('Canvas Webview Host is disposed.'));
+    if (snapshot) return Promise.resolve(snapshot);
+    if (initialSnapshotRequest) return initialSnapshotRequest;
+    initialSnapshotRequest = runtime.getSnapshot().then((next) => {
+      if (!disposed && !runtimeEventObserved) publishSnapshot(next);
+      return snapshot ?? next;
+    });
+    void initialSnapshotRequest.catch((error: unknown) => {
+      if (disposed) return;
+      initialSnapshotFailure = error;
+      emitLoadFailure(error);
+    });
+    return initialSnapshotRequest;
   };
 
   const executeSave = async (): Promise<void> => {
@@ -255,23 +293,7 @@ export function createCanvasWebviewHost(
     }
     switch (value['type']) {
       case 'ready':
-        snapshotRequestSequence += 1;
-        currentSnapshotRequestId = `canvas-webview-snapshot:${snapshotRequestSequence}`;
-        {
-          const requestId = currentSnapshotRequestId;
-          void runtime.getSnapshot().then(
-            (next) => {
-              if (currentSnapshotRequestId !== requestId) return;
-              currentSnapshotRequestId = undefined;
-              publishSnapshot(next);
-            },
-            (error: unknown) => {
-              if (currentSnapshotRequestId !== requestId) return;
-              currentSnapshotRequestId = undefined;
-              emitLoadFailure(error);
-            },
-          );
-        }
+        void readInitialSnapshot().catch(() => undefined);
         return;
       case 'canvasStatus': {
         enqueue(() => executeCanvasStatus(value['data']));
@@ -312,16 +334,6 @@ export function createCanvasWebviewHost(
     }
   };
 
-  const emitLoadFailure = (error: unknown): void => {
-    emit({
-      type: 'canvas.loadFailed',
-      diagnostic: {
-        code: 'canvas-runtime-effect-failed',
-        message: error instanceof Error ? error.message : String(error),
-      },
-    });
-  };
-
   const queueOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     const result = operationTail.then(operation);
     operationTail = result.then(
@@ -356,6 +368,10 @@ export function createCanvasWebviewHost(
 
   return {
     documentId: runtime.identity.documentId,
+    prepare() {
+      start();
+      void readInitialSnapshot().catch(() => undefined);
+    },
     postMessage,
     supportsMessage,
     getState: () => delegate?.getState() ?? state,
@@ -367,6 +383,8 @@ export function createCanvasWebviewHost(
     reportStateDiagnostic,
     subscribe(listener) {
       if (disposed) throw new Error('Canvas Webview Host is disposed.');
+      const preparedSnapshot = snapshot;
+      const preparedFailure = initialSnapshotFailure;
       listeners.add(listener);
       try {
         start();
@@ -374,6 +392,8 @@ export function createCanvasWebviewHost(
         listeners.delete(listener);
         throw error;
       }
+      if (preparedSnapshot) replaySnapshot(listener, preparedSnapshot);
+      else if (preparedFailure) listener(loadFailureMessage(preparedFailure));
       return () => listeners.delete(listener);
     },
     async requestSource(sourceKind, sourceMode, position) {

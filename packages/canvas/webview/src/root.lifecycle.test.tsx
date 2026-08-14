@@ -31,6 +31,7 @@ vi.mock('./CanvasApp', async () => {
   };
 });
 
+import { createCanvasWebviewHost } from './host-runtime';
 import { CanvasWebviewRoot } from './root';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -50,7 +51,7 @@ describe('CanvasWebviewRoot lifetime', () => {
     document.body.innerHTML = '';
   });
 
-  it('lets child effects unsubscribe before disposing the instance Host', async () => {
+  it('leaves injected Host disposal to the owning surface after child cleanup', async () => {
     const dispose = vi.fn();
     const runtime: CanvasHostRuntime = {
       identity: {
@@ -89,16 +90,14 @@ describe('CanvasWebviewRoot lifetime', () => {
       dispose,
     };
 
-    act(() => {
-      root.render(<CanvasWebviewRoot runtime={runtime} />);
-    });
+    const host = createCanvasWebviewHost(runtime);
+    act(() => root.render(<CanvasWebviewRoot host={host} />));
     expect(() => {
       act(() => root.unmount());
     }).not.toThrow();
     expect(dispose).not.toHaveBeenCalled();
 
-    await Promise.resolve();
-
+    host.dispose();
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
@@ -141,10 +140,12 @@ describe('CanvasWebviewRoot lifetime', () => {
       dispose,
     };
 
+    const host = createCanvasWebviewHost(runtime);
+    host.prepare();
     act(() => {
       root.render(
         <StrictMode>
-          <CanvasWebviewRoot runtime={runtime} />
+          <CanvasWebviewRoot host={host} />
         </StrictMode>,
       );
     });
@@ -156,8 +157,11 @@ describe('CanvasWebviewRoot lifetime', () => {
     act(() => root.unmount());
     await Promise.resolve();
 
-    expect(dispose).toHaveBeenCalledTimes(1);
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(dispose).not.toHaveBeenCalled();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    host.dispose();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
   it('suspends the high-memory Canvas child while retaining its owner Host', async () => {
@@ -165,14 +169,15 @@ describe('CanvasWebviewRoot lifetime', () => {
     const unsubscribe = vi.fn();
     const subscribe = vi.fn(() => unsubscribe);
     const runtime = createRuntime({ dispose, subscribe });
+    const host = createCanvasWebviewHost(runtime);
 
     act(() => {
-      root.render(<CanvasWebviewRoot lifecyclePresentation="active" runtime={runtime} />);
+      root.render(<CanvasWebviewRoot host={host} lifecyclePresentation="active" />);
     });
     expect(container.querySelector('[data-canvas-app="mounted"]')).not.toBeNull();
 
     act(() => {
-      root.render(<CanvasWebviewRoot lifecyclePresentation="suspended" runtime={runtime} />);
+      root.render(<CanvasWebviewRoot host={host} lifecyclePresentation="suspended" />);
     });
     expect(container.querySelector('[data-canvas-app="mounted"]')).toBeNull();
     expect(container.querySelector('[data-canvas-suspended="true"]')).not.toBeNull();
@@ -180,13 +185,15 @@ describe('CanvasWebviewRoot lifetime', () => {
     expect(dispose).not.toHaveBeenCalled();
 
     act(() => {
-      root.render(<CanvasWebviewRoot lifecyclePresentation="active" runtime={runtime} />);
+      root.render(<CanvasWebviewRoot host={host} lifecyclePresentation="active" />);
     });
     expect(container.querySelector('[data-canvas-app="mounted"]')).not.toBeNull();
     expect(subscribe).toHaveBeenCalledOnce();
 
     act(() => root.unmount());
     await Promise.resolve();
+    expect(dispose).not.toHaveBeenCalled();
+    host.dispose();
     expect(dispose).toHaveBeenCalledOnce();
   });
 });

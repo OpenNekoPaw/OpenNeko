@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import {
+  createCanvasGenerationNode,
   createCanvasHostIntentRequest,
   type CanvasGenerationApplicationPort,
   type CanvasHostIntent,
@@ -42,6 +43,89 @@ afterEach(async () => {
 });
 
 describe('DesktopCanvasRuntime', () => {
+  it('returns the document snapshot before resuming persisted Generation runs', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-progressive-'));
+    roots.push(workspacePath);
+    const identity = createIdentity();
+    const run = {
+      submissionId: 'submission-progressive-1',
+      recipeInputFingerprint: 'sha256:progressive-recipe',
+      jobRef: { kind: 'generation' as const, jobId: 'generation-progressive-1' },
+    };
+    const authoredCanvas = createCanvasGenerationNode({
+      canvas: {
+        name: 'Progressive Canvas',
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        nodes: [],
+        connections: [],
+      },
+      nodeId: 'generation-node-1',
+      kind: 'image',
+      position: { x: 40, y: 60 },
+    });
+    const generationNode = authoredCanvas.nodes[0];
+    if (!generationNode || generationNode.type !== 'generation') {
+      throw new Error('Progressive Generation fixture is invalid.');
+    }
+    const canvas = {
+      ...authoredCanvas,
+      nodes: [
+        {
+          ...generationNode,
+          data: { ...generationNode.data, latestRun: run },
+        },
+      ],
+    };
+    await writeFixtureFile(workspacePath, identity.documentId, JSON.stringify(canvas));
+    let releaseResume = (): void => undefined;
+    const resumeGate = new Promise<void>((resolve) => {
+      releaseResume = resolve;
+    });
+    const resumeNode = vi.fn(
+      async (
+        input: Parameters<CanvasGenerationApplicationPort['resumeNode']>[0],
+      ): ReturnType<CanvasGenerationApplicationPort['resumeNode']> => {
+        await resumeGate;
+        return {
+          canvas: input.canvas,
+          projection: {
+            nodeId: 'generation-node-1',
+            ...run,
+            phase: 'running' as const,
+          },
+        };
+      },
+    );
+    const generation: CanvasGenerationApplicationPort = {
+      startNode: async () => {
+        throw new Error('Generation execution is not expected by this fixture.');
+      },
+      resumeNode,
+      observeNode: async function* () {},
+      cancelNode: async () => {
+        throw new Error('Generation cancellation is not expected by this fixture.');
+      },
+      detachWindow: vi.fn(),
+      dispose: vi.fn(async () => undefined),
+    };
+    const runtime = createRuntimeWithGeneration(workspacePath, identity, generation);
+
+    const initial = await runtime.getSnapshot('window-1', identity);
+    expect(initial.canvas.name).toBe('Progressive Canvas');
+    expect(initial.generationNodes).toEqual([]);
+    const events: CanvasHostSnapshot[] = [];
+    await runtime.subscribe('window-1', identity, (event) => events.push(event.snapshot));
+    await vi.waitFor(() => expect(resumeNode).toHaveBeenCalledOnce());
+
+    releaseResume();
+    await vi.waitFor(() => {
+      expect(events.at(-1)?.generationNodes).toEqual([
+        expect.objectContaining({ nodeId: 'generation-node-1', phase: 'running' }),
+      ]);
+    });
+    await runtime.dispose();
+  });
+
   it('reads a bounded text preview through the workspace content service', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-text-preview-'));
     roots.push(workspacePath);

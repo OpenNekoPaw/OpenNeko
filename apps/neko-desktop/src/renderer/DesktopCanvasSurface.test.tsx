@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { StrictMode, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
@@ -16,6 +16,18 @@ import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
 import { createDesktopI18n } from './i18n';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+const hostMocks = vi.hoisted(() => ({
+  prepare: vi.fn(),
+  dispose: vi.fn(),
+}));
+
+vi.mock('@neko/canvas-webview/host-runtime', () => ({
+  createCanvasWebviewHost: vi.fn(() => ({
+    prepare: hostMocks.prepare,
+    dispose: hostMocks.dispose,
+  })),
+}));
 
 vi.mock('@neko/canvas-webview/root', () => {
   throw new Error('poisoned Canvas Webview module');
@@ -41,10 +53,14 @@ describe('DesktopCanvasSurface module containment', () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
-  afterEach(() => {
-    act(() => root.unmount());
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
     consoleError.mockRestore();
     container.remove();
+    vi.clearAllMocks();
   });
 
   it('keeps sibling Desktop content visible when the Canvas Webview import rejects', async () => {
@@ -52,32 +68,34 @@ describe('DesktopCanvasSurface module containment', () => {
     const projection = createProjection();
     await act(async () => {
       root.render(
-        <I18nProvider service={i18n.i18nService}>
-          <div data-testid="shell-sibling">Agent interaction remains available</div>
-          <DesktopSurfaceErrorBoundary surfaceIdentity="workspace-1:main">
-            <DesktopCanvasSurface
-              project={{
-                projectId: 'project-1',
-                workspaceId: 'workspace-1',
-                profile: 'content',
-                displayName: 'Fixture project',
-                createdAt: '2026-08-08T00:00:00.000Z',
-                updatedAt: '2026-08-08T00:00:00.000Z',
-              }}
-              projection={projection}
-              view={{
-                viewId: 'canvas-view-1',
-                viewInstanceId: 'canvas-instance-1',
-                projectId: 'project-1',
-                workspaceId: 'workspace-1',
-                kind: 'canvas',
-                ownerId: 'canvas-owner-1',
-                displayLabel: 'workspace.nkc',
-                documentId: 'workspace.nkc',
-              }}
-            />
-          </DesktopSurfaceErrorBoundary>
-        </I18nProvider>,
+        <StrictMode>
+          <I18nProvider service={i18n.i18nService}>
+            <div data-testid="shell-sibling">Agent interaction remains available</div>
+            <DesktopSurfaceErrorBoundary surfaceIdentity="workspace-1:main">
+              <DesktopCanvasSurface
+                project={{
+                  projectId: 'project-1',
+                  workspaceId: 'workspace-1',
+                  profile: 'content',
+                  displayName: 'Fixture project',
+                  createdAt: '2026-08-08T00:00:00.000Z',
+                  updatedAt: '2026-08-08T00:00:00.000Z',
+                }}
+                projection={projection}
+                view={{
+                  viewId: 'canvas-view-1',
+                  viewInstanceId: 'canvas-instance-1',
+                  projectId: 'project-1',
+                  workspaceId: 'workspace-1',
+                  kind: 'canvas',
+                  ownerId: 'canvas-owner-1',
+                  displayLabel: 'workspace.nkc',
+                  documentId: 'workspace.nkc',
+                }}
+              />
+            </DesktopSurfaceErrorBoundary>
+          </I18nProvider>
+        </StrictMode>,
       );
       await Promise.resolve();
     });
@@ -89,6 +107,8 @@ describe('DesktopCanvasSurface module containment', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Surface 'workspace-1:main' failed",
     );
+    expect(hostMocks.prepare).toHaveBeenCalledTimes(2);
+    expect(hostMocks.dispose).toHaveBeenCalledOnce();
   });
 });
 
