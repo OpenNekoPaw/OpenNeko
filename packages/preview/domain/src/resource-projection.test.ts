@@ -200,4 +200,98 @@ describe('Preview resource projection service', () => {
     expect((await service.project(input)).status).toBe('unavailable');
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it('serializes concurrent projection requests for one descriptor without leaking a lease', async () => {
+    const release = vi.fn();
+    let completeRegistration!: () => void;
+    const registrationGate = new Promise<void>((resolve) => {
+      completeRegistration = resolve;
+    });
+    const registerSource = vi.fn(async () => {
+      await registrationGate;
+      return {
+        status: 'ready' as const,
+        lease: { url: `openneko://resource/${'t'.repeat(32)}`, release },
+      };
+    });
+    const service = createPreviewResourceProjectionService({
+      resolveSource: vi.fn(async () => ({
+        status: 'ready' as const,
+        source: {
+          kind: 'file' as const,
+          absolutePath: '/authorized/video.webm',
+          mediaType: 'video/webm',
+          sourceFingerprint: 'stat:2:200',
+          byteLength: 200,
+        },
+      })),
+      registerSource,
+    });
+    const input = {
+      descriptorId: 'preview-concurrent',
+      locator: { kind: 'workspace-file' as const, path: 'video.webm' },
+      displayName: 'video.webm',
+      owner: { surface: 'canvas' },
+    };
+
+    const first = service.project(input);
+    const second = service.project(input);
+    completeRegistration();
+
+    expect((await first).status).toBe('ready');
+    expect((await second).status).toBe('ready');
+    expect(registerSource).toHaveBeenCalledOnce();
+    expect(release).not.toHaveBeenCalled();
+    service.release(input.descriptorId);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('fences a registration that completes after its descriptor was released', async () => {
+    const release = vi.fn();
+    let completeRegistration!: () => void;
+    const registrationGate = new Promise<void>((resolve) => {
+      completeRegistration = resolve;
+    });
+    let registrationStarted!: () => void;
+    const registrationStart = new Promise<void>((resolve) => {
+      registrationStarted = resolve;
+    });
+    const service = createPreviewResourceProjectionService({
+      resolveSource: vi.fn(async () => ({
+        status: 'ready' as const,
+        source: {
+          kind: 'file' as const,
+          absolutePath: '/authorized/audio.mp3',
+          mediaType: 'audio/mpeg',
+          sourceFingerprint: 'stat:3:300',
+          byteLength: 300,
+        },
+      })),
+      registerSource: vi.fn(async () => {
+        registrationStarted();
+        await registrationGate;
+        return {
+          status: 'ready' as const,
+          lease: { url: `openneko://resource/${'u'.repeat(32)}`, release },
+        };
+      }),
+    });
+    const descriptorId = 'preview-release-race';
+    const pending = service.project({
+      descriptorId,
+      locator: { kind: 'workspace-file', path: 'audio.mp3' },
+      displayName: 'audio.mp3',
+      owner: { surface: 'agent' },
+    });
+
+    await registrationStart;
+    service.release(descriptorId);
+    completeRegistration();
+
+    await expect(pending).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'preview-projection-released' },
+    });
+    expect(release).toHaveBeenCalledOnce();
+  });
 });

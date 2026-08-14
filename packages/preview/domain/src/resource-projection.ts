@@ -93,87 +93,129 @@ export function createPreviewResourceProjectionService<Owner>(ports: {
       readonly lease: PreviewResourceLease;
     }
   >();
+  const operationTails = new Map<string, Promise<void>>();
+  const releaseFences = new Map<string, symbol>();
   let disposed = false;
+
+  const releaseStoredProjection = (descriptorId: string): void => {
+    const current = projections.get(descriptorId);
+    if (!current) return;
+    current.lease.release();
+    projections.delete(descriptorId);
+  };
+
+  const projectNow = async (
+    input: PreviewResourceProjectionInput<Owner>,
+    releaseFence: symbol | undefined,
+  ): Promise<PreviewResourceProjection> => {
+    if (disposed) throw new Error('Preview resource projection service is disposed.');
+    if (releaseFences.get(input.descriptorId) !== releaseFence) {
+      return releasedProjection();
+    }
+    const resolved = await ports.resolveSource({
+      locator: input.locator,
+      displayName: requireDisplayName(input.displayName),
+      owner: input.owner,
+      ...(input.requestedMediaType
+        ? { requestedMediaType: requireMediaType(input.requestedMediaType) }
+        : {}),
+    });
+    if (disposed || releaseFences.get(input.descriptorId) !== releaseFence) {
+      return releasedProjection();
+    }
+    if (resolved.status === 'unavailable') {
+      releaseStoredProjection(input.descriptorId);
+      return resolved;
+    }
+    validateSource(resolved.source);
+
+    const current = projections.get(input.descriptorId);
+    if (
+      current?.descriptor.sourceFingerprint === resolved.source.sourceFingerprint &&
+      current.descriptor.mediaType === resolved.source.mediaType &&
+      current.descriptor.byteLength === resolved.source.byteLength
+    ) {
+      return { status: 'ready', descriptor: current.descriptor, lease: current.lease };
+    }
+    releaseStoredProjection(input.descriptorId);
+
+    const registered = await ports.registerSource({
+      owner: input.owner,
+      source: resolved.source,
+    });
+    if (registered.status === 'unavailable') return registered;
+    if (disposed || releaseFences.get(input.descriptorId) !== releaseFence) {
+      registered.lease.release();
+      return releasedProjection();
+    }
+
+    const contentKind =
+      previewContentKindFromMediaType(resolved.source.mediaType) ??
+      detectPreviewContentKind(input.displayName);
+    if (!contentKind) {
+      registered.lease.release();
+      return {
+        status: 'unavailable',
+        diagnostic: {
+          code: 'preview-unsupported-kind',
+          message: `Preview does not support '${input.displayName}'.`,
+        },
+      };
+    }
+
+    try {
+      const descriptor = parsePreviewMediaDescriptor({
+        descriptorId: input.descriptorId,
+        sourceFingerprint: resolved.source.sourceFingerprint,
+        contentLocator:
+          input.locator.kind === 'content-representation' ? input.locator.source : input.locator,
+        url: registered.lease.url,
+        ...(registered.lease.resourceUris ? { resourceUris: registered.lease.resourceUris } : {}),
+        contentKind,
+        mediaType: resolved.source.mediaType,
+        displayName: input.displayName,
+        byteLength: resolved.source.byteLength,
+      });
+      projections.set(input.descriptorId, { descriptor, lease: registered.lease });
+      return { status: 'ready', descriptor, lease: registered.lease };
+    } catch (error) {
+      registered.lease.release();
+      throw error;
+    }
+  };
+
   const service: PreviewResourceProjectionService<Owner> = {
-    async project(input): Promise<PreviewResourceProjection> {
+    project(input): Promise<PreviewResourceProjection> {
       if (disposed) throw new Error('Preview resource projection service is disposed.');
-      const resolved = await ports.resolveSource({
-        locator: input.locator,
-        displayName: requireDisplayName(input.displayName),
-        owner: input.owner,
-        ...(input.requestedMediaType
-          ? { requestedMediaType: requireMediaType(input.requestedMediaType) }
-          : {}),
+      const previous = operationTails.get(input.descriptorId) ?? Promise.resolve();
+      const releaseFence = releaseFences.get(input.descriptorId);
+      const operation = previous.then(
+        () => projectNow(input, releaseFence),
+        () => projectNow(input, releaseFence),
+      );
+      const tail = operation.then(
+        () => undefined,
+        () => undefined,
+      );
+      operationTails.set(input.descriptorId, tail);
+      void tail.finally(() => {
+        if (operationTails.get(input.descriptorId) === tail) {
+          operationTails.delete(input.descriptorId);
+        }
       });
-      if (resolved.status === 'unavailable') {
-        service.release(input.descriptorId);
-        return resolved;
-      }
-      validateSource(resolved.source);
-
-      const current = projections.get(input.descriptorId);
-      if (
-        current?.descriptor.sourceFingerprint === resolved.source.sourceFingerprint &&
-        current.descriptor.mediaType === resolved.source.mediaType &&
-        current.descriptor.byteLength === resolved.source.byteLength
-      ) {
-        return { status: 'ready', descriptor: current.descriptor, lease: current.lease };
-      }
-      current?.lease.release();
-      projections.delete(input.descriptorId);
-
-      const registered = await ports.registerSource({
-        owner: input.owner,
-        source: resolved.source,
-      });
-      if (registered.status === 'unavailable') return registered;
-
-      const contentKind =
-        previewContentKindFromMediaType(resolved.source.mediaType) ??
-        detectPreviewContentKind(input.displayName);
-      if (!contentKind) {
-        registered.lease.release();
-        return {
-          status: 'unavailable',
-          diagnostic: {
-            code: 'preview-unsupported-kind',
-            message: `Preview does not support '${input.displayName}'.`,
-          },
-        };
-      }
-
-      try {
-        const descriptor = parsePreviewMediaDescriptor({
-          descriptorId: input.descriptorId,
-          sourceFingerprint: resolved.source.sourceFingerprint,
-          contentLocator:
-            input.locator.kind === 'content-representation' ? input.locator.source : input.locator,
-          url: registered.lease.url,
-          ...(registered.lease.resourceUris ? { resourceUris: registered.lease.resourceUris } : {}),
-          contentKind,
-          mediaType: resolved.source.mediaType,
-          displayName: input.displayName,
-          byteLength: resolved.source.byteLength,
-        });
-        projections.set(input.descriptorId, { descriptor, lease: registered.lease });
-        return { status: 'ready', descriptor, lease: registered.lease };
-      } catch (error) {
-        registered.lease.release();
-        throw error;
-      }
+      return operation;
     },
     release(descriptorId) {
       if (disposed) return;
-      const current = projections.get(descriptorId);
-      if (!current) return;
-      current.lease.release();
-      projections.delete(descriptorId);
+      releaseFences.set(descriptorId, Symbol(descriptorId));
+      releaseStoredProjection(descriptorId);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       for (const projection of projections.values()) projection.lease.release();
       projections.clear();
+      releaseFences.clear();
     },
   };
   return Object.freeze(service);
@@ -193,6 +235,16 @@ export function previewContentKindFromMediaType(mediaType: string): PreviewConte
     return 'document';
   }
   return undefined;
+}
+
+function releasedProjection(): PreviewResourceProjection {
+  return {
+    status: 'unavailable',
+    diagnostic: {
+      code: 'preview-projection-released',
+      message: 'Preview resource projection was released before registration completed.',
+    },
+  };
 }
 
 function validateSource(source: PreviewResourceSource): void {
