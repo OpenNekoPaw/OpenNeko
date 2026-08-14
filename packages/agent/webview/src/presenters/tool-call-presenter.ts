@@ -41,6 +41,7 @@ export interface DocumentImageThumbnailProjection {
   locator?: DocumentLocator;
   contentLocator?: ContentLocator;
   representationLocator?: ContentRepresentationLocator;
+  previewDescriptor?: PreviewMediaDescriptor;
   previewDiagnostic?: string;
   label: string;
   referenceJson: string;
@@ -522,7 +523,8 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
       readString(info, 'entryPath') ??
       (locator ? formatDocumentLocator(locator) : locatorIdentity.path);
     const documentFilePath = locatorIdentity.filePath || filePath;
-    const src = readString(info, 'renderUri');
+    const previewDescriptor = readPreviewDescriptor(info);
+    const src = previewDescriptor?.url ?? readString(info, 'renderUri');
     const previewDiagnostic = readResourceProjectionDiagnostic(info);
     thumbnails.push({
       id: `${path}:${index}`,
@@ -537,6 +539,7 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
       ...(locator ? { locator } : {}),
       ...(contentLocator ? { contentLocator } : {}),
       ...(representationLocator ? { representationLocator } : {}),
+      ...(previewDescriptor ? { previewDescriptor } : {}),
       ...(src ? { src } : {}),
       ...(previewDiagnostic ? { previewDiagnostic } : {}),
       label: formatDocumentThumbnailLabel(locator, index),
@@ -604,7 +607,14 @@ function extractReadImageThumbnails(
       const perceptual = asRecord(perceptionCard?.perceptual);
       const perceptionThumbnailRef = asRecord(perceptual?.thumbnailRef);
       const path = readString(image, 'path') ?? readString(documentImage, 'path');
+      const previewDescriptor =
+        readPreviewDescriptor(image) ??
+        readPreviewDescriptor(documentImage) ??
+        readPreviewDescriptor(attachment) ??
+        readPreviewDescriptor(attachmentAssetRef) ??
+        readPreviewDescriptor(perceptionThumbnailRef);
       const src =
+        previewDescriptor?.url ??
         readString(image, 'renderUri') ??
         readString(documentImage, 'renderUri') ??
         readString(image, 'src') ??
@@ -647,6 +657,7 @@ function extractReadImageThumbnails(
           ...(locator ? { locator } : {}),
           ...(contentLocator ? { contentLocator } : {}),
           ...(representationLocator ? { representationLocator } : {}),
+          ...(previewDescriptor ? { previewDescriptor } : {}),
           ...(previewDiagnostic ? { previewDiagnostic } : {}),
           label,
           referenceJson: formatDocumentImageReferenceJson({
@@ -670,6 +681,17 @@ function extractReadImageThumbnails(
   }
 
   return [];
+}
+
+function readPreviewDescriptor(
+  record: Record<string, unknown> | undefined,
+): PreviewMediaDescriptor | undefined {
+  if (!record || !('previewDescriptor' in record)) return undefined;
+  try {
+    return parsePreviewMediaDescriptor(record.previewDescriptor);
+  } catch {
+    return undefined;
+  }
 }
 
 function readResourceProjectionDiagnostic(

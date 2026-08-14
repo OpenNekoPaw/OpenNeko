@@ -459,6 +459,55 @@ describe('tool-call-presenter', () => {
     ]);
   });
 
+  it('uses the authorized preview descriptor projected beside each ReadImage result', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/001.png',
+    };
+    const descriptor = {
+      descriptorId: 'agent-display:read-image:page-1',
+      sourceFingerprint: 'sha256:page-1',
+      contentLocator,
+      url: `openneko://resource/${'a'.repeat(32)}`,
+      contentKind: 'image' as const,
+      mediaType: 'image/png',
+      displayName: '001.png',
+      byteLength: 2048,
+    };
+    const projection = projectToolCallDisplayState({
+      id: 'tool-authorized-preview',
+      name: 'ReadImage',
+      arguments: {},
+      result: {
+        success: true,
+        data: {
+          images: [
+            {
+              label: 'Page 1',
+              width: 1200,
+              height: 1800,
+              mimeType: 'image/png',
+              contentLocator,
+              previewDescriptor: descriptor,
+            },
+          ],
+        },
+      },
+    });
+
+    expect(projection.documentThumbnails).toEqual([
+      expect.objectContaining({
+        path: 'pages/001.png',
+        filePath: 'books/comic.cbz',
+        src: descriptor.url,
+        previewDescriptor: descriptor,
+        contentLocator,
+      }),
+    ]);
+    expect(projection.documentThumbnails[0]?.referenceJson).not.toContain(descriptor.url);
+  });
+
   it('keeps an ordered locator-only placeholder when preview projection fails', () => {
     const contentLocator = {
       kind: 'document-entry' as const,

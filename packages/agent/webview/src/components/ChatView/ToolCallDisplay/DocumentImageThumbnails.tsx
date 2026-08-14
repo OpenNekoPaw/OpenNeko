@@ -1,10 +1,12 @@
 import { memo, useCallback } from 'react';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import { useAgentHostMessages } from '../../../host-runtime-context';
 import { CopyIcon, FileIcon, MoreHorizontalIcon, UploadIcon } from '@neko/ui/icons';
 import { useMessageActions } from '../MessageActionsContext';
 import { projectCanvasContentTransferTarget } from '../../../presenters/plugin-transfer-presenter';
 import type { DocumentImageThumbnailProjection } from '../../../presenters/tool-call-presenter';
 import { useTranslation } from '../../../i18n/I18nContext';
+import { getLocale } from '../../../i18n';
 
 interface DocumentImageThumbnailsProps {
   thumbnails: readonly DocumentImageThumbnailProjection[];
@@ -79,7 +81,12 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                 }
               >
                 <div className="relative h-28 w-full bg-[var(--agent-bg)]">
-                  {thumbnail.src ? (
+                  {thumbnail.previewDescriptor ? (
+                    <LightweightPreview
+                      descriptor={thumbnail.previewDescriptor}
+                      locale={getLocale()}
+                    />
+                  ) : thumbnail.src ? (
                     <img
                       src={thumbnail.src}
                       alt={thumbnail.label}
