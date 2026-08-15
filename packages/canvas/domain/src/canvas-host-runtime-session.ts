@@ -766,7 +766,11 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private async persistCanvas(canvas: CanvasData): Promise<void> {
     const saveDocument = this.options.effects.saveDocument;
     if (!saveDocument) throw new Error('Canvas durable save capability is unavailable.');
-    await saveDocument({ canvas: cloneCanvas(canvas), identity: { ...this.identity } });
+    await saveDocument({
+      canvas: cloneCanvas(canvas),
+      identity: { ...this.identity },
+      removedNodeIds: [],
+    });
   }
 
   private startGenerationObservation(nodeId: string): void {

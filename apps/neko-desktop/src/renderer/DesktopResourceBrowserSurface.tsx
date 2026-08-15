@@ -89,7 +89,7 @@ export function DesktopResourceBrowserSurface({
     const binding = {
       workspaceId: characterCreationAuthority.workspaceId,
       workspaceGrantId: characterCreationAuthority.workspaceGrantId,
-      contentProjectId: project.projectId,
+      projectId: project.projectId,
     };
     return {
       destinationLabel: project.displayName,
@@ -167,25 +167,8 @@ export async function createDesktopProjectCharacterFromResource(input: {
       entity: source.entity,
     },
   );
-  const projectOutcome = (outcome: typeof result): ResourceBrowserCharacterCreationOutcome => {
-    if (outcome.status === 'created') {
-      input.onCreated(characterProjectId, input.displayName);
-      return { status: 'created' };
-    }
-    return {
-      status: 'incomplete',
-      retry: async () =>
-        projectOutcome(
-          await input.bridge.projectLocalAuthoring.retryCharacter(
-            input.windowId,
-            input.binding,
-            outcome.receipt,
-            source.entity,
-          ),
-        ),
-    };
-  };
-  return projectOutcome(result);
+  input.onCreated(characterProjectId, input.displayName);
+  return { status: result.status };
 }
 
 function characterCreationSourceFromResource(input: {

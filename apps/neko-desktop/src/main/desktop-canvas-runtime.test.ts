@@ -13,10 +13,9 @@ import {
 } from '@neko/canvas-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
 import {
-  createProjectMediaLibraryBindingFingerprint,
+  createWorkspaceLinkedMediaLibrary,
   ProjectMediaLibraryBindingRepository,
 } from '@neko/assets-node';
-import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
@@ -295,7 +294,7 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('opens a project Canvas with one safe invalid locator isolated to its node', async () => {
+  it('opens a project Canvas with one unavailable managed-link locator isolated to its node', async () => {
     const workspacePath = await mkdtemp(
       path.join(tmpdir(), 'openneko-canvas-invalid-material-isolation-'),
     );
@@ -375,7 +374,9 @@ describe('DesktopCanvasRuntime', () => {
         identity,
         selectedNodeIds: ['unavailable-cover'],
       }),
-    ).resolves.toMatchObject({ descriptors: [] });
+    ).resolves.toMatchObject({
+      descriptors: [],
+    });
     expect(previewResource).not.toHaveBeenCalled();
 
     const saved = await runtime.executeIntent(
@@ -643,9 +644,9 @@ describe('DesktopCanvasRuntime', () => {
     const globalMediaLibraryRoot = path.join(workspacePath, '.global-media-libraries');
     await bindProjectMediaLibrary(
       workspacePath,
-      globalMediaLibraryRoot,
       linkedLibraryPath,
       'Project Media',
+      globalMediaLibraryRoot,
       identity.projectId,
     );
     const requestProjectMediaLibraryCopy = vi.fn(async () => ({
@@ -2226,20 +2227,20 @@ describe('DesktopCanvasRuntime', () => {
       writeFixtureFile(globalLibraryPath, 'stills/global-frame.png', 'global-image'),
       writeFixtureFile(externalSourcePath, 'outside.png', 'external-image'),
     ]);
+    const identity = createIdentity();
     const globalMediaLibraryRoot = path.join(workspacePath, '.global-media-libraries');
     await bindProjectMediaLibrary(
       workspacePath,
-      globalMediaLibraryRoot,
       linkedLibraryPath,
       'linked-media',
-      'project-1',
+      globalMediaLibraryRoot,
+      identity.projectId,
     );
     const { libraryId } = await createGlobalMediaLibraryConnection({
       mediaLibraryRoot: globalMediaLibraryRoot,
       sourceDirectory: globalLibraryPath,
       locationKind: 'local',
     });
-    const identity = createIdentity();
     const runtime = new DesktopCanvasRuntime({
       shell: {
         resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
@@ -2928,9 +2929,9 @@ async function executeAcceptedIntent(
 
 async function bindProjectMediaLibrary(
   workspacePath: string,
-  globalMediaLibraryRoot: string,
   sourceDirectory: string,
   libraryName: string,
+  globalMediaLibraryRoot: string,
   projectId: string,
 ): Promise<void> {
   const { libraryId } = await createGlobalMediaLibraryConnection({
@@ -2938,22 +2939,16 @@ async function bindProjectMediaLibrary(
     sourceDirectory,
     locationKind: 'local',
   });
-  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
-    projectId,
+  await createWorkspaceLinkedMediaLibrary({
+    workspaceRoot: workspacePath,
+    name: libraryName,
+    targetDirectory: sourceDirectory,
+  });
+  await new ProjectMediaLibraryBindingRepository(workspacePath, projectId).apply({
     libraryName,
     connectionId: libraryId,
+    expectedBindingFingerprint: null,
   });
-  await new ProjectMediaLibraryBindingRepository(workspacePath, projectId).applyRecovery(
-    confirmProjectMediaLibraryRecovery({
-      projectId,
-      libraryName,
-      connectionId: libraryId,
-      requirementFingerprint: 'sha256:test-requirement-1234',
-      validatedRelativePaths: [],
-      expectedBindingFingerprint: null,
-      replacementBindingFingerprint,
-    }),
-  );
 }
 
 async function writeFixtureFile(

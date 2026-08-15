@@ -15,16 +15,12 @@ import {
   type CanvasReferencedContentLocator,
 } from '@neko/canvas-domain';
 import { ConsoleLogger } from '@neko/shared/logger';
-import {
-  createProjectMediaLibraryBindingFingerprint,
-  ProjectMediaLibraryBindingRepository,
-} from '@neko/assets-node';
+import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { CanvasMaterialAuthoringService } from '@neko/canvas-node';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 
 const roots: string[] = [];
 
@@ -72,9 +68,8 @@ describe('CanvasMaterialAuthoringService', () => {
       request: directRequest(
         fixture.identity,
         {
-          kind: 'media-library',
-          libraryName: 'Editorial',
-          relativePath: 'shots/clip.mp4',
+          kind: 'workspace-file',
+          path: 'neko/assets/Editorial/shots/clip.mp4',
         },
         'video',
       ),
@@ -102,9 +97,8 @@ describe('CanvasMaterialAuthoringService', () => {
         {
           kind: 'document-entry',
           source: {
-            kind: 'media-library',
-            libraryName: 'Editorial',
-            relativePath: 'books/story.epub',
+            kind: 'workspace-file',
+            path: 'neko/assets/Editorial/books/story.epub',
           },
           entryPath: 'chapters/two.xhtml',
         },
@@ -130,9 +124,8 @@ describe('CanvasMaterialAuthoringService', () => {
     expect(canvas.nodes.map(contentLocatorOf)).toEqual([
       { kind: 'workspace-file', path: 'media/cat.png' },
       {
-        kind: 'media-library',
-        libraryName: 'Editorial',
-        relativePath: 'shots/clip.mp4',
+        kind: 'workspace-file',
+        path: 'neko/assets/Editorial/shots/clip.mp4',
       },
       {
         kind: 'document-entry',
@@ -142,9 +135,8 @@ describe('CanvasMaterialAuthoringService', () => {
       {
         kind: 'document-entry',
         source: {
-          kind: 'media-library',
-          libraryName: 'Editorial',
-          relativePath: 'books/story.epub',
+          kind: 'workspace-file',
+          path: 'neko/assets/Editorial/books/story.epub',
         },
         entryPath: 'chapters/two.xhtml',
       },
@@ -523,30 +515,11 @@ async function bindProjectMediaLibrary(
   sourceDirectory: string,
   libraryName: string,
 ): Promise<void> {
-  const { libraryId } = await createGlobalMediaLibraryConnection({
-    mediaLibraryRoot: fixture.globalMediaLibraryRoot,
-    sourceDirectory,
-    locationKind: 'local',
+  await createWorkspaceLinkedMediaLibrary({
+    workspaceRoot: fixture.workspace.workspacePath,
+    name: libraryName,
+    targetDirectory: sourceDirectory,
   });
-  const replacementBindingFingerprint = createProjectMediaLibraryBindingFingerprint({
-    projectId: fixture.identity.projectId,
-    libraryName,
-    connectionId: libraryId,
-  });
-  await new ProjectMediaLibraryBindingRepository(
-    fixture.workspace.workspacePath,
-    fixture.identity.projectId,
-  ).applyRecovery(
-    confirmProjectMediaLibraryRecovery({
-      projectId: fixture.identity.projectId,
-      libraryName,
-      connectionId: libraryId,
-      requirementFingerprint: 'sha256:test-requirement-1234',
-      validatedRelativePaths: [],
-      expectedBindingFingerprint: null,
-      replacementBindingFingerprint,
-    }),
-  );
 }
 
 function emptyCanvas(): CanvasData {

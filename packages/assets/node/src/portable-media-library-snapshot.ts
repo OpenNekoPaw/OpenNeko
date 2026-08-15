@@ -512,11 +512,11 @@ async function inspectPortableProjectDependencies(input: {
 }> {
   const characters = createCharacterAuthoringFileRepository({
     workspaceRoot: input.workspacePath,
-    scope: { kind: 'content-project', contentProjectId: input.projectId },
+    scope: { kind: 'project', projectId: input.projectId },
   });
   const worlds = createWorldAuthoringFileRepository({
     workspaceRoot: input.workspacePath,
-    scope: { kind: 'content-project', contentProjectId: input.projectId },
+    scope: { kind: 'project', projectId: input.projectId },
   });
   const [characterCatalog, worldCatalog] = await Promise.all([
     characters.readAuthoringCatalog(),

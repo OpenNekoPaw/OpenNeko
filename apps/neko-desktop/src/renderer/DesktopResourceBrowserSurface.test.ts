@@ -6,7 +6,7 @@ import { createDesktopProjectCharacterFromResource } from './DesktopResourceBrow
 const binding = {
   workspaceId: 'workspace-source',
   workspaceGrantId: 'workspace-grant-source',
-  contentProjectId: 'content-project-destination',
+  projectId: 'project-destination',
 };
 
 function createIds(...ids: string[]): () => string {
@@ -28,10 +28,6 @@ describe('Desktop Resource Browser Character creation handoff', () => {
       status: 'created' as const,
       target: { kind: 'character-project' as const, characterProjectId: 'character-project:cp' },
     }));
-    const retryCharacter =
-      vi.fn<
-        OpenNekoDesktopProjectLocalAuthoringBridge['projectLocalAuthoring']['retryCharacter']
-      >();
     const onCreated = vi.fn();
     const item: ResourceBrowserItem = {
       resourceId: 'content:rin',
@@ -47,7 +43,7 @@ describe('Desktop Resource Browser Character creation handoff', () => {
     await expect(
       createDesktopProjectCharacterFromResource({
         binding,
-        bridge: { projectLocalAuthoring: { createTarget, retryCharacter } },
+        bridge: { projectLocalAuthoring: { createTarget } },
         displayName: 'Rin',
         item,
         onCreated,
@@ -78,18 +74,13 @@ describe('Desktop Resource Browser Character creation handoff', () => {
       entity: { kind: 'create', entityId: 'entity:entity', name: 'Rin' },
     });
     expect(onCreated).toHaveBeenCalledWith('character-project:cp', 'Rin');
-    expect(retryCharacter).not.toHaveBeenCalled();
   });
 
   it('rejects Asset rows that do not expose an exact package resource representation', async () => {
     const createTarget =
       vi.fn<OpenNekoDesktopProjectLocalAuthoringBridge['projectLocalAuthoring']['createTarget']>();
-    const retryCharacter =
-      vi.fn<
-        OpenNekoDesktopProjectLocalAuthoringBridge['projectLocalAuthoring']['retryCharacter']
-      >();
     const bridge: OpenNekoDesktopProjectLocalAuthoringBridge = {
-      projectLocalAuthoring: { createTarget, retryCharacter },
+      projectLocalAuthoring: { createTarget },
     };
     await expect(
       createDesktopProjectCharacterFromResource({

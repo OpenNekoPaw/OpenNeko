@@ -30,6 +30,8 @@ describe('Desktop Canvas text preview IPC', () => {
       selectWorkspaceGrant: vi.fn(),
       saveCharacterPackage: vi.fn(),
       readCharacterPackage: vi.fn(),
+      saveWorldPackage: vi.fn(),
+      readWorldPackage: vi.fn(),
     });
     const handler = electron.handlers.get(DESKTOP_CANVAS_CHANNELS.textFilePreviewRead);
     if (!handler) throw new Error('Canvas text preview IPC handler was not registered.');
@@ -58,6 +60,8 @@ describe('Desktop Canvas text preview IPC', () => {
       selectWorkspaceGrant: vi.fn(),
       saveCharacterPackage: vi.fn(),
       readCharacterPackage: vi.fn(),
+      saveWorldPackage: vi.fn(),
+      readWorldPackage: vi.fn(),
     });
     const handler = electron.handlers.get(DESKTOP_CANVAS_CHANNELS.textFilePreviewRead);
     if (!handler) throw new Error('Canvas text preview IPC handler was not registered.');

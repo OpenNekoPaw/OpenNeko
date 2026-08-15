@@ -32,10 +32,7 @@ import {
   type WorkspaceFileContentLocator,
 } from '@neko/content';
 import { NodeAuthorizedWorkspaceWriter } from '@neko/content/node';
-import {
-  resolveProjectMediaLibraryContentPath,
-  resolveWorkspaceContentLocator,
-} from '@neko/assets-node';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 
 import type { DesktopShellService } from '@neko/host/desktop-shell-service';
 import {
@@ -138,16 +135,6 @@ export class DesktopCutRuntime {
       },
       resolveResourcePath: async (identity, locator) => {
         const workspace = await options.shell.resolveAgentWorkspace(identity.workspaceId);
-        if (locator.kind === 'media-library') {
-          return resolveProjectMediaLibraryContentPath(
-            {
-              projectId: identity.projectId,
-              workspaceRoot: workspace.workspacePath,
-              globalMediaLibraryRoot: options.globalMediaLibraryRoot,
-            },
-            locator,
-          );
-        }
         if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
           return resolveWorkspaceContentLocator(workspace, locator);
         }

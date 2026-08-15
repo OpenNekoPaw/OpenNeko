@@ -35,7 +35,7 @@ export async function resolveWorkspaceContentLocator(
   return resolvedPath;
 }
 
-export class WorkspaceContentLocatorResolutionError extends Error {
+class WorkspaceContentLocatorResolutionError extends Error {
   constructor(
     readonly code: WorkspacePathGuardDiagnosticCode,
     message: string,

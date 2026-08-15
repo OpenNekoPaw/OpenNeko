@@ -5,7 +5,6 @@ import { DEFAULT_CANVAS_DATA } from '@neko/canvas-domain';
 import type { ILogger } from '@neko/shared/logger';
 import { parseCanvasHostIntentRequest, type CanvasHostIntentResult } from '@neko/canvas-domain';
 import {
-  createResourceBrowserSearchRequest,
   createResourceBrowserSnapshotRequest,
   type ResourceBrowserProjectionEvent,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -249,6 +248,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       openCreativeDocument: async () => undefined,
       openTextEditor: async () => undefined,
       selectSource: async () => undefined,
+      selectWorkspaceFiles: async () => undefined,
       trashWorkspaceItem: async () => undefined,
       selectConfiguredGlobalMediaLibrary: async () => undefined,
       selectGlobalMediaLibrarySource: async () => undefined,
@@ -316,10 +316,12 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       } finally {
         unsubscribe();
       }
-      expect(
-        resolveDesktopWindowWorkspaceWorkbench(projection.window, project.workspaceId).layout.main
-          .views,
-      ).toEqual([expect.objectContaining({ kind: 'project-content' })]);
+      const mainViews = resolveDesktopWindowWorkspaceWorkbench(
+        projection.window,
+        project.workspaceId,
+      ).layout.main.views;
+      expect(mainViews).toEqual([expect.objectContaining({ kind: 'canvas' })]);
+      expect(mainViews.some((view) => view.kind === 'project-content')).toBe(false);
       shell.setRendererSessionId(windowId, 'renderer-session-2');
       await expect(
         runtime.getSnapshot(
@@ -721,6 +723,7 @@ async function createGlobalLibraryRuntimeFixture(
     openCreativeDocument: async () => undefined,
     openTextEditor: async () => undefined,
     selectSource: async () => undefined,
+    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: async () => undefined,
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,

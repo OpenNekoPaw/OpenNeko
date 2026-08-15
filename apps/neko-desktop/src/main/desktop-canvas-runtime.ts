@@ -39,10 +39,7 @@ import {
   CanvasTextFilePreviewService,
   type CanvasExternalSource,
 } from '@neko/canvas-node';
-import {
-  resolveProjectMediaLibraryContentPath,
-  resolveWorkspaceContentLocator,
-} from '@neko/assets-node';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import {
   parseDesktopCanvasPreviewResourceReleaseRequest,
   parseDesktopCanvasPreviewResourceRequest,
@@ -527,9 +524,7 @@ export class DesktopCanvasRuntime {
             identity: requestIdentity,
             workspace: grant.workspace,
             locator,
-            ...(locator.kind === 'workspace-file' ||
-            locator.kind === 'generated-output' ||
-            locator.kind === 'media-library'
+            ...(locator.kind === 'workspace-file' || locator.kind === 'generated-output'
               ? {
                   absolutePath: await this.resolveContentPath(
                     requestIdentity.projectId,
@@ -568,8 +563,7 @@ export class DesktopCanvasRuntime {
         ? {
             resolveReveal: async ({ target }: { readonly target: CanvasMaterialActionTarget }) =>
               target.locator.kind === 'workspace-file' ||
-              target.locator.kind === 'generated-output' ||
-              target.locator.kind === 'media-library',
+              target.locator.kind === 'generated-output',
             reveal: ({ identity: requestIdentity, target }) =>
               revealEffect(requestIdentity, target.locator),
           }
@@ -758,10 +752,7 @@ export class DesktopCanvasRuntime {
             targets,
           }),
         saveDocument: async ({ canvas, removedNodeIds }) => {
-          const authoritative = await this.loadDocument(
-            documentPath,
-            grant.workspace.displayName,
-          );
+          const authoritative = await this.loadDocument(documentPath, grant.workspace.displayName);
           const candidateNodeIds = new Set(canvas.nodes.map((node) => node.id));
           const removedNodeIdSet = new Set(removedNodeIds);
           const unprovenMissingNodeIds = authoritative.nodes
@@ -897,16 +888,6 @@ export class DesktopCanvasRuntime {
     workspace: DesktopCanvasViewGrant['workspace'],
     locator: ContentLocator,
   ): Promise<string> {
-    if (locator.kind === 'media-library') {
-      return resolveProjectMediaLibraryContentPath(
-        {
-          projectId,
-          workspaceRoot: workspace.workspacePath,
-          globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
-        },
-        locator,
-      );
-    }
     if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
       return resolveWorkspaceContentLocator(workspace, locator);
     }
