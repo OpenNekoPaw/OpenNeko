@@ -1,0 +1,86 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "workspace-missing-character-target-rejected",
+  "suiteId": "skill.character-creator",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Invoke the builtin Character Creator from an exact Workspace Draft without selecting one exact CharacterProject authoring target.",
+    "canonicalPath": [
+      "visible Workspace Draft",
+      "workspace-qualified builtin character-creator catalog entry",
+      "typed Skill Draft submit",
+      "exact CharacterProject target rejection"
+    ],
+    "observables": [
+      {
+        "ref": "character-target-boundary-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Workspace binding, builtin Skill catalog identity, rejected Draft submit, no rejection-time Conversation or Character mutation, and a later ordinary Workspace turn.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The creator submit is rejected before a Conversation or Character mutation because no exact CharacterProject authoring target receipt exists; the unchanged Workspace Draft remains usable for a later ordinary turn.",
+    "expectedFailure": "Creating an unassigned target, inferring a Project target, starting a Conversation, or reporting save success fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "creator-without-target",
+      "kind": "draft-submit",
+      "catalogRef": "initial",
+      "input": {
+        "kind": "skill",
+        "name": "character-creator",
+        "args": "Create a reviewable clockmaker character draft."
+      },
+      "expectedStatus": "rejected"
+    },
+    {
+      "id": "canonical-submit",
+      "kind": "submit",
+      "prompt": "Reply with one concise sentence confirming this exact Workspace remains usable."
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "target-boundary",
+      "kind": "draft-rejection",
+      "stepId": "creator-without-target",
+      "catalogRef": "initial",
+      "initialBindingKind": "workspace",
+      "currentBindingKind": "workspace",
+      "surfaceBindingKind": "workspace",
+      "conversationCreated": false,
+      "messageIncludes": "exact character-project authoring target receipt",
+      "evidenceRef": "character-target-boundary-facts"
+    },
+    {
+      "id": "binding",
+      "kind": "interaction-binding",
+      "initialPhase": "draft",
+      "initialBindingKind": "workspace",
+      "finalPhase": "session",
+      "finalBindingKind": "workspace",
+      "conversationCreated": true,
+      "evidenceRef": "character-target-boundary-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "character-target-boundary-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 },
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
+    "startSurface": "workspace"
+  }
+}

@@ -19,6 +19,12 @@
       "disposition": "suite",
       "suiteIds": ["skill.character-creator"]
     },
+    {
+      "kind": "builtin-skill",
+      "id": "world-creator",
+      "disposition": "suite",
+      "suiteIds": ["skill.world-creator"]
+    },
     { "kind": "builtin-skill", "id": "image", "disposition": "suite", "suiteIds": ["skill.image"] },
     { "kind": "builtin-skill", "id": "video", "disposition": "suite", "suiteIds": ["skill.video"] },
     {

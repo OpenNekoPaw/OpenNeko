@@ -1,16 +1,16 @@
 {
   "schema": "neko.agent-eval.suite",
-  "id": "skill.character-creator",
-  "owner": { "kind": "skill", "id": "character-creator" },
+  "id": "skill.world-creator",
+  "owner": { "kind": "skill", "id": "world-creator" },
   "target": {
     "kind": "skill",
     "identity": {
-      "name": "character-creator",
+      "name": "world-creator",
       "source": "builtin",
       "provenance": "builtin",
       "rootId": "builtin-skills",
-      "relativePath": "character-creator",
-      "fingerprint": "sha256:efe626c6864488019e2da9d9eb792b6c51809a3ed03721437afda77126d9bbfb"
+      "relativePath": "world-creator",
+      "fingerprint": "sha256:916941b2d9cb34b1c5c20d8306e4f534226fa471c3813a711c113ca1340d2cdb"
     }
   },
   "runtimeProfiles": [
@@ -39,20 +39,14 @@
   ],
   "cases": [
     {
-      "id": "workspace-missing-character-target-rejected",
-      "file": "cases/workspace-missing-character-target-rejected.json",
+      "id": "workspace-missing-world-target-rejected",
+      "file": "cases/workspace-missing-world-target-rejected.json",
       "group": "boundary",
       "visibility": "public"
     },
     {
-      "id": "roleplay-request-does-not-author",
-      "file": "cases/roleplay-request-does-not-author.json",
-      "group": "boundary",
-      "visibility": "public"
-    },
-    {
-      "id": "assistant-creates-global-character",
-      "file": "cases/assistant-creates-global-character.json",
+      "id": "assistant-creates-global-world",
+      "file": "cases/assistant-creates-global-world.json",
       "group": "canonical",
       "visibility": "public"
     }

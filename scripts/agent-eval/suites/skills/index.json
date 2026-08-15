@@ -16,6 +16,7 @@
     { "suiteId": "skill.storyboard", "path": "storyboard/suite.json", "ownerId": "storyboard", "targetKind": "skill" },
     { "suiteId": "skill.subtitle-assistant", "path": "subtitle-assistant/suite.json", "ownerId": "subtitle-assistant", "targetKind": "skill" },
     { "suiteId": "skill.video-editing", "path": "video-editing/suite.json", "ownerId": "video-editing", "targetKind": "skill" },
-    { "suiteId": "skill.video", "path": "video/suite.json", "ownerId": "video", "targetKind": "skill" }
+    { "suiteId": "skill.video", "path": "video/suite.json", "ownerId": "video", "targetKind": "skill" },
+    { "suiteId": "skill.world-creator", "path": "world-creator/suite.json", "ownerId": "world-creator", "targetKind": "skill" }
   ]
 }
