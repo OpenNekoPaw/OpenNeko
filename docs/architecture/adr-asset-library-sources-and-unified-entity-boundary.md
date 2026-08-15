@@ -13,9 +13,9 @@ Entity 是 character、scene、object、location 和 style 在项目内唯一的
 Asset Library 作为第三个模型，只管理用户显式导入或安装的本地普通版本化素材包。后续
 [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
 取代了本 ADR 的 Entity Asset 扩展：Project Entity 保持最小项目语义锚点，Character 与 World
-分别拥有便携性和发布语义。项目 `.neko`、Media Library locator/binding 与同步/打包边界由
-[`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
-取代本 ADR 的 `neko/assets` 项目 link 决策。远程 Asset 分发不属于当前 change，未来需要独立 OpenSpec。
+分别拥有便携性和发布语义。项目 Media Library locator、本机 binding、全局 connection、受管链接投影与同步/打包边界由
+[`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)
+恢复为分层的唯一解析链。远程 Asset 分发不属于当前 change，未来需要独立 OpenSpec。
 
 用户展示分为两个边界：Resources 只提供 Files、Media、Assets 三个 owner-preserving source；项目语义和
 创作对象进入 Project-owned Project Content，按角色、世界、其他元素、待确认四组展示。Entity 不作为
@@ -24,7 +24,7 @@ Resources source 或普通用户的顶层管理对象。关联 Character 的 Ent
 
 | Owner                            | 拥有                                                                                | 不拥有                                                                                            |
 | -------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Media Library                    | logical locator、项目本机 binding、文件 projection、显式 copy/delete                | semantic identity、physical target 持久化、generated/package lifecycle                             |
+| Media Library                    | logical locator、target-free 项目 binding、受管 link projection、显式 copy/delete    | Entity identity、generated/package lifecycle                                                        |
 | Asset Library（目标）            | 显式本地 managed package、stable ID、revision/digest、dependency、install/uninstall | 任意文件 discovery、远程分发、Media link target、Project Entity mutation、generic path resolution |
 | Project Entity                   | identity、alias、status、binding、orphan/rebind                                     | 文件字节、Character/World facts、usage、package lifecycle、generated output                       |
 | ContentReadService               | locator 授权 stat/read                                                              | membership、cache path、UI projection                                                             |
@@ -34,13 +34,13 @@ Resources source 或普通用户的顶层管理对象。关联 Character 的 Ent
 
 ## 文件与 binding
 
-项目保存 `MediaLibraryContentLocator(libraryName, relativePath)`；Assets 在项目
-`.neko/media-libraries/` 下保存不含物理 target 的本机 binding，并通过用户已授权的
-`~/.neko/media-libraries/` 全局 connection 解析实际目录。绝对 target、credential、同步状态和本机
-mount 信息不得进入项目事实、Renderer 或 diagnostic。普通 workspace file 与 Media Library file
-使用同一个 `ContentReadService`，但保留不同 owner-qualified locator 和唯一 handler。
+项目保存 `MediaLibraryContentLocator(libraryName, relativePath)`；Assets 在项目 `.neko/media-libraries`
+保存 target-free binding，并通过用户全局 Media Library connection 解析授权 target。Assets 同时在
+`neko/assets/<libraryName>` 维护直接受管软链接（Windows junction），作为 Workspace/Agent 访问投影。
+绝对 target、credential、同步状态和本机 mount 信息不得进入项目事实、Renderer 或 diagnostic。
+Content handler 必须校验 binding、connection 与 link 三者精确一致后才能读取；不得绕过 link 直读 target。
 
-bind/rebind/remove 只管理可删除的项目本机 binding。copy/delete 会修改外部 target，必须携带显式目标、授权、conflict
+bind/rebind/remove 管理可删除的项目 binding 与链接投影。copy/delete 会修改外部 target，必须携带显式目标、授权、conflict
 policy 与 fingerprint precondition。工作区外普通文件先原子导入 `neko/imports/<kind>/`，再由领域
 owner 创建引用。
 
@@ -67,7 +67,7 @@ Media Library 继续是普通文件唯一直接入口。Asset Library 不扫描 
 或 checkpoint。未来远程分发只能经独立 OpenSpec 引入。
 
 Canvas 不建立自己的媒体库或素材副本 registry。未绑定的全局 library 不能把绝对路径写入 `.nkc`；
-用户必须先确认项目 binding、复制文件到明确项目目标，或使用已授权的项目 import。
+用户必须先确认项目 binding（系统维护对应受管链接投影）、复制文件到明确项目目标，或使用已授权的项目 import。
 
 ## Projection 与 cache
 
@@ -96,3 +96,4 @@ thumbnail、proxy、archive extraction 和其他 cache 是 Host/representation o
 - [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
 - [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
 - [`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
+- [`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)

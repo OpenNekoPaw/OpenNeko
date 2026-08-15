@@ -21,7 +21,7 @@
 - Entity 不拥有文件、Asset package、Character、World、thumbnail、cache、usage 或 interaction lifecycle。
 - 删除资源不删除 Entity；deprecate Entity 不删除资源、角色、世界或历史引用。
 
-Entity 是跨文档语义锚点，不是 Character/World 的基类。Standalone Character/World 可以没有 Entity；
+Entity 是跨文档语义锚点，不是 Character/World 的基类。全局 Character/World 可以没有 Entity；
 项目组合通过精确 identity 关联它们。
 
 ## 最小模型

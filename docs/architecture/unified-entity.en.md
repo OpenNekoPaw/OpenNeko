@@ -44,7 +44,7 @@ same-name, latest-revision, active-workspace, or legacy-catalog fallback.
 
 ## Character and World Composition
 
-Standalone Characters do not require an Entity. A project-local Character is connected by a Project-owned
+Global Characters do not require an Entity. A project-local Character is connected by a Project-owned
 exact association containing only `projectId`, `entityId`, and `characterProjectId`. CharacterProject does
 not store a project Entity ID. Character dialogue, Room, embody, Conversation, Agent launch, and exact
 CharacterVersion selection remain Chara-owned.

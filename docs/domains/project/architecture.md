@@ -10,39 +10,39 @@ neko/project-bindings/entity-character/<entity>.json
   -> exact Project + Entity + CharacterProject association fact
 
 Chara / World scoped catalogs + Entity / Canvas / Cut references
-  -> Project Content, target, dependency, usage and publication projections
+  -> Project Content and exact owner-qualified reference projections
 ```
 
-`neko/project-composition.json` 不再是 authority 或 runtime input。Character/World membership 从精确
-Project scope records 派生；CharacterVersion、WorldVersion、Asset revision、package resource 与
-Media Library dependency 从当前 consumer 引用派生。Projection 不能写回 owner，也不能授权删除、发布、
-读取或 fallback。
+Project 只拥有 membership 和导航元数据，不复制 Character/World 事实。工作区可以同时包含 Content、
+本地可编辑 Character/World，以及只读的全局 CharacterVersion/WorldVersion 精确引用。全局目录更新不会
+改写已有 Project 引用；用户必须显式选择新版本。Projection 不能写回 owner，也不能按名称、current、
+latest 或 active fallback。
 
 ## 失败边界
 
 - 缺失或无效 `neko/project.json` 是 Project identity diagnostic，不生成替代 identity。
 - association 一条一文件独立解析；无效字节保留并只产生该 row diagnostic。
 - Chara、World 或文档 owner 的单条无效记录只标记对应 group/row；有效 sibling 仍进入 Project Content。
-- 完整性未知时，只阻止要求 dependency closure 完整的 publication/portable 操作，不阻止 Workspace、Files
-  或无关领域。
+- 完整性未知时，只阻止依赖该条记录的操作，不阻止 Workspace、Files 或无关领域。
 - Desktop scene transition 在 Workspace 授权成功后提交；Project Content 构建失败留在其 Surface，不回滚
   Shell 导航。
 
+## Workspace 展示
+
+Desktop 在 Workspace 右侧组合 Project Browser 与 package-owned Workspace Root。列表同时展示 Content、
+本地角色/世界和全局精确引用，并标注“可编辑”或“只读”。选择全局引用只加入当前 Workspace，不导航
+离开；复制到本地后才可编辑。Project Content 的错误只影响当前行，其他 owner 和 Resources 仍可用。
+
 ## 同步与便携性
 
-普通产品同步读取 `neko/project.json` 的精确 identity，传输同步事实、项目 owned files 与逻辑 locator；
-根 `.neko`、隐藏/tool 目录、symbolic link、global connection、credential、物理 target 和外部媒体字节
-不会进入同步清单。
+普通同步只处理 Project 自有事实和精确引用。角色/世界 ZIP 由各自 owner 负责：一个包只含一个不可变
+领域版本和必要资源，导入直接提交全局目录；不创建安装记录、Project membership、适配副本或 publication
+plan。归档路径、链接逃逸、重复条目、容量、清单和摘要校验失败时，只拒绝当前导入。
 
-便携打包重读固定 owner references 与 Character/World catalogs，要求完整 coverage，并把 dependency
-fingerprint 纳入 stale precondition。当前 Media Library 字节按引用收集到确定的项目路径，只修改 staging
-中的 owning documents；缺失版本、未组合的精确 Asset/package export owner、目标冲突、容量不足、内容变化
-或取消均在 publish 前失败。staging 还会拒绝 machine-local field 和退休 locator，最终只通过一次 rename
-发布。
+## 本机重新初始化
 
-## 离线转换
-
-旧 composition、`neko/assets` link 和 linked-media locator 不由产品启动或普通 reader 解释。用户必须在
-Desktop 关闭时，对绝对 Workspace 与全局 Media root 先执行只读 inspection；只有 `ready` 结果、原 inspection
-fingerprint 与精确 Project confirmation 同时存在时，产品不可达工具才创建 sibling staging。原 Workspace
-被保留为 timestamped backup，完整后验验证通过的 staging 才替换精确 target；备份永不成为 fallback authority。
+项目中的 `media-library` locator 是权威、可同步的外部媒体身份；`.neko/media-libraries` binding 与
+`neko/assets/<libraryName>` managed link 都是本机可重建状态。删除 `.neko` 后项目仍可打开，受影响引用
+显示未关联；只有项目事实需要同名库、现存直接链接精确匹配唯一可用全局 connection 且没有冲突时，才可
+确定性重建 binding。零个或多个匹配、普通目录占位、链接目标不一致都必须局部显示冲突并要求显式关联，
+不得把 Workspace 投影写回项目事实、按名称猜测 target 或读取全局目录作为替代事实。

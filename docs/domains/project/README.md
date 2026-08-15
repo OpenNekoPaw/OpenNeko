@@ -1,8 +1,8 @@
 # Project 领域
 
-Project 只拥有稳定项目身份、Project-owned association facts，以及从固定 owner ports 计算的只读投影。
-Character、World、Entity、Canvas、Cut、Asset 与媒体字节仍由各自领域拥有；Project 不复制它们的 payload，
-也不保存可编辑 membership 或 dependency summary。
+Project 只拥有稳定项目身份、工作区 membership 和精确 owner-qualified 引用。Character、World、Entity、
+Canvas、Cut、Asset 与媒体字节仍由各自领域拥有；Project 不复制它们的 payload，也不维护安装、适配、恢复
+或 publication 生命周期。
 
 参与包：
 

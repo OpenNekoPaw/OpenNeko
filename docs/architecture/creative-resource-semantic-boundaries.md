@@ -79,7 +79,7 @@ candidate、mention、occurrence、availability 和 inferred relationship 是投
 
 ## Entity 与 Character
 
-Standalone Character 不需要 Entity。项目内 Character 通过 Project owner 保存精确关联：
+全局 Character 不需要 Entity。项目内 Character 通过 Project owner 保存精确关联：
 
 ```ts
 interface ProjectEntityCharacterAssociation {
@@ -96,7 +96,7 @@ interface ProjectEntityCharacterAssociation {
 
 - 一个项目内 Character 精确关联一个本项目 Character Entity；
 - 一个 Character Entity 可以不具备角色互动能力，最多关联一个 CharacterProject；
-- 同一 standalone CharacterVersion 可被多个项目作为外部依赖引用，每个项目拥有自己的 Entity 关联；
+- 同一精确全局 CharacterVersion 可被多个项目只读引用，每个项目拥有自己的 Entity 关联；
 - CharacterProject 不保存项目 `entityId`，避免把可复用角色绑死到一个项目；
 - 对话启动必须携带精确 CharacterVersion，不推断 latest、active 或 current。
 
@@ -125,8 +125,20 @@ seed、实时 repository 或内部文件格式。
 
 ## 资源展示与管理
 
-Resource Browser 提供一个 Resources 体验，并且只可按 Files、Media、Assets 三个来源筛选。结果必须
-携带 owner、精确 identity、可用性和 owner 声明的操作；选择、搜索或预览不会转换身份。
+Workspace 右侧 Project Browser 组合两个互斥可见、独立 owner 的视图：Resources 与 Project Content。
+Desktop 只保存当前 tab 的可丢弃 presentation state，并且只挂载所选 package Root；任一视图加载或操作
+失败不得卸载另一个视图或改变其 authority。
+
+Resource Browser 只按“项目文件、外部媒体、素材”三个来源筛选。结果必须携带 owner、精确 identity、
+可用性和 owner 声明的操作；选择、搜索或预览不会转换身份。Character、World、Project Entity 与
+Entity candidate 不进入 Resources，也不被包装成素材。
+
+普通“导入文件”固定复制到当前项目文件目录，使用冲突安全的项目内名称，不保存源绝对路径；源文件始终
+只读，成功后的项目副本随普通项目同步和打包。只有用户显式添加外部媒体目录时，Desktop 才先把目录注册
+为用户全局 Media Library，再为项目创建 target-free binding 与 `neko/assets/<libraryName>` 受管软链接；
+关联已有全局库进入同一 binding/link 结果。外部引用持久化为 `MediaLibraryContentLocator`，软链接只供
+Workspace 受限运行时访问。该操作不复制目录，也不让外部字节进入普通同步。已有引用缺失时，只能显式
+选择精确全局 connection 重连，不提供按名称、最近目录或 active Workspace 推断的关联操作。
 
 Project Content 是 Project owner 计算的只读聚合，固定包含四个互斥分组：
 

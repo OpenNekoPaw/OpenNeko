@@ -71,7 +71,7 @@ repository；Studio 只是继续编辑 definition、representation、voice、sto
 Character Creator seed、实时 repository 或 Workspace。创建与导入都不得自动发布 CharacterVersion、
 启动 Dialogue/Room、选择 provider/model 或授予 Agent 能力。
 
-Standalone Character 不需要 Entity。项目内 Character 由 Project per-record association owner 在精确
+全局 Character 不需要 Entity。项目内 Character 由 Project per-record association owner 在精确
 `contentProjectId` 下保存 `entityId + characterProjectId` 关联；CharacterProject 不保存项目
 `entityId`。一个项目本地
 Character 必须有一个精确 Character Entity association，但 Character Entity 可以没有 CharacterProject。

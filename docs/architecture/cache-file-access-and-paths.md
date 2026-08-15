@@ -4,21 +4,22 @@
 
 更新日期：2026-08-13
 
-项目媒体 binding、派生内容私有存储与 Content I/O 的当前收敛结果由本文记录。旧媒体库 `${VAR}`、
-`neko/assets` link locator 和旧 ContentAccess cache contract 不进入新产品读取、启动或自动 cleanup
-路径；原字节保持不变，显式转换仅由产品不可达的离线工具处理。
+项目媒体身份、本机授权、受管链接投影、派生内容私有存储与 Content I/O 的当前收敛结果由本文记录。
+旧媒体库 `${VAR}` 与旧 ContentAccess cache contract 不进入新产品读取、启动或自动 cleanup 路径；
+target-free `.neko/media-libraries` binding 与 `media-library` locator 仍是 canonical 设计。
 
 本文定义 Desktop 产品中的工作区路径、内容读写、文档访问、runtime 投影和可重建派生物边界。Creative Entity 与 Media Library 的业务语义分别见 [`unified-entity.md`](unified-entity.md) 和 [`asset-library.md`](asset-library.md)。
 实施与验收记录由
-[`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
-跟踪。`neko/assets` 不再是产品成功路径。
+[`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)
+跟踪。`neko/assets/<libraryName>` 受管软链接是 binding 派生的 Workspace 访问路径，不是媒体身份或授权 authority。
 
 ## 核心原则
 
-- 媒体库项目事实使用 `MediaLibraryContentLocator(libraryName, relativePath)`；不伪装成普通 workspace path。
-- 项目 `.neko/media-libraries/` 保存不含 physical target 的可删除本机 binding；用户全局 connection owner
-  在 `~/.neko/media-libraries/` 保存本机授权和 target。
-- Host 只通过 exact project binding 与 exact global connection 解析，并做 relative/traversal 与最终 realpath containment 校验。
+- 媒体库项目事实使用 `MediaLibraryContentLocator(libraryName, relativePath)`。
+- 项目 `.neko` 保存 target-free binding，全局 connection 保存物理授权，`neko/assets/<libraryName>`
+  直接软链接（Windows junction）是两者派生的 Workspace 访问投影。
+- Host 校验 exact binding、connection 与 managed link 一致后，才允许链接跨越 Workspace 边界，并做
+  relative/traversal 与最终 realpath containment 校验。
 - 公共内容接口只表达 source read、runtime projection、authorized write 和 semantic representation；不暴露 cache、materialization、manifest、root、GC 或 physical path。
 - 产品子包不感知 ResourceCache。thumbnail、proxy、waveform、raster page 等是表现语义，是否生成、复用或存储由 Host 内容实现决定。
 - Cache 只保存可重建派生物，不能成为项目、Asset、Entity、Agent memory、原始 source 或 accepted output 的事实来源。
@@ -30,7 +31,8 @@
 | 形态                                              | 是否可持久化 | 用途                                                                      |
 | ------------------------------------------------- | ------------ | ------------------------------------------------------------------------- |
 | workspace-relative path                           | 是           | 工作区 source 与项目文件                                                  |
-| Media Library name + relative descendant          | 是           | external media-library source；使用 owner-qualified locator               |
+| media library name + relative descendant           | 是           | external media source；使用 media-library locator                          |
+| `neko/assets/<name>/<descendant>`                  | 仅 Agent 投影 | sender-bound Workspace 访问，不写回项目领域事实                            |
 | document source + locator/entryPath               | 是           | PDF/EPUB/DOCX/CBZ 等文档定位                                              |
 | stable `ContentLocator` / Asset / Entity identity | 是           | workspace、document entry、generated output、package 与领域事实的跨包身份 |
 | `${VAR}/path`                                     | 有条件       | 其他非媒体库既有配置 root；不得用于新媒体库 source                        |
@@ -38,17 +40,17 @@
 | Host/Renderer/Node token 或 stream URL            | 否           | 当前 runtime projection                                                   |
 | derived/cache/temp/materialized path              | 否           | Host 内部可重建表现或 scratch                                             |
 
-普通 workspace source 直接使用 `WorkspaceFileContentLocator`，外部媒体使用
-`MediaLibraryContentLocator`，二者都不需要注册 Asset 或进入 cache。`Downloads`、Desktop、temp 和任意
-外部绝对目录不是隐式授权来源；用户必须显式导入、放入 workspace，或确认项目到已授权全局媒体库的 binding。
+普通 workspace source 使用 `WorkspaceFileContentLocator`，外部媒体使用 `MediaLibraryContentLocator`；
+二者都不需要注册 Asset 或进入 cache。`Downloads`、Desktop、temp 和任意外部绝对目录不是隐式授权
+来源；用户必须显式导入，或先登记全局 Media Library 再建立项目 binding 与受管链接投影。
 
 ## 服务职责
 
 | 服务                                                 | 负责                                                                                   | 不负责                                              |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `PathResolver`                                       | 普通 workspace-relative path 和 portable relative descendant 的 normalization          | 媒体库 binding、target lookup、cache、Webview       |
-| workspace file guard                                 | absolute/traversal 拒绝与普通 workspace containment                                    | 媒体库 target、binding、library state               |
-| Media Library content handler                        | exact binding/connection resolution、relative descendant 与 final realpath containment | 保存项目事实、fallback target、Asset membership     |
+| `PathResolver`                                       | 普通 workspace-relative path 和 portable relative descendant 的 normalization          | 媒体库授权策略、cache、Webview                      |
+| workspace file guard                                 | absolute/traversal 拒绝、普通 containment、exact managed-link containment               | link 生命周期、fallback target、Asset membership    |
+| Assets binding/managed-link service                  | binding、global connection 校验、link 投影、名称冲突与 target containment               | 项目事实、fallback target、target 内容               |
 | `ContentReadService`                                 | locator stat、bounded bytes/Range、Renderer/media/processor opaque projection          | cache policy、项目写入 ownership、公开 localPath    |
 | `ContentRepresentationService`                       | thumbnail/proxy/waveform/raster 等语义表现请求                                         | 向调用方公开存储方式、cache status 或 root          |
 | Host derived store (`ResourceCacheService` internal) | fingerprint、生成复用、in-flight 去重、freshness、retention、quota、GC                 | 产品子包协议、source identity、正式 Asset/输出      |
@@ -85,19 +87,18 @@ Host 为不同 consumer 注入 capability-scoped port。调用方不能通过 `c
 
 公共请求和结果不得出现 `cache-materialize`、`missing-cache`、`cache-path`、`cache-artifact`、cache destination、manifest path、root、GC 或 storage provider ID。Host-only physical path resolver 不作为跨包 service target。
 
-## 项目媒体 Binding 安全边界
+## 项目媒体受管链接安全边界
 
 - `libraryName` 必须是 portable single segment，`relativePath` 必须 normalized、relative 且无 dot segment。
-- 项目 `.neko` binding 只允许保存 exact global connection identity 与本地 binding fingerprint，不得保存
-  physical target、credential、mount 或 runtime URL；缺失时 canonical 状态为空。
-- binding 只有经 immutable plan 与用户确认后才能创建/替换；open、metadata rebuild 与 projection refresh 不执行 mutation。
-- Content handler 按 exact Project + library identity 读取 binding，再由 global owner 解析已授权 connection；
-  不尝试 active/recent Workspace、同名目录、旧 link、cache 或 alternate provider。
-- 最终 realpath 必须位于当前 global connection target 内，阻止 nested symlink escape。
+- 项目 `.neko` 保存 target-free binding；软链接入口是由 binding 与 exact global connection 派生的访问投影。
+- link 只有在用户确认 binding，或本地初始化能证明 existing link 精确匹配唯一 global connection 时创建/替换。
+- Content guard 检查 exact binding、global connection 与 `neko/assets/<libraryName>` 直接链接，不尝试
+  active/recent Workspace、同名 connection、cache 或 alternate provider。
+- 最终 realpath 必须位于当前 managed link target 内，阻止 nested symlink escape。
 - 项目 codec、Renderer、Agent、log、sync 与 package 都拒绝 `.neko` path、connection identity 和 target。
 
 Electron Main 并非真正 OS sandbox，因此仍需上述 guard；Desktop 只拥有 sender/Workspace/native path
-授权 adapter，binding、resolution 和 recovery policy 由 Assets/Content owning package 决定。
+授权 adapter，link lifecycle、resolution 和 recovery policy 由 Assets/Content owning package 决定。
 
 ## 子包边界
 
@@ -123,13 +124,14 @@ ReadDocument 分别输出语义 `DocumentLocator` 与内容 `DocumentEntryConten
 
 ## 写入与持久事实
 
-- 新媒体库 source 保存 `MediaLibraryContentLocator`；普通项目文件继续保存 `WorkspaceFileContentLocator`。
-- NKC/OTIO 写入拒绝 `.neko`、`neko/assets`、媒体库 `${VAR}`、absolute path、file URI、connection identity、cache/materialized path、Renderer/runtime URL。
+- 新媒体库 source 保存 `MediaLibraryContentLocator`；普通项目文件保存 `WorkspaceFileContentLocator`。
+- NKC/OTIO 写入拒绝 `.neko`、媒体库 `${VAR}`、`neko/assets` Agent 投影、absolute path、file URI、
+  connection identity、cache/materialized path、Renderer/runtime URL。
 - Agent generic file read/write 额外拒绝 NKC/OTIO；Agent 只能通过 Canvas/Cut owning-domain
   query/authoring capability 访问其结构与 mutation。
 - 项目、Asset、generated output、package 和 export 的 ownership 由原有领域 owner 决定；共享 writer 不根据 mode 猜测 destination。
-- package/export 通过 ContentReadService 读取 exact Media Library descendant 字节，不复制 binding 或序列化 target。
-- 产品普通 sync 不包含 `.neko`、binding 或 external bytes；独立便携快照只复制权威引用的 bytes，并在
+- package/export 通过 ContentReadService 读取 exact Media Library descendant 字节，不复制 binding/link 或序列化 target。
+- 产品普通 sync 不包含 `.neko`、binding、managed link 或 external bytes；独立便携快照只复制权威引用的 bytes，并在
   sibling staging 中重写项目文档后 atomic publish，不修改 source workspace 或 external target。
 - legacy variable/original path/local override 不由产品 runtime 读取、分类或转换；正常读取和 authoring
   只有 canonical locator path。
@@ -146,10 +148,11 @@ ReadDocument 分别输出语义 `DocumentLocator` 与内容 `DocumentEntryConten
 
 ## 验证
 
-- binding/guard 测试覆盖 `.neko` deletion、invalid sibling、exact confirmed rebind、workspace move、unavailable target、unmanaged/nested escape 和 target non-disclosure；
+- binding/link/guard 测试覆盖 `.neko` deletion、create/rebind/remove、invalid sibling、workspace move、unavailable target、
+  unmanaged/nested escape 和 target non-disclosure；
 - content contract 测试覆盖 discriminated read/projection、Range/maxBytes/cancel、authorized writer 和无 cache/localPath public fields；
 - dependency guard 证明产品包不 import ResourceCache、manifest、root、GC 或 materialization protocol；
 - source/representation 路径测试证明原始文件和 native entry 直读，thumbnail/proxy/raster 命中内部 representation path；
-- NK/package 测试覆盖 save/reopen/workspace move/rebind、非 canonical record 局部拒绝、binding resolution
+- NK/package 测试覆盖 save/reopen/workspace move/rebind、非 canonical record 局部拒绝、binding + managed-link resolution
   和 canonical path 唯一性；
 - Renderer/Agent protocol 测试证明 payload 不含 absolute target、cache path、raw filesystem error 或 runtime identity 持久化。

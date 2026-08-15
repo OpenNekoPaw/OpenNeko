@@ -2,13 +2,14 @@
 
 状态：Accepted
 
-更新日期：2026-08-13
+更新日期：2026-08-14
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
 `define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`、
 `add-markdown-workspace-references-and-media-embeds`、
 `integrate-open-source-browser-and-computer-use`、
-`separate-project-facts-local-state-and-media-bindings`
+`separate-project-facts-local-state-and-media-bindings`、
+`restore-workspace-linked-media-access`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名描述当前 Electron Desktop；明确标记由活跃 OpenSpec 跟踪的
@@ -83,16 +84,18 @@ runtime 入口。
 
 `packages/content` 拥有文档解析、locator/range、entry ref、图片元数据探测和格式识别等跨领域内容语义。
 
-> `MediaLibraryContentLocator` 是外部媒体的唯一产品 contract；
-> `workspace-file: neko/assets/...` 已退出产品读取、authoring 与 dispatch。
+> 项目外部媒体的 portable contract 是 `MediaLibraryContentLocator`。项目到 Agent 的 producer
+> 才把已授权媒体投影为受控软链接下的
+> `workspace-file: neko/assets/<libraryName>/...`；Agent 不感知 Media Library、全局 connection、
+> 物理 target 或 `.neko` binding，其他项目消费者不得持久化该 Agent 专用 Workspace 投影。
 
 - `@neko/content` 与 `@neko/content/core` 只暴露 renderer-safe contract 和纯语义；文档读取服务必须从
   `@neko/content/document` 显式导入，Node 文件/容器实现必须从 `@neko/content/node` 或
   `@neko/content/document/node` 显式导入。
 - 通过 runtime deps 注入文本、二进制和 container 读取能力。
-- `@neko/content` 的 closed locator union 分别表达普通 `workspace-file` 与
-  `media-library(libraryName, relativePath)`；Media Library locator 不得包含 `.neko`、`neko/assets`、
-  global connection identity、absolute/cache/runtime path，并只命中唯一 Media Library handler。
+- `@neko/content` 分别保留普通项目文件的 `workspace-file` 与外部媒体的
+  `media-library` identity；Host 可读取 Agent 专用的 `neko/assets` Workspace 投影，但 guard 只允许
+  精确 binding-backed managed link 跨越 Workspace realpath，并拒绝普通 symlink 与 nested escape。
 - 不管理 cache root、Webview URI、runtime token、workspace 生命周期或 UI 状态。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
 - 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 分别返回语义 `DocumentLocator` 与内容 `ContentLocator`，不拥有 SQLite projection。
@@ -111,10 +114,12 @@ authority、Content、Entity、Character 或 World payload，也不解释 Worksp
   `neko/project-bindings/entity-character/` 的精确 Project-owned facts；不得读取
   `neko/project-composition.json`、扫描其他 Workspace、读取用户级 SQLite 或提供 fallback repository。
 - `@neko/project-webview` 拥有 Project catalog 和 composition browser presentation；Desktop 只组合其 public Root。
-- standalone Character/World library root 由 Host settings 授权，portable locator 分别为 `${NEKO_HOME}/libraries/characters` 与 `${NEKO_HOME}/libraries/worlds`；Renderer 和领域事实不得接收展开后的绝对路径。
+- 全局 Character/World 对象与不可变领域版本分别由 `@neko/chara-node` 和 `@neko/world-node`
+  的 catalog repository 在授权的全局存储 root 内管理；它们不是 Workspace，也不通过 Renderer grant
+  或独立库目录访问。Renderer 和领域事实不得接收展开后的绝对路径。
 - Project-local Character/World facts及其 Project scope 由 `@neko/chara` / `@neko/world` 及其 Node
   repositories 拥有；Project 通过固定 public owner port 派生 membership。
-- standalone Character 不要求 Entity；项目本地 Character 由 Project-owned association record 保存精确
+- 全局 Character 不要求 Entity；项目本地 Character 由 Project-owned association record 保存精确
   `contentProjectId` owner 下的 `entityId + characterProjectId` 关联。不得把 `entityId` 写入
   CharacterProject，或按名称、
   active/current Project 自动推断关联。
@@ -214,9 +219,11 @@ context。
 
 文件发现边界：
 
-- Assets 从项目 `.neko/media-libraries/` 的严格、target-free binding 与用户全局
-  `~/.neko/media-libraries/` connection 解析授权 root；`@neko/assets-domain` 拥有 binding/recovery policy，
-  `@neko/assets-node` 拥有目录读取、containment、取消和生命周期，Desktop 只组合 native adapter。
+- Assets 以用户全局 Media Library connection、项目 `.neko/media-libraries` target-free binding 和
+  `neko/assets/<libraryName>` managed symlink/junction 共同构成授权链；link 只是可重建 Workspace
+  access projection，不是业务 authority 或 project fact。`@neko/assets-domain` 拥有 binding/link policy，
+  `@neko/assets-node` 拥有精确 connection resolution、link materialization、目录读取、containment、
+  取消和生命周期，Desktop 只组合 native adapter。
 - 文件事件只触发 host-neutral coordinator；发现文件不得创建 Entity/binding、写 catalog 或分配文件 identity。
 - semantic/entity projection 使用 `LocalMetadataStore` 的用户级 SQLite binding；Webview 和功能包不接收数据库路径或 raw SQL。
 
@@ -269,7 +276,7 @@ Agent 能力按 owning package 职责分层：
 | `@neko/host`                 | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
 | `@neko/agent-webview`        | Chat/Agent UI、消息投影和用户输入                                                                                          |
 | `@neko/chara-webview`        | Character、Dialogue 与 Chatroom 的 browser-only 产品视图和可丢弃展示状态                                                   |
-| `@neko/world-webview`        | World Foundation Library、Studio、确定性预览与可丢弃展示状态；不实现完整 World Experience                                  |
+| `@neko/world-webview`        | World 管理、目录创作、确定性 Runtime Workbench 与可丢弃展示状态；不实现完整 World Experience                               |
 
 Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime 与 Host 不导入 Electron、React
 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
@@ -333,12 +340,12 @@ Tools media-diff 原型因没有 Desktop producer、产品入口或运行态验�
 
 ## Character / World 顶级领域聚合包
 
-Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 Agent、应用根或现有 Assets/Preview 内部。`@neko/chara` 与 `@neko/world` 均已建立 Foundation owner；完整 Character Storyline/Memory 和 AI-native World Story/Gameplay/Experience/Presentation 仍按各自活跃 OpenSpec 演进：
+Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 Agent、应用根或现有 Assets/Preview 内部。`@neko/chara` 已建立 Foundation owner；`@neko/world` 已建立相互分离的管理、目录创作和确定性 Foundation runtime owner。完整 Character Storyline/Memory 和 AI-native World Story/Gameplay/Experience/Presentation 仍按各自活跃 OpenSpec 演进：
 
-| 包                                                         | 状态                                   | 聚合主线                                                                                            | 主要职责                                                                                                                                             | 关键边界                                                                                                                                                                              |
-| ---------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI | `CharacterProject -> CharacterVersion + Storyline authoring + Companion continuity + Dialogue/Room` | 角色背景故事与原生背景设定、角色创作与发布、个人故事线创作、日常角色/关系记忆、Dialogue/Chatroom policy、上下文投影、持久化和 package-owned 产品视图 | 完全复用 AgentSession；Narrative 不绑定外部 Composition/World/Save；Entity、Assets、Voice、Presentation、Media/Game 只通过公共 ref/port/provider 组合，Chara 不拥有外部 facts/runtime |
-| `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Foundation / Node adapter / browser UI | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`                                      | 世界书、事实、规则/事件、运行、存档、分支、WorldView、Foundation 创作与确定性检查；Node/Webview 分别只拥有 adapter 与展示状态                        | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；基础预览不得冒充需要 Story/Experience/实时 AI 的完整 World 成功路径                                           |
+| 包                                                         | 状态                                           | 聚合主线                                                                                            | 主要职责                                                                                                                                              | 关键边界                                                                                                                                                                              |
+| ---------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI         | `CharacterProject -> CharacterVersion + Storyline authoring + Companion continuity + Dialogue/Room` | 角色背景故事与原生背景设定、角色创作与发布、个人故事线创作、日常角色/关系记忆、Dialogue/Chatroom policy、上下文投影、持久化和 package-owned 产品视图  | 完全复用 AgentSession；Narrative 不绑定外部 Composition/World/Save；Entity、Assets、Voice、Presentation、Media/Game 只通过公共 ref/port/provider 组合，Chara 不拥有外部 facts/runtime |
+| `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Management / authoring / deterministic runtime | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`                                      | 世界书、事实、规则/事件、版本、运行、存档、分支与 WorldView；管理只读投影，目录创作保留 Workspace Primary Main，Runtime Workbench 消费 exact Run 投影 | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；创作预览不写 runtime，Foundation runtime 不得冒充 Story/Gameplay/Experience/实时 AI                           |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
 Agent、Renderer、Device、表现 runtime 和 host adapter。Agent package 不导入 Character/World；
@@ -450,14 +457,15 @@ UserCharacterRelationship、AgentSession transcript 与外部存档必须保持�
 Canvas 只拥有节点布局、连接和 durable projection，不拥有素材字节、媒体库 membership、
 Generation recipe、viewer/editor 或 provider execution。素材进入 Canvas 固定为四条路径：
 
-1. 工作区文件保存 `WorkspaceFileContentLocator`，项目已绑定 Media Library 文件保存
-   `MediaLibraryContentLocator`，引用时不复制字节；
-2. 全局 Media Library 文件先由 Media Library owner 显式确认项目本机 binding，或显式复制到项目可授权位置；
+1. 普通工作区文件保存 `WorkspaceFileContentLocator`；项目授权的外部媒体保存
+   `MediaLibraryContentLocator`，二者引用时都不复制字节；
+2. 全局 Media Library 文件必须先由 Media Library owner 创建项目 binding 和匹配的 Workspace link，
+   或由用户显式复制到项目可授权位置；
 3. 任意工作区外文件由 Host 原子复制到 `neko/imports/<kind>/`，再用新的项目 locator 创建节点；
 4. AI 素材先进入 Generation-owned draft/Job，只有 owner 成功提交的
    `generated-output` locator 才投影为 Media/File 结果节点。
 
-素材来源只能由 validated locator 推导：`workspace-file`、`document-entry`、
+素材来源只能由 validated locator 推导：`workspace-file`、`media-library`、`document-entry`、
 `package-resource` 是 referenced，`generated-output` 是 generated。扩展名、目录名、
 provenance 文本、历史 prompt 和运行时 URL 都不得成为来源 authority。历史生成摘要只用于
 展示；重新生成必须用稳定 `JobRef<'generation'>` 向 Generation owner 解析权威 recipe，
