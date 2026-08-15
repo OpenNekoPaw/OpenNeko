@@ -46,21 +46,21 @@ mutations.
 ### Requirement: Project Character association is explicit and project-owned
 
 Project composition SHALL own an exact association between one confirmed project Character Entity and
-one CharacterProject without copying either owner's payload. A standalone Character SHALL NOT require an
+one CharacterProject without copying either owner's payload. An independently installed immutable CharacterVersion SHALL NOT require an
 Entity; a project-local Character SHALL have exactly one association; and a Character Entity MAY remain
 without interactive Character capability.
 
 #### Scenario: Create a project-local Character
 
-- **WHEN** a user explicitly creates a Character in one authorized Content Project
+- **WHEN** a user explicitly creates a Character in one authorized Project Creative Workspace
 - **THEN** the workflow creates or selects one exact Character Entity, creates one fresh project-local
   CharacterProject, records Project membership and commits their exact association
 - **AND** no standalone catalog record, implicit active Project or usable CharacterVersion is selected
 
-#### Scenario: Create a standalone Character
+#### Scenario: Install an independent Character release
 
-- **WHEN** a user creates a Character in the authorized standalone Character library
-- **THEN** Chara creates the CharacterProject without creating a Content Project or Project Entity
+- **WHEN** a user installs one exact eligible CharacterVersion without selecting a Project
+- **THEN** Chara creates an immutable installed-release record without creating a CharacterProject, Project, or Project Entity
 
 #### Scenario: Enable interaction for a discovered person
 
@@ -88,10 +88,10 @@ MUST NOT create FileCharacter, AssetCharacter, EntityCharacter or provider-speci
 - **THEN** Chara creates one fresh CharacterProject and records the selected representation ref without
   treating the Asset package as Character identity or inventing Character definition facts
 
-#### Scenario: Import a portable Character
+#### Scenario: Install a portable Character release
 
-- **WHEN** a user imports a valid `.neko-character` archive
-- **THEN** the Chara import workflow validates and installs its exact selected Character records
+- **WHEN** a user selects `Install for use` for a valid `.neko-character` archive
+- **THEN** the Chara install workflow validates and installs its exact selected eligible CharacterVersions and bounded resources
 - **AND** it does not route the archive through Character Creator or retain the archive as a live
   repository
 
@@ -141,3 +141,5 @@ diff/apply as a successful operation.
   implementation
 - **AND** existing user bytes remain untouched and receive an exact unsupported-state diagnostic rather
   than a compatibility or fallback reader
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** The standalone mutable Character creation scenario is superseded. Independent installed CharacterVersions may remain Entity-free and Project-local editable CharacterProjects retain exact Entity association semantics.

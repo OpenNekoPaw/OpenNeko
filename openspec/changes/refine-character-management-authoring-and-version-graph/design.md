@@ -232,3 +232,5 @@ Rollback 只能撤回尚未写入用户数据的 UI/composition commit。已经�
 ## Open Questions
 
 - version archive/hide 是否已有真实产品需求；没有时首轮只实现引用阻止删除，不新增 archive 状态。
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** Quick-generation handoff and standalone mutable placement decisions below are historical context only and MUST NOT receive new production work. Lineage, exact CharacterVersion, portable validation, Chara ownership, and fail-local behavior remain applicable.

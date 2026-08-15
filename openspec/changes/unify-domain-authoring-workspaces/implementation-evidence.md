@@ -1,7 +1,10 @@
 ## Decisions
 
+> Historical evidence only. `simplify-project-authoring-and-installed-libraries` supersedes the
+> standalone Character/World library decisions below. The successor deleted the Host-managed
+> library roots and uses owner-managed global catalogs plus Project-local objects.
+
 - Formal World Experience launch authority is `WorldExperienceVersion`. `WorldVersion` remains the reusable World Foundation publication and is not a compatible alias for a complete experience.
-- Host settings owns standalone library root configuration. Portable locators are `${NEKO_HOME}/libraries/characters` and `${NEKO_HOME}/libraries/worlds`; expanded roots remain inside the Host boundary.
 
 ## Existing Authoring Data Inventory
 
@@ -18,7 +21,9 @@ The Character rows require an explicit Chara-owned offline export/import workflo
 
 ## Authoring and Runtime Persistence Cutover
 
-- Desktop production composition now constructs standalone Character and World file-authoring repositories at the Host-owned `${NEKO_HOME}/libraries/characters` and `${NEKO_HOME}/libraries/worlds` roots.
+- The successor production composition no longer constructs Host-owned standalone Character or
+  World authoring repositories; Chara and World Node catalog repositories own global objects and
+  versions under the global storage root.
 - Character runtime composition receives distinct conversation-launch, interaction, room, storyline, memory, relationship, presentation, avatar-authority, and runtime-catalog objects. No returned runtime object exposes Character authoring mutation methods.
 - World runtime composition receives a runtime repository and runtime-only catalog separately from the file authoring repository. Starting a runtime pins its exact immutable publication into runtime persistence; the authoring repository is not used as a SQLite fallback.
 - Runtime-only table initialization does not create `chara_projects`, `chara_authoring_test_snapshots`, or `world_projects`. Existing legacy tables and bytes are not deleted.

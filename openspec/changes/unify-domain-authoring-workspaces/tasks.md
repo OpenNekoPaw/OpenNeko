@@ -1,6 +1,6 @@
 ## 1. Contract and data decisions
 
-- [ ] 1.1 Reconcile `add-home-experience-entry-modes`, `compose-desktop-workbench-scenes`, `unify-agent-launch-and-domain-bindings`, and active Character/World changes with this change so one canonical intent, scene, target, and runtime contract remains.
+- [x] 1.1 Reconcile `add-home-experience-entry-modes`, `compose-desktop-workbench-scenes`, `unify-agent-launch-and-domain-bindings`, and active Character/World changes with this change so one canonical intent, scene, target, and runtime contract remains. World first-closure ownership is handed to `refine-world-management-authoring-and-runtime`; advanced Experience changes remain gated.
 - [x] 1.2 Freeze the World-owned publication identity consumed by formal World Experience launch, update this change's specs to that single name if needed, and add a poison assertion forbidding a `WorldVersion`/`WorldExperienceVersion` compatibility dispatch.
 - [x] 1.3 Decide and document the owner and configured `${VAR}/...` location for standalone Character and World library roots while keeping raw roots out of renderer and domain facts.
 - [x] 1.4 Inventory existing `chara_projects`, `chara_versions`, `world_projects`, and `world_versions` SQLite records without logging payloads; record whether an explicit offline export/import workflow is required before product cutover.
@@ -61,6 +61,7 @@
 - [x] 6.10 Split World management into a package-owned list/grid catalog Surface and exact configuration/detail Surface composed through controlled Workbench Main and Secondary Main slots.
 - [x] 6.11 Verify Content, Character, and World authoring use the same controlled Workbench geometry while retaining owner-specific components, commands, snapshots, and runtime boundaries.
 - [x] 6.12 Project expanded application-sidebar sections for Projects, Conversations, Characters, and Worlds; group Character Dialogue/Room conversations exactly and keep Worlds empty until an exact World Conversation owner exists.
+- [x] 6.13 Keep the Primary Main region available and visible for a fresh Workspace with zero Main Views, render only the canonical empty presentation, and verify Secondary Main authoring never replaces or fabricates the Primary Main state.
 - [x] 6.14 Make Text Editor tab close an owner-atomic operation: close released clean Views without reopening deleted files, while preserving explicit dirty save/discard/cancel handling and exact identity validation.
 
 ## 7. Agent Entry and target routing
@@ -92,12 +93,14 @@
 
 ## 9. Runtime, UI, and Agent acceptance
 
-- [ ] 9.1 Use the authoritative packaged/development Electron runtime to verify direct Project, Character, and World sidebar navigation opens only the selected owner catalog, invalid records remain locally visible, and leaving a manager unmounts its package Root.
-- [ ] 9.2 Verify in one real Project Workspace that Content, a project-local Character, and a project-local World can be created and alternated; confirm files land only in canonical relative paths and standalone catalogs do not acquire local records.
-- [ ] 9.3 Verify standalone Character/World authoring uses the same Studio/service/publication behavior as project-local targets, and external publication refs remain read-only with explicit source handoff.
+- [ ] 9.1 Use the authoritative packaged/development Electron runtime to verify Conversation and Creation navigation, subordinate installed Character/World management, local invalid-record visibility, and outgoing package Root unmounting.
+- [ ] 9.2 Verify in one real generic Project Creative Workspace that Content, Character, and World targets can coexist and alternate without a mandatory Content root; confirm files land only in canonical relative paths and installed/recovery catalogs do not acquire project-local mutable records.
+- [ ] 9.3 Verify new mutable Character/World authoring requires one exact Project authority, installed releases remain read-only, `Adapt in Project` creates a fresh target, and recovery records expose no authoring or publication success path.
 - [ ] 9.4 Verify authoring tests/previews do not create formal runtimes, while published Character Dialogue/Room and World Experience create exact runtimes that continue after Studio/Workspace Root unload.
-- [ ] 9.5 Execute the `neko-ui-validation` acceptance inventory for direct sidebar navigation, Project/Character/World management, World list/grid + detail, Entry, Studio, shared authoring Workbench, empty, invalid, loading, unavailable, dense, and narrow-window states; inspect current screenshots with an image-capable Agent and report adjacent regressions.
+- [ ] 9.5 Execute the `neko-ui-validation` acceptance inventory for Conversation/Creation navigation, Project mixed-domain management, installed Character/World management, exact runtime launch, generic Creative Workspace, empty, invalid, loading, unavailable, dense, and narrow-window states; inspect current screenshots with an image-capable Agent and report adjacent regressions.
 - [ ] 9.6 Add or update declarative Agent Evaluation scenarios for the four Entry intents, exact authoring target mutation, cross-target denial, provider unavailability, and published runtime launch; run key-free harness readiness without treating it as behavior evidence.
 - [ ] 9.7 With explicit provider/model/cost authorization and `~/.neko/config.toml`, run visible real Electron UI Agent acceptance and the affected hidden full-Desktop real-API matrix; record final response, terminal state, exact Conversation/Workspace/target/runtime identities, isolation, reopen behavior, and all unexecuted baseline cases.
 - [ ] 9.8 Package the Desktop with `pnpm package:desktop`, repeat the critical create/switch/publish/run flows from the packaged app, and record platform-specific blockers.
 - [ ] 9.9 Complete `neko-quality-review`, listing canonical owner/path evidence, deleted/poisoned paths, verification commands/results, user-data handling, unexecuted checks, and residual risks before marking the change implementation complete.
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** Completed standalone/direct-destination tasks are historical evidence, not current target behavior. Any unchecked task that would validate or extend standalone mutable authoring or direct Character/World authoring navigation is superseded and MUST be executed only through the successor task list.

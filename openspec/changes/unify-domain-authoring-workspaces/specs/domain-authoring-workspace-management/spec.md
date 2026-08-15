@@ -16,31 +16,37 @@ The system SHALL represent directory/root authorization as Workspace authority, 
 - **THEN** only that target fails with an identity-qualified diagnostic
 - **AND** the system does not use the visible editor, current Project, recent record, or another target as authority
 
-### Requirement: Project Workspaces support project-local domain authoring
+### Requirement: Project-bound Creative Workspaces support mixed-domain authoring
 
-A Content Project Workspace SHALL support Content artifacts plus zero or more project-local CharacterProject and WorldProject authoring targets. Creating a project-local Character or World MUST use the canonical Chara or World contract, codec, application service, validation, publication, and diagnostic path. The Project composition SHALL own only target membership, placement, navigation metadata, and exact dependency references.
+A Project-bound Creative Workspace SHALL support zero or more Content artifacts, CharacterProject targets, and WorldProject targets without requiring a primary domain or mandatory Content target. Creating a project-local Character or World MUST use the canonical Chara or World contract, codec, application service, validation, publication, and diagnostic path. The Project composition SHALL own only target membership, placement, navigation metadata, exact dependency references, and typed output composition.
 
-#### Scenario: Content author creates a local Character
+#### Scenario: Project author creates a local Character
 
-- **WHEN** an author explicitly creates a Character from a Content Project Workspace
+- **WHEN** an author explicitly creates a Character from one exact Project-bound Creative Workspace
 - **THEN** the Chara owner creates one canonical CharacterProject under the exact Workspace authority and the Project composition records its exact target reference
 - **AND** no Project-owned Character shape, copied global record, CharacterRun, or implicit publication is created
 
-#### Scenario: Content author creates a local World
+#### Scenario: Project author creates a local World
 
-- **WHEN** an author explicitly creates a World from a Content Project Workspace
+- **WHEN** an author explicitly creates a World from one exact Project-bound Creative Workspace
 - **THEN** the World owner creates one canonical WorldProject under the exact Workspace authority and the Project composition records its exact target reference
 - **AND** no Project-owned World shape, WorldRun, WorldSave, or generic creative record is created
 
-### Requirement: Standalone and project-local authoring use one domain path
+### Requirement: New mutable domain authoring is Project-scoped
 
-Standalone Character and World authoring SHALL use library-managed authorized Workspace roots while project-local authoring SHALL use the exact Project Workspace root. Both placements MUST use the same owning-domain contract, service, codec, publication behavior, and package-owned Studio Root. Placement MAY select an explicit repository root adapter, but it MUST NOT select a different business implementation, schema, success semantic, or fallback persistence path.
+Every newly created mutable CharacterProject and WorldProject SHALL use one exact Project-bound Creative Workspace and the single owning-domain contract, service, codec, publication behavior, and package-owned authoring Root. Existing standalone mutable records MAY remain readable only through an owner-qualified recovery catalog that disables new authoring and publication. Installed CharacterVersion and WorldVersion libraries SHALL remain immutable use/reference catalogs and MUST NOT become authoring roots.
 
-#### Scenario: Standalone Character and project-local Character are edited
+#### Scenario: Project-local Character is edited
 
-- **WHEN** an author opens one standalone CharacterProject and one project-local CharacterProject in separate visible authoring contexts
-- **THEN** both are validated and mutated through the same Chara authoring service and Character Studio contract
-- **AND** only their exact authorized roots and catalog projections differ
+- **WHEN** an author opens one exact project-local CharacterProject
+- **THEN** Chara uses the canonical service, codec, repository behavior, and authoring package Root under that Project authority
+- **AND** no standalone authoring authority, implicit Project, or alternate repository is created
+
+#### Scenario: Legacy standalone record is inspected
+
+- **WHEN** an existing standalone CharacterProject or WorldProject is projected through recovery
+- **THEN** the owner exposes its exact identity, diagnostic, export, move-to-Project, and delete eligibility
+- **AND** recovery does not permit mutation, publication, Agent creation, or runtime launch from the mutable draft
 
 #### Scenario: Canonical root is unavailable
 
@@ -58,21 +64,21 @@ Project-local CharacterProject and WorldProject records SHALL be discoverable an
 - **THEN** its project-local Character and World files remain unchanged and are no longer projected as standalone library items
 - **AND** reopening the exact directory can reconstruct the Project-scoped catalog without fabricating new identities
 
-#### Scenario: User opens standalone Character management
+#### Scenario: User opens the installed Character library
 
-- **WHEN** the standalone Character catalog is projected
-- **THEN** it contains only records registered under standalone Character Workspace roots
-- **AND** project-local Characters do not leak into the standalone catalog through a global scan or duplicate index
+- **WHEN** the installed Character catalog is projected
+- **THEN** it contains only exact immutable installed CharacterVersions and owner-qualified installation diagnostics
+- **AND** project-local CharacterProjects and legacy mutable recovery records do not leak into that use catalog
 
-### Requirement: Domain management shares the Workbench shell without an in-page mode switch
+### Requirement: Conversation and Creation share controlled Workbench composition
 
-Desktop SHALL expose direct Project, Character, and World destinations in the application sidebar. The destinations MAY share the controlled Workbench shell and package-neutral search, sorting, empty-state, selection, and layout primitives, but each destination SHALL consume only its owning projection and retain its own create, open, remove, publish, archive, diagnostic, and runtime-launch semantics. Once a domain destination is visible, it MUST NOT render a Project/Character/World mode switch. The shared shell MUST NOT define a generic creative DTO, writable all-domain registry, or combined destructive command.
+Desktop SHALL expose Conversation and Creation as the product-level intents. Creation SHALL select one exact Project and compose its mixed-domain management and authoring surfaces; Conversation MAY open subordinate installed Character/World management or delegate exact runtime launch without becoming a runtime owner. The controlled Workbench MAY share package-neutral search, sorting, empty-state, selection, and layout primitives, but each visible surface SHALL consume only its owning projection. The shared shell MUST NOT define a generic creative DTO, writable all-domain registry, combined destructive command, or direct standalone Character/World authoring destination.
 
-#### Scenario: User opens a domain manager from the application sidebar
+#### Scenario: User opens a Project from Creation
 
-- **WHEN** the user chooses Projects, Characters, or Worlds from the application sidebar
-- **THEN** Desktop navigates to the exact owner-qualified management scene and mounts only that package-owned catalog Root
-- **AND** the destination contains no secondary cross-domain selector and the previous catalog Root is unmounted without changing durable records or background runtimes
+- **WHEN** the user chooses one exact Project from Creation
+- **THEN** Desktop composes that Project's generic Creative Workspace and owner-qualified target surfaces
+- **AND** the previous Project Roots are unmounted without changing durable records or protected background runtimes
 
 #### Scenario: User selects a World record
 
@@ -86,9 +92,9 @@ Desktop SHALL expose direct Project, Character, and World destinations in the ap
 - **THEN** that record remains visible with an owner-qualified diagnostic and sibling records and domain catalogs remain usable
 - **AND** Creative Management does not hide the record, clear the catalog, or replace it with a generic invalid item
 
-### Requirement: Application navigation separates Project, Conversation, Character, and World records
+### Requirement: Application navigation separates product intents from durable owner records
 
-The expanded application sidebar SHALL expose lightweight Projects, Conversations, Characters, and Worlds sections. Project rows MAY contain their exact Workspace conversations, Assistant conversations SHALL remain in Conversations, Character Dialogue and Room conversations SHALL appear under Characters, and World conversations SHALL appear under Worlds only after an exact World-owned Agent Conversation exists. The sidebar MUST NOT create a Conversation from a CharacterProject, WorldProject, CharacterRun, Room, WorldRun, or management selection merely to populate a section.
+The expanded application sidebar SHALL expose Conversation and Creation as the primary product intents. Conversation MAY project lightweight exact Assistant Conversation, Character Dialogue, Room, World Run, or Save continuation rows supplied by their owning catalogs; Creation MAY project lightweight exact Project rows. The sidebar MUST NOT create a durable lifecycle from a CharacterProject, WorldProject, installed release, management selection, or navigation action merely to populate a section.
 
 #### Scenario: Character conversations are projected
 
@@ -104,13 +110,13 @@ The expanded application sidebar SHALL expose lightweight Projects, Conversation
 
 ### Requirement: Project composition references external publications without copying facts
 
-A Project Workspace MAY bind exact independently published CharacterVersion and WorldExperienceVersion references in addition to project-local authoring targets. External published dependencies SHALL remain immutable and read-only in the Project Workbench. Editing an external source MUST use an explicit navigation handoff to its owning Studio, and publication MUST freeze exact dependency identities rather than resolve latest, active, name-matched, or first-compatible records.
+A Project Workspace MAY bind exact independently published CharacterVersion and WorldExperienceVersion references in addition to project-local authoring targets. External published dependencies SHALL remain immutable and read-only in the Project Workbench. Editing from an external source MUST use an explicit `Adapt in Project` operation that creates a fresh project-local target while preserving the installed source, and publication MUST freeze exact dependency identities rather than resolve latest, active, name-matched, or first-compatible records.
 
 #### Scenario: Project binds an independent Character
 
 - **WHEN** an author adds an independently published CharacterVersion to a Project composition
 - **THEN** the Project records the exact immutable CharacterVersion reference and exposes an owner-qualified source navigation action when available
-- **AND** it does not copy CharacterDefinition or mutate the CharacterProject from the Project Workspace
+- **AND** it does not copy CharacterDefinition or mutate an installed source from the Project Workspace
 
 #### Scenario: External dependency becomes unavailable
 
@@ -165,3 +171,5 @@ Content authoring SHALL produce previews and exports without creating a Content 
 - **WHEN** the user explicitly launches an eligible project-local published WorldExperienceVersion
 - **THEN** the World runtime creates or restores its exact Run and Save identities independently of the authoring Workbench
 - **AND** unmounting or switching the authoring target does not cancel, redirect, or transfer that runtime
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** Requirements below that authorize standalone mutable CharacterProject/WorldProject authoring or direct domain authoring destinations are superseded. Project-local authoring, exact external immutable references, owner boundaries, and failure isolation remain applicable.

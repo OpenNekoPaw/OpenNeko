@@ -1,37 +1,34 @@
 ## ADDED Requirements
 
-### Requirement: Character management detail does not host Character Studio
+### Requirement: Installed Character management does not host Character authoring
 
-Desktop Creative Management SHALL compose a responsive Character card catalog in Main and a lightweight Chara-owned Character detail in Secondary Main. The catalog SHALL use one card presentation rather than expose a redundant list/grid mode. The detail SHALL prioritize placement, identity, summary, draft/finalization status, usable-version count and Start Conversation/Edit actions. Complete version graph, Storyline and reference inventory belong to Workspace Character Authoring and MUST NOT appear as default management-detail sections. The detail MUST NOT mount the complete mutable Character definition editor, Storyline editor, version finalization form, Agent authoring Root or hidden Character Studio provider.
+Desktop SHALL compose the installed Character catalog and exact immutable release detail as an owner-qualified management scene under Conversation. The detail MAY expose inspect, launch, exact Project reference, Adapt in Project, export, and reference-safe uninstall actions. It MUST NOT mount the mutable Character editor, Storyline editor, finalization form, Agent authoring Root, blank creation action, or hidden Character Studio provider.
 
-#### Scenario: User selects and deselects a Character
+#### Scenario: User selects and deselects an installed Character
 
-- **WHEN** the user selects one CharacterProject and then closes its management detail
-- **THEN** Desktop mounts and unmounts only the exact lightweight Secondary Main detail while the Character catalog remains in Main
-- **AND** no authoring Root, directory grant consumer, draft state or Studio subscription remains mounted
+- **WHEN** the user selects one exact installed CharacterVersion and then leaves the management scene
+- **THEN** Desktop mounts and unmounts only the exact Chara-owned catalog/detail Roots
+- **AND** no runtime, authoring Root, directory grant consumer, or mutable draft state remains mounted
 
-### Requirement: Character authoring is an exact Workspace authoring target
+### Requirement: Character authoring is an exact Project Workspace target
 
-Desktop SHALL compose the Chara-owned Character authoring surface as a Secondary Main target only when canonical Workspace Authoring selects an exact CharacterProject after Host validates the sender-bound directory Workspace grant and owner-qualified target. The primary Main SHALL remain the Content Project's canonical Board or the standalone Workspace's explicit empty state. Standalone and project-local Characters SHALL reuse the same target switching, Workbench slots, Agent/resources composition and Character surface; only the authorized Workspace authority, Project membership requirement and exact binding differ. Desktop MUST NOT expose a raw path to Renderer, wrap standalone Character in a fake Content Project, create an independent Character Studio Scene/Workbench/controller, replace the default Board/empty Main or retain a previous Character surface after target switching.
+Desktop SHALL compose the Chara-owned Character authoring surface only when Creation has selected one exact Project and Host has validated its sender-bound Creative Workspace grant plus owner-qualified CharacterProject target. Desktop MUST NOT expose a raw path, fabricate a Content target, create an independent Character Studio Scene/Workbench/controller, infer a recent target, or retain a previous Character Root after target switching.
 
-#### Scenario: User opens a standalone Character from management
+#### Scenario: User opens a project-local Character
 
-- **WHEN** the user invokes “Open Studio” and Host validates the exact standalone library target
-- **THEN** Desktop transitions from Creative Management to the controlled Workspace authoring composition, preserves the Board/empty primary Main and mounts the Chara-owned Character surface in Secondary Main
-- **AND** the previous management Secondary Main is unmounted rather than promoted into an editor
+- **WHEN** Project management receives an exact Chara authoring receipt
+- **THEN** Desktop mounts the Character authoring Root in the declared visible Creative Workspace slot
+- **AND** it does not retain installed-library management or another target Root as hidden authority
 
-#### Scenario: User switches between project-local authoring targets
+### Requirement: Desktop does not own Character creation routing
 
-- **WHEN** one Project Workspace switches from Content to Character to another Character target
-- **THEN** Main replaces the owner Root after outgoing snapshot commit and incoming exact authority validation
-- **AND** no hidden Character surface, independent Studio controller, current-target fallback or cross-target draft state is retained
+Desktop SHALL expose Project management's direct `New Character` action and compose Project-bound Agent Skill results only from owner-issued receipts. It MUST NOT route a Character Management quick-generation handoff, embed a second Composer, choose a destination, create a target, or implement Chara mutation and publication semantics.
 
-### Requirement: Quick Character creation uses an exact Agent Entry handoff
+#### Scenario: Project-bound Agent creation completes
 
-Desktop SHALL route the Character Management quick-generation action through one typed transition to the canonical Agent Entry/Composer with the exact `character-creator` activation and an explicit management return identity. Destination selection, Agent invocation, fresh-target authorization and Chara mutation SHALL continue through their canonical public ports. Desktop MUST NOT embed a second Composer in Character Management, create a management-owned Agent runtime, turn Secondary Main into an authoring Root or create a second Character Studio.
+- **WHEN** Chara commits one approved fresh CharacterProject and returns its exact target receipt
+- **THEN** Desktop may offer an explicit handoff to that target inside the same Project Creative Workspace
+- **AND** navigation does not create another CharacterProject, CharacterVersion, or Agent Conversation
 
-#### Scenario: Quick creation completes without Studio
-
-- **WHEN** the exact Character draft operation succeeds from Character Management
-- **THEN** the canonical Agent result exposes an exact “View Character” handoff that returns to and selects the created CharacterProject in Character Management
-- **AND** Desktop does not create or retain a Studio View unless the user separately invokes “Open Studio”
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-15):** Controlled slots and Chara-owned Roots remain applicable; standalone Character Studio entry and management quick generation are removed rather than merely marked superseded.

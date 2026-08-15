@@ -81,3 +81,5 @@ parallel paths harder to remove. World remains a future product extension outsid
   untouched. Contract removal must preserve bytes, expose exact diagnostics for
   unsupported former records, and must not invent migration, fallback, automatic association, or latest
   version selection.
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** New standalone mutable Character creation is retired. The no-required-Entity semantic remains valid for independently installed immutable Character releases, while editable CharacterProjects are Project-scoped.

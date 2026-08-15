@@ -12,11 +12,11 @@ An explicitly localized Character-owned representation SHALL additionally have o
 - **THEN** the Chara surface reads and writes its canonical relative records under that CharacterProject directory
 - **AND** it does not require, mutate or execute an exported package
 
-#### Scenario: Standalone and project-local Characters persist identically
+#### Scenario: Project-local and recoverable legacy Characters use canonical codecs
 
-- **WHEN** equivalent standalone and project-local CharacterProjects are stored under their respective authorized roots
-- **THEN** both use the same Chara-owned relative record layout and codecs
-- **AND** their catalog scope and Project membership remain external placement facts rather than alternate file formats
+- **WHEN** one project-local CharacterProject and one legacy standalone recovery record are decoded
+- **THEN** both use the canonical Chara-owned record codecs without a compatibility shape
+- **AND** only the Project-local record is writable while recovery remains explicit and read-only
 
 #### Scenario: Imported Live2D bytes are installed
 
@@ -67,16 +67,21 @@ A Character package SHALL contain Character authoring facts and explicitly inclu
 - **THEN** none of those records or settings appear in the archive inventory or bytes
 - **AND** importing the package creates or installs only the explicitly selected Character authoring facts and assets
 
-### Requirement: Character package import is validated before Workspace installation
+### Requirement: Character package validation precedes explicit install or Project import
 
-Host/Node SHALL treat the archive as untrusted input and validate its containment, entry count, expanded size, duplicate paths, symlinks, compression behavior, manifest inventory, record codecs, exact identities and integrity digests before Chara writes any records. Chara SHALL present an import preview with placement, included branches/Storylines/assets, unresolved dependencies and exact identity conflicts. Import SHALL require an explicitly authorized standalone-library or project-local destination and MUST NOT execute in place, overwrite existing records, infer the active/recent Workspace or silently remap references. Completion, rejection or cancellation SHALL release the archive reader and temporary bytes without retaining a package binding, mount, watcher, recent-package authority or synchronization task.
+Host/Node SHALL treat the archive as untrusted input and validate its containment, entry count, expanded size, duplicate paths, symlinks, compression behavior, manifest inventory, record codecs, exact identities and integrity digests before Chara writes any records. Chara SHALL present distinct previews for `Install for use` and `Import into Project for editing`. Installation SHALL commit only eligible immutable releases and bounded resources to the installed library. Editing import SHALL require one exact Project-bound Creative Workspace and commit mutable records through the canonical Chara repository. Neither command may execute in place, overwrite existing records, infer an active/recent Project, silently remap references, or fall back to the other command. Completion, rejection, or cancellation SHALL release the archive reader and temporary bytes without retaining a package binding, mount, watcher, recent-package authority, or synchronization task.
 
-#### Scenario: User imports a valid self-contained package
+#### Scenario: User installs a valid usable package
 
-- **WHEN** validation succeeds and the user authorizes one exact destination and confirms the conflict-free preview
-- **THEN** Chara installs the records and embedded assets through the canonical Workspace repository and returns the exact CharacterProject identity
-- **AND** subsequent authoring uses normal Workspace records rather than reading from the ZIP
-- **AND** moving, changing or deleting the source ZIP does not change the installed Character
+- **WHEN** validation succeeds and the user confirms exact eligible CharacterVersions and bounded resources
+- **THEN** Chara creates one immutable installed-release catalog entry without a CharacterProject or Project membership
+- **AND** moving, changing, or deleting the source ZIP does not change the installed release
+
+#### Scenario: User imports a package for editing
+
+- **WHEN** validation succeeds and the user confirms one exact Project destination and conflict-free editing preview
+- **THEN** Chara commits the mutable authoring records through the Project-bound repository and Project records exact membership
+- **AND** no installed-library entry is created as a side effect
 
 #### Scenario: Package contains an unsafe or invalid entry
 
@@ -89,3 +94,5 @@ Host/Node SHALL treat the archive as untrusted input and validate its containmen
 - **WHEN** the package contains a CharacterProject or immutable CharacterVersion identity already present with different facts
 - **THEN** the preview reports the exact conflict and commit is disabled until an owner-defined explicit conflict workflow is chosen
 - **AND** import does not overwrite, merge, rename or bind the package to the currently selected Character automatically
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** The successor replaces the standalone/project-local destination union with explicit install-for-use and import-into-Project commands. Archive security, canonical record integrity, no live ZIP authority, and atomic failure requirements remain applicable.

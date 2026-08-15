@@ -193,6 +193,8 @@ Project Workspace 的资源/导航 projection 可以同时列出 Content documen
 
 切换 target 的顺序为：提交 outgoing owner允许的 selection/scroll/layout/draft snapshot，卸载 outgoing Root及 subscriptions/media handles，校验 incoming target authority，再挂载 incoming Root。失败时保留 Project tree和 sibling refs，但不保留旧 Root充当 fallback。后台 Agent turn、CharacterRun或WorldRun按其 exact runtime owner继续，不因 authoring Root卸载而取消。
 
+Workspace 的 Primary Main 是稳定的可见布局区域，不以已有 Main View 为存在条件。fresh Workspace 在没有 Content、Canvas、Character 或 World View 时，默认显示 package-owned 的 canonical empty presentation；该 presentation 不进入 Main View catalog，不获得 authoring target identity，也不创建或推断 Board。Character/World 以 Secondary Main 打开时继续保留这个空 Primary Main，关闭 Secondary Main 后仍回到同一 fresh state。
+
 未采用 retained tab deck/LRU，因为访问历史不是资源所有权；没有测量证据支持跨领域 Root cache。显式可见分屏未来可以增加 `secondaryMain`，但必须由独立 OpenSpec定义支持的 target pair和资源预算。
 
 ### 8. Agent Entry 使用意图名称，并分离 authoring 与 runtime binding
@@ -297,3 +299,5 @@ Content authoring只有编辑、preview/export/job，不创建 ContentRun。Char
 - standalone Character/World library root的默认位置与用户改选入口应由Host settings还是各domain catalog registration拥有。无论选择哪种，领域文件只保存相对路径，Renderer只接收opaque identity。
 - 现有SQLite authoring表中是否存在已对真实用户承诺的数据需要通过发布级显式export/import恢复；实施前必须完成数据资格盘点并记录结论。
 - Project-local target移除后的产品语义需要在实现前确认是“仅解除membership并保留文件”还是同时提供独立的owning-domain删除命令；默认采用前者，删除必须单独确认并进行引用检查。
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** Standalone mutable authoring roots, direct Character/World authoring destinations, and standalone Agent target selection are historical implemented context only. They MUST NOT receive new production work; the successor owns their atomic replacement and user-data recovery.

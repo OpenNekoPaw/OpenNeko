@@ -145,3 +145,5 @@
   tests cover exact identity, sibling Conversation isolation, disposal, stale activation rejection and scrolling.
 - Local Asset provider-backed checks were not part of the selected Character case and remain unavailable residual
   risk rather than a mock success. Asset cloud and complete World authoring/runtime remain outside this change.
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** Completed standalone Character tasks are historical evidence. No new standalone mutable authoring behavior may be added here; installed-release semantics and recovery are successor-owned.

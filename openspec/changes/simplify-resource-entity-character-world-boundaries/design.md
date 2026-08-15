@@ -321,3 +321,5 @@ records, re-enabling retired readers, selecting fallback identities or deleting 
   unsupported-state handling?
 - Which World optional subcapability is the first real product consumer after Foundation: Story,
   deterministic interaction surface, or Experience composition?
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** References to standalone Character authoring are superseded by immutable installed releases plus Project adaptation. Entity/Character ownership, exact Project association, and read-only projection boundaries remain applicable.

@@ -56,23 +56,23 @@ The Character Workbench role/participant manager SHALL read and update provider/
 - **THEN** the next turn uses that participant's selected provider/model with an empty effective Skill/Tool receipt
 - **AND** the manager does not offer a successful Skill/Tool activation, republish CharacterVersion or alter another participant
 
-### Requirement: Assistant and Workspace Agents create Character drafts through public authoring capabilities
+### Requirement: Project-bound Agents create Character drafts through public authoring capabilities
 
-An Assistant or Workspace Agent MAY discover one authoring-only `character-creator` Skill and Chara-contributed capability. Selecting or directly typing the Skill SHALL preserve the full `$character-creator <prompt>` invocation and open an operation-level destination chooser without changing the selected Entry mode or originating Conversation binding. The user SHALL explicitly choose the standalone Character library or an authorized Content Project and provide the new draft label before Desktop authorizes that exact root and Chara creates one fresh CharacterProject. The primary workflow SHALL transform prompt text and Agent-authorized reference projections into one reviewable Character definition, separate confirmed source facts from inferred suggestions, and fill only that exact draft through the standard identity-bound Tool approval. The Tool approval SHALL be the single mutation confirmation. It MUST NOT infer active/recent Workspace authority, publish CharacterVersion, create Storyline/CharacterRun/Room/Companion continuity, call a Character provider/runtime directly, or retain a `character-creation` compatibility alias.
+An Agent operating inside one exact Project-bound Creative Workspace MAY discover one authoring-only `character-creator` Skill and Chara-contributed capability. Selecting or directly typing the Skill SHALL preserve the full `$character-creator <prompt>` invocation without changing the originating Conversation binding. Before mutation, Chara SHALL create or authorize one fresh project-local CharacterProject and return an operation-level receipt bound to the exact Project, Workspace authority, and target. The primary workflow SHALL transform prompt text and Agent-authorized reference projections into one reviewable Character definition, separate confirmed source facts from inferred suggestions, and fill only that exact draft through the standard identity-bound Tool approval. It MUST NOT infer active/recent Workspace authority, offer a standalone destination, publish CharacterVersion, create Storyline/CharacterRun/Room/Companion continuity, call a Character provider/runtime directly, or retain a compatibility alias.
 
 Preview, validation and improvement MAY operate on an exact created CharacterProject or authoring-test snapshot as explicit secondary workflows. Automated Character validation SHALL compose one tool-free Character responder and one independent Probe Agent. Evidence SHALL remain scoped to validation turns, reports MAY be saved only under the authorized project-local character-test artifact location, and suggested profile, relationship, knowledge or story changes MUST remain unapplied until the user confirms the existing Chara owning command.
 
-#### Scenario: Workspace Agent creates a project-local draft from prompt and material
+#### Scenario: Project Agent creates a draft from prompt and material
 
 - **WHEN** the user asks the Workspace Agent to create a character from prompt text and exact authorized source references
-- **THEN** the operation chooser defaults visibly to that exact Content Project, creates and binds one fresh project-local CharacterProject only after explicit selection, and the Skill receives the complete prompt while the Workspace Conversation keeps its original binding
+- **THEN** Chara creates and binds one fresh project-local CharacterProject only after exact Project authorization and approval, and the Skill receives the complete prompt while the Agent Conversation keeps its original binding
 - **AND** one standard Tool approval fills only that draft without a second text-confirmation gate, publishing a CharacterVersion, or creating a Conversation, Room, continuity or memory record
 
-#### Scenario: Global Assistant creates a standalone draft
+#### Scenario: Global Assistant receives a persistent creation request
 
 - **WHEN** the user selects or directly types `$character-creator <prompt>` in the global Assistant
-- **THEN** the composer preserves the complete input and offers the standalone Character library plus authorized project-local destinations without switching to Authoring mode
-- **AND** choosing the standalone library creates one exact fresh CharacterProject while the Agent Conversation remains Assistant-bound
+- **THEN** the Assistant may preserve the input and request that the user enter Creation and select one exact Project
+- **AND** no CharacterProject, authoring receipt, installed-library mutation, or Project authority is inferred or created
 
 #### Scenario: Character creation destination is cancelled
 
@@ -159,3 +159,5 @@ Invalid mode fields, unavailable CharacterVersion, stale StorylineNode, forbidde
 - **WHEN** launch validation finds one participant's StorylineNode does not belong to its selected StorylineVersion
 - **THEN** the Room launch fails before every CharacterRun and AgentSession commit
 - **AND** existing Character, Room and Assistant Conversations remain usable
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** The global Assistant destination chooser and standalone Character creation scenarios are superseded. Exact Dialogue/Room mode and CharacterVersion runtime requirements remain applicable; persistent creation now requires a Project-bound Agent.
