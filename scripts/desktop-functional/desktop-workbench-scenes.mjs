@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { openFixtureWorkspace } from './desktop-operations.mjs';
@@ -1198,7 +1198,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
               size: { width: 320, height: 180 },
               zIndex: 1,
               data: {
-                assetPath: 'workspace/library-image.png',
+                assetPath: 'library-image.png',
                 contentLocator: {
                   kind: 'media-library',
                   libraryName: 'workspace',
@@ -1258,7 +1258,6 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
     return prepared;
   },
   async run({
-    cdp,
     checkpoint,
     click,
     evaluate,
@@ -1277,7 +1276,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
 
-      const globalMediaLibrary = await registerFixtureGlobalMediaLibrary({
+      await registerFixtureGlobalMediaLibrary({
         evaluate,
         click,
         waitForSelector,
@@ -1306,7 +1305,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         pressKey,
         referenceLabel: 'library-image.png',
         referenceQuery: 'library-image',
-        expectedPortablePath: 'workspace/library-image.png',
+        expectedPortablePath: 'neko/assets/workspace/library-image.png',
         expectedSourceLabels: ['Media', '媒体'],
         forbiddenText: prepared.workspacePath,
         screenshot,
@@ -1385,16 +1384,20 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         provider: providerEvidence,
       });
 
-      const bindingDirectory = join(prepared.workspacePath, '.neko', 'media-libraries');
       const associationDirectory = join(
         prepared.workspacePath,
         'neko',
         'project-bindings',
         'entity-character',
       );
-      await mkdir(bindingDirectory, { recursive: true });
+      const brokenLinkPath = join(prepared.workspacePath, 'neko', 'assets', 'Broken');
+      await mkdir(join(prepared.workspacePath, 'neko', 'assets'), { recursive: true });
       await mkdir(associationDirectory, { recursive: true });
-      await writeFile(join(bindingDirectory, 'Broken.json'), '{"projectId":', 'utf8');
+      await symlink(
+        join(prepared.workspacePath, 'missing-media-library-target'),
+        brokenLinkPath,
+        'dir',
+      );
       await writeFile(join(associationDirectory, 'invalid-row.json'), '{not-json', 'utf8');
       await restartFixtureWorkspaceApplication({
         evaluate,
@@ -1404,19 +1407,19 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
       });
       await waitForProjectMediaLibraryStates(evaluate, {
         workspace: 'available',
-        Broken: 'binding-invalid',
+        Broken: 'entry-conflict',
       });
       const projectFactIsolation = await inspectInvalidProjectAssociationIsolation(evaluate);
-      const invalidBinding = {
+      const unavailableLink = {
         valid: await inspectFixtureProjectMediaLibrary(evaluate, 'available', 'workspace'),
-        invalid: await inspectFixtureProjectMediaLibrary(evaluate, 'binding-invalid', 'Broken'),
+        invalid: await inspectFixtureProjectMediaLibrary(evaluate, 'entry-conflict', 'Broken'),
         projectFactIsolation,
       };
-      const invalidBindingScreenshot = await captureSettledScreenshot(
+      const unavailableLinkScreenshot = await captureSettledScreenshot(
         screenshot,
-        'workspace-media-library-invalid-binding-isolated',
+        'workspace-media-library-unavailable-link-isolated',
       );
-      checkpoint('workspace-media-library-invalid-binding-isolated', invalidBinding);
+      checkpoint('workspace-media-library-unavailable-link-isolated', unavailableLink);
 
       await rm(join(prepared.workspacePath, '.neko'), { recursive: true, force: true });
       await restartFixtureWorkspaceApplication({
@@ -1426,26 +1429,30 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         waitForSelector,
       });
       await waitForProjectMediaLibraryStates(evaluate, {
-        workspace: 'required-unlinked',
-        Broken: 'required-unlinked',
+        workspace: 'available',
+        Broken: 'entry-conflict',
       });
       const afterLocalStateDeletion = {
-        workspace: await inspectFixtureProjectMediaLibrary(
-          evaluate,
-          'required-unlinked',
-          'workspace',
-        ),
-        broken: await inspectFixtureProjectMediaLibrary(
-          evaluate,
-          'required-unlinked',
-          'Broken',
-        ),
+        workspace: await inspectFixtureProjectMediaLibrary(evaluate, 'available', 'workspace'),
+        broken: await inspectFixtureProjectMediaLibrary(evaluate, 'entry-conflict', 'Broken'),
       };
       const deletedLocalStateScreenshot = await captureSettledScreenshot(
         screenshot,
         'workspace-media-library-after-local-state-deletion',
       );
-      const recoveryAfterDeletion = await recoverFixtureProjectMediaLibrary({
+
+      await rm(join(prepared.workspacePath, 'neko', 'assets', 'workspace'));
+      await restartFixtureWorkspaceApplication({
+        evaluate,
+        restartApplication,
+        waitForDesktopBridge,
+        waitForSelector,
+      });
+      await waitForProjectMediaLibraryStates(evaluate, {
+        workspace: 'required-unlinked',
+        Broken: 'entry-conflict',
+      });
+      const recoveryAfterUnlink = await recoverFixtureProjectMediaLibrary({
         evaluate,
         screenshot,
         waitForSelector,
@@ -1457,11 +1464,14 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         screenshot,
         workspacePath: prepared.workspacePath,
       });
-      checkpoint('workspace-media-library-reinitialized-after-deletion', {
-        afterLocalStateDeletion,
-        recoveryAfterDeletion: recoveryAfterDeletion.applied,
-        reservedMutation: reservedMutation.evidence,
-      });
+      checkpoint(
+        'workspace-media-library-independent-from-local-state-and-recovered-after-unlink',
+        {
+          afterLocalStateDeletion,
+          recoveryAfterUnlink: recoveryAfterUnlink.applied,
+          reservedMutation: reservedMutation.evidence,
+        },
+      );
       return {
         entryDraft,
         entryRoot,
@@ -1471,19 +1481,19 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         mentionSelection: mention.selection,
         workspaceSession,
         provider: providerEvidence,
-        invalidBinding,
+        unavailableLink,
         afterLocalStateDeletion,
-        recoveryAfterDeletion,
+        recoveryAfterUnlink,
         reservedMutation: reservedMutation.evidence,
         screenshots: [
           recoveryRequired.requiredScreenshot,
           recoveryRequired.appliedScreenshot,
           mention.screenshot,
           completedScreenshot,
-          invalidBindingScreenshot,
+          unavailableLinkScreenshot,
           deletedLocalStateScreenshot,
-          recoveryAfterDeletion.requiredScreenshot,
-          recoveryAfterDeletion.appliedScreenshot,
+          recoveryAfterUnlink.requiredScreenshot,
+          recoveryAfterUnlink.appliedScreenshot,
           reservedMutation.screenshot,
         ],
       };
@@ -1920,7 +1930,7 @@ async function waitForNavigationButton(evaluate, index) {
   );
 }
 
-export async function clickApplicationNavigation(evaluate, click, index) {
+async function clickApplicationNavigation(evaluate, click, index) {
   await waitForNavigationButton(evaluate, index);
   await click(APPLICATION_NAVIGATION_BUTTON_SELECTOR, index);
 }
@@ -3893,7 +3903,7 @@ async function inspectWorkspaceResourceChrome(evaluate) {
       refreshCount !== 0 ||
       initialLibraryControlCount !== 0 ||
       panelCloseCount !== 0 ||
-      sources.length !== 4
+      sources.length !== 3
     ) {
       throw new Error(
         'Workspace Resource Browser chrome does not match its embedded contract: ' +
@@ -3901,10 +3911,10 @@ async function inspectWorkspaceResourceChrome(evaluate) {
       );
     }
     const mediaSource = sources.find((item) =>
-      ['共享媒体', 'Shared media'].includes(item.textContent?.trim() ?? ''),
+      ['外部媒体', 'External media'].includes(item.textContent?.trim() ?? ''),
     );
     if (!(mediaSource instanceof HTMLButtonElement)) {
-      throw new Error('Workspace Resource Browser Shared Media source is unavailable.');
+      throw new Error('Workspace Resource Browser External Media source is unavailable.');
     }
     mediaSource.click();
     return { refreshCount, initialLibraryControlCount, panelCloseCount, sourceLabels };
@@ -3914,10 +3924,10 @@ async function inspectWorkspaceResourceChrome(evaluate) {
     `(() => {
       const browser = document.querySelector('.desktop-resource-browser-root');
       const selected = browser?.querySelector('.neko-resource-browser__sources [aria-selected="true"]');
-      return ['共享媒体', 'Shared media'].includes(selected?.textContent?.trim() ?? '') &&
+      return ['外部媒体', 'External media'].includes(selected?.textContent?.trim() ?? '') &&
         browser?.querySelectorAll('.neko-resource-browser__library-menu button').length === 1;
     })()`,
-    'Workspace Resource Browser did not activate the Shared Media source and its management action.',
+    'Workspace Resource Browser did not activate the External Media source and its management action.',
   );
   const switched = await evaluate(`(() => {
     const browser = document.querySelector('.desktop-resource-browser-root');
@@ -3926,10 +3936,10 @@ async function inspectWorkspaceResourceChrome(evaluate) {
     }
     const sources = [...browser.querySelectorAll('.neko-resource-browser__sources [role="tab"]')];
     const assetSource = sources.find((item) =>
-      ['已安装素材', 'Installed assets'].includes(item.textContent?.trim() ?? ''),
+      ['素材', 'Assets'].includes(item.textContent?.trim() ?? ''),
     );
     if (!(assetSource instanceof HTMLButtonElement)) {
-      throw new Error('Workspace Resource Browser Installed Assets source is unavailable.');
+      throw new Error('Workspace Resource Browser Assets source is unavailable.');
     }
     assetSource.click();
     return true;
@@ -3943,7 +3953,7 @@ async function inspectWorkspaceResourceChrome(evaluate) {
       const selected = browser?.querySelector('.neko-resource-browser__sources [aria-selected="true"]');
       const hasAsset = [...(browser?.querySelectorAll('.neko-resource-browser__item strong') ?? [])]
         .some((item) => item.textContent?.trim() === 'workspace-lighting.png');
-      return ['已安装素材', 'Installed assets'].includes(selected?.textContent?.trim() ?? '') &&
+      return ['素材', 'Assets'].includes(selected?.textContent?.trim() ?? '') &&
         browser?.querySelectorAll('.neko-resource-browser__library-menu button').length === 0 &&
         hasAsset;
     })()`,
@@ -5233,7 +5243,7 @@ async function selectGlobalLibraryCatalog(evaluate, labelPattern) {
   );
 }
 
-export async function registerFixtureGlobalMediaLibrary({
+async function registerFixtureGlobalMediaLibrary({
   evaluate,
   click,
   waitForSelector,
@@ -5285,7 +5295,7 @@ export async function registerFixtureGlobalMediaLibrary({
   return projection;
 }
 
-export async function recoverFixtureProjectMediaLibrary({
+async function recoverFixtureProjectMediaLibrary({
   evaluate,
   screenshot,
   waitForSelector,
@@ -5293,7 +5303,7 @@ export async function recoverFixtureProjectMediaLibrary({
   expectedContentLabel = 'library-image.png',
 }) {
   await waitForSelector('.neko-resource-browser__sources[role="tablist"]');
-  await activateWorkspaceResourceSource(evaluate, /^(Shared media|共享媒体)$/u);
+  await activateWorkspaceResourceSource(evaluate, /^(External media|外部媒体)$/u);
   await waitForCondition(
     evaluate,
     `(() => document.querySelectorAll('.neko-resource-browser__item-row').length > 0 ||
@@ -5549,7 +5559,7 @@ async function restartFixtureWorkspaceApplication({
   await openFixtureWorkspace(evaluate);
   await waitForSelector('.desktop-scene-workbench--workspace');
   await waitForSelector('.neko-resource-browser__sources[role="tablist"]');
-  await activateWorkspaceResourceSource(evaluate, /^(Shared media|共享媒体)$/u);
+  await activateWorkspaceResourceSource(evaluate, /^(External media|外部媒体)$/u);
 }
 
 async function activateWorkspaceResourceSource(evaluate, labelPattern) {

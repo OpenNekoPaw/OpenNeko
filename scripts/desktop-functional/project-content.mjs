@@ -20,6 +20,12 @@ export const projectContentScenario = Object.freeze({
   async run({ checkpoint, click, evaluate, screenshot, waitForSelector }) {
     await resizeWindow(evaluate, 1440, 900);
     await openFixtureWorkspace(evaluate);
+    await waitForSelector('[data-project-browser-view="resources"]');
+    await waitForSelector('.neko-resource-browser__sources');
+    const resources = await inspectResources(evaluate);
+    checkpoint('project-browser-resources', resources);
+
+    await click('.project-resource-dock__views button', 1);
     await waitForSelector('.project-content-root');
     await waitForSelector('.project-content-group');
     const wide = await inspectProjectContent(evaluate);
@@ -30,6 +36,22 @@ export const projectContentScenario = Object.freeze({
     const narrow = await inspectProjectContent(evaluate);
     checkpoint('project-content-narrow', narrow);
     const narrowScreenshot = await screenshot('project-content-narrow');
+
+    await click('.project-resource-dock__views button', 0);
+    await waitForSelector('.neko-resource-browser__sources');
+    const returned = await evaluate(`(() => ({
+      projectContentRoots: document.querySelectorAll('.project-content-root').length,
+      resourceRoots: document.querySelectorAll('.neko-resource-browser').length,
+      selectedView: document.querySelector('[data-project-browser-view]')?.getAttribute('data-project-browser-view'),
+    }))()`);
+    if (
+      returned.projectContentRoots !== 0 ||
+      returned.resourceRoots !== 1 ||
+      returned.selectedView !== 'resources'
+    ) {
+      throw new Error(`Project Browser did not return to Resources: ${JSON.stringify(returned)}`);
+    }
+    checkpoint('project-browser-returned-resources', returned);
 
     const navigationIndex = await evaluate(`(() => [...document.querySelectorAll(
       '[data-primary-sidebar="application"] .home-primary-navigation .home-nav-button'
@@ -44,18 +66,70 @@ export const projectContentScenario = Object.freeze({
     await waitForSelector('[data-project-catalog-root]');
     const unmounted = await evaluate(`(() => ({
       projectContentRoots: document.querySelectorAll('.project-content-root').length,
+      projectBrowserRoots: document.querySelectorAll('[data-project-browser-view]').length,
       projectCatalogRoots: document.querySelectorAll('[data-project-catalog-root]').length,
     }))()`);
-    if (unmounted.projectContentRoots !== 0 || unmounted.projectCatalogRoots !== 1) {
+    if (
+      unmounted.projectContentRoots !== 0 ||
+      unmounted.projectBrowserRoots !== 0 ||
+      unmounted.projectCatalogRoots !== 1
+    ) {
       throw new Error(
         `Project Content Root was retained after navigation: ${JSON.stringify(unmounted)}`,
       );
     }
     checkpoint('project-content-unmounted', unmounted);
 
-    return { wide, narrow, unmounted, screenshots: [wideScreenshot, narrowScreenshot] };
+    return {
+      resources,
+      wide,
+      narrow,
+      returned,
+      unmounted,
+      screenshots: [wideScreenshot, narrowScreenshot],
+    };
   },
 });
+
+async function inspectResources(evaluate) {
+  const state = await evaluate(`(() => {
+    const projectViews = [...document.querySelectorAll('.project-resource-dock__views [role="tab"]')];
+    const sourceTabs = [...document.querySelectorAll('.neko-resource-browser__sources [role="tab"]')];
+    return {
+      projectViews: projectViews.map((tab) => tab.textContent?.trim() ?? ''),
+      selectedProjectView: projectViews.find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent?.trim() ?? '',
+      resourceSources: sourceTabs.map((tab) => tab.textContent?.trim() ?? ''),
+      selectedResourceSource: sourceTabs.find((tab) => tab.getAttribute('aria-selected') === 'true')?.textContent?.trim() ?? '',
+      searchPlaceholder: document.querySelector('.neko-resource-browser__search input')?.getAttribute('placeholder') ?? '',
+      projectContentRoots: document.querySelectorAll('.project-content-root').length,
+      canvasRoots: document.querySelectorAll('[data-canvas-webview-root="true"]').length,
+    };
+  })()`);
+  const expectedProjectViews = [
+    ['Resources', 'Project content'],
+    ['资源', '项目内容'],
+  ];
+  const expectedResourceSources = [
+    ['Project files', 'External media', 'Assets'],
+    ['项目文件', '外部媒体', '素材'],
+  ];
+  if (
+    !expectedProjectViews.some(
+      (labels) => JSON.stringify(labels) === JSON.stringify(state.projectViews),
+    ) ||
+    !['Resources', '资源'].includes(state.selectedProjectView) ||
+    !expectedResourceSources.some(
+      (labels) => JSON.stringify(labels) === JSON.stringify(state.resourceSources),
+    ) ||
+    !['Project files', '项目文件'].includes(state.selectedResourceSource) ||
+    !state.searchPlaceholder ||
+    state.projectContentRoots !== 0 ||
+    state.canvasRoots !== 1
+  ) {
+    throw new Error(`Resources presentation is invalid: ${JSON.stringify(state)}`);
+  }
+  return state;
+}
 
 async function inspectProjectContent(evaluate) {
   const state = await evaluate(`(() => {
@@ -64,7 +138,9 @@ async function inspectProjectContent(evaluate) {
     const sourceTabs = [...document.querySelectorAll('.neko-resource-browser__sources [role="tab"]')];
     const rect = root?.getBoundingClientRect();
     return {
-      title: root?.querySelector('h2')?.textContent?.trim() ?? '',
+      selectedProjectView: document.querySelector(
+        '.project-resource-dock__views [role="tab"][aria-selected="true"]'
+      )?.textContent?.trim() ?? '',
       groups: groups.map((group) => ({
         id: group.getAttribute('data-project-content-group'),
         title: group.querySelector('h3')?.textContent?.trim() ?? '',
@@ -74,18 +150,20 @@ async function inspectProjectContent(evaluate) {
       visibleWidth: rect?.width ?? 0,
       documentOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       rootOverflow: root instanceof HTMLElement && root.scrollWidth > root.clientWidth,
+      canvasRoots: document.querySelectorAll('[data-canvas-webview-root="true"]').length,
     };
   })()`);
   const groupIds = state.groups.map((group) => group.id);
   if (
-    !['Project content', '项目内容'].includes(state.title) ||
+    !['Project content', '项目内容'].includes(state.selectedProjectView) ||
     JSON.stringify(groupIds) !==
       JSON.stringify(['characters', 'worlds', 'elements', 'candidates']) ||
     state.groups.some((group) => group.empty.length === 0) ||
     state.resourceSources.length !== 3 ||
     state.visibleWidth <= 0 ||
     state.documentOverflow ||
-    state.rootOverflow
+    state.rootOverflow ||
+    state.canvasRoots !== 1
   ) {
     throw new Error(`Project Content presentation is invalid: ${JSON.stringify(state)}`);
   }

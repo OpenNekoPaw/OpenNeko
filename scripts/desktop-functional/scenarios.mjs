@@ -9,7 +9,6 @@ import {
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopMarkdownMediaScenario } from '../../packages/text-editor/webview/functional/desktop-markdown-media.mjs';
 import { desktopTextEditorScenario } from '../../packages/text-editor/webview/functional/desktop-text-editor.mjs';
-import { desktopWorldTransformationScenario } from '../../packages/world-webview/functional/desktop-world-transformation.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
@@ -55,7 +54,6 @@ const scenarios = new Map(
     assetLibraryRecordRemovalScenario,
     desktopMarkdownMediaScenario,
     desktopTextEditorScenario,
-    desktopWorldTransformationScenario,
     noActiveProjectCatalogsScenario,
   ].map((scenario) => [scenario.id, scenario]),
 );
