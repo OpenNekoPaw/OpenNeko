@@ -217,9 +217,9 @@ import {
   type CharacterAuthoringHostResult,
   type CharacterAuthoringSnapshot,
   type CharacterPortableExportSelection,
+  type CharacterPortableImportTarget,
   type CharacterPortableHostBinding,
   type CharacterPortableHostResult,
-  type CharacterPortablePackagePreview,
   type CharacterRoomWorkbenchProjectionEvent,
   type CharacterRoomWorkbenchSnapshotResult,
   type RoomView,
@@ -235,25 +235,37 @@ import type {
 import { prepareCharacterAgentTurnContext } from './character-agent-domain-context-adapter';
 import {
   parseWorldAuthoringHostRequest,
-  parseWorldFoundationAnyHostRequest,
+  parseWorldManagementHostRequest,
+  parseWorldPortableHostRequest,
+  parseWorldRuntimeHostRequest,
   type WorldAuthoringCommand,
+  type WorldAuthoringAuthority,
   type WorldAuthoringHostRequest,
   type WorldAuthoringHostResult,
   type WorldAuthoringSnapshot,
-  type WorldFoundationHostResult,
+  type WorldManagementHostResult,
+  type WorldPortableExportSelection,
+  type WorldPortableImportTarget,
+  type WorldPortableHostBinding,
+  type WorldPortableHostResult,
+  type WorldPortableOperationResult,
+  type WorldRuntimeBinding,
+  type WorldRuntimeHostResult,
 } from '@neko/world/contracts';
-import type { WorldFoundationCommandPort, WorldFoundationService } from '@neko/world/application';
+import type { WorldManagementService, WorldRuntimeWorkbenchService } from '@neko/world/application';
 import {
   parseProjectLocalAuthoringHostRequest,
   parseProjectAuthoringHostRequest,
   type ProjectAuthoringCatalogHostResult,
+  type ProjectCreativeWorkspaceHostResult,
+  type ProjectCreativeWorkspaceProjection,
+  type ProjectGlobalReferenceMutation,
+  type ProjectWorkspaceObjectMutation,
   type ProjectContentHostResult,
   type ProjectContentProjection,
   type ProjectLocalAuthoringOutcome,
   type ProjectLocalAuthoringCreateInput,
   type ProjectLocalAuthoringHostResult,
-  type ProjectLocalCharacterCreationReceipt,
-  type ProjectLocalCharacterEntitySelection,
   type ProjectAuthoringNavigationHostResult,
   type ProjectAuthoringNavigationItem,
 } from '@neko/project/contracts';
@@ -266,26 +278,36 @@ export interface DesktopAppHostOptions {
   readonly projectAuthoring: {
     getNavigation(input: {
       readonly workspace: AssetWorkspaceResolution;
-      readonly contentProjectId: string;
-      readonly contentLabel: string;
+      readonly projectId: string;
+      readonly projectLabel: string;
     }): Promise<readonly ProjectAuthoringNavigationItem[]>;
     getContent(input: {
       readonly workspace: AssetWorkspaceResolution;
       readonly workspaceId: string;
-      readonly contentProjectId: string;
+      readonly projectId: string;
     }): Promise<ProjectContentProjection>;
+    getCreativeWorkspace(input: {
+      readonly workspace: AssetWorkspaceResolution;
+      readonly workspaceId: string;
+      readonly projectId: string;
+    }): Promise<ProjectCreativeWorkspaceProjection>;
+    mutateCreativeWorkspaceReference(input: {
+      readonly workspace: AssetWorkspaceResolution;
+      readonly workspaceId: string;
+      readonly projectId: string;
+      readonly mutation: ProjectGlobalReferenceMutation;
+    }): Promise<ProjectCreativeWorkspaceProjection>;
+    mutateCreativeWorkspaceObject(input: {
+      readonly workspace: AssetWorkspaceResolution;
+      readonly workspaceId: string;
+      readonly projectId: string;
+      readonly mutation: ProjectWorkspaceObjectMutation;
+    }): Promise<ProjectCreativeWorkspaceProjection>;
     createLocalTarget(input: {
       readonly workspace: AssetWorkspaceResolution;
       readonly workspaceId: string;
-      readonly contentProjectId: string;
+      readonly projectId: string;
       readonly create: ProjectLocalAuthoringCreateInput;
-    }): Promise<ProjectLocalAuthoringOutcome>;
-    retryLocalCharacter(input: {
-      readonly workspace: AssetWorkspaceResolution;
-      readonly workspaceId: string;
-      readonly contentProjectId: string;
-      readonly receipt: ProjectLocalCharacterCreationReceipt;
-      readonly entity: ProjectLocalCharacterEntitySelection;
     }): Promise<ProjectLocalAuthoringOutcome>;
     getCharacterSnapshot(input: {
       readonly workspace: AssetWorkspaceResolution;
@@ -309,24 +331,18 @@ export interface DesktopAppHostOptions {
       readonly characterProjectId: string;
       readonly selection: CharacterPortableExportSelection;
     }): Promise<Uint8Array>;
-    previewCharacterPackage(input: {
-      readonly workspace: AssetWorkspaceResolution;
-      readonly authority: CharacterAuthoringAuthority;
+    importCharacterGlobalPackage(input: {
       readonly archiveBytes: Uint8Array;
-    }): Promise<CharacterPortablePackagePreview>;
-    commitCharacterPackage(input: {
-      readonly workspace: AssetWorkspaceResolution;
-      readonly authority: CharacterAuthoringAuthority;
-      readonly archiveBytes: Uint8Array;
+      readonly target?: CharacterPortableImportTarget;
     }): Promise<string>;
     getWorldSnapshot(input: {
       readonly workspace: AssetWorkspaceResolution;
-      readonly contentProjectId: string;
+      readonly authority: WorldAuthoringAuthority;
       readonly worldProjectId: string;
     }): Promise<WorldAuthoringSnapshot>;
     executeWorld(input: {
       readonly workspace: AssetWorkspaceResolution;
-      readonly contentProjectId: string;
+      readonly authority: WorldAuthoringAuthority;
       readonly worldProjectId: string;
       readonly command: WorldAuthoringCommand;
     }): Promise<WorldAuthoringSnapshot>;
@@ -339,15 +355,26 @@ export interface DesktopAppHostOptions {
   readonly agentLaunch: DesktopAgentLaunchRuntime;
   readonly agentLaunchSubmission: AgentLaunchDraftSubmissionApplicationService;
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
-  readonly authoringLibraryRoots: Readonly<
-    Record<'character' | 'world', { readonly label: string; readonly hostResource: string }>
-  >;
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
   readonly characterFoundation: CharacterFoundationService;
   readonly characterFoundationCommands: CharacterFoundationCommandPort;
-  readonly worldFoundation: WorldFoundationService;
-  readonly worldFoundationCommands: WorldFoundationCommandPort;
+  readonly worldManagement: WorldManagementService;
+  readonly worldPortable: {
+    exportPackage(input: {
+      readonly workspace: AssetWorkspaceResolution;
+      readonly authority: WorldAuthoringAuthority;
+      readonly selection: WorldPortableExportSelection;
+    }): Promise<{
+      readonly archiveBytes: Uint8Array;
+      readonly result: WorldPortableOperationResult;
+    }>;
+    importGlobal(input: {
+      readonly archiveBytes: Uint8Array;
+      readonly target?: WorldPortableImportTarget;
+    }): Promise<WorldPortableOperationResult>;
+  };
+  readonly worldRuntime: Pick<WorldRuntimeWorkbenchService, 'launch' | 'read' | 'submitAction'>;
   readonly characterAvatar?: DesktopCharacterAvatarRuntime;
   readonly characterInteractions: Pick<
     CharacterInteractionService,
@@ -411,13 +438,13 @@ export class DesktopAppHost {
   readonly agentLaunch: DesktopAgentLaunchRuntime;
   readonly agentLaunchSubmission: AgentLaunchDraftSubmissionApplicationService;
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
-  readonly authoringLibraryRoots: DesktopAppHostOptions['authoringLibraryRoots'];
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources: AssistantResourceService | undefined;
   readonly characterFoundation: CharacterFoundationService;
   readonly characterFoundationCommands: CharacterFoundationCommandPort;
-  readonly worldFoundation: WorldFoundationService;
-  readonly worldFoundationCommands: WorldFoundationCommandPort;
+  readonly worldManagement: WorldManagementService;
+  readonly worldPortable: DesktopAppHostOptions['worldPortable'];
+  readonly worldRuntime: Pick<WorldRuntimeWorkbenchService, 'launch' | 'read' | 'submitAction'>;
   readonly characterAvatar: DesktopCharacterAvatarRuntime | undefined;
   readonly characterInteractions: DesktopAppHostOptions['characterInteractions'];
   readonly characterRoomConversations: DesktopAppHostOptions['characterRoomConversations'];
@@ -438,16 +465,6 @@ export class DesktopAppHost {
     number,
     { readonly roomRunId: string; readonly dispose: () => void }
   >();
-  private readonly characterImportReceipts = new Map<
-    string,
-    {
-      readonly webContentsId: number;
-      readonly windowId: string;
-      readonly rendererSessionId: string;
-      readonly binding: CharacterPortableHostBinding;
-      readonly archiveBytes: Uint8Array;
-    }
-  >();
   private disposed = false;
 
   constructor(private readonly options: DesktopAppHostOptions) {
@@ -467,13 +484,13 @@ export class DesktopAppHost {
     this.agentLaunch = options.agentLaunch;
     this.agentLaunchSubmission = options.agentLaunchSubmission;
     this.workspaceGrants = options.workspaceGrants;
-    this.authoringLibraryRoots = options.authoringLibraryRoots;
     this.conversationLifecycle = options.conversationLifecycle;
     this.assistantResources = options.assistantResources;
     this.characterFoundation = options.characterFoundation;
     this.characterFoundationCommands = options.characterFoundationCommands;
-    this.worldFoundation = options.worldFoundation;
-    this.worldFoundationCommands = options.worldFoundationCommands;
+    this.worldManagement = options.worldManagement;
+    this.worldPortable = options.worldPortable;
+    this.worldRuntime = options.worldRuntime;
     this.characterAvatar = options.characterAvatar;
     this.characterInteractions = options.characterInteractions;
     this.characterRoomConversations = options.characterRoomConversations;
@@ -540,18 +557,118 @@ export class DesktopAppHost {
     return { requestId: request.requestId, snapshot: await this.characterFoundation.getSnapshot() };
   }
 
-  async executeWorldFoundationRequest(
+  async executeWorldManagementRequest(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<WorldFoundationHostResult> {
+  ): Promise<WorldManagementHostResult> {
     this.requireActive();
-    const request = parseWorldFoundationAnyHostRequest(payload);
+    const request = parseWorldManagementHostRequest(payload);
     this.windows.resolveSender(sender);
-    if (request.operation !== 'snapshot-get') {
-      const { requestId: _requestId, ...command } = request;
-      await this.worldFoundationCommands.execute(command);
+    if (request.operation === 'catalog-get') {
+      return {
+        requestId: request.requestId,
+        operation: request.operation,
+        catalog: await this.worldManagement.readCatalog(request.query),
+      };
     }
-    return { requestId: request.requestId, snapshot: await this.worldFoundation.getSnapshot() };
+    return {
+      requestId: request.requestId,
+      operation: request.operation,
+      detail: await this.worldManagement.readDetail(request.globalWorldId),
+    };
+  }
+
+  async createWorldPortableExport(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<{ readonly result: WorldPortableHostResult; readonly archiveBytes: Uint8Array }> {
+    this.requireActive();
+    const request = parseWorldPortableHostRequest(payload);
+    if (request.operation !== 'export') {
+      throw new Error('World portable export requires an export request.');
+    }
+    const window = this.windows.resolveSender(sender);
+    this.requireWorldPortableWindow(request, window.windowId);
+    const workspace = await this.resolveWorldAuthoringAuthority({
+      ...request.binding,
+      rendererSessionId: request.rendererSessionId,
+      windowId: request.windowId,
+    });
+    const exported = await this.worldPortable.exportPackage({
+      workspace,
+      authority: request.binding.authority,
+      selection: request.selection,
+    });
+    return {
+      archiveBytes: exported.archiveBytes,
+      result: { requestId: request.requestId, status: 'completed', result: exported.result },
+    };
+  }
+
+  async importWorldPortablePackage(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+    archiveBytes: Uint8Array,
+  ): Promise<WorldPortableHostResult> {
+    this.requireActive();
+    const request = parseWorldPortableHostRequest(payload);
+    if (request.operation !== 'import') {
+      throw new Error('World portable import requires an import request.');
+    }
+    const window = this.windows.resolveSender(sender);
+    this.requireWorldPortableWindow(request, window.windowId);
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
+    const result = await this.worldPortable.importGlobal({
+      archiveBytes,
+      ...(request.target === undefined ? {} : { target: request.target }),
+    });
+    return { requestId: request.requestId, status: 'completed', result };
+  }
+
+  private requireWorldPortableWindow(
+    request: { readonly windowId: string },
+    windowId: string,
+  ): void {
+    if (request.windowId !== windowId) {
+      throw new Error('World portable request belongs to another Window.');
+    }
+  }
+
+
+  async executeWorldRuntimeRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<WorldRuntimeHostResult> {
+    this.requireActive();
+    const request = parseWorldRuntimeHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.windowId !== window.windowId) {
+      throw new Error('World Runtime request belongs to another Window.');
+    }
+    await this.shell.assertWindowMutationContext(request.windowId, request.rendererSessionId);
+    if (request.operation === 'runtime-launch') {
+      return {
+        requestId: request.requestId,
+        projection: await this.worldRuntime.launch(request.launch),
+      };
+    }
+    const scene = await this.shell.getSceneProjection(request.windowId);
+    if (
+      scene.context.kind !== 'world-runtime' ||
+      !sameWorldRuntimeBinding(scene.context.binding, request.binding)
+    ) {
+      throw new Error('World Runtime request does not match the exact active Runtime Scene.');
+    }
+    return {
+      requestId: request.requestId,
+      projection:
+        request.operation === 'runtime-snapshot-get'
+          ? await this.worldRuntime.read(request.binding)
+          : await this.worldRuntime.submitAction({
+              binding: request.binding,
+              intent: request.intent,
+            }),
+    };
   }
 
   async getProjectAuthoringNavigation(
@@ -561,6 +678,7 @@ export class DesktopAppHost {
     | ProjectAuthoringNavigationHostResult
     | ProjectAuthoringCatalogHostResult
     | ProjectContentHostResult
+    | ProjectCreativeWorkspaceHostResult
   > {
     this.requireActive();
     const request = parseProjectAuthoringHostRequest(payload);
@@ -579,12 +697,12 @@ export class DesktopAppHost {
           const workspace = await this.shell.resolveAgentWorkspace(project.workspaceId);
           return {
             workspaceId: workspace.workspaceId,
-            contentProjectId: project.projectId,
+            projectId: project.projectId,
             label: project.displayName,
             navigation: await this.projectAuthoring.getNavigation({
               workspace,
-              contentProjectId: project.projectId,
-              contentLabel: project.displayName,
+              projectId: project.projectId,
+              projectLabel: project.displayName,
             }),
           };
         }),
@@ -598,7 +716,7 @@ export class DesktopAppHost {
           result.status === 'rejected'
             ? [
                 {
-                  contentProjectId: availableProjects[index]!.projectId,
+                  projectId: availableProjects[index]!.projectId,
                   message: describeError(result.reason),
                 },
               ]
@@ -611,22 +729,63 @@ export class DesktopAppHost {
       return {
         requestId: request.requestId,
         workspaceId: request.workspaceId,
-        contentProjectId: request.contentProjectId,
+        projectId: request.projectId,
         projection: await this.projectAuthoring.getContent({
           workspace,
           workspaceId: request.workspaceId,
-          contentProjectId: request.contentProjectId,
+          projectId: request.projectId,
+        }),
+      };
+    }
+    if (request.operation === 'creative-workspace-get') {
+      return {
+        requestId: request.requestId,
+        workspaceId: request.workspaceId,
+        workspaceGrantId: request.workspaceGrantId,
+        projectId: request.projectId,
+        projection: await this.projectAuthoring.getCreativeWorkspace({
+          workspace,
+          workspaceId: request.workspaceId,
+          projectId: request.projectId,
+        }),
+      };
+    }
+    if (request.operation === 'creative-workspace-reference-mutate') {
+      return {
+        requestId: request.requestId,
+        workspaceId: request.workspaceId,
+        workspaceGrantId: request.workspaceGrantId,
+        projectId: request.projectId,
+        projection: await this.projectAuthoring.mutateCreativeWorkspaceReference({
+          workspace,
+          workspaceId: request.workspaceId,
+          projectId: request.projectId,
+          mutation: request.mutation,
+        }),
+      };
+    }
+    if (request.operation === 'creative-workspace-object-mutate') {
+      return {
+        requestId: request.requestId,
+        workspaceId: request.workspaceId,
+        workspaceGrantId: request.workspaceGrantId,
+        projectId: request.projectId,
+        projection: await this.projectAuthoring.mutateCreativeWorkspaceObject({
+          workspace,
+          workspaceId: request.workspaceId,
+          projectId: request.projectId,
+          mutation: request.mutation,
         }),
       };
     }
     return {
       requestId: request.requestId,
       workspaceId: request.workspaceId,
-      contentProjectId: request.contentProjectId,
+      projectId: request.projectId,
       navigation: await this.projectAuthoring.getNavigation({
         workspace,
-        contentProjectId: request.contentProjectId,
-        contentLabel: project.displayName,
+        projectId: request.projectId,
+        projectLabel: project.displayName,
       }),
     };
   }
@@ -642,26 +801,17 @@ export class DesktopAppHost {
       throw new Error('Project local authoring request belongs to another Window.');
     }
     const { workspace } = await this.resolveProjectAuthoringAuthority(request);
-    const outcome =
-      request.operation === 'create-local-target'
-        ? await this.projectAuthoring.createLocalTarget({
-            workspace,
-            workspaceId: request.workspaceId,
-            contentProjectId: request.contentProjectId,
-            create: request.input,
-          })
-        : await this.projectAuthoring.retryLocalCharacter({
-            workspace,
-            workspaceId: request.workspaceId,
-            contentProjectId: request.contentProjectId,
-            receipt: request.input.receipt,
-            entity: request.input.entity,
-          });
+    const outcome = await this.projectAuthoring.createLocalTarget({
+      workspace,
+      workspaceId: request.workspaceId,
+      projectId: request.projectId,
+      create: request.input,
+    });
     return {
       requestId: request.requestId,
       workspaceId: request.workspaceId,
       workspaceGrantId: request.workspaceGrantId,
-      contentProjectId: request.contentProjectId,
+      projectId: request.projectId,
       ...outcome,
     };
   }
@@ -740,87 +890,24 @@ export class DesktopAppHost {
     return { requestId: request.requestId, status: 'scope-ready', scope };
   }
 
-  async previewCharacterPortableImport(
+  async importCharacterPortablePackage(
     sender: DesktopSenderIdentity,
     payload: unknown,
     archiveBytes: Uint8Array,
   ): Promise<CharacterPortableHostResult> {
     this.requireActive();
     const request = parseCharacterPortableHostRequest(payload);
-    if (request.operation !== 'import-preview') {
-      throw new Error('Character portable import preview requires a preview request.');
-    }
-    const window = this.windows.resolveSender(sender);
-    this.requireCharacterPortableWindow(request, window.windowId);
-    const workspace = await this.resolveCharacterAuthoringAuthority(request);
-    const preview = await this.projectAuthoring.previewCharacterPackage({
-      workspace,
-      authority: request.authority,
-      archiveBytes,
-    });
-    const importReceiptId = `character-import:${randomUUID()}`;
-    this.characterImportReceipts.set(importReceiptId, {
-      webContentsId: sender.webContentsId,
-      windowId: window.windowId,
-      rendererSessionId: request.rendererSessionId,
-      binding: portableBinding(request),
-      archiveBytes,
-    });
-    return { requestId: request.requestId, status: 'preview-ready', importReceiptId, preview };
-  }
-
-  async commitCharacterPortableImport(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<CharacterPortableHostResult> {
-    this.requireActive();
-    const request = parseCharacterPortableHostRequest(payload);
-    if (request.operation !== 'import-commit') {
-      throw new Error('Character portable import commit requires a commit request.');
-    }
-    const window = this.windows.resolveSender(sender);
-    this.requireCharacterPortableWindow(request, window.windowId);
-    const receipt = this.requireCharacterImportReceipt(
-      request.importReceiptId,
-      sender.webContentsId,
-      window.windowId,
-      request.rendererSessionId,
-      request,
-    );
-    try {
-      const workspace = await this.resolveCharacterAuthoringAuthority(request);
-      const characterProjectId = await this.projectAuthoring.commitCharacterPackage({
-        workspace,
-        authority: request.authority,
-        archiveBytes: receipt.archiveBytes,
-      });
-      return { requestId: request.requestId, status: 'installed', characterProjectId };
-    } finally {
-      this.characterImportReceipts.delete(request.importReceiptId);
-    }
-  }
-
-  async cancelCharacterPortableImport(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<CharacterPortableHostResult> {
-    this.requireActive();
-    const request = parseCharacterPortableHostRequest(payload);
-    if (request.operation !== 'import-cancel') {
-      throw new Error('Character portable import cancellation requires a cancel request.');
+    if (request.operation !== 'import') {
+      throw new Error('Character portable import requires an import request.');
     }
     const window = this.windows.resolveSender(sender);
     this.requireCharacterPortableWindow(request, window.windowId);
     await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
-    this.requireCharacterImportReceipt(
-      request.importReceiptId,
-      sender.webContentsId,
-      window.windowId,
-      request.rendererSessionId,
-      request,
-    );
-    this.characterImportReceipts.delete(request.importReceiptId);
-    return { requestId: request.requestId, status: 'cancelled' };
+    const globalCharacterId = await this.projectAuthoring.importCharacterGlobalPackage({
+      archiveBytes,
+      ...(request.target === undefined ? {} : { target: request.target }),
+    });
+    return { requestId: request.requestId, status: 'imported', globalCharacterId };
   }
 
   private requireCharacterPortableWindow(
@@ -832,25 +919,6 @@ export class DesktopAppHost {
     }
   }
 
-  private requireCharacterImportReceipt(
-    importReceiptId: string,
-    webContentsId: number,
-    windowId: string,
-    rendererSessionId: string,
-    binding: CharacterPortableHostBinding,
-  ) {
-    const receipt = this.characterImportReceipts.get(importReceiptId);
-    if (
-      !receipt ||
-      receipt.webContentsId !== webContentsId ||
-      receipt.windowId !== windowId ||
-      receipt.rendererSessionId !== rendererSessionId ||
-      !samePortableBinding(receipt.binding, binding)
-    ) {
-      throw new Error('Character import receipt does not match its sender and exact destination.');
-    }
-    return receipt;
-  }
 
   async executeWorldAuthoringRequest(
     sender: DesktopSenderIdentity,
@@ -862,10 +930,10 @@ export class DesktopAppHost {
     if (request.windowId !== window.windowId) {
       throw new Error('World authoring request belongs to another Window.');
     }
-    const { workspace } = await this.resolveProjectAuthoringAuthority(request);
+    const workspace = await this.resolveWorldAuthoringAuthority(request);
     const input = {
       workspace,
-      contentProjectId: request.contentProjectId,
+      authority: request.authority,
       worldProjectId: request.worldProjectId,
     };
     const snapshot =
@@ -879,7 +947,7 @@ export class DesktopAppHost {
       requestId: request.requestId,
       workspaceId: request.workspaceId,
       workspaceGrantId: request.workspaceGrantId,
-      contentProjectId: request.contentProjectId,
+      authority: request.authority,
       worldProjectId: request.worldProjectId,
       snapshot,
     };
@@ -1542,25 +1610,6 @@ export class DesktopAppHost {
         grant,
       };
     }
-    if (request.operation === 'select-authoring-library') {
-      const library = this.authoringLibraryRoots[request.library];
-      const grant = this.workspaceGrants.authorize({
-        windowId: window.windowId,
-        label: library.label,
-        hostResource: library.hostResource,
-      });
-      const resolution = await this.workspaceGrants.resolve(
-        window.windowId,
-        grant.workspaceGrantId,
-      );
-      await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
-      return {
-        requestId: request.requestId,
-        status: 'authorized',
-        workspaceId: resolution.workspace.workspaceId,
-        grant,
-      };
-    }
     const projection = await this.shell.getProjection(window.windowId);
     const project = projection.catalog.projects.find(
       (candidate) => candidate.projectId === request.projectId,
@@ -1588,72 +1637,94 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopAgentMessageRequest(payload);
     const window = this.windows.resolveSender(sender);
-    if (isAgentProjectionControlMessage(request.message.type)) {
-      const result = await this.agentBridge.sendProjectionControl(request, {
-        applicationInstanceId: this.applicationIdentity.instanceId,
-        windowId: window.windowId,
-      });
-      if (request.message.type === 'projectionAttach') {
-        this.startCommittedAgentProviderExecution(request.message.key.conversationId);
-      }
-      return result;
-    }
-    const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
-    if (request.message.type === 'sendMessage') {
-      const context = await this.conversationLifecycle.readConversationContext(
-        request.message.conversationId,
-      );
-      if (context.kind === 'room') {
-        const scene = resolveActiveDesktopWindowWorkbench(
-          (await this.shell.getProjection(window.windowId)).window,
-        ).scene;
-        if (
-          scene.context.kind !== 'character-interaction' ||
-          scene.context.owner.kind !== 'room' ||
-          scene.context.scope.conversationId !== request.message.conversationId ||
-          !isSameAgentConversationOwner(conversationOwnerFromContext(context), scene.context.owner)
-        ) {
-          throw new Error('Room message does not match the exact active Room Conversation owner.');
-        }
-        this.agentBridge.assertConnection(request.connection, grant);
-        const result = await this.characterRoomConversations.submitUserMessage({
-          submissionId: request.message.messageTrackingId ?? request.requestId,
-          roomRunId: context.roomRunId,
-          userId: 'user:local',
-          message: request.message.message,
+    try {
+      if (isAgentProjectionControlMessage(request.message.type)) {
+        const result = await this.agentBridge.sendProjectionControl(request, {
+          applicationInstanceId: this.applicationIdentity.instanceId,
+          windowId: window.windowId,
         });
-        const rejected = result.outcomes.filter((outcome) => outcome.status === 'rejected');
-        for (const outcome of rejected) {
-          this.reportError(
-            outcome.diagnostic.code,
-            `Room participant '${outcome.participantId}' response was rejected.`,
-            new Error(outcome.diagnostic.message),
-          );
+        if (request.message.type === 'projectionAttach') {
+          this.startCommittedAgentProviderExecution(request.message.key.conversationId);
         }
-        if (
-          result.outcomes.length > 0 &&
-          result.outcomes.every((outcome) => outcome.status === 'rejected')
-        ) {
-          throw new Error('Every scheduled Room participant response was rejected.');
+        return result;
+      }
+      const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
+      if (request.message.type === 'sendMessage') {
+        const context = await this.conversationLifecycle.readConversationContext(
+          request.message.conversationId,
+        );
+        if (context.kind === 'room') {
+          const scene = resolveActiveDesktopWindowWorkbench(
+            (await this.shell.getProjection(window.windowId)).window,
+          ).scene;
+          if (
+            scene.context.kind !== 'character-interaction' ||
+            scene.context.owner.kind !== 'room' ||
+            scene.context.scope.conversationId !== request.message.conversationId ||
+            !isSameAgentConversationOwner(
+              conversationOwnerFromContext(context),
+              scene.context.owner,
+            )
+          ) {
+            throw new Error(
+              'Room message does not match the exact active Room Conversation owner.',
+            );
+          }
+          this.agentBridge.assertConnection(request.connection, grant);
+          const result = await this.characterRoomConversations.submitUserMessage({
+            submissionId: request.message.messageTrackingId ?? request.requestId,
+            roomRunId: context.roomRunId,
+            userId: 'user:local',
+            message: request.message.message,
+          });
+          const rejected = result.outcomes.filter((outcome) => outcome.status === 'rejected');
+          for (const outcome of rejected) {
+            this.reportError(
+              outcome.diagnostic.code,
+              `Room participant '${outcome.participantId}' response was rejected.`,
+              new Error(outcome.diagnostic.message),
+            );
+          }
+          if (
+            result.outcomes.length > 0 &&
+            result.outcomes.every((outcome) => outcome.status === 'rejected')
+          ) {
+            throw new Error('Every scheduled Room participant response was rejected.');
+          }
+          return { requestId: request.requestId, status: 'accepted' };
         }
+      }
+      if (request.message.type === 'newConversation') {
+        const projection = await this.shell.getProjection(window.windowId);
+        const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
+        await this.shell.transitionScene(
+          createDesktopSceneTransitionRequest({
+            requestId: request.requestId,
+            rendererSessionId: projection.rendererSessionId,
+            windowId: window.windowId,
+            sceneId: scene.sceneId,
+            intent: { kind: 'new-agent-conversation' },
+          }),
+        );
         return { requestId: request.requestId, status: 'accepted' };
       }
-    }
-    if (request.message.type === 'newConversation') {
-      const projection = await this.shell.getProjection(window.windowId);
-      const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
-      await this.shell.transitionScene(
-        createDesktopSceneTransitionRequest({
+      return await this.agentBridge.send(request, grant);
+    } catch (error) {
+      if (error instanceof AgentConversationLifecycleUnavailableError) {
+        return {
           requestId: request.requestId,
-          rendererSessionId: projection.rendererSessionId,
-          windowId: window.windowId,
-          sceneId: scene.sceneId,
-          intent: { kind: 'new-agent-conversation' },
-        }),
-      );
-      return { requestId: request.requestId, status: 'accepted' };
+          status: 'unavailable',
+          diagnostic: {
+            code: 'desktop-agent-conversation-unavailable',
+            severity: 'error',
+            conversationId: error.conversationId,
+            fieldNames: [...error.fieldNames],
+            message: 'The stored Agent Conversation cannot be opened by the current application.',
+          },
+        };
+      }
+      throw error;
     }
-    return this.agentBridge.send(request, grant);
   }
 
   private async resolveConversationDomainTurnContext(input: {
@@ -2437,15 +2508,13 @@ export class DesktopAppHost {
       return result;
     }
     let characterAuthoringWorkspace: AssetWorkspaceResolution | undefined;
+    let worldAuthoringWorkspace: AssetWorkspaceResolution | undefined;
     if (request.intent.kind === 'open-character-authoring') {
       const resolution = await this.workspaceGrants.resolve(
         window.windowId,
         request.intent.workspaceGrantId,
       );
-      const authority =
-        request.intent.authority.kind === 'content-project'
-          ? request.intent.authority
-          : ({ kind: 'standalone-library' } as const);
+      const authority = request.intent.authority;
       characterAuthoringWorkspace = await this.resolveCharacterAuthoringAuthority({
         rendererSessionId: request.rendererSessionId,
         windowId: request.windowId,
@@ -2459,10 +2528,35 @@ export class DesktopAppHost {
         characterProjectId: request.intent.characterProjectId,
       });
     }
+    if (request.intent.kind === 'open-world-authoring') {
+      const resolution = await this.workspaceGrants.resolve(
+        window.windowId,
+        request.intent.workspaceGrantId,
+      );
+      const authority = request.intent.authority;
+      worldAuthoringWorkspace = await this.resolveWorldAuthoringAuthority({
+        rendererSessionId: request.rendererSessionId,
+        windowId: request.windowId,
+        workspaceId: resolution.workspace.workspaceId,
+        workspaceGrantId: request.intent.workspaceGrantId,
+        authority,
+      });
+      await this.projectAuthoring.getWorldSnapshot({
+        workspace: worldAuthoringWorkspace,
+        authority,
+        worldProjectId: request.intent.worldProjectId,
+      });
+    }
+    if (request.intent.kind === 'open-world-runtime') {
+      await this.shell.assertWindowMutationContext(request.windowId, request.rendererSessionId);
+      await this.worldRuntime.read(request.intent.binding);
+    }
     const result = await this.shell.transitionScene(request);
     if (result.status === 'transitioned') {
       if (characterAuthoringWorkspace) {
         await this.agent.attachWorkspace(characterAuthoringWorkspace);
+      } else if (worldAuthoringWorkspace) {
+        await this.agent.attachWorkspace(worldAuthoringWorkspace);
       } else {
         await this.attachWorkspaceAgentScene(result.scene);
       }
@@ -2833,11 +2927,6 @@ export class DesktopAppHost {
 
   detachWindowResources(windowId: string, webContentsId: number): void {
     this.detachRendererSubscriptions(webContentsId);
-    for (const [receiptId, receipt] of this.characterImportReceipts) {
-      if (receipt.windowId === windowId || receipt.webContentsId === webContentsId) {
-        this.characterImportReceipts.delete(receiptId);
-      }
-    }
     this.resourceBrowser?.detachWindow(windowId);
     this.assetCenter?.detachWindow(windowId);
     this.projectPortability?.detachWindow(windowId);
@@ -3126,7 +3215,7 @@ export class DesktopAppHost {
     readonly windowId: string;
     readonly workspaceId: string;
     readonly workspaceGrantId: string;
-    readonly contentProjectId: string;
+    readonly projectId: string;
   }): Promise<{
     readonly workspace: AssetWorkspaceResolution;
     readonly project: DesktopShellProjection['catalog']['projects'][number];
@@ -3142,13 +3231,10 @@ export class DesktopAppHost {
     const projection = await this.shell.getProjection(request.windowId);
     const project = projection.catalog.projects.find(
       (candidate) =>
-        candidate.projectId === request.contentProjectId &&
-        candidate.workspaceId === request.workspaceId,
+        candidate.projectId === request.projectId && candidate.workspaceId === request.workspaceId,
     );
     if (!project) {
-      throw new Error(
-        `Content Project '${request.contentProjectId}' is not registered for this Workspace.`,
-      );
+      throw new Error(`Project '${request.projectId}' is not registered for this Workspace.`);
     }
     return { workspace: resolution.workspace, project };
   }
@@ -3168,26 +3254,41 @@ export class DesktopAppHost {
     if (resolution.workspace.workspaceId !== request.workspaceId) {
       throw new Error('Character authoring grant resolves to another Workspace.');
     }
-    if (request.authority.kind === 'standalone-library') {
-      if (
-        resolution.workspace.workspacePath !== this.authoringLibraryRoots.character.hostResource
-      ) {
-        throw new Error(
-          'Standalone Character authoring requires the configured Character library.',
-        );
-      }
-      return resolution.workspace;
-    }
-    const contentProjectId = request.authority.contentProjectId;
+    const projectId = request.authority.projectId;
     const projection = await this.shell.getProjection(request.windowId);
     const project = projection.catalog.projects.find(
       (candidate) =>
-        candidate.projectId === contentProjectId && candidate.workspaceId === request.workspaceId,
+        candidate.projectId === projectId && candidate.workspaceId === request.workspaceId,
     );
     if (!project) {
-      throw new Error(
-        `Content Project '${contentProjectId}' is not registered for this Workspace.`,
-      );
+      throw new Error(`Project '${projectId}' is not registered for this Workspace.`);
+    }
+    return resolution.workspace;
+  }
+
+  private async resolveWorldAuthoringAuthority(request: {
+    readonly rendererSessionId: string;
+    readonly windowId: string;
+    readonly workspaceId: string;
+    readonly workspaceGrantId: string;
+    readonly authority: WorldAuthoringAuthority;
+  }): Promise<AssetWorkspaceResolution> {
+    await this.shell.assertWindowMutationContext(request.windowId, request.rendererSessionId);
+    const resolution = await this.workspaceGrants.resolve(
+      request.windowId,
+      request.workspaceGrantId,
+    );
+    if (resolution.workspace.workspaceId !== request.workspaceId) {
+      throw new Error('World authoring grant resolves to another Workspace.');
+    }
+    const projectId = request.authority.projectId;
+    const projection = await this.shell.getProjection(request.windowId);
+    const project = projection.catalog.projects.find(
+      (candidate) =>
+        candidate.projectId === projectId && candidate.workspaceId === request.workspaceId,
+    );
+    if (!project) {
+      throw new Error(`Project '${projectId}' is not registered for this Workspace.`);
     }
     return resolution.workspace;
   }
@@ -3331,9 +3432,27 @@ function samePortableBinding(
     left.workspaceId === right.workspaceId &&
     left.workspaceGrantId === right.workspaceGrantId &&
     left.authority.kind === right.authority.kind &&
-    (left.authority.kind === 'standalone-library' ||
-      (right.authority.kind === 'content-project' &&
-        left.authority.contentProjectId === right.authority.contentProjectId))
+    left.authority.projectId === right.authority.projectId
+  );
+}
+
+function worldPortableBinding(input: WorldPortableHostBinding): WorldPortableHostBinding {
+  return {
+    workspaceId: input.workspaceId,
+    workspaceGrantId: input.workspaceGrantId,
+    authority: input.authority,
+  };
+}
+
+function sameWorldPortableBinding(
+  left: WorldPortableHostBinding,
+  right: WorldPortableHostBinding,
+): boolean {
+  return (
+    left.workspaceId === right.workspaceId &&
+    left.workspaceGrantId === right.workspaceGrantId &&
+    left.authority.kind === right.authority.kind &&
+    left.authority.projectId === right.authority.projectId
   );
 }
 
@@ -3370,6 +3489,8 @@ function characterAuthoringCommand(
 
 function worldAuthoringCommand(request: WorldAuthoringHostRequest): WorldAuthoringCommand {
   switch (request.operation) {
+    case 'world-project-create':
+      return { operation: request.operation, input: request.input };
     case 'world-project-update-draft':
       return { operation: request.operation, input: request.input };
     case 'world-project-set-review':
@@ -3379,6 +3500,18 @@ function worldAuthoringCommand(request: WorldAuthoringHostRequest): WorldAuthori
     case 'authoring-snapshot-get':
       throw new Error('World authoring snapshot request is not a command.');
   }
+}
+
+function sameWorldRuntimeBinding(left: WorldRuntimeBinding, right: WorldRuntimeBinding): boolean {
+  return (
+    left.worldProjectId === right.worldProjectId &&
+    left.worldVersionId === right.worldVersionId &&
+    left.worldRunId === right.worldRunId &&
+    left.worldSaveId === right.worldSaveId &&
+    left.branchId === right.branchId &&
+    left.participantId === right.participantId &&
+    left.actorId === right.actorId
+  );
 }
 
 function isAgentProjectionControlMessage(type: string): boolean {

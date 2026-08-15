@@ -34,7 +34,7 @@ describe('Desktop Character portable IPC', () => {
   const binding: CharacterPortableHostBinding = {
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
-    authority: { kind: 'standalone-library' },
+    authority: { kind: 'project', projectId: 'project-1' },
   };
 
   beforeEach(() => {
@@ -60,6 +60,8 @@ describe('Desktop Character portable IPC', () => {
       selectWorkspaceGrant: vi.fn(),
       saveCharacterPackage,
       readCharacterPackage: vi.fn(),
+      saveWorldPackage: vi.fn(),
+      readWorldPackage: vi.fn(),
     });
     const handler = electron.handlers.get(CHARACTER_PORTABLE_HOST_CHANNELS.exportPackage);
     if (!handler) throw new Error('Character export IPC handler was not registered.');
@@ -67,8 +69,7 @@ describe('Desktop Character portable IPC', () => {
       kind: 'export',
       characterProjectId: 'character-1',
       selection: {
-        characterStorylineIds: [],
-        authoringTestSnapshotIds: [],
+        characterVersionId: 'character-version-1',
         embeddedRepresentationIds: [],
       },
     });
@@ -103,6 +104,8 @@ describe('Desktop Character portable IPC', () => {
       selectWorkspaceGrant: vi.fn(),
       saveCharacterPackage,
       readCharacterPackage: vi.fn(),
+      saveWorldPackage: vi.fn(),
+      readWorldPackage: vi.fn(),
     });
     const handler = electron.handlers.get(CHARACTER_PORTABLE_HOST_CHANNELS.exportScope);
     if (!handler) throw new Error('Character export scope IPC handler was not registered.');
@@ -119,24 +122,26 @@ describe('Desktop Character portable IPC', () => {
     expect(saveCharacterPackage).not.toHaveBeenCalled();
   });
 
-  it('does not allocate Host import state when source selection is cancelled', async () => {
-    const previewCharacterPortableImport = vi.fn();
-    registerDesktopIpc({ previewCharacterPortableImport } as never, {
+  it('imports directly and does not allocate Host receipt state when source selection is cancelled', async () => {
+    const importCharacterPortablePackage = vi.fn();
+    registerDesktopIpc({ importCharacterPortablePackage } as never, {
       selectContentWorkspace: vi.fn(),
       selectWorkspaceGrant: vi.fn(),
       saveCharacterPackage: vi.fn(),
       readCharacterPackage: vi.fn(async () => undefined),
+      saveWorldPackage: vi.fn(),
+      readWorldPackage: vi.fn(),
     });
-    const handler = electron.handlers.get(CHARACTER_PORTABLE_HOST_CHANNELS.previewImport);
-    if (!handler) throw new Error('Character import preview IPC handler was not registered.');
-    const request = createCharacterPortableHostRequest(context, binding, {
-      kind: 'import-preview',
+    const handler = electron.handlers.get(CHARACTER_PORTABLE_HOST_CHANNELS.importPackage);
+    if (!handler) throw new Error('Character import IPC handler was not registered.');
+    const request = createCharacterPortableHostRequest(context, undefined, {
+      kind: 'import',
     });
 
     await expect(handler(event, request)).resolves.toEqual({
       requestId: context.requestId,
       status: 'cancelled',
     });
-    expect(previewCharacterPortableImport).not.toHaveBeenCalled();
+    expect(importCharacterPortablePackage).not.toHaveBeenCalled();
   });
 });

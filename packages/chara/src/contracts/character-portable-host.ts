@@ -1,16 +1,10 @@
 import type { CharacterAuthoringAuthority } from './character-authoring-host';
-import {
-  parseCharacterPortablePackagePreview,
-  type CharacterPortablePackagePreview,
-} from './character-portable-package';
 import { CHARACTER_REPRESENTATION_KINDS, type CharacterRepresentationKind } from './character';
 
 export const CHARACTER_PORTABLE_HOST_CHANNELS = {
   exportScope: 'neko:character:portable:export-scope',
   exportPackage: 'neko:character:portable:export',
-  previewImport: 'neko:character:portable:import-preview',
-  commitImport: 'neko:character:portable:import-commit',
-  cancelImport: 'neko:character:portable:import-cancel',
+  importPackage: 'neko:character:portable:import',
 } as const;
 
 export interface CharacterPortableHostBinding {
@@ -20,22 +14,22 @@ export interface CharacterPortableHostBinding {
 }
 
 export interface CharacterPortableExportSelection {
-  readonly characterStorylineIds: readonly string[];
-  readonly authoringTestSnapshotIds: readonly string[];
+  readonly characterVersionId: string;
   readonly embeddedRepresentationIds: readonly string[];
 }
+
+export type CharacterPortableImportTarget =
+  | { readonly kind: 'new'; readonly globalCharacterId: string }
+  | {
+      readonly kind: 'existing';
+      readonly globalCharacterId: string;
+      readonly expectedCurrentCharacterVersionId: string;
+    };
 
 export interface CharacterPortableExportScope {
   readonly characterProjectId: string;
   readonly displayName: string;
   readonly characterVersionIds: readonly string[];
-  readonly branchHeadCharacterVersionIds: readonly string[];
-  readonly unlinkedCharacterVersionIds: readonly string[];
-  readonly characterStorylines: readonly {
-    readonly characterStorylineId: string;
-    readonly displayName: string;
-  }[];
-  readonly authoringTestSnapshotIds: readonly string[];
   readonly representations: readonly {
     readonly representationId: string;
     readonly kind: CharacterRepresentationKind;
@@ -63,13 +57,10 @@ export type CharacterPortableHostRequest =
         readonly characterProjectId: string;
         readonly selection: CharacterPortableExportSelection;
       })
-  | (CharacterPortableHostContext &
-      CharacterPortableHostBinding & { readonly operation: 'import-preview' })
-  | (CharacterPortableHostContext &
-      CharacterPortableHostBinding & {
-        readonly operation: 'import-commit' | 'import-cancel';
-        readonly importReceiptId: string;
-      });
+  | (CharacterPortableHostContext & {
+      readonly operation: 'import';
+      readonly target?: CharacterPortableImportTarget;
+    });
 
 export type CharacterPortableHostResult =
   | { readonly requestId: string; readonly status: 'cancelled' | 'exported' }
@@ -80,14 +71,8 @@ export type CharacterPortableHostResult =
     }
   | {
       readonly requestId: string;
-      readonly status: 'preview-ready';
-      readonly importReceiptId: string;
-      readonly preview: CharacterPortablePackagePreview;
-    }
-  | {
-      readonly requestId: string;
-      readonly status: 'installed';
-      readonly characterProjectId: string;
+      readonly status: 'imported';
+      readonly globalCharacterId: string;
     };
 
 export interface OpenNekoDesktopCharacterPortableBridge {
@@ -103,19 +88,9 @@ export interface OpenNekoDesktopCharacterPortableBridge {
       characterProjectId: string,
       selection: CharacterPortableExportSelection,
     ): Promise<CharacterPortableHostResult>;
-    previewImport(
+    importPackage(
       windowId: string,
-      binding: CharacterPortableHostBinding,
-    ): Promise<CharacterPortableHostResult>;
-    commitImport(
-      windowId: string,
-      binding: CharacterPortableHostBinding,
-      importReceiptId: string,
-    ): Promise<CharacterPortableHostResult>;
-    cancelImport(
-      windowId: string,
-      binding: CharacterPortableHostBinding,
-      importReceiptId: string,
+      target?: CharacterPortableImportTarget,
     ): Promise<CharacterPortableHostResult>;
   };
 }
@@ -123,8 +98,8 @@ export interface OpenNekoDesktopCharacterPortableBridge {
 export function parseCharacterPortableHostRequest(value: unknown): CharacterPortableHostRequest {
   const record = requireRecord(value, 'Character portable Host request');
   const operation = record['operation'];
-  const base = parseBase(record);
   if (operation === 'export-scope') {
+    const base = parseBase(record);
     requireExactKeys(record, [...BASE_KEYS, 'operation', 'characterProjectId']);
     return {
       ...base,
@@ -133,6 +108,7 @@ export function parseCharacterPortableHostRequest(value: unknown): CharacterPort
     };
   }
   if (operation === 'export') {
+    const base = parseBase(record);
     requireExactKeys(record, [...BASE_KEYS, 'operation', 'characterProjectId', 'selection']);
     return {
       ...base,
@@ -141,16 +117,20 @@ export function parseCharacterPortableHostRequest(value: unknown): CharacterPort
       selection: parseExportSelection(record['selection']),
     };
   }
-  if (operation === 'import-preview') {
-    requireExactKeys(record, [...BASE_KEYS, 'operation']);
-    return { ...base, operation };
-  }
-  if (operation === 'import-commit' || operation === 'import-cancel') {
-    requireExactKeys(record, [...BASE_KEYS, 'operation', 'importReceiptId']);
+  if (operation === 'import') {
+    const context = parseContext(record);
+    requireExactKeys(
+      record,
+      !Object.prototype.hasOwnProperty.call(record, 'target')
+        ? [...CONTEXT_KEYS, 'operation']
+        : [...CONTEXT_KEYS, 'operation', 'target'],
+    );
     return {
-      ...base,
+      ...context,
       operation,
-      importReceiptId: requireIdentity(record['importReceiptId'], 'Character import receipt'),
+      ...(record['target'] === undefined
+        ? {}
+        : { target: parseCharacterPortableImportTarget(record['target']) }),
     };
   }
   throw new Error(`Unknown Character portable Host operation '${String(operation)}'.`);
@@ -173,21 +153,12 @@ export function parseCharacterPortableHostResult(
     requireExactKeys(record, ['requestId', 'status', 'scope']);
     return { requestId, status, scope: parseCharacterPortableExportScope(record['scope']) };
   }
-  if (status === 'preview-ready') {
-    requireExactKeys(record, ['requestId', 'status', 'importReceiptId', 'preview']);
+  if (status === 'imported') {
+    requireExactKeys(record, ['requestId', 'status', 'globalCharacterId']);
     return {
       requestId,
       status,
-      importReceiptId: requireIdentity(record['importReceiptId'], 'Character import receipt'),
-      preview: parseCharacterPortablePackagePreview(record['preview']),
-    };
-  }
-  if (status === 'installed') {
-    requireExactKeys(record, ['requestId', 'status', 'characterProjectId']);
-    return {
-      requestId,
-      status,
-      characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+      globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
     };
   }
   throw new Error(`Unknown Character portable Host result '${String(status)}'.`);
@@ -195,7 +166,7 @@ export function parseCharacterPortableHostResult(
 
 export function createCharacterPortableHostRequest(
   context: CharacterPortableHostContext,
-  binding: CharacterPortableHostBinding,
+  binding: CharacterPortableHostBinding | undefined,
   operation:
     | { readonly kind: 'export-scope'; readonly characterProjectId: string }
     | {
@@ -203,21 +174,44 @@ export function createCharacterPortableHostRequest(
         readonly characterProjectId: string;
         readonly selection: CharacterPortableExportSelection;
       }
-    | { readonly kind: 'import-preview' }
-    | { readonly kind: 'import-commit' | 'import-cancel'; readonly importReceiptId: string },
+    | { readonly kind: 'import'; readonly target?: CharacterPortableImportTarget },
 ): CharacterPortableHostRequest {
   return parseCharacterPortableHostRequest({
     ...context,
-    ...binding,
+    ...(binding ?? {}),
     operation: operation.kind,
     ...(operation.kind === 'export-scope'
       ? { characterProjectId: operation.characterProjectId }
       : operation.kind === 'export'
         ? { characterProjectId: operation.characterProjectId, selection: operation.selection }
-        : operation.kind === 'import-preview'
+        : operation.target === undefined
           ? {}
-          : { importReceiptId: operation.importReceiptId }),
+          : { target: operation.target }),
   });
+}
+
+function parseCharacterPortableImportTarget(value: unknown): CharacterPortableImportTarget {
+  const record = requireRecord(value, 'Character portable import target');
+  const kind = record['kind'];
+  if (kind === 'new') {
+    requireExactKeys(record, ['kind', 'globalCharacterId']);
+    return {
+      kind,
+      globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
+    };
+  }
+  if (kind === 'existing') {
+    requireExactKeys(record, ['kind', 'globalCharacterId', 'expectedCurrentCharacterVersionId']);
+    return {
+      kind,
+      globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
+      expectedCurrentCharacterVersionId: requireIdentity(
+        record['expectedCurrentCharacterVersionId'],
+        'GlobalCharacter current CharacterVersion',
+      ),
+    };
+  }
+  throw new Error('Character portable import target kind is unsupported.');
 }
 
 export function parseCharacterPortableExportScope(value: unknown): CharacterPortableExportScope {
@@ -226,42 +220,9 @@ export function parseCharacterPortableExportScope(value: unknown): CharacterPort
     'characterProjectId',
     'displayName',
     'characterVersionIds',
-    'branchHeadCharacterVersionIds',
-    'unlinkedCharacterVersionIds',
-    'characterStorylines',
-    'authoringTestSnapshotIds',
     'representations',
   ]);
   const characterVersionIds = identityList(record['characterVersionIds']);
-  const branchHeadCharacterVersionIds = identityList(record['branchHeadCharacterVersionIds']);
-  const unlinkedCharacterVersionIds = identityList(record['unlinkedCharacterVersionIds']);
-  const versionIds = new Set(characterVersionIds);
-  if (
-    [...branchHeadCharacterVersionIds, ...unlinkedCharacterVersionIds].some(
-      (identity) => !versionIds.has(identity),
-    )
-  ) {
-    throw new Error('Character portable export scope references an unavailable CharacterVersion.');
-  }
-  if (
-    branchHeadCharacterVersionIds.some((identity) => unlinkedCharacterVersionIds.includes(identity))
-  ) {
-    throw new Error('Character portable branch heads and unlinked versions must be disjoint.');
-  }
-  const characterStorylines = requireUnique(
-    requireArray(record['characterStorylines'], (value) => {
-      const storyline = requireRecord(value, 'Character portable Storyline scope');
-      requireExactKeys(storyline, ['characterStorylineId', 'displayName']);
-      return {
-        characterStorylineId: requireIdentity(
-          storyline['characterStorylineId'],
-          'CharacterStoryline',
-        ),
-        displayName: requireIdentity(storyline['displayName'], 'CharacterStoryline display name'),
-      };
-    }),
-    (storyline) => storyline.characterStorylineId,
-  );
   const representations = requireUnique(
     requireArray(record['representations'], (value) => {
       const representation = requireRecord(value, 'Character portable representation scope');
@@ -302,13 +263,11 @@ export function parseCharacterPortableExportScope(value: unknown): CharacterPort
     characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
     displayName: requireIdentity(record['displayName'], 'Character display name'),
     characterVersionIds,
-    branchHeadCharacterVersionIds,
-    unlinkedCharacterVersionIds,
-    characterStorylines,
-    authoringTestSnapshotIds: identityList(record['authoringTestSnapshotIds']),
     representations,
   };
 }
+
+const CONTEXT_KEYS = ['requestId', 'rendererSessionId', 'windowId'] as const;
 
 const BASE_KEYS = [
   'requestId',
@@ -324,35 +283,37 @@ function parseBase(
 ): CharacterPortableHostContext & CharacterPortableHostBinding {
   const authority = requireRecord(record['authority'], 'Character portable authority');
   const kind = authority['kind'];
-  if (kind === 'standalone-library') requireExactKeys(authority, ['kind']);
-  else if (kind === 'content-project') requireExactKeys(authority, ['kind', 'contentProjectId']);
-  else throw new Error(`Unknown Character portable authority '${String(kind)}'.`);
+  requireExactKeys(authority, ['kind', 'projectId']);
+  if (kind !== 'project') {
+    throw new Error(`Unknown Character portable authority '${String(kind)}'.`);
+  }
+  return {
+    ...parseContext(record),
+    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+    workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
+    authority: {
+      kind,
+      projectId: requireIdentity(authority['projectId'], 'Project'),
+    },
+  };
+}
+
+function parseContext(record: Readonly<Record<string, unknown>>): CharacterPortableHostContext {
   return {
     requestId: requireIdentity(record['requestId'], 'Character portable request'),
     rendererSessionId: requireIdentity(record['rendererSessionId'], 'Renderer session'),
     windowId: requireIdentity(record['windowId'], 'Window'),
-    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-    workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-    authority:
-      kind === 'standalone-library'
-        ? { kind }
-        : {
-            kind,
-            contentProjectId: requireIdentity(authority['contentProjectId'], 'Content Project'),
-          },
   };
 }
 
 function parseExportSelection(value: unknown): CharacterPortableExportSelection {
   const record = requireRecord(value, 'Character portable export selection');
-  requireExactKeys(record, [
-    'characterStorylineIds',
-    'authoringTestSnapshotIds',
-    'embeddedRepresentationIds',
-  ]);
+  requireExactKeys(record, ['characterVersionId', 'embeddedRepresentationIds']);
   return {
-    characterStorylineIds: identityList(record['characterStorylineIds']),
-    authoringTestSnapshotIds: identityList(record['authoringTestSnapshotIds']),
+    characterVersionId: requireIdentity(
+      record['characterVersionId'],
+      'Character portable CharacterVersion selection',
+    ),
     embeddedRepresentationIds: identityList(record['embeddedRepresentationIds']),
   };
 }

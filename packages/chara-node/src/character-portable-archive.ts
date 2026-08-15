@@ -7,14 +7,9 @@ import {
   type Entry,
 } from '@zip.js/zip.js';
 import {
-  parseCharacterAuthoringTestSnapshot,
   parseCharacterPortablePackageManifest,
   parseCharacterProject,
-  parseCharacterStoryline,
-  parseCharacterStorylineDraft,
-  parseCharacterStorylineVersion,
   parseCharacterVersion,
-  parseCharacterVersionLineage,
   type CharacterPortableExternalDependency,
   type CharacterPortablePackageManifest,
   type CharacterPortableRecordKind,
@@ -289,30 +284,6 @@ function validateRecordBytes(
     case 'character-version': {
       const parsed = parseCharacterVersion(value);
       actualId = parsed.characterVersionId;
-      ownerCharacterProjectId = parsed.characterProjectId;
-      break;
-    }
-    case 'character-version-lineage': {
-      const parsed = parseCharacterVersionLineage(value);
-      actualId = parsed.characterProjectId;
-      ownerCharacterProjectId = parsed.characterProjectId;
-      break;
-    }
-    case 'character-storyline': {
-      const parsed = parseCharacterStoryline(value);
-      actualId = parsed.characterStorylineId;
-      ownerCharacterProjectId = parsed.characterProjectId;
-      break;
-    }
-    case 'character-storyline-draft':
-      actualId = parseCharacterStorylineDraft(value).characterStorylineId;
-      break;
-    case 'character-storyline-version':
-      actualId = parseCharacterStorylineVersion(value).characterStorylineVersionId;
-      break;
-    case 'authoring-test-snapshot': {
-      const parsed = parseCharacterAuthoringTestSnapshot(value);
-      actualId = parsed.authoringTestSnapshotId;
       ownerCharacterProjectId = parsed.characterProjectId;
       break;
     }

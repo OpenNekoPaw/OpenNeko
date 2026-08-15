@@ -1,10 +1,4 @@
-import {
-  parseWorldActionIntent,
-  parseWorldFact,
-  worldFactSemanticRef,
-  type WorldActionIntent,
-  type WorldFact,
-} from '@neko/world/contracts';
+import { parseWorldFact, type WorldActionIntent, type WorldFact } from '@neko/world/contracts';
 import type { WorldActionHandler } from './world-runtime-service';
 
 export const WORLD_FOUNDATION_FACT_SET_ACTION = 'world.foundation.fact.set' as const;
@@ -35,30 +29,6 @@ export function createWorldFoundationActionHandlers(): readonly WorldActionHandl
       },
     },
   ]);
-}
-
-export function createWorldFoundationSetFactIntent(input: {
-  readonly identity: Omit<WorldActionIntent, 'action' | 'parameters' | 'targetRef'>;
-  readonly fact: WorldFact;
-}): WorldActionIntent {
-  return parseWorldActionIntent({
-    ...input.identity,
-    action: WORLD_FOUNDATION_FACT_SET_ACTION,
-    targetRef: worldFactSemanticRef(input.fact.factId),
-    parameters: { fact: input.fact },
-  });
-}
-
-export function createWorldFoundationDeleteFactIntent(input: {
-  readonly identity: Omit<WorldActionIntent, 'action' | 'parameters' | 'targetRef'>;
-  readonly factId: string;
-}): WorldActionIntent {
-  return parseWorldActionIntent({
-    ...input.identity,
-    action: WORLD_FOUNDATION_FACT_DELETE_ACTION,
-    targetRef: worldFactSemanticRef(input.factId),
-    parameters: { factId: input.factId },
-  });
 }
 
 function parseSetFact(intent: WorldActionIntent): WorldFact {

@@ -11,7 +11,7 @@ describe('World authoring Host contract', () => {
   const binding: WorldAuthoringBinding = {
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
-    contentProjectId: 'content-project-1',
+    authority: { kind: 'project', projectId: 'project-1' },
     worldProjectId: 'world-1',
   };
 
@@ -36,19 +36,29 @@ describe('World authoring Host contract', () => {
         },
       }),
     ).toMatchObject({ operation: 'world-project-set-review', ...binding });
+    expect(
+      createWorldAuthoringCommandRequest({
+        requestId: 'request-create',
+        rendererSessionId: 'renderer-1',
+        windowId: 'window-1',
+        binding,
+        command: {
+          operation: 'world-project-create',
+          input: { worldProjectId: 'world-1', title: 'Archive City', draft: definition() },
+        },
+      }),
+    ).toMatchObject({ operation: 'world-project-create', ...binding });
     expect(() =>
       parseWorldAuthoringHostRequest({
         requestId: 'request-3',
         rendererSessionId: 'renderer-1',
         windowId: 'window-1',
         ...binding,
-        operation: 'world-preview-run-create',
+        operation: 'world-preview-branch-activate',
         input: {
-          worldVersionId: 'world-version-1',
           worldRunId: 'world-run-1',
           worldSaveId: 'world-save-1',
           branchId: 'branch-1',
-          saveLabel: 'Save',
         },
       }),
     ).toThrow('is not permitted');
@@ -92,6 +102,29 @@ describe('World authoring Host contract', () => {
     expect(() =>
       parseWorldAuthoringHostResult({ ...result, schemaVersion: 1 }, 'request-1', binding),
     ).toThrow('unknown or missing fields');
+  });
+
+  it('rejects retired standalone and Content Project authority shapes', () => {
+    expect(() =>
+      parseWorldAuthoringHostRequest({
+        requestId: 'standalone-request',
+        rendererSessionId: 'renderer-1',
+        windowId: 'window-1',
+        ...binding,
+        authority: { kind: 'standalone-library' },
+        operation: 'authoring-snapshot-get',
+      }),
+    ).toThrow();
+    expect(() =>
+      parseWorldAuthoringHostRequest({
+        requestId: 'legacy-request',
+        rendererSessionId: 'renderer-1',
+        windowId: 'window-1',
+        ...binding,
+        authority: { kind: 'content-project', contentProjectId: 'project-1' },
+        operation: 'authoring-snapshot-get',
+      }),
+    ).toThrow();
   });
 });
 

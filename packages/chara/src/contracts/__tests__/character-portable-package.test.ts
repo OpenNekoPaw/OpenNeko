@@ -14,7 +14,6 @@ describe('Character portable package contracts', () => {
       records: [
         record('character-project', 'character-project-a', 'character/project.json'),
         record('character-version', 'character-version-a', 'character/versions/version-a.json'),
-        record('character-version-lineage', 'character-project-a', 'character/lineage.json'),
       ],
       embeddedAssets: [
         asset('assets/live2d/model.model3.json', 'application/json'),
@@ -32,7 +31,6 @@ describe('Character portable package contracts', () => {
     expect(manifest.records.map((entry) => entry.kind)).toEqual([
       'character-project',
       'character-version',
-      'character-version-lineage',
     ]);
     expect(manifest.embeddedAssets).toHaveLength(2);
     expect(manifest.externalDependencies[0]?.resourceRef).toBe('voice:provider-voice-a');
@@ -93,25 +91,18 @@ describe('Character portable package contracts', () => {
     ).toThrow(/unsupported fields/u);
   });
 
-  it('parses an exact destination preview without package identity or path state', () => {
+  it('parses a global import preview without Project destination, package identity or path state', () => {
     const preview = parseCharacterPortablePackagePreview({
-      destination: { kind: 'content-project', contentProjectId: 'content-project-a' },
       characterProjectId: 'character-project-a',
       displayName: 'Lin',
       characterVersionIds: ['version-a'],
-      branchHeadCharacterVersionIds: ['version-a'],
-      unlinkedCharacterVersionIds: [],
-      characterStorylineIds: ['storyline-a'],
       embeddedAssets: [asset('assets/live2d/model.json', 'application/json')],
       externalDependencies: [],
       conflicts: [],
       canCommit: true,
     });
 
-    expect(preview.destination).toEqual({
-      kind: 'content-project',
-      contentProjectId: 'content-project-a',
-    });
+    expect(Object.keys(preview)).not.toContain('destination');
     expect(Object.keys(preview)).not.toContain('packageId');
     expect(Object.keys(preview)).not.toContain('path');
   });
@@ -119,13 +110,9 @@ describe('Character portable package contracts', () => {
   it('rejects a preview whose commit state hides exact conflicts', () => {
     expect(() =>
       parseCharacterPortablePackagePreview({
-        destination: { kind: 'standalone-library' },
         characterProjectId: 'character-project-a',
         displayName: 'Lin',
         characterVersionIds: [],
-        branchHeadCharacterVersionIds: [],
-        unlinkedCharacterVersionIds: [],
-        characterStorylineIds: [],
         embeddedAssets: [],
         externalDependencies: [],
         conflicts: [{ kind: 'character-project', recordId: 'character-project-a' }],
@@ -146,7 +133,7 @@ function validManifest() {
 }
 
 function record(
-  kind: 'character-project' | 'character-version' | 'character-version-lineage',
+  kind: 'character-project' | 'character-version',
   recordId: string,
   archivePath: string,
 ) {

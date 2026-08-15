@@ -10,15 +10,7 @@ import {
   requireUniqueIdentities,
 } from './codec';
 
-export const CHARACTER_PORTABLE_RECORD_KINDS = [
-  'character-project',
-  'character-version',
-  'character-version-lineage',
-  'character-storyline',
-  'character-storyline-draft',
-  'character-storyline-version',
-  'authoring-test-snapshot',
-] as const;
+export const CHARACTER_PORTABLE_RECORD_KINDS = ['character-project', 'character-version'] as const;
 
 export type CharacterPortableRecordKind = (typeof CHARACTER_PORTABLE_RECORD_KINDS)[number];
 
@@ -55,23 +47,15 @@ export interface CharacterPortablePackageManifest {
   readonly externalDependencies: readonly CharacterPortableExternalDependency[];
 }
 
-export type CharacterPortableDestination =
-  | { readonly kind: 'standalone-library' }
-  | { readonly kind: 'content-project'; readonly contentProjectId: string };
-
 export interface CharacterPortableIdentityConflict {
   readonly kind: CharacterPortableRecordKind | 'localized-asset';
   readonly recordId: string;
 }
 
 export interface CharacterPortablePackagePreview {
-  readonly destination: CharacterPortableDestination;
   readonly characterProjectId: string;
   readonly displayName: string;
   readonly characterVersionIds: readonly string[];
-  readonly branchHeadCharacterVersionIds: readonly string[];
-  readonly unlinkedCharacterVersionIds: readonly string[];
-  readonly characterStorylineIds: readonly string[];
   readonly embeddedAssets: readonly CharacterPortableEmbeddedAssetEntry[];
   readonly externalDependencies: readonly CharacterPortableExternalDependency[];
   readonly conflicts: readonly CharacterPortableIdentityConflict[];
@@ -153,13 +137,9 @@ export function parseCharacterPortablePackagePreview(
   const record = requireExactRecord(
     value,
     [
-      'destination',
       'characterProjectId',
       'displayName',
       'characterVersionIds',
-      'branchHeadCharacterVersionIds',
-      'unlinkedCharacterVersionIds',
-      'characterStorylineIds',
       'embeddedAssets',
       'externalDependencies',
       'conflicts',
@@ -184,7 +164,6 @@ export function parseCharacterPortablePackagePreview(
     throw new Error('Character portable package preview canCommit must match its conflicts.');
   }
   return {
-    destination: parseCharacterPortableDestination(record['destination']),
     characterProjectId: requireIdentity(
       record['characterProjectId'],
       'Character portable package preview CharacterProject identity',
@@ -196,18 +175,6 @@ export function parseCharacterPortablePackagePreview(
     characterVersionIds: identityList(
       record['characterVersionIds'],
       'Character portable package preview CharacterVersions',
-    ),
-    branchHeadCharacterVersionIds: identityList(
-      record['branchHeadCharacterVersionIds'],
-      'Character portable package preview branch heads',
-    ),
-    unlinkedCharacterVersionIds: identityList(
-      record['unlinkedCharacterVersionIds'],
-      'Character portable package preview unlinked versions',
-    ),
-    characterStorylineIds: identityList(
-      record['characterStorylineIds'],
-      'Character portable package preview Storylines',
     ),
     embeddedAssets: requireArray(
       record['embeddedAssets'],
@@ -221,32 +188,6 @@ export function parseCharacterPortablePackagePreview(
     ),
     conflicts,
     canCommit,
-  };
-}
-
-export function parseCharacterPortableDestination(value: unknown): CharacterPortableDestination {
-  const record = requireExactRecord(
-    value,
-    ['kind', 'contentProjectId'],
-    'Character portable package destination',
-  );
-  const kind = requireOneOf(
-    record['kind'],
-    ['standalone-library', 'content-project'] as const,
-    'Character portable package destination kind',
-  );
-  if (kind === 'standalone-library') {
-    if (record['contentProjectId'] !== undefined) {
-      throw new Error('Standalone Character destination cannot identify a Content Project.');
-    }
-    return { kind };
-  }
-  return {
-    kind,
-    contentProjectId: requireIdentity(
-      record['contentProjectId'],
-      'Character portable package destination Content Project identity',
-    ),
   };
 }
 

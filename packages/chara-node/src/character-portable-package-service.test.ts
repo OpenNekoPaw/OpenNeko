@@ -3,9 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   CharacterAuthoringService,
-  CharacterPortableImportWriteError,
+  CharacterGlobalCatalogService,
   CharacterPortablePackageService,
-  CharacterStorylineService,
 } from '@neko/chara/application';
 import {
   createEmptyCharacterBackgroundStory,
@@ -13,6 +12,7 @@ import {
 } from '@neko/chara/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCharacterAuthoringFileRepository } from './character-authoring-file-repository';
+import { CharacterGlobalCatalogFileRepository } from './character-global-catalog-file-repository';
 import { createCharacterPortableArchivePort } from './character-portable-archive';
 
 const NOW = '2026-08-12T00:00:00.000Z';
@@ -23,333 +23,120 @@ afterEach(async () => {
 });
 
 describe('Character portable package service', () => {
-  it('exports, previews and installs an exact multi-branch Character snapshot', async () => {
-    const source = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    await seedCharacter(source);
+  it('exports one exact Character version and imports it directly into the global catalog', async () => {
+    const source = await sourceRepository();
     const archive = createCharacterPortableArchivePort();
     const service = new CharacterPortablePackageService(source, archive);
-    await expect(service.getExportScope('character-project-a')).resolves.toMatchObject({
-      characterProjectId: 'character-project-a',
-      branchHeadCharacterVersionIds: ['character-version-left', 'character-version-right'],
-      unlinkedCharacterVersionIds: [],
-      characterStorylines: [{ characterStorylineId: 'storyline-a', displayName: 'Opening' }],
-      representations: expect.arrayContaining([
-        {
-          representationId: 'live2d-main',
-          kind: 'live2d',
-          canEmbed: true,
-          ownedFileCount: 2,
-          ownedByteLength: 19,
-        },
-        {
-          representationId: 'voice-main',
-          kind: 'voice',
-          canEmbed: false,
-          ownedFileCount: 0,
-          ownedByteLength: 0,
-        },
-      ]),
-    });
+
     const exported = await service.exportPackage({
       characterProjectId: 'character-project-a',
-      characterStorylineIds: ['storyline-a'],
-      authoringTestSnapshotIds: [],
+      characterVersionId: 'character-version-a',
       embeddedRepresentationIds: ['live2d-main'],
       maxEmbeddedAssetBytes: 1024,
     });
-    expect(exported.manifest.externalDependencies).toEqual([
-      {
-        representationId: 'voice-main',
-        kind: 'voice',
-        resourceRef: 'voice:provider-voice-a',
-      },
-      {
-        representationId: 'vrm-main',
-        kind: 'vrm',
-        resourceRef: 'asset:vrm-source',
-      },
+    expect(exported.manifest.records).toMatchObject([
+      { kind: 'character-project', recordId: 'character-project-a' },
+      { kind: 'character-version', recordId: 'character-version-a' },
     ]);
     expect(exported.manifest.embeddedAssets).toMatchObject([
       { archivePath: 'assets/live2d/model.model3.json', entry: true },
       { archivePath: 'assets/live2d/texture_00.png', entry: false },
     ]);
 
-    const destination = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    const imports = new CharacterPortablePackageService(destination, archive);
-    const preview = await imports.previewImport({
-      archiveBytes: exported.archiveBytes,
-      destination: { kind: 'standalone-library' },
-    });
-    expect(preview).toMatchObject({
-      characterProjectId: 'character-project-a',
-      characterVersionIds: [
-        'character-version-left',
-        'character-version-right',
-        'character-version-root',
-      ],
-      branchHeadCharacterVersionIds: ['character-version-left', 'character-version-right'],
-      characterStorylineIds: ['storyline-a'],
-      canCommit: true,
-      conflicts: [],
-    });
-
+    const globalCatalog = await globalCatalogService(source);
     await expect(
-      imports.commitImport({
+      service.importIntoGlobal({
         archiveBytes: exported.archiveBytes,
-        destination: { kind: 'standalone-library' },
-      }),
-    ).resolves.toEqual({ characterProjectId: 'character-project-a' });
-    await expect(destination.readProject('character-project-a')).resolves.toMatchObject({
-      displayName: 'Lin',
-    });
-    await expect(destination.readStorylineVersion('storyline-version-a')).resolves.toMatchObject({
-      characterVersionId: 'character-version-left',
-    });
-    await expect(
-      destination.readLocalizedAsset('character-project-a', 'live2d/model.model3.json', 1024),
-    ).resolves.toEqual(new TextEncoder().encode('{"model":true}\n'));
-    await expect(
-      destination.readLocalizedAsset('character-project-a', 'live2d/texture_00.png', 1024),
-    ).resolves.toEqual(new Uint8Array([1, 2, 3, 4]));
-    await expect(
-      destination.readLocalizedAssetBindingCatalog('character-project-a'),
-    ).resolves.toMatchObject({
-      bindings: [
-        {
-          representationId: 'live2d-main',
-          entryRelativeAssetPath: 'live2d/model.model3.json',
-          files: [
-            { relativeAssetPath: 'live2d/model.model3.json' },
-            { relativeAssetPath: 'live2d/texture_00.png' },
-          ],
-        },
-      ],
-    });
-  });
-
-  it('reports exact mutable identity conflicts and does not overwrite the destination', async () => {
-    const source = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    await seedCharacter(source);
-    const archive = createCharacterPortableArchivePort();
-    const exported = await new CharacterPortablePackageService(source, archive).exportPackage({
-      characterProjectId: 'character-project-a',
-      characterStorylineIds: [],
-      authoringTestSnapshotIds: [],
-      embeddedRepresentationIds: [],
-      maxEmbeddedAssetBytes: 1024,
-    });
-    const destination = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    await new CharacterAuthoringService({
-      repository: destination,
-      lineage: destination,
-      now: () => NOW,
-    }).createProject({
-      characterProjectId: 'character-project-a',
-      displayName: 'Different',
-      draft: definition(),
-    });
-    const imports = new CharacterPortablePackageService(destination, archive);
-
-    await expect(
-      imports.previewImport({
-        archiveBytes: exported.archiveBytes,
-        destination: { kind: 'standalone-library' },
+        globalCatalog,
       }),
     ).resolves.toMatchObject({
-      canCommit: false,
-      conflicts: [{ kind: 'character-project', recordId: 'character-project-a' }],
-    });
-    await expect(
-      imports.commitImport({
-        archiveBytes: exported.archiveBytes,
-        destination: { kind: 'standalone-library' },
-      }),
-    ).rejects.toMatchObject({ code: 'character-package-identity-conflict' });
-    await expect(destination.readProject('character-project-a')).resolves.toMatchObject({
-      displayName: 'Different',
-    });
-  });
-
-  it('blocks a different immutable CharacterVersion with the same exact identity', async () => {
-    const source = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    await seedCharacter(source);
-    const archive = createCharacterPortableArchivePort();
-    const exported = await new CharacterPortablePackageService(source, archive).exportPackage({
-      characterProjectId: 'character-project-a',
-      characterStorylineIds: [],
-      authoringTestSnapshotIds: [],
-      embeddedRepresentationIds: [],
-      maxEmbeddedAssetBytes: 1024,
-    });
-    const destination = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    const project = await source.readProject('character-project-a');
-    const rootVersion = await source.readPublication('character-version-root');
-    if (!project || !rootVersion) throw new Error('Source fixture is incomplete.');
-    await destination.saveProject(project);
-    await destination.storePublication({ ...rootVersion, label: 'Conflicting immutable facts' });
-
-    await expect(
-      new CharacterPortablePackageService(destination, archive).previewImport({
-        archiveBytes: exported.archiveBytes,
-        destination: { kind: 'standalone-library' },
-      }),
-    ).resolves.toMatchObject({
-      canCommit: false,
-      conflicts: [{ kind: 'character-version', recordId: 'character-version-root' }],
-    });
-    await expect(destination.readPublication('character-version-root')).resolves.toMatchObject({
-      label: 'Conflicting immutable facts',
-    });
-  });
-
-  it('returns an exact partial-install diagnostic and supports idempotent retry', async () => {
-    const source = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    await seedCharacter(source);
-    const archive = createCharacterPortableArchivePort();
-    const exported = await new CharacterPortablePackageService(source, archive).exportPackage({
-      characterProjectId: 'character-project-a',
-      characterStorylineIds: ['storyline-a'],
-      authoringTestSnapshotIds: [],
-      embeddedRepresentationIds: ['live2d-main'],
-      maxEmbeddedAssetBytes: 1024,
-    });
-    const destination = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    const interrupted = new CharacterPortablePackageService(
-      {
-        ...destination,
-        saveLocalizedAssetBindingCatalog: async () => {
-          throw new Error('simulated binding write interruption');
-        },
+      globalCharacter: {
+        globalCharacterId: 'character-project-a',
+        currentCharacterVersionId: 'character-version-a',
       },
-      archive,
-    );
-    const input = {
-      archiveBytes: exported.archiveBytes,
-      destination: { kind: 'standalone-library' as const },
-    };
-
-    const failure = await interrupted.commitImport(input).catch((error: unknown) => error);
-    expect(failure).toBeInstanceOf(CharacterPortableImportWriteError);
-    expect(failure).toMatchObject({
-      code: 'character-package-install-partial',
-      characterProjectId: 'character-project-a',
+      characterVersion: {
+        characterVersionId: 'character-version-a',
+        globalCharacterId: 'character-project-a',
+      },
     });
-    await expect(destination.readProject('character-project-a')).resolves.toBeDefined();
-    await expect(
-      destination.readLocalizedAsset('character-project-a', 'live2d/model.model3.json', 1024),
-    ).resolves.toBeDefined();
-    await expect(
-      destination.readLocalizedAssetBindingCatalog('character-project-a'),
-    ).resolves.toBeUndefined();
-    await expect(
-      new CharacterPortablePackageService(destination, archive).commitImport(input),
-    ).resolves.toEqual({ characterProjectId: 'character-project-a' });
-    await expect(
-      destination.readLocalizedAssetBindingCatalog('character-project-a'),
-    ).resolves.toBeDefined();
+    await expect(globalCatalog.readCatalog()).resolves.toMatchObject({
+      characters: [{ globalCharacterId: 'character-project-a' }],
+      versions: [{ characterVersionId: 'character-version-a' }],
+      links: [],
+    });
   });
 
-  it('rejects a destination that does not match the authorized repository scope', async () => {
-    const source = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    await seedCharacter(source);
-    const archive = createCharacterPortableArchivePort();
-    const exported = await new CharacterPortablePackageService(source, archive).exportPackage({
+  it('rejects a repeated global import without creating another object or version', async () => {
+    const source = await sourceRepository();
+    const service = new CharacterPortablePackageService(
+      source,
+      createCharacterPortableArchivePort(),
+    );
+    const exported = await service.exportPackage({
       characterProjectId: 'character-project-a',
-      characterStorylineIds: [],
-      authoringTestSnapshotIds: [],
+      characterVersionId: 'character-version-a',
       embeddedRepresentationIds: [],
       maxEmbeddedAssetBytes: 1024,
     });
+    const globalCatalog = await globalCatalogService(source);
 
+    await service.importIntoGlobal({ archiveBytes: exported.archiveBytes, globalCatalog });
     await expect(
-      new CharacterPortablePackageService(source, archive).previewImport({
-        archiveBytes: exported.archiveBytes,
-        destination: { kind: 'content-project', contentProjectId: 'content-project-a' },
-      }),
-    ).rejects.toMatchObject({ code: 'character-package-destination-mismatch' });
+      service.importIntoGlobal({ archiveBytes: exported.archiveBytes, globalCatalog }),
+    ).rejects.toMatchObject({ code: 'global-character-version-conflict' });
+    await expect(globalCatalog.readCatalog()).resolves.toMatchObject({
+      characters: [{ characterVersionIds: ['character-version-a'] }],
+      versions: [{ characterVersionId: 'character-version-a' }],
+    });
   });
 
-  it('rejects embedding a representation that has no complete exact localized binding', async () => {
-    const source = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
+  it('rejects one invalid archive while preserving a valid global sibling', async () => {
+    const source = await sourceRepository();
+    const globalCatalog = await globalCatalogService(source);
+    await globalCatalog.createGlobal({
+      globalCharacterId: 'global-character-sibling',
+      characterVersionId: 'character-version-sibling',
+      displayName: 'Sibling',
+      label: 'v1',
+      definition: definition(),
     });
-    await seedCharacter(source);
 
+    await expect(
+      new CharacterPortablePackageService(
+        source,
+        createCharacterPortableArchivePort(),
+      ).importIntoGlobal({
+        archiveBytes: new Uint8Array([1, 2, 3, 4]),
+        globalCatalog,
+      }),
+    ).rejects.toMatchObject({ code: 'character-package-invalid' });
+    await expect(globalCatalog.readCatalog()).resolves.toMatchObject({
+      characters: [{ globalCharacterId: 'global-character-sibling' }],
+      versions: [{ characterVersionId: 'character-version-sibling' }],
+    });
+  });
+
+  it('rejects embedding a representation without a complete exact localized binding', async () => {
+    const source = await sourceRepository();
     await expect(
       new CharacterPortablePackageService(
         source,
         createCharacterPortableArchivePort(),
       ).exportPackage({
         characterProjectId: 'character-project-a',
-        characterStorylineIds: [],
-        authoringTestSnapshotIds: [],
+        characterVersionId: 'character-version-a',
         embeddedRepresentationIds: ['vrm-main'],
         maxEmbeddedAssetBytes: 1024,
       }),
     ).rejects.toMatchObject({ code: 'character-package-selection-invalid' });
   });
-
-  it('rejects one invalid archive while preserving a valid destination sibling', async () => {
-    const destination = createCharacterAuthoringFileRepository({
-      workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
-    });
-    await new CharacterAuthoringService({
-      repository: destination,
-      lineage: destination,
-      now: () => NOW,
-    }).createProject({
-      characterProjectId: 'character-sibling',
-      displayName: 'Sibling',
-      draft: definition(),
-    });
-
-    await expect(
-      new CharacterPortablePackageService(
-        destination,
-        createCharacterPortableArchivePort(),
-      ).previewImport({
-        archiveBytes: new Uint8Array([1, 2, 3, 4]),
-        destination: { kind: 'standalone-library' },
-      }),
-    ).rejects.toMatchObject({ code: 'character-package-invalid' });
-    await expect(destination.readProject('character-sibling')).resolves.toMatchObject({
-      displayName: 'Sibling',
-    });
-  });
 });
 
-async function seedCharacter(
-  repository: ReturnType<typeof createCharacterAuthoringFileRepository>,
-): Promise<void> {
+async function sourceRepository() {
+  const repository = createCharacterAuthoringFileRepository({
+    workspaceRoot: await workspace(),
+    scope: { kind: 'project', projectId: 'project-source' },
+  });
   const authoring = new CharacterAuthoringService({
     repository,
     lineage: repository,
@@ -366,48 +153,8 @@ async function seedCharacter(
   });
   await authoring.publish({
     characterProjectId: 'character-project-a',
-    characterVersionId: 'character-version-root',
-    label: 'Root',
-  });
-  await authoring.continueFromVersion({
-    characterProjectId: 'character-project-a',
-    characterVersionId: 'character-version-root',
-    replaceWorkingDraft: true,
-  });
-  await authoring.setReviewStatus({
-    characterProjectId: 'character-project-a',
-    reviewStatus: 'ready',
-  });
-  await authoring.publish({
-    characterProjectId: 'character-project-a',
-    characterVersionId: 'character-version-left',
-    label: 'Left',
-  });
-  await authoring.continueFromVersion({
-    characterProjectId: 'character-project-a',
-    characterVersionId: 'character-version-root',
-    replaceWorkingDraft: true,
-  });
-  await authoring.setReviewStatus({
-    characterProjectId: 'character-project-a',
-    reviewStatus: 'ready',
-  });
-  await authoring.publish({
-    characterProjectId: 'character-project-a',
-    characterVersionId: 'character-version-right',
-    label: 'Right',
-  });
-  const storylines = new CharacterStorylineService(repository, { now: () => NOW });
-  await storylines.create({
-    characterStorylineId: 'storyline-a',
-    characterProjectId: 'character-project-a',
-    displayName: 'Opening',
-    draft: storylineDraft('character-version-left'),
-  });
-  await storylines.publish({
-    characterStorylineId: 'storyline-a',
-    characterStorylineVersionId: 'storyline-version-a',
-    label: 'Opening',
+    characterVersionId: 'character-version-a',
+    label: 'v1',
   });
   await repository.storeLocalizedAsset(
     'character-project-a',
@@ -442,6 +189,17 @@ async function seedCharacter(
       },
     ],
   });
+  return repository;
+}
+
+async function globalCatalogService(
+  workspaceRepository: ReturnType<typeof createCharacterAuthoringFileRepository>,
+) {
+  return new CharacterGlobalCatalogService({
+    repository: new CharacterGlobalCatalogFileRepository(await workspace()),
+    workspace: workspaceRepository,
+    now: () => NOW,
+  });
 }
 
 async function workspace(): Promise<string> {
@@ -466,42 +224,10 @@ function definition() {
         resourceRef: 'asset:live2d-source',
       },
       {
-        representationId: 'voice-main',
-        kind: 'voice' as const,
-        resourceRef: 'voice:provider-voice-a',
-      },
-      {
         representationId: 'vrm-main',
         kind: 'vrm' as const,
         resourceRef: 'asset:vrm-source',
       },
     ],
-  };
-}
-
-function storylineDraft(characterVersionId: string) {
-  return {
-    characterVersionId,
-    premise: 'An old promise returns.',
-    constraints: [],
-    nodeOrder: ['node-a'],
-    nodes: [
-      {
-        storylineNodeId: 'node-a',
-        title: 'Arrival',
-        spoilerVisibility: 'visible' as const,
-        context: {
-          situation: 'The gate opens.',
-          allowedStoryFacts: [],
-          forbiddenStoryFacts: [],
-          narrativeMemories: [],
-          knowledgeBoundary: [],
-          behaviorConstraints: [],
-          expressionConstraints: [],
-          authorOnlyNotes: [],
-        },
-      },
-    ],
-    edges: [],
   };
 }

@@ -320,7 +320,7 @@ describe('DesktopAgentSurface', () => {
             {
               kind: 'open-character-studio',
               characterProjectId: 'character-project-lin',
-              authority: { kind: 'standalone-library', library: 'character' },
+              authority: { kind: 'project', projectId: 'project-1' },
             },
           ],
         },
@@ -354,7 +354,7 @@ describe('DesktopAgentSurface', () => {
     expect(onCharacterProductHandoff).toHaveBeenLastCalledWith({
       kind: 'open-character-studio',
       characterProjectId: 'character-project-lin',
-      authority: { kind: 'standalone-library', library: 'character' },
+      authority: { kind: 'project', projectId: 'project-1' },
     });
     expect(onCharacterProductHandoff).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
@@ -912,7 +912,6 @@ function installBridge(
         chooseDirectory: vi.fn(),
         createContentProject: vi.fn(),
         selectProject: vi.fn(),
-        selectAuthoringLibrary: vi.fn(),
       },
       agent: {
         getBootstrap,
@@ -953,7 +952,7 @@ function installBridge(
         getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
         getSnapshot: vi.fn(async () => ({
           character: {
-            projects: [],
+            globalCharacters: [],
             versions: [],
             relationships: [],
             characterRuns: [],
@@ -970,7 +969,7 @@ function installBridge(
         })),
         execute: vi.fn(async () => ({
           character: {
-            projects: [],
+            globalCharacters: [],
             versions: [],
             relationships: [],
             characterRuns: [],
@@ -997,19 +996,22 @@ function installBridge(
       characterPortable: {
         getExportScope: vi.fn(),
         exportPackage: vi.fn(),
-        previewImport: vi.fn(),
-        commitImport: vi.fn(),
-        cancelImport: vi.fn(),
+        importPackage: vi.fn(),
       },
-      worldFoundation: {
-        getSnapshot: vi.fn(async () => ({
-          world: { projects: [], versions: [], runtimes: [] },
+      worldPortable: {
+        exportPackage: vi.fn(),
+        importPackage: vi.fn(),
+      },
+      worldManagement: {
+        getCatalog: vi.fn(async (query) => ({
+          scope: { kind: 'global-catalog' as const },
+          query,
+          items: [],
           diagnostics: [],
         })),
-        execute: vi.fn(async () => ({
-          world: { projects: [], versions: [], runtimes: [] },
-          diagnostics: [],
-        })),
+        getDetail: vi.fn(async () => {
+          throw new Error('World management detail is not expected by this test.');
+        }),
       },
       worldAuthoring: {
         getSnapshot: vi.fn(async () => {
@@ -1018,6 +1020,11 @@ function installBridge(
         execute: vi.fn(async () => {
           throw new Error('World authoring is not expected by this test.');
         }),
+      },
+      worldRuntime: {
+        launch: vi.fn(),
+        getSnapshot: vi.fn(),
+        submitAction: vi.fn(),
       },
       characterAvatar: {
         openSurface: vi.fn(),
@@ -1036,10 +1043,12 @@ function installBridge(
         })),
         getNavigation: vi.fn(),
         getContent: vi.fn(),
+        getCreativeWorkspace: vi.fn(),
+        mutateCreativeWorkspaceReference: vi.fn(),
+        mutateCreativeWorkspaceObject: vi.fn(),
       },
       projectLocalAuthoring: {
         createTarget: vi.fn(),
-        retryCharacter: vi.fn(),
       },
       projectPortability: {
         inspect: vi.fn(),

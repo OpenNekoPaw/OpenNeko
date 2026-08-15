@@ -1,28 +1,56 @@
 import {
+  parseWorldDefinition,
   parseWorldProject,
   parseWorldVersion,
+  type WorldDefinition,
   type WorldProject,
+  type WorldReviewStatus,
   type WorldVersion,
 } from './world';
-import {
-  parseWorldFoundationCommandHostRequest,
-  type WorldFoundationCommand,
-} from './world-foundation-host';
 
 export const WORLD_AUTHORING_HOST_CHANNEL = 'neko:world:authoring' as const;
 
-export type WorldAuthoringCommand = Extract<
-  WorldFoundationCommand,
-  {
-    readonly operation:
-      'world-project-update-draft' | 'world-project-set-review' | 'world-version-publish';
-  }
->;
+export interface WorldAuthoringAuthority {
+  readonly kind: 'project';
+  readonly projectId: string;
+}
+
+export type WorldAuthoringCommand =
+  | {
+      readonly operation: 'world-project-create';
+      readonly input: {
+        readonly worldProjectId: string;
+        readonly title: string;
+        readonly draft: WorldDefinition;
+      };
+    }
+  | {
+      readonly operation: 'world-project-update-draft';
+      readonly input: {
+        readonly worldProjectId: string;
+        readonly draft: WorldDefinition;
+      };
+    }
+  | {
+      readonly operation: 'world-project-set-review';
+      readonly input: {
+        readonly worldProjectId: string;
+        readonly reviewStatus: WorldReviewStatus;
+      };
+    }
+  | {
+      readonly operation: 'world-version-publish';
+      readonly input: {
+        readonly worldProjectId: string;
+        readonly worldVersionId: string;
+        readonly label: string;
+      };
+    };
 
 export interface WorldAuthoringBinding {
   readonly workspaceId: string;
   readonly workspaceGrantId: string;
-  readonly contentProjectId: string;
+  readonly authority: WorldAuthoringAuthority;
   readonly worldProjectId: string;
 }
 
@@ -109,18 +137,13 @@ export function parseWorldAuthoringHostRequest(value: unknown): WorldAuthoringHo
     return { ...base, operation };
   }
   requireExactKeys(record, [...BASE_KEYS, 'operation', 'input']);
-  const parsed = parseWorldFoundationCommandHostRequest({
-    requestId: base.requestId,
-    operation,
-    input: record['input'],
-  });
-  if (!isWorldAuthoringCommand(parsed)) {
-    throw new Error(`World authoring operation '${String(operation)}' is not permitted.`);
-  }
+  const parsed = parseWorldAuthoringCommand({ operation, input: record['input'] });
   if (parsed.input.worldProjectId !== base.worldProjectId) {
     throw new Error('World authoring command targets another WorldProject.');
   }
   switch (parsed.operation) {
+    case 'world-project-create':
+      return { ...base, operation: parsed.operation, input: parsed.input };
     case 'world-project-update-draft':
       return { ...base, operation: parsed.operation, input: parsed.input };
     case 'world-project-set-review':
@@ -160,30 +183,20 @@ export function parseWorldAuthoringSnapshot(value: unknown): WorldAuthoringSnaps
   };
 }
 
-export function isWorldAuthoringCommand(
-  command: WorldFoundationCommand,
-): command is WorldAuthoringCommand {
-  return (
-    command.operation === 'world-project-update-draft' ||
-    command.operation === 'world-project-set-review' ||
-    command.operation === 'world-version-publish'
-  );
-}
-
 const BASE_KEYS = [
   'requestId',
   'rendererSessionId',
   'windowId',
   'workspaceId',
   'workspaceGrantId',
-  'contentProjectId',
+  'authority',
   'worldProjectId',
 ] as const;
 const RESULT_KEYS = [
   'requestId',
   'workspaceId',
   'workspaceGrantId',
-  'contentProjectId',
+  'authority',
   'worldProjectId',
 ] as const;
 
@@ -207,7 +220,7 @@ function parseBinding(record: Readonly<Record<string, unknown>>): WorldAuthoring
   return {
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-    contentProjectId: requireIdentity(record['contentProjectId'], 'ContentProject'),
+    authority: parseWorldAuthoringAuthority(record['authority']),
     worldProjectId: requireIdentity(record['worldProjectId'], 'WorldProject'),
   };
 }
@@ -228,17 +241,84 @@ function parseDiagnostic(value: unknown): WorldAuthoringDiagnostic {
   };
 }
 
+export function parseWorldAuthoringCommand(value: unknown): WorldAuthoringCommand {
+  const command = requireRecord(value, 'World authoring command');
+  requireExactKeys(command, ['operation', 'input']);
+  const operation = command['operation'];
+  const input = requireRecord(command['input'], 'World authoring input');
+  switch (operation) {
+    case 'world-project-create':
+      requireExactKeys(input, ['worldProjectId', 'title', 'draft']);
+      return {
+        operation,
+        input: {
+          worldProjectId: requireIdentity(input['worldProjectId'], 'WorldProject'),
+          title: requireIdentity(input['title'], 'World title'),
+          draft: parseWorldDefinition(input['draft']),
+        },
+      };
+    case 'world-project-update-draft':
+      requireExactKeys(input, ['worldProjectId', 'draft']);
+      return {
+        operation,
+        input: {
+          worldProjectId: requireIdentity(input['worldProjectId'], 'WorldProject'),
+          draft: parseWorldDefinition(input['draft']),
+        },
+      };
+    case 'world-project-set-review': {
+      requireExactKeys(input, ['worldProjectId', 'reviewStatus']);
+      const reviewStatus = input['reviewStatus'];
+      if (reviewStatus !== 'draft' && reviewStatus !== 'ready' && reviewStatus !== 'blocked') {
+        throw new Error(`Unknown World review status '${String(reviewStatus)}'.`);
+      }
+      return {
+        operation,
+        input: {
+          worldProjectId: requireIdentity(input['worldProjectId'], 'WorldProject'),
+          reviewStatus,
+        },
+      };
+    }
+    case 'world-version-publish':
+      requireExactKeys(input, ['worldProjectId', 'worldVersionId', 'label']);
+      return {
+        operation,
+        input: {
+          worldProjectId: requireIdentity(input['worldProjectId'], 'WorldProject'),
+          worldVersionId: requireIdentity(input['worldVersionId'], 'WorldVersion'),
+          label: requireIdentity(input['label'], 'World version label'),
+        },
+      };
+    default:
+      throw new Error(`World authoring operation '${String(operation)}' is not permitted.`);
+  }
+}
+
 function assertBinding(actual: WorldAuthoringBinding, expected: WorldAuthoringBinding): void {
-  for (const key of [
-    'workspaceId',
-    'workspaceGrantId',
-    'contentProjectId',
-    'worldProjectId',
-  ] as const) {
+  for (const key of ['workspaceId', 'workspaceGrantId', 'worldProjectId'] as const) {
     if (actual[key] !== expected[key]) {
       throw new Error(`World authoring response ${key} mismatch.`);
     }
   }
+  if (
+    actual.authority.kind !== expected.authority.kind ||
+    actual.authority.projectId !== expected.authority.projectId
+  ) {
+    throw new Error('World authoring response authority mismatch.');
+  }
+}
+
+export function parseWorldAuthoringAuthority(value: unknown): WorldAuthoringAuthority {
+  const record = requireRecord(value, 'World authoring authority');
+  requireExactKeys(record, ['kind', 'projectId']);
+  if (record['kind'] !== 'project') {
+    throw new Error(`Unknown World authoring authority '${String(record['kind'])}'.`);
+  }
+  return {
+    kind: 'project',
+    projectId: requireIdentity(record['projectId'], 'World authoring Project'),
+  };
 }
 
 function parseArray<T>(value: unknown, parse: (item: unknown) => T, label: string): readonly T[] {

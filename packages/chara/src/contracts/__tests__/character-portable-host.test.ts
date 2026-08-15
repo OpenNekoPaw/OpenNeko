@@ -15,10 +15,10 @@ describe('Character portable Host contract', () => {
   const binding: CharacterPortableHostBinding = {
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
-    authority: { kind: 'content-project', contentProjectId: 'content-project-1' },
+    authority: { kind: 'project', projectId: 'project-1' },
   };
 
-  it('creates exact project-local export and receipt requests', () => {
+  it('creates exact project-local export and direct import requests', () => {
     expect(
       createCharacterPortableHostRequest(context, binding, {
         kind: 'export-scope',
@@ -30,8 +30,7 @@ describe('Character portable Host contract', () => {
         kind: 'export',
         characterProjectId: 'character-1',
         selection: {
-          characterStorylineIds: ['storyline-1'],
-          authoringTestSnapshotIds: [],
+          characterVersionId: 'character-version-1',
           embeddedRepresentationIds: ['portrait-1'],
         },
       }),
@@ -42,35 +41,52 @@ describe('Character portable Host contract', () => {
       characterProjectId: 'character-1',
     });
     expect(
-      createCharacterPortableHostRequest(context, binding, {
-        kind: 'import-commit',
-        importReceiptId: 'receipt-1',
+      createCharacterPortableHostRequest(context, undefined, {
+        kind: 'import',
+        target: { kind: 'new', globalCharacterId: 'global-character-1' },
       }),
-    ).toMatchObject({ operation: 'import-commit', importReceiptId: 'receipt-1' });
+    ).toMatchObject({
+      operation: 'import',
+      target: { kind: 'new', globalCharacterId: 'global-character-1' },
+    });
   });
 
   it('rejects raw paths, extra fields and duplicate selections', () => {
-    const request = createCharacterPortableHostRequest(context, binding, {
-      kind: 'import-preview',
-    });
+    const request = createCharacterPortableHostRequest(context, undefined, { kind: 'import' });
     expect(() => parseCharacterPortableHostRequest({ ...request, rawPath: '/tmp/a.zip' })).toThrow(
       'unsupported or missing fields',
     );
     expect(() =>
       parseCharacterPortableHostRequest({
-        ...request,
-        operation: 'export',
-        characterProjectId: 'character-1',
+        ...createCharacterPortableHostRequest(context, binding, {
+          kind: 'export',
+          characterProjectId: 'character-1',
+          selection: {
+            characterVersionId: 'character-version-1',
+            embeddedRepresentationIds: [],
+          },
+        }),
         selection: {
-          characterStorylineIds: ['storyline-1', 'storyline-1'],
-          authoringTestSnapshotIds: [],
-          embeddedRepresentationIds: [],
+          characterVersionId: 'character-version-1',
+          embeddedRepresentationIds: ['portrait-1', 'portrait-1'],
         },
       }),
     ).toThrow('must be unique');
+    expect(() =>
+      parseCharacterPortableHostRequest({
+        ...request,
+        authority: { kind: 'standalone-library' },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseCharacterPortableHostRequest({
+        ...request,
+        authority: { kind: 'content-project', contentProjectId: 'project-1' },
+      }),
+    ).toThrow();
   });
 
-  it('strictly parses a preview without exposing a source file identity', () => {
+  it('strictly parses an imported result without exposing a source file identity', () => {
     expect(
       parseCharacterPortableHostResult(
         {
@@ -80,10 +96,6 @@ describe('Character portable Host contract', () => {
             characterProjectId: 'character-1',
             displayName: 'Lin',
             characterVersionIds: [],
-            branchHeadCharacterVersionIds: [],
-            unlinkedCharacterVersionIds: [],
-            characterStorylines: [],
-            authoringTestSnapshotIds: [],
             representations: [
               {
                 representationId: 'portrait-1',
@@ -105,25 +117,12 @@ describe('Character portable Host contract', () => {
       parseCharacterPortableHostResult(
         {
           requestId: context.requestId,
-          status: 'preview-ready',
-          importReceiptId: 'receipt-1',
-          preview: {
-            destination: binding.authority,
-            characterProjectId: 'character-1',
-            displayName: 'Lin',
-            characterVersionIds: [],
-            branchHeadCharacterVersionIds: [],
-            unlinkedCharacterVersionIds: [],
-            characterStorylineIds: [],
-            embeddedAssets: [],
-            externalDependencies: [],
-            conflicts: [],
-            canCommit: true,
-          },
+          status: 'imported',
+          globalCharacterId: 'global-character-1',
         },
         context.requestId,
       ),
-    ).toMatchObject({ status: 'preview-ready', importReceiptId: 'receipt-1' });
+    ).toMatchObject({ status: 'imported', globalCharacterId: 'global-character-1' });
     expect(() =>
       parseCharacterPortableHostResult(
         { requestId: context.requestId, status: 'exported', packagePath: '/tmp/a.zip' },

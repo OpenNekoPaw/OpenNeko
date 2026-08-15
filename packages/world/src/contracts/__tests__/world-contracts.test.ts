@@ -91,6 +91,7 @@ describe('World Foundation canonical contracts', () => {
       createdAt: now,
       updatedAt: now,
     });
+    expect(project).not.toHaveProperty('externalSource');
     const published = parseWorldVersion({
       worldVersionId: 'world-version-a',
       worldProjectId: project.worldProjectId,

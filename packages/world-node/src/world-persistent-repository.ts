@@ -15,14 +15,13 @@ import {
 } from '@neko/local-metadata';
 import type {
   WorldAuthoringRepository,
-  WorldDurableCatalogPort,
   WorldRuntimeAggregate,
   WorldRuntimeCatalogPort,
   WorldRuntimeRepository,
 } from '@neko/world/application';
 
 export interface WorldPersistentRepository
-  extends WorldAuthoringRepository, WorldRuntimeRepository, WorldDurableCatalogPort {}
+  extends WorldAuthoringRepository, WorldRuntimeRepository {}
 
 export interface WorldRuntimeRepositories {
   readonly runtime: WorldRuntimeRepository;
@@ -79,52 +78,6 @@ export function createPersistentWorldRepository(options: {
   readonly metadataStore: LocalMetadataStore;
 }): WorldPersistentRepository {
   const repository: WorldPersistentRepository = {
-    readCatalog: (signal) => {
-      signal?.throwIfAborted();
-      return options.metadataStore.transaction(
-        { mode: 'read', ownership: 'state', operation: 'read-world-catalog' },
-        async ({ sql }) => {
-          const diagnostics: import('@neko/world/application').WorldDurableRecordDiagnostic[] = [];
-          const projects = await readCatalogPayloads(
-            sql,
-            'world_projects',
-            'world_project_id',
-            'world-project',
-            parseWorldProject,
-            (record) => record.worldProjectId,
-            diagnostics,
-          );
-          const versions = await readCatalogPayloads(
-            sql,
-            'world_versions',
-            'world_version_id',
-            'world-version',
-            parseWorldVersion,
-            (record) => record.worldVersionId,
-            diagnostics,
-          );
-          const runtimeRows = await sql.all(
-            `SELECT world_run_id FROM world_runtime_aggregates ORDER BY world_run_id`,
-          );
-          const runtimes = [];
-          for (const row of runtimeRows) {
-            const recordId = diagnosticText(row['world_run_id']);
-            try {
-              const aggregate = await readRuntime(sql, recordId, 'read-world-catalog');
-              if (!aggregate) throw new Error(`WorldRun '${recordId}' is missing.`);
-              runtimes.push({ run: aggregate.run, save: aggregate.save });
-            } catch (error) {
-              diagnostics.push({
-                recordKind: 'world-runtime',
-                recordId,
-                message: error instanceof Error ? error.message : String(error),
-              });
-            }
-          }
-          return { projects, versions, runtimes, diagnostics };
-        },
-      );
-    },
     readProject: (identity, signal) => {
       signal?.throwIfAborted();
       return readPayload(
@@ -332,37 +285,6 @@ export function createPersistentWorldRuntimeRepositories(options: {
   };
   const catalog = Object.freeze(runtimeCatalog);
   return Object.freeze({ runtime, catalog });
-}
-
-async function readCatalogPayloads<T>(
-  sql: LocalMetadataSqlExecutor,
-  tableName: string,
-  idColumn: string,
-  recordKind: import('@neko/world/application').WorldDurableRecordDiagnostic['recordKind'],
-  parse: (value: unknown) => T,
-  readIdentity: (value: T) => string,
-  diagnostics: import('@neko/world/application').WorldDurableRecordDiagnostic[],
-): Promise<T[]> {
-  const rows = await sql.all(
-    `SELECT ${idColumn}, payload_json FROM ${tableName} ORDER BY ${idColumn}`,
-  );
-  const records: T[] = [];
-  for (const row of rows) {
-    const recordId = diagnosticText(row[idColumn]);
-    try {
-      const record = parse(JSON.parse(readText(row, 'payload_json')));
-      if (readIdentity(record) !== recordId)
-        throw new Error('Row identity does not match its payload.');
-      records.push(structuredClone(record));
-    } catch (error) {
-      diagnostics.push({
-        recordKind,
-        recordId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-  return records;
 }
 
 function diagnosticText(value: unknown): string {

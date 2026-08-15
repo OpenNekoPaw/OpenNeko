@@ -31,7 +31,6 @@ import { DesktopAppHost, type DesktopAppHostOptions } from './app-host';
 import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
 import {
   createDesktopContentProjectTargetRequest,
-  createDesktopWorkspaceAuthoringLibraryTargetRequest,
   createDesktopWorkspaceDirectoryTargetRequest,
 } from '@neko/host/desktop-workspace-grant-contract';
 import { createAssetCenterHostRequest } from '@neko/assets-domain/asset-center';
@@ -76,7 +75,7 @@ import {
 import { DesktopWorkbenchContractError } from '@neko/host/desktop-workbench-contract';
 import type { ResourceBrowserNodeRuntime } from '@neko/assets-node';
 import { CharacterFoundationService } from '@neko/chara/application';
-import { WorldFoundationService } from '@neko/world/application';
+import { WorldManagementService } from '@neko/world/application';
 import type { RoomRun, RoomView } from '@neko/chara/contracts';
 import {
   createCharacterAuthoringCommandRequest,
@@ -88,13 +87,19 @@ import {
 import {
   createWorldAuthoringCommandRequest,
   createWorldAuthoringSnapshotRequest,
+  createWorldPortableHostRequest,
+  createWorldRuntimeLaunchRequest,
+  createWorldRuntimeSnapshotRequest,
+  type WorldRuntimeBinding,
+  type WorldRuntimeProjection,
 } from '@neko/world/contracts';
 import {
   createProjectAuthoringCatalogHostRequest,
   createProjectAuthoringNavigationHostRequest,
+  createProjectCreativeWorkspaceHostRequest,
+  createProjectCreativeWorkspaceMutationHostRequest,
   createProjectContentHostRequest,
   createProjectLocalAuthoringHostRequest,
-  createProjectLocalAuthoringRetryHostRequest,
 } from '@neko/project/contracts';
 
 const standardCapabilityConstraint = async (input: {
@@ -107,7 +112,7 @@ const standardCapabilityConstraint = async (input: {
 });
 
 describe('DesktopAppHost', () => {
-  it('delegates Character Foundation commands to the package owner and returns its projection', async () => {
+  it('rejects retired Character Project authoring commands at the Foundation boundary', async () => {
     const commands = { execute: vi.fn(async () => undefined) };
     const fixture = await createShellAppHost({ characterFoundationCommands: commands });
     await expect(
@@ -116,11 +121,8 @@ describe('DesktopAppHost', () => {
         operation: 'character-project-set-review',
         input: { characterProjectId: 'character-project:a', reviewStatus: 'ready' },
       }),
-    ).resolves.toMatchObject({
-      requestId: 'character-request-1',
-      snapshot: { character: { projects: [], versions: [] }, diagnostics: [] },
-    });
-    expect(commands.execute).toHaveBeenCalledOnce();
+    ).rejects.toThrow("Unknown Character Foundation operation 'character-project-set-review'.");
+    expect(commands.execute).not.toHaveBeenCalled();
     await fixture.appHost.dispose();
   });
 
@@ -141,31 +143,24 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('delegates World Foundation commands to the package owner and returns its projection', async () => {
-    const commands = { execute: vi.fn(async () => undefined) };
-    const fixture = await createShellAppHost({ worldFoundationCommands: commands });
+  it('delegates World management reads to the narrow owner projection', async () => {
+    const fixture = await createShellAppHost();
     await expect(
-      fixture.appHost.executeWorldFoundationRequest(fixture.sender, {
-        requestId: 'world-request-1',
-        operation: 'world-project-create',
-        input: {
-          worldProjectId: 'world-project:a',
-          title: 'Archive City',
-          draft: {
-            background: 'A city of archives.',
-            worldBook: [],
-            locations: [],
-            organizations: [],
-            rules: [],
-            initialFacts: [],
-          },
-        },
+      fixture.appHost.executeWorldManagementRequest(fixture.sender, {
+        requestId: 'world-management-request-1',
+        operation: 'catalog-get',
+        query: { search: '', sort: 'recently-updated' },
       }),
-    ).resolves.toMatchObject({
-      requestId: 'world-request-1',
-      snapshot: { world: { projects: [], versions: [], runtimes: [] }, diagnostics: [] },
+    ).resolves.toEqual({
+      requestId: 'world-management-request-1',
+      operation: 'catalog-get',
+      catalog: {
+        scope: { kind: 'global-catalog' },
+        query: { search: '', sort: 'recently-updated' },
+        items: [],
+        diagnostics: [],
+      },
     });
-    expect(commands.execute).toHaveBeenCalledOnce();
     await fixture.appHost.dispose();
   });
 
@@ -247,7 +242,6 @@ describe('DesktopAppHost', () => {
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
-      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
@@ -257,8 +251,9 @@ describe('DesktopAppHost', () => {
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      worldFoundation: createWorldFoundationService(),
-      worldFoundationCommands: createWorldFoundationCommands(),
+      worldManagement: createWorldManagementService(),
+      worldRuntime: createWorldRuntimeWorkbench(),
+      worldPortable: createWorldPortableRuntime(),
       characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
@@ -339,7 +334,6 @@ describe('DesktopAppHost', () => {
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
-      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
@@ -349,8 +343,9 @@ describe('DesktopAppHost', () => {
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      worldFoundation: createWorldFoundationService(),
-      worldFoundationCommands: createWorldFoundationCommands(),
+      worldManagement: createWorldManagementService(),
+      worldRuntime: createWorldRuntimeWorkbench(),
+      worldPortable: createWorldPortableRuntime(),
       characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
@@ -414,7 +409,6 @@ describe('DesktopAppHost', () => {
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
-      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
@@ -424,8 +418,9 @@ describe('DesktopAppHost', () => {
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      worldFoundation: createWorldFoundationService(),
-      worldFoundationCommands: createWorldFoundationCommands(),
+      worldManagement: createWorldManagementService(),
+      worldRuntime: createWorldRuntimeWorkbench(),
+      worldPortable: createWorldPortableRuntime(),
       characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
@@ -643,13 +638,13 @@ describe('DesktopAppHost', () => {
     ).toHaveLength(workspaceConversationCount);
   });
 
-  it('registers Entry Content targets and authorizes configured libraries without navigation', async () => {
+  it('registers Entry Content targets without navigation', async () => {
     const fixture = await createShellAppHost();
     const initialScene = activeScene(fixture.projection);
     fixture.registry.resolve.mockImplementation(async (hostResource) => ({
-      workspaceId: hostResource.includes('characters') ? 'library-characters' : 'workspace-novel',
+      workspaceId: 'workspace-novel',
       workspacePath: hostResource,
-      displayName: hostResource.includes('characters') ? 'Characters' : 'Novel',
+      displayName: 'Novel',
       locator: { kind: 'variable' as const, value: '${HOME}/target' },
     }));
     const created = await fixture.appHost.resolveWorkspaceTarget(
@@ -671,20 +666,6 @@ describe('DesktopAppHost', () => {
     expect(afterCreate.window.tabs).toHaveLength(0);
     expect(afterCreate.catalog.projects).toHaveLength(1);
 
-    const library = await fixture.appHost.resolveWorkspaceTarget(
-      fixture.sender,
-      createDesktopWorkspaceAuthoringLibraryTargetRequest({
-        requestId: 'library-select-1',
-        rendererSessionId: afterCreate.rendererSessionId,
-        windowId: fixture.windowId,
-        library: 'character',
-      }),
-      async () => {
-        throw new Error('Configured library selection must not open the native picker.');
-      },
-    );
-    expect(library).toMatchObject({ status: 'authorized', workspaceId: 'library-characters' });
-    expect(JSON.stringify(library)).not.toContain('/Users/fixture');
     expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(
       initialScene,
     );
@@ -808,7 +789,7 @@ describe('DesktopAppHost', () => {
       }),
     ).resolves.toEqual({
       requestId: 'launch-workspace-after-restart',
-      status: 'ready',
+      status: 'ready' as const,
       catalog,
     });
     expect(restore).toHaveBeenCalledWith(
@@ -904,8 +885,8 @@ describe('DesktopAppHost', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
-      authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
-      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
+      target: { kind: 'content-document' as const, documentId: 'documents/story.md' },
     };
     const intent = {
       mode: 'authoring' as const,
@@ -1093,7 +1074,7 @@ describe('DesktopAppHost', () => {
       conversationId: 'conversation:character:character-run-entry-1',
       context: {
         kind: 'character' as const,
-        characterId: 'character-project-entry-1',
+        characterId: 'global-character-entry-1',
         characterVersionId: 'character-version-entry-1',
         characterRunId: 'character-run-entry-1',
         dialogueRunId: 'dialogue-run-entry-1',
@@ -1128,7 +1109,7 @@ describe('DesktopAppHost', () => {
         mode: 'companion' as const,
         participants: [
           {
-            characterProjectId: 'character-project-entry-1',
+            globalCharacterId: 'global-character-entry-1',
             characterVersionId: 'character-version-entry-1',
           },
         ],
@@ -2408,6 +2389,68 @@ describe('DesktopAppHost', () => {
         viewId: restored.scene.context.agentViewId,
       }),
     );
+
+    const readConversationContext = vi.spyOn(conversationLifecycle, 'readConversationContext');
+    readConversationContext.mockRejectedValueOnce(
+      new AgentConversationLifecycleUnavailableError(
+        conversationId,
+        ['lifecycle'],
+        new Error('Host-only decode detail.'),
+      ),
+    );
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest(
+          'pi-only-assistant-invalid-lifecycle',
+          {
+            applicationInstanceId: 'app-1',
+            windowId: fixture.windowId,
+            workbenchInstanceId: assistantWorkbench.workbenchInstanceId,
+            agentSurfaceId: assistantSurfaceId,
+            assistantSpaceId,
+            workspaceId: assistantSpaceId,
+            viewId: restored.scene.context.agentViewId,
+            connectionId: 'pi-only-assistant-connection',
+          },
+          { type: 'getConversations' },
+        ),
+      ),
+    ).resolves.toEqual({
+      requestId: 'pi-only-assistant-invalid-lifecycle',
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable',
+        severity: 'error',
+        conversationId,
+        fieldNames: ['lifecycle'],
+        message: 'The stored Agent Conversation cannot be opened by the current application.',
+      },
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+
+    readConversationContext.mockRejectedValueOnce(new Error('Unexpected connection failure.'));
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest(
+          'pi-only-assistant-unexpected-failure',
+          {
+            applicationInstanceId: 'app-1',
+            windowId: fixture.windowId,
+            workbenchInstanceId: assistantWorkbench.workbenchInstanceId,
+            agentSurfaceId: assistantSurfaceId,
+            assistantSpaceId,
+            workspaceId: assistantSpaceId,
+            viewId: restored.scene.context.agentViewId,
+            connectionId: 'pi-only-assistant-connection',
+          },
+          { type: 'getConversations' },
+        ),
+      ),
+    ).rejects.toThrow('Unexpected connection failure.');
+    expect(send).toHaveBeenCalledTimes(1);
+    readConversationContext.mockRestore();
     await fixture.appHost.dispose();
   });
 
@@ -2493,8 +2536,8 @@ describe('DesktopAppHost', () => {
     vi.mocked(projectAuthoring.getNavigation).mockResolvedValue([
       {
         kind: 'authoring-target',
-        target: { kind: 'content-project', contentProjectId: 'content:placeholder' },
-        identity: 'content-project:content:placeholder',
+        target: { kind: 'content-document', documentId: 'document-placeholder' },
+        identity: 'content-document:document-placeholder',
         label: 'Demo',
       },
     ]);
@@ -2517,8 +2560,8 @@ describe('DesktopAppHost', () => {
     vi.mocked(projectAuthoring.getNavigation).mockResolvedValue([
       {
         kind: 'authoring-target',
-        target: { kind: 'content-project', contentProjectId: project.projectId },
-        identity: `content-project:${project.projectId}`,
+        target: { kind: 'content-document', documentId: 'document-1' },
+        identity: 'content-document:document-1',
         label: project.displayName,
       },
     ]);
@@ -2529,7 +2572,7 @@ describe('DesktopAppHost', () => {
       binding: {
         workspaceId: resolution.workspaceId,
         workspaceGrantId: scene.context.scope.workspaceGrantId,
-        contentProjectId: project.projectId,
+        projectId: project.projectId,
       },
     });
 
@@ -2538,13 +2581,13 @@ describe('DesktopAppHost', () => {
     ).resolves.toMatchObject({
       requestId: request.requestId,
       workspaceId: resolution.workspaceId,
-      contentProjectId: project.projectId,
-      navigation: [{ identity: `content-project:${project.projectId}` }],
+      projectId: project.projectId,
+      navigation: [{ identity: 'content-document:document-1' }],
     });
     expect(projectAuthoring.getNavigation).toHaveBeenCalledWith({
       workspace: resolution,
-      contentProjectId: project.projectId,
-      contentLabel: project.displayName,
+      projectId: project.projectId,
+      projectLabel: project.displayName,
     });
 
     await expect(
@@ -2558,7 +2601,7 @@ describe('DesktopAppHost', () => {
       fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
         ...request,
         requestId: 'project-authoring-unregistered',
-        contentProjectId: 'content:unregistered',
+        projectId: 'project:unregistered',
       }),
     ).rejects.toThrow('is not registered for this Workspace');
 
@@ -2567,7 +2610,7 @@ describe('DesktopAppHost', () => {
         ...request,
         requestId: 'project-authoring-after-sibling-failure',
       }),
-    ).resolves.toMatchObject({ contentProjectId: project.projectId });
+    ).resolves.toMatchObject({ projectId: project.projectId });
     await fixture.appHost.dispose();
   });
 
@@ -2608,7 +2651,7 @@ describe('DesktopAppHost', () => {
           binding: {
             workspaceId: resolution.workspaceId,
             workspaceGrantId: scene.context.scope.workspaceGrantId,
-            contentProjectId: project.projectId,
+            projectId: project.projectId,
           },
         }),
       ),
@@ -2642,7 +2685,7 @@ describe('DesktopAppHost', () => {
       binding: {
         workspaceId: resolution.workspaceId,
         workspaceGrantId: scene.context.scope.workspaceGrantId,
-        contentProjectId: project.projectId,
+        projectId: project.projectId,
       },
     });
 
@@ -2650,13 +2693,13 @@ describe('DesktopAppHost', () => {
       fixture.appHost.getProjectAuthoringNavigation(fixture.sender, request),
     ).resolves.toMatchObject({
       requestId: request.requestId,
-      contentProjectId: project.projectId,
-      projection: { contentProjectId: project.projectId },
+      projectId: project.projectId,
+      projection: { projectId: project.projectId },
     });
     expect(projectAuthoring.getContent).toHaveBeenCalledWith({
       workspace: resolution,
       workspaceId: resolution.workspaceId,
-      contentProjectId: project.projectId,
+      projectId: project.projectId,
     });
 
     vi.mocked(projectAuthoring.getContent).mockClear();
@@ -2674,7 +2717,76 @@ describe('DesktopAppHost', () => {
         ...request,
         requestId: 'project-content-after-failure',
       }),
-    ).resolves.toMatchObject({ contentProjectId: project.projectId });
+    ).resolves.toMatchObject({ projectId: project.projectId });
+    await fixture.appHost.dispose();
+  });
+
+  it('delegates Creative Workspace reads and exact reference mutations through the grant', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'creative-workspace-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const scene = activeScene(opened.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Creative Workspace fixture requires an exact Workspace Scene.');
+    }
+    const binding = {
+      workspaceId: resolution.workspaceId,
+      workspaceGrantId: scene.context.scope.workspaceGrantId,
+      projectId: project.projectId,
+    };
+    const workspaceRequest = createProjectCreativeWorkspaceHostRequest({
+      requestId: 'creative-workspace-read',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding,
+    });
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, workspaceRequest),
+    ).resolves.toMatchObject({
+      requestId: workspaceRequest.requestId,
+      ...binding,
+      projection: { composition: { projectId: project.projectId } },
+    });
+    expect(projectAuthoring.getCreativeWorkspace).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      projectId: project.projectId,
+    });
+    const mutationRequest = createProjectCreativeWorkspaceMutationHostRequest({
+      requestId: 'creative-workspace-mutation',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding,
+      mutation: {
+        kind: 'remove',
+        reference: {
+          kind: 'world-version',
+          globalWorldId: 'global-world-1',
+          worldVersionId: 'world-version-1',
+        },
+      },
+    });
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, mutationRequest),
+    ).resolves.toMatchObject({ requestId: mutationRequest.requestId, ...binding });
+    expect(projectAuthoring.mutateCreativeWorkspaceReference).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      projectId: project.projectId,
+      mutation: mutationRequest.mutation,
+    });
+
     await fixture.appHost.dispose();
   });
 
@@ -2723,14 +2835,14 @@ describe('DesktopAppHost', () => {
     const [firstProject, secondProject] = secondOpened.projection.catalog.projects;
     if (!firstProject || !secondProject) throw new Error('Expected two registered Projects.');
     vi.mocked(projectAuthoring.getNavigation).mockImplementation(async (input) => {
-      if (input.contentProjectId === firstProject.projectId) {
+      if (input.projectId === firstProject.projectId) {
         throw new Error('First Project catalog is unreadable.');
       }
       return [
         {
           kind: 'authoring-target',
-          target: { kind: 'content-project', contentProjectId: secondProject.projectId },
-          identity: `content-project:${secondProject.projectId}`,
+          target: { kind: 'content-document', documentId: 'document-2' },
+          identity: 'content-document:document-2',
           label: secondProject.displayName,
         },
         {
@@ -2759,9 +2871,9 @@ describe('DesktopAppHost', () => {
       requestId: request.requestId,
       projects: [
         {
-          contentProjectId: secondProject.projectId,
+          projectId: secondProject.projectId,
           navigation: [
-            { identity: `content-project:${secondProject.projectId}` },
+            { identity: 'content-document:document-2' },
             { identity: 'character-project:character-1' },
             { identity: 'world-project:world-1' },
           ],
@@ -2769,7 +2881,7 @@ describe('DesktopAppHost', () => {
       ],
       diagnostics: [
         {
-          contentProjectId: firstProject.projectId,
+          projectId: firstProject.projectId,
           message: 'First Project catalog is unreadable.',
         },
       ],
@@ -2804,13 +2916,13 @@ describe('DesktopAppHost', () => {
     const characterBinding = {
       workspaceId: resolution.workspaceId,
       workspaceGrantId: scene.context.scope.workspaceGrantId,
-      authority: { kind: 'content-project' as const, contentProjectId: project.projectId },
+      authority: { kind: 'project' as const, projectId: project.projectId },
       characterProjectId: 'character-1',
     };
     const worldBinding = {
       workspaceId: resolution.workspaceId,
       workspaceGrantId: scene.context.scope.workspaceGrantId,
-      contentProjectId: project.projectId,
+      authority: { kind: 'project' as const, projectId: project.projectId },
       worldProjectId: 'world-1',
     };
 
@@ -2843,7 +2955,7 @@ describe('DesktopAppHost', () => {
     );
     expect(projectAuthoring.executeCharacter).toHaveBeenCalledWith({
       workspace: resolution,
-      authority: { kind: 'content-project', contentProjectId: project.projectId },
+      authority: { kind: 'project', projectId: project.projectId },
       characterProjectId: 'character-1',
       command: {
         operation: 'character-project-set-review',
@@ -2880,7 +2992,7 @@ describe('DesktopAppHost', () => {
     );
     expect(projectAuthoring.executeWorld).toHaveBeenCalledWith({
       workspace: resolution,
-      contentProjectId: project.projectId,
+      authority: { kind: 'project', projectId: project.projectId },
       worldProjectId: 'world-1',
       command: {
         operation: 'world-project-set-review',
@@ -2897,7 +3009,7 @@ describe('DesktopAppHost', () => {
           binding: {
             workspaceId: resolution.workspaceId,
             workspaceGrantId: scene.context.scope.workspaceGrantId,
-            contentProjectId: project.projectId,
+            projectId: project.projectId,
           },
           create: {
             kind: 'character-project',
@@ -2919,108 +3031,19 @@ describe('DesktopAppHost', () => {
     expect(projectAuthoring.createLocalTarget).toHaveBeenCalledWith({
       workspace: resolution,
       workspaceId: resolution.workspaceId,
-      contentProjectId: project.projectId,
+      projectId: project.projectId,
       create: expect.objectContaining({
         kind: 'character-project',
         characterProjectId: 'character-created',
         entity: expect.objectContaining({ kind: 'create', entityId: 'entity-created' }),
       }),
     });
-    const receipt = {
-      authority: {
-        workspaceId: resolution.workspaceId,
-        contentProjectId: project.projectId,
-      },
-      target: {
-        kind: 'character-project' as const,
-        characterProjectId: 'character-created',
-      },
-      entityId: 'entity-created',
-      completedSteps: ['character-project'] as const,
-      nextStep: 'project-entity' as const,
-    };
-    vi.mocked(projectAuthoring.createLocalTarget).mockResolvedValueOnce({
-      status: 'incomplete',
-      target: receipt.target,
-      receipt,
-    });
-    await expect(
-      fixture.appHost.executeProjectLocalAuthoringRequest(
-        fixture.sender,
-        createProjectLocalAuthoringHostRequest({
-          requestId: 'project-local-character-incomplete',
-          rendererSessionId: opened.projection.rendererSessionId,
-          windowId: fixture.windowId,
-          binding: {
-            workspaceId: resolution.workspaceId,
-            workspaceGrantId: scene.context.scope.workspaceGrantId,
-            contentProjectId: project.projectId,
-          },
-          create: {
-            kind: 'character-project',
-            characterProjectId: 'character-created',
-            displayName: 'Created Character',
-            draft: characterAuthoringSnapshot().project.draft,
-            sources: { evidence: [], assetRepresentations: [] },
-            entity: {
-              kind: 'create',
-              entityId: 'entity-created',
-              name: 'Created Character',
-            },
-          },
-        }),
-      ),
-    ).resolves.toMatchObject({
-      status: 'incomplete',
-      target: receipt.target,
-      receipt,
-    });
-    await expect(
-      fixture.appHost.executeProjectLocalAuthoringRequest(
-        fixture.sender,
-        createProjectLocalAuthoringRetryHostRequest({
-          requestId: 'project-local-character-retry',
-          rendererSessionId: opened.projection.rendererSessionId,
-          windowId: fixture.windowId,
-          binding: {
-            workspaceId: resolution.workspaceId,
-            workspaceGrantId: scene.context.scope.workspaceGrantId,
-            contentProjectId: project.projectId,
-          },
-          receipt,
-          entity: { kind: 'create', entityId: 'entity-created', name: 'Created Character' },
-        }),
-      ),
-    ).resolves.toMatchObject({
-      status: 'created',
-      target: { kind: 'character-project', characterProjectId: 'character-created' },
-    });
-    expect(projectAuthoring.retryLocalCharacter).toHaveBeenCalledWith({
-      workspace: resolution,
-      workspaceId: resolution.workspaceId,
-      contentProjectId: project.projectId,
-      receipt,
-      entity: { kind: 'create', entityId: 'entity-created', name: 'Created Character' },
-    });
     await fixture.appHost.dispose();
   });
 
-  it('binds project-local Character package preview and commit to one exact sender receipt', async () => {
+  it('binds Character package import to one exact sender and destination', async () => {
     const projectAuthoring = createProjectAuthoring();
-    vi.mocked(projectAuthoring.previewCharacterPackage).mockResolvedValue({
-      destination: { kind: 'content-project', contentProjectId: 'pending' },
-      characterProjectId: 'character-imported',
-      displayName: 'Imported',
-      characterVersionIds: ['character-version-1'],
-      branchHeadCharacterVersionIds: ['character-version-1'],
-      unlinkedCharacterVersionIds: [],
-      characterStorylineIds: [],
-      embeddedAssets: [],
-      externalDependencies: [],
-      conflicts: [],
-      canCommit: true,
-    });
-    vi.mocked(projectAuthoring.commitCharacterPackage).mockResolvedValue('character-imported');
+    vi.mocked(projectAuthoring.importCharacterGlobalPackage).mockResolvedValue('character-imported');
     const fixture = await createShellAppHost({ projectAuthoring });
     const resolution = createWorkspaceResolution();
     fixture.registry.resolve.mockResolvedValue(resolution);
@@ -3040,118 +3063,29 @@ describe('DesktopAppHost', () => {
     const binding = {
       workspaceId: resolution.workspaceId,
       workspaceGrantId: scene.context.scope.workspaceGrantId,
-      authority: { kind: 'content-project' as const, contentProjectId: project.projectId },
+      authority: { kind: 'project' as const, projectId: project.projectId },
     };
-    const previewRequest = createCharacterPortableHostRequest(
+    const importRequest = createCharacterPortableHostRequest(
       {
-        requestId: 'portable-preview',
+        requestId: 'portable-import',
         rendererSessionId: opened.projection.rendererSessionId,
         windowId: fixture.windowId,
       },
-      binding,
-      { kind: 'import-preview' },
+      undefined,
+      { kind: 'import', target: { kind: 'new', globalCharacterId: 'character-imported' } },
     );
     const archiveBytes = new Uint8Array([1, 2, 3]);
-    const preview = await fixture.appHost.previewCharacterPortableImport(
-      fixture.sender,
-      previewRequest,
-      archiveBytes,
-    );
-    if (preview.status !== 'preview-ready') {
-      throw new Error('Portable project fixture requires a preview receipt.');
-    }
-    expect(projectAuthoring.previewCharacterPackage).toHaveBeenCalledWith({
-      workspace: resolution,
-      authority: binding.authority,
-      archiveBytes,
-    });
-
     await expect(
-      fixture.appHost.commitCharacterPortableImport(
-        fixture.sender,
-        createCharacterPortableHostRequest(
-          {
-            requestId: 'portable-wrong-destination',
-            rendererSessionId: opened.projection.rendererSessionId,
-            windowId: fixture.windowId,
-          },
-          {
-            ...binding,
-            authority: { kind: 'content-project', contentProjectId: 'content-project-other' },
-          },
-          { kind: 'import-commit', importReceiptId: preview.importReceiptId },
-        ),
-      ),
-    ).rejects.toThrow('does not match its sender and exact destination');
-    expect(projectAuthoring.commitCharacterPackage).not.toHaveBeenCalled();
-    await expect(
-      fixture.appHost.commitCharacterPortableImport(fixture.sender, {
-        ...createCharacterPortableHostRequest(
-          {
-            requestId: 'portable-wrong-renderer',
-            rendererSessionId: 'renderer-session-other',
-            windowId: fixture.windowId,
-          },
-          binding,
-          { kind: 'import-commit', importReceiptId: preview.importReceiptId },
-        ),
-      }),
-    ).rejects.toThrow('does not match its sender and exact destination');
-
-    const commitRequest = createCharacterPortableHostRequest(
-      {
-        requestId: 'portable-commit',
-        rendererSessionId: opened.projection.rendererSessionId,
-        windowId: fixture.windowId,
-      },
-      binding,
-      { kind: 'import-commit', importReceiptId: preview.importReceiptId },
-    );
-    await expect(
-      fixture.appHost.commitCharacterPortableImport(fixture.sender, commitRequest),
+      fixture.appHost.importCharacterPortablePackage(fixture.sender, importRequest, archiveBytes),
     ).resolves.toEqual({
-      requestId: 'portable-commit',
-      status: 'installed',
-      characterProjectId: 'character-imported',
+      requestId: 'portable-import',
+      status: 'imported',
+      globalCharacterId: 'character-imported',
     });
-    expect(projectAuthoring.commitCharacterPackage).toHaveBeenCalledWith({
-      workspace: resolution,
-      authority: binding.authority,
+    expect(projectAuthoring.importCharacterGlobalPackage).toHaveBeenCalledWith({
       archiveBytes,
+      target: { kind: 'new', globalCharacterId: 'character-imported' },
     });
-    await expect(
-      fixture.appHost.commitCharacterPortableImport(fixture.sender, {
-        ...commitRequest,
-        requestId: 'portable-reused-receipt',
-      }),
-    ).rejects.toThrow('does not match its sender and exact destination');
-    const cancellationPreview = await fixture.appHost.previewCharacterPortableImport(
-      fixture.sender,
-      { ...previewRequest, requestId: 'portable-cancellation-preview' },
-      archiveBytes,
-    );
-    if (cancellationPreview.status !== 'preview-ready') {
-      throw new Error('Portable cancellation fixture requires a preview receipt.');
-    }
-    const cancelRequest = createCharacterPortableHostRequest(
-      {
-        requestId: 'portable-cancel',
-        rendererSessionId: opened.projection.rendererSessionId,
-        windowId: fixture.windowId,
-      },
-      binding,
-      { kind: 'import-cancel', importReceiptId: cancellationPreview.importReceiptId },
-    );
-    await expect(
-      fixture.appHost.cancelCharacterPortableImport(fixture.sender, cancelRequest),
-    ).resolves.toEqual({ requestId: 'portable-cancel', status: 'cancelled' });
-    await expect(
-      fixture.appHost.commitCharacterPortableImport(fixture.sender, {
-        ...cancelRequest,
-        requestId: 'portable-commit-after-cancel',
-        operation: 'import-commit',
-      }),
-    ).rejects.toThrow('does not match its sender and exact destination');
     vi.mocked(projectAuthoring.getCharacterSnapshot).mockResolvedValue(
       characterAuthoringSnapshot(),
     );
@@ -3169,195 +3103,172 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('delegates standalone Character authoring only for the configured library grant', async () => {
+  it('rejects retired standalone Character authoring before the owner port is called', async () => {
     const projectAuthoring = createProjectAuthoring();
-    vi.mocked(projectAuthoring.getCharacterSnapshot).mockResolvedValue(
-      characterAuthoringSnapshot(),
-    );
     const fixture = await createShellAppHost({ projectAuthoring });
-    const libraryWorkspace = {
-      workspaceId: 'library-characters',
-      workspacePath: '/libraries/characters',
-      displayName: 'Characters',
-      locator: { kind: 'variable' as const, value: '${HOME}/.neko/characters' },
-    };
-    fixture.registry.resolve.mockResolvedValue(libraryWorkspace);
-    const selected = await fixture.appHost.resolveWorkspaceTarget(
-      fixture.sender,
-      createDesktopWorkspaceAuthoringLibraryTargetRequest({
-        requestId: 'character-library-select',
+    await expect(
+      fixture.appHost.executeCharacterAuthoringRequest(fixture.sender, {
+        requestId: 'character-standalone-snapshot',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        library: 'character',
+        operation: 'snapshot-get',
+        workspaceId: 'library-characters',
+        workspaceGrantId: 'grant-character-library',
+        authority: { kind: 'standalone-library' },
+        characterProjectId: 'character-1',
       }),
-      async () => {
-        throw new Error('Configured Character library must not open a native picker.');
-      },
+    ).rejects.toThrow();
+    expect(projectAuthoring.getCharacterSnapshot).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('rejects retired standalone World authoring before the owner port is called', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    await expect(
+      fixture.appHost.executeWorldAuthoringRequest(fixture.sender, {
+        requestId: 'world-standalone-snapshot',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        operation: 'snapshot-get',
+        binding: {
+          workspaceId: 'library-worlds',
+          workspaceGrantId: 'grant-world-library',
+          authority: { kind: 'standalone-library' },
+          worldProjectId: 'world-1',
+        },
+      }),
+    ).rejects.toThrow();
+    expect(projectAuthoring.getWorldSnapshot).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('binds World package import bytes to one exact sender and destination', async () => {
+    const worldPortable = createWorldPortableRuntime();
+    const importGlobal = vi.mocked(worldPortable.importGlobal);
+    importGlobal.mockResolvedValue({
+      kind: 'import-completed',
+      worldProjectId: 'world-imported',
+      worldVersionId: 'version-imported',
+    });
+    const fixture = await createShellAppHost({ worldPortable });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'world-portable-project-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
     );
-    if (selected.status !== 'authorized') {
-      throw new Error('Standalone Character authoring requires an authorized library grant.');
+    const scene = activeScene(opened.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('World portable fixture requires an exact Workspace Scene.');
     }
-    const binding = {
-      workspaceId: selected.workspaceId,
-      workspaceGrantId: selected.grant.workspaceGrantId,
-      authority: { kind: 'standalone-library' as const },
-      characterProjectId: 'character-1',
+    const archiveBytes = new Uint8Array([1, 2, 3]);
+    const importRequest = createWorldPortableHostRequest({
+      requestId: 'world-portable-import',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      operation: 'import',
+      target: { kind: 'new', globalWorldId: 'world-imported' },
+    });
+    await expect(
+      fixture.appHost.importWorldPortablePackage(fixture.sender, importRequest, archiveBytes),
+    ).resolves.toMatchObject({
+      requestId: 'world-portable-import',
+      status: 'completed',
+      result: { kind: 'import-completed', worldProjectId: 'world-imported' },
+    });
+    expect(importGlobal).toHaveBeenCalledWith({
+      archiveBytes,
+      target: { kind: 'new', globalWorldId: 'world-imported' },
+    });
+    await fixture.appHost.dispose();
+  });
+
+  it('keeps World Runtime IPC sender-bound and requires its exact active Runtime Scene', async () => {
+    const binding: WorldRuntimeBinding = {
+      worldProjectId: 'world-1',
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run-1',
+      worldSaveId: 'world-save-1',
+      branchId: 'branch-main',
+      participantId: 'participant-1',
+      actorId: 'actor-user',
     };
-
-    await expect(
-      fixture.appHost.executeCharacterAuthoringRequest(
-        fixture.sender,
-        createCharacterAuthoringSnapshotRequest({
-          requestId: 'character-standalone-snapshot',
-          rendererSessionId: fixture.projection.rendererSessionId,
-          windowId: fixture.windowId,
-          binding,
-        }),
-      ),
-    ).resolves.toMatchObject({
-      ...binding,
-      snapshot: { project: { characterProjectId: 'character-1' } },
+    const launch = vi.fn();
+    const read = vi.fn();
+    const fixture = await createShellAppHost({
+      worldRuntime: { launch, read, submitAction: vi.fn() },
     });
-    expect(projectAuthoring.getCharacterSnapshot).toHaveBeenCalledWith({
-      workspace: libraryWorkspace,
-      authority: { kind: 'standalone-library' },
-      characterProjectId: 'character-1',
-    });
-    vi.mocked(projectAuthoring.getCharacterPortableExportScope).mockResolvedValue({
-      characterProjectId: 'character-1',
-      displayName: 'Lin',
-      characterVersionIds: [],
-      branchHeadCharacterVersionIds: [],
-      unlinkedCharacterVersionIds: [],
-      characterStorylines: [],
-      authoringTestSnapshotIds: [],
-      representations: [],
-    });
-    await expect(
-      fixture.appHost.getCharacterPortableExportScope(
-        fixture.sender,
-        createCharacterPortableHostRequest(
-          {
-            requestId: 'character-standalone-export-scope',
-            rendererSessionId: fixture.projection.rendererSessionId,
-            windowId: fixture.windowId,
-          },
-          {
-            workspaceId: binding.workspaceId,
-            workspaceGrantId: binding.workspaceGrantId,
-            authority: binding.authority,
-          },
-          { kind: 'export-scope', characterProjectId: binding.characterProjectId },
-        ),
-      ),
-    ).resolves.toMatchObject({
-      requestId: 'character-standalone-export-scope',
-      status: 'scope-ready',
-      scope: { characterProjectId: 'character-1' },
-    });
-    expect(projectAuthoring.getCharacterPortableExportScope).toHaveBeenCalledWith({
-      workspace: libraryWorkspace,
-      authority: { kind: 'standalone-library' },
-      characterProjectId: 'character-1',
-    });
-    vi.mocked(projectAuthoring.exportCharacterPackage).mockResolvedValue(new Uint8Array([9, 8, 7]));
-    await expect(
-      fixture.appHost.createCharacterPortableExport(
-        fixture.sender,
-        createCharacterPortableHostRequest(
-          {
-            requestId: 'character-standalone-export',
-            rendererSessionId: fixture.projection.rendererSessionId,
-            windowId: fixture.windowId,
-          },
-          {
-            workspaceId: binding.workspaceId,
-            workspaceGrantId: binding.workspaceGrantId,
-            authority: binding.authority,
-          },
-          {
-            kind: 'export',
-            characterProjectId: binding.characterProjectId,
-            selection: {
-              characterStorylineIds: [],
-              authoringTestSnapshotIds: [],
-              embeddedRepresentationIds: [],
-            },
-          },
-        ),
-      ),
-    ).resolves.toMatchObject({
-      result: { requestId: 'character-standalone-export', status: 'exported' },
-      archiveBytes: new Uint8Array([9, 8, 7]),
-    });
-    expect(projectAuthoring.exportCharacterPackage).toHaveBeenCalledWith({
-      workspace: libraryWorkspace,
-      authority: { kind: 'standalone-library' },
-      characterProjectId: 'character-1',
-      selection: {
-        characterStorylineIds: [],
-        authoringTestSnapshotIds: [],
-        embeddedRepresentationIds: [],
-      },
+    const runtimeProjection = worldRuntimeProjection(binding);
+    launch.mockResolvedValue(runtimeProjection);
+    read.mockResolvedValue(runtimeProjection);
+    const launchRequest = createWorldRuntimeLaunchRequest({
+      requestId: 'world-runtime-launch',
+      rendererSessionId: fixture.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      launch: { ...binding, saveLabel: 'First run' },
     });
 
-    const beforeStudio = await fixture.appHost.shell.getProjection(fixture.windowId);
+    await expect(
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, launchRequest),
+    ).resolves.toEqual({ requestId: launchRequest.requestId, projection: runtimeProjection });
+    const snapshotRequest = createWorldRuntimeSnapshotRequest({
+      requestId: 'world-runtime-snapshot',
+      rendererSessionId: fixture.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding,
+    });
+    await expect(
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, snapshotRequest),
+    ).rejects.toThrow('exact active Runtime Scene');
+    expect(read).not.toHaveBeenCalled();
+
+    const current = await fixture.appHost.shell.getProjection(fixture.windowId);
     await expect(
       fixture.appHost.transitionScene(
         fixture.sender,
         createDesktopSceneTransitionRequest({
-          requestId: 'character-standalone-open-studio',
-          rendererSessionId: beforeStudio.rendererSessionId,
+          requestId: 'world-runtime-scene',
+          rendererSessionId: current.rendererSessionId,
           windowId: fixture.windowId,
-          sceneId: activeScene(beforeStudio).sceneId,
-          intent: {
-            kind: 'open-character-authoring',
-            workspaceGrantId: selected.grant.workspaceGrantId,
-            authority: { kind: 'standalone-library', library: 'character' },
-            characterProjectId: 'character-1',
-          },
+          sceneId: activeScene(current).sceneId,
+          intent: { kind: 'open-world-runtime', binding },
         }),
       ),
     ).resolves.toMatchObject({
       status: 'transitioned',
-      scene: {
-        slots: {
-          main: {
-            kind: 'character-authoring',
-            authority: { kind: 'standalone-library', library: 'character' },
-            characterProjectId: 'character-1',
-          },
-        },
-      },
+      scene: { context: { kind: 'world-runtime', binding } },
     });
-    expect(projectAuthoring.getCharacterSnapshot).toHaveBeenCalledTimes(2);
-    expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(libraryWorkspace);
-
-    fixture.registry.resolve.mockResolvedValue({
-      ...libraryWorkspace,
-      workspaceId: 'workspace-impostor',
-      workspacePath: '/projects/impostor',
-    });
-    const impostorGrant = fixture.appHost.workspaceGrants.authorize({
-      windowId: fixture.windowId,
-      label: 'Impostor',
-      hostResource: '/projects/impostor',
-    });
+    read.mockClear();
     await expect(
-      fixture.appHost.executeCharacterAuthoringRequest(fixture.sender, {
-        ...createCharacterAuthoringSnapshotRequest({
-          requestId: 'character-standalone-impostor',
-          rendererSessionId: fixture.projection.rendererSessionId,
-          windowId: fixture.windowId,
-          binding: {
-            ...binding,
-            workspaceId: 'workspace-impostor',
-            workspaceGrantId: impostorGrant.workspaceGrantId,
-          },
-        }),
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, snapshotRequest),
+    ).resolves.toEqual({ requestId: snapshotRequest.requestId, projection: runtimeProjection });
+    expect(read).toHaveBeenCalledWith(binding);
+
+    const runtimeScene = await fixture.appHost.shell.getProjection(fixture.windowId);
+    await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'leave-world-runtime',
+        rendererSessionId: runtimeScene.rendererSessionId,
+        windowId: fixture.windowId,
+        sceneId: activeScene(runtimeScene).sceneId,
+        intent: { kind: 'open-agent-entry' },
       }),
-    ).rejects.toThrow('requires the configured Character library');
-    expect(projectAuthoring.getCharacterSnapshot).toHaveBeenCalledTimes(2);
+    );
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(1);
+    await expect(
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, {
+        ...snapshotRequest,
+        requestId: 'world-runtime-after-exit',
+      }),
+    ).rejects.toThrow('exact active Runtime Scene');
+    expect(read).toHaveBeenCalledTimes(1);
     await fixture.appHost.dispose();
   });
 
@@ -4766,7 +4677,8 @@ async function createShellAppHost(options?: {
   readonly textEditor?: DesktopAppHostOptions['textEditor'];
   readonly projectAuthoring?: DesktopAppHostOptions['projectAuthoring'];
   readonly characterFoundationCommands?: DesktopAppHostOptions['characterFoundationCommands'];
-  readonly worldFoundationCommands?: DesktopAppHostOptions['worldFoundationCommands'];
+  readonly worldPortable?: DesktopAppHostOptions['worldPortable'];
+  readonly worldRuntime?: DesktopAppHostOptions['worldRuntime'];
   readonly characterInteractions?: DesktopAppHostOptions['characterInteractions'];
   readonly characterRoomConversations?: DesktopAppHostOptions['characterRoomConversations'];
   readonly characterRoomWorkbench?: DesktopAppHostOptions['characterRoomWorkbench'];
@@ -4882,7 +4794,6 @@ async function createShellAppHost(options?: {
     agentLaunch,
     agentLaunchSubmission,
     workspaceGrants: fixture.workspaceGrants,
-    authoringLibraryRoots: createAuthoringLibraryRoots(),
     conversationLifecycle,
     assistantResources: options?.assistantResources,
     assetCenter: options?.assetCenter,
@@ -4902,8 +4813,9 @@ async function createShellAppHost(options?: {
     characterFoundation: createCharacterFoundationService(),
     characterFoundationCommands:
       options?.characterFoundationCommands ?? createCharacterFoundationCommands(),
-    worldFoundation: createWorldFoundationService(),
-    worldFoundationCommands: options?.worldFoundationCommands ?? createWorldFoundationCommands(),
+    worldManagement: createWorldManagementService(),
+    worldPortable: options?.worldPortable ?? createWorldPortableRuntime(),
+    worldRuntime: options?.worldRuntime ?? createWorldRuntimeWorkbench(),
     characterInteractions: options?.characterInteractions ?? createCharacterInteractions(),
     characterRoomConversations:
       options?.characterRoomConversations ?? createCharacterRoomConversations(),
@@ -4937,10 +4849,16 @@ async function createShellAppHost(options?: {
 
 function createCharacterFoundationService(): CharacterFoundationService {
   return new CharacterFoundationService({
-    characterCatalog: {
+    globalCatalog: {
       readCatalog: async () => ({
-        projects: [],
+        characters: [],
         versions: [],
+        links: [],
+        diagnostics: [],
+      }),
+    },
+    runtime: {
+      readRuntimeCatalog: async () => ({
         relationships: [],
         characterRuns: [],
         dialogueRuns: [],
@@ -4960,13 +4878,52 @@ function createCharacterFoundationService(): CharacterFoundationService {
 function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
   return {
     getNavigation: vi.fn(async () => []),
-    getContent: vi.fn(async ({ contentProjectId }) => ({
-      contentProjectId,
+    getContent: vi.fn(async ({ projectId }) => ({
+      projectId,
       characters: [],
       worlds: [],
       elements: [],
       candidates: [],
       diagnostics: [],
+    })),
+    getCreativeWorkspace: vi.fn(async ({ projectId }) => ({
+      composition: {
+        projectId,
+        content: [],
+        characters: [],
+        worlds: [],
+        globalCharacters: [],
+        globalWorlds: [],
+        availableGlobalCharacters: [],
+        availableGlobalWorlds: [],
+        diagnostics: [],
+      },
+    })),
+    mutateCreativeWorkspaceReference: vi.fn(async ({ projectId }) => ({
+      composition: {
+        projectId,
+        content: [],
+        characters: [],
+        worlds: [],
+        globalCharacters: [],
+        globalWorlds: [],
+        availableGlobalCharacters: [],
+        availableGlobalWorlds: [],
+        diagnostics: [],
+      },
+    })),
+    mutateCreativeWorkspaceObject: vi.fn(async ({ projectId }) => ({
+      composition: {
+        projectId,
+        content: [],
+        characters: [],
+        worlds: [],
+        globalCharacters: [],
+        globalWorlds: [],
+        availableGlobalCharacters: [],
+        availableGlobalWorlds: [],
+        diagnostics: [],
+      },
     })),
     createLocalTarget: vi.fn(async ({ create }) =>
       create.kind === 'character-project'
@@ -4982,10 +4939,6 @@ function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
             target: { kind: 'world-project' as const, worldProjectId: create.worldProjectId },
           },
     ),
-    retryLocalCharacter: vi.fn(async ({ receipt }) => ({
-      status: 'created' as const,
-      target: receipt.target,
-    })),
     getCharacterSnapshot: vi.fn(async () => {
       throw new Error('Character authoring snapshot is not expected by this test.');
     }),
@@ -4996,11 +4949,8 @@ function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
       throw new Error('Character package export scope is not expected by this test.');
     }),
     exportCharacterPackage: vi.fn(async () => new Uint8Array()),
-    previewCharacterPackage: vi.fn(async () => {
-      throw new Error('Character package preview is not expected by this test.');
-    }),
-    commitCharacterPackage: vi.fn(async () => {
-      throw new Error('Character package commit is not expected by this test.');
+    importCharacterGlobalPackage: vi.fn(async () => {
+      throw new Error('Character package import is not expected by this test.');
     }),
     getWorldSnapshot: vi.fn(async () => {
       throw new Error('World authoring snapshot is not expected by this test.');
@@ -5011,27 +4961,64 @@ function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
   };
 }
 
-function createAuthoringLibraryRoots(): DesktopAppHostOptions['authoringLibraryRoots'] {
-  return {
-    character: { label: 'Characters', hostResource: '/libraries/characters' },
-    world: { label: 'Worlds', hostResource: '/libraries/worlds' },
-  };
-}
-
 function createCharacterFoundationCommands() {
   return { execute: vi.fn(async () => undefined) };
 }
 
-function createWorldFoundationService(): WorldFoundationService {
-  return new WorldFoundationService({
-    catalog: {
-      readCatalog: async () => ({ projects: [], versions: [], runtimes: [], diagnostics: [] }),
+function createWorldManagementService(): WorldManagementService {
+  return new WorldManagementService({
+    globalCatalog: {
+      readCatalog: async () => ({ worlds: [], versions: [], links: [], diagnostics: [] }),
     },
+    runtime: { readRuntimeCatalog: async () => ({ runtimes: [], diagnostics: [] }) },
   });
 }
 
-function createWorldFoundationCommands() {
-  return { execute: vi.fn(async () => undefined) };
+function createWorldRuntimeWorkbench(): DesktopAppHostOptions['worldRuntime'] {
+  return {
+    launch: vi.fn(async () => {
+      throw new Error('World Runtime launch is not expected by this test.');
+    }),
+    read: vi.fn(async () => {
+      throw new Error('World Runtime read is not expected by this test.');
+    }),
+    submitAction: vi.fn(async () => {
+      throw new Error('World Runtime action is not expected by this test.');
+    }),
+  };
+}
+
+function createWorldPortableRuntime(): DesktopAppHostOptions['worldPortable'] {
+  return {
+    exportPackage: vi.fn(async () => {
+      throw new Error('World portable export is not expected by this test.');
+    }),
+    importGlobal: vi.fn(async () => {
+      throw new Error('World portable import is not expected by this test.');
+    }),
+  };
+}
+
+function worldRuntimeProjection(binding: WorldRuntimeBinding): WorldRuntimeProjection {
+  return {
+    binding,
+    status: 'ready',
+    background: 'Archive City',
+    locations: [],
+    facts: [],
+    availableActions: ['world.foundation.fact.set'],
+    participants: [
+      {
+        participantId: binding.participantId,
+        ...(binding.actorId === undefined ? {} : { actorId: binding.actorId }),
+      },
+    ],
+    worldStateRevision: 0,
+    timepoint: 0,
+    branches: [{ branchId: binding.branchId, active: true, eventCount: 0 }],
+    timeline: [],
+    diagnostics: [],
+  };
 }
 
 function createCharacterInteractions() {
@@ -5603,7 +5590,8 @@ function activeScene(projection: DesktopShellProjection) {
 }
 
 function currentAgentSurfaceId(projection: DesktopShellProjection): string {
-  const agentSurfaceId = activeWorkbench(projection).scene.slots.interaction?.agentSurfaceId;
+  const interaction = activeWorkbench(projection).scene.slots.interaction;
+  const agentSurfaceId = interaction?.kind === 'agent' ? interaction.agentSurfaceId : undefined;
   if (!agentSurfaceId) throw new Error('Expected an exact active Agent Surface.');
   return agentSurfaceId;
 }

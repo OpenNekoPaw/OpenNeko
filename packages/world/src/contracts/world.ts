@@ -16,6 +16,10 @@ import {
 
 export type { WorldJsonValue } from './codec';
 
+export function parseWorldJsonValue(value: unknown): WorldJsonValue {
+  return requireJsonValue(value, 'World JSON value');
+}
+
 export const WORLD_REVIEW_STATUSES = ['draft', 'ready', 'blocked'] as const;
 export const WORLD_VISIBILITY_KINDS = ['public', 'actors', 'hidden'] as const;
 export const WORLD_FACT_MUTATION_KINDS = ['set', 'delete'] as const;
@@ -623,7 +627,7 @@ export function parseWorldDefinition(value: unknown): WorldDefinition {
   };
 }
 
-function parseWorldSourceRef(value: unknown): WorldSourceRef {
+export function parseWorldSourceRef(value: unknown): WorldSourceRef {
   const record = requireExactRecord(
     value,
     ['sourceRefId', 'sourceRef', 'excerpt', 'reviewedAt'],

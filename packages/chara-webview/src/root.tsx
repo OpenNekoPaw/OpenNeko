@@ -7,22 +7,11 @@ import type {
   OpenNekoDesktopCharacterAuthoringBridge,
   OpenNekoDesktopCharacterBridge,
 } from '@neko/chara/contracts';
-import {
-  BotIcon,
-  ChevronDownIcon,
-  EmptyState,
-  PlusIcon,
-  RefreshIcon,
-  SearchIcon,
-  UploadIcon,
-  UserIcon,
-  WarningIcon,
-} from '@neko/ui';
+import { EmptyState, RefreshIcon, SearchIcon, UserIcon, WarningIcon } from '@neko/ui';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CharacterAuthoringEditor } from './character-panel';
 import {
-  CharacterCreationEntrySurface,
   CharacterManagementDetailSurface,
   type CharacterManagementDetailActions,
 } from './character-management-detail';
@@ -40,7 +29,7 @@ export {
 export { CharacterStorylineTimelineSurface } from './storyline-timeline';
 export {
   CharacterPortableExportScopeSurface,
-  CharacterPortableImportPreviewSurface,
+  CharacterPortableImportSurface,
   type CharacterPortableExportRepresentation,
   type CharacterPortableExportScopePresentation,
   type CharacterPortableExportSelection,
@@ -64,8 +53,10 @@ export interface CharacterManagementRuntime {
   readonly execute: (command: CharacterFoundationCommand) => Promise<CharacterFoundationSnapshot>;
 }
 
-export type CharacterDetailSelection =
-  { readonly kind: 'create' } | { readonly kind: 'project'; readonly characterProjectId: string };
+export type CharacterDetailSelection = {
+  readonly kind: 'global';
+  readonly globalCharacterId: string;
+};
 
 export function useCharacterManagementRuntime(input: {
   readonly active: boolean;
@@ -121,36 +112,31 @@ export function useCharacterManagementRuntime(input: {
 export function CharacterCatalogSurface({
   locale,
   onImport,
-  onManualCreate,
-  onQuickGenerate,
   onSelect,
   runtime,
-  selectedProjectId,
+  selectedGlobalCharacterId,
 }: {
   readonly locale: SupportedLocale;
   readonly onImport?: () => void;
-  readonly onManualCreate: () => void;
-  readonly onQuickGenerate: () => void;
-  readonly onSelect: (characterProjectId: string) => void;
+  readonly onSelect: (globalCharacterId: string) => void;
   readonly runtime: CharacterManagementRuntime;
-  readonly selectedProjectId?: string;
+  readonly selectedGlobalCharacterId?: string;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'updated' | 'name'>('updated');
-  const creationMenuRef = useRef<HTMLDetailsElement>(null);
   const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
-  const projects = useMemo(() => {
+  const characters = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return [...(snapshot?.character.projects ?? [])]
-      .filter((project) => project.displayName.toLocaleLowerCase().includes(normalized))
+    return [...(snapshot?.character.globalCharacters ?? [])]
+      .filter((character) => character.displayName.toLocaleLowerCase().includes(normalized))
       .sort((left, right) =>
         sort === 'name'
           ? left.displayName.localeCompare(right.displayName) ||
-            left.characterProjectId.localeCompare(right.characterProjectId)
+            left.globalCharacterId.localeCompare(right.globalCharacterId)
           : right.updatedAt.localeCompare(left.updatedAt) ||
-            left.characterProjectId.localeCompare(right.characterProjectId),
+            left.globalCharacterId.localeCompare(right.globalCharacterId),
       );
-  }, [query, snapshot?.character.projects, sort]);
+  }, [query, snapshot?.character.globalCharacters, sort]);
 
   return (
     <section
@@ -169,49 +155,11 @@ export function CharacterCatalogSurface({
             )}
           </p>
         </div>
-        <div className="character-management__header-actions">
-          <details className="character-management__creation-menu" ref={creationMenuRef}>
-            <summary>
-              <PlusIcon size={15} />
-              <span>{foundationLabel(locale, '创建角色', 'Create character')}</span>
-              <ChevronDownIcon size={13} />
-            </summary>
-            <div>
-              <button
-                type="button"
-                onClick={() => {
-                  creationMenuRef.current?.removeAttribute('open');
-                  onQuickGenerate();
-                }}
-              >
-                <BotIcon size={15} />
-                <span>{foundationLabel(locale, 'AI 生成', 'Generate with AI')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  creationMenuRef.current?.removeAttribute('open');
-                  onManualCreate();
-                }}
-              >
-                <PlusIcon size={15} />
-                <span>{foundationLabel(locale, '手动创建', 'Create manually')}</span>
-              </button>
-              {onImport ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    creationMenuRef.current?.removeAttribute('open');
-                    onImport();
-                  }}
-                >
-                  <UploadIcon size={15} />
-                  <span>{foundationLabel(locale, '导入角色包', 'Import package')}</span>
-                </button>
-              ) : null}
-            </div>
-          </details>
-        </div>
+        {onImport ? (
+          <button type="button" onClick={onImport}>
+            {foundationLabel(locale, '导入角色包', 'Import package')}
+          </button>
+        ) : null}
       </header>
       <div className="character-management__toolbar">
         <label className="character-management__search">
@@ -253,13 +201,15 @@ export function CharacterCatalogSurface({
           </button>
         </div>
       ) : (
-        <div className={`character-management__catalog${projects.length === 0 ? ' is-empty' : ''}`}>
+        <div
+          className={`character-management__catalog${characters.length === 0 ? ' is-empty' : ''}`}
+        >
           {snapshot?.diagnostics.map((item) => (
             <FoundationDiagnostic key={`${item.owner}:${item.recordKind}:${item.recordId}`}>
               {`${item.recordKind} / ${item.recordId}: ${item.message}`}
             </FoundationDiagnostic>
           ))}
-          {projects.length === 0 ? (
+          {characters.length === 0 ? (
             <EmptyState
               fill
               icon={<UserIcon size={24} />}
@@ -268,43 +218,37 @@ export function CharacterCatalogSurface({
                   ? foundationLabel(locale, '没有匹配的角色', 'No matching characters')
                   : foundationLabel(
                       locale,
-                      '尚无角色，创建第一个角色。',
-                      'No characters yet. Create the first one.',
+                      '尚无角色，请导入第一个角色包。',
+                      'No characters yet. Import the first package.',
                     )
               }
             />
           ) : null}
-          {projects.map((project) => {
-            const publicationCount =
-              snapshot?.character.versions.filter(
-                (publication) => publication.characterProjectId === project.characterProjectId,
-              ).length ?? 0;
+          {characters.map((character) => {
+            const publicationCount = character.characterVersionIds.length;
             const diagnostic = snapshot?.diagnostics.find(
-              (item) => item.owner === 'character' && item.recordId === project.characterProjectId,
+              (item) => item.owner === 'character' && item.recordId === character.globalCharacterId,
             );
             return (
               <button
-                aria-pressed={selectedProjectId === project.characterProjectId}
+                aria-pressed={selectedGlobalCharacterId === character.globalCharacterId}
                 className="character-management__catalog-item"
-                key={project.characterProjectId}
+                key={character.globalCharacterId}
                 type="button"
-                onClick={() => onSelect(project.characterProjectId)}
+                onClick={() => onSelect(character.globalCharacterId)}
               >
                 <span className="character-management__avatar-placeholder">
                   <UserIcon size={20} />
                 </span>
                 <span className="character-management__catalog-copy">
-                  <strong>{project.displayName}</strong>
+                  <strong>{character.displayName}</strong>
                   <small>
-                    {project.draft.summary || foundationLabel(locale, '暂无概述', 'No summary')}
+                    {snapshot?.character.versions.find(
+                      (version) =>
+                        version.characterVersionId === character.currentCharacterVersionId,
+                    )?.definition.summary || foundationLabel(locale, '暂无概述', 'No summary')}
                   </small>
                   <span>
-                    {foundationLabel(
-                      locale,
-                      reviewLabelZh(project.reviewStatus),
-                      project.reviewStatus,
-                    )}
-                    {' · '}
                     {foundationLabel(
                       locale,
                       `${publicationCount} 个版本`,
@@ -348,18 +292,16 @@ export function CharacterDetailSurface({
             ? runtime.loadState.message
             : foundationLabel(locale, '正在读取角色详情...', 'Loading character details...')}
         </div>
-      ) : selection?.kind === 'create' ? (
-        <CharacterCreationEntrySurface actions={detailActions} locale={locale} />
-      ) : selection?.kind === 'project' ? (
+      ) : selection?.kind === 'global' ? (
         (() => {
-          const project = runtime.loadState.snapshot.character.projects.find(
-            (candidate) => candidate.characterProjectId === selection.characterProjectId,
+          const character = runtime.loadState.snapshot.character.globalCharacters.find(
+            (candidate) => candidate.globalCharacterId === selection.globalCharacterId,
           );
-          return project ? (
+          return character ? (
             <CharacterManagementDetailSurface
               actions={detailActions}
               locale={locale}
-              project={project}
+              character={character}
               snapshot={runtime.loadState.snapshot}
             />
           ) : (
@@ -509,15 +451,4 @@ export function CharacterAuthoringSurface({
       />
     </section>
   );
-}
-
-function reviewLabelZh(status: 'draft' | 'ready' | 'blocked'): string {
-  switch (status) {
-    case 'draft':
-      return '草稿';
-    case 'ready':
-      return '可以定稿';
-    case 'blocked':
-      return '阻塞';
-  }
 }

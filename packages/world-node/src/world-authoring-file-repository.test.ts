@@ -17,11 +17,9 @@ afterEach(async () => {
 });
 
 describe('World authoring file repository', () => {
-  it.each([
-    { kind: 'standalone-library' as const },
-    { kind: 'content-project' as const, contentProjectId: 'content-project-1' },
-  ])('uses the same service and file shape for $kind placement', async (scope) => {
+  it('uses the canonical service and file shape for Project placement', async () => {
     const root = await workspace();
+    const scope = { kind: 'project' as const, projectId: 'project-1' };
     const repository = createWorldAuthoringFileRepository({ workspaceRoot: root, scope });
     const service = new WorldAuthoringService({ repository, now: () => NOW });
     await service.createProject({
@@ -55,7 +53,7 @@ describe('World authoring file repository', () => {
     const root = await workspace();
     const repository = createWorldAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'content-project', contentProjectId: 'content-project-1' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     const service = new WorldAuthoringService({ repository, now: () => NOW });
     await service.createProject({
@@ -75,12 +73,12 @@ describe('World authoring file repository', () => {
     await expect(readFile(invalid, 'utf8')).resolves.toContain('world-invalid');
   });
 
-  it('does not project a Project-local World into the standalone library root', async () => {
+  it('does not project a Project-local World into another Project root', async () => {
     const projectRoot = await workspace();
     const libraryRoot = await workspace();
     const projectRepository = createWorldAuthoringFileRepository({
       workspaceRoot: projectRoot,
-      scope: { kind: 'content-project', contentProjectId: 'content-project-1' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await new WorldAuthoringService({
       repository: projectRepository,
@@ -90,11 +88,13 @@ describe('World authoring file repository', () => {
       title: 'Local',
       draft: definition(),
     });
-    const libraryRepository = createWorldAuthoringFileRepository({
+    const otherProjectRepository = createWorldAuthoringFileRepository({
       workspaceRoot: libraryRoot,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-2' },
     });
-    await expect(libraryRepository.readAuthoringCatalog()).resolves.toMatchObject({ projects: [] });
+    await expect(otherProjectRepository.readAuthoringCatalog()).resolves.toMatchObject({
+      projects: [],
+    });
     await expect(projectRepository.readAuthoringCatalog()).resolves.toMatchObject({
       projects: [expect.objectContaining({ worldProjectId: 'project-local-world' })],
     });
@@ -104,12 +104,12 @@ describe('World authoring file repository', () => {
     expect(() =>
       createWorldAuthoringFileRepository({
         workspaceRoot: 'relative',
-        scope: { kind: 'standalone-library' },
+        scope: { kind: 'project', projectId: 'project-1' },
       }),
     ).toThrow('absolute Host-authorized path');
     const repository = createWorldAuthoringFileRepository({
       workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     expect(() => repository.readProject('../escape')).toThrow(
       expect.objectContaining({ code: 'world-record-invalid' }),

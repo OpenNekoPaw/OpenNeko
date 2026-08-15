@@ -32,12 +32,12 @@ describe('WorldAuthoringHostService', () => {
 
   it('rejects a catalog from another Content Project without reading an active target', async () => {
     const service = createService({
-      scope: { kind: 'content-project', contentProjectId: 'content-other' },
+      scope: { kind: 'project', projectId: 'project-other' },
       projects: [worldProject('world-1')],
     });
 
     await expect(service.getSnapshot('world-1')).rejects.toThrow(
-      "does not match Content Project 'content-1'",
+      'does not match its exact authority',
     );
   });
 
@@ -73,10 +73,10 @@ function createService(
     ...authoringMethods,
   } as unknown as WorldAuthoringService;
   return new WorldAuthoringHostService({
-    contentProjectId: 'content-1',
+    scope: { kind: 'project', projectId: 'project-1' },
     catalog: {
       readAuthoringCatalog: async () => ({
-        scope: { kind: 'content-project', contentProjectId: 'content-1' },
+        scope: { kind: 'project', projectId: 'project-1' },
         projects: [],
         versions: [],
         diagnostics: [],

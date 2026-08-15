@@ -19,11 +19,11 @@
 
 ## 3. Project Creative Workspace
 
-- [ ] 3.1 Delivery batch B: update `@neko/project`, Project Workspace, owner workspace ports, Project Node storage and minimal Desktop wiring to list local Content/Character/World objects plus exact read-only global references; atomically create Project-bound local objects, add/update/remove exact references, copy a global version to a fresh local object and synchronize local Character/World objects. Preserve the completed Assistant-bound Creator path and do not modify Agent Entry, the primary sidebar or unrelated management layouts.
+- [x] 3.1 Delivery batch B: update `@neko/project`, Project Workspace, owner workspace ports, Project Node storage and minimal Desktop wiring to list local Content/Character/World objects plus exact read-only global references; atomically create Project-bound local objects, add/update/remove exact references, copy a global version to a fresh local object and synchronize local Character/World objects. Preserve the completed Assistant-bound Creator path and do not modify Agent Entry, the primary sidebar or unrelated management layouts.
 
 ## 4. Portable ZIP
 
-- [ ] 4.1 Delivery batch C: atomically replace Character/World install/import/adapt package producers, consumers, handlers and fixtures with one global import and one selected-version export per owner; enforce Host sender/path grants, bounded archive/inventory/integrity validation, temporary staging and atomic commit, and prove failure cannot mutate sibling global objects or Projects.
+- [x] 4.1 Delivery batch C: atomically replace Character/World install/import/adapt package producers, consumers, handlers and fixtures with one global import and one selected-version export per owner; enforce Host sender/path grants, bounded archive/inventory/integrity validation, temporary staging and atomic commit, and prove failure cannot mutate sibling global objects or Projects.
 
 ## 5. Entry and runtime
 

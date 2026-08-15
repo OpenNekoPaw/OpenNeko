@@ -13,8 +13,7 @@ export type CharacterPortableExportRepresentation =
 export type CharacterPortableExportScopePresentation = CharacterPortableExportScope;
 
 export interface CharacterPortableExportSelection {
-  readonly characterStorylineIds: readonly string[];
-  readonly authoringTestSnapshotIds: readonly string[];
+  readonly characterVersionId: string;
   readonly embeddedRepresentationIds: readonly string[];
 }
 
@@ -31,10 +30,7 @@ export function CharacterPortableExportScopeSurface({
   readonly onExport: (selection: CharacterPortableExportSelection) => void;
   readonly scope: CharacterPortableExportScopePresentation;
 }): JSX.Element {
-  const [storylineIds, setStorylineIds] = useState<readonly string[]>(
-    scope.characterStorylines.map((storyline) => storyline.characterStorylineId),
-  );
-  const [authoringTestIds, setAuthoringTestIds] = useState<readonly string[]>([]);
+  const [characterVersionId, setCharacterVersionId] = useState(scope.characterVersionIds[0] ?? '');
   const [embeddedRepresentationIds, setEmbeddedRepresentationIds] = useState<readonly string[]>([]);
   const embeddedBytes = useMemo(
     () =>
@@ -55,8 +51,8 @@ export function CharacterPortableExportScopeSurface({
       <PortableHeading
         description={foundationLabel(
           locale,
-          '创建一次性的 .neko-character 快照；不会发布、共享或同步角色。',
-          'Create a one-time .neko-character snapshot. This does not publish, share, or synchronize the character.',
+          '导出一个精确的全局角色版本及必要素材；不会携带工作区历史。',
+          'Export one exact global Character version and required assets; workspace history is excluded.',
         )}
         eyebrow={foundationLabel(locale, '便携快照', 'Portable snapshot')}
         title={scope.displayName}
@@ -67,42 +63,30 @@ export function CharacterPortableExportScopeSurface({
             foundationLabel(locale, '可用版本', 'Usable versions'),
             scope.characterVersionIds.length,
           ],
-          [
-            foundationLabel(locale, '分支头', 'Branch heads'),
-            scope.branchHeadCharacterVersionIds.length,
-          ],
-          [
-            foundationLabel(locale, '未连接版本', 'Unlinked versions'),
-            scope.unlinkedCharacterVersionIds.length,
-          ],
           [foundationLabel(locale, '嵌入大小', 'Embedded size'), formatBytes(embeddedBytes)],
         ]}
       />
 
       <PortableSection
-        title={foundationLabel(locale, '故事线范围', 'Storyline scope')}
+        title={foundationLabel(locale, '角色版本', 'Character version')}
         description={foundationLabel(
           locale,
-          '角色版本和分支始终完整保留；可选择是否包含每条故事线。',
-          'Character versions and branches are always preserved; choose which storylines to include.',
+          '每个 ZIP 只包含一个精确的不可变角色版本。',
+          'Each ZIP contains one exact immutable Character version.',
         )}
       >
-        {scope.characterStorylines.length === 0 ? (
-          <p>{foundationLabel(locale, '没有可包含的故事线。', 'No storylines are available.')}</p>
-        ) : (
-          <PortableChecklist
-            items={scope.characterStorylines.map((storyline) => ({
-              id: storyline.characterStorylineId,
-              label: storyline.displayName,
-              meta: storyline.characterStorylineId,
-              checked: storylineIds.includes(storyline.characterStorylineId),
-              disabled,
-            }))}
-            onChange={(identity, checked) =>
-              setStorylineIds(updateSelection(storylineIds, identity, checked))
-            }
-          />
-        )}
+        <select
+          aria-label={foundationLabel(locale, '角色版本', 'Character version')}
+          disabled={disabled}
+          value={characterVersionId}
+          onChange={(event) => setCharacterVersionId(event.currentTarget.value)}
+        >
+          {scope.characterVersionIds.map((identity) => (
+            <option key={identity} value={identity}>
+              {identity}
+            </option>
+          ))}
+        </select>
       </PortableSection>
 
       <PortableSection
@@ -141,31 +125,6 @@ export function CharacterPortableExportScopeSurface({
         )}
       </PortableSection>
 
-      <PortableSection
-        title={foundationLabel(locale, '创作测试', 'Authoring tests')}
-        description={foundationLabel(
-          locale,
-          '测试快照默认不包含；按需显式加入。',
-          'Authoring test snapshots are excluded by default; include them explicitly when needed.',
-        )}
-      >
-        {scope.authoringTestSnapshotIds.length === 0 ? (
-          <p>{foundationLabel(locale, '没有创作测试快照。', 'No authoring test snapshots.')}</p>
-        ) : (
-          <PortableChecklist
-            items={scope.authoringTestSnapshotIds.map((identity) => ({
-              id: identity,
-              label: identity,
-              checked: authoringTestIds.includes(identity),
-              disabled,
-            }))}
-            onChange={(identity, checked) =>
-              setAuthoringTestIds(updateSelection(authoringTestIds, identity, checked))
-            }
-          />
-        )}
-      </PortableSection>
-
       <PortableActions
         disabled={disabled}
         locale={locale}
@@ -175,19 +134,13 @@ export function CharacterPortableExportScopeSurface({
           'Choose destination and export',
         )}
         onCancel={onCancel}
-        onPrimary={() =>
-          onExport({
-            characterStorylineIds: storylineIds,
-            authoringTestSnapshotIds: authoringTestIds,
-            embeddedRepresentationIds,
-          })
-        }
+        onPrimary={() => onExport({ characterVersionId, embeddedRepresentationIds })}
       />
     </section>
   );
 }
 
-export function CharacterPortableImportPreviewSurface({
+export function CharacterPortableImportSurface({
   disabled = false,
   locale,
   onCancel,
@@ -211,15 +164,15 @@ export function CharacterPortableImportPreviewSurface({
     <section
       aria-label={foundationLabel(locale, '导入角色包预览', 'Character package import preview')}
       className="character-portable-surface"
-      data-character-portable-import-preview="true"
+      data-character-portable-import="true"
     >
       <PortableHeading
         description={foundationLabel(
           locale,
-          '验证已完成。确认后会把记录与素材安装到所选目录；不会从压缩包原地运行。',
-          'Validation is complete. Confirmation installs records and assets into the selected directory; the archive is never executed in place.',
+          '验证已完成。确认后会把这个版本导入全局角色目录；不会从压缩包原地运行。',
+          'Validation is complete. Confirmation imports this version into the global Character catalog; the archive is never executed in place.',
         )}
-        eyebrow={destinationLabel(locale, preview)}
+        eyebrow={foundationLabel(locale, '全局角色', 'Global Character')}
         title={preview.displayName}
       />
       <PortableFacts
@@ -228,11 +181,6 @@ export function CharacterPortableImportPreviewSurface({
             foundationLabel(locale, '可用版本', 'Usable versions'),
             preview.characterVersionIds.length,
           ],
-          [
-            foundationLabel(locale, '分支头', 'Branch heads'),
-            preview.branchHeadCharacterVersionIds.length,
-          ],
-          [foundationLabel(locale, '故事线', 'Storylines'), preview.characterStorylineIds.length],
           [
             foundationLabel(locale, '嵌入素材', 'Embedded assets'),
             `${embeddedRepresentationCount} · ${formatBytes(embeddedBytes)}`,
@@ -272,8 +220,8 @@ export function CharacterPortableImportPreviewSurface({
           preview.conflicts.length === 0
             ? foundationLabel(
                 locale,
-                '没有发现冲突，可以安装。',
-                'No conflicts were found. The package can be installed.',
+                '没有发现冲突，可以导入。',
+                'No conflicts were found. The package can be imported.',
               )
             : foundationLabel(
                 locale,
@@ -293,19 +241,10 @@ export function CharacterPortableImportPreviewSurface({
           </ul>
         ) : null}
       </PortableSection>
-      {preview.unlinkedCharacterVersionIds.length > 0 ? (
-        <p className="character-portable-surface__notice">
-          {foundationLabel(
-            locale,
-            `包含 ${preview.unlinkedCharacterVersionIds.length} 个未连接的旧版本；它们会原样保留。`,
-            `Includes ${preview.unlinkedCharacterVersionIds.length} unlinked historical versions; they will be preserved as-is.`,
-          )}
-        </p>
-      ) : null}
       <PortableActions
         disabled={disabled || !preview.canCommit}
         locale={locale}
-        primaryLabel={foundationLabel(locale, '确认安装', 'Confirm install')}
+        primaryLabel={foundationLabel(locale, '导入到全局目录', 'Import to global catalog')}
         onCancel={onCancel}
         onPrimary={onCommit}
       />
@@ -438,15 +377,6 @@ function updateSelection(
       ? identities
       : [...identities, identity]
     : identities.filter((candidate) => candidate !== identity);
-}
-
-function destinationLabel(
-  locale: SupportedLocale,
-  preview: CharacterPortablePackagePreview,
-): string {
-  return preview.destination.kind === 'standalone-library'
-    ? foundationLabel(locale, '独立角色库', 'Standalone library')
-    : foundationLabel(locale, '项目内角色', 'Project-local character');
 }
 
 function representationKindLabel(

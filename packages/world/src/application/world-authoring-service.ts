@@ -19,6 +19,15 @@ export interface WorldAuthoringServiceOptions {
   readonly now?: () => string;
 }
 
+export interface UpdateWorldDraftInput {
+  readonly worldProjectId: string;
+  readonly draft: WorldDefinition;
+}
+
+export interface FillFreshWorldInput extends UpdateWorldDraftInput {
+  readonly title: string;
+}
+
 export type WorldAuthoringDiagnosticCode =
   | 'world-project-not-found'
   | 'world-project-already-exists'
@@ -52,6 +61,19 @@ export class WorldAuthoringService {
     },
     signal?: AbortSignal,
   ): Promise<WorldProject> {
+    const project = await this.prepareProject(input, signal);
+    await this.options.repository.saveProject(project, signal);
+    return structuredClone(project);
+  }
+
+  async prepareProject(
+    input: {
+      readonly worldProjectId: string;
+      readonly title: string;
+      readonly draft: WorldDefinition;
+    },
+    signal?: AbortSignal,
+  ): Promise<WorldProject> {
     if (await this.options.repository.readProject(input.worldProjectId, signal)) {
       throw worldAuthoringError(
         'world-project-already-exists',
@@ -69,17 +91,35 @@ export class WorldAuthoringService {
       createdAt: timestamp,
       updatedAt: timestamp,
     });
-    await this.options.repository.saveProject(project, signal);
     return structuredClone(project);
   }
 
-  async updateDraft(
-    input: { readonly worldProjectId: string; readonly draft: WorldDefinition },
-    signal?: AbortSignal,
-  ): Promise<WorldProject> {
+  async updateDraft(input: UpdateWorldDraftInput, signal?: AbortSignal): Promise<WorldProject> {
     return this.updateProject(
       input.worldProjectId,
       (project) => ({ ...project, draft: structuredClone(input.draft), reviewStatus: 'draft' }),
+      signal,
+    );
+  }
+
+  async fillFreshDraft(input: FillFreshWorldInput, signal?: AbortSignal): Promise<WorldProject> {
+    return this.updateProject(
+      input.worldProjectId,
+      (project) => {
+        if (!isFreshWorldCreationTarget(project)) {
+          throw worldAuthoringError(
+            'world-authoring-operation-invalid',
+            `WorldProject '${project.worldProjectId}' is not a fresh world creation target.`,
+            project.worldProjectId,
+          );
+        }
+        return {
+          ...project,
+          title: input.title,
+          draft: structuredClone(input.draft),
+          reviewStatus: 'draft',
+        };
+      },
       signal,
     );
   }
@@ -171,6 +211,20 @@ export class WorldAuthoringService {
     await this.options.repository.saveProject(updated, signal);
     return structuredClone(updated);
   }
+}
+
+function isFreshWorldCreationTarget(project: WorldProject): boolean {
+  const { draft } = project;
+  return (
+    project.reviewStatus === 'draft' &&
+    project.sourceRefs.length === 0 &&
+    draft.background.length === 0 &&
+    draft.worldBook.length === 0 &&
+    draft.locations.length === 0 &&
+    draft.organizations.length === 0 &&
+    draft.rules.length === 0 &&
+    draft.initialFacts.length === 0
+  );
 }
 
 function deepFreeze<T>(value: T): T {

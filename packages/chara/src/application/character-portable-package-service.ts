@@ -1,41 +1,28 @@
 import {
-  parseCharacterAuthoringTestSnapshot,
   parseCharacterPortablePackageManifest,
-  parseCharacterPortablePackagePreview,
   parseCharacterPortableExportScope,
   parseCharacterProject,
-  parseCharacterStoryline,
-  parseCharacterStorylineDraft,
-  parseCharacterStorylineVersion,
   parseCharacterVersion,
-  parseCharacterVersionLineage,
-  type CharacterAuthoringTestSnapshot,
+  parseGlobalCharacterVersion,
   type CharacterLocalizedAssetBinding,
   type CharacterLocalizedAssetBindingCatalog,
-  type CharacterPortableDestination,
   type CharacterPortableExternalDependency,
   type CharacterPortableEmbeddedAssetEntry,
   type CharacterPortablePackageManifest,
-  type CharacterPortablePackagePreview,
   type CharacterPortableExportScope,
   type CharacterPortableRecordKind,
   type CharacterProject,
   type CharacterRepresentationKind,
-  type CharacterStoryline,
-  type CharacterStorylineDraft,
-  type CharacterStorylineVersion,
   type CharacterVersion,
-  type CharacterVersionLineage,
 } from '@neko/chara/contracts';
-import type {
-  CharacterAuthoringCatalogPort,
-  CharacterAuthoringCatalogScope,
-} from './character-durable-catalog';
+import type { CharacterAuthoringCatalogPort } from './character-durable-catalog';
 import type { CharacterAuthoringRepository } from './character-authoring-service';
 import type { CharacterLocalizedAssetRepository } from './character-localized-asset-repository';
-import type { CharacterStorylineRepository } from './character-storyline-service';
-import { projectCharacterVersionGraph } from './character-version-graph-service';
-import type { CharacterVersionLineageRepository } from './character-version-lineage-repository';
+import type {
+  CharacterGlobalCatalogService,
+  CharacterGlobalImportReceipt,
+  ImportCharacterGlobalVersionInput,
+} from './character-global-catalog-service';
 
 export interface CharacterPortableRecordSource {
   readonly kind: CharacterPortableRecordKind;
@@ -79,31 +66,25 @@ export interface CharacterPortableArchivePort {
 export interface CharacterPortableWorkspaceRepository
   extends
     CharacterAuthoringRepository,
-    CharacterVersionLineageRepository,
-    CharacterStorylineRepository,
     CharacterLocalizedAssetRepository,
     CharacterAuthoringCatalogPort {}
 
 export interface ExportCharacterPortablePackageInput {
   readonly characterProjectId: string;
-  readonly characterStorylineIds: readonly string[];
-  readonly authoringTestSnapshotIds: readonly string[];
+  readonly characterVersionId: string;
   readonly embeddedRepresentationIds: readonly string[];
   readonly maxEmbeddedAssetBytes: number;
 }
 
-export interface PreviewCharacterPortablePackageInput {
+export interface ImportCharacterPortablePackageToGlobalInput {
   readonly archiveBytes: Uint8Array;
-  readonly destination: CharacterPortableDestination;
+  readonly target?: ImportCharacterGlobalVersionInput['target'];
+  readonly globalCatalog: CharacterGlobalCatalogService;
 }
 
 export class CharacterPortablePackageError extends Error {
   constructor(
-    readonly code:
-      | 'character-package-source-unavailable'
-      | 'character-package-selection-invalid'
-      | 'character-package-destination-mismatch'
-      | 'character-package-identity-conflict',
+    readonly code: 'character-package-source-unavailable' | 'character-package-selection-invalid',
     message: string,
   ) {
     super(message);
@@ -111,25 +92,9 @@ export class CharacterPortablePackageError extends Error {
   }
 }
 
-export class CharacterPortableImportWriteError extends Error {
-  readonly code = 'character-package-install-partial';
-
-  constructor(
-    readonly characterProjectId: string,
-    readonly installedRecordIds: readonly string[],
-    options: ErrorOptions,
-  ) {
-    super(
-      `Character package installation stopped after ${String(installedRecordIds.length)} records. Retry the exact package and destination.`,
-      options,
-    );
-    this.name = 'CharacterPortableImportWriteError';
-  }
-}
-
 export class CharacterPortablePackageService {
   constructor(
-    private readonly repository: CharacterPortableWorkspaceRepository,
+    private readonly repository: CharacterPortableWorkspaceRepository | undefined,
     private readonly archive: CharacterPortableArchivePort,
   ) {}
 
@@ -138,7 +103,8 @@ export class CharacterPortablePackageService {
     signal?: AbortSignal,
   ): Promise<CharacterPortableExportScope> {
     signal?.throwIfAborted();
-    const catalog = await this.repository.readAuthoringCatalog(signal);
+    const repository = this.requireRepository();
+    const catalog = await repository.readAuthoringCatalog(signal);
     const project = catalog.projects.find(
       (candidate) => candidate.characterProjectId === characterProjectId,
     );
@@ -151,16 +117,10 @@ export class CharacterPortablePackageService {
     const versions = catalog.versions.filter(
       (version) => version.characterProjectId === characterProjectId,
     );
-    const [lineage, storylines, localizedAssets] = await Promise.all([
-      this.repository.readLineage(characterProjectId, signal),
-      this.repository.listStorylines(characterProjectId, signal),
-      this.repository.readLocalizedAssetBindingCatalog(characterProjectId, signal),
-    ]);
-    const graph = projectCharacterVersionGraph({
-      project,
-      versions,
-      ...(lineage ? { lineage } : {}),
-    });
+    const localizedAssets = await repository.readLocalizedAssetBindingCatalog(
+      characterProjectId,
+      signal,
+    );
     const bindingByRepresentation = new Map(
       (localizedAssets?.bindings ?? []).map((binding) => [binding.representationId, binding]),
     );
@@ -168,15 +128,6 @@ export class CharacterPortablePackageService {
       characterProjectId,
       displayName: project.displayName,
       characterVersionIds: versions.map((version) => version.characterVersionId),
-      branchHeadCharacterVersionIds: graph.headCharacterVersionIds,
-      unlinkedCharacterVersionIds: graph.unlinkedCharacterVersionIds,
-      characterStorylines: storylines.map((storyline) => ({
-        characterStorylineId: storyline.characterStorylineId,
-        displayName: storyline.displayName,
-      })),
-      authoringTestSnapshotIds: catalog.authoringTestSnapshots
-        .filter((snapshot) => snapshot.characterProjectId === characterProjectId)
-        .map((snapshot) => snapshot.authoringTestSnapshotId),
       representations: [...collectRepresentations(project, versions).values()].map(
         (representation) => {
           const binding = bindingByRepresentation.get(representation.representationId);
@@ -202,7 +153,8 @@ export class CharacterPortablePackageService {
   }> {
     signal?.throwIfAborted();
     requirePositiveByteLimit(input.maxEmbeddedAssetBytes);
-    const catalog = await this.repository.readAuthoringCatalog(signal);
+    const repository = this.requireRepository();
+    const catalog = await repository.readAuthoringCatalog(signal);
     const project = catalog.projects.find(
       (candidate) => candidate.characterProjectId === input.characterProjectId,
     );
@@ -212,45 +164,27 @@ export class CharacterPortablePackageService {
         `CharacterProject '${input.characterProjectId}' is unavailable in the exact source Workspace.`,
       );
     }
-    const versions = catalog.versions.filter(
-      (version) => version.characterProjectId === input.characterProjectId,
+    const version = catalog.versions.find(
+      (candidate) => candidate.characterVersionId === input.characterVersionId,
     );
-    const lineage = await this.repository.readLineage(input.characterProjectId, signal);
-    const records: CharacterPortableRecordSource[] = [
-      record('character-project', project.characterProjectId, 'character/project.json', project),
-      ...versions.map((version) =>
-        record(
-          'character-version',
-          version.characterVersionId,
-          `character/versions/${version.characterVersionId}.json`,
-          version,
-        ),
-      ),
-    ];
-    if (lineage) {
-      records.push(
-        record(
-          'character-version-lineage',
-          lineage.characterProjectId,
-          'character/lineage.json',
-          lineage,
-        ),
+    if (!version || version.characterProjectId !== input.characterProjectId) {
+      throw portableError(
+        'character-package-selection-invalid',
+        `CharacterVersion '${input.characterVersionId}' does not belong to CharacterProject '${input.characterProjectId}'.`,
       );
     }
-    await this.collectStorylineRecords(
-      project,
-      unique(input.characterStorylineIds, 'CharacterStoryline selection'),
-      records,
-      signal,
-    );
-    collectAuthoringTests(
-      project.characterProjectId,
-      unique(input.authoringTestSnapshotIds, 'authoring-test selection'),
-      catalog.authoringTestSnapshots,
-      records,
-    );
+    const versions = [version];
+    const records: CharacterPortableRecordSource[] = [
+      record('character-project', project.characterProjectId, 'character/project.json', project),
+      record(
+        'character-version',
+        version.characterVersionId,
+        `character/versions/${version.characterVersionId}.json`,
+        version,
+      ),
+    ];
     const knownRepresentations = collectRepresentations(project, versions);
-    const localizedAssetBindings = await this.repository.readLocalizedAssetBindingCatalog(
+    const localizedAssetBindings = await repository.readLocalizedAssetBindingCatalog(
       project.characterProjectId,
       signal,
     );
@@ -284,134 +218,48 @@ export class CharacterPortablePackageService {
     );
   }
 
-  async previewImport(
-    input: PreviewCharacterPortablePackageInput,
+  async importIntoGlobal(
+    input: ImportCharacterPortablePackageToGlobalInput,
     signal?: AbortSignal,
-  ): Promise<CharacterPortablePackagePreview> {
-    const content = await this.archive.read(input.archiveBytes, signal);
-    return this.previewDecoded(decodePackage(content), input.destination, signal);
-  }
-
-  async commitImport(
-    input: PreviewCharacterPortablePackageInput,
-    signal?: AbortSignal,
-  ): Promise<{ readonly characterProjectId: string }> {
+  ): Promise<CharacterGlobalImportReceipt> {
+    signal?.throwIfAborted();
     const content = await this.archive.read(input.archiveBytes, signal);
     const decoded = decodePackage(content);
-    const preview = await this.previewDecoded(decoded, input.destination, signal);
-    if (!preview.canCommit) {
+    if (decoded.versions.length !== 1) {
       throw portableError(
-        'character-package-identity-conflict',
-        `Character package has ${String(preview.conflicts.length)} exact identity conflicts.`,
+        'character-package-selection-invalid',
+        'A Character package must contain exactly one immutable CharacterVersion.',
       );
     }
-    const installed: string[] = [];
-    try {
-      await this.repository.saveProject(decoded.project, signal);
-      installed.push(`character-project:${decoded.project.characterProjectId}`);
-      for (const version of decoded.versions) {
-        await this.repository.storePublication(version, signal);
-        installed.push(`character-version:${version.characterVersionId}`);
-      }
-      if (decoded.lineage) {
-        await this.repository.saveLineage(decoded.lineage, signal);
-        installed.push(`character-version-lineage:${decoded.lineage.characterProjectId}`);
-      }
-      for (const storyline of decoded.storylines) {
-        const draft = requireStorylineDraft(decoded, storyline.characterStorylineId);
-        const existing = await this.repository.readStoryline(
-          storyline.characterStorylineId,
-          signal,
-        );
-        if (!existing) await this.repository.createStoryline(storyline, draft, signal);
-        installed.push(`character-storyline:${storyline.characterStorylineId}`);
-      }
-      for (const version of decoded.storylineVersions) {
-        await this.repository.storeStorylineVersion(version, signal);
-        installed.push(`character-storyline-version:${version.characterStorylineVersionId}`);
-      }
-      for (const snapshot of decoded.authoringTests) {
-        await this.repository.saveAuthoringTestSnapshot(snapshot, signal);
-        installed.push(`authoring-test-snapshot:${snapshot.authoringTestSnapshotId}`);
-      }
-      for (const asset of decoded.embeddedAssets) {
-        await this.repository.storeLocalizedAsset(
-          decoded.project.characterProjectId,
-          asset.relativeAssetPath,
-          asset.bytes,
-          signal,
-        );
-        installed.push(`localized-asset:${asset.relativeAssetPath}`);
-      }
-      if (decoded.localizedAssetBindings.bindings.length > 0) {
-        const existingBindings = await this.repository.readLocalizedAssetBindingCatalog(
-          decoded.project.characterProjectId,
-          signal,
-        );
-        await this.repository.saveLocalizedAssetBindingCatalog(
-          mergeLocalizedAssetBindings(decoded.localizedAssetBindings, existingBindings),
-          signal,
-        );
-        installed.push(
-          ...decoded.localizedAssetBindings.bindings.map(
-            (binding) => `localized-asset-binding:${binding.representationId}`,
-          ),
-        );
-      }
-    } catch (cause) {
-      throw new CharacterPortableImportWriteError(decoded.project.characterProjectId, installed, {
-        cause,
-      });
-    }
-    return { characterProjectId: decoded.project.characterProjectId };
-  }
-
-  private async collectStorylineRecords(
-    project: CharacterProject,
-    selectedIds: readonly string[],
-    records: CharacterPortableRecordSource[],
-    signal?: AbortSignal,
-  ): Promise<void> {
-    for (const storylineId of selectedIds) {
-      signal?.throwIfAborted();
-      const storyline = await this.repository.readStoryline(storylineId, signal);
-      if (!storyline || storyline.characterProjectId !== project.characterProjectId) {
-        throw portableError(
-          'character-package-selection-invalid',
-          `CharacterStoryline '${storylineId}' is unavailable in exact CharacterProject '${project.characterProjectId}'.`,
-        );
-      }
-      const draft = await this.repository.readStorylineDraft(storylineId, signal);
-      if (!draft) {
-        throw portableError(
-          'character-package-source-unavailable',
-          `CharacterStorylineDraft '${storylineId}' is unavailable.`,
-        );
-      }
-      const versions = await this.repository.listStorylineVersions(storylineId, signal);
-      records.push(
-        record(
-          'character-storyline',
-          storylineId,
-          `character/storylines/${storylineId}/storyline.json`,
-          storyline,
-        ),
-        record(
-          'character-storyline-draft',
-          storylineId,
-          `character/storylines/${storylineId}/draft.json`,
-          draft,
-        ),
-        ...versions.map((version) =>
-          record(
-            'character-storyline-version',
-            version.characterStorylineVersionId,
-            `character/storylines/${storylineId}/versions/${version.characterStorylineVersionId}.json`,
-            version,
-          ),
-        ),
+    const version = decoded.versions[0];
+    if (version === undefined) {
+      throw portableError(
+        'character-package-selection-invalid',
+        'Character package does not contain a CharacterVersion.',
       );
     }
+    const target: ImportCharacterGlobalVersionInput['target'] = input.target ?? {
+      kind: 'new' as const,
+      globalCharacterId: decoded.project.characterProjectId,
+    };
+    const globalVersion = parseGlobalCharacterVersion({
+      characterVersionId: version.characterVersionId,
+      globalCharacterId: target.globalCharacterId,
+      label: version.label,
+      definition: version.definition,
+      acceptedEvidenceIds: version.acceptedEvidenceIds,
+      publishedAt: version.publishedAt,
+    });
+    if (target.kind === 'new') {
+      return input.globalCatalog.importVersion(
+        { target, displayName: decoded.project.displayName, characterVersion: globalVersion },
+        signal,
+      );
+    }
+    return input.globalCatalog.importVersion(
+      { target, displayName: decoded.project.displayName, characterVersion: globalVersion },
+      signal,
+    );
   }
 
   private async collectEmbeddedAssets(
@@ -448,7 +296,7 @@ export class CharacterPortablePackageService {
         );
       }
       for (const file of binding.files) {
-        const bytes = await this.repository.readLocalizedAsset(
+        const bytes = await this.requireRepository().readLocalizedAsset(
           characterProjectId,
           file.relativeAssetPath,
           Math.max(1, Math.min(maxBytes, file.byteLength)),
@@ -481,144 +329,14 @@ export class CharacterPortablePackageService {
     return assets;
   }
 
-  private async previewDecoded(
-    decoded: DecodedCharacterPackage,
-    destination: CharacterPortableDestination,
-    signal?: AbortSignal,
-  ): Promise<CharacterPortablePackagePreview> {
-    signal?.throwIfAborted();
-    const catalog = await this.repository.readAuthoringCatalog(signal);
-    assertDestination(catalog.scope, destination);
-    const conflicts: { kind: CharacterPortableRecordKind | 'localized-asset'; recordId: string }[] =
-      [];
-    const existingProject = catalog.projects.find(
-      (project) => project.characterProjectId === decoded.project.characterProjectId,
-    );
-    conflictIfDifferent(
-      existingProject,
-      decoded.project,
-      'character-project',
-      decoded.project.characterProjectId,
-      conflicts,
-    );
-    for (const version of decoded.versions) {
-      conflictIfDifferent(
-        catalog.versions.find(
-          (candidate) => candidate.characterVersionId === version.characterVersionId,
-        ),
-        version,
-        'character-version',
-        version.characterVersionId,
-        conflicts,
+  private requireRepository(): CharacterPortableWorkspaceRepository {
+    if (!this.repository) {
+      throw portableError(
+        'character-package-source-unavailable',
+        'Character package export requires an exact Project Workspace source.',
       );
     }
-    if (decoded.lineage) {
-      conflictIfDifferent(
-        await this.repository.readLineage(decoded.project.characterProjectId, signal),
-        decoded.lineage,
-        'character-version-lineage',
-        decoded.project.characterProjectId,
-        conflicts,
-      );
-    }
-    for (const storyline of decoded.storylines) {
-      conflictIfDifferent(
-        await this.repository.readStoryline(storyline.characterStorylineId, signal),
-        storyline,
-        'character-storyline',
-        storyline.characterStorylineId,
-        conflicts,
-      );
-      conflictIfDifferent(
-        await this.repository.readStorylineDraft(storyline.characterStorylineId, signal),
-        requireStorylineDraft(decoded, storyline.characterStorylineId),
-        'character-storyline-draft',
-        storyline.characterStorylineId,
-        conflicts,
-      );
-    }
-    for (const version of decoded.storylineVersions) {
-      conflictIfDifferent(
-        await this.repository.readStorylineVersion(version.characterStorylineVersionId, signal),
-        version,
-        'character-storyline-version',
-        version.characterStorylineVersionId,
-        conflicts,
-      );
-    }
-    for (const snapshot of decoded.authoringTests) {
-      conflictIfDifferent(
-        catalog.authoringTestSnapshots.find(
-          (candidate) => candidate.authoringTestSnapshotId === snapshot.authoringTestSnapshotId,
-        ),
-        snapshot,
-        'authoring-test-snapshot',
-        snapshot.authoringTestSnapshotId,
-        conflicts,
-      );
-    }
-    const existingAssets = existingProject
-      ? await this.repository.listLocalizedAssets(decoded.project.characterProjectId, signal)
-      : [];
-    for (const asset of decoded.embeddedAssets) {
-      const descriptor = existingAssets.find(
-        (candidate) => candidate.relativeAssetPath === asset.relativeAssetPath,
-      );
-      if (descriptor && descriptor.byteLength !== asset.bytes.byteLength) {
-        conflicts.push({ kind: 'localized-asset', recordId: asset.relativeAssetPath });
-        continue;
-      }
-      const existing = descriptor
-        ? await this.repository.readLocalizedAsset(
-            decoded.project.characterProjectId,
-            asset.relativeAssetPath,
-            Math.max(1, descriptor.byteLength),
-            signal,
-          )
-        : undefined;
-      conflictIfDifferent(
-        existing,
-        asset.bytes,
-        'localized-asset',
-        asset.relativeAssetPath,
-        conflicts,
-      );
-    }
-    const existingBindings = existingProject
-      ? await this.repository.readLocalizedAssetBindingCatalog(
-          decoded.project.characterProjectId,
-          signal,
-        )
-      : undefined;
-    for (const binding of decoded.localizedAssetBindings.bindings) {
-      conflictIfDifferent(
-        existingBindings?.bindings.find(
-          (candidate) => candidate.representationId === binding.representationId,
-        ),
-        binding,
-        'localized-asset',
-        binding.representationId,
-        conflicts,
-      );
-    }
-    const graph = projectCharacterVersionGraph({
-      project: decoded.project,
-      versions: decoded.versions,
-      ...(decoded.lineage === undefined ? {} : { lineage: decoded.lineage }),
-    });
-    return parseCharacterPortablePackagePreview({
-      destination,
-      characterProjectId: decoded.project.characterProjectId,
-      displayName: decoded.project.displayName,
-      characterVersionIds: decoded.versions.map((version) => version.characterVersionId),
-      branchHeadCharacterVersionIds: graph.headCharacterVersionIds,
-      unlinkedCharacterVersionIds: graph.unlinkedCharacterVersionIds,
-      characterStorylineIds: decoded.storylines.map((storyline) => storyline.characterStorylineId),
-      embeddedAssets: decoded.content.manifest.embeddedAssets,
-      externalDependencies: decoded.content.manifest.externalDependencies,
-      conflicts,
-      canCommit: conflicts.length === 0,
-    });
+    return this.repository;
   }
 }
 
@@ -626,11 +344,6 @@ interface DecodedCharacterPackage {
   readonly content: CharacterPortableArchiveContent;
   readonly project: CharacterProject;
   readonly versions: readonly CharacterVersion[];
-  readonly lineage?: CharacterVersionLineage;
-  readonly storylines: readonly CharacterStoryline[];
-  readonly storylineDrafts: readonly CharacterStorylineDraft[];
-  readonly storylineVersions: readonly CharacterStorylineVersion[];
-  readonly authoringTests: readonly CharacterAuthoringTestSnapshot[];
   readonly embeddedAssets: readonly {
     readonly relativeAssetPath: string;
     readonly bytes: Uint8Array;
@@ -642,11 +355,6 @@ function decodePackage(content: CharacterPortableArchiveContent): DecodedCharact
   const manifest = parseCharacterPortablePackageManifest(content.manifest);
   let project: CharacterProject | undefined;
   const versions: CharacterVersion[] = [];
-  let lineage: CharacterVersionLineage | undefined;
-  const storylines: CharacterStoryline[] = [];
-  const storylineDrafts: CharacterStorylineDraft[] = [];
-  const storylineVersions: CharacterStorylineVersion[] = [];
-  const authoringTests: CharacterAuthoringTestSnapshot[] = [];
   for (const entry of manifest.records) {
     const value = decodeRecord(content, entry.archivePath, entry.recordId);
     switch (entry.kind) {
@@ -656,21 +364,6 @@ function decodePackage(content: CharacterPortableArchiveContent): DecodedCharact
       case 'character-version':
         versions.push(parseCharacterVersion(value));
         break;
-      case 'character-version-lineage':
-        lineage = parseCharacterVersionLineage(value);
-        break;
-      case 'character-storyline':
-        storylines.push(parseCharacterStoryline(value));
-        break;
-      case 'character-storyline-draft':
-        storylineDrafts.push(parseCharacterStorylineDraft(value));
-        break;
-      case 'character-storyline-version':
-        storylineVersions.push(parseCharacterStorylineVersion(value));
-        break;
-      case 'authoring-test-snapshot':
-        authoringTests.push(parseCharacterAuthoringTestSnapshot(value));
-        break;
     }
   }
   if (!project || project.characterProjectId !== manifest.characterProjectId) {
@@ -679,14 +372,15 @@ function decodePackage(content: CharacterPortableArchiveContent): DecodedCharact
       'Character package entry CharacterProject is unavailable or mismatched.',
     );
   }
+  if (versions.length !== 1) {
+    throw portableError(
+      'character-package-selection-invalid',
+      'Character package must contain exactly one immutable CharacterVersion.',
+    );
+  }
   validateDecodedOwnership({
     project,
     versions,
-    lineage,
-    storylines,
-    storylineDrafts,
-    storylineVersions,
-    authoringTests,
     embeddedAssets: manifest.embeddedAssets,
     externalDependencies: manifest.externalDependencies,
   });
@@ -695,11 +389,6 @@ function decodePackage(content: CharacterPortableArchiveContent): DecodedCharact
     content,
     project,
     versions,
-    ...(lineage === undefined ? {} : { lineage }),
-    storylines,
-    storylineDrafts,
-    storylineVersions,
-    authoringTests,
     embeddedAssets: manifest.embeddedAssets.map((entry) => ({
       relativeAssetPath: entry.archivePath.slice('assets/'.length),
       bytes: requireBytes(content, entry.archivePath),
@@ -714,63 +403,12 @@ function decodePackage(content: CharacterPortableArchiveContent): DecodedCharact
 function validateDecodedOwnership(input: {
   readonly project: CharacterProject;
   readonly versions: readonly CharacterVersion[];
-  readonly lineage?: CharacterVersionLineage;
-  readonly storylines: readonly CharacterStoryline[];
-  readonly storylineDrafts: readonly CharacterStorylineDraft[];
-  readonly storylineVersions: readonly CharacterStorylineVersion[];
-  readonly authoringTests: readonly CharacterAuthoringTestSnapshot[];
   readonly embeddedAssets: readonly CharacterPortableEmbeddedAssetEntry[];
   readonly externalDependencies: readonly CharacterPortableExternalDependency[];
 }): void {
   const projectId = input.project.characterProjectId;
-  const versionIds = new Set(input.versions.map((version) => version.characterVersionId));
   if (input.versions.some((version) => version.characterProjectId !== projectId)) {
     throw portableError('character-package-selection-invalid', 'CharacterVersion owner mismatch.');
-  }
-  if (input.lineage && input.lineage.characterProjectId !== projectId) {
-    throw portableError(
-      'character-package-selection-invalid',
-      'CharacterVersion lineage owner mismatch.',
-    );
-  }
-  if (
-    input.lineage?.relations.some(
-      (relation) =>
-        !versionIds.has(relation.characterVersionId) ||
-        relation.parentCharacterVersionIds.some((parentId) => !versionIds.has(parentId)),
-    )
-  ) {
-    throw portableError(
-      'character-package-selection-invalid',
-      'CharacterVersion lineage references a version outside the package.',
-    );
-  }
-  const storylineIds = new Set(input.storylines.map((storyline) => storyline.characterStorylineId));
-  if (input.storylines.some((storyline) => storyline.characterProjectId !== projectId)) {
-    throw portableError(
-      'character-package-selection-invalid',
-      'CharacterStoryline owner mismatch.',
-    );
-  }
-  for (const storylineId of storylineIds) requireStorylineDraft(input, storylineId);
-  if (
-    input.storylineDrafts.some(
-      (draft) =>
-        !storylineIds.has(draft.characterStorylineId) || !versionIds.has(draft.characterVersionId),
-    ) ||
-    input.storylineVersions.some(
-      (version) =>
-        !storylineIds.has(version.characterStorylineId) ||
-        !versionIds.has(version.characterVersionId),
-    )
-  ) {
-    throw portableError(
-      'character-package-selection-invalid',
-      'Character Storyline records reference facts outside the package.',
-    );
-  }
-  if (input.authoringTests.some((snapshot) => snapshot.characterProjectId !== projectId)) {
-    throw portableError('character-package-selection-invalid', 'Authoring test owner mismatch.');
   }
   const representations = collectRepresentations(input.project, input.versions);
   const inventoriedRepresentationIds = new Set([
@@ -835,62 +473,6 @@ function decodeLocalizedAssetBindings(
       };
     })
     .sort((left, right) => left.representationId.localeCompare(right.representationId));
-}
-
-function mergeLocalizedAssetBindings(
-  imported: CharacterLocalizedAssetBindingCatalog,
-  existing: CharacterLocalizedAssetBindingCatalog | undefined,
-): CharacterLocalizedAssetBindingCatalog {
-  if (existing !== undefined && existing.characterProjectId !== imported.characterProjectId) {
-    throw portableError(
-      'character-package-destination-mismatch',
-      `Localized Character asset bindings belong to another CharacterProject '${existing.characterProjectId}'.`,
-    );
-  }
-  const bindings = new Map(
-    (existing?.bindings ?? []).map((binding) => [binding.representationId, binding]),
-  );
-  for (const binding of imported.bindings) {
-    const current = bindings.get(binding.representationId);
-    if (current !== undefined && !same(current, binding)) {
-      throw portableError(
-        'character-package-identity-conflict',
-        `Localized Character asset binding '${binding.representationId}' already exists with different facts.`,
-      );
-    }
-    bindings.set(binding.representationId, binding);
-  }
-  return {
-    characterProjectId: imported.characterProjectId,
-    bindings: [...bindings.values()].sort((left, right) =>
-      left.representationId.localeCompare(right.representationId),
-    ),
-  };
-}
-
-function collectAuthoringTests(
-  characterProjectId: string,
-  selectedIds: readonly string[],
-  snapshots: readonly CharacterAuthoringTestSnapshot[],
-  records: CharacterPortableRecordSource[],
-): void {
-  for (const identity of selectedIds) {
-    const snapshot = snapshots.find((candidate) => candidate.authoringTestSnapshotId === identity);
-    if (!snapshot || snapshot.characterProjectId !== characterProjectId) {
-      throw portableError(
-        'character-package-selection-invalid',
-        `Character authoring test '${identity}' is unavailable in the exact CharacterProject.`,
-      );
-    }
-    records.push(
-      record(
-        'authoring-test-snapshot',
-        identity,
-        `character/authoring-tests/${identity}.json`,
-        snapshot,
-      ),
-    );
-  }
 }
 
 function collectRepresentations(
@@ -969,16 +551,6 @@ function encodeJson(value: unknown): Uint8Array {
   return new TextEncoder().encode(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function conflictIfDifferent(
-  existing: unknown,
-  incoming: unknown,
-  kind: CharacterPortableRecordKind | 'localized-asset',
-  recordId: string,
-  conflicts: { kind: CharacterPortableRecordKind | 'localized-asset'; recordId: string }[],
-): void {
-  if (existing !== undefined && !same(existing, incoming)) conflicts.push({ kind, recordId });
-}
-
 function same(left: unknown, right: unknown): boolean {
   if (left instanceof Uint8Array && right instanceof Uint8Array) {
     return (
@@ -986,40 +558,6 @@ function same(left: unknown, right: unknown): boolean {
     );
   }
   return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function requireStorylineDraft(
-  decoded: Pick<DecodedCharacterPackage, 'storylineDrafts'>,
-  storylineId: string,
-): CharacterStorylineDraft {
-  const drafts = decoded.storylineDrafts.filter(
-    (draft) => draft.characterStorylineId === storylineId,
-  );
-  const draft = drafts[0];
-  if (draft === undefined || drafts.length !== 1) {
-    throw portableError(
-      'character-package-selection-invalid',
-      `CharacterStoryline '${storylineId}' must have exactly one draft in the package.`,
-    );
-  }
-  return draft;
-}
-
-function assertDestination(
-  scope: CharacterAuthoringCatalogScope,
-  destination: CharacterPortableDestination,
-): void {
-  if (
-    scope.kind !== destination.kind ||
-    (scope.kind === 'content-project' &&
-      destination.kind === 'content-project' &&
-      scope.contentProjectId !== destination.contentProjectId)
-  ) {
-    throw portableError(
-      'character-package-destination-mismatch',
-      'Character package destination does not match the exact authorized Workspace repository.',
-    );
-  }
 }
 
 function requirePositiveByteLimit(value: number): void {
