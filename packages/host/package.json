@@ -38,6 +38,7 @@
     "@neko/local-metadata": "workspace:*",
     "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*",
+    "@neko/world": "workspace:*",
     "smol-toml": "1.6.1"
   },
   "devDependencies": {
