@@ -11,7 +11,7 @@
 > authoring, installed/adapted/recovery data, publication plans, or old entry destinations is
 > retired; only compatible canonical facts are carried forward.
 
-- [ ] 1.1 Across delivery batches B-D, atomically replace Character, World, Project, Host and IPC producers/consumers with workspace-object, global-object, immutable domain-version and exact-reference contracts; each batch must update its complete owning path and tests without compatibility shapes or parallel success paths.
+- [x] 1.1 Across delivery batches B-D, atomically replace Character, World, Project, Host and IPC producers/consumers with workspace-object, global-object, immutable domain-version and exact-reference contracts; each batch must update its complete owning path and tests without compatibility shapes or parallel success paths.
 
 ## 2. Global catalogs and synchronization
 
@@ -35,4 +35,4 @@
 
 ## 7. Documentation and verification
 
-- [ ] 7.1 Delivery batch D: update canonical Chinese/English Project, Character, World, Agent, Desktop composition and package-boundary docs; run focused package tests, archive-security tests, `pnpm typecheck`, `pnpm lint`, architecture/OpenSpec checks, Neko quality review, visible Electron UI validation and applicable real Agent evaluation, recording unrelated blockers and residual risks.
+- [x] 7.1 Delivery batch D: update canonical Chinese/English Project, Character, World, Agent, Desktop composition and package-boundary docs; run focused package tests, archive-security tests, `pnpm typecheck`, `pnpm lint`, architecture/OpenSpec checks, Neko quality review, visible Electron UI validation and applicable real Agent evaluation, recording unrelated blockers and residual risks.
