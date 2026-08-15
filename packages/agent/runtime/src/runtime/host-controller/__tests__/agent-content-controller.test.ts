@@ -154,6 +154,53 @@ describe('Agent content controller', () => {
     }
   });
 
+  it('isolates a non-canonical Workspace subtree without blocking entry projection', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-invalid-locator-'));
+    const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const reportMentionContributorError = vi.fn();
+    const readDirectory = vi.fn(async () => [
+      { name: 'guide.md', type: 'file' as const },
+      { name: 'world-project:legacy', type: 'directory' as const },
+    ]);
+    try {
+      const projection = await searchAgentWorkspaceMentions({
+        workspace: {
+          workspaceId: 'workspace-1',
+          workspacePath,
+          displayName: 'Workspace',
+          locator: { kind: 'variable', value: '${HOME}/workspace' },
+        },
+        host: {
+          files: {
+            readDirectory,
+            readText: vi.fn(async () => Promise.reject(missingGitignore)),
+          },
+          paths: {},
+        } as Parameters<typeof searchAgentWorkspaceMentions>[0]['host'],
+        filter: '',
+        purpose: 'entry',
+        reportMentionContributorError,
+      });
+
+      expect(projection.files).toEqual([
+        expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'guide.md' },
+          name: 'guide.md',
+          source: 'workspace',
+        }),
+      ]);
+      expect(reportMentionContributorError).toHaveBeenCalledOnce();
+      expect(reportMentionContributorError.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          message: expect.stringContaining('world-project:legacy'),
+        }),
+      );
+      expect(readDirectory).toHaveBeenCalledOnce();
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true });
+    }
+  });
+
   it('routes all content operations through narrow Host effects with connection context', async () => {
     const effects = createEffects();
     const context = createContext();

@@ -31,6 +31,10 @@ import { readProjectEntityResources } from '@neko/entity-node';
 
 const MAX_SVG_BYTES = 10 * 1024 * 1024;
 
+type CanonicalWorkspaceProjectFileCandidate = AgentProjectFileCandidate & {
+  readonly contentLocator: WorkspaceFileContentLocator;
+};
+
 type AgentContentEffectErrorCode =
   | 'desktop-agent-content-access-denied'
   | 'desktop-agent-content-kind-unsupported'
@@ -272,7 +276,12 @@ async function searchWorkspaceMentionFiles(
   input: Parameters<typeof searchAgentWorkspaceMentions>[0],
   plan: AgentProjectFileSearchPlan,
 ): Promise<readonly AgentProjectFileCandidate[]> {
-  const workspaceFiles = await searchGrantedWorkspace(input.workspace, input.host, plan);
+  const workspaceFiles = await searchGrantedWorkspace(
+    input.workspace,
+    input.host,
+    plan,
+    input.reportMentionContributorError,
+  );
   if (!input.searchWorkspaceLinkedMediaFiles) return workspaceFiles;
   let linkedMediaLocators: readonly WorkspaceFileContentLocator[];
   try {
@@ -287,10 +296,7 @@ async function searchWorkspaceMentionFiles(
   }
   const candidates = new Map<string, AgentProjectFileCandidate>();
   for (const candidate of workspaceFiles) {
-    candidates.set(
-      contentLocatorKey({ kind: 'workspace-file', path: candidate.relativePath }),
-      candidate,
-    );
+    candidates.set(contentLocatorKey(candidate.contentLocator), candidate);
   }
   for (const locator of linkedMediaLocators) {
     const validation = validateContentLocator(locator);
@@ -369,11 +375,12 @@ async function searchGrantedWorkspace(
   workspace: AssetWorkspaceResolution,
   host: CreateAgentContentEffectsOptions['host'],
   plan: AgentProjectFileSearchPlan,
-): Promise<readonly AgentProjectFileCandidate[]> {
+  reportInvalidCandidate?: (error: Error) => void,
+): Promise<readonly CanonicalWorkspaceProjectFileCandidate[]> {
   await assertHostAccess(host, 'list', workspace.workspacePath);
   const gitignoreRules = await readGitignoreRules(workspace.workspacePath, host);
   const filter = extractSearchFilter(plan.includePattern);
-  const candidates: AgentProjectFileCandidate[] = [];
+  const candidates: CanonicalWorkspaceProjectFileCandidate[] = [];
   await walkWorkspaceFiles({
     absoluteDirectory: workspace.workspacePath,
     relativeDirectory: '',
@@ -382,6 +389,7 @@ async function searchGrantedWorkspace(
     filter,
     limit: Math.max(plan.limit * 4, plan.limit),
     candidates,
+    reportInvalidCandidate,
   });
   return candidates
     .sort((left, right) =>
@@ -400,7 +408,8 @@ async function walkWorkspaceFiles(input: {
   readonly gitignoreRules: readonly string[];
   readonly filter: string;
   readonly limit: number;
-  readonly candidates: AgentProjectFileCandidate[];
+  readonly candidates: CanonicalWorkspaceProjectFileCandidate[];
+  readonly reportInvalidCandidate?: (error: Error) => void;
 }): Promise<void> {
   if (input.candidates.length >= input.limit) return;
   const entries = [...(await input.host.files.readDirectory(input.absoluteDirectory))].sort(
@@ -419,6 +428,19 @@ async function walkWorkspaceFiles(input: {
     ) {
       continue;
     }
+    const locatorResult = validateContentLocator({ kind: 'workspace-file', path: relativePath });
+    if (!locatorResult.ok || locatorResult.locator.kind !== 'workspace-file') {
+      input.reportInvalidCandidate?.(
+        new Error(
+          `Agent Workspace path '${relativePath}' cannot form a canonical content locator. ${
+            locatorResult.ok
+              ? ''
+              : locatorResult.diagnostics.map((diagnostic) => diagnostic.message).join(' ')
+          }`.trim(),
+        ),
+      );
+      continue;
+    }
     if (entry.type === 'directory') {
       await walkWorkspaceFiles({
         ...input,
@@ -432,9 +454,10 @@ async function walkWorkspaceFiles(input: {
       (!input.filter || relativePath.toLocaleLowerCase().includes(input.filter))
     ) {
       input.candidates.push({
-        relativePath,
+        relativePath: locatorResult.locator.path,
+        contentLocator: locatorResult.locator,
         source: 'workspace',
-        ...workspaceFilePresentation(relativePath),
+        ...workspaceFilePresentation(locatorResult.locator.path),
       });
     }
   }
