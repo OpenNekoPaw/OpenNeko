@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { open, realpath } from 'node:fs/promises';
+import { lstat, open, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import type {
   ContentBytes,
@@ -10,6 +10,8 @@ import type {
   MediaLibraryContentLocator,
 } from '@neko/content';
 import type { ContentReadHandler } from '@neko/content/core';
+import { authorizeWorkspaceContainedPath } from '@neko/content/node';
+import { workspaceLinkedMediaLibraryPath } from '@neko/assets-domain/contracts';
 import type { ProjectMediaLibraryBindingRepository } from './project-media-library-binding-repository';
 import { resolveGlobalMediaLibraryTarget } from './global-media-library-files';
 
@@ -32,6 +34,8 @@ export function createGlobalProjectMediaLibraryConnectionResolver(
 export interface ProjectMediaLibraryContentReadHandlerOptions {
   readonly bindings: Pick<ProjectMediaLibraryBindingRepository, 'read'>;
   readonly connections: ProjectMediaLibraryConnectionResolver;
+  readonly workspaceRoot: string;
+  readonly initialize?: () => Promise<void>;
   readonly defaultMaxBytes?: number;
 }
 
@@ -43,28 +47,58 @@ export class ProjectMediaLibraryContentPathResolver {
   constructor(
     private readonly options: Pick<
       ProjectMediaLibraryContentReadHandlerOptions,
-      'bindings' | 'connections'
+      'bindings' | 'connections' | 'workspaceRoot' | 'initialize'
     >,
   ) {}
 
   async resolve(
     locator: MediaLibraryContentLocator,
   ): Promise<ProjectMediaLibraryContentPathResolution> {
-    const binding = await this.options.bindings.read(locator.libraryName);
+    const root = await this.resolveLibraryRoot(locator.libraryName);
+    if (!root.ok) return root;
+
+    try {
+      const candidate = path.resolve(root.filePath, ...locator.relativePath.split('/'));
+      const authorization = await authorizeWorkspaceContainedPath({
+        workspaceRoot: this.options.workspaceRoot,
+        requestedPath: candidate,
+      });
+      if (!authorization.authorized) {
+        return { ok: false, code: 'content-unauthorized' };
+      }
+      return { ok: true, filePath: await realpath(candidate) };
+    } catch (error) {
+      if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR')) {
+        return { ok: false, code: 'content-missing' };
+      }
+      if (isNodeError(error, 'EACCES') || isNodeError(error, 'EPERM')) {
+        return { ok: false, code: 'content-unauthorized' };
+      }
+      return { ok: false, code: 'content-read-failed' };
+    }
+  }
+
+  async resolveLibraryRoot(libraryName: string): Promise<ProjectMediaLibraryContentPathResolution> {
+    await this.options.initialize?.();
+    const binding = await this.options.bindings.read(libraryName);
     if (binding.status === 'absent') return { ok: false, code: 'content-missing' };
     if (binding.status === 'invalid') return { ok: false, code: 'content-unauthorized' };
 
     try {
-      const root = await realpath(
+      const registeredTarget = await realpath(
         await this.options.connections.resolveAuthorizedTarget(binding.binding.connectionId),
       );
-      const candidate = path.resolve(root, ...locator.relativePath.split('/'));
-      if (!isInside(candidate, root)) return { ok: false, code: 'content-unauthorized' };
-      const resolvedCandidate = await realpath(candidate);
-      if (!isInside(resolvedCandidate, root)) {
+      const linkPath = path.join(
+        this.options.workspaceRoot,
+        ...workspaceLinkedMediaLibraryPath(libraryName).split('/'),
+      );
+      if (!(await lstat(linkPath)).isSymbolicLink()) {
         return { ok: false, code: 'content-unauthorized' };
       }
-      return { ok: true, filePath: resolvedCandidate };
+      if ((await realpath(linkPath)) !== registeredTarget) {
+        return { ok: false, code: 'content-unauthorized' };
+      }
+      return { ok: true, filePath: linkPath };
     } catch (error) {
       if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR')) {
         return { ok: false, code: 'content-missing' };
@@ -231,14 +265,6 @@ async function readRange(
     total += result.bytesRead;
   }
   return total === bytes.byteLength ? bytes : bytes.slice(0, total);
-}
-
-function isInside(candidate: string, root: string): boolean {
-  const relative = path.relative(root, candidate);
-  return (
-    relative === '' ||
-    (relative !== '..' && !path.isAbsolute(relative) && !relative.startsWith(`..${path.sep}`))
-  );
 }
 
 function fileSystemDiagnostic(

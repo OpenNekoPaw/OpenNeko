@@ -232,6 +232,7 @@ async function createFixture(): Promise<{
     openCreativeDocument: async () => undefined,
     openTextEditor: async () => undefined,
     selectSource: async () => undefined,
+    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: async () => undefined,
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,

@@ -14,9 +14,25 @@ import {
   type ProjectMediaLibraryBindingRepository,
 } from './project-media-library-binding-repository';
 import type { ProjectMediaLibraryConnectionResolver } from './project-media-library-content-handler';
+import type { WorkspaceLinkedMediaLibraryPreviousState } from './workspace-linked-media-libraries';
 
 export interface ProjectMediaLibraryRequirementReader {
   read(libraryName: string): Promise<ProjectMediaLibraryRequirement | undefined>;
+}
+
+export interface ProjectMediaLibraryWorkspaceProjection {
+  materialize(input: {
+    readonly libraryName: string;
+    readonly targetDirectory: string;
+  }): Promise<WorkspaceLinkedMediaLibraryPreviousState>;
+  remove(input: {
+    readonly libraryName: string;
+    readonly targetDirectory?: string;
+  }): Promise<WorkspaceLinkedMediaLibraryPreviousState>;
+  restore(input: {
+    readonly libraryName: string;
+    readonly previous: WorkspaceLinkedMediaLibraryPreviousState;
+  }): Promise<void>;
 }
 
 export class ProjectMediaLibraryBindingService {
@@ -25,10 +41,11 @@ export class ProjectMediaLibraryBindingService {
       readonly projectId: string;
       readonly bindings: Pick<
         ProjectMediaLibraryBindingRepository,
-        'read' | 'applyRecovery' | 'remove'
+        'read' | 'apply' | 'applyRecovery' | 'remove'
       >;
       readonly connections: ProjectMediaLibraryConnectionResolver;
       readonly requirements: ProjectMediaLibraryRequirementReader;
+      readonly workspaceProjection: ProjectMediaLibraryWorkspaceProjection;
     },
   ) {}
 
@@ -73,15 +90,82 @@ export class ProjectMediaLibraryBindingService {
     ) {
       throw new Error('Project Media Library references changed after recovery was planned.');
     }
-    await this.validateReferencedDescendants(plan.connectionId, plan.validatedRelativePaths);
-    return this.options.bindings.applyRecovery(parsed);
+    const targetDirectory = await this.validateReferencedDescendants(
+      plan.connectionId,
+      plan.validatedRelativePaths,
+    );
+    const previous = await this.options.workspaceProjection.materialize({
+      libraryName: plan.libraryName,
+      targetDirectory,
+    });
+    try {
+      return await this.options.bindings.applyRecovery(parsed);
+    } catch (error) {
+      return this.restoreProjection(plan.libraryName, previous, error);
+    }
+  }
+
+  async associate(input: {
+    readonly libraryName: string;
+    readonly connectionId: string;
+  }): Promise<ProjectMediaLibraryBinding> {
+    const current = await this.options.bindings.read(input.libraryName);
+    if (current.status === 'invalid') {
+      throw new Error('Invalid Project Media Library binding must be repaired explicitly.');
+    }
+    let targetDirectory: string;
+    try {
+      targetDirectory = await realpath(
+        await this.options.connections.resolveAuthorizedTarget(input.connectionId),
+      );
+      if (!(await stat(targetDirectory)).isDirectory()) throw new Error('not-directory');
+    } catch {
+      throw new Error('Selected Media Library connection is unavailable.');
+    }
+    const previous = await this.options.workspaceProjection.materialize({
+      libraryName: input.libraryName,
+      targetDirectory,
+    });
+    try {
+      return await this.options.bindings.apply({
+        libraryName: input.libraryName,
+        connectionId: input.connectionId,
+        expectedBindingFingerprint:
+          current.status === 'available' ? current.binding.bindingFingerprint : null,
+      });
+    } catch (error) {
+      return this.restoreProjection(input.libraryName, previous, error);
+    }
   }
 
   async remove(input: {
     readonly libraryName: string;
     readonly expectedBindingFingerprint: string;
   }): Promise<void> {
-    await this.options.bindings.remove(input);
+    const current = await this.options.bindings.read(input.libraryName);
+    if (current.status !== 'available') {
+      throw new Error('Project Media Library binding is unavailable for removal.');
+    }
+    if (current.binding.bindingFingerprint !== input.expectedBindingFingerprint) {
+      throw new Error('Project Media Library binding changed before removal.');
+    }
+    let targetDirectory: string | undefined;
+    try {
+      targetDirectory = await this.options.connections.resolveAuthorizedTarget(
+        current.binding.connectionId,
+      );
+    } catch {
+      // A stale global record must not make the project-owned binding impossible to remove.
+    }
+    const previous = await this.options.workspaceProjection.remove({
+      libraryName: input.libraryName,
+      targetDirectory,
+    });
+    try {
+      await this.options.bindings.remove(input);
+    } catch (error) {
+      await this.restoreProjection(input.libraryName, previous, error);
+    }
   }
 
   private async requireCurrentRequirement(
@@ -101,7 +185,7 @@ export class ProjectMediaLibraryBindingService {
   private async validateReferencedDescendants(
     connectionId: string,
     relativePaths: readonly string[],
-  ): Promise<void> {
+  ): Promise<string> {
     let root: string;
     try {
       root = await realpath(await this.options.connections.resolveAuthorizedTarget(connectionId));
@@ -122,6 +206,23 @@ export class ProjectMediaLibraryBindingService {
         );
       }
     }
+    return root;
+  }
+
+  private async restoreProjection(
+    libraryName: string,
+    previous: WorkspaceLinkedMediaLibraryPreviousState,
+    operationError: unknown,
+  ): Promise<never> {
+    try {
+      await this.options.workspaceProjection.restore({ libraryName, previous });
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [operationError, rollbackError],
+        'Project Media Library mutation failed and its Workspace projection could not be restored.',
+      );
+    }
+    throw operationError;
   }
 }
 

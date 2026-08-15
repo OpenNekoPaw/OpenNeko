@@ -357,6 +357,7 @@ describe('Resource Browser contract', () => {
         'thumbnail.resolve',
         'workspace-entry.create-directory',
         'workspace-entry.create-file',
+        'workspace-entry.import-files',
       ].sort(),
     );
     expect(
@@ -367,13 +368,13 @@ describe('Resource Browser contract', () => {
     ).toBe(1);
     expect(
       parseResourceBrowserIntentRequest({
-        requestId: 'source-1',
+        requestId: 'import-1',
         identity,
-        route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
+        route: RESOURCE_BROWSER_ROUTES.importFiles,
       }),
     ).toMatchObject({
-      requestId: 'source-1',
-      route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
+      requestId: 'import-1',
+      route: RESOURCE_BROWSER_ROUTES.importFiles,
     });
   });
 

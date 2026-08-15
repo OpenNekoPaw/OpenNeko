@@ -59,6 +59,11 @@ describe('Resource Browser controller', () => {
       descriptorId: thumbnail?.descriptorId,
       dataUrl: 'data:image/png;base64,aW1hZ2U=',
     });
+    const withImportedFiles = await controller.execute({
+      requestId: 'import-files-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.importFiles,
+    });
     const assets = await controller.search(
       createResourceBrowserSearchRequest({
         requestId: 'search-1',
@@ -68,11 +73,6 @@ describe('Resource Browser controller', () => {
       }),
     );
     const refreshed = await controller.reconcile();
-    const withGlobalLibrary = await controller.execute({
-      requestId: 'global-library-1',
-      identity,
-      route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
-    });
     const withDirectoryLibrary = await controller.execute({
       requestId: 'directory-library-1',
       identity,
@@ -87,9 +87,9 @@ describe('Resource Browser controller', () => {
     });
     expect(source.refresh).toHaveBeenCalledWith(identity);
     expect(refreshed.source).toBe('assets');
-    expect(interactions.linkGlobalLibrary).toHaveBeenCalledWith({ identity });
+    expect(interactions.importFiles).toHaveBeenCalledWith({ identity });
     expect(interactions.addDirectoryLibrary).toHaveBeenCalledWith({ identity });
-    expect(withGlobalLibrary.source).toBe('assets');
+    expect(withImportedFiles.source).toBe('files');
     expect(withDirectoryLibrary.source).toBe('assets');
     expect(listener.mock.calls.map(([event]) => event.sequence)).toEqual([1, 2, 3, 4]);
   });
@@ -739,7 +739,7 @@ function createSource(): ResourceBrowserProjectionSource & {
 }
 
 function createInteractions(): ResourceBrowserInteractionPort & {
-  readonly linkGlobalLibrary: ReturnType<typeof vi.fn>;
+  readonly importFiles: ReturnType<typeof vi.fn>;
   readonly addDirectoryLibrary: ReturnType<typeof vi.fn>;
   readonly preview: ReturnType<typeof vi.fn>;
   readonly openCreativeDocument: ReturnType<typeof vi.fn>;
@@ -753,6 +753,7 @@ function createInteractions(): ResourceBrowserInteractionPort & {
     createCreativeDocument: vi.fn(async () => ({ status: 'opened' as const })),
     createFile: vi.fn(async () => undefined),
     createDirectory: vi.fn(async () => undefined),
+    importFiles: vi.fn(async () => 'imported' as const),
     trashContent: vi.fn(async () => undefined),
     linkGlobalLibrary: vi.fn(async () => 'linked' as const),
     addDirectoryLibrary: vi.fn(async () => 'added' as const),

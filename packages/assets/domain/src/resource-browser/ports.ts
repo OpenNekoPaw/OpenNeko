@@ -94,6 +94,10 @@ export interface ResourceBrowserInteractionPort {
     readonly parent?: ResourceBrowserContentItem;
     readonly name: string;
   }): Promise<void>;
+  importFiles(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly parent?: ResourceBrowserContentItem;
+  }): Promise<'imported' | 'cancelled'>;
   trashContent(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserContentItem;

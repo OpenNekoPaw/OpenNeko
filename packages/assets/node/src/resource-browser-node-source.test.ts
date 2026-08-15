@@ -297,6 +297,7 @@ function createComposition(
     openCreativeDocument: overrides.openCreativeDocument ?? (async () => undefined),
     openTextEditor: async () => undefined,
     selectSource: async () => undefined,
+    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: overrides.trashWorkspaceItem ?? (async () => undefined),
     selectGlobalLibrary: async () => undefined,
     mutateGlobalMediaLibraries: (operation) => operation(),

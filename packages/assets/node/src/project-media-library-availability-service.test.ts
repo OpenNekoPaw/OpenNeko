@@ -34,6 +34,7 @@ describe('ProjectMediaLibraryAvailabilityService', () => {
     await writeFile(path.join(availableRoot, 'shots', 'hero.mov'), 'hero');
     await fixture.library('Incomplete');
     const escapedRoot = await fixture.library('Escaped');
+    await fixture.library('Unused');
     const outsideRoot = path.join(fixture.root, 'outside');
     await mkdir(outsideRoot);
     await writeFile(path.join(outsideRoot, 'outside.mov'), 'outside');
@@ -45,6 +46,12 @@ describe('ProjectMediaLibraryAvailabilityService', () => {
       fixture.bind('Incomplete'),
       fixture.bind('Escaped'),
       fixture.bind('Unused'),
+    ]);
+    await Promise.all([
+      fixture.link('Footage'),
+      fixture.link('Incomplete'),
+      fixture.link('Escaped'),
+      fixture.link('Unused'),
     ]);
     await fixture.invalid('Broken');
     const connections = [
@@ -96,6 +103,17 @@ describe('ProjectMediaLibraryAvailabilityService', () => {
     await expect(
       import('node:fs/promises').then(({ stat }) => stat(path.join(fixture.workspace, '.neko'))),
     ).rejects.toThrow();
+  });
+
+  it('reports an unadoptable workspace entry as a local conflict', async () => {
+    const fixture = await createFixture([
+      mediaOwner('boards/main.nkc', [['Footage', 'shots/hero.mov']]),
+    ]);
+    await mkdir(path.join(fixture.workspace, 'neko/assets/Footage'), { recursive: true });
+
+    await expect(fixture.service([]).inspect()).resolves.toMatchObject({
+      libraries: [expect.objectContaining({ libraryName: 'Footage', state: 'entry-conflict' })],
+    });
   });
 });
 
@@ -151,6 +169,17 @@ async function createFixture(owners: readonly ProjectContentReferenceOwnerSnapsh
       await writeFile(
         path.join(directory, `${libraryName}.json`),
         serializeProjectMediaLibraryBinding(binding),
+      );
+    },
+    async link(libraryName: string) {
+      const target = targets.get(connectionId(libraryName));
+      if (!target) throw new Error(`Missing test Media Library target '${libraryName}'.`);
+      const directory = path.join(workspace, 'neko', 'assets');
+      await mkdir(directory, { recursive: true });
+      await symlink(
+        target,
+        path.join(directory, libraryName),
+        process.platform === 'win32' ? 'junction' : 'dir',
       );
     },
     async invalid(libraryName: string) {

@@ -17,6 +17,7 @@ export type ProjectMediaLibraryAvailabilityState =
   | 'target-unavailable'
   | 'content-incomplete'
   | 'binding-invalid'
+  | 'entry-conflict'
   | 'unreferenced-local-binding';
 
 export type ProjectMediaLibraryDiagnosticCode = Exclude<
@@ -294,6 +295,7 @@ function requireAvailabilityState(value: unknown): ProjectMediaLibraryAvailabili
     value !== 'target-unavailable' &&
     value !== 'content-incomplete' &&
     value !== 'binding-invalid' &&
+    value !== 'entry-conflict' &&
     value !== 'unreferenced-local-binding'
   ) {
     throw new Error('Project Media Library availability state is invalid.');

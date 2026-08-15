@@ -252,18 +252,51 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       }
       return this.reconcile();
     }
-    if (
-      parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
-      parsed.route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
-    ) {
-      const result =
-        parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary
-          ? await this.options.interactions.linkGlobalLibrary({ identity: this.identity })
-          : await this.options.interactions.addDirectoryLibrary({ identity: this.identity });
+    if (parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary) {
+      const result = await this.options.interactions.linkGlobalLibrary({
+        identity: this.identity,
+      });
       if (result === 'cancelled') return current;
       await this.options.source.refresh(this.identity);
       const projection = await this.readProjection(current.source, current.query, 100);
       return this.commitProjection(projection);
+    }
+    if (parsed.route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary) {
+      const result = await this.options.interactions.addDirectoryLibrary({
+        identity: this.identity,
+      });
+      if (result === 'cancelled') return current;
+      await this.options.source.refresh(this.identity);
+      const projection = await this.readProjection(current.source, current.query, 100);
+      return this.commitProjection(projection);
+    }
+    if (parsed.route === RESOURCE_BROWSER_ROUTES.importFiles) {
+      if (current.source !== 'files' || current.query.length > 0) {
+        throw new ResourceBrowserContractError(
+          'invalid-resource-browser-payload',
+          'Resource Browser file import requires the unfiltered Files source.',
+        );
+      }
+      const target = parsed.resourceId
+        ? current.items.find(
+            (candidate): candidate is ResourceBrowserContentItem =>
+              candidate.resourceId === parsed.resourceId && candidate.source === 'files',
+          )
+        : undefined;
+      if (parsed.resourceId && !target) {
+        throw new ResourceBrowserContractError(
+          'resource-browser-stale-identity',
+          'Resource Browser import destination is stale.',
+        );
+      }
+      const parent = resolveCreationParent(current.items, target);
+      const result = await this.options.interactions.importFiles({
+        identity: this.identity,
+        ...(parent ? { parent } : {}),
+      });
+      if (result === 'cancelled') return current;
+      await this.options.source.refresh(this.identity);
+      return this.commitProjection(await this.readFilesMutationProjection(current, parent));
     }
     if (
       parsed.route === RESOURCE_BROWSER_ROUTES.createFile ||

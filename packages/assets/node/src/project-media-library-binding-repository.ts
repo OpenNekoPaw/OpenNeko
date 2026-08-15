@@ -118,27 +118,47 @@ export class ProjectMediaLibraryBindingRepository {
       throw new Error('Project Media Library recovery confirmation is invalid.');
     }
     const plan = parsedConfirmation.plan;
-    const binding: ProjectMediaLibraryBinding = {
-      projectId: plan.projectId,
+    const binding = await this.apply({
       libraryName: plan.libraryName,
       connectionId: plan.connectionId,
-      bindingFingerprint: plan.replacementBindingFingerprint,
-    };
-    if (createProjectMediaLibraryBindingFingerprint(binding) !== binding.bindingFingerprint) {
+      expectedBindingFingerprint: plan.expectedBindingFingerprint,
+    });
+    if (binding.bindingFingerprint !== plan.replacementBindingFingerprint) {
       throw new Error('Project Media Library replacement fingerprint is invalid.');
     }
+    return binding;
+  }
 
-    await this.assertExpectedBinding(plan.libraryName, plan.expectedBindingFingerprint);
+  async apply(input: {
+    readonly libraryName: string;
+    readonly connectionId: string;
+    readonly expectedBindingFingerprint: string | null;
+  }): Promise<ProjectMediaLibraryBinding> {
+    const binding: ProjectMediaLibraryBinding = {
+      projectId: this.projectId,
+      libraryName: input.libraryName,
+      connectionId: input.connectionId,
+      bindingFingerprint: createProjectMediaLibraryBindingFingerprint({
+        projectId: this.projectId,
+        libraryName: input.libraryName,
+        connectionId: input.connectionId,
+      }),
+    };
+
+    await this.assertExpectedBinding(input.libraryName, input.expectedBindingFingerprint);
     await fs.mkdir(this.directoryPath, { recursive: true });
-    const destinationPath = bindingPath(this.workspaceRoot, plan.libraryName);
-    const temporaryPath = path.join(this.directoryPath, `.${plan.libraryName}.${randomUUID()}.tmp`);
+    const destinationPath = bindingPath(this.workspaceRoot, input.libraryName);
+    const temporaryPath = path.join(
+      this.directoryPath,
+      `.${input.libraryName}.${randomUUID()}.tmp`,
+    );
     try {
       await fs.writeFile(temporaryPath, serializeProjectMediaLibraryBinding(binding), {
         encoding: 'utf8',
         flag: 'wx',
         mode: 0o600,
       });
-      await this.assertExpectedBinding(plan.libraryName, plan.expectedBindingFingerprint);
+      await this.assertExpectedBinding(input.libraryName, input.expectedBindingFingerprint);
       await fs.rename(temporaryPath, destinationPath);
     } finally {
       await fs.rm(temporaryPath, { force: true }).catch(() => undefined);

@@ -22,6 +22,7 @@ export const RESOURCE_BROWSER_ROUTES = {
   removeSource: 'source.remove',
   createFile: 'workspace-entry.create-file',
   createDirectory: 'workspace-entry.create-directory',
+  importFiles: 'workspace-entry.import-files',
   createCreativeDocument: 'creative-document.create',
   openCreativeDocument: 'creative-document.open',
   trashContent: 'content.trash',
@@ -53,6 +54,7 @@ export type ResourceBrowserMediaLibraryState =
   | 'target-unavailable'
   | 'content-incomplete'
   | 'binding-invalid'
+  | 'entry-conflict'
   | 'unreferenced-local-binding';
 
 export interface ResourceBrowserMediaLibraryStatus {
@@ -280,6 +282,7 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     | typeof RESOURCE_BROWSER_ROUTES.removeSource
     | typeof RESOURCE_BROWSER_ROUTES.createFile
     | typeof RESOURCE_BROWSER_ROUTES.createDirectory
+    | typeof RESOURCE_BROWSER_ROUTES.importFiles
     | typeof RESOURCE_BROWSER_ROUTES.createCreativeDocument
     | typeof RESOURCE_BROWSER_ROUTES.openCreativeDocument
     | typeof RESOURCE_BROWSER_ROUTES.trashContent
@@ -966,6 +969,7 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route !== RESOURCE_BROWSER_ROUTES.removeSource &&
     route !== RESOURCE_BROWSER_ROUTES.createFile &&
     route !== RESOURCE_BROWSER_ROUTES.createDirectory &&
+    route !== RESOURCE_BROWSER_ROUTES.importFiles &&
     route !== RESOURCE_BROWSER_ROUTES.createCreativeDocument &&
     route !== RESOURCE_BROWSER_ROUTES.trashContent &&
     route !== RESOURCE_BROWSER_ROUTES.preview &&
@@ -993,6 +997,16 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
   ) {
     return request;
+  }
+  if (route === RESOURCE_BROWSER_ROUTES.importFiles) {
+    const resourceId =
+      record['resourceId'] === undefined
+        ? undefined
+        : requireOpaqueIdentity(
+            record['resourceId'],
+            'Resource Browser import destination identity is invalid.',
+          );
+    return { ...request, ...(resourceId ? { resourceId } : {}) };
   }
   if (
     route === RESOURCE_BROWSER_ROUTES.createFile ||
@@ -1434,6 +1448,7 @@ function parseResourceBrowserMediaLibraryStatus(value: unknown): ResourceBrowser
     state !== 'target-unavailable' &&
     state !== 'content-incomplete' &&
     state !== 'binding-invalid' &&
+    state !== 'entry-conflict' &&
     state !== 'unreferenced-local-binding'
   ) {
     throw invalidPayload('Resource Browser Media Library state is invalid.');
@@ -1472,10 +1487,9 @@ function parseResourceBrowserMediaLibraryDiagnostic(
   const code = record['code'];
   const allowedCodes = new Set([
     'required-unlinked',
-    'connection-missing',
     'target-unavailable',
     'content-incomplete',
-    'binding-invalid',
+    'entry-conflict',
   ]);
   if (typeof code !== 'string' || !allowedCodes.has(code)) {
     throw invalidPayload('Resource Browser Media Library diagnostic code is invalid.');

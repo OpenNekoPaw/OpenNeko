@@ -5,6 +5,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { confirmProjectMediaLibraryRecovery } from '@neko/assets-domain/contracts';
 import { ProjectMediaLibraryBindingRepository } from './project-media-library-binding-repository';
 import { ProjectMediaLibraryBindingService } from './project-media-library-binding-service';
+import {
+  materializeWorkspaceLinkedMediaLibrary,
+  removeExactWorkspaceLinkedMediaLibrary,
+  removeWorkspaceLinkedMediaLibraryProjection,
+  restoreWorkspaceLinkedMediaLibrary,
+} from './workspace-linked-media-libraries';
 
 const PROJECT_ID = 'project-neko';
 const CONNECTION_ID = 'media-library:local:Footage';
@@ -37,6 +43,13 @@ describe('ProjectMediaLibraryBindingService', () => {
       status: 'available',
       binding: { connectionId: CONNECTION_ID },
     });
+    await expect(
+      import('node:fs/promises').then(({ realpath }) =>
+        realpath(path.join(fixture.workspace, 'neko/assets/Footage')),
+      ),
+    ).resolves.toBe(
+      await import('node:fs/promises').then(({ realpath }) => realpath(fixture.libraryRoot)),
+    );
   });
 
   it('rejects cancellation and stale references without changing the binding', async () => {
@@ -74,6 +87,37 @@ describe('ProjectMediaLibraryBindingService', () => {
 
     await expect(fixture.bindings.read('Footage')).resolves.toMatchObject({ status: 'absent' });
     await expect(
+      import('node:fs/promises').then(({ lstat }) =>
+        lstat(path.join(fixture.workspace, 'neko/assets/Footage')),
+      ),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      import('node:fs/promises').then(({ readFile }) =>
+        readFile(path.join(fixture.libraryRoot, 'shots', 'hero.mov'), 'utf8'),
+      ),
+    ).resolves.toBe('hero');
+  });
+
+  it('removes the project binding and direct link after the global connection record is lost', async () => {
+    const fixture = await createFixture();
+    const binding = await fixture.service.associate({
+      libraryName: 'Footage',
+      connectionId: CONNECTION_ID,
+    });
+    fixture.disableConnection();
+
+    await fixture.service.remove({
+      libraryName: 'Footage',
+      expectedBindingFingerprint: binding.bindingFingerprint,
+    });
+
+    await expect(fixture.bindings.read('Footage')).resolves.toMatchObject({ status: 'absent' });
+    await expect(
+      import('node:fs/promises').then(({ lstat }) =>
+        lstat(path.join(fixture.workspace, 'neko/assets/Footage')),
+      ),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
       import('node:fs/promises').then(({ readFile }) =>
         readFile(path.join(fixture.libraryRoot, 'shots', 'hero.mov'), 'utf8'),
       ),
@@ -99,16 +143,53 @@ async function createFixture() {
     referenceCount: 1,
     relativePaths: ['shots/hero.mov'],
   };
+  let connectionAvailable = true;
   const service = new ProjectMediaLibraryBindingService({
     projectId: PROJECT_ID,
     bindings,
     connections: {
       resolveAuthorizedTarget: async (connectionId) => {
-        if (connectionId !== CONNECTION_ID) throw new Error('unavailable');
+        if (!connectionAvailable || connectionId !== CONNECTION_ID) {
+          throw new Error('unavailable');
+        }
         return libraryRoot;
       },
     },
     requirements: { read: async () => requirement },
+    workspaceProjection: {
+      materialize: ({ libraryName, targetDirectory }) =>
+        materializeWorkspaceLinkedMediaLibrary({
+          workspaceRoot: workspace,
+          name: libraryName,
+          targetDirectory,
+        }),
+      remove: ({ libraryName, targetDirectory }) =>
+        targetDirectory
+          ? removeExactWorkspaceLinkedMediaLibrary({
+              workspaceRoot: workspace,
+              name: libraryName,
+              targetDirectory,
+            })
+          : removeWorkspaceLinkedMediaLibraryProjection({
+              workspaceRoot: workspace,
+              name: libraryName,
+            }),
+      restore: ({ libraryName, previous }) =>
+        restoreWorkspaceLinkedMediaLibrary({
+          workspaceRoot: workspace,
+          name: libraryName,
+          previous,
+        }),
+    },
   });
-  return { service, bindings, requirement, libraryRoot };
+  return {
+    service,
+    bindings,
+    requirement,
+    libraryRoot,
+    workspace,
+    disableConnection: () => {
+      connectionAvailable = false;
+    },
+  };
 }

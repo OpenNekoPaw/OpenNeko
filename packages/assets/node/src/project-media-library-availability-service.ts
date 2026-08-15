@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { realpath, stat } from 'node:fs/promises';
+import { lstat, realpath, stat } from 'node:fs/promises';
 import * as path from 'node:path';
+import { workspaceLinkedMediaLibraryPath } from '@neko/assets-domain/contracts';
 import type {
   ProjectMediaLibraryAvailability,
   ProjectMediaLibraryDiagnostic,
@@ -106,26 +107,22 @@ export class ProjectMediaLibraryAvailabilityService {
         continue;
       }
       const binding = bindingByName.get(libraryName);
-      if (!requirement) {
-        if (binding) {
-          libraries.push({
-            projectId: this.options.projectId,
-            libraryName,
-            state: 'unreferenced-local-binding',
-            requiredRelativePaths: [],
-          });
-        }
-        continue;
-      }
+      if (!requirement && !binding) continue;
       if (!binding) {
         unavailableRelativePaths.push({ libraryName, relativePaths: requiredRelativePaths });
+        const hasWorkspaceEntry = await workspaceProjectionEntryExists(
+          this.options.workspaceRoot,
+          libraryName,
+        );
         libraries.push(
           unavailable(
             this.options.projectId,
             libraryName,
-            'required-unlinked',
+            hasWorkspaceEntry ? 'entry-conflict' : 'required-unlinked',
             requiredRelativePaths,
-            'The project requires this Media Library, but this checkout has no local binding.',
+            hasWorkspaceEntry
+              ? 'The Workspace media entry exists but cannot be adopted as one exact global Media Library binding.'
+              : 'The project requires this Media Library, but this checkout has no local binding.',
           ),
         );
         continue;
@@ -173,6 +170,19 @@ export class ProjectMediaLibraryAvailabilityService {
         );
         continue;
       }
+      if (!(await hasExactWorkspaceProjection(this.options.workspaceRoot, libraryName, target))) {
+        unavailableRelativePaths.push({ libraryName, relativePaths: requiredRelativePaths });
+        libraries.push(
+          unavailable(
+            this.options.projectId,
+            libraryName,
+            'entry-conflict',
+            requiredRelativePaths,
+            'The managed Workspace link is missing or does not match the exact project binding.',
+          ),
+        );
+        continue;
+      }
       const unavailableDescendants = await findUnavailableDescendants(
         target,
         requiredRelativePaths,
@@ -202,7 +212,7 @@ export class ProjectMediaLibraryAvailabilityService {
       libraries.push({
         projectId: this.options.projectId,
         libraryName,
-        state: 'available',
+        state: requirement ? 'available' : 'unreferenced-local-binding',
         requiredRelativePaths,
       });
     }
@@ -245,6 +255,51 @@ export class ProjectMediaLibraryAvailabilityService {
           mediaLibraryRoot: this.options.globalMediaLibraryRoot,
           libraryId: connectionId,
         });
+  }
+}
+
+async function workspaceProjectionEntryExists(
+  workspaceRoot: string,
+  libraryName: string,
+): Promise<boolean> {
+  const linkPath = path.join(
+    workspaceRoot,
+    ...workspaceLinkedMediaLibraryPath(libraryName).split('/'),
+  );
+  try {
+    await lstat(linkPath);
+    return true;
+  } catch (error) {
+    if (isErrorCode(error, 'ENOENT')) return false;
+    throw error;
+  }
+}
+
+function isErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { readonly code?: unknown }).code === code
+  );
+}
+
+async function hasExactWorkspaceProjection(
+  workspaceRoot: string,
+  libraryName: string,
+  target: string,
+): Promise<boolean> {
+  try {
+    const linkPath = path.join(
+      workspaceRoot,
+      ...workspaceLinkedMediaLibraryPath(libraryName).split('/'),
+    );
+    return (
+      (await lstat(linkPath)).isSymbolicLink() &&
+      (await realpath(linkPath)) === (await realpath(target))
+    );
+  } catch {
+    return false;
   }
 }
 

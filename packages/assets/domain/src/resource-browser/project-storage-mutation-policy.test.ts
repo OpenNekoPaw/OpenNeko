@@ -8,7 +8,7 @@ describe('Resource Browser project storage mutation policy', () => {
   it.each([
     ['neko/project.json', 'project-facts'],
     ['neko/project-bindings/entity-character/a.json', 'project-facts'],
-    ['.neko/media-libraries/Footage.json', 'project-local-state'],
+    ['.neko/presentation/resource-browser.json', 'project-local-state'],
   ] as const)('reserves %s for its package owner', (path, owner) => {
     expect(inspectResourceBrowserProjectStorageMutation(path)).toEqual({
       code: 'package-owned-project-storage',

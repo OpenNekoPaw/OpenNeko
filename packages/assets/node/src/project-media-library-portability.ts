@@ -140,6 +140,7 @@ function projectPortabilityState(
     | 'target-unavailable'
     | 'content-incomplete'
     | 'binding-invalid'
+    | 'entry-conflict'
     | 'unreferenced-local-binding',
 ): WorkspaceMediaLibraryStatus['state'] {
   switch (state) {
@@ -154,6 +155,7 @@ function projectPortabilityState(
     case 'content-incomplete':
       return 'content-incomplete';
     case 'binding-invalid':
+    case 'entry-conflict':
       return 'entry-conflict';
     case 'unreferenced-local-binding':
       return 'unreferenced-linked';
@@ -171,6 +173,7 @@ function projectPortabilityDiagnosticCode(state: Parameters<typeof projectPortab
     case 'content-incomplete':
       return 'content-incomplete' as const;
     case 'binding-invalid':
+    case 'entry-conflict':
       return 'entry-conflict' as const;
     case 'available':
     case 'unreferenced-local-binding':

@@ -7,6 +7,7 @@ import {
   createProjectMediaLibraryRecoveryPlan,
 } from '@neko/assets-domain/contracts';
 import { createNodeHostContentReadService } from '@neko/content/node';
+import { encodeProjectEntityDocument } from '@neko/entity-domain';
 import { ProjectMediaLibraryBindingRepository } from './project-media-library-binding-repository';
 import { createProjectMediaLibraryBindingFingerprint } from './project-media-library-binding-repository';
 import { ProjectMediaLibraryContentReadHandler } from './project-media-library-content-handler';
@@ -24,12 +25,12 @@ afterEach(async () => {
 });
 
 describe('ProjectMediaLibraryContentReadHandler', () => {
-  it('composes the exact project binding handler and never consults a retired workspace link', async () => {
+  it('rejects a managed Workspace link that does not match the exact project binding', async () => {
     const fixture = await createFixture();
     const retiredRoot = path.join(fixture.outsideRoot, 'retired');
     await mkdir(retiredRoot, { recursive: true });
     await writeFile(path.join(retiredRoot, 'hero.txt'), 'poison', 'utf8');
-    await mkdir(path.join(fixture.workspace, 'neko', 'assets'), { recursive: true });
+    await rm(path.join(fixture.workspace, 'neko', 'assets', 'Footage'));
     await symlink(
       retiredRoot,
       path.join(fixture.workspace, 'neko', 'assets', 'Footage'),
@@ -48,15 +49,9 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
 
     const result = await content.read(locator);
 
-    expect(result.status).toBe('ready');
-    if (result.status === 'ready') expect(new TextDecoder().decode(result.bytes)).toBe('hero');
-    await expect(
-      content.read({
-        kind: 'workspace-file',
-        path: 'neko/assets/Footage/hero.txt',
-      }),
-    ).rejects.toMatchObject({
-      code: 'invalid-content-locator',
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'content-unauthorized' },
     });
   });
 
@@ -71,6 +66,7 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
       mediaLibraryHandler: new ProjectMediaLibraryContentReadHandler({
         bindings: fixture.bindings,
         connections: { resolveAuthorizedTarget },
+        workspaceRoot: fixture.workspace,
       }),
     });
     const locator = {
@@ -120,14 +116,12 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
     );
   });
 
-  it('fails only the requested locator after project .neko is deleted', async () => {
+  it('rebuilds the exact local binding after project .neko is deleted', async () => {
     const fixture = await createFixture();
-    const content = createNodeHostContentReadService({
+    const content = createProjectContentReadService({
+      projectId: PROJECT_ID,
       workspaceRoot: fixture.workspace,
-      mediaLibraryHandler: new ProjectMediaLibraryContentReadHandler({
-        bindings: fixture.bindings,
-        connections: { resolveAuthorizedTarget: async () => fixture.libraryRoot },
-      }),
+      globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
     await rm(path.join(fixture.workspace, '.neko'), { recursive: true, force: true });
 
@@ -137,10 +131,7 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
         libraryName: 'Footage',
         relativePath: 'shots/hero.txt',
       }),
-    ).resolves.toMatchObject({
-      status: 'unavailable',
-      diagnostic: { code: 'content-missing' },
-    });
+    ).resolves.toMatchObject({ status: 'ready' });
   });
 
   it('rejects a nested symbolic link that escapes the authorized target', async () => {
@@ -153,6 +144,7 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
       mediaLibraryHandler: new ProjectMediaLibraryContentReadHandler({
         bindings: fixture.bindings,
         connections: { resolveAuthorizedTarget: async () => fixture.libraryRoot },
+        workspaceRoot: fixture.workspace,
       }),
     });
 
@@ -183,10 +175,46 @@ async function createFixture() {
     mkdir(path.join(globalMediaLibraryRoot, 'nas'), { recursive: true }),
   ]);
   await writeFile(path.join(libraryRoot, 'shots', 'hero.txt'), 'hero', 'utf8');
+  await mkdir(path.join(workspace, 'neko'), { recursive: true });
+  await writeFile(
+    path.join(workspace, 'neko', 'entities.json'),
+    encodeProjectEntityDocument({
+      projectId: PROJECT_ID,
+      entities: [
+        {
+          entityId: 'entity-1',
+          kind: 'character',
+          names: { canonical: 'Hero', aliases: [] },
+          representations: [
+            {
+              bindingId: 'binding-1',
+              target: {
+                kind: 'media-library',
+                libraryName: 'Footage',
+                relativePath: 'shots/hero.txt',
+              },
+              role: 'portrait',
+              source: 'user',
+              acceptedAt: '2026-08-14T00:00:00.000Z',
+            },
+          ],
+          lifecycle: { state: 'active' },
+          createdAt: '2026-08-14T00:00:00.000Z',
+          updatedAt: '2026-08-14T00:00:00.000Z',
+        },
+      ],
+    }),
+  );
   const connectionId = 'media-library:nas:Footage';
   await symlink(
     libraryRoot,
     path.join(globalMediaLibraryRoot, 'nas', 'Footage'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  await mkdir(path.join(workspace, 'neko', 'assets'), { recursive: true });
+  await symlink(
+    libraryRoot,
+    path.join(workspace, 'neko', 'assets', 'Footage'),
     process.platform === 'win32' ? 'junction' : 'dir',
   );
   const bindings = new ProjectMediaLibraryBindingRepository(workspace, PROJECT_ID);

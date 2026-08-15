@@ -1,4 +1,6 @@
 export * from './asset/manifest';
+export * from './asset/workspace-linked-media-library';
+export * from './project-media-library-binding';
 export {
   aggregateWorkspaceMediaLibraryRequirements,
   parsePortableMediaLibrarySnapshotCheckpointPayload,
@@ -24,5 +26,4 @@ export {
 export * from './media-library-drag';
 export * from './media-library-projection';
 export * from './project-portability-contract';
-export * from './project-media-library-binding';
 export * from './workspace';

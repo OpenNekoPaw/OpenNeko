@@ -94,6 +94,19 @@ describe('Node Text Editor Markdown media service', () => {
       diagnostic: { code: 'text-editor-markdown-media-missing' },
     });
     expect(resources.registerFile).not.toHaveBeenCalled();
+
+    const linkedProjection = '![[neko/assets/References/cover.png]]';
+    await expect(
+      service.prepare({
+        request: mediaRequest(linkedProjection, 'neko/assets/References/cover.png'),
+        source: linkedProjection,
+        resourceOwner: resourceOwner(),
+        isCurrent: () => true,
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'text-editor-markdown-media-unauthorized' },
+    });
   });
 
   it('rejects an escaped symlink without registering its physical target', async () => {

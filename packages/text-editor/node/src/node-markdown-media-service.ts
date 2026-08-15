@@ -5,7 +5,7 @@ import {
   resolveProjectMediaLibraryContentPath,
   resolveWorkspaceContentLocator,
 } from '@neko/assets-node';
-import { parseContentReferenceTarget } from '@neko/content';
+import { isProjectDurableContentLocator, parseContentReferenceTarget } from '@neko/content';
 import { projectNekoMarkdownExtensions } from '@neko/markdown';
 import { detectPreviewContentKind, getPreviewMediaType } from '@neko/preview-domain';
 import {
@@ -98,7 +98,9 @@ export class NodeTextEditorMarkdownMediaService {
         return unavailable(request, 'text-editor-markdown-media-unauthorized');
       }
       const locator = parseContentReferenceTarget(request.token.target);
-      if (!locator) return unavailable(request, 'text-editor-markdown-media-unauthorized');
+      if (!locator || !isProjectDurableContentLocator(locator)) {
+        return unavailable(request, 'text-editor-markdown-media-unauthorized');
+      }
       absolutePath =
         locator.kind === 'media-library'
           ? await resolveProjectMediaLibraryContentPath(
@@ -229,13 +231,23 @@ function classifyMedia(target: string): TextEditorMarkdownMediaKind | undefined 
 }
 
 function diagnosticForResolutionError(error: unknown): TextEditorMarkdownMediaDiagnosticCode {
-  if (isErrorCode(error, 'ENOENT') || isErrorCode(error, 'ENOTDIR')) {
+  if (
+    isErrorCode(error, 'ENOENT') ||
+    isErrorCode(error, 'ENOTDIR') ||
+    isErrorCode(error, 'workspace-path-unavailable') ||
+    isErrorCode(error, 'library-link-broken') ||
+    isErrorCode(error, 'library-link-loop')
+  ) {
     return 'text-editor-markdown-media-missing';
   }
   if (
     isErrorCode(error, 'EACCES') ||
     isErrorCode(error, 'EPERM') ||
-    (error instanceof Error && error.message.includes('outside its authorized workspace source'))
+    isErrorCode(error, 'invalid-workspace-path') ||
+    isErrorCode(error, 'library-permission-denied') ||
+    isErrorCode(error, 'library-entry-not-link') ||
+    isErrorCode(error, 'unmanaged-symlink') ||
+    isErrorCode(error, 'nested-link-escape')
   ) {
     return 'text-editor-markdown-media-unauthorized';
   }
