@@ -7,8 +7,8 @@ Runtime。Chara、Search、Quality 与媒体比较 Tools 仍保留领域 package
 Desktop 产品路径；本索引中的“保留”不等于“已经接入”。Assets 的产品入口是单一 Media
 Library，Creative Entity 通过稳定引用与其连接。Generation 的实现中边界由
 [`extract-generation-domain-package`](../../openspec/changes/extract-generation-domain-package/)
-约束，稳定后再建立领域目录；Chara 的稳定边界见
-[`chara/README.md`](chara/README.md)。新增领域目录时使用 `docs/domains/<domain>/`，并优先提供：
+约束，稳定后再建立领域目录；Chara、World 与 Project 的稳定边界见下方索引。新增领域目录时使用
+`docs/domains/<domain>/`，并优先提供：
 
 - `README.md`：范围、参与包、横切能力和阅读路径；
 - `architecture.md`：领域 owner、contract、依赖、生命周期和错误边界；
@@ -20,4 +20,5 @@ Library，Creative Entity 通过稳定引用与其连接。Generation 的实现�
 
 - [`automation/README.md`](automation/README.md)：Browser/Computer automation 的 provider、session、target、授权与 evidence 边界；
 - [`chara/README.md`](chara/README.md)：Character 背景故事、原生背景设定、个人故事线、记忆、Dialogue/Room 与表现边界。
+- [`world/README.md`](world/README.md)：World 工作区对象、全局版本、运行/存档和单版本 ZIP 边界。
 - [`project/README.md`](project/README.md)：Project identity、独立 association facts、派生 Content/dependency projection，以及 sync/package 边界。

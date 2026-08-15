@@ -58,28 +58,30 @@ CharacterConversationSelection
 
 UI selection、Timeline、context cache、transcript summary、模型输出和 active/recent identity 都不是领域事实 owner。
 
-管理页、Workspace Authoring 与 Interaction 必须是三种独立生命周期。管理页只投影目录与只读详情；Workspace 只挂载当前 exact Character authoring Surface；Conversation/Room runtime 可在 UI 卸载后继续，但不得保留 React tree、provider 或媒体资源。Scene 切换只提交允许恢复的 presentation snapshot，并从精确 Workspace grant、placement authority 和 CharacterProject identity 重建新 Root。
+管理页、Project Workspace Authoring 与 Interaction 必须是三种独立生命周期。管理页只投影全局目录与只读版本详情；Workspace 只挂载当前 exact Character authoring Surface；Conversation/Room runtime 可在 UI 卸载后继续，但不得保留 React tree、provider 或媒体资源。
 
 ## 创建、管理与 Project Entity 关联
 
 手动输入、提示词、文件 evidence、普通 Asset representation 和 confirmed Entity context 都是同一个
-fresh CharacterProject 创建操作的 seed。快速创建可以跳过 Studio，但必须写入与 Studio 相同的 Chara
-repository；Studio 只是继续编辑 definition、representation、voice、storyline 与版本图的创作工作区，
-不拥有第二套角色类型、格式或保存路径。
+fresh CharacterProject 创建操作的 seed。Project-bound 快速创建可以跳过 Studio，但必须通过同一个原子 owner
+command 写入精确 Project Workspace；Assistant-bound 快速创建直接提交 GlobalCharacter 和首个不可变
+CharacterVersion，不创建隐藏 Project 或工作区对象。Studio 只继续编辑工作区 definition、representation、
+voice、storyline 与版本图，不拥有第二套角色类型、格式或保存路径。
 
-`.neko-character` 是独立的 untrusted ZIP 导入导出 workflow，用于恢复精确用户管理的角色记录；它不是
-Character Creator seed、实时 repository 或 Workspace。创建与导入都不得自动发布 CharacterVersion、
-启动 Dialogue/Room、选择 provider/model 或授予 Agent 能力。
+`.neko-character` 是独立的 untrusted ZIP 导入导出 workflow，只传输一个选定的不可变版本和必要资源；
+它不是 Character Creator seed、实时 repository 或 Workspace。导入固定提交全局目录，不创建工作区对象、
+安装记录、适配副本或恢复记录。
 
 全局 Character 不需要 Entity。项目内 Character 由 Project per-record association owner 在精确
-`contentProjectId` 下保存 `entityId + characterProjectId` 关联；CharacterProject 不保存项目
+`projectId` 下保存 `entityId + characterProjectId` 关联；CharacterProject 不保存项目
 `entityId`。一个项目本地
 Character 必须有一个精确 Character Entity association，但 Character Entity 可以没有 CharacterProject。
 Chara 只在关联有效且用户选择了精确 CharacterVersion 时提供 Open Character、Open Studio 或 Start
 Interaction handoff。Entity 不拥有 Dialogue、Room、Embody、Conversation 或 Agent launch lifecycle。
 
-项目内创建跨 CharacterProject、membership、Entity 与 association 时，部分 commit 必须返回可见 receipt，
-只重试缺失的精确步骤；不得删除已保存用户内容、改绑另一角色，或回退 active/recent Project。
+项目内创建跨 CharacterProject、membership、Entity 与 association 时，必须由同一 Workspace storage
+transaction 原子提交。任一步失败都不得留下孤立角色、Entity、association 或待重试 receipt，也不得回退
+active/recent Project。
 
 ## Conversation mode contract
 
@@ -163,7 +165,7 @@ Character representation 只保存语义和稳定 ref。Presentation provider �
 
 ## Workspace 目录与可移植角色包
 
-角色管理、创作和运行的唯一持久 authority 是 Host 授权 Workspace 下的 Chara 目录记录：
+工作区创作的持久 authority 是 Host 授权 Project Workspace 下的 Chara 目录记录：
 
 ```text
 neko/characters/<characterProjectId>/
@@ -181,11 +183,15 @@ neko/characters/<characterProjectId>/
 `.neko-character` ZIP 只服务用户显式触发的导入和导出，不是 Character identity、live repository、Workspace、runtime 或同步源：
 
 ```text
-export: canonical Workspace records -> bounded ZIP snapshot
-import: ZIP validation/preview -> explicit Workspace install -> release ZIP resources
+export: one selected CharacterVersion + required resources -> bounded ZIP snapshot
+import: Host file grant -> archive validation -> atomic GlobalCharacter/CharacterVersion commit
 ```
 
-导入时先写入角色自有 bytes，再提交 canonical localized-asset binding；若中途失败，未绑定 bytes 不得被报告为可用，精确重试可以继续安装。导入完成后，管理、Studio、Dialogue 和 Room 只读取已安装的 Workspace records；移动、修改或删除源 ZIP 不影响已安装角色。产品不得保存 ZIP 路径、manifest 或打开状态作为角色事实，不得挂载、监听、回读、同步或从 ZIP 原地编辑/运行。导出包不包含 Conversation、Room、Companion continuity/memory、Narrative run、provider/model 配置、Skill/Tool grant、approval、credential、cache 或 presentation snapshot。
+Node adapter 在 staging 中验证路径 containment、链接、重复条目、文件数量、展开大小、inventory 和 digest，
+随后由 Chara application service 原子提交全局对象和版本。失败不得改变 sibling 全局对象或任何 Project。
+产品不得保存 ZIP 路径、manifest 或打开状态作为角色事实，也不得挂载、监听、回读或从 ZIP 原地运行。
+导出包不包含工作区历史、完整版本图、Conversation、Room、memory、provider/model 配置、credential、cache
+或 presentation snapshot。
 
 普通 representation/voice 继续保存 opaque ref。只有用户明确选择、Host 授权且允许复制的素材 bytes 才可进入角色包；未内嵌资源作为 external dependency 显示，不静默复制全局库、项目 sibling 或任意本地路径。
 

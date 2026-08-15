@@ -1,14 +1,14 @@
 # Chara 领域
 
-Chara 是角色创作、发布、个人故事线创作、日常长期记忆、Dialogue/Room 和角色表现语义的 owner。host-neutral domain/application 位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara-node`，browser-only 管理与互动视图位于 `packages/chara-webview`。
+Chara 是角色工作区对象、全局角色与不可变领域版本、个人故事线、日常长期记忆、Dialogue/Room 和角色表现语义的 owner。host-neutral domain/application 位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara-node`，browser-only 管理与互动视图位于 `packages/chara-webview`。
 
 Agent 继续唯一拥有 Conversation、AgentSession、turn、queue、Tool、Approval、provider/model 执行、transcript 和 compaction；Desktop 只负责 Electron sender/Window/Scene、typed IPC、本地资源授权和 public Surface 组合。
 
 ## 管理、创作与互动入口
 
-角色管理是 Window 级单例导航场景：Main 只显示角色卡片目录，Secondary Main 只显示只读详情和生命周期操作。它不挂载角色编辑器，也不拥有 Agent runtime。快速生成只把精确 builtin Character Creator、完整提示词和已授权引用交给标准 Agent Composer；手动创建只在用户授权目标目录后建立空白草稿。
+角色管理是 Window 级单例导航场景：Main 显示全局角色目录，Secondary Main 显示当前版本和历史版本。它不挂载工作区编辑器，也不拥有 Agent runtime。助手模式调用 `character-creator` 时直接创建全局角色及首个不可变版本；创作模式绑定精确 Project 时创建该工作区内的可编辑角色。
 
-完整编辑属于 Workspace Authoring 中的 Chara capability。Standalone 角色库与 project-local Content Project 使用同一个 Chara repository/service/Surface 和相同相对布局，但携带不同且显式的 authority；切换目标会卸载旧管理或创作 Root，不保留隐藏编辑器。Character Interaction 是独立 Conversation/Room runtime，只消费用户选择的精确可用版本。
+完整编辑属于 Project Creative Workspace 中的 Chara capability。新可编辑角色从首次 durable commit 起就属于一个精确 Project；不存在 standalone 草稿、隐藏默认 Project 或 active/recent Project fallback。工作区角色可以同步为新的全局角色，或为已关联全局角色追加不可变版本。Character Interaction 是独立 Conversation/Room runtime，只消费用户选择的精确全局版本。
 
 “创建可用版本”是本地不可变领域版本操作，不是远程发布，也不自动开始对话。版本图只投影 authoritative lineage；旧的未关联版本保持 `unlinked` 可见，任何启动操作都必须引用精确 CharacterVersion，不解析 latest/current/head。
 
@@ -96,9 +96,9 @@ Companion turn 可以携带用户显式选择的 owner-qualified Workspace/Conte
 
 ## 本地角色目录与导入导出
 
-角色草稿、可用版本、lineage、Storyline 和创作测试只在授权 Workspace 的 `neko/characters/<characterProjectId>/...` 目录记录中管理和运行。standalone 与 project-local Character 使用相同相对布局，区别只来自外部 placement authority。
+工作区角色、定稿版本、lineage、Storyline 和创作测试只在授权 Project Workspace 的 `neko/characters/<characterProjectId>/...` 目录记录中管理。全局角色目录单独保存稳定 `globalCharacterId`、精确 `currentCharacterVersionId` 和不可变版本；Project 与运行时只保存精确版本引用。
 
-`.neko-character` ZIP 仅是导入导出快照：导出从 canonical 目录读取用户选定记录和已有 exact 本地化素材绑定；导入先校验和预览，再写入角色自有 bytes 与 canonical `resourceRef/representation -> entry/files` 绑定并释放归档资源。文件存在或 ZIP manifest 不能替代该绑定。ZIP 不被挂载为 Workspace，不保存为角色 identity，不参与后续编辑、对话、Room、监听或同步；导入后源 ZIP 可以移动或删除而不影响已安装角色。
+`.neko-character` ZIP 仅是单版本传输快照：导出一个用户选择的不可变角色版本和必要素材；导入经 Host 文件授权和 archive/inventory/integrity 校验后，直接原子提交到全局角色目录。更新已有全局角色时必须携带精确对象和当前版本确认；另存为新对象必须使用新的全局 identity。ZIP 不被挂载为 Workspace，不保存为角色 identity，也不创建安装、适配、恢复或 Project membership 记录。
 
 ## Character Interaction Workbench
 
@@ -118,9 +118,7 @@ Main 不固定为 Avatar，也不尝试 first-compatible renderer。未知、失
 
 ## 当前状态
 
-现有 foundation 已实现部分 Character/Room、StorylineRun、run-scoped memory 和固定 Avatar Workbench 原型。`separate-companion-and-narrative-character-conversations` 正在原子替换这些路径；旧记录必须保留可见 diagnostic，但不得进入新成功路径。
-
-Character 管理与 Workspace Authoring 已进入 Desktop 组合；真实 provider 驱动的 Character Creator/Conversation 完整验收仍受发布门禁约束。包内服务、fixture 和隔离 UI 不能替代可见 Electron 与真实 Agent 路径证据。
+Character 全局管理、Project Workspace 创作、Dialogue/Room 和 portable ZIP 已进入 Desktop 组合。真实 provider 驱动的 Character Creator/Conversation 完整验收仍受发布门禁约束；包内服务、fixture 和隔离 UI 不能替代可见 Electron 与真实 Agent 路径证据。
 
 ## 阅读路径
 

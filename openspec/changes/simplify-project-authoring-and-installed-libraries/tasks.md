@@ -31,7 +31,7 @@
 
 ## 6. Destructive legacy removal
 
-- [ ] 6.1 Delivery batch D: delete the remaining installed-library/adaptation/recovery/publication-plan services, repositories, Roots, handlers, exports, fixtures, stores and resource directories after batches B-C remove their consumers; add exact-scope tests proving obsolete data is not read or migrated and canonical Project objects, domain versions, Conversations, Rooms, Runs, Saves and valid refs are not deleted.
+- [x] 6.1 Delivery batch D: delete the remaining installed-library/adaptation/recovery/publication-plan services, repositories, Roots, handlers, exports, fixtures, stores and resource directories after batches B-C remove their consumers; add exact-scope tests proving obsolete data is not read or migrated and canonical Project objects, domain versions, Conversations, Rooms, Runs, Saves and valid refs are not deleted.
 
 ## 7. Documentation and verification
 
