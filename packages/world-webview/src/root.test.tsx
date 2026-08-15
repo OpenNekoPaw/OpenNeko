@@ -70,15 +70,13 @@ describe('World package Webview roots', () => {
     );
   });
 
-  it('delegates exact global Run and Export identities from one detail scroller', async () => {
-    const onRun = vi.fn();
+  it('delegates the exact global export identity from one detail scroller', async () => {
     const onExport = vi.fn();
     const { container } = render(
       <WorldManagementDetailRoot
         actions={{
           onExport,
           onImport: vi.fn(),
-          onRun,
         }}
         locale="en"
         runtime={{
@@ -95,9 +93,7 @@ describe('World package Webview roots', () => {
       1,
     );
     expect(container.querySelector('.world-authoring__preview')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-    expect(onRun).toHaveBeenCalledWith('world-a', 'version-a');
     expect(onExport).toHaveBeenCalledWith('global-world-a');
   });
 

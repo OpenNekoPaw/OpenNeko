@@ -267,7 +267,6 @@ interface ShellActions {
   readonly onImportWorldPackage: (
     target?: import('@neko/world/contracts').WorldPortableImportTarget,
   ) => void;
-  readonly onRunWorldVersion: (worldProjectId: string, worldVersionId: string) => void;
   readonly onExportWorldPackage: (globalWorldId: string) => void;
   readonly onStartGlobalCharacterConversation: (input: {
     readonly globalCharacterId: string;
@@ -789,13 +788,6 @@ export function DesktopApplication(): JSX.Element {
         .catch((error: unknown) => setDiagnostic(describeError(error)))
         .finally(finishPending);
     },
-    onRunWorldVersion: () => {
-      setDiagnostic(
-        locale === 'zh-cn'
-          ? '独立世界记录仅用于恢复，不能启动新的世界运行。'
-          : 'Standalone World records are recovery-only and cannot start a new Run.',
-      );
-    },
     onExportWorldPackage: () => {
       setDiagnostic(
         locale === 'zh-cn'
@@ -1304,7 +1296,6 @@ export function DesktopShellView({
     onExportCharacterPackage: () => undefined,
     onImportCharacterPackage: () => undefined,
     onImportWorldPackage: () => undefined,
-    onRunWorldVersion: () => undefined,
     onExportWorldPackage: () => undefined,
     onStartGlobalCharacterConversation: async () => undefined,
     onFinalizeAndStartCharacterConversation: async () => undefined,
@@ -2313,7 +2304,6 @@ function DesktopWorkbenchRuntimePortals({
                 : undefined,
             );
           },
-          onRun: actions.onRunWorldVersion,
         }}
         locale={locale}
         runtime={worldManagement}

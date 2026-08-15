@@ -30,7 +30,6 @@ export interface WorldManagementCreateActions {
 }
 
 export interface WorldManagementDetailActions extends WorldManagementCreateActions {
-  readonly onRun: (worldProjectId: string, worldVersionId: string) => void;
   readonly onExport: (globalWorldId: string) => void;
 }
 
@@ -535,12 +534,7 @@ function WorldDetailContent({
         ) : (
           <div className="world-management__version-list">
             {detail.versions.map((version) => (
-              <VersionRow
-                key={version.worldVersionId}
-                locale={locale}
-                onRun={() => actions.onRun(version.worldProjectId, version.worldVersionId)}
-                version={version}
-              />
+              <VersionRow key={version.worldVersionId} locale={locale} version={version} />
             ))}
           </div>
         )}
@@ -590,11 +584,9 @@ function WorldDetailContent({
 
 function VersionRow({
   locale,
-  onRun,
   version,
 }: {
   readonly locale: SupportedLocale;
-  readonly onRun: () => void;
   readonly version: WorldManagementVersionSummary;
 }): JSX.Element {
   return (
@@ -607,9 +599,6 @@ function VersionRow({
         <small>
           {version.runtimeCount} {text(locale, '次运行', 'runs')}
         </small>
-        <button type="button" onClick={onRun}>
-          {text(locale, '运行', 'Run')}
-        </button>
       </span>
     </div>
   );
