@@ -1,10 +1,11 @@
 import type { CharacterProject, CharacterVersion } from '@neko/chara/contracts';
-import type { WorldExperienceVersionId, WorldProject } from '@neko/world/contracts';
+import type { WorldExperienceVersionId, WorldProject, WorldVersion } from '@neko/world/contracts';
 
 export type ContentProjectId = string;
 export type CharacterProjectId = CharacterProject['characterProjectId'];
 export type CharacterVersionId = CharacterVersion['characterVersionId'];
 export type WorldProjectId = WorldProject['worldProjectId'];
+export type WorldVersionId = WorldVersion['worldVersionId'];
 
 export type ProjectLocalTargetRef =
   | { readonly kind: 'character-project'; readonly characterProjectId: CharacterProjectId }
@@ -13,6 +14,18 @@ export type ProjectLocalTargetRef =
 export type ProjectAuthoringTargetRef =
   | { readonly kind: 'content-project'; readonly contentProjectId: ContentProjectId }
   | ProjectLocalTargetRef;
+
+export type ProjectGlobalReference =
+  | {
+      readonly kind: 'character-version';
+      readonly globalCharacterId: string;
+      readonly characterVersionId: CharacterVersionId;
+    }
+  | {
+      readonly kind: 'world-version';
+      readonly globalWorldId: string;
+      readonly worldVersionId: WorldVersionId;
+    };
 
 export type ProjectPublicationDependencyRef =
   | { readonly kind: 'character-version'; readonly characterVersionId: CharacterVersionId }
@@ -152,6 +165,46 @@ export function projectPublicationDependencyKey(
     case 'package-resource':
       return `package-resource:${dependency.packageId}:${dependency.revision}:${dependency.resourcePath}`;
   }
+}
+
+export function parseProjectGlobalReference(value: unknown): ProjectGlobalReference {
+  const record = requireRecord(value, 'Project global reference');
+  if (record['kind'] === 'character-version') {
+    requireExactKeys(
+      record,
+      ['kind', 'globalCharacterId', 'characterVersionId'],
+      'Character global reference',
+    );
+    return {
+      kind: 'character-version',
+      globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter identity'),
+      characterVersionId: requireIdentity(
+        record['characterVersionId'],
+        'CharacterVersion identity',
+      ),
+    };
+  }
+  if (record['kind'] === 'world-version') {
+    requireExactKeys(record, ['kind', 'globalWorldId', 'worldVersionId'], 'World global reference');
+    return {
+      kind: 'world-version',
+      globalWorldId: requireIdentity(record['globalWorldId'], 'GlobalWorld identity'),
+      worldVersionId: requireIdentity(record['worldVersionId'], 'WorldVersion identity'),
+    };
+  }
+  throw new Error(`Unknown Project global reference kind: ${String(record['kind'])}`);
+}
+
+export function projectGlobalReferenceKey(reference: ProjectGlobalReference): string {
+  return reference.kind === 'character-version'
+    ? `character-version:${reference.globalCharacterId}:${reference.characterVersionId}`
+    : `world-version:${reference.globalWorldId}:${reference.worldVersionId}`;
+}
+
+export function projectGlobalObjectKey(reference: ProjectGlobalReference): string {
+  return reference.kind === 'character-version'
+    ? `character:${reference.globalCharacterId}`
+    : `world:${reference.globalWorldId}`;
 }
 
 function requireRecord(value: unknown, label: string): Readonly<Record<string, unknown>> {
