@@ -16,5 +16,6 @@ rules:
     - For changed Desktop or package production modules, record the owner, package role, canonical public entry/path, producer and consumer, runtime boundary, replaced path, and user-data impact.
     - Record why any production logic retained in apps/* requires the Application boundary and why it is not host-neutral business behavior.
   tasks:
+    - Proposal objectives and implementation tasks must have clear boundaries and controlled complexity; task count is not a quality metric. A proposal must not combine independently deliverable objectives, owners, or delivery boundaries, and a task must not bundle independently executable or verifiable outcomes. Split over-complex objectives or tasks into independently reviewable, implementable, and verifiable proposals or tasks; do not merge unrelated work merely to reduce the task count.
     - Every ownership migration must include producer tests, consumer/delegation tests, runtime verification where applicable, and deletion/poison/fail-closed proof for the replaced path.
     - Completion tasks must list actual verification commands and residual risks; result-only success without canonical-path evidence is insufficient.
