@@ -24,7 +24,7 @@
 .neko-resource-browser__toolbar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
 }
 
 .neko-resource-browser__library-menu {
@@ -156,7 +156,7 @@
   padding: 6px 8px;
 }
 
-.neko-resource-browser__search > div {
+.neko-resource-browser__search-field {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -182,7 +182,11 @@
 .neko-resource-browser__view-modes {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
+  padding: 1px;
+  border: 1px solid var(--neko-border, #dfe4e1);
+  border-radius: 7px;
+  background: var(--neko-input-background, #f7f8f7);
 }
 
 .neko-resource-browser__view-modes button {
@@ -190,18 +194,39 @@
   width: 28px;
   height: 28px;
   padding: 0;
+  border-color: transparent;
+  border-radius: 5px;
   place-items: center;
   color: var(--neko-descriptionForeground, #747d78);
 }
 
+.neko-resource-browser__view-modes button:hover:not(:disabled) {
+  border-color: transparent;
+}
+
 .neko-resource-browser__view-modes button[aria-pressed='true'] {
+  border-color: transparent;
+  color: var(--neko-foreground, #26312c);
+  background: var(--neko-elevated, #ffffff);
+  box-shadow: 0 1px 2px rgb(21 31 27 / 10%);
+}
+
+.neko-resource-browser__toolbar > .neko-resource-browser__icon-button,
+.neko-resource-browser__library-menu > .neko-resource-browser__icon-button {
+  border-color: var(--neko-border, #dfe4e1);
+  background: var(--neko-input-background, #f7f8f7);
+}
+
+.neko-resource-browser__toolbar > .neko-resource-browser__icon-button:hover:not(:disabled),
+.neko-resource-browser__library-menu > .neko-resource-browser__icon-button:hover:not(:disabled) {
   border-color: var(--neko-border, #d7ddda);
+  color: var(--neko-foreground, #26312c);
   background: var(--neko-hover, #eef2f0);
 }
 
 .neko-resource-browser__sources {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 3px;
   padding: 3px 7px;
   border-bottom: 1px solid var(--neko-border, #e2e5e3);

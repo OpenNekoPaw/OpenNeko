@@ -6,10 +6,12 @@ export interface ResourceBrowserLabels {
   readonly media: string;
   readonly assets: string;
   readonly search: string;
-  readonly searchPlaceholder: string;
+  readonly searchFilesPlaceholder: string;
+  readonly searchMediaPlaceholder: string;
+  readonly searchAssetsPlaceholder: string;
   readonly createMenu: string;
+  readonly importFiles: string;
   readonly rescan: string;
-  readonly configureMediaLibraries: string;
   readonly linkGlobalLibrary: string;
   readonly addDirectoryLibrary: string;
   readonly relinkSource: string;
@@ -31,6 +33,7 @@ export interface ResourceBrowserLabels {
   readonly recoveryConfirm: string;
   readonly recoveryCancel: string;
   readonly recoveryReferences: string;
+  readonly noAvailableRecoverySource: string;
   readonly statusAvailable: string;
   readonly statusRequiredUnlinked: string;
   readonly statusConnectionMissing: string;
@@ -63,27 +66,27 @@ export interface ResourceBrowserLabels {
   readonly createCharacter: string;
   readonly characterName: string;
   readonly characterDestination: string;
-  readonly characterCreationIncomplete: string;
-  readonly retryCharacterCreation: string;
 }
 
 const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   en: {
     title: 'Resources',
     files: 'Project files',
-    media: 'Shared media',
-    assets: 'Installed assets',
+    media: 'External media',
+    assets: 'Assets',
     search: 'Search',
-    searchPlaceholder: 'Search project resources…',
+    searchFilesPlaceholder: 'Search project files…',
+    searchMediaPlaceholder: 'Search external media…',
+    searchAssetsPlaceholder: 'Search assets…',
     createMenu: 'New',
+    importFiles: 'Import files',
     rescan: 'Rescan',
-    configureMediaLibraries: 'Configure media libraries',
-    linkGlobalLibrary: 'Link global media library',
-    addDirectoryLibrary: 'Add directory as media library',
-    relinkSource: 'Relink media library',
-    removeSource: 'Remove media library',
+    linkGlobalLibrary: 'Associate global Media Library',
+    addDirectoryLibrary: 'Add directory to global Media Library',
+    relinkSource: 'Reconnect external media',
+    removeSource: 'Remove external source',
     removeSourceConfirm:
-      'Remove this workspace link? Referenced items will remain visible as missing.',
+      'Remove this project association and its workspace link? Referenced items will remain visible as missing.',
     createFile: 'New file',
     createDirectory: 'New folder',
     createCanvas: 'New Canvas',
@@ -93,19 +96,20 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     trashContent: 'Move to Trash',
     trashContentConfirm: 'Move this workspace item to Trash?',
     confirm: 'Create',
-    recoverSource: 'Recover media library',
-    recoveryTitle: 'Recover media library',
-    recoveryUseGlobal: 'Use global connection',
+    recoverSource: 'Reconnect external media',
+    recoveryTitle: 'Reconnect external media',
+    recoveryUseGlobal: 'Use an existing source',
     recoverySelectDirectory: 'Choose directory',
     recoveryConfirm: 'Confirm recovery',
     recoveryCancel: 'Cancel',
     recoveryReferences: 'referenced entries',
+    noAvailableRecoverySource: 'No matching available external source was found.',
     statusAvailable: 'Available',
-    statusRequiredUnlinked: 'Required library is not linked',
-    statusConnectionMissing: 'Global connection is missing',
-    statusTargetUnavailable: 'Library target is unavailable',
+    statusRequiredUnlinked: 'Required external source is not connected',
+    statusConnectionMissing: 'External source connection is missing',
+    statusTargetUnavailable: 'External source is unavailable',
     statusContentIncomplete: 'Referenced content is incomplete',
-    statusBindingInvalid: 'The project-local binding record is invalid',
+    statusBindingInvalid: 'The local external-source binding is invalid',
     statusUnreferencedLocalBinding: 'Bound locally but not referenced by project content',
     preview: 'Preview',
     editText: 'Edit text',
@@ -129,28 +133,28 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     gridView: 'Grid view',
     breadcrumbs: 'Resource location',
     workspaceRoot: 'Workspace',
-    mediaLibraries: 'Media libraries',
+    mediaLibraries: 'External media',
     createCharacter: 'Create Character from this resource',
     characterName: 'Character name',
     characterDestination: 'Create in {destination}',
-    characterCreationIncomplete: 'The Character was created, but project linking is incomplete.',
-    retryCharacterCreation: 'Retry linking',
   },
   'zh-cn': {
     title: '资源',
     files: '项目文件',
-    media: '共享媒体',
-    assets: '已安装素材',
+    media: '外部媒体',
+    assets: '素材',
     search: '搜索',
-    searchPlaceholder: '搜索项目资源…',
+    searchFilesPlaceholder: '搜索项目文件…',
+    searchMediaPlaceholder: '搜索外部媒体…',
+    searchAssetsPlaceholder: '搜索素材…',
     createMenu: '新建',
+    importFiles: '导入文件',
     rescan: '重新扫描',
-    configureMediaLibraries: '配置媒体库',
     linkGlobalLibrary: '关联全局媒体库',
-    addDirectoryLibrary: '将目录添加为媒体库',
-    relinkSource: '重新链接媒体库',
-    removeSource: '移除媒体库',
-    removeSourceConfirm: '确认移除此工作区链接？项目引用仍会保留，并显示为缺失。',
+    addDirectoryLibrary: '将目录添加到全局媒体库',
+    relinkSource: '重新连接外部媒体',
+    removeSource: '移除外部来源',
+    removeSourceConfirm: '确认移除此项目关联及工作区链接？项目引用仍会保留，并显示为缺失。',
     createFile: '新建文件',
     createDirectory: '新建目录',
     createCanvas: '新建画布',
@@ -160,19 +164,20 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     trashContent: '移到废纸篓',
     trashContentConfirm: '确认将此工作区项目移到废纸篓？',
     confirm: '创建',
-    recoverSource: '恢复媒体库',
-    recoveryTitle: '恢复媒体库',
-    recoveryUseGlobal: '使用全局连接',
+    recoverSource: '重新连接外部媒体',
+    recoveryTitle: '重新连接外部媒体',
+    recoveryUseGlobal: '使用已有来源',
     recoverySelectDirectory: '选择目录',
     recoveryConfirm: '确认恢复',
     recoveryCancel: '取消',
     recoveryReferences: '个引用条目',
+    noAvailableRecoverySource: '没有找到名称匹配且可用的外部媒体来源。',
     statusAvailable: '可用',
-    statusRequiredUnlinked: '项目需要此媒体库，但尚未链接',
-    statusConnectionMissing: '全局媒体库连接缺失',
-    statusTargetUnavailable: '媒体库目标不可用',
+    statusRequiredUnlinked: '项目需要此外部来源，但尚未连接',
+    statusConnectionMissing: '外部来源连接缺失',
+    statusTargetUnavailable: '外部来源不可用',
     statusContentIncomplete: '部分引用素材缺失',
-    statusBindingInvalid: '项目本地媒体库绑定记录无效',
+    statusBindingInvalid: '项目本地外部来源绑定无效',
     statusUnreferencedLocalBinding: '已有本地绑定，但项目内容暂未引用',
     preview: '预览',
     editText: '编辑文本',
@@ -195,12 +200,10 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     gridView: '网格视图',
     breadcrumbs: '资源位置',
     workspaceRoot: '工作区',
-    mediaLibraries: '媒体库',
+    mediaLibraries: '外部媒体',
     createCharacter: '基于此资源创建角色',
     characterName: '角色名称',
     characterDestination: '创建到 {destination}',
-    characterCreationIncomplete: '角色已创建，但项目关联尚未完成。',
-    retryCharacterCreation: '重试关联',
   },
 };
 

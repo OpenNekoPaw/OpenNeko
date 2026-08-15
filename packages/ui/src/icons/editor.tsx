@@ -214,6 +214,25 @@ export function LayersIcon({ size = 16, className, strokeWidth = 2 }: IconProps)
   );
 }
 
+export function ListIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      {...base(strokeWidth)}
+    >
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <circle cx="3.5" cy="6" r="0.75" fill="currentColor" stroke="none" />
+      <circle cx="3.5" cy="12" r="0.75" fill="currentColor" stroke="none" />
+      <circle cx="3.5" cy="18" r="0.75" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function StorylineIcon({ size = 16, className, strokeWidth = 2 }: IconProps) {
   return (
     <svg

@@ -9,6 +9,7 @@ import {
   FileIcon,
   FolderIcon,
   GridIcon,
+  ListIcon,
   PackageIcon,
   PlayIcon,
   PlusIcon,
@@ -17,6 +18,7 @@ import {
   SearchIcon,
   SuccessIcon,
   TrashIcon,
+  UploadIcon,
   VolumeIcon,
   WarningIcon,
   InfoIcon,
@@ -76,12 +78,9 @@ export interface ResourceBrowserRootProps {
   readonly characterCreation?: ResourceBrowserCharacterCreation;
 }
 
-export type ResourceBrowserCharacterCreationOutcome =
-  | { readonly status: 'created' }
-  | {
-      readonly status: 'incomplete';
-      readonly retry: () => Promise<ResourceBrowserCharacterCreationOutcome>;
-    };
+export interface ResourceBrowserCharacterCreationOutcome {
+  readonly status: 'created';
+}
 
 export interface ResourceBrowserCharacterCreation {
   readonly destinationLabel: string;
@@ -172,7 +171,6 @@ export function ResourceBrowserRoot({
     readonly item: ResourceBrowserItem;
     readonly displayName: string;
     readonly returnFocus: HTMLElement;
-    readonly outcome?: Extract<ResourceBrowserCharacterCreationOutcome, { status: 'incomplete' }>;
     readonly error?: string;
   }>();
   const [quickPreview, setQuickPreview] = useState<{
@@ -211,7 +209,7 @@ export function ResourceBrowserRoot({
           }),
         )
         .catch((error: unknown) => {
-          if (surfaceActive) setState({ kind: 'error', message: describeError(error) });
+          if (surfaceActive) setOperationError(describeError(error));
         });
     },
     [runtime],
@@ -253,7 +251,7 @@ export function ResourceBrowserRoot({
         })
         .catch((error: unknown) => {
           if (requestId === quickPreviewRequestId.current) {
-            setState({ kind: 'error', message: describeError(error) });
+            setOperationError(describeError(error));
           }
         });
     }, 180);
@@ -417,7 +415,7 @@ export function ResourceBrowserRoot({
       }
     } catch (error: unknown) {
       if (requestNumber === requestSequence.current) {
-        setState({ kind: 'error', message: describeError(error) });
+        setOperationError(describeOperationError(error, labels));
       }
     } finally {
       if (requestNumber === requestSequence.current) setPending(false);
@@ -426,13 +424,14 @@ export function ResourceBrowserRoot({
 
   const execute = async (
     route:
-      | 'source.link-global-library'
       | 'projection.reconcile'
+      | 'source.link-global-library'
       | 'source.add-directory-library'
       | 'source.relink'
       | 'source.remove'
       | 'workspace-entry.create-file'
       | 'workspace-entry.create-directory'
+      | 'workspace-entry.import-files'
       | 'creative-document.create'
       | 'creative-document.open'
       | 'content.trash'
@@ -613,7 +612,7 @@ export function ResourceBrowserRoot({
   ): Promise<void> => {
     const libraryStatus = item.libraryStatus;
     if (!libraryStatus) {
-      setState({ kind: 'error', message: 'Media Library recovery status is unavailable.' });
+      setOperationError('External Media recovery status is unavailable.');
       return;
     }
     requestSequence.current += 1;
@@ -638,9 +637,14 @@ export function ResourceBrowserRoot({
           candidate,
         }),
       );
-      if (result.status === 'planned') setRecovery(result);
+      if (result.status === 'planned') {
+        setRecovery(result);
+        setOperationError(undefined);
+      } else if (candidate === 'existing-global') {
+        setOperationError(labels.noAvailableRecoverySource);
+      }
     } catch (error: unknown) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeOperationError(error, labels));
     } finally {
       setPending(false);
     }
@@ -659,7 +663,7 @@ export function ResourceBrowserRoot({
       );
       setRecovery(undefined);
     } catch (error: unknown) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeOperationError(error, labels));
     } finally {
       setPending(false);
     }
@@ -680,7 +684,7 @@ export function ResourceBrowserRoot({
       setRecovery(undefined);
       setState({ kind: 'ready', projection: nextProjection });
     } catch (error: unknown) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeOperationError(error, labels));
     } finally {
       setPending(false);
     }
@@ -716,7 +720,7 @@ export function ResourceBrowserRoot({
       return nextProjection;
     } catch (error: unknown) {
       if (requestNumber === requestSequence.current) {
-        setState({ kind: 'error', message: describeError(error) });
+        setOperationError(describeOperationError(error, labels));
       }
       return undefined;
     } finally {
@@ -768,14 +772,8 @@ export function ResourceBrowserRoot({
   ): Promise<void> => {
     setPending(true);
     try {
-      const outcome = await operation();
-      if (outcome.status === 'created') {
-        setCharacterCreationDraft(undefined);
-        return;
-      }
-      setCharacterCreationDraft((current) =>
-        current ? { ...current, outcome, error: undefined } : current,
-      );
+      await operation();
+      setCharacterCreationDraft(undefined);
     } catch (error: unknown) {
       setCharacterCreationDraft((current) =>
         current ? { ...current, error: describeError(error) } : current,
@@ -797,17 +795,23 @@ export function ResourceBrowserRoot({
         </header>
       ) : null}
       <form className="neko-resource-browser__search" onSubmit={submitSearch}>
-        <div>
+        <div className="neko-resource-browser__search-field">
           <SearchIcon size={14} aria-hidden="true" />
           <input
             aria-label={labels.search}
-            placeholder={labels.searchPlaceholder}
+            placeholder={
+              projection.source === 'files'
+                ? labels.searchFilesPlaceholder
+                : projection.source === 'media'
+                  ? labels.searchMediaPlaceholder
+                  : labels.searchAssetsPlaceholder
+            }
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </div>
         <div className="neko-resource-browser__toolbar">
-          {projection.source === 'files' || projection.source === 'media' ? (
+          {projection.source === 'files' ? (
             <div
               className="neko-resource-browser__library-menu"
               ref={libraryMenuRef}
@@ -822,67 +826,90 @@ export function ResourceBrowserRoot({
                 ref={libraryMenuButtonRef}
                 type="button"
                 className="neko-resource-browser__icon-button"
-                disabled={pending || (projection.source === 'files' && creationKinds.length === 0)}
-                aria-label={
-                  projection.source === 'files' ? labels.createMenu : labels.configureMediaLibraries
-                }
+                disabled={pending || creationKinds.length === 0}
+                aria-label={labels.createMenu}
                 aria-haspopup="menu"
                 aria-expanded={libraryMenuOpen}
-                title={
-                  projection.source === 'files' ? labels.createMenu : labels.configureMediaLibraries
-                }
+                title={labels.createMenu}
                 onClick={() => setLibraryMenuOpen((open) => !open)}
               >
                 <PlusIcon size={15} />
               </button>
               {libraryMenuOpen ? (
                 <div className="neko-resource-browser__library-menu-content" role="menu">
-                  {projection.source === 'files' ? (
-                    <>
-                      <span className="neko-resource-browser__create-target" role="presentation">
-                        {labels.createTarget.replace('{target}', creationTargetLabel)}
-                      </span>
-                      {creationKinds.map((kind) => (
-                        <button
-                          key={kind}
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setLibraryMenuOpen(false);
-                            beginCreateEntry(kind);
-                          }}
-                        >
-                          {createKindIcon(kind)}
-                          <span>{createKindLabel(kind, labels)}</span>
-                        </button>
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setLibraryMenuOpen(false);
-                          void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
-                        }}
-                      >
-                        <PackageIcon size={14} aria-hidden="true" />
-                        <span>{labels.linkGlobalLibrary}</span>
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setLibraryMenuOpen(false);
-                          void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
-                        }}
-                      >
-                        <FolderIcon size={14} aria-hidden="true" />
-                        <span>{labels.addDirectoryLibrary}</span>
-                      </button>
-                    </>
-                  )}
+                  <span className="neko-resource-browser__create-target" role="presentation">
+                    {labels.createTarget.replace('{target}', creationTargetLabel)}
+                  </span>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setLibraryMenuOpen(false);
+                      void execute(
+                        RESOURCE_BROWSER_ROUTES.importFiles,
+                        selectedItem?.source === 'files' ? selectedItem : undefined,
+                      );
+                    }}
+                  >
+                    <UploadIcon size={14} aria-hidden="true" />
+                    <span>{labels.importFiles}</span>
+                  </button>
+                  {creationKinds.map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setLibraryMenuOpen(false);
+                        beginCreateEntry(kind);
+                      }}
+                    >
+                      {createKindIcon(kind)}
+                      <span>{createKindLabel(kind, labels)}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : projection.source === 'media' ? (
+            <div className="neko-resource-browser__library-menu" ref={libraryMenuRef}>
+              <button
+                ref={libraryMenuButtonRef}
+                type="button"
+                className="neko-resource-browser__icon-button"
+                disabled={pending}
+                aria-label={labels.linkGlobalLibrary}
+                aria-haspopup="menu"
+                aria-expanded={libraryMenuOpen}
+                title={labels.linkGlobalLibrary}
+                onClick={() => setLibraryMenuOpen((open) => !open)}
+              >
+                <PlusIcon size={15} />
+              </button>
+              {libraryMenuOpen ? (
+                <div className="neko-resource-browser__library-menu-content" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setLibraryMenuOpen(false);
+                      void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
+                    }}
+                  >
+                    <PackageIcon size={14} aria-hidden="true" />
+                    <span>{labels.linkGlobalLibrary}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setLibraryMenuOpen(false);
+                      void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
+                    }}
+                  >
+                    <FolderIcon size={14} aria-hidden="true" />
+                    <span>{labels.addDirectoryLibrary}</span>
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -895,7 +922,7 @@ export function ResourceBrowserRoot({
               title={labels.listView}
               onClick={() => setViewMode('list')}
             >
-              <FileIcon size={14} />
+              <ListIcon size={14} />
             </button>
             <button
               type="button"
@@ -1271,12 +1298,19 @@ export function ResourceBrowserRoot({
               }
               return;
             }
-            if (action === 'link-library') {
-              void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
+            if (action === 'import-files') {
+              void execute(
+                RESOURCE_BROWSER_ROUTES.importFiles,
+                item?.source === 'files' ? item : undefined,
+              );
               return;
             }
             if (action === 'add-library') {
               void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
+              return;
+            }
+            if (action === 'link-library') {
+              void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
               return;
             }
             if (!item) return;
@@ -1302,11 +1336,7 @@ export function ResourceBrowserRoot({
             aria-modal="true"
             aria-labelledby="resource-browser-character-create-title"
             onKeyDown={(event) => {
-              if (
-                event.key !== 'Escape' ||
-                pending ||
-                characterCreationDraft.outcome !== undefined
-              ) {
+              if (event.key !== 'Escape' || pending) {
                 return;
               }
               event.preventDefault();
@@ -1334,7 +1364,7 @@ export function ResourceBrowserRoot({
             <input
               autoFocus
               aria-label={labels.characterName}
-              disabled={pending || characterCreationDraft.outcome !== undefined}
+              disabled={pending}
               value={characterCreationDraft.displayName}
               onChange={(event) => {
                 const displayName = event.currentTarget.value;
@@ -1349,46 +1379,27 @@ export function ResourceBrowserRoot({
                 );
               }}
             />
-            {characterCreationDraft.outcome ? (
-              <small role="alert">{labels.characterCreationIncomplete}</small>
-            ) : null}
             {characterCreationDraft.error ? (
               <small role="alert">{characterCreationDraft.error}</small>
             ) : null}
             <div>
-              {characterCreationDraft.outcome ? null : (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    const returnFocus = characterCreationDraft.returnFocus;
-                    setCharacterCreationDraft(undefined);
-                    globalThis.queueMicrotask(() => returnFocus.focus());
-                  }}
-                >
-                  {labels.recoveryCancel}
-                </button>
-              )}
-              {characterCreationDraft.outcome ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    const outcome = characterCreationDraft.outcome;
-                    if (!outcome) return;
-                    void runCharacterCreation(outcome.retry);
-                  }}
-                >
-                  {labels.retryCharacterCreation}
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={pending || characterCreationDraft.displayName.trim().length === 0}
-                >
-                  {labels.confirm}
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const returnFocus = characterCreationDraft.returnFocus;
+                  setCharacterCreationDraft(undefined);
+                  globalThis.queueMicrotask(() => returnFocus.focus());
+                }}
+              >
+                {labels.recoveryCancel}
+              </button>
+              <button
+                type="submit"
+                disabled={pending || characterCreationDraft.displayName.trim().length === 0}
+              >
+                {labels.confirm}
+              </button>
             </div>
           </form>
         </div>
@@ -1461,6 +1472,7 @@ type ResourceBrowserContextAction =
   | 'create-directory'
   | 'create-canvas'
   | 'create-cut'
+  | 'import-files'
   | 'trash-content'
   | 'link-library'
   | 'add-library'
@@ -1506,6 +1518,11 @@ function ResourceBrowserContextMenu({
   }[] = [];
   if (!item) {
     if (menu.source === 'files') {
+      actions.push({
+        action: 'import-files',
+        label: labels.importFiles,
+        icon: <UploadIcon size={14} />,
+      });
       actions.push(...createContextActions(creationKinds, labels));
     }
     if (menu.source === 'media') {
@@ -1634,7 +1651,7 @@ function canRecoverLibrary(item: ResourceBrowserItem): boolean {
 
 function hasManagedLibraryLink(item: ResourceBrowserItem): boolean {
   const state = item.libraryStatus?.state;
-  return state !== 'required-unlinked' && state !== 'binding-invalid';
+  return state !== 'required-unlinked' && state !== 'entry-conflict';
 }
 
 function canDragResourceToCanvas(item: ResourceBrowserItem): boolean {
@@ -1670,14 +1687,15 @@ function presentLibraryStatus(
       return labels.statusAvailable;
     case 'required-unlinked':
       return labels.statusRequiredUnlinked;
-    case 'connection-missing':
-      return labels.statusConnectionMissing;
     case 'target-unavailable':
       return labels.statusTargetUnavailable;
     case 'content-incomplete':
       return labels.statusContentIncomplete;
+    case 'entry-conflict':
     case 'binding-invalid':
       return labels.statusBindingInvalid;
+    case 'connection-missing':
+      return labels.statusConnectionMissing;
     case 'unreferenced-local-binding':
       return labels.statusUnreferencedLocalBinding;
     case undefined:
@@ -2134,5 +2152,10 @@ function ResourceBrowserPlaceholderIcon({
 }
 
 function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message.startsWith("Error invoking remote method '")) return message;
+  const boundary = message.indexOf("':");
+  if (boundary < 0) return message;
+  const detail = message.slice(boundary + 2).trimStart();
+  return detail.startsWith('Error:') ? detail.slice('Error:'.length).trimStart() : detail;
 }

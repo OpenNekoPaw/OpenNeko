@@ -44,6 +44,32 @@ const projection: ResourceBrowserProjection = {
   ],
 };
 
+function createMissingMediaProjection(): ResourceBrowserProjection {
+  return {
+    ...projection,
+    source: 'media',
+    items: [
+      {
+        resourceId: 'content:missing-library',
+        source: 'media',
+        role: 'library-root',
+        libraryName: 'Footage',
+        libraryStatus: {
+          libraryName: 'Footage',
+          state: 'required-unlinked',
+          referenceCount: 2,
+          missingCount: 2,
+          operationFingerprint: 'sha256:operation',
+        },
+        depth: 0,
+        kind: 'directory',
+        label: 'Footage',
+        capabilities: [],
+      },
+    ],
+  };
+}
+
 describe('ResourceBrowserRoot', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -53,9 +79,17 @@ describe('ResourceBrowserRoot', () => {
     render(<ResourceBrowserRoot runtime={createRuntime()} locale="en" />);
 
     await screen.findByText('cat.png');
-    expect(screen.getByRole('button', { name: 'List view' }).getAttribute('aria-pressed')).toBe(
-      'true',
+    const listButton = screen.getByRole('button', { name: 'List view' });
+    const searchField = screen.getByRole('textbox', { name: 'Search' }).parentElement;
+    expect(listButton.getAttribute('aria-pressed')).toBe('true');
+    expect(searchField?.classList.contains('neko-resource-browser__search-field')).toBe(true);
+    expect(listButton.parentElement?.classList.contains('neko-resource-browser__view-modes')).toBe(
+      true,
     );
+    expect(
+      listButton.parentElement?.parentElement?.classList.contains('neko-resource-browser__toolbar'),
+    ).toBe(true);
+    expect(searchField?.classList.contains('neko-resource-browser__toolbar')).toBe(false);
     expect(
       document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),
     ).toBe('list');
@@ -281,7 +315,7 @@ describe('ResourceBrowserRoot', () => {
 
     await screen.findByText('cat.png');
     expect(screen.queryByText('Resource management')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Associate global Media Library' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
     expect(document.querySelector('.neko-resource-browser__toolbar')).toBeTruthy();
     expect(document.querySelector('.neko-resource-browser__header')).toBeNull();
@@ -292,7 +326,7 @@ describe('ResourceBrowserRoot', () => {
 
     await screen.findByText('cat.png');
     expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Associate global Media Library' })).toBeTruthy();
   });
 
   it('exposes all four Files creation kinds through one discoverable add menu', async () => {
@@ -477,8 +511,7 @@ describe('ResourceBrowserRoot', () => {
   });
 
   it('creates a Character from an exact resource only after confirming its project destination', async () => {
-    const retry = vi.fn(async () => ({ status: 'created' as const }));
-    const create = vi.fn(async () => ({ status: 'incomplete' as const, retry }));
+    const create = vi.fn(async () => ({ status: 'created' as const }));
     render(
       <ResourceBrowserRoot
         runtime={createRuntime()}
@@ -501,13 +534,7 @@ describe('ResourceBrowserRoot', () => {
 
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
     expect(create).toHaveBeenCalledWith(projection.items[0], 'Luna');
-    expect(
-      await screen.findByText('The Character was created, but project linking is incomplete.'),
-    ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry linking' }));
-    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('opens admitted text in the editor by default and Preview only from the explicit menu', async () => {
@@ -579,6 +606,22 @@ describe('ResourceBrowserRoot', () => {
       ),
     );
     expect(screen.queryByLabelText('preview.png')).toBeNull();
+  });
+
+  it('keeps resources visible when quick preview resolution fails', async () => {
+    const runtime = createRuntime();
+    runtime.resolveQuickPreview.mockRejectedValueOnce(
+      new Error('Media quick preview is unavailable.'),
+    );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    const row = (await screen.findByText('cat.png')).closest('.neko-resource-browser__item-row');
+    expect(row).toBeTruthy();
+    fireEvent.pointerEnter(row!);
+
+    expect(await screen.findByText('Media quick preview is unavailable.')).toBeTruthy();
+    expect(screen.getByText('cat.png')).toBeTruthy();
+    expect(screen.queryByText('Resource Browser unavailable')).toBeNull();
   });
 
   it('uses the shared ambient video parameters for Resource Browser hover playback', async () => {
@@ -863,31 +906,47 @@ describe('ResourceBrowserRoot', () => {
     await screen.findByText('cat.png');
     expect(screen.queryByRole('tab', { name: '全部' })).toBeNull();
     expect(screen.getByRole('tab', { name: '项目文件' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '共享媒体' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '已安装素材' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '外部媒体' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '素材' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: '项目元素' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: '已安装素材' }));
+    expect(screen.queryByRole('tab', { name: '角色' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: '世界' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: '待确认' })).toBeNull();
+    expect(screen.getByPlaceholderText('搜索外部媒体…')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '项目文件' }));
+    await screen.findByRole('button', { name: '新建' });
+    expect(screen.getByPlaceholderText('搜索项目文件…')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '新建' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '导入文件' }));
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ route: 'workspace-entry.import-files' }),
+      ),
+    );
+    fireEvent.click(screen.getByRole('tab', { name: '素材' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
         expect.objectContaining({ source: 'assets', route: 'search' }),
       ),
     );
-    expect(screen.queryByRole('button', { name: '配置媒体库' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: '共享媒体' }));
+    expect(screen.getByPlaceholderText('搜索素材…')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '关联全局媒体库' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '外部媒体' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
         expect.objectContaining({ source: 'media', route: 'search' }),
       ),
     );
-    fireEvent.click(screen.getByRole('button', { name: '配置媒体库' }));
+    expect(screen.queryByRole('menuitem', { name: '关联全局媒体库' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '关联全局媒体库' }));
     fireEvent.click(screen.getByRole('menuitem', { name: '关联全局媒体库' }));
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({ route: 'source.link-global-library' }),
       ),
     );
-    fireEvent.click(screen.getByRole('button', { name: '配置媒体库' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '将目录添加为媒体库' }));
+    fireEvent.click(screen.getByRole('button', { name: '关联全局媒体库' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '将目录添加到全局媒体库' }));
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({ route: 'source.add-directory-library' }),
@@ -942,7 +1001,7 @@ describe('ResourceBrowserRoot', () => {
 
     const file = await screen.findByText('brief.md');
     fireEvent.click(file);
-    fireEvent.click(screen.getByRole('tab', { name: 'Installed assets' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Assets' }));
     const asset = await screen.findByText('Lighting preset');
     expect(screen.queryByText('brief.md')).toBeNull();
     fireEvent.click(asset);
@@ -955,7 +1014,7 @@ describe('ResourceBrowserRoot', () => {
           ?.getAttribute('data-selected'),
       ).toBe('true'),
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Installed assets' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Assets' }));
     await waitFor(() =>
       expect(
         screen
@@ -1080,9 +1139,8 @@ describe('ResourceBrowserRoot', () => {
           kind: 'image' as const,
           label: 'portrait.png',
           locator: {
-            kind: 'media-library' as const,
-            libraryName: 'Assets',
-            relativePath: 'portrait.png',
+            kind: 'workspace-file' as const,
+            path: 'neko/assets/Assets/portrait.png',
           },
           capabilities: ['preview' as const],
         },
@@ -1094,7 +1152,13 @@ describe('ResourceBrowserRoot', () => {
       <ResourceBrowserRoot runtime={firstRuntime} locale="en" defaultViewMode="grid" />,
     );
 
-    fireEvent.doubleClick(await screen.findByText('Assets'));
+    const libraryLabel = await waitFor(() => {
+      const label = document.querySelector('.neko-resource-browser__item strong');
+      expect(label?.textContent).toBe('Assets');
+      return label;
+    });
+    if (!libraryLabel) throw new Error('Media library label is required.');
+    fireEvent.doubleClick(libraryLabel);
     expect(await screen.findByText('portrait.png')).toBeTruthy();
     first.unmount();
 
@@ -1451,6 +1515,67 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.queryByText('hero.png')).toBeNull();
   });
 
+  it('keeps the Media tree mounted when loading one nested directory fails', async () => {
+    const mediaTreeProjection: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-media-child-failure',
+        workspaceId: 'workspace-media-child-failure',
+      },
+      source: 'media',
+      items: [
+        {
+          resourceId: 'media-library:assets',
+          source: 'media',
+          role: 'library-root',
+          libraryName: 'Assets',
+          libraryStatus: {
+            libraryName: 'Assets',
+            state: 'available',
+            referenceCount: 0,
+            missingCount: 0,
+            operationFingerprint: 'sha256:assets',
+          },
+          depth: 0,
+          kind: 'directory',
+          label: 'Assets',
+          capabilities: [],
+        },
+        {
+          resourceId: 'content:assets-media',
+          parentResourceId: 'media-library:assets',
+          source: 'media',
+          role: 'directory',
+          libraryName: 'Assets',
+          depth: 1,
+          kind: 'directory',
+          label: 'Media',
+          locator: {
+            kind: 'media-library',
+            libraryName: 'Assets',
+            relativePath: 'Media',
+          },
+          capabilities: ['reveal'],
+        },
+      ],
+    };
+    const runtime = createRuntime(mediaTreeProjection);
+    runtime.children
+      .mockResolvedValueOnce(mediaTreeProjection)
+      .mockRejectedValueOnce(new Error('Nested Media directory is unavailable.'));
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    fireEvent.doubleClick(await screen.findByRole('treeitem', { name: /Assets/i }));
+    const mediaDirectory = await screen.findByRole('treeitem', { name: /Media/i });
+    fireEvent.doubleClick(mediaDirectory);
+
+    expect(await screen.findByText('Nested Media directory is unavailable.')).toBeTruthy();
+    expect(screen.getByRole('treeitem', { name: /Assets/i })).toBeTruthy();
+    expect(screen.getByRole('treeitem', { name: /Media/i })).toBeTruthy();
+    expect(screen.queryByText('Resource Browser unavailable')).toBeNull();
+  });
+
   it('keeps media library management on the selected library row', async () => {
     const libraryProjection: ResourceBrowserProjection = {
       ...projection,
@@ -1479,7 +1604,7 @@ describe('ResourceBrowserRoot', () => {
     render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
     expect(await screen.findByText('Footage')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Relink media library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect external media' }));
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1490,12 +1615,12 @@ describe('ResourceBrowserRoot', () => {
     );
     runtime.execute.mockClear();
     const confirm = vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove media library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove external source' }));
     expect(confirm).toHaveBeenCalledOnce();
     expect(runtime.execute).not.toHaveBeenCalled();
 
     confirm.mockReturnValueOnce(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove media library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove external source' }));
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1508,29 +1633,7 @@ describe('ResourceBrowserRoot', () => {
   });
 
   it('keeps missing library identity across list/grid and confirms revisioned recovery', async () => {
-    const libraryProjection: ResourceBrowserProjection = {
-      ...projection,
-      source: 'media',
-      items: [
-        {
-          resourceId: 'content:missing-library',
-          source: 'media',
-          role: 'library-root',
-          libraryName: 'Footage',
-          libraryStatus: {
-            libraryName: 'Footage',
-            state: 'required-unlinked',
-            referenceCount: 2,
-            missingCount: 2,
-            operationFingerprint: 'sha256:operation',
-          },
-          depth: 0,
-          kind: 'directory',
-          label: 'Footage',
-          capabilities: [],
-        },
-      ],
-    };
+    const libraryProjection = createMissingMediaProjection();
     const runtime = createRuntime(libraryProjection);
     runtime.planRecovery.mockResolvedValueOnce({
       requestId: 'resource-recovery-plan-1',
@@ -1561,8 +1664,8 @@ describe('ResourceBrowserRoot', () => {
       document.querySelector('.neko-resource-browser__item-row[data-selected="true"] strong')
         ?.textContent,
     ).toBe('Footage');
-    fireEvent.click(screen.getByRole('button', { name: 'Recover media library' }));
-    expect(await screen.findByRole('dialog', { name: 'Recover media library' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect external media' }));
+    expect(await screen.findByRole('dialog', { name: 'Reconnect external media' })).toBeTruthy();
     expect(runtime.applyRecovery).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm recovery' }));
     await waitFor(() =>
@@ -1574,6 +1677,38 @@ describe('ResourceBrowserRoot', () => {
         }),
       ),
     );
+  });
+
+  it('keeps missing external media visible when no recovery source exists and strips IPC wrappers', async () => {
+    const libraryProjection = createMissingMediaProjection();
+    const runtime = createRuntime(libraryProjection);
+    runtime.planRecovery
+      .mockResolvedValueOnce({
+        requestId: 'resource-recovery-plan-1',
+        identity: libraryProjection.identity,
+        resourceId: 'content:missing-library',
+        status: 'cancelled',
+      })
+      .mockRejectedValueOnce(
+        new Error(
+          "Error invoking remote method 'openneko:resources:recovery-plan': Error: Reconnect found multiple exact-name available external sources.",
+        ),
+      );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reconnect external media' }));
+    expect(
+      await screen.findByText('No matching available external source was found.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Footage')).toBeTruthy();
+    expect(screen.queryByText('Resource Browser unavailable')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect external media' }));
+    expect(
+      await screen.findByText('Reconnect found multiple exact-name available external sources.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Error invoking remote method/)).toBeNull();
+    expect(screen.getByText('Footage')).toBeTruthy();
   });
 
   it('resolves media thumbnails only when their row enters the visible range', async () => {
@@ -1602,6 +1737,19 @@ describe('ResourceBrowserRoot', () => {
     expect(runtime.resolveThumbnail).not.toHaveBeenCalled();
     notify?.([{ isIntersecting: true } as IntersectionObserverEntry]);
     await waitFor(() => expect(runtime.resolveThumbnail).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the resource projection available when one thumbnail resolution fails', async () => {
+    const runtime = createRuntime();
+    runtime.resolveThumbnail.mockRejectedValueOnce(
+      new Error('Media Library content is unavailable: content-missing.'),
+    );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    expect(await screen.findByText('cat.png')).toBeTruthy();
+    await waitFor(() => expect(runtime.resolveThumbnail).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Resource Browser unavailable')).toBeNull();
+    expect(screen.getByText('cat.png')).toBeTruthy();
   });
 
   it('ignores a completed thumbnail when its source fingerprint was replaced', async () => {
